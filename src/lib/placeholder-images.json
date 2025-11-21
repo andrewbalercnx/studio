@@ -1,3 +1,28 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "style-1",
+      "description": "A vibrant and playful cartoon style, perfect for fun adventures.",
+      "imageUrl": "https://images.unsplash.com/photo-1739513275763-84d4393a84ad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHx2aWJyYW50JTIwY2FydG9vbnxlbnwwfHx8fDE3NjM3NDcxNDB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "vibrant cartoon"
+    },
+    {
+      "id": "style-2",
+      "description": "A soft and dreamy watercolor look for magical and gentle stories.",
+      "imageUrl": "https://images.unsplash.com/photo-1598495494482-172d89ff078c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxkcmVhbXklMjB3YXRlcmNvbG9yfGVufDB8fHx8MTc2Mzc0NzE0MHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "dreamy watercolor"
+    },
+    {
+      "id": "style-3",
+      "description": "A classic storybook illustration style, with rich textures and details.",
+      "imageUrl": "https://images.unsplash.com/photo-1757357068575-c532b3b20836?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxzdG9yeWJvb2slMjBpbGx1c3RyYXRpb258ZW58MHx8fHwxNzYzNzAzNjAxfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "storybook illustration"
+    },
+    {
+      "id": "style-4",
+      "description": "A bold and expressive anime style, great for action-packed tales.",
+      "imageUrl": "https://picsum.photos/seed/style4/400/300",
+      "imageHint": "expressive anime"
+    }
+  ]
 }
