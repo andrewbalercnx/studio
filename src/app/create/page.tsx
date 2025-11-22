@@ -13,8 +13,8 @@ import Link from 'next/link';
 import { PartyPopper } from 'lucide-react';
 
 const steps = [
-  { id: '01', name: 'Write Your Story' },
-  { id: '02', name: 'Create Characters' },
+  { id: '01', name: 'Create Characters' },
+  { id: '02', name: 'Write Your Story' },
   { id: '03', name: 'Preview Your Book' },
 ];
 
@@ -56,19 +56,19 @@ export default function CreatePage() {
 
       <div className="flex-grow container py-4">
         {stepToRender === 0 && !isComplete && (
-          <StoryWriter
-            story={story}
-            setStory={setStory}
-            author={author}
-            setAuthor={setAuthor}
-          />
-        )}
-        {stepToRender === 1 && !isComplete && (
           <CharacterCreator
             characters={characters}
             setCharacters={setCharacters}
             artStyle={selectedArtStyle}
             setArtStyle={setSelectedArtStyle}
+          />
+        )}
+        {stepToRender === 1 && !isComplete && (
+          <StoryWriter
+            story={story}
+            setStory={setStory}
+            author={author}
+            setAuthor={setAuthor}
           />
         )}
         {stepToRender === 2 && (
