@@ -9,7 +9,14 @@ import { useFirestore } from '@/firebase';
 import { collection, doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import type { StorySession } from '@/lib/types';
+import type { StorySession as StorySessionType } from '@/lib/types';
+
+// Add the new fields to the local type for this page
+type StorySession = StorySessionType & {
+  promptConfigId?: string;
+  promptConfigLevelBand?: string;
+};
+
 
 const sampleSession: Omit<StorySession, 'createdAt' | 'updatedAt' | 'messages' | 'characters' | 'beats'> = {
     id: "sample-session-1",
@@ -19,6 +26,8 @@ const sampleSession: Omit<StorySession, 'createdAt' | 'updatedAt' | 'messages' |
     currentStepIndex: 0,
     storyTitle: "Sample Story",
     storyVibe: "funny",
+    promptConfigId: 'warmup_level_low_v1',
+    promptConfigLevelBand: 'low',
 };
 
 export default function AdminSessionsPage() {
@@ -116,18 +125,22 @@ export default function AdminSessionsPage() {
                   <TableHead>ID</TableHead>
                   <TableHead>Child ID</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Current Phase</TableHead>
+                  <TableHead>Phase</TableHead>
                   <TableHead>Title</TableHead>
+                  <TableHead>Prompt Config ID</TableHead>
+                  <TableHead>Level Band</TableHead>
               </TableRow>
           </TableHeader>
           <TableBody>
               {sessions.map((session) => (
                   <TableRow key={session.id}>
-                      <TableCell className="font-mono">{session.id}</TableCell>
-                      <TableCell className="font-mono">{session.childId}</TableCell>
+                      <TableCell className="font-mono text-xs">{session.id}</TableCell>
+                      <TableCell className="font-mono text-xs">{session.childId}</TableCell>
                       <TableCell>{session.status}</TableCell>
                       <TableCell>{session.currentPhase}</TableCell>
                       <TableCell>{session.storyTitle}</TableCell>
+                      <TableCell className="font-mono text-xs">{session.promptConfigId || '-'}</TableCell>
+                      <TableCell>{session.promptConfigLevelBand || '-'}</TableCell>
                   </TableRow>
               ))}
           </TableBody>

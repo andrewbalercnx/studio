@@ -47,6 +47,8 @@ export type StorySession = {
     finalStoryText?: string;
     createdAt: Date;
     updatedAt: Date;
+    promptConfigId?: string;
+    promptConfigLevelBand?: string;
     // This is a client-side representation and not stored in Firestore directly
     // with the session document. It's populated from the messages sub-collection.
     messages: ChatMessage[];

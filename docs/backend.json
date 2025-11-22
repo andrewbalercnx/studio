@@ -149,6 +149,14 @@
         "updatedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "promptConfigId": {
+          "type": "string",
+          "description": "The ID of the prompt config used for this session."
+        },
+        "promptConfigLevelBand": {
+            "type": "string",
+            "description": "The level band of the prompt config used for this session."
         }
       },
       "required": [
@@ -334,5 +342,3 @@
     }
   }
 }
-
-    

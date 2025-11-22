@@ -80,26 +80,7 @@ export default function StartStoryPage() {
             else if (childEstimatedLevel === 3) chosenLevelBand = "medium";
             else chosenLevelBand = "high";
 
-            // 3. Create a new story session
-            const storySessionsRef = collection(firestore, 'storySessions');
-            const newSessionData = {
-                childId: childId,
-                status: "in_progress",
-                currentPhase: "warmup",
-                currentStepIndex: 0,
-                storyTitle: "",
-                storyVibe: "",
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-                characters: [],
-                beats: [],
-            };
-            const newSessionRef = await addDoc(storySessionsRef, newSessionData);
-            const storySessionId = newSessionRef.id;
-            await setDoc(newSessionRef, { id: storySessionId }, { merge: true });
-
-
-            // 4. Select a warmup promptConfig
+            // 3. Select a warmup promptConfig
             const promptConfigsRef = collection(firestore, 'promptConfigs');
             const q = query(
                 promptConfigsRef, 
@@ -125,6 +106,27 @@ export default function StartStoryPage() {
             if (!promptConfig) {
                 throw new Error("No warmup promptConfig found (including fallback).");
             }
+            
+            // 4. Create a new story session, now including prompt info
+            const storySessionsRef = collection(firestore, 'storySessions');
+            const newSessionData = {
+                childId: childId,
+                status: "in_progress",
+                currentPhase: "warmup",
+                currentStepIndex: 0,
+                storyTitle: "",
+                storyVibe: "",
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                characters: [],
+                beats: [],
+                promptConfigId: promptConfig.id,
+                promptConfigLevelBand: chosenLevelBand,
+            };
+            const newSessionRef = await addDoc(storySessionsRef, newSessionData);
+            const storySessionId = newSessionRef.id;
+            await setDoc(newSessionRef, { id: storySessionId }, { merge: true });
+
             
             const initialAssistantMessage = "Hi! I am your Story Guide. What would you like me to call you?";
 
@@ -260,5 +262,3 @@ export default function StartStoryPage() {
         </div>
     );
 }
-
-    
