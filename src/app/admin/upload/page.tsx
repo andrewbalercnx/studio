@@ -260,7 +260,7 @@ export default function AdminUploadPage() {
                          <div>Valid items: <Badge variant={validation.validCount === validation.itemCount ? 'default' : 'destructive'}>{validation.validCount}</Badge></div>
                         </>
                     ) : (
-                        <p className="text-destructive font-mono">{validation.errorMessage}</p>
+                        <div className="text-destructive font-mono">{validation.errorMessage}</div>
                     )}
                 </div>
                 {validation.results.length > 0 && (
@@ -292,7 +292,7 @@ export default function AdminUploadPage() {
             </CardContent>
         </Card>
     )
-  }
+  };
 
   return (
     <div className="container mx-auto p-4 sm:p-6 md:p-8">
@@ -311,7 +311,7 @@ export default function AdminUploadPage() {
       <Card className="mt-8">
         <CardHeader>
           <CardTitle>Diagnostics</CardTitle>
-        </Header>
+        </CardHeader>
         <CardContent>
           <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
             <code>{JSON.stringify(diagnostics, null, 2)}</code>
