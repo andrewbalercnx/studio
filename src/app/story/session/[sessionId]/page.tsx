@@ -13,8 +13,7 @@ import type { StorySession, ChatMessage as Message } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 
-export default function StorySessionPage({ params }: { params: { sessionId: string } }) {
-    const { sessionId } = params;
+export default function StorySessionPage({ params: { sessionId } }: { params: { sessionId: string } }) {
     const { user, loading: userLoading } = useUser();
     const firestore = useFirestore();
     const [input, setInput] = useState('');
