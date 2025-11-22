@@ -166,11 +166,11 @@ export default function AdminUploadPage() {
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="flex gap-4 text-sm">
-                    <p>Parse Status: {validation.parseOk ? <Badge>OK</Badge> : <Badge variant="destructive">Failed</Badge>}</p>
+                    <div>Parse Status: {validation.parseOk ? <Badge>OK</Badge> : <Badge variant="destructive">Failed</Badge>}</div>
                     {validation.parseOk ? (
                         <>
-                         <p>Items found: <Badge variant="secondary">{validation.itemCount}</Badge></p>
-                         <p>Valid items: <Badge variant={validation.validCount === validation.itemCount ? 'default' : 'destructive'}>{validation.validCount}</Badge></p>
+                         <div>Items found: <Badge variant="secondary">{validation.itemCount}</Badge></div>
+                         <div>Valid items: <Badge variant={validation.validCount === validation.itemCount ? 'default' : 'destructive'}>{validation.validCount}</Badge></div>
                         </>
                     ) : (
                         <p className="text-destructive font-mono">{validation.errorMessage}</p>
