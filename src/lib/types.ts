@@ -1,3 +1,4 @@
+
 'use client';
 
 export type Role = 'user' | 'assistant' | 'system';
@@ -10,8 +11,9 @@ export type Choice = {
 
 export type ChatMessage = {
     id: string;
-    role: Role;
-    content: string;
+    sender: 'child' | 'assistant' | 'system';
+    text: string;
+    createdAt: any; // Allow for server timestamp
     choices?: Choice[];
 };
 
@@ -77,3 +79,6 @@ export type ChildProfile = {
 	preferredStoryLength: 'short' | 'medium' | 'long';
 	helpPreference: 'more_scaffolding' | 'balanced' | 'independent';
 };
+
+
+    

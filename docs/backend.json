@@ -219,9 +219,6 @@
         "id": {
           "type": "string"
         },
-        "storySessionId": {
-          "type": "string"
-        },
         "sender": {
           "type": "string",
           "enum": [
@@ -246,7 +243,6 @@
       },
       "required": [
         "id",
-        "storySessionId",
         "sender",
         "text",
         "createdAt"
@@ -338,3 +334,5 @@
     }
   }
 }
+
+    

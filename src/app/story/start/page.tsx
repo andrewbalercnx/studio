@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, addDoc, collection, query, where, getDocs, limit, DocumentData } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, addDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import type { PromptConfig, ChildProfile } from '@/lib/types';
 
 
@@ -68,7 +68,6 @@ export default function StartStoryPage() {
                     helpPreference: "more_scaffolding",
                 };
                 await setDoc(childRef, newChildProfileData);
-                // We don't have the resolved server timestamp here, but that's okay for client logic
                 childProfile = { ...newChildProfileData, createdAt: new Date() } as ChildProfile;
             } else {
                 childProfile = childDoc.data() as ChildProfile;
@@ -127,7 +126,17 @@ export default function StartStoryPage() {
                 throw new Error("No warmup promptConfig found (including fallback).");
             }
             
-            // 5. Build response object
+            const initialAssistantMessage = "Hi! I am your Story Guide. What would you like me to call you?";
+
+            // 5. Store initial message in subcollection
+            const messagesRef = collection(firestore, 'storySessions', storySessionId, 'messages');
+            await addDoc(messagesRef, {
+                sender: 'assistant',
+                text: initialAssistantMessage,
+                createdAt: serverTimestamp()
+            });
+
+            // 6. Build response object
             const result: StartStoryResponse = {
                 storySessionId: storySessionId,
                 childId: childId,
@@ -140,7 +149,7 @@ export default function StartStoryPage() {
                     version: promptConfig.version,
                     status: promptConfig.status,
                 },
-                initialAssistantMessage: "Hi! I am your Story Guide. What would you like me to call you?",
+                initialAssistantMessage,
             };
             setResponse(result);
 
@@ -187,6 +196,14 @@ export default function StartStoryPage() {
                         {isLoading ? <><LoaderCircle className="animate-spin mr-2" /> Starting...</> : 'Start a new story'}
                     </Button>
                 </div>
+
+                {response && !response.error && (
+                    <div className="text-center">
+                        <Button asChild>
+                            <Link href={`/story/session/${response.storySessionId}`}>Go to this story</Link>
+                        </Button>
+                    </div>
+                )}
 
                 {response && (
                     <Card>
