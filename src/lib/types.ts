@@ -53,3 +53,16 @@ export type ArtStyle = {
   imageUrl: string;
   imageHint: string;
 };
+
+export type PromptConfig = {
+    id: string;
+    phase: string;
+    levelBand: string;
+    languageCode: string;
+    version: number;
+    status: string;
+    systemPrompt: string;
+    modeInstructions: string;
+    additionalContextTemplate?: object;
+    allowedChatMoves?: string[];
+};
