@@ -9,6 +9,9 @@ import { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import type { PromptConfig } from '@/lib/types';
+import { useFirestore } from '@/firebase';
+import { writeBatch, doc } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 type ValidationResultItem = {
   id: string | null;
@@ -26,6 +29,13 @@ type ValidationState = {
   results: ValidationResultItem[];
 };
 
+type SaveState = {
+  lastAction: 'none' | 'save_started' | 'save_success' | 'save_error';
+  attemptedCount: number;
+  savedCount: number;
+  errorMessage: string | null;
+};
+
 const initialValidationState: ValidationState = {
   lastAction: 'none',
   inputLength: 0,
@@ -34,6 +44,13 @@ const initialValidationState: ValidationState = {
   validCount: 0,
   errorMessage: null,
   results: [],
+};
+
+const initialSaveState: SaveState = {
+    lastAction: 'none',
+    attemptedCount: 0,
+    savedCount: 0,
+    errorMessage: null,
 };
 
 const requiredFields: (keyof PromptConfig)[] = [
@@ -54,10 +71,18 @@ const fieldTypes: { [key in keyof PromptConfig]?: string } = {
 
 export default function AdminUploadPage() {
   const { isAuthenticated, isAdmin, email, loading, error } = useAdminStatus();
+  const firestore = useFirestore();
+  const { toast } = useToast();
+  
   const [jsonInput, setJsonInput] = useState('');
+  const [parsedItems, setParsedItems] = useState<any[]>([]);
   const [validation, setValidation] = useState<ValidationState>(initialValidationState);
+  const [saveState, setSaveState] = useState<SaveState>(initialSaveState);
 
   const handleValidate = () => {
+    // Reset save state on new validation
+    setSaveState(initialSaveState);
+    
     let parsedJson: any;
     try {
       parsedJson = JSON.parse(jsonInput);
@@ -69,10 +94,13 @@ export default function AdminUploadPage() {
         parseOk: false,
         errorMessage: e.message,
       });
+      setParsedItems([]);
       return;
     }
 
     const items = Array.isArray(parsedJson) ? parsedJson : [parsedJson];
+    setParsedItems(items); // Store successfully parsed items
+    
     const results: ValidationResultItem[] = items.map((item: any) => {
       const itemErrors: string[] = [];
       if (typeof item !== 'object' || item === null) {
@@ -116,10 +144,63 @@ export default function AdminUploadPage() {
     });
   };
 
+  const handleSaveToFirestore = async () => {
+    if (!firestore || !isAdmin || validation.validCount === 0) return;
+
+    setSaveState({
+        lastAction: 'save_started',
+        attemptedCount: validation.validCount,
+        savedCount: 0,
+        errorMessage: null,
+    });
+
+    try {
+        const batch = writeBatch(firestore);
+        const validItems = parsedItems.filter((_, index) => validation.results[index].isValid);
+
+        validItems.forEach((item) => {
+            const docRef = doc(firestore, 'promptConfigs', item.id);
+            batch.set(docRef, item);
+        });
+
+        await batch.commit();
+
+        setSaveState({
+            lastAction: 'save_success',
+            attemptedCount: validItems.length,
+            savedCount: validItems.length,
+            errorMessage: null,
+        });
+        toast({
+            title: 'Save Successful',
+            description: `${validItems.length} prompt configs saved to Firestore.`,
+        });
+
+    } catch (e: any) {
+        setSaveState({
+            lastAction: 'save_error',
+            attemptedCount: validation.validCount,
+            savedCount: 0,
+            errorMessage: e.message,
+        });
+        toast({
+            title: 'Save Error',
+            description: e.message,
+            variant: 'destructive',
+        });
+    }
+  };
+
+  const isSaveDisabled = !isAdmin || !validation.parseOk || validation.validCount === 0;
+
   const diagnostics = {
     page: 'admin-upload',
     auth: { isAuthenticated, email, isAdmin, loading, error },
-    ui: { hasTextarea: true, hasValidateButton: true },
+    ui: {
+        hasTextarea: true,
+        hasValidateButton: true,
+        hasSaveButton: true,
+    },
     validation: {
         lastAction: validation.lastAction,
         inputLength: jsonInput.length,
@@ -127,7 +208,8 @@ export default function AdminUploadPage() {
         itemCount: validation.itemCount,
         validCount: validation.validCount,
         errorMessage: validation.errorMessage,
-    }
+    },
+    save: saveState,
   };
 
   const renderContent = () => {
@@ -152,7 +234,12 @@ export default function AdminUploadPage() {
           value={jsonInput}
           onChange={e => setJsonInput(e.target.value)}
         />
-        <Button onClick={handleValidate}>Validate JSON</Button>
+        <div className="flex gap-2">
+            <Button onClick={handleValidate}>Validate JSON</Button>
+            <Button onClick={handleSaveToFirestore} disabled={isSaveDisabled}>
+                Save to Firestore
+            </Button>
+        </div>
         {validation.lastAction !== 'none' && renderValidationResults()}
       </div>
     );
@@ -224,7 +311,7 @@ export default function AdminUploadPage() {
       <Card className="mt-8">
         <CardHeader>
           <CardTitle>Diagnostics</CardTitle>
-        </CardHeader>
+        </Header>
         <CardContent>
           <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
             <code>{JSON.stringify(diagnostics, null, 2)}</code>
