@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -6,7 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
-import { startWarmupStory } from '@/ai/flows/start-story-flow';
+import { useFirestore } from '@/firebase';
+import { doc, getDoc, setDoc, serverTimestamp, addDoc, collection, query, where, getDocs, limit, DocumentData } from 'firebase/firestore';
+import type { PromptConfig, ChildProfile } from '@/lib/types';
+
 
 type StartStoryResponse = {
     storySessionId: string;
@@ -30,11 +34,12 @@ type StartStoryResponse = {
 
 export default function StartStoryPage() {
     const { user, loading: userLoading } = useUser();
+    const firestore = useFirestore();
     const [isLoading, setIsLoading] = useState(false);
     const [response, setResponse] = useState<StartStoryResponse | null>(null);
 
     const handleStartStory = async () => {
-        if (!user) return;
+        if (!user || !firestore) return;
         
         setIsLoading(true);
         setResponse(null);
@@ -42,14 +47,105 @@ export default function StartStoryPage() {
         const childDisplayName = user.displayName 
             || (user.email ? user.email.split('@')[0] : null)
             || "Unnamed Child";
+        
+        const childId = user.uid;
 
         try {
-            const result = await startWarmupStory({
-                childId: user.uid,
-                childDisplayName: childDisplayName
-            });
+            // 1. Ensure a child profile exists
+            const childRef = doc(firestore, 'children', childId);
+            const childDoc = await getDoc(childRef);
+            let childProfile: ChildProfile;
+
+            if (!childDoc.exists()) {
+                const newChildProfileData = {
+                    id: childId,
+                    displayName: childDisplayName,
+                    createdAt: serverTimestamp(),
+                    estimatedLevel: 2,
+                    favouriteGenres: ["funny", "magical"],
+                    favouriteCharacterTypes: ["self", "pet"],
+                    preferredStoryLength: "short",
+                    helpPreference: "more_scaffolding",
+                };
+                await setDoc(childRef, newChildProfileData);
+                // We don't have the resolved server timestamp here, but that's okay for client logic
+                childProfile = { ...newChildProfileData, createdAt: new Date() } as ChildProfile;
+            } else {
+                childProfile = childDoc.data() as ChildProfile;
+            }
+
+            // 2. Determine child level band
+            const childEstimatedLevel = childProfile.estimatedLevel || 2;
+            let chosenLevelBand: 'low' | 'medium' | 'high';
+            if (childEstimatedLevel <= 2) chosenLevelBand = "low";
+            else if (childEstimatedLevel === 3) chosenLevelBand = "medium";
+            else chosenLevelBand = "high";
+
+            // 3. Create a new story session
+            const storySessionsRef = collection(firestore, 'storySessions');
+            const newSessionData = {
+                childId: childId,
+                status: "in_progress",
+                currentPhase: "warmup",
+                currentStepIndex: 0,
+                storyTitle: "",
+                storyVibe: "",
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                characters: [],
+                beats: [],
+            };
+            const newSessionRef = await addDoc(storySessionsRef, newSessionData);
+            const storySessionId = newSessionRef.id;
+            await setDoc(newSessionRef, { id: storySessionId }, { merge: true });
+
+
+            // 4. Select a warmup promptConfig
+            const promptConfigsRef = collection(firestore, 'promptConfigs');
+            const q = query(
+                promptConfigsRef, 
+                where('phase', '==', 'warmup'),
+                where('levelBand', '==', chosenLevelBand),
+                where('status', '==', 'live'),
+                limit(1)
+            );
+            
+            const querySnapshot = await getDocs(q);
+            let promptConfig: PromptConfig | null = null;
+            
+            if (!querySnapshot.empty) {
+                promptConfig = querySnapshot.docs[0].data() as PromptConfig;
+            } else {
+                const fallbackRef = doc(firestore, 'promptConfigs', 'warmup_level_low_v1');
+                const fallbackDoc = await getDoc(fallbackRef);
+                if (fallbackDoc.exists()) {
+                    promptConfig = fallbackDoc.data() as PromptConfig;
+                }
+            }
+
+            if (!promptConfig) {
+                throw new Error("No warmup promptConfig found (including fallback).");
+            }
+            
+            // 5. Build response object
+            const result: StartStoryResponse = {
+                storySessionId: storySessionId,
+                childId: childId,
+                childEstimatedLevel: childEstimatedLevel,
+                chosenLevelBand: chosenLevelBand,
+                promptConfigSummary: {
+                    id: promptConfig.id,
+                    phase: promptConfig.phase,
+                    levelBand: promptConfig.levelBand,
+                    version: promptConfig.version,
+                    status: promptConfig.status,
+                },
+                initialAssistantMessage: "Hi! I am your Story Guide. What would you like me to call you?",
+            };
             setResponse(result);
+
         } catch (e: any) {
+            console.error("Error starting story:", e);
             setResponse({ error: true, message: e.message || 'An unknown error occurred.' });
         }
         setIsLoading(false);
@@ -147,3 +243,5 @@ export default function StartStoryPage() {
         </div>
     );
 }
+
+    

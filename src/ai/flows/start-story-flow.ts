@@ -1,9 +1,12 @@
+
 'use server';
 
 /**
  * @fileOverview Flow to initialize a new story session.
  * 
- * - startWarmupStory - A function that creates a child profile (if needed) and a new story session.
+ * NOTE: This server action is currently not used. The logic has been moved
+ * to the client-side in /story/start/page.tsx to work around a server
+ * credential issue. It is kept here for reference.
  */
 
 import { getFirestore } from 'firebase-admin/firestore';
@@ -110,7 +113,7 @@ export async function startWarmupStory(input: StartWarmupStoryInput): Promise<St
             .limit(1);
 
         let promptConfigSnapshot = await query.get();
-        let promptConfig: PromptConfig | null = null;
+        let promptConfig: any = null; // Changed to any to satisfy TS on fallback
         
         if (promptConfigSnapshot.empty) {
             // Fallback
@@ -149,3 +152,5 @@ export async function startWarmupStory(input: StartWarmupStoryInput): Promise<St
         return { error: true, message: e.message || "An unexpected error occurred." };
     }
 }
+
+    
