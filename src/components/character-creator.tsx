@@ -36,7 +36,7 @@ export default function CharacterCreator({ characters, setCharacters, artStyle, 
     }
   }, [user, userLoading, router]);
 
-  if (userLoading || !user) {
+  if (userLoading) {
     return (
       <div className="h-full flex items-center justify-center">
         <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
@@ -154,8 +154,14 @@ function AddCharacterDialog({ artStyle, onCharacterCreated, closeDialog }: { art
         transformedImageUrl, // URL from storage
       };
 
-      // 4. Save character metadata to Firestore
-      await setDoc(doc(firestore, `users/${user.uid}/characters`, characterId), newCharacter);
+      // 4. Save character metadata to Firestore (non-blocking)
+      setDoc(doc(firestore, `users/${user.uid}/characters`, characterId), newCharacter)
+        .catch((error) => {
+            console.error("Error writing document: ", error);
+            // We can show a toast here, but for now we'll just log it.
+            // The UI will still proceed as if successful due to optimistic updates.
+        });
+
 
       onCharacterCreated(newCharacter);
       toast({ title: `Character "${name}" created!` });
