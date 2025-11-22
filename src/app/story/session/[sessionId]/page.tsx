@@ -11,7 +11,7 @@ import { useFirestore } from '@/firebase';
 import { doc, collection, addDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import type { StorySession, ChatMessage as Message } from '@/lib/types';
 import { Input } from '@/components/ui/input';
-import { useCollection } from '@/lib/firestore-hooks';
+import { useCollection, useDocument } from '@/lib/firestore-hooks';
 
 type PageParams = {
     params: {
@@ -19,22 +19,19 @@ type PageParams = {
     };
 };
 
-export default function StorySessionPage({ params }: PageParams) {
+export default function StorySessionPage({ params }: { params: { sessionId: string } }) {
     const { sessionId } = params;
     const { user, loading: userLoading } = useUser();
     const firestore = useFirestore();
     const [input, setInput] = useState('');
     const [isSending, setIsSending] = useState(false);
 
-    // This is a placeholder for session data. We will fetch this later.
-    const [session, setSession] = useState<StorySession | null>(null);
+    const sessionRef = firestore ? doc(firestore, 'storySessions', sessionId) : null;
+    const { data: session, loading: sessionLoading, error: sessionError } = useDocument<StorySession>(sessionRef);
 
     const messagesQuery = firestore ? query(collection(firestore, `storySessions/${sessionId}/messages`), orderBy('createdAt')) : null;
     const { data: messages, loading: messagesLoading, error: messagesError } = useCollection<Message>(messagesQuery);
     
-    // In a real app, you would fetch session details as well.
-    // For now, we'll just focus on messages.
-
     const handleSendMessage = async () => {
         if (!input.trim() || !firestore || !user) return;
 
@@ -63,7 +60,7 @@ export default function StorySessionPage({ params }: PageParams) {
             email: user?.email || null,
         },
         firestore: {
-            hasSession: !!session, // This would be dynamic in a real implementation
+            hasSession: !!session,
             messagesCount: messages?.length || 0,
             firstMessageSender: messages && messages.length > 0 ? messages[0].sender : null,
             lastMessageSender: messages && messages.length > 0 ? messages[messages.length - 1].sender : null,
@@ -71,7 +68,7 @@ export default function StorySessionPage({ params }: PageParams) {
     };
 
     const renderContent = () => {
-        if (userLoading) {
+        if (userLoading || sessionLoading) {
             return <div className="flex items-center justify-center"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>;
         }
 
@@ -84,6 +81,14 @@ export default function StorySessionPage({ params }: PageParams) {
             );
         }
         
+        if (!session) {
+            return (
+                <div className="text-center">
+                    <p className="text-destructive">This story session could not be found.</p>
+                </div>
+            )
+        }
+        
         return (
              <Card className="w-full max-w-2xl h-full flex flex-col">
                 <CardHeader>
@@ -93,8 +98,8 @@ export default function StorySessionPage({ params }: PageParams) {
                 <CardContent className="flex-grow overflow-y-auto pr-6 space-y-4">
                    {messagesLoading && <div className="flex items-center gap-2"><LoaderCircle className="animate-spin mr-2" />Loading messages...</div>}
                    {messagesError && <p className="text-destructive">Error loading messages: {messagesError.message}</p>}
-                   {messages && messages.map((msg, index) => (
-                       <div key={index} className="flex flex-col">
+                   {messages && messages.map((msg: any) => (
+                       <div key={msg.id} className="flex flex-col">
                            <span className="text-xs font-bold text-muted-foreground">
                                {msg.sender === 'assistant' ? 'Story Guide' : 'You'}
                            </span>
@@ -143,5 +148,3 @@ export default function StorySessionPage({ params }: PageParams) {
         </div>
     );
 }
-
-    
