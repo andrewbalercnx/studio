@@ -42,7 +42,6 @@ export default function StorySessionPage() {
             setInput('');
         } catch (e) {
             console.error("Error sending message:", e);
-            // Optionally, show a toast notification
         } finally {
             setIsSending(false);
         }
@@ -77,6 +76,10 @@ export default function StorySessionPage() {
             );
         }
         
+        if (sessionError) {
+            return <p className="text-destructive">Error loading session: {sessionError.message}</p>;
+        }
+        
         if (!session) {
             return (
                 <div className="text-center">
@@ -95,11 +98,13 @@ export default function StorySessionPage() {
                    {messagesLoading && <div className="flex items-center gap-2"><LoaderCircle className="animate-spin mr-2" />Loading messages...</div>}
                    {messagesError && <p className="text-destructive">Error loading messages: {messagesError.message}</p>}
                    {messages && messages.map((msg: any) => (
-                       <div key={msg.id} className="flex flex-col">
+                       <div key={msg.id} className={`flex flex-col ${msg.sender === 'child' ? 'items-end' : 'items-start'}`}>
                            <span className="text-xs font-bold text-muted-foreground">
                                {msg.sender === 'assistant' ? 'Story Guide' : 'You'}
                            </span>
-                           <p className="p-2 bg-muted rounded-md">{msg.text}</p>
+                           <p className={`p-2 rounded-md ${msg.sender === 'child' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                               {msg.text}
+                           </p>
                        </div>
                    ))}
                 </CardContent>
