@@ -21,10 +21,13 @@ export function useUser() {
 
   useEffect(() => {
     if (auth) {
-      onAuthStateChanged(auth, (user) => {
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
         setUser(user);
         setLoading(false);
       });
+      return () => unsubscribe();
+    } else {
+      setLoading(false);
     }
   }, [auth]);
 

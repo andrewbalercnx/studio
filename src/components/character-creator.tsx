@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { ArtStyle, Character } from '@/lib/types';
 import ArtStyleSelector from './art-style-selector';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -27,12 +27,21 @@ type CharacterCreatorProps = {
 
 export default function CharacterCreator({ characters, setCharacters, artStyle, setArtStyle }: CharacterCreatorProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const { user } = useUser();
+  const { user, loading: userLoading } = useUser();
   const router = useRouter();
 
-  if (!user) {
+  useEffect(() => {
+    if (!userLoading && !user) {
       router.push('/login?redirect=/create');
-      return null;
+    }
+  }, [user, userLoading, router]);
+
+  if (userLoading || !user) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
   
   return (
