@@ -4,14 +4,107 @@ import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoaderCircle } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useEffect, useState } from 'react';
+import { useFirestore } from '@/firebase';
+import { collection, doc, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
-const stubPrompts = [
-    { id: 'warmup_level_low_v1', phase: 'warmup', levelBand: 'low' },
-    { id: 'warmup_level_med_v1', phase: 'warmup', levelBand: 'medium' },
+type PromptConfig = {
+    id: string;
+    phase: string;
+    levelBand: string;
+    languageCode: string;
+    version: number;
+    status: string;
+    systemPrompt: string;
+    modeInstructions: string;
+    additionalContextTemplate: object;
+    allowedChatMoves: string[];
+};
+
+const samplePrompts: PromptConfig[] = [
+    {
+        id: "warmup_level_low_v1",
+        phase: "warmup",
+        levelBand: "low",
+        languageCode: "en-GB",
+        version: 1,
+        status: "draft",
+        systemPrompt: "(placeholder system prompt for warmup low level)",
+        modeInstructions: "(placeholder mode instructions for warmup low level)",
+        additionalContextTemplate: {
+            placeholders: ["childName", "favouriteThings"]
+        },
+        allowedChatMoves: ["ask_short_question", "ask_for_two_sentences"]
+    },
+    {
+        id: "warmup_level_med_v1",
+        phase: "warmup",
+        levelBand: "medium",
+        languageCode: "en-GB",
+        version: 1,
+        status: "draft",
+        systemPrompt: "(placeholder system prompt for warmup medium level)",
+        modeInstructions: "(placeholder mode instructions for warmup medium level)",
+        additionalContextTemplate: {
+            placeholders: ["childName", "favouriteThings", "recentStoryVibe"]
+        },
+        allowedChatMoves: ["ask_short_question", "ask_for_three_sentences", "summarise_child_answer_back"]
+    }
 ];
 
 export default function AdminPromptsPage() {
-  const { isAuthenticated, isAdmin, email, loading, error } = useAdminStatus();
+  const { isAuthenticated, isAdmin, email, loading: authLoading } = useAdminStatus();
+  const firestore = useFirestore();
+  const { toast } = useToast();
+
+  const [prompts, setPrompts] = useState<PromptConfig[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!firestore || !isAdmin) {
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
+    const promptsRef = collection(firestore, 'promptConfigs');
+    const unsubscribe = onSnapshot(promptsRef, 
+      (snapshot) => {
+        const promptList = snapshot.docs.map(d => d.data() as PromptConfig);
+        setPrompts(promptList);
+        setLoading(false);
+        setError(null);
+      },
+      (err) => {
+        console.error("Error fetching prompt configs:", err);
+        setError("Could not fetch prompt configs.");
+        setPrompts([]);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [firestore, isAdmin]);
+  
+  const handleCreateSampleConfigs = async () => {
+    if (!firestore) return;
+    try {
+        const batch = writeBatch(firestore);
+        samplePrompts.forEach(p => {
+            const docRef = doc(firestore, "promptConfigs", p.id);
+            batch.set(docRef, p);
+        });
+        await batch.commit();
+        toast({ title: 'Success', description: 'Sample prompt configs created.' });
+    } catch (e: any) {
+        console.error("Error creating sample configs:", e);
+        toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  };
+
 
   const diagnostics = {
     page: 'admin-prompts',
@@ -19,20 +112,20 @@ export default function AdminPromptsPage() {
       isAuthenticated,
       email,
       isAdmin,
-      loading,
-      error,
+      loading: authLoading,
+      error: null, // useAdminStatus hook error
     },
-    stubData: {
-      itemsSampled: stubPrompts.length,
-    }
+    firestore: {
+        collection: 'promptConfigs',
+        count: prompts.length,
+        sampleIds: prompts.slice(0, 3).map(p => p.id),
+    },
+    ...(error ? { firestoreError: error } : {})
   };
 
   const renderContent = () => {
-    if (loading) {
-      return <LoaderCircle className="mx-auto h-8 w-8 animate-spin" />;
-    }
-    if (error) {
-      return <p className="text-destructive">Error: {error}</p>;
+    if (authLoading || loading) {
+      return <div className="flex items-center gap-2"><LoaderCircle className="h-5 w-5 animate-spin" /><span>Loading prompt configs...</span></div>;
     }
     if (!isAuthenticated) {
       return <p>You must be signed in to access admin pages.</p>;
@@ -40,28 +133,39 @@ export default function AdminPromptsPage() {
     if (!isAdmin) {
       return <p>You are signed in but do not have admin rights.</p>;
     }
+    if (error) {
+        return <p className="text-destructive">{error}</p>;
+    }
+    if (prompts.length === 0) {
+        return (
+            <div className="text-center py-8 border-2 border-dashed rounded-lg">
+                <p className="text-muted-foreground mb-4">No prompt configs found.</p>
+                <Button onClick={handleCreateSampleConfigs}>Create sample configs</Button>
+            </div>
+        )
+    }
+
     return (
-        <div>
-            <p className="mb-4">This is a placeholder list. Real data will be connected later.</p>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>ID</TableHead>
-                        <TableHead>Phase</TableHead>
-                        <TableHead>Level Band</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {stubPrompts.map((prompt) => (
-                        <TableRow key={prompt.id}>
-                            <TableCell className="font-mono">{prompt.id}</TableCell>
-                            <TableCell>{prompt.phase}</TableCell>
-                            <TableCell>{prompt.levelBand}</TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </div>
+      <Table>
+          <TableHeader>
+              <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Phase</TableHead>
+                  <TableHead>Level Band</TableHead>
+                  <TableHead>Status</TableHead>
+              </TableRow>
+          </TableHeader>
+          <TableBody>
+              {prompts.map((prompt) => (
+                  <TableRow key={prompt.id}>
+                      <TableCell className="font-mono">{prompt.id}</TableCell>
+                      <TableCell>{prompt.phase}</TableCell>
+                      <TableCell>{prompt.levelBand}</TableCell>
+                      <TableCell>{prompt.status}</TableCell>
+                  </TableRow>
+              ))}
+          </TableBody>
+      </Table>
     );
   };
 
