@@ -36,7 +36,7 @@ export default function AdminDashboardPage() {
     return (
       <div className="space-y-4">
         <p>Welcome to the Story Guide admin area.</p>
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-4">
           <Button asChild>
             <Link href="/admin/users">Manage Users</Link>
           </Button>
@@ -45,6 +45,12 @@ export default function AdminDashboardPage() {
           </Button>
           <Button asChild>
             <Link href="/admin/upload">Upload JSON Configs</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/children">Children</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/sessions">Story Sessions</Link>
           </Button>
         </div>
       </div>

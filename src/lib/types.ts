@@ -66,3 +66,14 @@ export type PromptConfig = {
     additionalContextTemplate?: object;
     allowedChatMoves?: string[];
 };
+
+export type ChildProfile = {
+    id: string;
+	displayName: string;
+	createdAt: Date;
+	estimatedLevel: number;
+	favouriteGenres: string[];
+	favouriteCharacterTypes: string[];
+	preferredStoryLength: 'short' | 'medium' | 'long';
+	helpPreference: 'more_scaffolding' | 'balanced' | 'independent';
+};
