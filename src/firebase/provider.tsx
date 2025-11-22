@@ -3,7 +3,8 @@
 import {createContext, useContext} from 'react';
 import type {FirebaseApp} from 'firebase/app';
 import type {Auth} from 'firebase/auth';
-import type {Firestore}mport { getStorage, FirebaseStorage } from 'firebase/storage';
+import type {Firestore} from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 type FirebaseContextValue = {
   firebaseApp: FirebaseApp;
@@ -49,4 +50,3 @@ export function useFirestore() {
 export function useStorage() {
     return useFirebase().storage;
 }
-
