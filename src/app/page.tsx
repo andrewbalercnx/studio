@@ -5,38 +5,55 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { continueChat } from '@/ai/flows/story-chat-flow';
-import type { ChatMessage as ChatMessageType } from '@/lib/types';
+import type { StorySession, ChatMessage as ChatMessageType } from '@/lib/types';
 import { ChatMessage } from '@/components/chat-message';
 import { LoaderCircle, Send } from 'lucide-react';
 import { useUser } from '@/firebase/auth/use-user';
 import Link from 'next/link';
 
+// Create a mock story session for development
+const createMockStorySession = (user: any): StorySession => ({
+  id: 'session-1',
+  childId: user.uid,
+  status: 'in_progress',
+  currentPhase: 'warmup',
+  currentStepIndex: 0,
+  characters: [],
+  beats: [],
+  messages: [],
+  createdAt: new Date(),
+  updatedAt: new Date(),
+});
+
+
 export default function Home() {
   const { user, loading: userLoading } = useUser();
-  const [messages, setMessages] = useState<ChatMessageType[]>([]);
+  const [session, setSession] = useState<StorySession | null>(null);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Start the conversation when the component loads
   useEffect(() => {
-    if (user && messages.length === 0) {
-      getInitialMessage();
+    if (user && !session) {
+      const newSession = createMockStorySession(user);
+      setSession(newSession);
+      getInitialMessage(newSession);
     }
-  }, [user, messages.length]);
+  }, [user, session]);
 
   // Scroll to bottom when new messages are added
   useEffect(() => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [session?.messages]);
 
-  const getInitialMessage = async () => {
+  const getInitialMessage = async (currentSession: StorySession) => {
     setIsLoading(true);
     try {
-      const result = await continueChat({ messages: [] });
-      setMessages([result.message]);
+      const result = await continueChat({ session: currentSession });
+      setSession(prev => prev ? { ...prev, messages: [result.message] } : null);
     } catch (error) {
       console.error('Error getting initial message:', error);
       // You could add a user-facing error message here
@@ -46,7 +63,7 @@ export default function Home() {
   };
 
   const sendMessage = async (messageContent: string) => {
-    if (!messageContent.trim()) return;
+    if (!messageContent.trim() || !session) return;
 
     const userMessage: ChatMessageType = {
       id: `user-${Date.now()}`,
@@ -54,14 +71,18 @@ export default function Home() {
       content: messageContent,
     };
 
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
+    const updatedSession: StorySession = {
+      ...session,
+      messages: [...session.messages, userMessage],
+    };
+    
+    setSession(updatedSession);
     setInput('');
     setIsLoading(true);
 
     try {
-      const result = await continueChat({ messages: newMessages });
-      setMessages(prev => [...prev, result.message]);
+      const result = await continueChat({ session: updatedSession });
+      setSession(prev => prev ? { ...prev, messages: [...prev.messages, result.message] } : null);
     } catch (error) {
       console.error('Error continuing chat:', error);
       const errorMessage: ChatMessageType = {
@@ -69,7 +90,7 @@ export default function Home() {
         role: 'assistant',
         content: 'Oops! I had a little trouble thinking. Please try again.',
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setSession(prev => prev ? { ...prev, messages: [...prev.messages, errorMessage] } : null);
     } finally {
       setIsLoading(false);
     }
@@ -116,7 +137,7 @@ export default function Home() {
           <CardTitle className="font-headline text-center">Your Story Adventure</CardTitle>
         </CardHeader>
         <CardContent ref={scrollAreaRef} className="flex-grow overflow-y-auto pr-6 space-y-4">
-          {messages.map((msg) => (
+          {session?.messages.map((msg) => (
             <ChatMessage key={msg.id} message={msg} onChoiceClick={handleChoiceClick} />
           ))}
            {isLoading && (

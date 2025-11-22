@@ -10,25 +10,55 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { ChatMessage, Role, Choice } from '@/lib/types';
+import { StorySession, ChatMessage } from '@/lib/types';
 
 
 // Define Zod schemas that match the TypeScript types
 const ChoiceSchema = z.object({
   id: z.string(),
   text: z.string(),
+  value: z.string().optional(),
 });
 
 const ChatMessageSchema = z.object({
   id: z.string(),
-  role: z.enum(['user', 'assistant']),
+  role: z.enum(['user', 'assistant', 'system']),
   content: z.string(),
   choices: z.array(ChoiceSchema).optional(),
 });
 
+const CharacterSchema = z.object({
+    name: z.string(),
+    type: z.enum(['self', 'friend', 'family', 'pet', 'imaginary']),
+    traits: z.array(z.string()),
+    goal: z.string(),
+});
+
+const StoryBeatSchema = z.object({
+    label: z.string(),
+    childPlanText: z.string(),
+    draftText: z.string(),
+});
+
+const StorySessionSchema = z.object({
+    id: z.string(),
+    childId: z.string(),
+    status: z.enum(['in_progress', 'completed']),
+    currentPhase: z.string(),
+    currentStepIndex: z.number(),
+    storyTitle: z.string().optional(),
+    storyVibe: z.string().optional(),
+    characters: z.array(CharacterSchema),
+    beats: z.array(StoryBeatSchema),
+    finalStoryText: z.string().optional(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    messages: z.array(ChatMessageSchema),
+});
+
 
 const ContinueChatInputSchema = z.object({
-  messages: z.array(ChatMessageSchema).describe('The history of the conversation so far.'),
+  session: StorySessionSchema.describe('The entire story session object, including all messages.'),
 });
 export type ContinueChatInput = z.infer<typeof ContinueChatInputSchema>;
 
@@ -50,11 +80,11 @@ const continueChatFlow = ai.defineFlow(
     inputSchema: ContinueChatInputSchema,
     outputSchema: ContinueChatOutputSchema,
   },
-  async (input) => {
+  async ({ session }) => {
     // For now, we'll return a simple, hard-coded response.
     // In the future, this will contain complex logic driven by JSON configuration.
     
-    const hasMessages = input.messages.length > 0;
+    const hasMessages = session.messages.length > 0;
 
     if (!hasMessages) {
         return {
@@ -66,11 +96,11 @@ const continueChatFlow = ai.defineFlow(
         }
     }
     
-    const lastUserMessage = input.messages[input.messages.length - 1];
+    const lastUserMessage = session.messages[session.messages.length - 1];
     
     // This is a simple, temporary logic tree. This will be replaced by a
     // configuration-driven system.
-    if (lastUserMessage.content.toLowerCase().includes('hello') || input.messages.length === 1) {
+    if (lastUserMessage.content.toLowerCase().includes('hello') || session.messages.length === 1) {
          return {
             message: {
                 id: `assistant-${Date.now()}`,

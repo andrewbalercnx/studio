@@ -1,3 +1,5 @@
+'use client';
+
 export type Role = 'user' | 'assistant' | 'system';
 
 export type Choice = {
@@ -42,4 +44,12 @@ export type StorySession = {
     // This is a client-side representation and not stored in Firestore directly
     // with the session document. It's populated from the messages sub-collection.
     messages: ChatMessage[];
+};
+
+export type ArtStyle = {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl: string;
+  imageHint: string;
 };
