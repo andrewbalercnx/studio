@@ -134,7 +134,7 @@ export default function Home() {
     <div className="flex h-[calc(100vh-3.5rem)] justify-center items-center p-4">
       <Card className="w-full max-w-2xl h-full flex flex-col">
         <CardHeader>
-          <CardTitle className="font-headline text-center">Your Story Adventure</CardTitle>
+          <CardTitle className="font-headline text-center">Story Chat</CardTitle>
         </CardHeader>
         <CardContent ref={scrollAreaRef} className="flex-grow overflow-y-auto pr-6 space-y-4">
           {session?.messages.map((msg) => (

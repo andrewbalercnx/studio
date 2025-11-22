@@ -1,0 +1,167 @@
+'use server';
+
+/**
+ * @fileOverview Flow to initialize a new story session.
+ * 
+ * - startWarmupStory - A function that creates a child profile (if needed) and a new story session.
+ */
+
+import { auth } from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
+import { headers } from 'next/headers';
+import { initFirebaseAdminApp } from '@/firebase/admin/app';
+import type { ChildProfile, StorySession, PromptConfig } from '@/lib/types';
+
+initFirebaseAdminApp();
+
+type StartWarmupStoryResponse = {
+    storySessionId: string;
+    childId: string;
+    childEstimatedLevel: number;
+    chosenLevelBand: string;
+    promptConfigSummary: {
+        id: string;
+        phase: string;
+        levelBand: string;
+        version: number;
+        status: string;
+    };
+    initialAssistantMessage: string;
+};
+
+type ErrorResponse = {
+    error: true;
+    message: string;
+};
+
+
+async function getAuthenticatedUser() {
+    const sessionCookie = headers().get('__session')?.valueOf();
+
+    if (!sessionCookie) {
+        return null;
+    }
+
+    try {
+        const decodedIdToken = await auth().verifySessionCookie(sessionCookie);
+        return decodedIdToken;
+    } catch (error) {
+        console.error('Error verifying session cookie:', error);
+        return null;
+    }
+}
+
+
+export async function startWarmupStory(): Promise<StartWarmupStoryResponse | ErrorResponse> {
+    const user = await getAuthenticatedUser();
+    
+    if (!user) {
+        // This would ideally return an HTTP 401 status, but in Server Actions we return an error object.
+        return { error: true, message: "Not authenticated" };
+    }
+
+    const firestore = getFirestore();
+    const childId = user.uid;
+    const childRef = firestore.collection('children').doc(childId);
+
+    let childProfile: ChildProfile;
+    let childEstimatedLevel: number;
+
+    try {
+        const childDoc = await childRef.get();
+
+        if (!childDoc.exists) {
+            const newChildProfile: Omit<ChildProfile, 'createdAt'> = {
+                id: childId,
+                displayName: user.name || user.email?.split('@')[0] || 'Unnamed Child',
+                estimatedLevel: 2,
+                favouriteGenres: ["funny", "magical"],
+                favouriteCharacterTypes: ["self", "pet"],
+                preferredStoryLength: "short",
+                helpPreference: "more_scaffolding"
+            };
+            await childRef.set({
+                ...newChildProfile,
+                createdAt: new Date(),
+            });
+            childProfile = { ...newChildProfile, createdAt: new Date() };
+            childEstimatedLevel = newChildProfile.estimatedLevel;
+        } else {
+            childProfile = childDoc.data() as ChildProfile;
+            childEstimatedLevel = childProfile.estimatedLevel || 2;
+        }
+
+        // Determine level band
+        let chosenLevelBand: string;
+        if (childEstimatedLevel <= 2) chosenLevelBand = "low";
+        else if (childEstimatedLevel === 3) chosenLevelBand = "medium";
+        else if (childEstimatedLevel >= 4) chosenLevelBand = "high";
+        else chosenLevelBand = "low"; // Default case
+
+        // Create new story session
+        const storySessionsRef = firestore.collection('storySessions');
+        const newSessionRef = storySessionsRef.doc();
+        const now = new Date();
+        const newSessionData: Omit<StorySession, 'messages'> = {
+            id: newSessionRef.id,
+            childId: childId,
+            status: "in_progress",
+            currentPhase: "warmup",
+            currentStepIndex: 0,
+            storyTitle: "",
+            storyVibe: "",
+            characters: [],
+            beats: [],
+            createdAt: now,
+            updatedAt: now,
+        };
+        await newSessionRef.set(newSessionData);
+
+        // Select prompt config
+        const promptConfigsRef = firestore.collection('promptConfigs');
+        const query = promptConfigsRef
+            .where('phase', '==', 'warmup')
+            .where('levelBand', '==', chosenLevelBand)
+            .where('status', '==', 'live')
+            .limit(1);
+
+        let promptConfigSnapshot = await query.get();
+        let promptConfig: PromptConfig | null = null;
+        
+        if (promptConfigSnapshot.empty) {
+            // Fallback
+            const fallbackRef = firestore.collection('promptConfigs').doc('warmup_level_low_v1');
+            const fallbackDoc = await fallbackRef.get();
+            if (fallbackDoc.exists) {
+                promptConfig = fallbackDoc.data() as PromptConfig;
+            }
+        } else {
+            promptConfig = promptConfigSnapshot.docs[0].data() as PromptConfig;
+        }
+        
+        if (!promptConfig) {
+            return { error: true, message: "No warmup promptConfig found (including fallback)." };
+        }
+        
+        const initialAssistantMessage = "Hi! I am your Story Guide. What would you like me to call you?";
+
+        return {
+            storySessionId: newSessionData.id,
+            childId: childId,
+            childEstimatedLevel: childEstimatedLevel,
+            chosenLevelBand: chosenLevelBand,
+            promptConfigSummary: {
+                id: promptConfig.id,
+                phase: promptConfig.phase,
+                levelBand: promptConfig.levelBand,
+                version: promptConfig.version,
+                status: promptConfig.status,
+            },
+            initialAssistantMessage: initialAssistantMessage,
+        };
+
+    } catch (e: any) {
+        console.error("Error in startWarmupStory:", e);
+        return { error: true, message: e.message || "An unexpected error occurred." };
+    }
+}
