@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useParams } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -13,7 +14,9 @@ import type { StorySession, ChatMessage as Message } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 
-export default function StorySessionPage({ params: { sessionId } }: { params: { sessionId: string } }) {
+export default function StorySessionPage() {
+    const params = useParams<{ sessionId: string }>();
+    const sessionId = params.sessionId;
     const { user, loading: userLoading } = useUser();
     const firestore = useFirestore();
     const [input, setInput] = useState('');
