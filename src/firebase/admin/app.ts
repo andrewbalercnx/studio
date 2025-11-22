@@ -5,7 +5,7 @@ import { ServiceAccount, credential } from 'firebase-admin';
 
 let adminApp: App;
 
-export function initFirebaseAdminApp() {
+export async function initFirebaseAdminApp() {
   if (getApps().length) {
     adminApp = getApp();
     return adminApp;
