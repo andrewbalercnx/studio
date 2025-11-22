@@ -25,32 +25,28 @@ export async function storySuggestionAndGuidance(input: StorySuggestionAndGuidan
   return storySuggestionAndGuidanceFlow(input);
 }
 
-const storyGuidancePrompt = ai.definePrompt({
-  name: 'storyGuidancePrompt',
-  input: {schema: StorySuggestionAndGuidanceInputSchema},
-  output: {schema: StorySuggestionAndGuidanceOutputSchema},
-  prompt: `You are a helpful assistant that guides children in creating their own stories.
-
-  Based on the child's previous responses (if any), suggest a story idea or ask a question to help them develop their story further.
-
-  Previous Responses: {{#each previousResponses}}{{{this}}}
-{{/each}}
-  
-  If the story is just starting, begin by suggesting a story idea, such as "Once upon a time, there was a magical kingdom...".
-
-  Otherwise, ask a question that encourages them to add details about characters, settings, or plot points.
-  Make sure the question is engaging and fun for a child.
-`,
-});
-
 const storySuggestionAndGuidanceFlow = ai.defineFlow(
   {
     name: 'storySuggestionAndGuidanceFlow',
     inputSchema: StorySuggestionAndGuidanceInputSchema,
     outputSchema: StorySuggestionAndGuidanceOutputSchema,
   },
-  async input => {
-    const {output} = await storyGuidancePrompt(input);
+  async (input) => {
+    const { output } = await ai.generate({
+      model: 'googleai/gemini-2.5-flash',
+      output: { schema: StorySuggestionAndGuidanceOutputSchema },
+      prompt: `You are a helpful assistant that guides children in creating their own stories.
+
+        Based on the child's previous responses (if any), suggest a story idea or ask a question to help them develop their story further.
+
+        Previous Responses: ${input.previousResponses?.join('\n') || 'None'}
+        
+        If the story is just starting, begin by suggesting a story idea, such as "Once upon a time, there was a magical kingdom...".
+
+        Otherwise, ask a question that encourages them to add details about characters, settings, or plot points.
+        Make sure the question is engaging and fun for a child.
+      `,
+    });
     return output!;
   }
 );

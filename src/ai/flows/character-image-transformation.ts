@@ -36,22 +36,6 @@ export async function transformImageToCharacter(
   return transformImageToCharacterFlow(input);
 }
 
-const transformImageToCharacterPrompt = ai.definePrompt({
-  name: 'transformImageToCharacterPrompt',
-  input: {schema: TransformImageToCharacterInputSchema},
-  output: {schema: TransformImageToCharacterOutputSchema},
-  prompt: `You are an AI that transforms photos of people into characters in a specified art style.
-
-  The user will provide a photo and a description of the desired art style.
-  Your task is to transform the photo into a character that matches the specified art style.
-
-  Art Style Description: {{{artStyleDescription}}}
-  Photo: {{media url=photoDataUri}}
-
-  Return the transformed image as a data URI.
-  `,
-});
-
 const transformImageToCharacterFlow = ai.defineFlow(
   {
     name: 'transformImageToCharacterFlow',
@@ -59,7 +43,21 @@ const transformImageToCharacterFlow = ai.defineFlow(
     outputSchema: TransformImageToCharacterOutputSchema,
   },
   async input => {
-    const {output} = await transformImageToCharacterPrompt(input);
-    return output!;
+    const { media } = await ai.generate({
+      model: 'googleai/gemini-2.5-flash-image-preview',
+      prompt: [
+        { media: { url: input.photoDataUri } },
+        { text: `Transform this photo into a character in the following art style: ${input.artStyleDescription}.` },
+      ],
+      config: {
+        responseModalities: ['IMAGE'],
+      },
+    });
+
+    if (!media?.url) {
+      throw new Error('Image generation failed.');
+    }
+
+    return { transformedImageDataUri: media.url };
   }
 );
