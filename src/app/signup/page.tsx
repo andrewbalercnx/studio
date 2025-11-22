@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAuth, useFirestore } from '@/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -40,7 +40,8 @@ export default function SignUpPage() {
       await setDoc(doc(firestore, 'users', user.uid), {
         id: user.uid,
         email: user.email,
-        createdAt: new Date(),
+        isAdmin: false, // Set default admin status
+        createdAt: serverTimestamp(),
       });
       
       toast({ title: 'Account created successfully!' });

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
+import { useFirestore } from '@/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 interface AdminStatus {
   isAuthenticated: boolean;
@@ -13,6 +15,7 @@ interface AdminStatus {
 
 export function useAdminStatus(): AdminStatus {
   const { user, loading: authLoading } = useUser();
+  const firestore = useFirestore();
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -23,29 +26,37 @@ export function useAdminStatus(): AdminStatus {
       return;
     }
 
-    if (!user) {
+    if (!user || !firestore) {
       setIsAdmin(false);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    user.getIdTokenResult()
-      .then((idTokenResult) => {
-        const claims = idTokenResult.claims;
-        setIsAdmin(claims.role === 'admin');
+    const userDocRef = doc(firestore, 'users', user.uid);
+    
+    const unsubscribe = onSnapshot(userDocRef, 
+      (doc) => {
+        if (doc.exists()) {
+          const data = doc.data();
+          setIsAdmin(data.isAdmin === true);
+        } else {
+          // Document might not exist yet if sign-up is in progress
+          setIsAdmin(false);
+        }
         setError(null);
-      })
-      .catch((e) => {
-        console.error("Error getting ID token result:", e);
+        setLoading(false);
+      },
+      (e) => {
+        console.error("Error fetching user profile:", e);
         setError("Could not verify admin status.");
         setIsAdmin(false);
-      })
-      .finally(() => {
         setLoading(false);
-      });
+      }
+    );
 
-  }, [user, authLoading]);
+    return () => unsubscribe();
+  }, [user, authLoading, firestore]);
 
   return {
     isAuthenticated: !!user,

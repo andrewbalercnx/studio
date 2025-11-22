@@ -38,6 +38,9 @@ export default function AdminDashboardPage() {
         <p>Welcome to the Story Guide admin area.</p>
         <div className="flex gap-4">
           <Button asChild>
+            <Link href="/admin/users">Manage Users</Link>
+          </Button>
+          <Button asChild>
             <Link href="/admin/prompts">Manage Prompt Configs</Link>
           </Button>
           <Button asChild>
