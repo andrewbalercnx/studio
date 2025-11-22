@@ -1,0 +1,265 @@
+{
+  "entities": {
+    "ChildProfile": {
+      "title": "Child Profile",
+      "description": "Stores information about a child using the app.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the child."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The child's chosen display name."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the profile was created."
+        },
+        "estimatedLevel": {
+          "type": "number",
+          "description": "AI-estimated reading/writing level (e.g., 1-5)."
+        },
+        "favouriteGenres": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of genres the child enjoys (e.g., 'funny', 'magical')."
+        },
+        "favouriteCharacterTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Common character types the child likes (e.g., 'self', 'pet')."
+        },
+        "preferredStoryLength": {
+          "type": "string",
+          "enum": [
+            "short",
+            "medium",
+            "long"
+          ],
+          "description": "The typical story length the child prefers."
+        },
+        "helpPreference": {
+          "type": "string",
+          "enum": [
+            "more_scaffolding",
+            "balanced",
+            "independent"
+          ],
+          "description": "How much guidance the child prefers."
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "createdAt"
+      ]
+    },
+    "StorySession": {
+      "title": "Story Session",
+      "description": "Represents a single story creation session for a child.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the story session."
+        },
+        "childId": {
+          "type": "string",
+          "description": "Reference to the child who owns this session."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "in_progress",
+            "completed"
+          ],
+          "description": "The current status of the story."
+        },
+        "currentPhase": {
+          "type": "string",
+          "description": "The current phase of the story creation flow (e.g., 'warmup', 'planBeats')."
+        },
+        "currentStepIndex": {
+          "type": "number",
+          "description": "The index of the current step within the current phase."
+        },
+        "storyTitle": {
+          "type": "string",
+          "description": "The title of the story."
+        },
+        "storyVibe": {
+          "type": "string",
+          "description": "The chosen vibe or genre for the story."
+        },
+        "characters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/entities/Character"
+          },
+          "description": "An array of characters in the story."
+        },
+        "beats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/entities/StoryBeat"
+          },
+          "description": "The planned story beats or plot points."
+        },
+        "finalStoryText": {
+          "type": "string",
+          "description": "The full, final generated story text."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "childId",
+        "status",
+        "currentPhase",
+        "currentStepIndex",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Character": {
+      "title": "Story Character",
+      "description": "A character within a story session.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "self",
+            "friend",
+            "family",
+            "pet",
+            "imaginary"
+          ]
+        },
+        "traits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "goal": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"]
+    },
+    "StoryBeat": {
+        "title": "Story Beat",
+        "description": "A single plot point or section of the story.",
+        "type": "object",
+        "properties": {
+            "label": {
+                "type": "string",
+                "description": "A machine-readable label for the beat (e.g., 'start', 'problem')."
+            },
+            "childPlanText": {
+                "type": "string",
+                "description": "The child's one or two sentence plan for this beat."
+            },
+            "draftText": {
+                "type": "string",
+                "description": "The AI-drafted paragraph for this beat."
+            }
+        },
+        "required": ["label"]
+    },
+    "ChatMessage": {
+      "title": "Chat Message",
+      "description": "A single message in a story session conversation.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "storySessionId": {
+          "type": "string"
+        },
+        "sender": {
+          "type": "string",
+          "enum": [
+            "child",
+            "assistant",
+            "system"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/entities/Choice"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "storySessionId",
+        "sender",
+        "text",
+        "createdAt"
+      ]
+    },
+    "Choice": {
+      "title": "Chat Choice",
+      "description": "A tappable choice presented to the child in the chat.",
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "The text displayed to the child."
+        },
+        "value": {
+          "type": "string",
+          "description": "The machine-readable value sent back when tapped."
+        }
+      },
+      "required": ["label", "value"]
+    }
+  },
+  "auth": {
+    "providers": [
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "/children/{childId}": {
+      "schema": { "$ref": "#/entities/ChildProfile" },
+      "description": "Stores individual child profiles."
+    },
+    "/storySessions/{storySessionId}": {
+      "schema": { "$ref": "#/entities/StorySession" },
+      "description": "Stores story creation sessions."
+    },
+    "/storySessions/{storySessionId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Stores the sequence of messages for a given story session."
+    }
+  }
+}
