@@ -1,0 +1,5 @@
+ATTEMPT 1: 
+- Create src/app/providers.tsx as a client component.
+- This provider will contain FirebaseClientProvider, Header, and Toaster.
+- The RootLayout (server component) in src/app/layout.tsx will use this Providers component to wrap its children.
+- This establishes a clean client boundary at the top of the application tree, ensuring context is available before any client components like Header need it. This is the canonical Next.js App Router pattern.
