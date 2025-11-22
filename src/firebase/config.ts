@@ -5,10 +5,12 @@
 import {FirebaseOptions} from 'firebase/app';
 
 export const firebaseConfig: FirebaseOptions = {
-  apiKey: "API_KEY",
-  authDomain: "PROJECT_ID.firebaseapp.com",
-  projectId: "PROJECT_ID",
-  storageBucket: "PROJECT_ID.appspot.com",
-  messagingSenderId: "SENDER_ID",
-  appId: "APP_ID",
+  "projectId": "studio-6508342045-13669",
+  "appId": "1:682539229514:web:7eab256bcc4712952c21b3",
+  "apiKey": "AIzaSyBnmgkx6nfE8hgOqdcgeErOs0SzXVAnXmI",
+  "authDomain": "studio-6508342045-13669.firebaseapp.com",
+  "measurementId": "",
+  "messagingSenderId": "682539229514",
+  "storageBucket": "studio-6508342045-13669.appspot.com"
 };
+
