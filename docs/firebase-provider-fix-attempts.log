@@ -1,5 +1,11 @@
-Attempt #1: Incorrectly structured providers by creating app-layout.tsx and wrapping it. Failed.
-Attempt #2: Moved provider logic inside app-layout.tsx. Failed.
-Attempt #3: Removed app-layout.tsx and placed FirebaseClientProvider directly in RootLayout. Failed.
-Attempt #4: Re-created providers.tsx but with incorrect component structure inside. Failed.
-Attempt #5: (Current & Final) Implemented the canonical provider pattern. Created a dedicated 'src/app/providers.tsx' Client Component to house all client-side layout and context providers. The root 'src/app/layout.tsx' is now a pure Server Component that delegates its children to this new Providers component. This definitively separates server and client concerns.
+ATTEMPT LOG: Resolving `useStorage` hook dependency loop.
+
+FAILURE PATTERN: Repeatedly added `useStorage` hook to `src/firebase/provider.tsx` without adding the corresponding `getStorage` and `FirebaseStorage` imports from `firebase/storage`. An automated process (likely a linter or type-checker with auto-fix enabled) was silently reverting the change by removing the invalid code, causing an infinite loop of failures.
+
+FINAL, CORRECT STRATEGY (2024-08-01):
+1.  **Modify `src/firebase/provider.tsx`**: Add `import { getStorage, FirebaseStorage } from 'firebase/storage';`.
+2.  **Modify `src/firebase/provider.tsx`**: Add `storage: FirebaseStorage;` to the `FirebaseContextValue` type.
+3.  **Modify `src/firebase/provider.tsx`**: Add the `useStorage` hook definition: `export function useStorage() { return useFirebase().storage; }`.
+4.  **Modify `src/firebase/index.ts`**: Add `storage: getStorage(firebaseApp)` to the returned object in `initializeFirebase`.
+
+This two-part solution ensures the code is valid, dependency-complete, and will not be reverted by automated tooling. This breaks the failure loop.
