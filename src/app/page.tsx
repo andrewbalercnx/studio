@@ -52,7 +52,14 @@ export default function Home() {
   const getInitialMessage = async (currentSession: StorySession) => {
     setIsLoading(true);
     try {
-      const result = await continueChat({ session: currentSession });
+      // The flow expects dates as strings, but the type expects Date objects.
+      // We can stringify them for the API call.
+      const apiSession = {
+        ...currentSession,
+        createdAt: currentSession.createdAt.toISOString(),
+        updatedAt: currentSession.updatedAt.toISOString(),
+      }
+      const result = await continueChat({ session: apiSession as any });
       setSession(prev => prev ? { ...prev, messages: [result.message] } : null);
     } catch (error) {
       console.error('Error getting initial message:', error);
@@ -81,7 +88,13 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      const result = await continueChat({ session: updatedSession });
+       const apiSession = {
+        ...updatedSession,
+        createdAt: updatedSession.createdAt.toISOString(),
+        updatedAt: updatedSession.updatedAt.toISOString(),
+        messages: updatedSession.messages.map(m => ({...m, createdAt: new Date().toISOString()}))
+      }
+      const result = await continueChat({ session: apiSession as any });
       setSession(prev => prev ? { ...prev, messages: [...prev.messages, result.message] } : null);
     } catch (error) {
       console.error('Error continuing chat:', error);

@@ -11,10 +11,14 @@ export type Choice = {
 
 export type ChatMessage = {
     id: string;
+    // This is different from the Genkit role, which is 'user' | 'assistant' | 'system'
     sender: 'child' | 'assistant' | 'system';
     text: string;
-    createdAt: any; // Allow for server timestamp
+    createdAt: any; // Allow for server timestamp or Date
     choices?: Choice[];
+    // For Genkit compatibility
+    role?: 'user' | 'model' | 'system' | 'tool';
+    content?: string;
 };
 
 export type Character = {
