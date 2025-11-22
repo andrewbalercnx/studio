@@ -1,9 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { FirebaseClientProvider } from '@/firebase/client-provider';
-import Header from '@/components/header';
-import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
+import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: 'StoryPic Kids',
@@ -23,13 +21,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap" rel="stylesheet" />
       </head>
       <body className={cn("h-full font-body antialiased bg-background")}>
-        <FirebaseClientProvider>
-          <div className="relative flex min-h-screen flex-col">
-            <Header />
-            <main className="flex-1">{children}</main>
-          </div>
-          <Toaster />
-        </FirebaseClientProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
