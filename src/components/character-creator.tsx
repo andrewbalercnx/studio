@@ -12,6 +12,11 @@ import { useToast } from '@/hooks/use-toast';
 import { transformImageToCharacter } from '@/ai/flows/character-image-transformation';
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { useUser } from '@/firebase/auth/use-user';
+import { useRouter } from 'next/navigation';
+import { useUploadFile } from '@/firebase/storage/use-upload-file';
+import { useFirestore } from '@/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 type CharacterCreatorProps = {
   characters: Character[];
@@ -22,6 +27,13 @@ type CharacterCreatorProps = {
 
 export default function CharacterCreator({ characters, setCharacters, artStyle, setArtStyle }: CharacterCreatorProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { user } = useUser();
+  const router = useRouter();
+
+  if (!user) {
+      router.push('/login?redirect=/create');
+      return null;
+  }
   
   return (
     <div className="h-full grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -91,6 +103,9 @@ function AddCharacterDialog({ artStyle, onCharacterCreated, closeDialog }: { art
   const [photoDataUri, setPhotoDataUri] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { uploadFile } = useUploadFile();
+  const firestore = useFirestore();
+  const { user } = useUser();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -104,23 +119,35 @@ function AddCharacterDialog({ artStyle, onCharacterCreated, closeDialog }: { art
   };
 
   const handleSubmit = async () => {
-    if (!name || !photoDataUri || !artStyle) {
-      toast({ title: 'Please fill out all fields.', variant: 'destructive' });
+    if (!name || !photoDataUri || !artStyle || !user || !firestore) {
+      toast({ title: 'Please fill out all fields and be signed in.', variant: 'destructive' });
       return;
     }
     setIsLoading(true);
     try {
+      // 1. Transform the image
       const result = await transformImageToCharacter({
         photoDataUri,
         artStyleDescription: artStyle.imageHint
       });
 
+      const characterId = new Date().toISOString();
+
+      // 2. Upload both original and transformed images to Firebase Storage
+      const originalPhotoUrl = await uploadFile(`characters/${characterId}_original.png`, photoDataUri);
+      const transformedImageUrl = await uploadFile(`characters/${characterId}_transformed.png`, result.transformedImageDataUri);
+
+      // 3. Create character object
       const newCharacter: Character = {
-        id: new Date().toISOString(),
+        id: characterId,
         name,
-        originalPhotoUrl: photoDataUri,
-        transformedImageUrl: result.transformedImageDataUri,
+        originalPhotoUrl, // URL from storage
+        transformedImageUrl, // URL from storage
       };
+
+      // 4. Save character metadata to Firestore
+      await setDoc(doc(firestore, `users/${user.uid}/characters`, characterId), newCharacter);
+
       onCharacterCreated(newCharacter);
       toast({ title: `Character "${name}" created!` });
       closeDialog();
@@ -128,7 +155,7 @@ function AddCharacterDialog({ artStyle, onCharacterCreated, closeDialog }: { art
       console.error(error);
       toast({
         title: 'Character creation failed',
-        description: 'The AI couldn\'t transform the image. Please try another photo.',
+        description: 'Something went wrong. Please try again.',
         variant: 'destructive',
       });
     } finally {

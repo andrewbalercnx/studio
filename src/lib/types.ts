@@ -8,9 +8,9 @@ export type ArtStyle = {
 
 export type Character = {
   id: string;
-  name: string;
-  originalPhotoUrl: string; // data URI
-  transformedImageUrl: string; // data URI
+  name:string;
+  originalPhotoUrl: string; // URL from Firebase Storage
+  transformedImageUrl: string; // URL from Firebase Storage
 };
 
 export type Story = {
