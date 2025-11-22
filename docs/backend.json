@@ -241,6 +241,46 @@
         }
       },
       "required": ["label", "value"]
+    },
+    "PromptConfig": {
+      "title": "Prompt Configuration",
+      "description": "Configuration for Genkit prompts, driving the conversation for a specific phase and language level.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the prompt configuration."
+        },
+        "phase": {
+          "type": "string",
+          "description": "The story creation phase this config applies to (e.g., 'warmup', 'planBeats')."
+        },
+        "languageLevel": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "Optional language complexity level this config targets."
+        },
+        "systemPrompt": {
+          "type": "string",
+          "description": "High-level behavior instructions for the Genkit LLM."
+        },
+        "modeInstructions": {
+          "type": "string",
+          "description": "Detailed instructions for the current phase."
+        },
+        "additionalContextTemplate": {
+          "type": "object",
+          "description": "A template for injecting dynamic data into the prompt. Can contain placeholders like {{childName}}."
+        },
+        "allowedChatMoves": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Defines the types of responses the AI is allowed to make (e.g. 'ask_short_question')."
+        }
+      },
+      "required": ["id", "phase", "systemPrompt", "modeInstructions"]
     }
   },
   "auth": {
@@ -260,6 +300,10 @@
     "/storySessions/{storySessionId}/messages/{messageId}": {
       "schema": { "$ref": "#/entities/ChatMessage" },
       "description": "Stores the sequence of messages for a given story session."
+    },
+    "/promptConfigs/{configId}": {
+      "schema": { "$ref": "#/entities/PromptConfig" },
+      "description": "Stores the prompt configurations that drive the AI's behavior."
     }
   }
 }
