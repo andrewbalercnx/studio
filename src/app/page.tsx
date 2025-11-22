@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { continueChat } from '@/ai/flows/story-chat-flow';
 import type { StorySession, ChatMessage as ChatMessageType } from '@/lib/types';
 import { ChatMessage } from '@/components/chat-message';
 import { LoaderCircle, Send } from 'lucide-react';
@@ -37,8 +36,15 @@ export default function Home() {
   useEffect(() => {
     if (user && !session) {
       const newSession = createMockStorySession(user);
+      const initialMessage: ChatMessageType = {
+        id: `assistant-${Date.now()}`,
+        sender: 'assistant',
+        role: 'assistant',
+        content: "Hi! I'm your Story Guide. I'm so excited to help you create a story. First, what's your name?",
+        createdAt: new Date(),
+      };
+      newSession.messages.push(initialMessage);
       setSession(newSession);
-      getInitialMessage(newSession);
     }
   }, [user, session]);
 
@@ -49,64 +55,21 @@ export default function Home() {
     }
   }, [session?.messages]);
 
-  const getInitialMessage = async (currentSession: StorySession) => {
-    setIsLoading(true);
-    try {
-      // The flow expects dates as strings, but the type expects Date objects.
-      // We can stringify them for the API call.
-      const apiSession = {
-        ...currentSession,
-        createdAt: currentSession.createdAt.toISOString(),
-        updatedAt: currentSession.updatedAt.toISOString(),
-      }
-      const result = await continueChat({ session: apiSession as any });
-      setSession(prev => prev ? { ...prev, messages: [result.message] } : null);
-    } catch (error) {
-      console.error('Error getting initial message:', error);
-      // You could add a user-facing error message here
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const sendMessage = async (messageContent: string) => {
     if (!messageContent.trim() || !session) return;
 
     const userMessage: ChatMessageType = {
       id: `user-${Date.now()}`,
+      sender: 'child',
       role: 'user',
       content: messageContent,
-    };
-
-    const updatedSession: StorySession = {
-      ...session,
-      messages: [...session.messages, userMessage],
+      createdAt: new Date(),
     };
     
-    setSession(updatedSession);
+    // In this step, we only add the user's message.
+    // The call to `continueChat` is removed to prevent auto-replies.
+    setSession(prev => prev ? { ...prev, messages: [...prev.messages, userMessage] } : null);
     setInput('');
-    setIsLoading(true);
-
-    try {
-       const apiSession = {
-        ...updatedSession,
-        createdAt: updatedSession.createdAt.toISOString(),
-        updatedAt: updatedSession.updatedAt.toISOString(),
-        messages: updatedSession.messages.map(m => ({...m, createdAt: new Date().toISOString()}))
-      }
-      const result = await continueChat({ session: apiSession as any });
-      setSession(prev => prev ? { ...prev, messages: [...prev.messages, result.message] } : null);
-    } catch (error) {
-      console.error('Error continuing chat:', error);
-      const errorMessage: ChatMessageType = {
-        id: `error-${Date.now()}`,
-        role: 'assistant',
-        content: 'Oops! I had a little trouble thinking. Please try again.',
-      };
-      setSession(prev => prev ? { ...prev, messages: [...prev.messages, errorMessage] } : null);
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const handleSend = () => {
