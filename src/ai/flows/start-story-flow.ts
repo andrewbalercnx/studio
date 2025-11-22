@@ -6,13 +6,16 @@
  * - startWarmupStory - A function that creates a child profile (if needed) and a new story session.
  */
 
-import { auth } from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import { headers } from 'next/headers';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import type { ChildProfile, StorySession, PromptConfig } from '@/lib/types';
 
 initFirebaseAdminApp();
+
+type StartWarmupStoryInput = {
+    childId: string;
+    childDisplayName: string | null;
+};
 
 type StartWarmupStoryResponse = {
     storySessionId: string;
@@ -35,33 +38,14 @@ type ErrorResponse = {
 };
 
 
-async function getAuthenticatedUser() {
-    const sessionCookie = headers().get('__session')?.valueOf();
-
-    if (!sessionCookie) {
-        return null;
-    }
-
-    try {
-        const decodedIdToken = await auth().verifySessionCookie(sessionCookie);
-        return decodedIdToken;
-    } catch (error) {
-        console.error('Error verifying session cookie:', error);
-        return null;
-    }
-}
-
-
-export async function startWarmupStory(): Promise<StartWarmupStoryResponse | ErrorResponse> {
-    const user = await getAuthenticatedUser();
+export async function startWarmupStory(input: StartWarmupStoryInput): Promise<StartWarmupStoryResponse | ErrorResponse> {
+    const { childId, childDisplayName } = input;
     
-    if (!user) {
-        // This would ideally return an HTTP 401 status, but in Server Actions we return an error object.
-        return { error: true, message: "Not authenticated" };
+    if (!childId) {
+        return { error: true, message: "Missing childId" };
     }
 
     const firestore = getFirestore();
-    const childId = user.uid;
     const childRef = firestore.collection('children').doc(childId);
 
     let childProfile: ChildProfile;
@@ -73,7 +57,7 @@ export async function startWarmupStory(): Promise<StartWarmupStoryResponse | Err
         if (!childDoc.exists) {
             const newChildProfile: Omit<ChildProfile, 'createdAt'> = {
                 id: childId,
-                displayName: user.name || user.email?.split('@')[0] || 'Unnamed Child',
+                displayName: childDisplayName || 'Unnamed Child',
                 estimatedLevel: 2,
                 favouriteGenres: ["funny", "magical"],
                 favouriteCharacterTypes: ["self", "pet"],

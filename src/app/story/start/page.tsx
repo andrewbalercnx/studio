@@ -34,10 +34,20 @@ export default function StartStoryPage() {
     const [response, setResponse] = useState<StartStoryResponse | null>(null);
 
     const handleStartStory = async () => {
+        if (!user) return;
+        
         setIsLoading(true);
         setResponse(null);
+
+        const childDisplayName = user.displayName 
+            || (user.email ? user.email.split('@')[0] : null)
+            || "Unnamed Child";
+
         try {
-            const result = await startWarmupStory();
+            const result = await startWarmupStory({
+                childId: user.uid,
+                childDisplayName: childDisplayName
+            });
             setResponse(result);
         } catch (e: any) {
             setResponse({ error: true, message: e.message || 'An unknown error occurred.' });
