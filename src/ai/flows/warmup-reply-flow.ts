@@ -16,8 +16,7 @@ type PromptDebug = {
     systemLength: number;
     messagesType: string;
     messageCount: number;
-    firstMessageSummary: object | null;
-    secondMessageSummary: object | null;
+    messagesShape: any[];
 } | null;
 
 
@@ -76,7 +75,7 @@ export const warmupReplyFlow = ai.defineFlow(
                     role: role,
                     content: [{ text: data.text }],
                 };
-            }).filter(Boolean); // Filter out any null messages
+            }).filter(Boolean) as any[]; // Filter out nulls and cast
             
             // 4. Build prompt
             const systemPromptText = [
@@ -85,31 +84,47 @@ export const warmupReplyFlow = ai.defineFlow(
             ].join('\n\n');
 
             // 5. Build the promptDebug object
-            const getMessageSummary = (msg: any) => {
-                if (!msg) return null;
-                const hasContent = Array.isArray(msg.content);
-                return {
-                    role: msg.role || null,
-                    hasContentArray: hasContent,
-                    contentLength: hasContent ? msg.content.length : 0,
-                    firstPartKeys: (hasContent && msg.content[0]) ? Object.keys(msg.content[0]) : [],
-                };
-            };
-            
             promptDebug = {
                 hasSystem: typeof systemPromptText === 'string' && systemPromptText.length > 0,
                 systemLength: typeof systemPromptText === 'string' ? systemPromptText.length : 0,
                 messagesType: typeof history,
                 messageCount: Array.isArray(history) ? history.length : 0,
-                firstMessageSummary: getMessageSummary(history[0]),
-                secondMessageSummary: getMessageSummary(history[1]),
+                messagesShape: Array.isArray(history) ? history.map((msg, index) => {
+                    if (!msg) {
+                        return { index, hasValue: false };
+                    }
+                    const contentIsArray = Array.isArray(msg.content);
+                    const firstPart = contentIsArray && msg.content[0];
+                    return {
+                        index,
+                        hasValue: true,
+                        role: msg.role || null,
+                        hasContentArray: contentIsArray,
+                        contentLength: contentIsArray ? msg.content.length : 0,
+                        firstPartKeys: firstPart ? Object.keys(firstPart) : [],
+                        firstTextPreview: firstPart && typeof firstPart.text === 'string' ? firstPart.text.slice(0, 40) : null,
+                    };
+                }) : [],
             };
+
+            // 6. Pre-flight validation of the messages array
+            if (!Array.isArray(history)) {
+                throw new Error('Invalid history: not an array');
+            }
+            for (let i = 0; i < history.length; i++) {
+                const msg = history[i];
+                if (!msg) throw new Error(`Invalid message at index ${i}: message is null or undefined.`);
+                if (typeof msg.role !== 'string') throw new Error(`Invalid message at index ${i}: role is missing or not a string.`);
+                if (!Array.isArray(msg.content)) throw new Error(`Invalid message at index ${i}: content is missing or not an array.`);
+                if (msg.content.length === 0 || !msg.content[0]) throw new Error(`Invalid message at index ${i}: content[0] is missing.`);
+                if (typeof msg.content[0].text !== 'string') throw new Error(`Invalid message at index ${i}: content[0].text is missing or not a string.`);
+            }
             
-            // 6. Call Gemini
+            // 7. Call Gemini
             const llmResponse = await ai.generate({
                 model: 'googleai/gemini-2.5-flash',
                 system: systemPromptText,
-                history: history as any[], // Cast to any[] to satisfy Genkit type
+                history: history,
                 config: {
                     temperature: promptConfig.model?.temperature || 0.6,
                     maxOutputTokens: promptConfig.model?.maxOutputTokens || 250,
