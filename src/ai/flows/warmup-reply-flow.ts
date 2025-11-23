@@ -110,7 +110,7 @@ export const warmupReplyFlow = ai.defineFlow(
                 promptPreview: finalPrompt.slice(0, 200),
             };
             
-            const resolvedMaxOutputTokens = 256;
+            const resolvedMaxOutputTokens = 10000;
 
             // 6. Call Gemini with the single prompt string
             const llmResponse = await ai.generate({
@@ -129,20 +129,7 @@ export const warmupReplyFlow = ai.defineFlow(
 
             // Add richer diagnostics
             const firstCandidate = raw && Array.isArray(raw.candidates) && raw.candidates.length > 0 ? raw.candidates[0] : null;
-            const candidateContent = firstCandidate && firstCandidate.content && Array.isArray(firstCandidate.content.parts) ? firstCandidate.content.parts : null;
-
-            let contentPartsSummary: any[] = [];
-            if (Array.isArray(candidateContent)) {
-                contentPartsSummary = candidateContent.map((part: any, index: number) => {
-                    const keys = part && typeof part === 'object' ? Object.keys(part) : [];
-                    const typeHint = typeof part === 'string' ? 'string' : (part && (part.partKind || part.type || null));
-                    return {
-                        index,
-                        keys,
-                        typeHint: typeHint || null
-                    };
-                });
-            }
+            
             let rawCandidatePreview: string | null = null;
             try {
                 if (firstCandidate) {
@@ -161,15 +148,13 @@ export const warmupReplyFlow = ai.defineFlow(
                 hasCandidatesArray: !!(raw && Array.isArray(raw.candidates)),
                 candidatesLength: raw && Array.isArray(raw.candidates) ? raw.candidates.length : 0,
                 firstCandidateKeys: firstCandidate && typeof firstCandidate === "object" ? Object.keys(firstCandidate) : [],
-                contentPartsSummary,
                 rawCandidatePreview,
                 topLevelFinishReason: (llmResponse as any).finishReason ?? null,
                 firstCandidateFinishReason: firstCandidate?.finishReason ?? null,
             };
 
             // Attempt to extract text
-            if (raw && Array.isArray(raw.candidates) && raw.candidates.length > 0) {
-                const firstCandidate = raw.candidates[0];
+            if (firstCandidate) {
                 const content = firstCandidate?.content;
                 const parts = content && Array.isArray(content.parts) ? content.parts : [];
                 const firstPart = parts.length > 0 ? parts[0] : null;
