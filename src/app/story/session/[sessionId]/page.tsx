@@ -19,6 +19,7 @@ type GenkitDiagnostics = {
     lastCallOk: boolean | null;
     lastErrorMessage: string | null;
     lastUsedPromptConfigId: string | null;
+    lastAssistantTextPreview: string | null;
     debug: any | null; // Add debug field
 }
 
@@ -35,6 +36,7 @@ export default function StorySessionPage() {
         lastCallOk: null,
         lastErrorMessage: null,
         lastUsedPromptConfigId: null,
+        lastAssistantTextPreview: null,
         debug: null,
     });
     
@@ -77,6 +79,7 @@ export default function StorySessionPage() {
                     lastCallOk: true,
                     lastErrorMessage: null,
                     lastUsedPromptConfigId: result.usedPromptConfigId,
+                    lastAssistantTextPreview: result.assistantTextPreview || null,
                     debug: null,
                 });
             } else {
@@ -92,6 +95,7 @@ export default function StorySessionPage() {
                     lastCallOk: false,
                     lastErrorMessage: result.errorMessage || 'An unknown error occurred.',
                     lastUsedPromptConfigId: result.usedPromptConfigId || null,
+                    lastAssistantTextPreview: null,
                     debug: result.debug || null, // Store debug info
                 });
             }
@@ -109,6 +113,7 @@ export default function StorySessionPage() {
                 lastCallOk: false,
                 lastErrorMessage: e.message,
                 lastUsedPromptConfigId: null,
+                lastAssistantTextPreview: null,
                 debug: { clientError: true },
             });
         } finally {

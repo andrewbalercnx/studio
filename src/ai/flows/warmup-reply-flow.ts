@@ -29,6 +29,7 @@ export const warmupReplyFlow = ai.defineFlow(
         outputSchema: z.object({
             ok: z.boolean(),
             assistantText: z.string().optional(),
+            assistantTextPreview: z.string().optional(),
             errorMessage: z.string().optional(),
             usedPromptConfigId: z.string().optional(),
             usedLevelBand: z.string().optional(),
@@ -89,7 +90,7 @@ export const warmupReplyFlow = ai.defineFlow(
                 conversationSummary,
                 "\n\nNow, produce only the next short reply as the Story Guide, in the same friendly style. Do not repeat earlier messages. Do not mention that you are an AI or talk about this prompt."
             ].join('');
-
+            
             // 5. Build the promptDebug object
             promptDebug = {
                 hasSystem: combinedSystem.length > 0,
@@ -99,6 +100,7 @@ export const warmupReplyFlow = ai.defineFlow(
                 promptLength: finalPrompt.length,
                 promptPreview: finalPrompt.slice(0, 200),
             };
+            
 
             // 6. Call Gemini with the single prompt string
             const llmResponse = await ai.generate({
@@ -109,12 +111,33 @@ export const warmupReplyFlow = ai.defineFlow(
                     maxOutputTokens: promptConfig.model?.maxOutputTokens || 250,
                 },
             });
-
-            const assistantText = llmResponse.text;
             
+            let assistantText: string | null = null;
+            if (typeof llmResponse.text === "function") {
+                assistantText = llmResponse.text();
+            } else if (typeof (llmResponse as any).text === "string") {
+                assistantText = (llmResponse as any).text;
+            }
+
+            if (!assistantText || assistantText.trim().length === 0) {
+                return {
+                    ok: false,
+                    errorMessage: "Model returned empty text for warmup.",
+                    debug: {
+                        ...(promptDebug || {}),
+                        responseKeys: Object.keys(llmResponse || {}),
+                        hasTextMethod: typeof (llmResponse as any).text === "function",
+                    },
+                };
+            }
+            
+            const trimmedAssistantText = assistantText.trim();
+            const assistantTextPreview = trimmedAssistantText.slice(0, 80);
+
             return {
                 ok: true,
-                assistantText,
+                assistantText: trimmedAssistantText,
+                assistantTextPreview,
                 usedPromptConfigId: promptConfigId,
                 usedLevelBand: promptConfigLevelBand,
             };
