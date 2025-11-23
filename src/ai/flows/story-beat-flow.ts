@@ -10,7 +10,7 @@ import { z } from 'genkit';
 import type { StorySession, ChatMessage, PromptConfig, StoryType, Character } from '@/lib/types';
 
 type StoryBeatDebugInfo = {
-    stage: 'loading_session' | 'loading_storyType' | 'loading_promptConfig' | 'ai_generate' | 'json_parse' | 'unknown';
+    stage: 'loading_session' | 'loading_storyType' | 'loading_promptConfig' | 'ai_generate' | 'json_parse' | 'json_validate' | 'unknown';
     details: Record<string, any>;
 };
 
@@ -126,25 +126,77 @@ Do not output any other text or formatting.
 
             // 7. Call Genkit AI
             debug.stage = 'ai_generate';
+            const temperature = promptConfig.model?.temperature ?? 0.7;
+            const maxOutputTokens = promptConfig.model?.maxOutputTokens ?? 1024;
+            
             const llmResponse = await ai.generate({
                 model: 'googleai/gemini-2.5-flash',
                 prompt: finalPrompt,
-                output: {
-                    format: 'json',
-                    schema: StoryBeatOutputSchema
-                },
                 config: {
-                    temperature: promptConfig.model?.temperature ?? 0.7,
-                    maxOutputTokens: promptConfig.model?.maxOutputTokens ?? 1024,
+                    temperature,
+                    maxOutputTokens,
                 }
             });
             
-            const structuredOutput = llmResponse.output();
-
-            // 8. Validate and Return
-            if (!structuredOutput) {
-                 return { ok: false, sessionId, errorMessage: "Model returned no structured output.", debug };
+            const rawText = llmResponse.text;
+             if (!rawText || !rawText.trim()) {
+                return {
+                    ok: false,
+                    sessionId,
+                    errorMessage: "Model returned empty text for storyBeat.",
+                    debug: {
+                        stage: 'ai_generate',
+                        details: {
+                            textPresent: !!rawText,
+                            rawTextPreview: rawText
+                        }
+                    }
+                };
             }
+            
+
+            // 8. Manually parse and validate
+            debug.stage = 'json_parse';
+            let parsed: z.infer<typeof StoryBeatOutputSchema>;
+            try {
+                // Sometimes the model wraps the JSON in ```json ... ```, so we need to extract it.
+                const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
+                const jsonToParse = jsonMatch ? jsonMatch[1] : rawText;
+                parsed = JSON.parse(jsonToParse);
+            } catch (err) {
+                return {
+                    ok: false,
+                    sessionId,
+                    errorMessage: "Model output is not valid JSON for storyBeat.",
+                    debug: {
+                        stage: 'json_parse',
+                        details: {
+                            parseError: String(err),
+                            rawTextPreview: rawText.slice(0, 500)
+                        }
+                    }
+                };
+            }
+
+            debug.stage = 'json_validate';
+            const validationResult = StoryBeatOutputSchema.safeParse(parsed);
+
+            if (!validationResult.success) {
+                 return {
+                    ok: false,
+                    sessionId,
+                    errorMessage: `Model JSON does not match expected storyBeat shape. Errors: ${validationResult.error.message}`,
+                    debug: {
+                        stage: 'json_validate',
+                        details: {
+                            validationErrors: validationResult.error.issues,
+                            rawTextPreview: rawText.slice(0, 500)
+                        }
+                    }
+                };
+            }
+
+            const structuredOutput = validationResult.data;
 
             return {
                 ok: true,
@@ -159,7 +211,8 @@ Do not output any other text or formatting.
                     storySoFarLength: storySoFar.length,
                     arcStepIndex,
                     modelName: 'googleai/gemini-2.5-flash',
-                    maxOutputTokens: promptConfig.model?.maxOutputTokens ?? 1024,
+                    maxOutputTokens,
+                    temperature,
                     promptPreview: finalPrompt.substring(0, 500) + '...',
                 }
             };
