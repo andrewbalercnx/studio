@@ -78,22 +78,28 @@ export default function StorySessionPage() {
                 });
             } else {
                 // 4. Handle API error
-                const errorMessage = result.error || 'The Story Guide is having trouble thinking of a reply. Please try again.';
+                const friendlyErrorMessage = 'The Story Guide is having trouble thinking of a reply. Please try again.';
                 await addDoc(messagesRef, {
                     sender: 'assistant',
-                    text: `(Sorry, I had a problem: ${errorMessage})`,
+                    text: friendlyErrorMessage,
                     createdAt: serverTimestamp(),
                 });
-                toast({ title: 'API Error', description: errorMessage, variant: 'destructive' });
+                toast({ title: 'API Error', description: result.errorMessage, variant: 'destructive' });
                 setGenkitDiagnostics({
                     lastCallOk: false,
-                    lastErrorMessage: errorMessage,
+                    lastErrorMessage: result.errorMessage || 'An unknown error occurred.',
                     lastUsedPromptConfigId: null,
                 });
             }
 
         } catch (e: any) {
             console.error("Error in send message flow:", e);
+            const friendlyErrorMessage = 'The Story Guide is having trouble thinking of a reply. Please try again.';
+            await addDoc(messagesRef, {
+                sender: 'assistant',
+                text: friendlyErrorMessage,
+                createdAt: serverTimestamp(),
+            });
             toast({ title: 'Error', description: e.message, variant: 'destructive' });
              setGenkitDiagnostics({
                 lastCallOk: false,

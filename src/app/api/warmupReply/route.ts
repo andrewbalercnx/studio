@@ -6,7 +6,7 @@ export async function POST(request: Request) {
         const { sessionId } = await request.json();
 
         if (!sessionId) {
-            return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });
+            return NextResponse.json({ ok: false, errorMessage: 'sessionId is required' }, { status: 400 });
         }
 
         const result = await warmupReplyFlow.run({ sessionId });
@@ -14,10 +14,10 @@ export async function POST(request: Request) {
         if (result.ok) {
             return NextResponse.json(result);
         } else {
-            return NextResponse.json({ error: result.errorMessage }, { status: 500 });
+            return NextResponse.json({ ok: false, errorMessage: result.errorMessage || 'An unknown flow error occurred.' }, { status: 500 });
         }
 
     } catch (e: any) {
-        return NextResponse.json({ error: e.message || 'An unexpected error occurred.' }, { status: 500 });
+        return NextResponse.json({ ok: false, errorMessage: e.message || 'An unexpected error occurred.' }, { status: 500 });
     }
 }
