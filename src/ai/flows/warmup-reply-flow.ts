@@ -10,6 +10,17 @@ import { getDoc, doc, collection, getDocs, query, orderBy } from 'firebase/fires
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, PromptConfig } from '@/lib/types';
 
+// Define a type for the debug object
+type PromptDebug = {
+    hasSystem: boolean;
+    systemLength: number;
+    messagesType: string;
+    messageCount: number;
+    firstMessageSummary: object | null;
+    secondMessageSummary: object | null;
+} | null;
+
+
 export const warmupReplyFlow = ai.defineFlow(
     {
         name: 'warmupReplyFlow',
@@ -20,9 +31,12 @@ export const warmupReplyFlow = ai.defineFlow(
             errorMessage: z.string().optional(),
             usedPromptConfigId: z.string().optional(),
             usedLevelBand: z.string().optional(),
+            debug: z.any().optional(),
         }),
     },
     async ({ sessionId }) => {
+        let promptDebug: PromptDebug = null;
+
         try {
             const { firestore } = initializeFirebase();
 
@@ -53,25 +67,49 @@ export const warmupReplyFlow = ai.defineFlow(
             const messagesSnapshot = await getDocs(messagesQuery);
             
             const history = messagesSnapshot.docs.map(doc => {
-                const data = doc.data(); // as ChatMessage-like from Firestore
+                const data = doc.data();
+                if (!data.text || typeof data.text !== 'string') {
+                    return null;
+                }
                 const role = data.sender === 'child' ? 'user' : 'model';
                 return {
                     role: role,
                     content: [{ text: data.text }],
                 };
-            });
+            }).filter(Boolean); // Filter out any null messages
             
             // 4. Build prompt
             const systemPromptText = [
                 promptConfig.systemPrompt,
                 `MODE INSTRUCTIONS: ${promptConfig.modeInstructions}`,
             ].join('\n\n');
+
+            // 5. Build the promptDebug object
+            const getMessageSummary = (msg: any) => {
+                if (!msg) return null;
+                const hasContent = Array.isArray(msg.content);
+                return {
+                    role: msg.role || null,
+                    hasContentArray: hasContent,
+                    contentLength: hasContent ? msg.content.length : 0,
+                    firstPartKeys: (hasContent && msg.content[0]) ? Object.keys(msg.content[0]) : [],
+                };
+            };
             
-            // 5. Call Gemini
+            promptDebug = {
+                hasSystem: typeof systemPromptText === 'string' && systemPromptText.length > 0,
+                systemLength: typeof systemPromptText === 'string' ? systemPromptText.length : 0,
+                messagesType: typeof history,
+                messageCount: Array.isArray(history) ? history.length : 0,
+                firstMessageSummary: getMessageSummary(history[0]),
+                secondMessageSummary: getMessageSummary(history[1]),
+            };
+            
+            // 6. Call Gemini
             const llmResponse = await ai.generate({
                 model: 'googleai/gemini-2.5-flash',
                 system: systemPromptText,
-                history: history,
+                history: history as any[], // Cast to any[] to satisfy Genkit type
                 config: {
                     temperature: promptConfig.model?.temperature || 0.6,
                     maxOutputTokens: promptConfig.model?.maxOutputTokens || 250,
@@ -92,6 +130,7 @@ export const warmupReplyFlow = ai.defineFlow(
             return {
                 ok: false,
                 errorMessage: `Unexpected error in warmupReplyFlow for session ${sessionId}: ${errorMessage}`,
+                debug: promptDebug,
             };
         }
     }

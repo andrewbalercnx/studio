@@ -19,6 +19,7 @@ type GenkitDiagnostics = {
     lastCallOk: boolean | null;
     lastErrorMessage: string | null;
     lastUsedPromptConfigId: string | null;
+    debug: any | null; // Add debug field
 }
 
 export default function StorySessionPage() {
@@ -34,6 +35,7 @@ export default function StorySessionPage() {
         lastCallOk: null,
         lastErrorMessage: null,
         lastUsedPromptConfigId: null,
+        debug: null,
     });
     
     const messagesQuery = firestore ? query(collection(firestore, `storySessions/${sessionId}/messages`), orderBy('createdAt')) : null;
@@ -75,6 +77,7 @@ export default function StorySessionPage() {
                     lastCallOk: true,
                     lastErrorMessage: null,
                     lastUsedPromptConfigId: result.usedPromptConfigId,
+                    debug: null,
                 });
             } else {
                 // 4. Handle API error
@@ -89,6 +92,7 @@ export default function StorySessionPage() {
                     lastCallOk: false,
                     lastErrorMessage: result.errorMessage || 'An unknown error occurred.',
                     lastUsedPromptConfigId: result.usedPromptConfigId || null,
+                    debug: result.debug || null, // Store debug info
                 });
             }
 
@@ -105,6 +109,7 @@ export default function StorySessionPage() {
                 lastCallOk: false,
                 lastErrorMessage: e.message,
                 lastUsedPromptConfigId: null,
+                debug: { clientError: true },
             });
         } finally {
             setIsSending(false);

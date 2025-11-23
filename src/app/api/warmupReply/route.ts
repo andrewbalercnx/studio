@@ -19,6 +19,7 @@ export async function POST(request: Request) {
                 ok: false,
                 errorMessage: result.errorMessage || 'An unknown flow error occurred.',
                 usedPromptConfigId: result.usedPromptConfigId || null,
+                debug: result.debug || null, // Pass debug info
              }, { status: 500 });
         }
 
