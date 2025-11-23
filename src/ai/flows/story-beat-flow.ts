@@ -138,24 +138,37 @@ Do not output any other text or formatting.
                 }
             });
             
-            const rawText = llmResponse.text;
-             if (!rawText || !rawText.trim()) {
+            // 8. Extract raw text robustly
+            let rawText: string | null = null;
+            const raw = (llmResponse as any).raw;
+            const firstCandidate = raw && Array.isArray(raw.candidates) && raw.candidates.length > 0 ? raw.candidates[0] : null;
+            if (firstCandidate) {
+                const content = firstCandidate?.content;
+                const parts = content && Array.isArray(content.parts) ? content.parts : [];
+                const firstPart = parts.length > 0 ? parts[0] : null;
+                const textValue = firstPart && typeof firstPart.text === 'string' ? firstPart.text : null;
+                if (textValue && textValue.trim().length > 0) {
+                    rawText = textValue.trim();
+                }
+            }
+
+             if (!rawText) {
                 return {
                     ok: false,
                     sessionId,
-                    errorMessage: "Model returned empty text for storyBeat.",
+                    errorMessage: "Model returned empty or malformed text in raw response for storyBeat.",
                     debug: {
                         stage: 'ai_generate',
                         details: {
                             textPresent: !!rawText,
-                            rawTextPreview: rawText
+                            rawResponsePreview: raw ? JSON.stringify(raw).slice(0, 500) : null
                         }
                     }
                 };
             }
             
 
-            // 8. Manually parse and validate
+            // 9. Manually parse and validate
             debug.stage = 'json_parse';
             let parsed: z.infer<typeof StoryBeatOutputSchema>;
             try {
