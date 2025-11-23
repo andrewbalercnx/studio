@@ -66,7 +66,7 @@ export const warmupReplyFlow = ai.defineFlow(
 
             // 5. Call Gemini
             const llmResponse = await ai.generate({
-                model: 'gemini-1.5-flash',
+                model: 'googleai/gemini-2.5-flash',
                 prompt: {
                     system: systemPrompt.map(p => p.text).join('\n\n'),
                     messages: [...history],

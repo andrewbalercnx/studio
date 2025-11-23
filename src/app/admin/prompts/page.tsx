@@ -28,7 +28,7 @@ const samplePrompts: PromptConfig[] = [
         },
         allowedChatMoves: ["ask_short_question", "ask_for_two_sentences"],
         model: {
-            name: "gemini-1.5-flash",
+            name: "googleai/gemini-2.5-flash",
             temperature: 0.6,
             maxOutputTokens: 200,
         }
@@ -47,7 +47,7 @@ const samplePrompts: PromptConfig[] = [
         },
         allowedChatMoves: ["ask_short_question", "ask_for_three_sentences", "summarise_child_answer_back"],
         model: {
-            name: "gemini-1.5-flash",
+            name: "googleai/gemini-2.5-flash",
             temperature: 0.6,
             maxOutputTokens: 250,
         }
@@ -66,7 +66,7 @@ const samplePrompts: PromptConfig[] = [
         },
         allowedChatMoves: ["ask_open_question", "summarise_child_answer_back"],
         model: {
-            name: "gemini-1.5-flash",
+            name: "googleai/gemini-2.5-flash",
             temperature: 0.7,
             maxOutputTokens: 300,
         }
