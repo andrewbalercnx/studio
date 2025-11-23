@@ -18,6 +18,13 @@ type PromptDebug = {
     conversationLines: number;
     promptLength: number;
     promptPreview: string;
+    responseKeys?: string[];
+    hasRaw?: boolean;
+    hasCandidatesArray?: boolean;
+    candidatesLength?: number;
+    firstCandidateKeys?: string[];
+    contentPartsSummary?: any[];
+    rawCandidatePreview?: string | null;
 } | null;
 
 
@@ -114,6 +121,43 @@ export const warmupReplyFlow = ai.defineFlow(
             let assistantText: string | null = null;
             const raw = (llmResponse as any).raw;
 
+            // Add richer diagnostics
+            const firstCandidate = raw && Array.isArray(raw.candidates) && raw.candidates.length > 0 ? raw.candidates[0] : null;
+            const candidateContent = firstCandidate && Array.isArray(firstCandidate.content) ? firstCandidate.content : null;
+            let contentPartsSummary: any[] = [];
+            if (Array.isArray(candidateContent)) {
+                contentPartsSummary = candidateContent.map((part: any, index: number) => {
+                    const keys = part && typeof part === 'object' ? Object.keys(part) : [];
+                    const typeHint = typeof part === 'string' ? 'string' : (part && (part.partKind || part.type || null));
+                    return {
+                        index,
+                        keys,
+                        typeHint: typeHint || null
+                    };
+                });
+            }
+            let rawCandidatePreview: string | null = null;
+            try {
+                if (firstCandidate) {
+                    const json = JSON.stringify(firstCandidate);
+                    rawCandidatePreview = json.length > 1200 ? json.slice(0, 1200) + '...(truncated)' : json;
+                }
+            } catch (e) {
+                rawCandidatePreview = "[[error stringifying firstCandidate]]";
+            }
+
+            promptDebug = {
+                ...(promptDebug || {}),
+                responseKeys: llmResponse ? Object.keys(llmResponse as any) : [],
+                hasRaw: !!raw,
+                hasCandidatesArray: !!(raw && Array.isArray(raw.candidates)),
+                candidatesLength: raw && Array.isArray(raw.candidates) ? raw.candidates.length : 0,
+                firstCandidateKeys: firstCandidate && typeof firstCandidate === "object" ? Object.keys(firstCandidate) : [],
+                contentPartsSummary,
+                rawCandidatePreview,
+            };
+
+            // Attempt to extract text
             if (raw && Array.isArray(raw.candidates) && raw.candidates.length > 0) {
                 const firstCandidate = raw.candidates[0];
                 const content = firstCandidate?.content;
@@ -130,13 +174,7 @@ export const warmupReplyFlow = ai.defineFlow(
                 return {
                     ok: false,
                     errorMessage: "Model returned empty or malformed text in raw.candidates.",
-                    debug: {
-                        ...(promptDebug || {}),
-                        responseKeys: Object.keys(llmResponse || {}),
-                        hasRaw: !!raw,
-                        hasCandidatesArray: raw && Array.isArray(raw.candidates),
-                        candidatesLength: raw && Array.isArray(raw.candidates) ? raw.candidates.length : 0,
-                    },
+                    debug: promptDebug,
                 };
             }
             
@@ -161,5 +199,3 @@ export const warmupReplyFlow = ai.defineFlow(
         }
     }
 );
-
-    
