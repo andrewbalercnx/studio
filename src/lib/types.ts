@@ -1,6 +1,6 @@
-
-
 'use client';
+
+import type { Timestamp } from 'firebase/firestore';
 
 export type Role = 'user' | 'assistant' | 'system';
 
@@ -22,13 +22,6 @@ export type ChatMessage = {
     content?: string;
 };
 
-export type Character = {
-    name: string;
-    type: 'self' | 'friend' | 'family' | 'pet' | 'imaginary';
-    traits: string[];
-    goal: string;
-};
-
 export type StoryBeat = {
     label: string;
     childPlanText: string;
@@ -43,8 +36,6 @@ export type StorySession = {
     currentStepIndex: number;
     storyTitle?: string;
     storyVibe?: string;
-    characters: Character[];
-    beats: StoryBeat[];
     finalStoryText?: string;
     createdAt: Date;
     updatedAt: Date;
@@ -53,6 +44,9 @@ export type StorySession = {
     storyTypeId?: string;
     storyPhaseId?: string;
     arcStepIndex?: number;
+    // NEW FIELDS
+    mainCharacterId?: string;
+    supportingCharacterIds?: string[];
     // This is a client-side representation and not stored in Firestore directly
     // with the session document. It's populated from the messages sub-collection.
     messages: ChatMessage[];
@@ -119,6 +113,34 @@ export type StoryType = {
   arcTemplate: {
     steps: string[];
   };
+};
+
+export type Character = {
+    id: string;
+    ownerChildId: string;
+    sessionId?: string;
+    role: 'child' | 'family' | 'friend' | 'pet' | 'other';
+    name: string;
+    realPersonRef?: {
+        kind: 'self' | 'family' | 'friend';
+        label: string;
+    };
+    traits?: {
+        ageApprox?: string;
+        size?: string;
+        bravery?: 'shy' | 'calm' | 'brave' | 'very_brave';
+        energy?: 'quiet' | 'playful' | 'bouncy';
+        moodDefault?: string;
+        colorDetails?: string;
+    };
+    visualNotes?: {
+        hair?: string;
+        clothing?: string;
+        specialItem?: string;
+        styleHint?: string;
+    };
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 };
 
     

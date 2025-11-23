@@ -124,20 +124,6 @@
           "type": "string",
           "description": "The chosen vibe or genre for the story."
         },
-        "characters": {
-          "type": "array",
-          "items": {
-            "$ref": "#/entities/Character"
-          },
-          "description": "An array of characters in the story."
-        },
-        "beats": {
-          "type": "array",
-          "items": {
-            "$ref": "#/entities/StoryBeat"
-          },
-          "description": "The planned story beats or plot points."
-        },
         "finalStoryText": {
           "type": "string",
           "description": "The full, final generated story text."
@@ -169,6 +155,17 @@
         "arcStepIndex": {
           "type": "number",
           "description": "0-based index into the story type's arcTemplate.steps array."
+        },
+        "mainCharacterId": {
+          "type": "string",
+          "description": "ID of the main character for this session, referencing characters/{id}."
+        },
+        "supportingCharacterIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of supporting characters, referencing characters/{id}."
         }
       },
       "required": [
@@ -183,33 +180,64 @@
     },
     "Character": {
       "title": "Story Character",
-      "description": "A character within a story session.",
+      "description": "Represents a character in a story, owned by a child.",
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string"
+        },
+        "ownerChildId": {
+          "type": "string",
+          "description": "Firebase auth uid of the child who owns this character."
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Optional: specific story session this character is tied to."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["child", "family", "friend", "pet", "other"]
+        },
         "name": {
           "type": "string"
         },
-        "type": {
-          "type": "string",
-          "enum": [
-            "self",
-            "friend",
-            "family",
-            "pet",
-            "imaginary"
-          ]
-        },
-        "traits": {
-          "type": "array",
-          "items": {
-            "type": "string"
+        "realPersonRef": {
+          "type": "object",
+          "properties": {
+            "kind": { "type": "string", "enum": ["self", "family", "friend"]},
+            "label": { "type": "string" }
           }
         },
-        "goal": {
-          "type": "string"
+        "traits": {
+          "type": "object",
+          "properties": {
+            "ageApprox": { "type": "string" },
+            "size": { "type": "string" },
+            "bravery": { "type": "string", "enum": ["shy", "calm", "brave", "very_brave"]},
+            "energy": { "type": "string", "enum": ["quiet", "playful", "bouncy"]},
+            "moodDefault": { "type": "string" },
+            "colorDetails": { "type": "string" }
+          }
+        },
+        "visualNotes": {
+          "type": "object",
+          "properties": {
+            "hair": { "type": "string" },
+            "clothing": { "type": "string" },
+            "specialItem": { "type": "string" },
+            "styleHint": { "type": "string" }
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
         }
       },
-      "required": ["name", "type"]
+      "required": ["id", "ownerChildId", "role", "name", "createdAt", "updatedAt"]
     },
     "StoryBeat": {
         "title": "Story Beat",
@@ -387,6 +415,10 @@
       "schema": { "$ref": "#/entities/ChatMessage" },
       "description": "Stores the sequence of messages for a given story session."
     },
+    "/characters/{characterId}": {
+      "schema": { "$ref": "#/entities/Character" },
+      "description": "Stores characters for stories."
+    },
     "/promptConfigs/{configId}": {
       "schema": { "$ref": "#/entities/PromptConfig" },
       "description": "Stores the prompt configurations that drive the AI's behavior."
@@ -401,3 +433,5 @@
     }
   }
 }
+
+    

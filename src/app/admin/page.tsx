@@ -58,6 +58,9 @@ export default function AdminDashboardPage() {
           <Button asChild>
             <Link href="/admin/storyTypes">Story Types</Link>
           </Button>
+          <Button asChild>
+            <Link href="/admin/characters">Characters</Link>
+          </Button>
         </div>
       </div>
     );
@@ -90,3 +93,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
