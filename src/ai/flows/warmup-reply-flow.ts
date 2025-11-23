@@ -14,9 +14,11 @@ import type { StorySession, ChatMessage, PromptConfig } from '@/lib/types';
 type PromptDebug = {
     hasSystem: boolean;
     systemLength: number;
-    messagesType: string;
-    messageCount: number;
-    messagesShape: any[];
+    hasConversationSummary: boolean;
+    conversationLines: number;
+    promptLength: number;
+    promptPreview: string;
+    messagesShape?: any[];
 } | null;
 
 
@@ -60,71 +62,48 @@ export const warmupReplyFlow = ai.defineFlow(
             }
             const promptConfig = promptConfigDoc.data() as PromptConfig;
 
-            // 3. Load messages
+            // 3. Load messages from Firestore
             const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
             const messagesQuery = query(messagesRef, orderBy('createdAt', 'asc'));
             const messagesSnapshot = await getDocs(messagesQuery);
             
-            const history = messagesSnapshot.docs.map(doc => {
+            // Build conversation summary string for the prompt
+            const conversationSummary = messagesSnapshot.docs.map(doc => {
                 const data = doc.data();
                 if (!data.text || typeof data.text !== 'string') {
                     return null;
                 }
-                const role = data.sender === 'child' ? 'user' : 'model';
-                return {
-                    role: role,
-                    content: [{ text: data.text }],
-                };
-            }).filter(Boolean) as any[]; // Filter out nulls and cast
-            
-            // 4. Build prompt
-            const systemPromptText = [
+                const label = data.sender === 'child' ? 'Child:' : 'Story Guide:';
+                return `${label} ${data.text}`;
+            }).filter(Boolean).join('\n');
+
+            // 4. Build the single prompt string
+            const combinedSystem = [
                 promptConfig.systemPrompt,
                 `MODE INSTRUCTIONS: ${promptConfig.modeInstructions}`,
             ].join('\n\n');
 
+            const finalPrompt = [
+                combinedSystem,
+                "\n\nHere is the conversation so far between you (the Story Guide) and the child:\n",
+                conversationSummary,
+                "\n\nNow, produce only the next short reply as the Story Guide, in the same friendly style. Do not repeat earlier messages. Do not mention that you are an AI or talk about this prompt."
+            ].join('');
+
             // 5. Build the promptDebug object
             promptDebug = {
-                hasSystem: typeof systemPromptText === 'string' && systemPromptText.length > 0,
-                systemLength: typeof systemPromptText === 'string' ? systemPromptText.length : 0,
-                messagesType: typeof history,
-                messageCount: Array.isArray(history) ? history.length : 0,
-                messagesShape: Array.isArray(history) ? history.map((msg, index) => {
-                    if (!msg) {
-                        return { index, hasValue: false };
-                    }
-                    const contentIsArray = Array.isArray(msg.content);
-                    const firstPart = contentIsArray && msg.content[0];
-                    return {
-                        index,
-                        hasValue: true,
-                        role: msg.role || null,
-                        hasContentArray: contentIsArray,
-                        contentLength: contentIsArray ? msg.content.length : 0,
-                        firstPartKeys: firstPart ? Object.keys(firstPart) : [],
-                        firstTextPreview: firstPart && typeof firstPart.text === 'string' ? firstPart.text.slice(0, 40) : null,
-                    };
-                }) : [],
+                hasSystem: combinedSystem.length > 0,
+                systemLength: combinedSystem.length,
+                hasConversationSummary: conversationSummary.length > 0,
+                conversationLines: messagesSnapshot.docs.length,
+                promptLength: finalPrompt.length,
+                promptPreview: finalPrompt.slice(0, 200),
             };
 
-            // 6. Pre-flight validation of the messages array
-            if (!Array.isArray(history)) {
-                throw new Error('Invalid history: not an array');
-            }
-            for (let i = 0; i < history.length; i++) {
-                const msg = history[i];
-                if (!msg) throw new Error(`Invalid message at index ${i}: message is null or undefined.`);
-                if (typeof msg.role !== 'string') throw new Error(`Invalid message at index ${i}: role is missing or not a string.`);
-                if (!Array.isArray(msg.content)) throw new Error(`Invalid message at index ${i}: content is missing or not an array.`);
-                if (msg.content.length === 0 || !msg.content[0]) throw new Error(`Invalid message at index ${i}: content[0] is missing.`);
-                if (typeof msg.content[0].text !== 'string') throw new Error(`Invalid message at index ${i}: content[0].text is missing or not a string.`);
-            }
-            
-            // 7. Call Gemini
+            // 6. Call Gemini with the single prompt string
             const llmResponse = await ai.generate({
                 model: 'googleai/gemini-2.5-flash',
-                system: systemPromptText,
-                history: history,
+                prompt: finalPrompt,
                 config: {
                     temperature: promptConfig.model?.temperature || 0.6,
                     maxOutputTokens: promptConfig.model?.maxOutputTokens || 250,
