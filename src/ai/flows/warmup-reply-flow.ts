@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -8,8 +9,6 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, PromptConfig } from '@/lib/types';
-import { logger } from 'genkit';
-
 
 export const warmupReplyFlow = ai.defineFlow(
     {
@@ -24,8 +23,6 @@ export const warmupReplyFlow = ai.defineFlow(
         }),
     },
     async ({ sessionId }) => {
-        logger.info(`Warmup reply flow started for session: ${sessionId}`);
-
         try {
             await initFirebaseAdminApp();
             const firestore = getFirestore();
@@ -34,7 +31,6 @@ export const warmupReplyFlow = ai.defineFlow(
             const sessionRef = firestore.collection('storySessions').doc(sessionId);
             const sessionDoc = await sessionRef.get();
             if (!sessionDoc.exists) {
-                logger.error(`Session not found: ${sessionId}`);
                 return { ok: false, errorMessage: `Session not found: ${sessionId}` };
             }
             const session = sessionDoc.data() as StorySession;
@@ -42,14 +38,12 @@ export const warmupReplyFlow = ai.defineFlow(
             // 2. Load prompt config
             const { promptConfigId, promptConfigLevelBand } = session;
             if (!promptConfigId) {
-                logger.error(`No promptConfigId on session: ${sessionId}`);
                 return { ok: false, errorMessage: 'No promptConfigId stored on session.' };
             }
 
             const promptConfigRef = firestore.collection('promptConfigs').doc(promptConfigId);
             const promptConfigDoc = await promptConfigRef.get();
             if (!promptConfigDoc.exists) {
-                logger.error(`Prompt config not found: ${promptConfigId}`);
                 return { ok: false, errorMessage: `Prompt config '${promptConfigId}' not found.` };
             }
             const promptConfig = promptConfigDoc.data() as PromptConfig;
@@ -86,7 +80,6 @@ export const warmupReplyFlow = ai.defineFlow(
             });
 
             const assistantText = llmResponse.text;
-            logger.info(`Generated reply for session ${sessionId}: "${assistantText}"`);
             
             return {
                 ok: true,
@@ -96,7 +89,6 @@ export const warmupReplyFlow = ai.defineFlow(
             };
 
         } catch (e: any) {
-            logger.error("Error in warmupReplyFlow:", e);
             return {
                 ok: false,
                 errorMessage: e.message || 'An unexpected error occurred in the flow.',
