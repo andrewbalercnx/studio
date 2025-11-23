@@ -70,6 +70,21 @@ const samplePrompts: PromptConfig[] = [
             temperature: 0.7,
             maxOutputTokens: 300,
         }
+    },
+    {
+        id: "story_beat_low_v1",
+        phase: "storyBeat",
+        levelBand: "low",
+        languageCode: "en-GB",
+        version: 1,
+        status: "live",
+        systemPrompt: "You are a master storyteller for young children (ages 3-5). Your tone is gentle, encouraging, and magical. You will continue a story based on the context provided.",
+        modeInstructions: "Your task is to generate the next part of the story. Write one short paragraph to continue the narrative. Then, provide three simple, clear choices for what could happen next. The choices should be distinct and lead to interesting outcomes. You must respond only with a valid JSON object matching the requested schema.",
+        model: {
+            name: "googleai/gemini-2.5-flash",
+            temperature: 0.8,
+            maxOutputTokens: 1024
+        }
     }
 ];
 

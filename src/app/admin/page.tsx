@@ -61,6 +61,9 @@ export default function AdminDashboardPage() {
           <Button asChild>
             <Link href="/admin/characters">Characters</Link>
           </Button>
+          <Button asChild>
+            <Link href="/admin/storyBeatTest">Story Beat Test</Link>
+          </Button>
         </div>
       </div>
     );
@@ -85,7 +88,7 @@ export default function AdminDashboardPage() {
           <CardTitle>Diagnostics</CardTitle>
         </CardHeader>
         <CardContent>
-          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
+          <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
             <code>{JSON.stringify(diagnostics, null, 2)}</code>
           </pre>
         </CardContent>
@@ -93,5 +96,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
-    
