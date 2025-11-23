@@ -5,8 +5,8 @@
  * @fileOverview A Genkit flow to generate a reply during the "warmup" phase.
  */
 import { ai } from '@/ai/genkit';
-import { initFirebaseAdminApp } from '@/firebase/admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { initializeFirebase } from '@/firebase';
+import { getDoc, doc, collection, getDocs, orderBy } from 'firebase/firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, PromptConfig } from '@/lib/types';
 
@@ -24,13 +24,12 @@ export const warmupReplyFlow = ai.defineFlow(
     },
     async ({ sessionId }) => {
         try {
-            await initFirebaseAdminApp();
-            const firestore = getFirestore();
+            const { firestore } = initializeFirebase();
 
             // 1. Load session
-            const sessionRef = firestore.collection('storySessions').doc(sessionId);
-            const sessionDoc = await sessionRef.get();
-            if (!sessionDoc.exists) {
+            const sessionRef = doc(firestore, 'storySessions', sessionId);
+            const sessionDoc = await getDoc(sessionRef);
+            if (!sessionDoc.exists()) {
                 return { ok: false, errorMessage: `Failed to load story session with id ${sessionId}: document does not exist.` };
             }
             const session = sessionDoc.data() as StorySession;
@@ -41,16 +40,17 @@ export const warmupReplyFlow = ai.defineFlow(
                 return { ok: false, errorMessage: `No promptConfigId found on session ${sessionId}.` };
             }
 
-            const promptConfigRef = firestore.collection('promptConfigs').doc(promptConfigId);
-            const promptConfigDoc = await promptConfigRef.get();
-            if (!promptConfigDoc.exists) {
+            const promptConfigRef = doc(firestore, 'promptConfigs', promptConfigId);
+            const promptConfigDoc = await getDoc(promptConfigRef);
+            if (!promptConfigDoc.exists()) {
                 return { ok: false, errorMessage: `Prompt config '${promptConfigId}' not found in promptConfigs collection.` };
             }
             const promptConfig = promptConfigDoc.data() as PromptConfig;
 
             // 3. Load messages
-            const messagesRef = sessionRef.collection('messages').orderBy('createdAt', 'asc');
-            const messagesSnapshot = await messagesRef.get();
+            const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+            const messagesQuery = query(messagesRef, orderBy('createdAt', 'asc'));
+            const messagesSnapshot = await getDocs(messagesQuery);
             const messages = messagesSnapshot.docs.map(doc => doc.data() as ChatMessage);
 
             // 4. Build prompt
