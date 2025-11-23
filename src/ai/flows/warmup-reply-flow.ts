@@ -6,7 +6,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, orderBy } from 'firebase/firestore';
+import { getDoc, doc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, PromptConfig } from '@/lib/types';
 
