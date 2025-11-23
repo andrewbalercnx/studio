@@ -25,6 +25,8 @@ type PromptDebug = {
     firstCandidateKeys?: string[];
     contentPartsSummary?: any[];
     rawCandidatePreview?: string | null;
+    topLevelFinishReason?: string | null;
+    firstCandidateFinishReason?: string | null;
 } | null;
 
 
@@ -123,7 +125,8 @@ export const warmupReplyFlow = ai.defineFlow(
 
             // Add richer diagnostics
             const firstCandidate = raw && Array.isArray(raw.candidates) && raw.candidates.length > 0 ? raw.candidates[0] : null;
-            const candidateContent = firstCandidate && Array.isArray(firstCandidate.content) ? firstCandidate.content : null;
+            const candidateContent = firstCandidate && firstCandidate.content && Array.isArray(firstCandidate.content.parts) ? firstCandidate.content.parts : null;
+
             let contentPartsSummary: any[] = [];
             if (Array.isArray(candidateContent)) {
                 contentPartsSummary = candidateContent.map((part: any, index: number) => {
@@ -155,6 +158,8 @@ export const warmupReplyFlow = ai.defineFlow(
                 firstCandidateKeys: firstCandidate && typeof firstCandidate === "object" ? Object.keys(firstCandidate) : [],
                 contentPartsSummary,
                 rawCandidatePreview,
+                topLevelFinishReason: (llmResponse as any).finishReason ?? null,
+                firstCandidateFinishReason: firstCandidate?.finishReason ?? null,
             };
 
             // Attempt to extract text
