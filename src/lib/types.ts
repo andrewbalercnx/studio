@@ -1,4 +1,5 @@
 
+
 'use client';
 
 export type Role = 'user' | 'assistant' | 'system';
@@ -73,6 +74,11 @@ export type PromptConfig = {
     modeInstructions: string;
     additionalContextTemplate?: object;
     allowedChatMoves?: string[];
+    model?: {
+        name: string;
+        temperature?: number;
+        maxOutputTokens?: number;
+    }
 };
 
 export type ChildProfile = {

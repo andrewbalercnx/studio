@@ -12,7 +12,14 @@ import { useFirestore } from '@/firebase';
 import { doc, collection, addDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import type { StorySession, ChatMessage as Message } from '@/lib/types';
 import { Input } from '@/components/ui/input';
-import { useCollection, useDocument } from '@/lib/firestore-hooks';
+import { useCollection } from '@/lib/firestore-hooks';
+import { useToast } from '@/hooks/use-toast';
+
+type GenkitDiagnostics = {
+    lastCallOk: boolean | null;
+    lastErrorMessage: string | null;
+    lastUsedPromptConfigId: string | null;
+}
 
 export default function StorySessionPage() {
     const params = useParams<{ sessionId: string }>();
@@ -21,10 +28,14 @@ export default function StorySessionPage() {
     const firestore = useFirestore();
     const [input, setInput] = useState('');
     const [isSending, setIsSending] = useState(false);
+    const { toast } = useToast();
 
-    const sessionRef = firestore ? doc(firestore, 'storySessions', sessionId) : null;
-    const { data: session, loading: sessionLoading, error: sessionError } = useDocument<StorySession>(sessionRef);
-
+    const [genkitDiagnostics, setGenkitDiagnostics] = useState<GenkitDiagnostics>({
+        lastCallOk: null,
+        lastErrorMessage: null,
+        lastUsedPromptConfigId: null,
+    });
+    
     const messagesQuery = firestore ? query(collection(firestore, `storySessions/${sessionId}/messages`), orderBy('createdAt')) : null;
     const { data: messages, loading: messagesLoading, error: messagesError } = useCollection<Message>(messagesQuery);
     
@@ -32,16 +43,63 @@ export default function StorySessionPage() {
         if (!input.trim() || !firestore || !user) return;
 
         setIsSending(true);
+        const childMessageText = input.trim();
+        setInput('');
+
         const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
         try {
+            // 1. Write child message to Firestore
             await addDoc(messagesRef, {
                 sender: 'child',
-                text: input.trim(),
+                text: childMessageText,
                 createdAt: serverTimestamp(),
             });
-            setInput('');
-        } catch (e) {
-            console.error("Error sending message:", e);
+
+            // 2. Call warmup reply API
+            const response = await fetch('/api/warmupReply', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId }),
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.ok) {
+                // 3. Write assistant message to Firestore
+                await addDoc(messagesRef, {
+                    sender: 'assistant',
+                    text: result.assistantText,
+                    createdAt: serverTimestamp(),
+                });
+                 setGenkitDiagnostics({
+                    lastCallOk: true,
+                    lastErrorMessage: null,
+                    lastUsedPromptConfigId: result.usedPromptConfigId,
+                });
+            } else {
+                // 4. Handle API error
+                const errorMessage = result.error || 'The Story Guide is having trouble thinking of a reply. Please try again.';
+                await addDoc(messagesRef, {
+                    sender: 'assistant',
+                    text: `(Sorry, I had a problem: ${errorMessage})`,
+                    createdAt: serverTimestamp(),
+                });
+                toast({ title: 'API Error', description: errorMessage, variant: 'destructive' });
+                setGenkitDiagnostics({
+                    lastCallOk: false,
+                    lastErrorMessage: errorMessage,
+                    lastUsedPromptConfigId: null,
+                });
+            }
+
+        } catch (e: any) {
+            console.error("Error in send message flow:", e);
+            toast({ title: 'Error', description: e.message, variant: 'destructive' });
+             setGenkitDiagnostics({
+                lastCallOk: false,
+                lastErrorMessage: e.message,
+                lastUsedPromptConfigId: null,
+            });
         } finally {
             setIsSending(false);
         }
@@ -55,15 +113,15 @@ export default function StorySessionPage() {
             email: user?.email || null,
         },
         firestore: {
-            hasSession: !!session,
             messagesCount: messages?.length || 0,
             firstMessageSender: messages && messages.length > 0 ? messages[0].sender : null,
             lastMessageSender: messages && messages.length > 0 ? messages[messages.length - 1].sender : null,
         },
+        genkit: genkitDiagnostics,
     };
 
     const renderContent = () => {
-        if (userLoading || sessionLoading) {
+        if (userLoading) {
             return <div className="flex items-center justify-center"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>;
         }
 
@@ -74,18 +132,6 @@ export default function StorySessionPage() {
                     <Button asChild><Link href="/login">Sign In</Link></Button>
                 </div>
             );
-        }
-        
-        if (sessionError) {
-            return <p className="text-destructive">Error loading session: {sessionError.message}</p>;
-        }
-        
-        if (!session) {
-            return (
-                <div className="text-center">
-                    <p className="text-destructive">This story session could not be found.</p>
-                </div>
-            )
         }
         
         return (
@@ -107,6 +153,14 @@ export default function StorySessionPage() {
                            </p>
                        </div>
                    ))}
+                   {isSending && (
+                        <div className="flex justify-start">
+                            <div className="bg-muted p-3 rounded-lg flex items-center gap-2">
+                                <LoaderCircle className="h-5 w-5 animate-spin" />
+                                <span className="text-sm text-muted-foreground">Thinking...</span>
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
                 <CardFooter className="border-t pt-6">
                   <div className="flex w-full items-center space-x-2">

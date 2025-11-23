@@ -9,19 +9,8 @@ import { useFirestore } from '@/firebase';
 import { collection, doc, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import type { PromptConfig } from '@/lib/types';
 
-type PromptConfig = {
-    id: string;
-    phase: string;
-    levelBand: string;
-    languageCode: string;
-    version: number;
-    status: string;
-    systemPrompt: string;
-    modeInstructions: string;
-    additionalContextTemplate: object;
-    allowedChatMoves: string[];
-};
 
 const samplePrompts: PromptConfig[] = [
     {
@@ -36,7 +25,12 @@ const samplePrompts: PromptConfig[] = [
         additionalContextTemplate: {
             placeholders: ["childName", "favouriteThings"]
         },
-        allowedChatMoves: ["ask_short_question", "ask_for_two_sentences"]
+        allowedChatMoves: ["ask_short_question", "ask_for_two_sentences"],
+        model: {
+            name: "gemini-2.5-pro",
+            temperature: 0.6,
+            maxOutputTokens: 200,
+        }
     },
     {
         id: "warmup_level_med_v1",
@@ -50,7 +44,31 @@ const samplePrompts: PromptConfig[] = [
         additionalContextTemplate: {
             placeholders: ["childName", "favouriteThings", "recentStoryVibe"]
         },
-        allowedChatMoves: ["ask_short_question", "ask_for_three_sentences", "summarise_child_answer_back"]
+        allowedChatMoves: ["ask_short_question", "ask_for_three_sentences", "summarise_child_answer_back"],
+        model: {
+            name: "gemini-2.5-pro",
+            temperature: 0.6,
+            maxOutputTokens: 250,
+        }
+    },
+    {
+        id: "warmup_level_high_v1",
+        phase: "warmup",
+        levelBand: "high",
+        languageCode: "en-GB",
+        version: 1,
+        status: "draft",
+        systemPrompt: "(placeholder system prompt for warmup high level)",
+        modeInstructions: "(placeholder mode instructions for warmup high level)",
+        additionalContextTemplate: {
+            placeholders: ["childName", "favouriteThings", "recentStoryVibe"]
+        },
+        allowedChatMoves: ["ask_open_question", "summarise_child_answer_back"],
+        model: {
+            name: "gemini-2.5-pro",
+            temperature: 0.7,
+            maxOutputTokens: 300,
+        }
     }
 ];
 
