@@ -18,7 +18,6 @@ type PromptDebug = {
     conversationLines: number;
     promptLength: number;
     promptPreview: string;
-    messagesShape?: any[];
 } | null;
 
 
@@ -92,7 +91,6 @@ export const warmupReplyFlow = ai.defineFlow(
             ].join('');
             
             // 5. Build the promptDebug object
-            const history = messagesSnapshot.docs.map(d => d.data());
             promptDebug = {
                 hasSystem: combinedSystem.length > 0,
                 systemLength: combinedSystem.length,
@@ -100,35 +98,7 @@ export const warmupReplyFlow = ai.defineFlow(
                 conversationLines: messagesSnapshot.docs.length,
                 promptLength: finalPrompt.length,
                 promptPreview: finalPrompt.slice(0, 200),
-                messagesShape: history.map((message, i) => {
-                    const hasValue = message != null;
-                    const role = hasValue && typeof message.role === 'string' ? message.role : null;
-                    const hasContentArray = hasValue && Array.isArray(message.content);
-                    const contentLength = hasContentArray ? message.content.length : 0;
-                    const firstPart = hasContentArray && message.content[0];
-                    const firstPartKeys = firstPart ? Object.keys(firstPart) : [];
-                    const firstTextPreview = firstPart && typeof firstPart.text === 'string' ? firstPart.text.slice(0, 40) : null;
-            
-                    return {
-                        index: i,
-                        hasValue,
-                        role,
-                        hasContentArray,
-                        contentLength,
-                        firstPartKeys,
-                        firstTextPreview
-                    };
-                }),
             };
-
-            for (let i = 0; i < history.length; i++) {
-                const message = history[i];
-                if (message == null) throw new Error(`Invalid message at index ${i}: message is null/undefined`);
-                if (typeof message.role !== 'string') throw new Error(`Invalid message at index ${i}: role is missing or not a string`);
-                if (!Array.isArray(message.content)) throw new Error(`Invalid message at index ${i}: content is missing or not an array`);
-                if (message.content.length === 0 || !message.content[0]) throw new Error(`Invalid message at index ${i}: content[0] is missing`);
-                if (typeof message.content[0].text !== 'string') throw new Error(`Invalid message at index ${i}: content[0].text is missing or not a string`);
-            }
             
 
             // 6. Call Gemini with the single prompt string
