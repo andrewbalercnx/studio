@@ -92,6 +92,7 @@ export const warmupReplyFlow = ai.defineFlow(
             ].join('');
             
             // 5. Build the promptDebug object
+            const history = messagesSnapshot.docs.map(d => d.data());
             promptDebug = {
                 hasSystem: combinedSystem.length > 0,
                 systemLength: combinedSystem.length,
@@ -99,7 +100,35 @@ export const warmupReplyFlow = ai.defineFlow(
                 conversationLines: messagesSnapshot.docs.length,
                 promptLength: finalPrompt.length,
                 promptPreview: finalPrompt.slice(0, 200),
+                messagesShape: history.map((message, i) => {
+                    const hasValue = message != null;
+                    const role = hasValue && typeof message.role === 'string' ? message.role : null;
+                    const hasContentArray = hasValue && Array.isArray(message.content);
+                    const contentLength = hasContentArray ? message.content.length : 0;
+                    const firstPart = hasContentArray && message.content[0];
+                    const firstPartKeys = firstPart ? Object.keys(firstPart) : [];
+                    const firstTextPreview = firstPart && typeof firstPart.text === 'string' ? firstPart.text.slice(0, 40) : null;
+            
+                    return {
+                        index: i,
+                        hasValue,
+                        role,
+                        hasContentArray,
+                        contentLength,
+                        firstPartKeys,
+                        firstTextPreview
+                    };
+                }),
             };
+
+            for (let i = 0; i < history.length; i++) {
+                const message = history[i];
+                if (message == null) throw new Error(`Invalid message at index ${i}: message is null/undefined`);
+                if (typeof message.role !== 'string') throw new Error(`Invalid message at index ${i}: role is missing or not a string`);
+                if (!Array.isArray(message.content)) throw new Error(`Invalid message at index ${i}: content is missing or not an array`);
+                if (message.content.length === 0 || !message.content[0]) throw new Error(`Invalid message at index ${i}: content[0] is missing`);
+                if (typeof message.content[0].text !== 'string') throw new Error(`Invalid message at index ${i}: content[0].text is missing or not a string`);
+            }
             
 
             // 6. Call Gemini with the single prompt string
@@ -113,25 +142,35 @@ export const warmupReplyFlow = ai.defineFlow(
             });
             
             let assistantText: string | null = null;
-            if (typeof llmResponse.text === "function") {
-                assistantText = llmResponse.text();
-            } else if (typeof (llmResponse as any).text === "string") {
-                assistantText = (llmResponse as any).text;
+            const raw = (llmResponse as any).raw;
+
+            if (raw && Array.isArray(raw.candidates) && raw.candidates.length > 0) {
+                const firstCandidate = raw.candidates[0];
+                const content = firstCandidate?.content;
+                const parts = content && Array.isArray(content.parts) ? content.parts : [];
+                const firstPart = parts.length > 0 ? parts[0] : null;
+                const textValue = firstPart && typeof firstPart.text === 'string' ? firstPart.text : null;
+                if (textValue && textValue.trim().length > 0) {
+                    assistantText = textValue.trim();
+                }
             }
 
-            if (!assistantText || assistantText.trim().length === 0) {
+
+            if (!assistantText) {
                 return {
                     ok: false,
-                    errorMessage: "Model returned empty text for warmup.",
+                    errorMessage: "Model returned empty or malformed text in raw.candidates.",
                     debug: {
                         ...(promptDebug || {}),
                         responseKeys: Object.keys(llmResponse || {}),
-                        hasTextMethod: typeof (llmResponse as any).text === "function",
+                        hasRaw: !!raw,
+                        hasCandidatesArray: raw && Array.isArray(raw.candidates),
+                        candidatesLength: raw && Array.isArray(raw.candidates) ? raw.candidates.length : 0,
                     },
                 };
             }
             
-            const trimmedAssistantText = assistantText.trim();
+            const trimmedAssistantText = assistantText;
             const assistantTextPreview = trimmedAssistantText.slice(0, 80);
 
             return {
@@ -152,3 +191,5 @@ export const warmupReplyFlow = ai.defineFlow(
         }
     }
 );
+
+    
