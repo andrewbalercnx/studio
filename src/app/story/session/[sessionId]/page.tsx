@@ -1,18 +1,18 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, Send } from 'lucide-react';
+import { LoaderCircle, Send, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
 import { doc, collection, addDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import type { StorySession, ChatMessage as Message } from '@/lib/types';
 import { Input } from '@/components/ui/input';
-import { useCollection } from '@/lib/firestore-hooks';
+import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import { useToast } from '@/hooks/use-toast';
 
 type GenkitDiagnostics = {
@@ -41,9 +41,18 @@ export default function StorySessionPage() {
         debug: null,
     });
     
-    const messagesQuery = firestore ? query(collection(firestore, `storySessions/${sessionId}/messages`), orderBy('createdAt')) : null;
+    // Firestore Hooks
+    const sessionRef = useMemo(() => firestore ? doc(firestore, 'storySessions', sessionId) : null, [firestore, sessionId]);
+    const { data: session, loading: sessionLoading, error: sessionError } = useDocument<StorySession>(sessionRef);
+    const messagesQuery = useMemo(() => firestore ? query(collection(firestore, `storySessions/${sessionId}/messages`), orderBy('createdAt')) : null, [firestore, sessionId]);
     const { data: messages, loading: messagesLoading, error: messagesError } = useCollection<Message>(messagesQuery);
     
+    // Derived state from session
+    const currentStoryTypeId = session?.storyTypeId ?? null;
+    const currentStoryPhaseId = session?.storyPhaseId ?? null;
+    const currentArcStepIndex = typeof session?.arcStepIndex === 'number' ? session.arcStepIndex : null;
+
+
     const handleSendMessage = async () => {
         if (!input.trim() || !firestore || !user) return;
 
@@ -133,22 +142,35 @@ export default function StorySessionPage() {
             messagesCount: messages?.length || 0,
             firstMessageSender: messages && messages.length > 0 ? messages[0].sender : null,
             lastMessageSender: messages && messages.length > 0 ? messages[messages.length - 1].sender : null,
+            sessionHasStoryType: !!currentStoryTypeId,
+            currentStoryTypeId: currentStoryTypeId,
+            currentStoryPhaseId: currentStoryPhaseId,
+            currentArcStepIndex: currentArcStepIndex,
         },
         genkit: genkitDiagnostics,
+        error: sessionError?.message || messagesError?.message || null,
     };
 
-    const renderContent = () => {
-        if (userLoading) {
-            return <div className="flex items-center justify-center"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>;
+    const renderChatContent = () => {
+        if (userLoading || sessionLoading) {
+            return <div className="flex items-center justify-center p-8"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>;
         }
 
         if (!user) {
             return (
-                <div className="text-center">
+                <div className="text-center p-8">
                     <p className="text-muted-foreground mb-4">Please sign in to view this story.</p>
                     <Button asChild><Link href="/login">Sign In</Link></Button>
                 </div>
             );
+        }
+        
+        if (sessionError) {
+             return <p className="text-destructive text-center p-8">Error loading session: {sessionError.message}</p>;
+        }
+
+        if (!session) {
+             return <p className="text-destructive text-center p-8">Could not find story session with ID: {sessionId}</p>;
         }
         
         return (
@@ -201,20 +223,42 @@ export default function StorySessionPage() {
         )
     };
 
-    return (
-        <div className="container mx-auto p-4 sm:p-6 md:p-8 flex flex-col items-center gap-8">
-            <div className="w-full h-[calc(100vh-24rem)] flex justify-center">
-              {renderContent()}
-            </div>
-            
+    const renderStoryTypeSection = () => {
+        if (sessionLoading) {
+            return <div className="flex justify-center"><LoaderCircle className="h-5 w-5 animate-spin"/></div>
+        }
+
+        if (currentStoryTypeId) {
+            return (
+                <div className="text-center p-4 rounded-lg bg-muted/50">
+                    <CheckCircle className="mx-auto h-8 w-8 text-green-500 mb-2" />
+                    <p className="font-semibold">Story type chosen.</p>
+                    <p className="text-sm text-muted-foreground font-mono">{currentStoryTypeId}</p>
+                </div>
+            )
+        }
+        
+        return (
             <div className="text-center">
                 <p className="mb-2">Ready to choose your kind of story?</p>
                 <Button onClick={() => router.push(`/story/type/${sessionId}`)}>
                     Choose story type
                 </Button>
             </div>
+        );
+    };
+
+    return (
+        <div className="container mx-auto p-4 sm:p-6 md:p-8 flex flex-col items-center gap-8">
+            <div className="w-full h-[calc(100vh-26rem)] flex justify-center">
+              {renderChatContent()}
+            </div>
             
-            <Card className="w-full max-w-2xl">
+            <div className="w-full max-w-2xl">
+                {renderStoryTypeSection()}
+            </div>
+            
+            <Card className="w-full max-w-4xl">
                 <CardHeader>
                     <CardTitle>Diagnostics</CardTitle>
                 </CardHeader>
@@ -227,5 +271,3 @@ export default function StorySessionPage() {
         </div>
     );
 }
-
-    
