@@ -141,9 +141,7 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             
             // 8. Extract raw text robustly
             let rawText: string | null = null;
-            if (typeof llmResponse.text === 'function') {
-                rawText = await llmResponse.text();
-            } else if (typeof llmResponse.text === 'string') {
+            if (typeof llmResponse.text === 'string') {
                 rawText = llmResponse.text;
             } else {
                 const raw = (llmResponse as any).raw;
@@ -160,7 +158,14 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             }
 
 
-             if (!rawText || rawText.trim() === '') {
+            if (!rawText || rawText.trim() === '') {
+                let llmResponseStringified = '[[Could not stringify llmResponse]]';
+                try {
+                    llmResponseStringified = JSON.stringify(llmResponse, null, 2);
+                } catch (e) {
+                    // Ignore stringify errors, use the placeholder
+                }
+
                 return {
                     ok: false,
                     sessionId,
@@ -169,7 +174,8 @@ Important: Return only a single JSON object. Do not include any extra text, expl
                         stage: 'ai_generate',
                         details: {
                             textPresent: !!rawText,
-                            rawResponsePreview: rawText ? rawText.slice(0, 500) : null
+                            rawResponsePreview: rawText ? rawText.slice(0, 500) : null,
+                            llmResponseStringified: llmResponseStringified,
                         }
                     }
                 };
@@ -250,3 +256,5 @@ Important: Return only a single JSON object. Do not include any extra text, expl
         }
     }
 );
+
+    
