@@ -92,5 +92,30 @@ export type ChildProfile = {
 	helpPreference: 'more_scaffolding' | 'balanced' | 'independent';
 };
 
+export type StoryPhase = {
+  id: string;
+  name: string;
+  phaseType: "warmup" | "storyBeat" | "ending";
+  description: string;
+  choiceCount: number;
+  allowMore: boolean;
+  status: "live" | "draft";
+  orderIndex: number;
+};
+
+export type StoryType = {
+  id: string;
+  name: string;
+  shortDescription: string;
+  ageRange: string;
+  status: "live" | "draft";
+  tags: string[];
+  defaultPhaseId: string;
+  endingPhaseId: string;
+  levelBands: string[];
+  arcTemplate: {
+    steps: string[];
+  };
+};
 
     

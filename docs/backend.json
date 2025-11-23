@@ -311,6 +311,45 @@
         }
       },
       "required": ["id", "phase", "systemPrompt", "modeInstructions"]
+    },
+    "StoryPhase": {
+        "title": "Story Phase",
+        "description": "A phase of the story interaction.",
+        "type": "object",
+        "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "phaseType": { "type": "string", "enum": ["warmup", "storyBeat", "ending"] },
+            "description": { "type": "string" },
+            "choiceCount": { "type": "number" },
+            "allowMore": { "type": "boolean" },
+            "status": { "type": "string", "enum": ["live", "draft"] },
+            "orderIndex": { "type": "number" }
+        },
+        "required": ["id", "name", "phaseType", "choiceCount", "allowMore", "status", "orderIndex"]
+    },
+    "StoryType": {
+        "title": "Story Type",
+        "description": "A template for a story.",
+        "type": "object",
+        "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "shortDescription": { "type": "string" },
+            "ageRange": { "type": "string" },
+            "status": { "type": "string", "enum": ["live", "draft"] },
+            "tags": { "type": "array", "items": { "type": "string" } },
+            "defaultPhaseId": { "type": "string" },
+            "endingPhaseId": { "type": "string" },
+            "levelBands": { "type": "array", "items": { "type": "string" } },
+            "arcTemplate": {
+                "type": "object",
+                "properties": {
+                    "steps": { "type": "array", "items": { "type": "string" } }
+                }
+            }
+        },
+        "required": ["id", "name", "shortDescription", "status", "tags", "defaultPhaseId", "endingPhaseId", "levelBands", "arcTemplate"]
     }
   },
   "auth": {
@@ -339,6 +378,14 @@
     "/promptConfigs/{configId}": {
       "schema": { "$ref": "#/entities/PromptConfig" },
       "description": "Stores the prompt configurations that drive the AI's behavior."
+    },
+    "/storyPhases/{phaseId}": {
+        "schema": { "$ref": "#/entities/StoryPhase" },
+        "description": "Stores the configuration for story interaction phases."
+    },
+    "/storyTypes/{typeId}": {
+        "schema": { "$ref": "#/entities/StoryType" },
+        "description": "Stores templates for different types of stories."
     }
   }
 }
