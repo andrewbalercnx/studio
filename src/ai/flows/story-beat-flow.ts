@@ -21,7 +21,7 @@ const StoryBeatOutputSchema = z.object({
   options: z.array(z.object({
     id: z.string().describe("A single uppercase letter, e.g., 'A', 'B', 'C'."),
     text: z.string().describe("A short, child-friendly choice for what happens next."),
-  })).min(3).describe("An array of at least 3 choices for the child.")
+  })).min(3).max(3).describe("An array of exactly 3 choices for the child.")
 });
 
 
@@ -127,15 +127,13 @@ Important: Return only a single JSON object. Do not include any extra text, expl
 
             // 7. Call Genkit AI
             debug.stage = 'ai_generate';
-            const temperature = promptConfig.model?.temperature ?? 0.7;
-            const maxOutputTokens = promptConfig.model?.maxOutputTokens ?? 10000;
             
             const llmResponse = await ai.generate({
                 model: 'googleai/gemini-2.5-flash',
                 prompt: finalPrompt,
                 config: {
-                    temperature,
-                    maxOutputTokens,
+                    temperature: promptConfig.model?.temperature ?? 0.7,
+                    maxOutputTokens: promptConfig.model?.maxOutputTokens ?? 10000,
                 }
             });
             
@@ -144,7 +142,7 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             if (llmResponse.text) {
                 rawText = llmResponse.text;
             } else {
-                const raw = (llmResponse as any).raw;
+                 const raw = (llmResponse as any).raw ?? (llmResponse as any).custom;
                 const firstCandidate = raw && Array.isArray(raw.candidates) && raw.candidates.length > 0 ? raw.candidates[0] : null;
                 if (firstCandidate) {
                     const content = firstCandidate?.content;
@@ -156,7 +154,6 @@ Important: Return only a single JSON object. Do not include any extra text, expl
                     }
                 }
             }
-
 
             if (!rawText || rawText.trim() === '') {
                 let llmResponseStringified = '[[Could not stringify llmResponse]]';
@@ -181,7 +178,6 @@ Important: Return only a single JSON object. Do not include any extra text, expl
                 };
             }
             
-
             // 9. Manually parse and validate
             debug.stage = 'json_parse';
             let parsed: z.infer<typeof StoryBeatOutputSchema>;
@@ -238,8 +234,8 @@ Important: Return only a single JSON object. Do not include any extra text, expl
                     storySoFarLength: storySoFar.length,
                     arcStepIndex,
                     modelName: 'googleai/gemini-2.5-flash',
-                    maxOutputTokens,
-                    temperature,
+                    maxOutputTokens: promptConfig.model?.maxOutputTokens,
+                    temperature: promptConfig.model?.temperature,
                     promptPreview: finalPrompt.substring(0, 500) + '...',
                 }
             };
@@ -256,5 +252,3 @@ Important: Return only a single JSON object. Do not include any extra text, expl
         }
     }
 );
-
-    
