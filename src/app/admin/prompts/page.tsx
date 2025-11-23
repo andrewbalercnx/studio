@@ -83,7 +83,7 @@ const samplePrompts: PromptConfig[] = [
         model: {
             name: "googleai/gemini-2.5-flash",
             temperature: 0.8,
-            maxOutputTokens: 1024
+            maxOutputTokens: 10000
         }
     }
 ];
