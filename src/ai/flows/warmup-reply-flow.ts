@@ -59,18 +59,16 @@ export const warmupReplyFlow = ai.defineFlow(
                 content: [{ text: msg.text }],
             }));
             
-            const systemPrompt = [
-                { text: promptConfig.systemPrompt },
-                { text: `MODE INSTRUCTIONS: ${promptConfig.modeInstructions}` },
-            ];
-
+            const systemPromptText = [
+                promptConfig.systemPrompt,
+                `MODE INSTRUCTIONS: ${promptConfig.modeInstructions}`,
+            ].join('\n\n');
+            
             // 5. Call Gemini
             const llmResponse = await ai.generate({
                 model: 'googleai/gemini-2.5-flash',
-                prompt: {
-                    system: systemPrompt.map(p => p.text).join('\n\n'),
-                    messages: [...history],
-                },
+                system: systemPromptText,
+                history: history,
                 config: {
                     temperature: promptConfig.model?.temperature || 0.6,
                     maxOutputTokens: promptConfig.model?.maxOutputTokens || 250,
