@@ -88,7 +88,7 @@ export default function StorySessionPage() {
                 setGenkitDiagnostics({
                     lastCallOk: false,
                     lastErrorMessage: result.errorMessage || 'An unknown error occurred.',
-                    lastUsedPromptConfigId: null,
+                    lastUsedPromptConfigId: result.usedPromptConfigId || null,
                 });
             }
 

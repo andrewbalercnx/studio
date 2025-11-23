@@ -31,20 +31,20 @@ export const warmupReplyFlow = ai.defineFlow(
             const sessionRef = firestore.collection('storySessions').doc(sessionId);
             const sessionDoc = await sessionRef.get();
             if (!sessionDoc.exists) {
-                return { ok: false, errorMessage: `Session not found: ${sessionId}` };
+                return { ok: false, errorMessage: `Failed to load story session with id ${sessionId}: document does not exist.` };
             }
             const session = sessionDoc.data() as StorySession;
 
             // 2. Load prompt config
             const { promptConfigId, promptConfigLevelBand } = session;
             if (!promptConfigId) {
-                return { ok: false, errorMessage: 'No promptConfigId stored on session.' };
+                return { ok: false, errorMessage: `No promptConfigId found on session ${sessionId}.` };
             }
 
             const promptConfigRef = firestore.collection('promptConfigs').doc(promptConfigId);
             const promptConfigDoc = await promptConfigRef.get();
             if (!promptConfigDoc.exists) {
-                return { ok: false, errorMessage: `Prompt config '${promptConfigId}' not found.` };
+                return { ok: false, errorMessage: `Prompt config '${promptConfigId}' not found in promptConfigs collection.` };
             }
             const promptConfig = promptConfigDoc.data() as PromptConfig;
 
@@ -89,9 +89,10 @@ export const warmupReplyFlow = ai.defineFlow(
             };
 
         } catch (e: any) {
+            const errorMessage = e instanceof Error ? e.message : JSON.stringify(e);
             return {
                 ok: false,
-                errorMessage: e.message || 'An unexpected error occurred in the flow.',
+                errorMessage: `Unexpected error in warmupReplyFlow for session ${sessionId}: ${errorMessage}`,
             };
         }
     }
