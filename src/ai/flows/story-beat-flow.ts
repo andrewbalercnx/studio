@@ -141,7 +141,7 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             
             // 8. Extract raw text robustly
             let rawText: string | null = null;
-            if (typeof llmResponse.text === 'string') {
+            if (llmResponse.text) {
                 rawText = llmResponse.text;
             } else {
                 const raw = (llmResponse as any).raw;
@@ -256,3 +256,5 @@ Important: Return only a single JSON object. Do not include any extra text, expl
         }
     }
 );
+
+    
