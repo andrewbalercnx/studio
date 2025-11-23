@@ -128,7 +128,7 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             // 7. Call Genkit AI
             debug.stage = 'ai_generate';
             const temperature = promptConfig.model?.temperature ?? 0.7;
-            const maxOutputTokens = promptConfig.model?.maxOutputTokens ?? 1024;
+            const maxOutputTokens = promptConfig.model?.maxOutputTokens ?? 10000;
             
             const llmResponse = await ai.generate({
                 model: 'googleai/gemini-2.5-flash',
@@ -256,5 +256,3 @@ Important: Return only a single JSON object. Do not include any extra text, expl
         }
     }
 );
-
-    
