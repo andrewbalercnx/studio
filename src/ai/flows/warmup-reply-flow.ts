@@ -54,8 +54,6 @@ export const warmupReplyFlow = ai.defineFlow(
             const messages = messagesSnapshot.docs.map(doc => doc.data() as ChatMessage);
 
             // 4. Build prompt
-            const model = ai.model(promptConfig.model?.name || 'gemini-2.5-pro');
-
             const history = messages.map(msg => ({
                 role: msg.sender === 'child' ? 'user' : 'model',
                 content: [{ text: msg.text }],
@@ -68,7 +66,7 @@ export const warmupReplyFlow = ai.defineFlow(
 
             // 5. Call Gemini
             const llmResponse = await ai.generate({
-                model,
+                model: 'gemini-2.5-pro',
                 prompt: {
                     system: systemPrompt.map(p => p.text).join('\n\n'),
                     messages: [...history],
