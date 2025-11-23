@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A Genkit flow to generate the next story beat.
@@ -121,7 +122,7 @@ ${storySoFar}
 
 Based on all the above, continue the story. Generate the next paragraph and three choices for the child. Output your response as a single, valid JSON object that matches this Zod schema:
 ${JSON.stringify(StoryBeatOutputSchema.jsonSchema, null, 2)}
-Do not output any other text or formatting.
+Important: Return only a single JSON object. Do not include any extra text, explanation, or formatting. Do not wrap the JSON in markdown or code fences. The output must start with { and end with }.
 `;
 
             // 7. Call Genkit AI
@@ -140,28 +141,35 @@ Do not output any other text or formatting.
             
             // 8. Extract raw text robustly
             let rawText: string | null = null;
-            const raw = (llmResponse as any).raw;
-            const firstCandidate = raw && Array.isArray(raw.candidates) && raw.candidates.length > 0 ? raw.candidates[0] : null;
-            if (firstCandidate) {
-                const content = firstCandidate?.content;
-                const parts = content && Array.isArray(content.parts) ? content.parts : [];
-                const firstPart = parts.length > 0 ? parts[0] : null;
-                const textValue = firstPart && typeof firstPart.text === 'string' ? firstPart.text : null;
-                if (textValue && textValue.trim().length > 0) {
-                    rawText = textValue.trim();
+            if (typeof llmResponse.text === 'function') {
+                rawText = await llmResponse.text();
+            } else if (typeof llmResponse.text === 'string') {
+                rawText = llmResponse.text;
+            } else {
+                const raw = (llmResponse as any).raw;
+                const firstCandidate = raw && Array.isArray(raw.candidates) && raw.candidates.length > 0 ? raw.candidates[0] : null;
+                if (firstCandidate) {
+                    const content = firstCandidate?.content;
+                    const parts = content && Array.isArray(content.parts) ? content.parts : [];
+                    const firstPart = parts.length > 0 ? parts[0] : null;
+                    const textValue = firstPart && typeof firstPart.text === 'string' ? firstPart.text : null;
+                    if (textValue && textValue.trim().length > 0) {
+                        rawText = textValue.trim();
+                    }
                 }
             }
 
-             if (!rawText) {
+
+             if (!rawText || rawText.trim() === '') {
                 return {
                     ok: false,
                     sessionId,
-                    errorMessage: "Model returned empty or malformed text in raw response for storyBeat.",
+                    errorMessage: "Model returned empty text for storyBeat.",
                     debug: {
                         stage: 'ai_generate',
                         details: {
                             textPresent: !!rawText,
-                            rawResponsePreview: raw ? JSON.stringify(raw).slice(0, 500) : null
+                            rawResponsePreview: rawText ? rawText.slice(0, 500) : null
                         }
                     }
                 };
@@ -174,7 +182,7 @@ Do not output any other text or formatting.
             try {
                 // Sometimes the model wraps the JSON in ```json ... ```, so we need to extract it.
                 const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
-                const jsonToParse = jsonMatch ? jsonMatch[1] : rawText;
+                const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
                 parsed = JSON.parse(jsonToParse);
             } catch (err) {
                 return {
