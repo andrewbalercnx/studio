@@ -51,14 +51,18 @@ export const warmupReplyFlow = ai.defineFlow(
             const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
             const messagesQuery = query(messagesRef, orderBy('createdAt', 'asc'));
             const messagesSnapshot = await getDocs(messagesQuery);
-            const messages = messagesSnapshot.docs.map(doc => doc.data() as ChatMessage);
-
-            // 4. Build prompt
-            const history = messages.map(msg => ({
-                role: msg.sender === 'child' ? 'user' : 'model',
-                content: [{ text: msg.text }],
-            }));
             
+            // Explicitly map Firestore docs to Genkit message format
+            const history = messagesSnapshot.docs.map(doc => {
+                const data = doc.data() as ChatMessage;
+                const role = data.sender === 'child' ? 'user' : 'model';
+                return {
+                    role: role,
+                    content: [{ text: data.text }],
+                };
+            });
+            
+            // 4. Build prompt
             const systemPromptText = [
                 promptConfig.systemPrompt,
                 `MODE INSTRUCTIONS: ${promptConfig.modeInstructions}`,
