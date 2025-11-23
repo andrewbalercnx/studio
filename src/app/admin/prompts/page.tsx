@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
@@ -19,7 +20,7 @@ const samplePrompts: PromptConfig[] = [
         levelBand: "low",
         languageCode: "en-GB",
         version: 1,
-        status: "draft",
+        status: "live",
         systemPrompt: "(placeholder system prompt for warmup low level)",
         modeInstructions: "(placeholder mode instructions for warmup low level)",
         additionalContextTemplate: {
@@ -27,7 +28,7 @@ const samplePrompts: PromptConfig[] = [
         },
         allowedChatMoves: ["ask_short_question", "ask_for_two_sentences"],
         model: {
-            name: "gemini-2.5-pro",
+            name: "gemini-1.5-flash",
             temperature: 0.6,
             maxOutputTokens: 200,
         }
@@ -38,7 +39,7 @@ const samplePrompts: PromptConfig[] = [
         levelBand: "medium",
         languageCode: "en-GB",
         version: 1,
-        status: "draft",
+        status: "live",
         systemPrompt: "(placeholder system prompt for warmup medium level)",
         modeInstructions: "(placeholder mode instructions for warmup medium level)",
         additionalContextTemplate: {
@@ -46,7 +47,7 @@ const samplePrompts: PromptConfig[] = [
         },
         allowedChatMoves: ["ask_short_question", "ask_for_three_sentences", "summarise_child_answer_back"],
         model: {
-            name: "gemini-2.5-pro",
+            name: "gemini-1.5-flash",
             temperature: 0.6,
             maxOutputTokens: 250,
         }
@@ -57,7 +58,7 @@ const samplePrompts: PromptConfig[] = [
         levelBand: "high",
         languageCode: "en-GB",
         version: 1,
-        status: "draft",
+        status: "live",
         systemPrompt: "(placeholder system prompt for warmup high level)",
         modeInstructions: "(placeholder mode instructions for warmup high level)",
         additionalContextTemplate: {
@@ -65,7 +66,7 @@ const samplePrompts: PromptConfig[] = [
         },
         allowedChatMoves: ["ask_open_question", "summarise_child_answer_back"],
         model: {
-            name: "gemini-2.5-pro",
+            name: "gemini-1.5-flash",
             temperature: 0.7,
             maxOutputTokens: 300,
         }
