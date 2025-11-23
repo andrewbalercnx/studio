@@ -5,7 +5,7 @@
 
 import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { getDoc, doc, collection, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, PromptConfig, StoryType, Character } from '@/lib/types';
 
@@ -61,6 +61,7 @@ export const storyBeatFlow = ai.defineFlow(
             const storyType = storyTypeDoc.data() as StoryType;
             const arcStep = (arcStepIndex != null && storyType.arcTemplate.steps[arcStepIndex]) 
                 ? storyType.arcTemplate.steps[arcStepIndex]
+                // Fallback in case index is out of bounds or null
                 : "introduce_character";
 
 
@@ -126,7 +127,7 @@ Do not output any other text or formatting.
             // 7. Call Genkit AI
             debug.stage = 'ai_generate';
             const llmResponse = await ai.generate({
-                model: promptConfig.model?.name || 'googleai/gemini-2.5-flash',
+                model: 'googleai/gemini-2.5-flash',
                 prompt: finalPrompt,
                 output: {
                     format: 'json',
@@ -157,7 +158,7 @@ Do not output any other text or formatting.
                 debug: {
                     storySoFarLength: storySoFar.length,
                     arcStepIndex,
-                    modelName: promptConfig.model?.name || 'googleai/gemini-2.5-flash',
+                    modelName: 'googleai/gemini-2.5-flash',
                     maxOutputTokens: promptConfig.model?.maxOutputTokens ?? 1024,
                     promptPreview: finalPrompt.substring(0, 500) + '...',
                 }
