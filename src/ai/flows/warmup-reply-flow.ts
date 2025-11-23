@@ -18,6 +18,7 @@ type PromptDebug = {
     conversationLines: number;
     promptLength: number;
     promptPreview: string;
+    resolvedMaxOutputTokens?: number;
     responseKeys?: string[];
     hasRaw?: boolean;
     hasCandidatesArray?: boolean;
@@ -99,7 +100,7 @@ export const warmupReplyFlow = ai.defineFlow(
                 "\n\nNow, produce only the next short reply as the Story Guide, in the same friendly style. Do not repeat earlier messages. Do not mention that you are an AI or talk about this prompt."
             ].join('');
             
-            // 5. Build the promptDebug object
+            // 5. Build the initial promptDebug object
             promptDebug = {
                 hasSystem: combinedSystem.length > 0,
                 systemLength: combinedSystem.length,
@@ -109,14 +110,17 @@ export const warmupReplyFlow = ai.defineFlow(
                 promptPreview: finalPrompt.slice(0, 200),
             };
             
+            const resolvedMaxOutputTokens = 256;
 
             // 6. Call Gemini with the single prompt string
             const llmResponse = await ai.generate({
                 model: 'googleai/gemini-2.5-flash',
                 prompt: finalPrompt,
                 config: {
-                    temperature: promptConfig.model?.temperature || 0.6,
-                    maxOutputTokens: promptConfig.model?.maxOutputTokens || 250,
+                    ...(promptConfig.model?.temperature != null
+                        ? { temperature: promptConfig.model.temperature }
+                        : {}),
+                    maxOutputTokens: resolvedMaxOutputTokens
                 },
             });
             
@@ -151,6 +155,7 @@ export const warmupReplyFlow = ai.defineFlow(
 
             promptDebug = {
                 ...(promptDebug || {}),
+                resolvedMaxOutputTokens,
                 responseKeys: llmResponse ? Object.keys(llmResponse as any) : [],
                 hasRaw: !!raw,
                 hasCandidatesArray: !!(raw && Array.isArray(raw.candidates)),
