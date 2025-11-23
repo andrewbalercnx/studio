@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -26,6 +26,7 @@ type GenkitDiagnostics = {
 export default function StorySessionPage() {
     const params = useParams<{ sessionId: string }>();
     const sessionId = params.sessionId;
+    const router = useRouter();
     const { user, loading: userLoading } = useUser();
     const firestore = useFirestore();
     const [input, setInput] = useState('');
@@ -202,8 +203,15 @@ export default function StorySessionPage() {
 
     return (
         <div className="container mx-auto p-4 sm:p-6 md:p-8 flex flex-col items-center gap-8">
-            <div className="w-full h-[calc(100vh-18rem)] flex justify-center">
+            <div className="w-full h-[calc(100vh-24rem)] flex justify-center">
               {renderContent()}
+            </div>
+            
+            <div className="text-center">
+                <p className="mb-2">Ready to choose your kind of story?</p>
+                <Button onClick={() => router.push(`/story/type/${sessionId}`)}>
+                    Choose story type
+                </Button>
             </div>
             
             <Card className="w-full max-w-2xl">
