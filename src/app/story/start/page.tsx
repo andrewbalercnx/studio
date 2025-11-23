@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, addDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, addDoc, collection, query, where, getDocs, limit, updateDoc } from 'firebase/firestore';
 import type { PromptConfig, ChildProfile } from '@/lib/types';
 
 
@@ -25,6 +25,7 @@ type StartStoryResponse = {
         status: string;
     };
     initialAssistantMessage: string;
+    mainCharacterId: string;
     error?: undefined;
 } | {
     error: true;
@@ -107,7 +108,7 @@ export default function StartStoryPage() {
                 throw new Error("No warmup promptConfig found (including fallback).");
             }
             
-            // 4. Create a new story session, now including prompt info
+            // 4. Create a new story session
             const storySessionsRef = collection(firestore, 'storySessions');
             const newSessionData = {
                 childId: childId,
@@ -118,19 +119,38 @@ export default function StartStoryPage() {
                 storyVibe: "",
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
-                characters: [],
-                beats: [],
                 promptConfigId: promptConfig.id,
                 promptConfigLevelBand: chosenLevelBand,
             };
             const newSessionRef = await addDoc(storySessionsRef, newSessionData);
             const storySessionId = newSessionRef.id;
-            await setDoc(newSessionRef, { id: storySessionId }, { merge: true });
 
+            // 5. Create the main character
+            const charactersRef = collection(firestore, 'characters');
+            const newCharacterData = {
+                ownerChildId: user.uid,
+                sessionId: storySessionId,
+                role: 'child',
+                name: childProfile.displayName || 'You',
+                realPersonRef: {
+                    kind: 'self',
+                    label: 'You'
+                },
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            };
+            const newCharacterRef = await addDoc(charactersRef, newCharacterData);
+            const mainCharacterId = newCharacterRef.id;
+
+            // 6. Link character to session and set session ID on session doc
+            await updateDoc(newSessionRef, {
+                id: storySessionId,
+                mainCharacterId: mainCharacterId
+            });
             
             const initialAssistantMessage = "Hi! I am your Story Guide. What would you like me to call you?";
 
-            // 5. Store initial message in subcollection
+            // 7. Store initial message in subcollection
             const messagesRef = collection(firestore, 'storySessions', storySessionId, 'messages');
             await addDoc(messagesRef, {
                 sender: 'assistant',
@@ -138,7 +158,7 @@ export default function StartStoryPage() {
                 createdAt: serverTimestamp()
             });
 
-            // 6. Build response object
+            // 8. Build response object
             const result: StartStoryResponse = {
                 storySessionId: storySessionId,
                 childId: childId,
@@ -152,6 +172,7 @@ export default function StartStoryPage() {
                     status: promptConfig.status,
                 },
                 initialAssistantMessage,
+                mainCharacterId,
             };
             setResponse(result);
 
@@ -171,9 +192,12 @@ export default function StartStoryPage() {
         result: {
             hasResponse: !!response,
             hasError: !!response?.error,
+            errorMessage: response?.error ? response.message : null,
             storySessionId: response && !response.error ? response.storySessionId : null,
             promptConfigId: response && !response.error ? response.promptConfigSummary.id : null,
             chosenLevelBand: response && !response.error ? response.chosenLevelBand : null,
+            hasMainCharacter: !!(response && !response.error && response.mainCharacterId),
+            mainCharacterId: response && !response.error ? response.mainCharacterId : null,
         }
     };
     
@@ -262,3 +286,5 @@ export default function StartStoryPage() {
         </div>
     );
 }
+
+    
