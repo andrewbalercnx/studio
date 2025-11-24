@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
 import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { ChatMessage, StorySession, Character } from '@/lib/types';
+import type { ChatMessage, StorySession, Character, PromptConfig } from '@/lib/types';
 
 type TestStatus = 'PENDING' | 'PASS' | 'FAIL' | 'SKIP' | 'ERROR';
 type TestResult = {
@@ -51,6 +51,7 @@ type ScenarioMoreOptionsResult = {
 
 const initialTests: TestResult[] = [
   { id: 'DATA_PROMPTS', name: 'Firestore: Prompt Configs', status: 'PENDING', message: '' },
+  { id: 'DATA_PROMPTS_STORY_BEAT_LIVE', name: 'Firestore: StoryBeat Live Configs', status: 'PENDING', message: '' },
   { id: 'DATA_STORY_TYPES', name: 'Firestore: Story Types', status: 'PENDING', message: '' },
   { id: 'DATA_STORY_PHASES', name: 'Firestore: Story Phases', status: 'PENDING', message: '' },
   { id: 'DATA_CHILDREN', name: 'Firestore: Children', status: 'PENDING', message: '' },
@@ -110,6 +111,31 @@ export default function AdminRegressionPage() {
       } catch (e: any) {
           updateTestResult('DATA_PROMPTS', { status: 'FAIL', message: e.message });
       }
+
+      // Test: DATA_PROMPTS_STORY_BEAT_LIVE
+      try {
+        const promptsRef = collection(firestore, 'promptConfigs');
+        const q = query(promptsRef, where('phase', '==', 'storyBeat'), where('status', '==', 'live'));
+        const snap = await getDocs(q);
+        const liveBeatConfigs = snap.docs.map(d => d.data() as PromptConfig);
+        fsSummary.storyBeatLiveCount = liveBeatConfigs.length;
+
+        if (liveBeatConfigs.length === 0) {
+          throw new Error("No live storyBeat promptConfigs found; at least one is required.");
+        }
+        
+        const lowLevelConfigs = liveBeatConfigs.filter(p => p.levelBand === 'low');
+        fsSummary.storyBeatLiveLowCount = lowLevelConfigs.length;
+
+        if (lowLevelConfigs.length === 0) {
+            throw new Error("Live storyBeat configs exist, but none have levelBand 'low'.");
+        }
+        updateTestResult('DATA_PROMPTS_STORY_BEAT_LIVE', { status: 'PASS', message: `Found ${liveBeatConfigs.length} live configs, including ${lowLevelConfigs.length} for levelBand 'low'.` });
+
+      } catch (e: any) {
+        updateTestResult('DATA_PROMPTS_STORY_BEAT_LIVE', { status: 'FAIL', message: e.message });
+      }
+
 
       // Test: DATA_STORY_TYPES
        try {
