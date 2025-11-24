@@ -10,8 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { collection, getDocs, doc, getDoc, query, where, limit } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import type { Message, StorySession, Character } from '@/lib/types';
 
 type TestStatus = 'PENDING' | 'PASS' | 'FAIL' | 'SKIP' | 'ERROR';
 type TestResult = {
@@ -28,15 +29,16 @@ const initialTests: TestResult[] = [
   { id: 'DATA_STORY_PHASES', name: 'Firestore: Story Phases', status: 'PENDING', message: '' },
   { id: 'DATA_CHILDREN', name: 'Firestore: Children', status: 'PENDING', message: '' },
   { id: 'DATA_SESSIONS_OVERVIEW', name: 'Firestore: Sessions Overview', status: 'PENDING', message: '' },
-  { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure', status: 'PENDING', message: '' },
-  { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages', status: 'PENDING', message: '' },
-  { id: 'API_STORY_BEAT', name: 'API: /api/storyBeat', status: 'PENDING', message: '' },
-  { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply', status: 'PENDING', message: '' },
+  { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure (Input)', status: 'PENDING', message: '' },
+  { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
+  { id: 'API_STORY_BEAT', name: 'API: /api/storyBeat (Input)', status: 'PENDING', message: '' },
+  { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_BEAT_AUTO', name: 'Scenario: Auto-Beat', status: 'PENDING', message: '' },
 ];
 
 
 export default function AdminRegressionPage() {
-  const { isAuthenticated, isAdmin, email, loading: authLoading } = useAdminStatus();
+  const { isAuthenticated, isAdmin, loading: authLoading } = useAdminStatus();
   const firestore = useFirestore();
   const { toast } = useToast();
 
@@ -49,6 +51,7 @@ export default function AdminRegressionPage() {
     page: 'admin-regression',
     firestoreSummary: {},
     apiSummary: {},
+    scenario: {},
   });
 
   const updateTestResult = (id: string, result: Partial<TestResult>) => {
@@ -64,9 +67,9 @@ export default function AdminRegressionPage() {
           const promptsRef = collection(firestore, 'promptConfigs');
           const qWarmup = query(promptsRef, where('phase', '==', 'warmup'), limit(1));
           const qBeat = query(promptsRef, where('phase', '==', 'storyBeat'), limit(1));
-          const [warmupSnap, beatSnap] = await Promise.all([getDocs(qWarmup), getDocs(qBeat)]);
+          const [warmupSnap, beatSnap, allSnap] = await Promise.all([getDocs(qWarmup), getDocs(qBeat), getDocs(promptsRef)]);
           
-          fsSummary.promptConfigsCount = (await getDocs(promptsRef)).size;
+          fsSummary.promptConfigsCount = allSnap.size;
 
           if (warmupSnap.empty || beatSnap.empty) {
               throw new Error(`Missing configs: warmup=${warmupSnap.size}, storyBeat=${beatSnap.size}`);
@@ -94,6 +97,61 @@ export default function AdminRegressionPage() {
        } catch(e: any) {
             updateTestResult('DATA_STORY_TYPES', { status: 'FAIL', message: e.message });
        }
+
+      // Test: DATA_STORY_PHASES
+      try {
+        const phasesRef = collection(firestore, 'storyPhases');
+        const requiredIds = ["warmup_phase_v1", "story_beat_phase_v1", "ending_phase_v1"];
+        const docs = await Promise.all(requiredIds.map(id => getDoc(doc(phasesRef, id))));
+        const missing = [];
+        for (let i = 0; i < docs.length; i++) {
+            if (!docs[i].exists()) {
+                missing.push(requiredIds[i]);
+            }
+        }
+        if (missing.length > 0) {
+            throw new Error(`Missing required phases: ${missing.join(', ')}`);
+        }
+        updateTestResult('DATA_STORY_PHASES', { status: 'PASS', message: 'Found all required phases.' });
+      } catch (e: any) {
+          updateTestResult('DATA_STORY_PHASES', { status: 'FAIL', message: e.message });
+      }
+
+      // Test: DATA_CHILDREN
+      try {
+        const childrenRef = collection(firestore, 'children');
+        const snap = await getDocs(query(childrenRef, limit(5)));
+        fsSummary.childrenCount = snap.size;
+        if (snap.empty) {
+            updateTestResult('DATA_CHILDREN', { status: 'SKIP', message: 'No children found; may be expected in dev.' });
+        } else {
+            const firstChild = snap.docs[0].data();
+            if (!firstChild.displayName) {
+                throw new Error('First child doc is missing displayName field.');
+            }
+            updateTestResult('DATA_CHILDREN', { status: 'PASS', message: `Found ${snap.size} children. First doc OK.` });
+        }
+      } catch (e: any) {
+        updateTestResult('DATA_CHILDREN', { status: 'FAIL', message: e.message });
+      }
+
+      // Test: DATA_SESSIONS_OVERVIEW
+      try {
+        const sessionsRef = collection(firestore, 'storySessions');
+        const snap = await getDocs(query(sessionsRef, limit(5)));
+        fsSummary.sessionsCount = snap.size;
+        if (snap.empty) {
+            updateTestResult('DATA_SESSIONS_OVERVIEW', { status: 'SKIP', message: 'No story sessions found.' });
+        } else {
+            const firstSession = snap.docs[0].data();
+            if (!firstSession.childId || !firstSession.storyPhaseId || typeof firstSession.arcStepIndex !== 'number') {
+                throw new Error('First session doc is missing key fields (childId, storyPhaseId, arcStepIndex).');
+            }
+            updateTestResult('DATA_SESSIONS_OVERVIEW', { status: 'PASS', message: `Found ${snap.size} sessions. First doc OK.` });
+        }
+      } catch (e: any) {
+        updateTestResult('DATA_SESSIONS_OVERVIEW', { status: 'FAIL', message: e.message });
+      }
        
        setDiagnostics(prev => ({...prev, firestoreSummary: {...prev.firestoreSummary, ...fsSummary }}));
   };
@@ -109,7 +167,7 @@ export default function AdminRegressionPage() {
               const sessionRef = doc(firestore, 'storySessions', beatSessionId);
               const sessionSnap = await getDoc(sessionRef);
               if (!sessionSnap.exists()) throw new Error(`Doc ${beatSessionId} not found.`);
-              const sessionData = sessionSnap.data();
+              const sessionData = sessionSnap.data() as StorySession;
               if (!sessionData.storyTypeId || typeof sessionData.arcStepIndex !== 'number' || !sessionData.mainCharacterId) {
                   throw new Error('Session doc is missing storyTypeId, arcStepIndex, or mainCharacterId');
               }
@@ -117,6 +175,30 @@ export default function AdminRegressionPage() {
           } catch(e:any) {
                updateTestResult('SESSION_BEAT_STRUCTURE', { status: 'FAIL', message: e.message });
           }
+      }
+
+      // Test: SESSION_BEAT_MESSAGES
+      if (!beatSessionId) {
+        updateTestResult('SESSION_BEAT_MESSAGES', { status: 'SKIP', message: 'No beat-ready sessionId provided.' });
+      } else {
+        try {
+            const messagesRef = collection(firestore, `storySessions/${beatSessionId}/messages`);
+            const snap = await getDocs(messagesRef);
+            const messages = snap.docs.map(d => d.data() as Message);
+            const total = messages.length;
+            const continuations = messages.filter(m => m.kind === 'beat_continuation').length;
+            const options = messages.filter(m => m.kind === 'beat_options' && m.options && m.options.length > 0).length;
+
+            if (total === 0) {
+                updateTestResult('SESSION_BEAT_MESSAGES', { status: 'FAIL', message: 'No messages found for this session.' });
+            } else if (continuations > 0 && options > 0) {
+                 updateTestResult('SESSION_BEAT_MESSAGES', { status: 'PASS', message: `Found ${total} messages, including ${continuations} continuations and ${options} options.` });
+            } else {
+                updateTestResult('SESSION_BEAT_MESSAGES', { status: 'PASS', message: `Found ${total} messages. No beat messages yet.` });
+            }
+        } catch (e: any) {
+            updateTestResult('SESSION_BEAT_MESSAGES', { status: 'ERROR', message: e.message });
+        }
       }
   };
 
@@ -148,19 +230,94 @@ export default function AdminRegressionPage() {
         updateTestResult('API_STORY_BEAT', { status: 'FAIL', message: e.message });
       }
     }
+
+    // Test: API_WARMUP_REPLY
+    if (!warmupSessionId) {
+        updateTestResult('API_WARMUP_REPLY', { status: 'SKIP', message: 'No warmup sessionId provided.' });
+    } else {
+        try {
+            const response = await fetch('/api/warmupReply', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: warmupSessionId }),
+            });
+            apiSummary.warmupReply = { lastStatus: response.status };
+            const result = await response.json();
+            apiSummary.warmupReply.lastOk = result.ok;
+            
+            if (!response.ok) {
+                 apiSummary.warmupReply.lastErrorMessage = result.errorMessage;
+                 throw new Error(`API returned status ${response.status}: ${result.errorMessage}`);
+            }
+             if (typeof result.ok !== 'boolean') {
+                throw new Error('API response missing "ok" field.');
+            }
+            apiSummary.warmupReply.lastPreview = result.assistantTextPreview;
+            updateTestResult('API_WARMUP_REPLY', { status: 'PASS', message: `API returned ok:${result.ok}.` });
+
+        } catch (e: any) {
+             updateTestResult('API_WARMUP_REPLY', { status: 'FAIL', message: e.message });
+        }
+    }
     
     setDiagnostics(prev => ({...prev, apiSummary: {...prev.apiSummary, ...apiSummary}}));
+  };
+  
+  const runScenarioTests = async () => {
+    if (!firestore) return;
+    let scenarioSummary: any = {};
+
+    // Test: SCENARIO_BEAT_AUTO
+    try {
+        // 1. Find live story type
+        const typesRef = collection(firestore, 'storyTypes');
+        const typeQuery = query(typesRef, where('status', '==', 'live'), limit(1));
+        const typeSnap = await getDocs(typeQuery);
+        if (typeSnap.empty) throw new Error('No live story types found to start a scenario.');
+        const storyType = typeSnap.docs[0].data();
+        const storyTypeId = storyType.id;
+
+        // 2. Create child and session
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Child', createdAt: serverTimestamp() });
+        scenarioSummary.childId = childRef.id;
+
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id,
+            storyTypeId: storyTypeId,
+            storyPhaseId: storyType.defaultPhaseId,
+            arcStepIndex: 0,
+            promptConfigLevelBand: 'low',
+            status: 'in_progress',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+        scenarioSummary.sessionId = sessionRef.id;
+
+        // Call API
+        const response = await fetch('/api/storyBeat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
+        });
+        if (!response.ok) throw new Error(`API returned ${response.status}`);
+        const result = await response.json();
+        if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
+        if (!result.storyContinuation || result.options?.length < 3) throw new Error('API response has invalid shape.');
+
+        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'PASS', message: `Created session ${sessionRef.id} and got valid API response.` });
+
+    } catch (e: any) {
+        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'ERROR', message: e.message });
+    }
+    setDiagnostics(prev => ({...prev, scenario: { beat: scenarioSummary } }));
   };
 
 
   const runAllTests = async () => {
     setIsRunning(true);
     setTests(initialTests); // Reset tests to PENDING
-    setDiagnostics(prev => ({ ...prev, firestoreSummary: {}, apiSummary: {} }));
+    setDiagnostics(prev => ({ ...prev, firestoreSummary: {}, apiSummary: {}, scenario: {} }));
 
     await runDataTests();
     await runSessionTests();
     await runApiTests();
+    await runScenarioTests();
 
     setIsRunning(false);
     toast({ title: 'Regression tests complete!' });
@@ -234,6 +391,13 @@ export default function AdminRegressionPage() {
     );
   };
 
+  const finalDiagnostics = {
+      ...diagnostics,
+      auth: { isAuthenticated, isAdmin },
+      input: { beatSessionId, warmupSessionId },
+      tests
+  };
+
 
   return (
     <div className="container mx-auto p-4 sm:p-6 md:p-8">
@@ -250,7 +414,7 @@ export default function AdminRegressionPage() {
         </CardHeader>
         <CardContent>
           <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
-            <code>{JSON.stringify({ ...diagnostics, auth: { isAuthenticated, isAdmin, email }, input: { beatSessionId, warmupSessionId }, tests }, null, 2)}</code>
+            <code>{JSON.stringify(finalDiagnostics, null, 2)}</code>
           </pre>
         </CardContent>
       </Card>
