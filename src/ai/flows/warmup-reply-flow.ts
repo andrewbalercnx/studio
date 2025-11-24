@@ -110,7 +110,7 @@ export const warmupReplyFlow = ai.defineFlow(
                 promptPreview: finalPrompt.slice(0, 200),
             };
             
-            const resolvedMaxOutputTokens = 500;
+            const resolvedMaxOutputTokens = promptConfig.model?.maxOutputTokens ?? 1000;
 
             // 6. Call Gemini with the single prompt string
             const llmResponse = await ai.generate({
@@ -128,7 +128,8 @@ export const warmupReplyFlow = ai.defineFlow(
             const raw = (llmResponse as any).raw;
 
             // Add richer diagnostics
-            const firstCandidate = raw && Array.isArray(raw.candidates) && raw.candidates.length > 0 ? raw.candidates[0] : null;
+            const candidates = raw?.candidates ?? [];
+            const firstCandidate = candidates.length > 0 ? candidates[0] : null;
             
             let rawCandidatePreview: string | null = null;
             try {
@@ -139,6 +140,11 @@ export const warmupReplyFlow = ai.defineFlow(
             } catch (e) {
                 rawCandidatePreview = "[[error stringifying firstCandidate]]";
             }
+            
+            const content = firstCandidate?.content;
+            const contentParts = Array.isArray(content?.parts) ? content.parts : [];
+            const firstPart = contentParts.length > 0 ? contentParts[0] : null;
+
 
             promptDebug = {
                 ...(promptDebug || {}),
@@ -146,26 +152,28 @@ export const warmupReplyFlow = ai.defineFlow(
                 responseKeys: llmResponse ? Object.keys(llmResponse as any) : [],
                 hasRaw: !!raw,
                 hasCandidatesArray: !!(raw && Array.isArray(raw.candidates)),
-                candidatesLength: raw && Array.isArray(raw.candidates) ? raw.candidates.length : 0,
+                candidatesLength: candidates.length,
                 firstCandidateKeys: firstCandidate && typeof firstCandidate === "object" ? Object.keys(firstCandidate) : [],
                 rawCandidatePreview,
                 topLevelFinishReason: (llmResponse as any).finishReason ?? null,
                 firstCandidateFinishReason: firstCandidate?.finishReason ?? null,
+                contentPartsSummary: contentParts.map((p: any) => Object.keys(p)),
             };
 
             // Attempt to extract text
-            if (firstCandidate) {
-                const content = firstCandidate?.content;
-                const parts = content && Array.isArray(content.parts) ? content.parts : [];
-                const firstPart = parts.length > 0 ? parts[0] : null;
-                const textValue = firstPart && typeof firstPart.text === 'string' ? firstPart.text : null;
-                if (textValue && textValue.trim().length > 0) {
-                    assistantText = textValue.trim();
-                }
+            if (firstPart && typeof firstPart.text === 'string' && firstPart.text.trim().length > 0) {
+                 assistantText = firstPart.text.trim();
             }
 
 
             if (!assistantText) {
+                if (promptDebug.firstCandidateFinishReason === 'MAX_TOKENS' || promptDebug.topLevelFinishReason === 'length') {
+                    return {
+                        ok: false,
+                        errorMessage: "Model hit MAX_TOKENS during warmup; increase maxOutputTokens or simplify the prompt.",
+                        debug: promptDebug,
+                    };
+                }
                 return {
                     ok: false,
                     errorMessage: "Model returned empty or malformed text in raw.candidates.",
