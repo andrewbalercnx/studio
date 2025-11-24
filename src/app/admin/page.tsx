@@ -65,6 +65,9 @@ export default function AdminDashboardPage() {
             <Link href="/admin/storyBeatTest">Story Beat Test</Link>
           </Button>
           <Button asChild>
+            <Link href="/admin/storyArcTest">Story Arc Test</Link>
+          </Button>
+          <Button asChild>
             <Link href="/admin/regression">Regression Tests</Link>
           </Button>
         </div>
