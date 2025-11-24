@@ -148,6 +148,15 @@ export const warmupReplyFlow = ai.defineFlow(
             const contentParts = Array.isArray(content?.parts) ? content.parts : [];
             const firstPart = contentParts.length > 0 ? contentParts[0] : null;
 
+            let llmResponseStringForDebug = '[[llmResponse was null]]';
+            if (llmResponse) {
+                try {
+                    llmResponseStringForDebug = JSON.stringify(llmResponse, null, 2);
+                } catch (e) {
+                    llmResponseStringForDebug = '[[Could not stringify llmResponse]]';
+                }
+            }
+
 
             promptDebug = {
                 ...(promptDebug || {}),
@@ -160,6 +169,7 @@ export const warmupReplyFlow = ai.defineFlow(
                 rawCandidatePreview,
                 topLevelFinishReason: (llmResponse as any).finishReason ?? null,
                 firstCandidateFinishReason: firstCandidate?.finishReason ?? null,
+                llmResponseStringified: llmResponseStringForDebug,
             };
 
             // Attempt to extract text
@@ -173,13 +183,13 @@ export const warmupReplyFlow = ai.defineFlow(
                     return {
                         ok: false,
                         errorMessage: "Model hit MAX_TOKENS during warmup; increase maxOutputTokens or simplify the prompt.",
-                        debug: { ...promptDebug, llmResponseStringified: JSON.stringify(llmResponse, null, 2) },
+                        debug: promptDebug,
                     };
                 }
                 return {
                     ok: false,
                     errorMessage: "Model returned empty or malformed text in raw.candidates.",
-                    debug: { ...promptDebug, llmResponseStringified: JSON.stringify(llmResponse, null, 2) },
+                    debug: promptDebug,
                 };
             }
             
@@ -196,10 +206,18 @@ export const warmupReplyFlow = ai.defineFlow(
 
         } catch (e: any) {
             const errorMessage = e instanceof Error ? e.message : JSON.stringify(e);
+            let llmResponseStringForDebug = '[[llmResponse was null]]';
+             if (llmResponse) {
+                try {
+                    llmResponseStringForDebug = JSON.stringify(llmResponse, null, 2);
+                } catch (e) {
+                    llmResponseStringForDebug = '[[Could not stringify llmResponse]]';
+                }
+            }
             return {
                 ok: false,
                 errorMessage: `Unexpected error in warmupReplyFlow for session ${sessionId}: ${errorMessage}`,
-                debug: { ...promptDebug, llmResponseStringified: llmResponse ? JSON.stringify(llmResponse, null, 2) : '[[llmResponse was null]]' },
+                debug: { ...(promptDebug || {}), error: errorMessage, llmResponseStringified: llmResponseStringForDebug },
             };
         }
     }

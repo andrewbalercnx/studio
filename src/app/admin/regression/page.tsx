@@ -36,6 +36,7 @@ type ScenarioWarmupResult = {
     lastOk: boolean | null;
     lastErrorMessage: string | null;
     lastPreview: string | null;
+    debug?: any;
 } | null;
 
 
@@ -275,6 +276,7 @@ export default function AdminRegressionPage() {
             
             if (!response.ok) {
                  apiSummary.warmupReply.lastErrorMessage = result.errorMessage;
+                 apiSummary.warmupReply.debug = result.debug;
                  // Don't throw for config errors on manual session
                  if (warmupSessionId) {
                     updateTestResult('API_WARMUP_REPLY', { status: 'FAIL', message: `API returned status ${response.status}: ${result.errorMessage || 'Unknown error'}` });
@@ -394,6 +396,7 @@ export default function AdminRegressionPage() {
             lastOk: jsonResponse?.ok ?? null,
             lastErrorMessage: jsonResponse?.errorMessage ?? null,
             lastPreview: jsonResponse?.assistantTextPreview ?? null,
+            debug: jsonResponse?.debug ?? null,
         };
 
         if (!response.ok) {
@@ -530,5 +533,3 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
-
-    
