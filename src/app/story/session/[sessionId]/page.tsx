@@ -9,8 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
-import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion } from 'firebase/firestore';
-import type { StorySession, ChatMessage as Message, Choice } from '@/lib/types';
+import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion, DocumentReference, getDoc } from 'firebase/firestore';
+import type { StorySession, ChatMessage as Message, Choice, Character } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import { useToast } from '@/hooks/use-toast';
@@ -43,6 +43,14 @@ type BeatInteractionDiagnostics = {
     lastMoreOptionsAt: string | null;
     lastNewCharacterId?: string;
     lastNewCharacterLabel?: string;
+};
+
+type CharacterTraitsDiagnostics = {
+    lastCharacterId?: string;
+    lastCharacterLabel?: string;
+    lastTraitsQuestionPreview?: string | null;
+    lastTraitsUpdateCount?: number | null;
+    errorMessage?: string;
 };
 
 
@@ -85,6 +93,8 @@ export default function StorySessionPage() {
         lastAssistantTextPreview: null,
         debug: null,
     });
+
+    const [characterTraitsDiagnostics, setCharacterTraitsDiagnostics] = useState<CharacterTraitsDiagnostics>({});
     
     // Firestore Hooks
     const sessionRef = useMemo(() => firestore ? doc(firestore, 'storySessions', sessionId) : null, [firestore, sessionId]);
@@ -245,6 +255,58 @@ export default function StorySessionPage() {
              setIsBeatRunning(false);
         }
     };
+
+    const runCharacterTraitsQuestion = async (sessionId: string, characterId: string) => {
+        if (!firestore) return;
+
+        try {
+            const response = await fetch('/api/characterTraits', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, characterId }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.ok) {
+                throw new Error(result.errorMessage || "Failed to get character traits question.");
+            }
+
+            const { question, suggestedTraits } = result;
+
+            // Write question message
+            const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+            await addDoc(messagesRef, {
+                sender: 'assistant',
+                text: question,
+                kind: 'character_traits_question',
+                createdAt: serverTimestamp(),
+            });
+            
+            // Update character with traits
+            const characterRef = doc(firestore, 'characters', characterId);
+            const characterDoc = await getDoc(characterRef);
+            const existingTraits = characterDoc.data()?.traits || [];
+            const combinedTraits = [...new Set([...existingTraits, ...suggestedTraits])];
+
+            await updateDoc(characterRef, {
+                traits: combinedTraits,
+                traitsLastUpdatedAt: serverTimestamp(),
+            });
+
+            setCharacterTraitsDiagnostics({
+                lastCharacterId: characterId,
+                lastCharacterLabel: characterDoc.data()?.name,
+                lastTraitsQuestionPreview: question.slice(0, 80),
+                lastTraitsUpdateCount: suggestedTraits.length,
+            });
+
+        } catch (e: any) {
+            console.error("Error in runCharacterTraitsQuestion:", e);
+            setCharacterTraitsDiagnostics(prev => ({ ...prev, errorMessage: e.message }));
+            // Don't toast, fail silently
+        }
+    };
     
     const handleRunStoryBeat = async () => {
         if (!user || !sessionId || !firestore) return;
@@ -310,7 +372,12 @@ export default function StorySessionPage() {
             lastNewCharacterLabel: newCharacterId ? (chosenOption.newCharacterLabel || chosenOption.text) : undefined,
         }));
 
-        // 5. Trigger next story beat
+        // 5. If new character, ask a traits question
+        if (newCharacterId) {
+            await runCharacterTraitsQuestion(sessionId, newCharacterId);
+        }
+
+        // 6. Trigger next story beat
         await runBeatAndAppendMessages();
     };
     
@@ -388,6 +455,7 @@ export default function StorySessionPage() {
         genkitWarmup: warmupDiagnostics,
         genkitBeat: beatDiagnostics,
         beatInteraction: beatInteractionDiagnostics,
+        characterTraits: characterTraitsDiagnostics,
         error: sessionError?.message || messagesError?.message || null,
     };
 

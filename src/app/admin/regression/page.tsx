@@ -55,6 +55,14 @@ type ScenarioCharacterResult = {
     sampleOption: Choice | null;
 } | null;
 
+type ScenarioCharacterTraitsResult = {
+    childId: string;
+    sessionId: string;
+    characterId: string;
+    traitsCount: number | null;
+    questionPreview: string | null;
+} | null;
+
 
 const initialTests: TestResult[] = [
   { id: 'DATA_PROMPTS', name: 'Firestore: Prompt Configs', status: 'PENDING', message: '' },
@@ -66,6 +74,7 @@ const initialTests: TestResult[] = [
   { id: 'SCENARIO_BEAT_AUTO', name: 'Scenario: Auto-Beat', status: 'PENDING', message: '' },
   { id: 'SCENARIO_BEAT_MORE_OPTIONS', name: 'Scenario: Beat More Options', status: 'PENDING', message: '' },
   { id: 'SCENARIO_CHARACTER_FROM_BEAT', name: 'Scenario: Character Metadata in Beat Options', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_CHARACTER_TRAITS', name: 'Scenario: Character Traits Flow', status: 'PENDING', message: '' },
   { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
@@ -281,13 +290,14 @@ export default function AdminRegressionPage() {
       }
   };
 
-  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult }> => {
-    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null };
+  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult }> => {
+    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null };
     
     let beatScenarioSummary: ScenarioResult = null;
     let warmupScenarioSummary: ScenarioWarmupResult = null;
     let moreOptionsScenarioSummary: ScenarioMoreOptionsResult = null;
     let characterScenarioSummary: ScenarioCharacterResult = null;
+    let characterTraitsScenarioSummary: ScenarioCharacterTraitsResult = null;
     let apiSummary: any = {};
 
     // Test: SCENARIO_BEAT_AUTO
@@ -503,8 +513,52 @@ export default function AdminRegressionPage() {
         updateTestResult('SCENARIO_CHARACTER_FROM_BEAT', { status: 'ERROR', message: e.message, details: characterScenarioSummary });
     }
 
+    // Test: SCENARIO_CHARACTER_TRAITS
+    try {
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Traits Test Child', createdAt: serverTimestamp() });
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id, storyTypeId: 'animal_adventure_v1', storyPhaseId: 'story_beat_phase_v1',
+            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress'
+        });
+        const charRef = await addDoc(collection(firestore, 'characters'), {
+            ownerChildId: childRef.id, sessionId: sessionRef.id, name: 'Test Bunny',
+            role: 'pet', traits: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+        });
+        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), {
+            sender: 'assistant', text: 'Once upon a time...', createdAt: serverTimestamp()
+        });
+        
+        const response = await fetch('/api/characterTraits', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: sessionRef.id, characterId: charRef.id })
+        });
+        
+        if (!response.ok) throw new Error(`API returned status ${response.status}`);
+        const result = await response.json();
+        if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
+        
+        if (!result.question || typeof result.question !== 'string') throw new Error('Response missing question field.');
+        if (!Array.isArray(result.suggestedTraits) || result.suggestedTraits.length === 0) throw new Error('Response missing suggestedTraits array.');
 
-    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary };
+        const charDoc = await getDoc(charRef);
+        const updatedChar = charDoc.data();
+
+        // This test does not update Firestore, so we don't check for it.
+        // In Part C, the session page will do the update.
+
+        characterTraitsScenarioSummary = {
+            childId: childRef.id, sessionId: sessionRef.id, characterId: charRef.id,
+            traitsCount: result.suggestedTraits.length, questionPreview: result.question.slice(0, 80)
+        };
+        
+        updateTestResult('SCENARIO_CHARACTER_TRAITS', { status: 'PASS', message: 'Flow returned a question and suggested traits.' });
+
+    } catch (e: any) {
+        updateTestResult('SCENARIO_CHARACTER_TRAITS', { status: 'ERROR', message: e.message, details: characterTraitsScenarioSummary });
+    }
+
+
+    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary };
     
     // --- API Tests ---
     
@@ -684,5 +738,3 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
-
-    

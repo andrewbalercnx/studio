@@ -209,15 +209,16 @@
           }
         },
         "traits": {
-          "type": "object",
-          "properties": {
-            "ageApprox": { "type": "string" },
-            "size": { "type": "string" },
-            "bravery": { "type": "string", "enum": ["shy", "calm", "brave", "very_brave"]},
-            "energy": { "type": "string", "enum": ["quiet", "playful", "bouncy"]},
-            "moodDefault": { "type": "string" },
-            "colorDetails": { "type": "string" }
-          }
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "A list of short, child-level adjectives/phrases (e.g., [“soft”, “quiet”, “brave”])."
+        },
+        "traitsLastUpdatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when traits were last updated."
         },
         "visualNotes": {
           "type": "object",
@@ -446,5 +447,3 @@
     }
   }
 }
-
-    

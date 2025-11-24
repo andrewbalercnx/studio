@@ -24,7 +24,7 @@ export type ChatMessage = {
     role?: 'user' | 'model' | 'system' | 'tool';
     content?: string;
     // New structured fields
-    kind?: 'beat_continuation' | 'beat_options' | 'child_choice';
+    kind?: 'beat_continuation' | 'beat_options' | 'child_choice' | 'character_traits_question';
     options?: Choice[];
     selectedOptionId?: string;
 };
@@ -132,14 +132,8 @@ export type Character = {
         kind: 'self' | 'family' | 'friend';
         label: string;
     };
-    traits?: {
-        ageApprox?: string;
-        size?: string;
-        bravery?: 'shy' | 'calm' | 'brave' | 'very_brave';
-        energy?: 'quiet' | 'playful' | 'bouncy';
-        moodDefault?: string;
-        colorDetails?: string;
-    };
+    traits?: string[];
+    traitsLastUpdatedAt?: Date;
     visualNotes?: {
         hair?: string;
         clothing?: string;
