@@ -9,6 +9,9 @@ export type Choice = {
     id: string;
     text: string;
     value?: string;
+    introducesCharacter?: boolean;
+    newCharacterLabel?: string | null;
+    newCharacterKind?: 'toy' | 'pet' | 'friend' | 'family' | 'other' | null;
 };
 
 export type ChatMessage = {
@@ -145,4 +148,9 @@ export type Character = {
     };
     createdAt: Timestamp;
     updatedAt: Timestamp;
+    // New optional fields for tracking source
+    introducedFromOptionId?: string;
+    introducedFromMessageId?: string;
 };
+
+    

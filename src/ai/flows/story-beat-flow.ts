@@ -21,6 +21,9 @@ const StoryBeatOutputSchema = z.object({
   options: z.array(z.object({
     id: z.string().describe("A single uppercase letter, e.g., 'A', 'B', 'C'."),
     text: z.string().describe("A short, child-friendly choice for what happens next."),
+    introducesCharacter: z.boolean().optional().describe("Set to true if this option clearly brings a new character into the story."),
+    newCharacterLabel: z.string().optional().nullable().describe("If introducesCharacter is true, a short noun phrase for the character (e.g., 'a friendly mailman')."),
+    newCharacterKind: z.enum(['toy', 'pet', 'friend', 'family', 'other']).optional().nullable().describe("If introducesCharacter is true, the kind of character."),
   })).min(3).max(3).describe("An array of exactly 3 choices for the child.")
 });
 
@@ -137,6 +140,13 @@ ${promptConfig.systemPrompt}
 
 MODE INSTRUCTIONS:
 ${promptConfig.modeInstructions}
+
+For each option, you MUST decide if it introduces a new character.
+- Set 'introducesCharacter' to true if the option brings in a new person, animal, or talking object who could appear again.
+  - Examples: "a new friend", "a talking squirrel", "a kind robot".
+  - If true, you MUST also provide a 'newCharacterLabel' (e.g., "a talking squirrel") and a 'newCharacterKind' ('toy', 'pet', 'friend', 'family', or 'other').
+- Set 'introducesCharacter' to false if the option is just an action or observation.
+  - Examples: "he sings a song", "the sun shines brighter", "he finds a shiny rock".
 
 CONTEXT:
 Story Type: ${storyType.name} (${storyTypeId})
@@ -282,3 +292,5 @@ Important: Return only a single JSON object. Do not include any extra text, expl
         }
     }
 );
+
+    

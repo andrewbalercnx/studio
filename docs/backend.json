@@ -308,6 +308,19 @@
         "value": {
           "type": "string",
           "description": "The machine-readable value sent back when tapped."
+        },
+        "introducesCharacter": {
+          "type": "boolean",
+          "description": "Whether this option introduces a new character."
+        },
+        "newCharacterLabel": {
+          "type": "string",
+          "description": "A short noun phrase for the new character."
+        },
+        "newCharacterKind": {
+          "type": "string",
+          "enum": ["toy", "pet", "friend", "family", "other"],
+          "description": "The kind of the new character."
         }
       },
       "required": ["label", "value"]

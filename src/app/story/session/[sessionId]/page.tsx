@@ -6,10 +6,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, Send, CheckCircle, RefreshCw } from 'lucide-react';
+import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
-import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit } from 'firebase/firestore';
+import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion } from 'firebase/firestore';
 import type { StorySession, ChatMessage as Message, Choice } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
@@ -40,6 +40,8 @@ type BeatInteractionDiagnostics = {
     lastArcStepIndexAfterChoice: number | null;
     moreOptionsCount: number;
     lastMoreOptionsAt: string | null;
+    lastNewCharacterId?: string;
+    lastNewCharacterLabel?: string;
 };
 
 
@@ -253,10 +255,35 @@ export default function StorySessionPage() {
     };
     
     const handleChooseOption = async (optionsMessage: Message, chosenOption: Choice) => {
-        if (!user || !sessionId || !firestore || !sessionRef || isBeatRunning) return;
-
-        // 1. Write child's choice message
+        if (!user || !sessionId || !firestore || !sessionRef || !session || isBeatRunning) return;
+    
+        const charactersRef = collection(firestore, 'characters');
         const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+        
+        let newCharacterId: string | undefined = undefined;
+
+        // 1. If the option introduces a character, create it first
+        if (chosenOption.introducesCharacter) {
+            const newCharacterData = {
+                ownerChildId: session.childId,
+                sessionId: sessionId,
+                name: chosenOption.newCharacterLabel || 'New Friend',
+                role: chosenOption.newCharacterKind || 'friend',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                introducedFromOptionId: chosenOption.id,
+                introducedFromMessageId: optionsMessage.id,
+            };
+            const newCharacterRef = await addDoc(charactersRef, newCharacterData);
+            newCharacterId = newCharacterRef.id;
+
+            // Link character to the session
+             await updateDoc(sessionRef, {
+                supportingCharacterIds: arrayUnion(newCharacterId)
+            });
+        }
+
+        // 2. Write child's choice message
         await addDoc(messagesRef, {
             sender: 'child',
             text: chosenOption.text,
@@ -265,22 +292,24 @@ export default function StorySessionPage() {
             createdAt: serverTimestamp(),
         });
 
-        // 2. Increment arc step
+        // 3. Increment arc step
         const newArcStepIndex = (currentArcStepIndex ?? -1) + 1;
         await updateDoc(sessionRef, {
             arcStepIndex: newArcStepIndex
         });
 
-        // 3. Update beat interaction diagnostics
+        // 4. Update beat interaction diagnostics
         setBeatInteractionDiagnostics(prev => ({
             ...prev,
             lastRequestType: 'choose',
             lastChosenOptionId: chosenOption.id,
             lastChosenOptionTextPreview: chosenOption.text.slice(0, 80),
             lastArcStepIndexAfterChoice: newArcStepIndex,
+            lastNewCharacterId: newCharacterId,
+            lastNewCharacterLabel: newCharacterId ? (chosenOption.newCharacterLabel || chosenOption.text) : undefined,
         }));
 
-        // 4. Trigger next story beat
+        // 5. Trigger next story beat
         await runBeatAndAppendMessages();
     };
     
@@ -404,8 +433,17 @@ export default function StorySessionPage() {
                                                 variant="outline"
                                                 onClick={() => handleChooseOption(msg, opt)}
                                                 disabled={isBeatRunning || isGeneratingMoreOptions || latestOptionsMessage?.id !== msg.id}
+                                                className="justify-start h-auto"
                                             >
-                                                {opt.text}
+                                                <div className="flex items-center gap-2">
+                                                    <span>{opt.text}</span>
+                                                    {opt.introducesCharacter && (
+                                                        <Badge variant="secondary" className="gap-1">
+                                                            <Sparkles className="h-3 w-3" />
+                                                            New Character
+                                                        </Badge>
+                                                    )}
+                                                </div>
                                             </Button>
                                         ))}
                                          <Button
@@ -532,3 +570,5 @@ export default function StorySessionPage() {
         </div>
     );
 }
+
+    

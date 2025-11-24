@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
 import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { ChatMessage, StorySession, Character, PromptConfig } from '@/lib/types';
+import type { ChatMessage, StorySession, Character, PromptConfig, Choice } from '@/lib/types';
 
 type TestStatus = 'PENDING' | 'PASS' | 'FAIL' | 'SKIP' | 'ERROR';
 type TestResult = {
@@ -48,6 +48,13 @@ type ScenarioMoreOptionsResult = {
     optionsAfterSample: string | null;
 } | null;
 
+type ScenarioCharacterResult = {
+    childId: string;
+    sessionId: string;
+    optionsCount: number | null;
+    sampleOption: Choice | null;
+} | null;
+
 
 const initialTests: TestResult[] = [
   { id: 'DATA_PROMPTS', name: 'Firestore: Prompt Configs', status: 'PENDING', message: '' },
@@ -58,6 +65,7 @@ const initialTests: TestResult[] = [
   { id: 'DATA_SESSIONS_OVERVIEW', name: 'Firestore: Sessions Overview', status: 'PENDING', message: '' },
   { id: 'SCENARIO_BEAT_AUTO', name: 'Scenario: Auto-Beat', status: 'PENDING', message: '' },
   { id: 'SCENARIO_BEAT_MORE_OPTIONS', name: 'Scenario: Beat More Options', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_CHARACTER_FROM_BEAT', name: 'Scenario: Character Metadata in Beat Options', status: 'PENDING', message: '' },
   { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
@@ -169,7 +177,7 @@ export default function AdminRegressionPage() {
         }
         updateTestResult('DATA_STORY_PHASES', { status: 'PASS', message: 'Found all required phases.' });
       } catch (e: any) {
-          updateTestResult('DATA_STORY_PHASES', { status: 'FAIL', message: e.message });
+        updateTestResult('DATA_STORY_PHASES', { status: 'FAIL', message: e.message });
       }
 
       // Test: DATA_CHILDREN
@@ -273,12 +281,13 @@ export default function AdminRegressionPage() {
       }
   };
 
-  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult }> => {
-    if (!firestore) return { beat: null, warmup: null, moreOptions: null };
+  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult }> => {
+    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null };
     
     let beatScenarioSummary: ScenarioResult = null;
     let warmupScenarioSummary: ScenarioWarmupResult = null;
     let moreOptionsScenarioSummary: ScenarioMoreOptionsResult = null;
+    let characterScenarioSummary: ScenarioCharacterResult = null;
     let apiSummary: any = {};
 
     // Test: SCENARIO_BEAT_AUTO
@@ -444,8 +453,58 @@ export default function AdminRegressionPage() {
         }
     }
 
+    // Test: SCENARIO_CHARACTER_FROM_BEAT
+    try {
+        const typesRef = collection(firestore, 'storyTypes');
+        const typeQuery = query(typesRef, where('status', '==', 'live'), limit(1));
+        const typeSnap = await getDocs(typeQuery);
+        if (typeSnap.empty) throw new Error('No live story types found.');
+        const storyType = typeSnap.docs[0].data();
+        const storyTypeId = typeSnap.docs[0].id;
 
-    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary };
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Char Test Child', createdAt: serverTimestamp(), regressionTag: 'char_beat' });
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id, storyTypeId, storyPhaseId: storyType.defaultPhaseId,
+            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
+            createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+        });
+        
+        characterScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, optionsCount: null, sampleOption: null };
+
+        const response = await fetch('/api/storyBeat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id })
+        });
+        if (!response.ok) throw new Error(`API returned status ${response.status}`);
+        const result = await response.json();
+        if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
+        
+        const options = result.options as Choice[];
+        if (!Array.isArray(options) || options.length < 3) throw new Error(`API returned ${options?.length ?? 0} options, expected 3.`);
+        
+        characterScenarioSummary.optionsCount = options.length;
+        characterScenarioSummary.sampleOption = options[0];
+
+        // Validate shape
+        for (const opt of options) {
+            if (typeof opt.id !== 'string' || typeof opt.text !== 'string') {
+                throw new Error('Option missing required id or text fields.');
+            }
+            if ('introducesCharacter' in opt && typeof opt.introducesCharacter !== 'boolean') {
+                 throw new Error('Option field introducesCharacter has wrong type.');
+            }
+             if ('newCharacterLabel' in opt && opt.newCharacterLabel !== null && typeof opt.newCharacterLabel !== 'string') {
+                throw new Error('Option field newCharacterLabel has wrong type.');
+            }
+        }
+        
+        updateTestResult('SCENARIO_CHARACTER_FROM_BEAT', { status: 'PASS', message: 'Beat returned options with valid character metadata shape.' });
+        
+    } catch(e: any) {
+        updateTestResult('SCENARIO_CHARACTER_FROM_BEAT', { status: 'ERROR', message: e.message, details: characterScenarioSummary });
+    }
+
+
+    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary };
     
     // --- API Tests ---
     
@@ -625,3 +684,5 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
+
+    
