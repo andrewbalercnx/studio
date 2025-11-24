@@ -323,7 +323,7 @@ export default function StorySessionPage() {
         }
         
         return (
-             <Card className="w-full max-w-2xl h-full flex flex-col">
+             <Card className="w-full max-w-2xl flex flex-col">
                 <CardHeader>
                     <CardTitle>Story Chat</CardTitle>
                     <CardDescription>Session ID: <span className="font-mono">{sessionId}</span></CardDescription>
@@ -442,7 +442,7 @@ export default function StorySessionPage() {
 
     return (
         <div className="container mx-auto p-4 sm:p-6 md:p-8 flex flex-col items-center gap-8">
-            <div className="w-full h-[calc(100vh-22rem)] flex justify-center">
+            <div className="w-full max-w-2xl">
               {renderChatContent()}
             </div>
             
