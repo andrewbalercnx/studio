@@ -27,6 +27,7 @@ type PromptDebug = {
     rawCandidatePreview?: string | null;
     topLevelFinishReason?: string | null;
     firstCandidateFinishReason?: string | null;
+    llmResponseStringified?: string; // Add this field
 } | null;
 
 
@@ -46,6 +47,7 @@ export const warmupReplyFlow = ai.defineFlow(
     },
     async ({ sessionId }) => {
         let promptDebug: PromptDebug = null;
+        let llmResponse: any = null; // To hold the response for debugging
 
         try {
             const { firestore } = initializeFirebase();
@@ -114,7 +116,7 @@ export const warmupReplyFlow = ai.defineFlow(
             const resolvedMaxOutputTokens = promptConfig.model?.maxOutputTokens ?? 1000;
 
             // 6. Call Gemini with the single prompt string
-            const llmResponse = await ai.generate({
+            llmResponse = await ai.generate({
                 model: 'googleai/gemini-2.5-flash',
                 prompt: finalPrompt,
                 config: {
@@ -158,7 +160,6 @@ export const warmupReplyFlow = ai.defineFlow(
                 rawCandidatePreview,
                 topLevelFinishReason: (llmResponse as any).finishReason ?? null,
                 firstCandidateFinishReason: firstCandidate?.finishReason ?? null,
-                contentPartsSummary: contentParts.map((p: any) => Object.keys(p)),
             };
 
             // Attempt to extract text
@@ -172,13 +173,13 @@ export const warmupReplyFlow = ai.defineFlow(
                     return {
                         ok: false,
                         errorMessage: "Model hit MAX_TOKENS during warmup; increase maxOutputTokens or simplify the prompt.",
-                        debug: promptDebug,
+                        debug: { ...promptDebug, llmResponseStringified: JSON.stringify(llmResponse, null, 2) },
                     };
                 }
                 return {
                     ok: false,
                     errorMessage: "Model returned empty or malformed text in raw.candidates.",
-                    debug: promptDebug,
+                    debug: { ...promptDebug, llmResponseStringified: JSON.stringify(llmResponse, null, 2) },
                 };
             }
             
@@ -198,7 +199,7 @@ export const warmupReplyFlow = ai.defineFlow(
             return {
                 ok: false,
                 errorMessage: `Unexpected error in warmupReplyFlow for session ${sessionId}: ${errorMessage}`,
-                debug: promptDebug,
+                debug: { ...promptDebug, llmResponseStringified: llmResponse ? JSON.stringify(llmResponse, null, 2) : '[[llmResponse was null]]' },
             };
         }
     }
