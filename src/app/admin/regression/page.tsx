@@ -57,8 +57,8 @@ const initialTests: TestResult[] = [
   { id: 'DATA_CHILDREN', name: 'Firestore: Children', status: 'PENDING', message: '' },
   { id: 'DATA_SESSIONS_OVERVIEW', name: 'Firestore: Sessions Overview', status: 'PENDING', message: '' },
   { id: 'SCENARIO_BEAT_AUTO', name: 'Scenario: Auto-Beat', status: 'PENDING', message: '' },
-  { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
   { id: 'SCENARIO_BEAT_MORE_OPTIONS', name: 'Scenario: Beat More Options', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
   { id: 'API_STORY_BEAT', name: 'API: /api/storyBeat (Input)', status: 'PENDING', message: '' },
@@ -128,10 +128,10 @@ export default function AdminRegressionPage() {
         fsSummary.storyBeatLiveLowCount = lowLevelConfigs.length;
 
         if (lowLevelConfigs.length === 0) {
-            throw new Error("Live storyBeat configs exist, but none have levelBand 'low'.");
+            updateTestResult('DATA_PROMPTS_STORY_BEAT_LIVE', { status: 'FAIL', message: "Live storyBeat configs exist, but none have levelBand 'low'." });
+        } else {
+            updateTestResult('DATA_PROMPTS_STORY_BEAT_LIVE', { status: 'PASS', message: `Found ${liveBeatConfigs.length} live configs, including ${lowLevelConfigs.length} for levelBand 'low'.` });
         }
-        updateTestResult('DATA_PROMPTS_STORY_BEAT_LIVE', { status: 'PASS', message: `Found ${liveBeatConfigs.length} live configs, including ${lowLevelConfigs.length} for levelBand 'low'.` });
-
       } catch (e: any) {
         updateTestResult('DATA_PROMPTS_STORY_BEAT_LIVE', { status: 'FAIL', message: e.message });
       }
@@ -261,8 +261,8 @@ export default function AdminRegressionPage() {
                  updateTestResult('SESSION_BEAT_MESSAGES', { status: 'PASS', message: `Found ${total} messages. No beat messages yet.` });
             } else {
                 const firstWithOptions = optionsMessages[0];
-                if (firstWithOptions && firstWithOptions.options?.length === 3) {
-                     updateTestResult('SESSION_BEAT_MESSAGES', { status: 'PASS', message: `Found ${total} messages, including ${continuations} continuations and ${optionsMessages.length} options blocks. First options block has 3 choices.` });
+                if (firstWithOptions && firstWithOptions.options?.length === 3 && firstWithOptions.options.every(o => o.id && o.text)) {
+                     updateTestResult('SESSION_BEAT_MESSAGES', { status: 'PASS', message: `Found ${total} messages, ${optionsMessages.length} options blocks. First has 3 valid items.` });
                 } else {
                      updateTestResult('SESSION_BEAT_MESSAGES', { status: 'FAIL', message: `Found ${optionsMessages.length} options blocks, but structure is incorrect.` });
                 }
@@ -391,7 +391,7 @@ export default function AdminRegressionPage() {
         updateTestResult('SCENARIO_BEAT_MORE_OPTIONS', { status: 'SKIP', message: 'Depends on successful SCENARIO_BEAT_AUTO.' });
     } else {
         try {
-            // First call (already done in SCENARIO_BEAT_AUTO, but we need the options)
+            // First call (already done in SCENARIO_BEAT_AUTO, but we need the options to write to firestore)
             const res1 = await fetch('/api/storyBeat', {
               method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: moreOptionsSessionId }),
             });

@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { LoaderCircle, Send, CheckCircle, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
-import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs } from 'firebase/firestore';
+import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit } from 'firebase/firestore';
 import type { StorySession, ChatMessage as Message, Choice } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
@@ -329,9 +329,9 @@ export default function StorySessionPage() {
             setBeatDiagnostics(prev => ({
                 ...prev,
                 lastBeatOk: false,
-                lastBeatErrorMessage: e.message,
+                lastBeatErrorMessage: e.message || "Failed to get more choices.",
             }));
-            toast({ title: "Error getting more choices", description: e.message, variant: 'destructive' });
+            toast({ title: "Error getting more choices", description: e.message, variant: "destructive" });
         } finally {
             setIsGeneratingMoreOptions(false);
         }
@@ -532,5 +532,3 @@ export default function StorySessionPage() {
         </div>
     );
 }
-
-    
