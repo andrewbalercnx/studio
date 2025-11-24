@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { ChatMessage, StorySession, Character } from '@/lib/types';
 
@@ -39,6 +39,15 @@ type ScenarioWarmupResult = {
     debug?: any;
 } | null;
 
+type ScenarioMoreOptionsResult = {
+    childId: string;
+    sessionId: string;
+    arcStepIndexBefore: number;
+    arcStepIndexAfter: number;
+    optionsBeforeSample: string | null;
+    optionsAfterSample: string | null;
+} | null;
+
 
 const initialTests: TestResult[] = [
   { id: 'DATA_PROMPTS', name: 'Firestore: Prompt Configs', status: 'PENDING', message: '' },
@@ -48,6 +57,7 @@ const initialTests: TestResult[] = [
   { id: 'DATA_SESSIONS_OVERVIEW', name: 'Firestore: Sessions Overview', status: 'PENDING', message: '' },
   { id: 'SCENARIO_BEAT_AUTO', name: 'Scenario: Auto-Beat', status: 'PENDING', message: '' },
   { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_BEAT_MORE_OPTIONS', name: 'Scenario: Beat More Options', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
   { id: 'API_STORY_BEAT', name: 'API: /api/storyBeat (Input)', status: 'PENDING', message: '' },
@@ -60,7 +70,7 @@ export default function AdminRegressionPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  const [beatSessionId, setBeatSessionId] = useState('sample-session-1');
+  const [beatSessionId, setBeatSessionId] = useState('');
   const [warmupSessionId, setWarmupSessionId] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [tests, setTests] = useState<TestResult[]>(initialTests);
@@ -237,11 +247,12 @@ export default function AdminRegressionPage() {
       }
   };
 
-  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult }> => {
-    if (!firestore) return { beat: null, warmup: null };
+  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult }> => {
+    if (!firestore) return { beat: null, warmup: null, moreOptions: null };
     
     let beatScenarioSummary: ScenarioResult = null;
     let warmupScenarioSummary: ScenarioWarmupResult = null;
+    let moreOptionsScenarioSummary: ScenarioMoreOptionsResult = null;
     let apiSummary: any = {};
 
     // Test: SCENARIO_BEAT_AUTO
@@ -348,7 +359,67 @@ export default function AdminRegressionPage() {
         updateTestResult('SCENARIO_WARMUP_AUTO', { status: 'ERROR', message: e.message, details: warmupScenarioSummary });
     }
 
-    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary };
+     // Test: SCENARIO_BEAT_MORE_OPTIONS
+    const moreOptionsSessionId = beatScenarioSummary?.sessionId;
+    if (!moreOptionsSessionId) {
+        updateTestResult('SCENARIO_BEAT_MORE_OPTIONS', { status: 'SKIP', message: 'Depends on successful SCENARIO_BEAT_AUTO.' });
+    } else {
+        try {
+            // First call (already done in SCENARIO_BEAT_AUTO, but we need the options)
+            const res1 = await fetch('/api/storyBeat', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: moreOptionsSessionId }),
+            });
+            const result1 = await res1.json();
+            if (!result1.ok) throw new Error(`First beat call failed: ${result1.errorMessage}`);
+            
+            const messagesRef = collection(firestore, `storySessions/${moreOptionsSessionId}/messages`);
+            await addDoc(messagesRef, { sender: 'assistant', text: result1.storyContinuation, kind: 'beat_continuation', createdAt: serverTimestamp() });
+            const optionsMessageRef = await addDoc(messagesRef, { sender: 'assistant', text: 'What happens next?', kind: 'beat_options', options: result1.options, createdAt: serverTimestamp() });
+
+            const optionsBeforeSample = result1.options[0]?.text || null;
+
+            const sessionDocBefore = await getDoc(doc(firestore, 'storySessions', moreOptionsSessionId));
+            const arcStepIndexBefore = sessionDocBefore.data()?.arcStepIndex;
+
+            // Second call (simulating "More Choices")
+            const res2 = await fetch('/api/storyBeat', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: moreOptionsSessionId }),
+            });
+            const result2 = await res2.json();
+             if (!result2.ok) throw new Error(`Second beat call (more choices) failed: ${result2.errorMessage}`);
+            
+            await updateDoc(optionsMessageRef, { options: result2.options });
+
+            const sessionDocAfter = await getDoc(doc(firestore, 'storySessions', moreOptionsSessionId));
+            const arcStepIndexAfter = sessionDocAfter.data()?.arcStepIndex;
+            
+            const optionsAfterSample = result2.options[0]?.text || null;
+
+            moreOptionsScenarioSummary = {
+                childId: beatScenarioSummary!.childId,
+                sessionId: moreOptionsSessionId,
+                arcStepIndexBefore,
+                arcStepIndexAfter,
+                optionsBeforeSample,
+                optionsAfterSample,
+            };
+
+            if (arcStepIndexAfter !== arcStepIndexBefore) {
+                throw new Error(`arcStepIndex advanced from ${arcStepIndexBefore} to ${arcStepIndexAfter}.`);
+            }
+            if (optionsAfterSample === optionsBeforeSample) {
+                throw new Error('Options did not change after requesting more.');
+            }
+            
+            updateTestResult('SCENARIO_BEAT_MORE_OPTIONS', { status: 'PASS', message: 'Generated new options without advancing arc step.' });
+
+        } catch (e: any) {
+            updateTestResult('SCENARIO_BEAT_MORE_OPTIONS', { status: 'ERROR', message: e.message, details: moreOptionsScenarioSummary });
+        }
+    }
+
+
+    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary };
     
     // --- API Tests ---
     
@@ -453,7 +524,7 @@ export default function AdminRegressionPage() {
             <CardContent className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label htmlFor="beatSessionId">Beat-ready Session ID</Label>
-                    <Input id="beatSessionId" value={beatSessionId} onChange={e => setBeatSessionId(e.target.value)} />
+                    <Input id="beatSessionId" value={beatSessionId} onChange={e => setBeatSessionId(e.target.value)} placeholder="Uses auto-scenario if blank"/>
                     <p className="text-xs text-muted-foreground">A session with storyTypeId, phaseId, arcStepIndex set.</p>
                 </div>
                  <div className="space-y-2">
@@ -528,5 +599,3 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
-
-    
