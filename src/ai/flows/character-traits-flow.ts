@@ -11,11 +11,6 @@ import { getDoc, doc, collection, getDocs, query, orderBy, limit } from 'firebas
 import { z } from 'genkit';
 import type { StorySession, Character, ChatMessage } from '@/lib/types';
 
-type FlowDebugInfo = {
-    stage: 'init' | 'loading_session' | 'loading_character' | 'loading_messages' | 'build_prompt' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate';
-    details: Record<string, any>;
-};
-
 // Zod schema for the expected JSON output from the model
 const CharacterTraitsOutputSchema = z.object({
   question: z.string().describe("ONE very short, child-friendly question about what the character is like."),
@@ -110,7 +105,7 @@ Now, generate the question and suggested traits as a single JSON object.
 
             // 5. Call Genkit AI
             debug.stage = 'ai_generate';
-            const maxOutputTokens = 500;
+            const maxOutputTokens = 2000;
             const temperature = 0.5;
             debug.modelName = 'googleai/gemini-2.5-flash';
             debug.temperature = temperature;
@@ -128,11 +123,14 @@ Now, generate the question and suggested traits as a single JSON object.
             debug.hasCandidatesArray = Array.isArray((llmResponse as any).raw?.candidates);
             debug.candidatesLength = Array.isArray((llmResponse as any).raw?.candidates) ? (llmResponse as any).raw.candidates.length : 0;
             debug.topLevelFinishReason = (llmResponse as any).finishReason ?? null;
-            debug.firstCandidateFinishReason = Array.isArray((llmResponse as any).raw?.candidates) ? (llmResponse as any).raw.candidates[0]?.finishReason ?? null : null;
+            debug.firstCandidateFinishReason = Array.isArray((llmResponse as any).raw?.candidates) && (llmResponse as any).raw.candidates.length > 0 ? (llmResponse as any).raw.candidates[0]?.finishReason ?? null : null;
             
             const rawText = llmResponse.text;
 
             if (!rawText || rawText.trim() === '') {
+                 if (debug.firstCandidateFinishReason === 'MAX_TOKENS' || debug.topLevelFinishReason === 'length') {
+                    throw new Error("Model hit MAX_TOKENS during characterTraits; increase maxOutputTokens or simplify the prompt.");
+                }
                 throw new Error("Model returned empty text for characterTraits.");
             }
             
