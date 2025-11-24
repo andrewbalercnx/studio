@@ -113,7 +113,10 @@ export const warmupReplyFlow = ai.defineFlow(
                 promptPreview: finalPrompt.slice(0, 200),
             };
             
-            const resolvedMaxOutputTokens = promptConfig.model?.maxOutputTokens ?? 1000;
+            const configMax = promptConfig.model?.maxOutputTokens;
+            const defaultMax = 1000;
+            const rawResolved = typeof configMax === 'number' && configMax > 0 ? configMax : defaultMax;
+            const resolvedMaxOutputTokens = Math.max(rawResolved, 10000);
 
             // 6. Call Gemini with the single prompt string
             llmResponse = await ai.generate({
