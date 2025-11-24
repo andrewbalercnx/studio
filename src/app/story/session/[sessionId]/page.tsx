@@ -6,10 +6,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, Send, CheckCircle, Bot } from 'lucide-react';
+import { LoaderCircle, Send, CheckCircle, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
-import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc } from 'firebase/firestore';
+import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs } from 'firebase/firestore';
 import type { StorySession, ChatMessage as Message, Choice } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
@@ -34,9 +34,12 @@ type BeatGenkitDiagnostics = {
 };
 
 type BeatInteractionDiagnostics = {
+    lastRequestType: 'choose' | 'more_options' | null;
     lastChosenOptionId: string | null;
     lastChosenOptionTextPreview: string | null;
     lastArcStepIndexAfterChoice: number | null;
+    moreOptionsCount: number;
+    lastMoreOptionsAt: string | null;
 };
 
 
@@ -52,6 +55,8 @@ export default function StorySessionPage() {
     const { isAdmin, loading: adminLoading } = useAdminStatus();
     
     const [isBeatRunning, setIsBeatRunning] = useState(false);
+    const [isGeneratingMoreOptions, setIsGeneratingMoreOptions] = useState(false);
+
     const [beatDiagnostics, setBeatDiagnostics] = useState<BeatGenkitDiagnostics>({
         lastBeatOk: null,
         lastBeatErrorMessage: null,
@@ -61,9 +66,12 @@ export default function StorySessionPage() {
     });
     
     const [beatInteractionDiagnostics, setBeatInteractionDiagnostics] = useState<BeatInteractionDiagnostics>({
+        lastRequestType: null,
         lastChosenOptionId: null,
         lastChosenOptionTextPreview: null,
         lastArcStepIndexAfterChoice: null,
+        moreOptionsCount: 0,
+        lastMoreOptionsAt: null,
     });
 
 
@@ -224,13 +232,11 @@ export default function StorySessionPage() {
             toast({ title: "Story Beat Succeeded!" });
 
         } catch (e: any) {
-             setBeatDiagnostics({
+             setBeatDiagnostics(prev => ({
+                ...prev,
                 lastBeatOk: false,
                 lastBeatErrorMessage: e.message || "Failed to run story beat.",
-                lastBeatPromptConfigId: null,
-                lastBeatArcStep: null,
-                lastBeatStoryContinuationPreview: null,
-            });
+            }));
             toast({ title: "Error running beat", description: e.message, variant: "destructive" });
         } finally {
              setIsBeatRunning(false);
@@ -266,14 +272,69 @@ export default function StorySessionPage() {
         });
 
         // 3. Update beat interaction diagnostics
-        setBeatInteractionDiagnostics({
+        setBeatInteractionDiagnostics(prev => ({
+            ...prev,
+            lastRequestType: 'choose',
             lastChosenOptionId: chosenOption.id,
             lastChosenOptionTextPreview: chosenOption.text.slice(0, 80),
             lastArcStepIndexAfterChoice: newArcStepIndex,
-        });
+        }));
 
         // 4. Trigger next story beat
         await runBeatAndAppendMessages();
+    };
+    
+    const handleMoreOptions = async () => {
+        if (!firestore || !sessionId) return;
+        setIsGeneratingMoreOptions(true);
+        setBeatDiagnostics(prev => ({...prev, lastBeatErrorMessage: null}));
+
+        try {
+            const response = await fetch('/api/storyBeat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId }),
+            });
+            const flowResult = await response.json();
+
+            if (!response.ok || !flowResult.ok) {
+                throw new Error(flowResult.errorMessage || "An unknown error occurred while getting more options.");
+            }
+
+            const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+            const q = query(messagesRef, orderBy('createdAt', 'desc'), limit(1));
+            const snapshot = await getDocs(q);
+            
+            const latestMessage = snapshot.docs[0];
+            if (latestMessage && latestMessage.data().kind === 'beat_options') {
+                await updateDoc(latestMessage.ref, { options: flowResult.options });
+            } else {
+                 throw new Error("Could not find the latest options message to update.");
+            }
+            
+            setBeatInteractionDiagnostics(prev => ({
+                ...prev,
+                lastRequestType: 'more_options',
+                moreOptionsCount: prev.moreOptionsCount + 1,
+                lastMoreOptionsAt: new Date().toISOString(),
+            }));
+             setBeatDiagnostics(prev => ({
+                ...prev,
+                lastBeatOk: true,
+                lastBeatErrorMessage: null,
+            }));
+            toast({ title: 'New choices are ready!' });
+
+        } catch (e: any) {
+            setBeatDiagnostics(prev => ({
+                ...prev,
+                lastBeatOk: false,
+                lastBeatErrorMessage: e.message,
+            }));
+            toast({ title: "Error getting more choices", description: e.message, variant: 'destructive' });
+        } finally {
+            setIsGeneratingMoreOptions(false);
+        }
     };
 
 
@@ -342,11 +403,19 @@ export default function StorySessionPage() {
                                                 key={opt.id}
                                                 variant="outline"
                                                 onClick={() => handleChooseOption(msg, opt)}
-                                                disabled={isBeatRunning || latestOptionsMessage?.id !== msg.id}
+                                                disabled={isBeatRunning || isGeneratingMoreOptions || latestOptionsMessage?.id !== msg.id}
                                             >
                                                 {opt.text}
                                             </Button>
                                         ))}
+                                         <Button
+                                            variant="ghost"
+                                            className="text-muted-foreground"
+                                            onClick={handleMoreOptions}
+                                            disabled={isBeatRunning || isGeneratingMoreOptions || latestOptionsMessage?.id !== msg.id}
+                                        >
+                                           <RefreshCw className="mr-2 h-4 w-4"/> More choices
+                                        </Button>
                                     </div>
                                 </div>
                             ) : (
@@ -369,7 +438,7 @@ export default function StorySessionPage() {
                             </div>
                         </div>
                     )}
-                     {isBeatRunning && (
+                     {(isBeatRunning || isGeneratingMoreOptions) && (
                         <div className="flex justify-start">
                             <div className="bg-muted p-3 rounded-lg flex items-center gap-2">
                                 <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -388,9 +457,9 @@ export default function StorySessionPage() {
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && !isSending && handleSendMessage()}
-                      disabled={isSending}
+                      disabled={isSending || isBeatRunning || isGeneratingMoreOptions}
                     />
-                    <Button onClick={handleSendMessage} disabled={isSending}>
+                    <Button onClick={handleSendMessage} disabled={isSending || isBeatRunning || isGeneratingMoreOptions}>
                       <Send className="h-4 w-4" />
                       <span className="sr-only">Send</span>
                     </Button>
@@ -430,7 +499,7 @@ export default function StorySessionPage() {
                         )}
                     </div>
                     <div className="text-center">
-                        <Button onClick={handleRunStoryBeat} disabled={!canRunBeat || isBeatRunning}>
+                        <Button onClick={handleRunStoryBeat} disabled={!canRunBeat || isBeatRunning || isGeneratingMoreOptions}>
                             {isBeatRunning ? <><LoaderCircle className="animate-spin mr-2"/>Running Beat...</> : 'Run Next Story Beat'}
                         </Button>
                          {!canRunBeat && <p className="text-xs text-muted-foreground mt-2">Requires Story Type and Phase to be set.</p>}
@@ -463,3 +532,5 @@ export default function StorySessionPage() {
         </div>
     );
 }
+
+    
