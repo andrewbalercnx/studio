@@ -59,8 +59,10 @@ type ScenarioCharacterTraitsResult = {
     childId: string;
     sessionId: string;
     characterId: string;
-    traitsCount: number | null;
-    questionPreview: string | null;
+    questionPreview?: string | null;
+    traitsCount?: number | null;
+    error?: any;
+    [key: string]: any; // Allow other properties from flow response
 } | null;
 
 
@@ -514,47 +516,78 @@ export default function AdminRegressionPage() {
     }
 
     // Test: SCENARIO_CHARACTER_TRAITS
+    let traitsChildId: string | null = null;
+    let traitsSessionId: string | null = null;
+    let traitsCharacterId: string | null = null;
+    let traitsErrorDetails: any = null;
+
     try {
         const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Traits Test Child', createdAt: serverTimestamp() });
+        traitsChildId = childRef.id;
+
         const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
             childId: childRef.id, storyTypeId: 'animal_adventure_v1', storyPhaseId: 'story_beat_phase_v1',
             arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress'
         });
+        traitsSessionId = sessionRef.id;
+        
         const charRef = await addDoc(collection(firestore, 'characters'), {
             ownerChildId: childRef.id, sessionId: sessionRef.id, name: 'Test Bunny',
             role: 'pet', traits: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp()
         });
+        traitsCharacterId = charRef.id;
+        
         await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), {
             sender: 'assistant', text: 'Once upon a time...', createdAt: serverTimestamp()
         });
         
         const response = await fetch('/api/characterTraits', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId: sessionRef.id, characterId: charRef.id })
+            body: JSON.stringify({ sessionId: traitsSessionId, characterId: traitsCharacterId })
         });
         
-        if (!response.ok) throw new Error(`API returned status ${response.status}`);
-        const result = await response.json();
-        if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
+        let body: any = null;
+        try {
+            body = await response.json();
+        } catch (e) {
+             throw new Error(`API did not return valid JSON. Status: ${response.status}`);
+        }
         
-        if (!result.question || typeof result.question !== 'string') throw new Error('Response missing question field.');
-        if (!Array.isArray(result.suggestedTraits) || result.suggestedTraits.length === 0) throw new Error('Response missing suggestedTraits array.');
+        traitsErrorDetails = body;
+
+        if (!response.ok || !body.ok) {
+            throw new Error(`API returned status ${response.status}${body?.errorMessage ? ': ' + body.errorMessage : ''}`);
+        }
+        
+        if (!body.question || typeof body.question !== 'string') throw new Error('Response missing question field.');
+        if (!Array.isArray(body.suggestedTraits) || body.suggestedTraits.length === 0) throw new Error('Response missing suggestedTraits array.');
 
         const charDoc = await getDoc(charRef);
-        const updatedChar = charDoc.data();
-
-        // This test does not update Firestore, so we don't check for it.
-        // In Part C, the session page will do the update.
+        if (!charDoc.exists()) throw new Error("Character doc disappeared after flow ran.");
 
         characterTraitsScenarioSummary = {
-            childId: childRef.id, sessionId: sessionRef.id, characterId: charRef.id,
-            traitsCount: result.suggestedTraits.length, questionPreview: result.question.slice(0, 80)
+            childId: traitsChildId, sessionId: traitsSessionId, characterId: traitsCharacterId, ...body
         };
         
-        updateTestResult('SCENARIO_CHARACTER_TRAITS', { status: 'PASS', message: 'Flow returned a question and suggested traits.' });
+        updateTestResult('SCENARIO_CHARACTER_TRAITS', { 
+            status: 'PASS', 
+            message: 'Flow returned a question and suggested traits.',
+            details: {
+                questionPreview: body.question.slice(0, 80),
+                traitsCount: body.suggestedTraits.length
+            }
+        });
 
     } catch (e: any) {
-        updateTestResult('SCENARIO_CHARACTER_TRAITS', { status: 'ERROR', message: e.message, details: characterTraitsScenarioSummary });
+        updateTestResult('SCENARIO_CHARACTER_TRAITS', { 
+            status: 'ERROR', 
+            message: e.message, 
+            details: traitsErrorDetails || { rawError: String(e) }
+        });
+        characterTraitsScenarioSummary = {
+            childId: traitsChildId, sessionId: traitsSessionId, characterId: traitsCharacterId,
+            error: traitsErrorDetails || { message: e.message }
+        };
     }
 
 

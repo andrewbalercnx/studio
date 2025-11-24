@@ -12,7 +12,7 @@ import { z } from 'genkit';
 import type { StorySession, Character, ChatMessage } from '@/lib/types';
 
 type FlowDebugInfo = {
-    stage: 'loading_session' | 'loading_character' | 'loading_messages' | 'ai_generate' | 'json_parse' | 'json_validate' | 'unknown';
+    stage: 'init' | 'loading_session' | 'loading_character' | 'loading_messages' | 'build_prompt' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate';
     details: Record<string, any>;
 };
 
@@ -29,7 +29,10 @@ export const characterTraitsFlow = ai.defineFlow(
         outputSchema: z.any(), // Using any to allow for custom error/success shapes
     },
     async ({ sessionId, characterId }) => {
-        let debug: FlowDebugInfo = { stage: 'unknown', details: {} };
+        const debug: any = { 
+            stage: 'init',
+            input: { sessionId, characterId }
+        };
 
         try {
             const { firestore } = initializeFirebase();
@@ -39,17 +42,22 @@ export const characterTraitsFlow = ai.defineFlow(
             const sessionRef = doc(firestore, 'storySessions', sessionId);
             const sessionDoc = await getDoc(sessionRef);
             if (!sessionDoc.exists()) {
-                return { ok: false, sessionId, errorMessage: `Session with id ${sessionId} not found.` };
+                throw new Error(`Session with id ${sessionId} not found.`);
             }
+            debug.sessionExists = true;
             
             // 2. Load character
             debug.stage = 'loading_character';
             const characterRef = doc(firestore, 'characters', characterId);
             const characterDoc = await getDoc(characterRef);
             if (!characterDoc.exists()) {
-                return { ok: false, characterId, errorMessage: `Character with id ${characterId} not found.` };
+                throw new Error(`Character with id ${characterId} not found.`);
             }
             const character = characterDoc.data() as Character;
+            debug.characterExists = true;
+            debug.characterName = character.name;
+            debug.characterRole = character.role;
+
 
             // 3. Load last 10 messages for context
             debug.stage = 'loading_messages';
@@ -63,8 +71,10 @@ export const characterTraitsFlow = ai.defineFlow(
                     return `${msg.sender === 'assistant' ? 'Story Guide' : 'Child'}: ${msg.text}`;
                 })
                 .join('\n');
+            debug.messagesLoaded = messagesSnapshot.size;
 
             // 4. Construct prompt
+            debug.stage = 'build_prompt';
             const systemPrompt = "You are the Story Guide. You help very young children (3–5) talk about story characters. You speak in very short, simple sentences. You do not use scary topics, lists, or emojis.";
             const modeInstructions = `
 You will be given the character's name, their kind (e.g., toy, pet), any traits we already know, and a short summary of the story so far.
@@ -95,17 +105,30 @@ ${storySoFar}
 
 Now, generate the question and suggested traits as a single JSON object.
 `;
+            debug.promptLength = finalPrompt.length;
+            debug.promptPreview = finalPrompt.slice(0, 200);
 
             // 5. Call Genkit AI
             debug.stage = 'ai_generate';
             const maxOutputTokens = 500;
             const temperature = 0.5;
+            debug.modelName = 'googleai/gemini-2.5-flash';
+            debug.temperature = temperature;
+            debug.maxOutputTokens = maxOutputTokens;
             
             const llmResponse = await ai.generate({
                 model: 'googleai/gemini-2.5-flash',
                 prompt: finalPrompt,
                 config: { temperature, maxOutputTokens }
             });
+
+            debug.stage = 'ai_generate_result';
+            debug.responseKeys = Object.keys(llmResponse ?? {});
+            debug.hasRaw = !!(llmResponse as any).raw;
+            debug.hasCandidatesArray = Array.isArray((llmResponse as any).raw?.candidates);
+            debug.candidatesLength = Array.isArray((llmResponse as any).raw?.candidates) ? (llmResponse as any).raw.candidates.length : 0;
+            debug.topLevelFinishReason = (llmResponse as any).finishReason ?? null;
+            debug.firstCandidateFinishReason = Array.isArray((llmResponse as any).raw?.candidates) ? (llmResponse as any).raw.candidates[0]?.finishReason ?? null : null;
             
             const rawText = llmResponse.text;
 
@@ -117,6 +140,7 @@ Now, generate the question and suggested traits as a single JSON object.
             debug.stage = 'json_parse';
             let parsed: z.infer<typeof CharacterTraitsOutputSchema>;
             try {
+                // Handle potential markdown fences
                 const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
                 const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
                 parsed = JSON.parse(jsonToParse);
@@ -139,22 +163,16 @@ Now, generate the question and suggested traits as a single JSON object.
                 characterId,
                 question,
                 suggestedTraits,
-                debug: {
-                    traitsCount: suggestedTraits.length,
-                    modelName: 'googleai/gemini-2.5-flash',
-                    maxOutputTokens,
-                    temperature,
-                }
+                debug: process.env.NODE_ENV === 'development' ? debug : null,
             };
 
         } catch (e: any) {
-            const errorMessage = e instanceof Error ? e.message : JSON.stringify(e);
-            debug.details.error = errorMessage;
+            console.error('Unexpected error in characterTraitsFlow:', e, debug);
             return {
                 ok: false,
                 sessionId,
                 characterId,
-                errorMessage: `Unexpected error in characterTraitsFlow: ${errorMessage}`,
+                errorMessage: `Unexpected error in characterTraitsFlow: ${e?.message || String(e)}`,
                 debug,
             };
         }

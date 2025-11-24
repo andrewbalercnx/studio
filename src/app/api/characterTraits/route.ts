@@ -15,11 +15,25 @@ export async function POST(request: Request) {
         if (result.ok) {
             return NextResponse.json(result, { status: 200 });
         } else {
-            return NextResponse.json(result, { status: 500 });
+            // Pass through the detailed error from the flow
+            return NextResponse.json(
+                {
+                    ok: false,
+                    errorMessage: result.errorMessage ?? 'Unknown error in characterTraitsFlow',
+                    debug: result.debug ?? null,
+                },
+                { status: 500 }
+            );
         }
 
     } catch (e: any) {
         const errorMessage = e.message || 'An unexpected error occurred in the API route.';
-        return NextResponse.json({ ok: false, errorMessage: `API /characterTraits route error: ${errorMessage}` }, { status: 500 });
+        return NextResponse.json(
+            { 
+                ok: false, 
+                errorMessage: `API /characterTraits route error: ${errorMessage}` 
+            }, 
+            { status: 500 }
+        );
     }
 }
