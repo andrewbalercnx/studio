@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import { warmupReplyFlow } from '@/ai/flows/warmup-reply-flow';
 
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
         if (result.ok) {
             return NextResponse.json(result);
         } else {
-            // Pass through the detailed error message from the flow
+            // Pass through the detailed error message and the full debug object from the flow
             return NextResponse.json({
                 ok: false,
                 errorMessage: result.errorMessage || 'An unknown flow error occurred.',
@@ -29,5 +30,3 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: false, errorMessage: `API /warmupReply route error: ${errorMessage}` }, { status: 500 });
     }
 }
-
-    
