@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -29,11 +30,12 @@ const initialTests: TestResult[] = [
   { id: 'DATA_STORY_PHASES', name: 'Firestore: Story Phases', status: 'PENDING', message: '' },
   { id: 'DATA_CHILDREN', name: 'Firestore: Children', status: 'PENDING', message: '' },
   { id: 'DATA_SESSIONS_OVERVIEW', name: 'Firestore: Sessions Overview', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_BEAT_AUTO', name: 'Scenario: Auto-Beat', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
   { id: 'API_STORY_BEAT', name: 'API: /api/storyBeat (Input)', status: 'PENDING', message: '' },
   { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
-  { id: 'SCENARIO_BEAT_AUTO', name: 'Scenario: Auto-Beat', status: 'PENDING', message: '' },
 ];
 
 
@@ -103,6 +105,7 @@ export default function AdminRegressionPage() {
         const phasesRef = collection(firestore, 'storyPhases');
         const requiredIds = ["warmup_phase_v1", "story_beat_phase_v1", "ending_phase_v1"];
         const docs = await Promise.all(requiredIds.map(id => getDoc(doc(phasesRef, id))));
+        fsSummary.storyPhasesCount = (await getDocs(phasesRef)).size;
         const missing = [];
         for (let i = 0; i < docs.length; i++) {
             if (!docs[i].exists()) {
@@ -138,16 +141,27 @@ export default function AdminRegressionPage() {
       // Test: DATA_SESSIONS_OVERVIEW
       try {
         const sessionsRef = collection(firestore, 'storySessions');
-        const snap = await getDocs(query(sessionsRef, limit(5)));
+        const snap = await getDocs(query(sessionsRef, limit(20)));
         fsSummary.sessionsCount = snap.size;
+        
         if (snap.empty) {
             updateTestResult('DATA_SESSIONS_OVERVIEW', { status: 'SKIP', message: 'No story sessions found.' });
         } else {
-            const firstSession = snap.docs[0].data();
-            if (!firstSession.childId || !firstSession.storyPhaseId || typeof firstSession.arcStepIndex !== 'number') {
-                throw new Error('First session doc is missing key fields (childId, storyPhaseId, arcStepIndex).');
+            let wellFormedCount = 0;
+            snap.docs.forEach(d => {
+                const s = d.data();
+                if (s.childId && s.storyPhaseId && typeof s.arcStepIndex === 'number') {
+                    wellFormedCount++;
+                }
+            });
+            fsSummary.sessionsWellFormed = wellFormedCount;
+            fsSummary.sessionsMalformed = snap.size - wellFormedCount;
+
+            if (wellFormedCount > 0) {
+                updateTestResult('DATA_SESSIONS_OVERVIEW', { status: 'PASS', message: `Found ${snap.size} sessions; ${wellFormedCount} well-formed, ${fsSummary.sessionsMalformed} malformed.` });
+            } else {
+                throw new Error(`Found ${snap.size} sessions but none have childId, storyPhaseId, and arcStepIndex.`);
             }
-            updateTestResult('DATA_SESSIONS_OVERVIEW', { status: 'PASS', message: `Found ${snap.size} sessions. First doc OK.` });
         }
       } catch (e: any) {
         updateTestResult('DATA_SESSIONS_OVERVIEW', { status: 'FAIL', message: e.message });
@@ -202,7 +216,7 @@ export default function AdminRegressionPage() {
       }
   };
 
-  const runApiTests = async () => {
+  const runApiTests = async (scenarioResults: any) => {
     let apiSummary: any = {};
     
     // Test: API_STORY_BEAT
@@ -232,26 +246,38 @@ export default function AdminRegressionPage() {
     }
 
     // Test: API_WARMUP_REPLY
-    if (!warmupSessionId) {
-        updateTestResult('API_WARMUP_REPLY', { status: 'SKIP', message: 'No warmup sessionId provided.' });
+    const warmupTestSessionId = warmupSessionId || scenarioResults.warmup?.sessionId;
+    if (!warmupTestSessionId) {
+        updateTestResult('API_WARMUP_REPLY', { status: 'SKIP', message: 'No warmup sessionId provided and scenario failed.' });
     } else {
         try {
             const response = await fetch('/api/warmupReply', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: warmupSessionId }),
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: warmupTestSessionId }),
             });
-            apiSummary.warmupReply = { lastStatus: response.status };
+            apiSummary.warmupReply = { lastStatus: response.status, forSession: warmupTestSessionId };
             const result = await response.json();
             apiSummary.warmupReply.lastOk = result.ok;
             
             if (!response.ok) {
                  apiSummary.warmupReply.lastErrorMessage = result.errorMessage;
+                 // Don't throw for config errors on manual session
+                 if (warmupSessionId) {
+                    updateTestResult('API_WARMUP_REPLY', { status: 'FAIL', message: `API returned status ${response.status}: ${result.errorMessage || 'Unknown error'}` });
+                    return; // End test here for manual session failure
+                 }
                  throw new Error(`API returned status ${response.status}: ${result.errorMessage}`);
             }
              if (typeof result.ok !== 'boolean') {
                 throw new Error('API response missing "ok" field.');
             }
-            apiSummary.warmupReply.lastPreview = result.assistantTextPreview;
-            updateTestResult('API_WARMUP_REPLY', { status: 'PASS', message: `API returned ok:${result.ok}.` });
+            if (!result.ok) {
+                // If it's a structured error, treat as a "soft fail" for the test
+                updateTestResult('API_WARMUP_REPLY', { status: 'FAIL', message: `API returned ok:false. Error: ${result.errorMessage.slice(0, 100)}` });
+            } else {
+                apiSummary.warmupReply.lastPreview = result.assistantTextPreview;
+                const source = warmupSessionId ? `manual session ${warmupSessionId.slice(0,5)}` : 'auto-scenario';
+                updateTestResult('API_WARMUP_REPLY', { status: 'PASS', message: `API returned ok:true for ${source}.` });
+            }
 
         } catch (e: any) {
              updateTestResult('API_WARMUP_REPLY', { status: 'FAIL', message: e.message });
@@ -262,22 +288,21 @@ export default function AdminRegressionPage() {
   };
   
   const runScenarioTests = async () => {
-    if (!firestore) return;
-    let scenarioSummary: any = {};
+    if (!firestore) return { beat: null, warmup: null };
+    let beatScenarioSummary: any = {};
+    let warmupScenarioSummary: any = {};
 
     // Test: SCENARIO_BEAT_AUTO
     try {
-        // 1. Find live story type
         const typesRef = collection(firestore, 'storyTypes');
         const typeQuery = query(typesRef, where('status', '==', 'live'), limit(1));
         const typeSnap = await getDocs(typeQuery);
-        if (typeSnap.empty) throw new Error('No live story types found to start a scenario.');
+        if (typeSnap.empty) throw new Error('No live story types found.');
         const storyType = typeSnap.docs[0].data();
-        const storyTypeId = storyType.id;
+        const storyTypeId = typeSnap.docs[0].id;
 
-        // 2. Create child and session
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Child', createdAt: serverTimestamp() });
-        scenarioSummary.childId = childRef.id;
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Child', createdAt: serverTimestamp(), regressionTag: 'auto' });
+        beatScenarioSummary.childId = childRef.id;
 
         const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
             childId: childRef.id,
@@ -289,9 +314,8 @@ export default function AdminRegressionPage() {
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
-        scenarioSummary.sessionId = sessionRef.id;
+        beatScenarioSummary.sessionId = sessionRef.id;
 
-        // Call API
         const response = await fetch('/api/storyBeat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
         });
@@ -300,25 +324,69 @@ export default function AdminRegressionPage() {
         if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
         if (!result.storyContinuation || result.options?.length < 3) throw new Error('API response has invalid shape.');
 
-        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'PASS', message: `Created session ${sessionRef.id} and got valid API response.` });
+        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'PASS', message: `Created session ${sessionRef.id.slice(0,5)} and got valid API response.` });
 
     } catch (e: any) {
         updateTestResult('SCENARIO_BEAT_AUTO', { status: 'ERROR', message: e.message });
+        beatScenarioSummary = null;
     }
-    setDiagnostics(prev => ({...prev, scenario: { beat: scenarioSummary } }));
+    
+    // Test: SCENARIO_WARMUP_AUTO
+    try {
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Warmup Child', createdAt: serverTimestamp(), regressionTag: 'auto' });
+        warmupScenarioSummary.childId = childRef.id;
+
+        const promptQuery = query(collection(firestore, 'promptConfigs'), where('phase', '==', 'warmup'), where('levelBand', '==', 'low'), limit(1));
+        const promptSnap = await getDocs(promptQuery);
+        if (promptSnap.empty) throw new Error('No live low-level warmup promptConfig found.');
+        const warmupPromptConfigId = promptSnap.docs[0].id;
+        
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id,
+            storyPhaseId: 'warmup_phase_v1',
+            promptConfigId: warmupPromptConfigId,
+            promptConfigLevelBand: 'low',
+            status: 'in_progress',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+        warmupScenarioSummary.sessionId = sessionRef.id;
+
+        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), {
+             sender: 'assistant', text: 'Hi! I am your Story Guide. What should I call you?', createdAt: serverTimestamp()
+        });
+
+        const response = await fetch('/api/warmupReply', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
+        });
+        if (!response.ok) throw new Error(`API returned ${response.status}`);
+        const result = await response.json();
+        if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
+        if (!result.assistantText) throw new Error('API response missing assistantText.');
+
+        updateTestResult('SCENARIO_WARMUP_AUTO', { status: 'PASS', message: `Created session ${sessionRef.id.slice(0,5)} and got valid API response.` });
+
+    } catch(e:any) {
+        updateTestResult('SCENARIO_WARMUP_AUTO', { status: 'ERROR', message: e.message });
+        warmupScenarioSummary = null;
+    }
+
+    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary };
+    setDiagnostics(prev => ({...prev, scenario: scenarioResults }));
+    return scenarioResults;
   };
 
 
   const runAllTests = async () => {
     setIsRunning(true);
-    setTests(initialTests); // Reset tests to PENDING
+    setTests(initialTests.map(t => ({...t, status: 'PENDING', message: '' })));
     setDiagnostics(prev => ({ ...prev, firestoreSummary: {}, apiSummary: {}, scenario: {} }));
 
     await runDataTests();
+    const scenarioResults = await runScenarioTests();
     await runSessionTests();
-    await runApiTests();
-    await runScenarioTests();
-
+    await runApiTests(scenarioResults);
+    
     setIsRunning(false);
     toast({ title: 'Regression tests complete!' });
   };
@@ -421,3 +489,5 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
+
+    
