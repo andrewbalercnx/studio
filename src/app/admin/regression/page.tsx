@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, orderBy } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { ChatMessage, StorySession, Character, PromptConfig, Choice } from '@/lib/types';
 
