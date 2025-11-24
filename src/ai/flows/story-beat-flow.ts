@@ -99,11 +99,27 @@ export const storyBeatFlow = ai.defineFlow(
                 orderBy('status', 'desc'), // 'live' comes before 'draft'
                 where('status', '==', 'live')
             );
-            const configSnapshot = await getDocs(q);
+            
+            let configSnapshot = await getDocs(q);
+            let promptConfig: PromptConfig | null = null;
+
             if (configSnapshot.empty) {
-                 return { ok: false, sessionId, errorMessage: `No 'storyBeat' prompt config found for levelBand '${promptConfigLevelBand}'.` };
+                // Fallback to 'low' level band if the specific one is not found
+                const fallbackQuery = query(
+                    promptConfigsRef,
+                    where('phase', '==', 'storyBeat'),
+                    where('levelBand', '==', 'low'),
+                    where('status', '==', 'live'),
+                    orderBy('status', 'desc')
+                );
+                configSnapshot = await getDocs(fallbackQuery);
             }
-            const promptConfig = configSnapshot.docs[0].data() as PromptConfig;
+
+            if (configSnapshot.empty) {
+                 return { ok: false, sessionId, errorMessage: `No 'storyBeat' prompt config found for levelBand '${promptConfigLevelBand}' or fallback 'low'.` };
+            }
+            promptConfig = configSnapshot.docs[0].data() as PromptConfig;
+
 
             // 6. Build Final Prompt
             const finalPrompt = `
