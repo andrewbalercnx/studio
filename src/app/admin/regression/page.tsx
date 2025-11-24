@@ -24,6 +24,21 @@ type TestResult = {
   details?: any;
 };
 
+type ScenarioResult = {
+    childId: string;
+    sessionId: string;
+} | null;
+
+type ScenarioWarmupResult = {
+    childId: string;
+    sessionId: string;
+    lastStatus: number;
+    lastOk: boolean | null;
+    lastErrorMessage: string | null;
+    lastPreview: string | null;
+} | null;
+
+
 const initialTests: TestResult[] = [
   { id: 'DATA_PROMPTS', name: 'Firestore: Prompt Configs', status: 'PENDING', message: '' },
   { id: 'DATA_STORY_TYPES', name: 'Firestore: Story Types', status: 'PENDING', message: '' },
@@ -216,7 +231,7 @@ export default function AdminRegressionPage() {
       }
   };
 
-  const runApiTests = async (scenarioResults: any) => {
+  const runApiTests = async (scenarioResults: { beat: ScenarioResult, warmup: ScenarioWarmupResult }) => {
     let apiSummary: any = {};
     
     // Test: API_STORY_BEAT
@@ -263,6 +278,7 @@ export default function AdminRegressionPage() {
                  // Don't throw for config errors on manual session
                  if (warmupSessionId) {
                     updateTestResult('API_WARMUP_REPLY', { status: 'FAIL', message: `API returned status ${response.status}: ${result.errorMessage || 'Unknown error'}` });
+                    setDiagnostics(prev => ({...prev, apiSummary: {...prev.apiSummary, ...apiSummary}}));
                     return; // End test here for manual session failure
                  }
                  throw new Error(`API returned status ${response.status}: ${result.errorMessage}`);
@@ -287,10 +303,11 @@ export default function AdminRegressionPage() {
     setDiagnostics(prev => ({...prev, apiSummary: {...prev.apiSummary, ...apiSummary}}));
   };
   
-  const runScenarioTests = async () => {
+  const runScenarioTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult }> => {
     if (!firestore) return { beat: null, warmup: null };
-    let beatScenarioSummary: any = {};
-    let warmupScenarioSummary: any = {};
+    
+    let beatScenarioSummary: ScenarioResult = null;
+    let warmupScenarioSummary: ScenarioWarmupResult = null;
 
     // Test: SCENARIO_BEAT_AUTO
     try {
@@ -301,20 +318,23 @@ export default function AdminRegressionPage() {
         const storyType = typeSnap.docs[0].data();
         const storyTypeId = typeSnap.docs[0].id;
 
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Child', createdAt: serverTimestamp(), regressionTag: 'auto' });
-        beatScenarioSummary.childId = childRef.id;
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Child', createdAt: serverTimestamp(), regressionTag: 'auto_beat' });
+
+        const mainCharRef = await addDoc(collection(firestore, 'characters'), { ownerChildId: childRef.id, name: 'Reggie', role: 'child' });
 
         const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
             childId: childRef.id,
             storyTypeId: storyTypeId,
             storyPhaseId: storyType.defaultPhaseId,
             arcStepIndex: 0,
+            mainCharacterId: mainCharRef.id,
             promptConfigLevelBand: 'low',
             status: 'in_progress',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
-        beatScenarioSummary.sessionId = sessionRef.id;
+        
+        beatScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id };
 
         const response = await fetch('/api/storyBeat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
@@ -333,24 +353,24 @@ export default function AdminRegressionPage() {
     
     // Test: SCENARIO_WARMUP_AUTO
     try {
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Warmup Child', createdAt: serverTimestamp(), regressionTag: 'auto' });
-        warmupScenarioSummary.childId = childRef.id;
-
-        const promptQuery = query(collection(firestore, 'promptConfigs'), where('phase', '==', 'warmup'), where('levelBand', '==', 'low'), limit(1));
+        const promptQuery = query(collection(firestore, 'promptConfigs'), where('phase', '==', 'warmup'), where('levelBand', '==', 'low'), where('status', '==', 'live'), limit(1));
         const promptSnap = await getDocs(promptQuery);
         if (promptSnap.empty) throw new Error('No live low-level warmup promptConfig found.');
         const warmupPromptConfigId = promptSnap.docs[0].id;
+        const warmupPromptConfigLevelBand = promptSnap.docs[0].data().levelBand;
+
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Warmup Child', createdAt: serverTimestamp(), regressionTag: 'auto_warmup' });
         
         const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
             childId: childRef.id,
             storyPhaseId: 'warmup_phase_v1',
             promptConfigId: warmupPromptConfigId,
-            promptConfigLevelBand: 'low',
+            promptConfigLevelBand: warmupPromptConfigLevelBand,
             status: 'in_progress',
+            arcStepIndex: 0,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
-        warmupScenarioSummary.sessionId = sessionRef.id;
 
         await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), {
              sender: 'assistant', text: 'Hi! I am your Story Guide. What should I call you?', createdAt: serverTimestamp()
@@ -359,16 +379,37 @@ export default function AdminRegressionPage() {
         const response = await fetch('/api/warmupReply', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
         });
-        if (!response.ok) throw new Error(`API returned ${response.status}`);
-        const result = await response.json();
-        if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
-        if (!result.assistantText) throw new Error('API response missing assistantText.');
+        
+        let jsonResponse;
+        try {
+            jsonResponse = await response.json();
+        } catch (jsonErr) {
+            throw new Error(`Could not parse JSON response from API. Status: ${response.status}.`);
+        }
+
+        warmupScenarioSummary = {
+            childId: childRef.id,
+            sessionId: sessionRef.id,
+            lastStatus: response.status,
+            lastOk: jsonResponse?.ok ?? null,
+            lastErrorMessage: jsonResponse?.errorMessage ?? null,
+            lastPreview: jsonResponse?.assistantTextPreview ?? null,
+        };
+
+        if (!response.ok) {
+            throw new Error(`API returned status ${response.status}: ${jsonResponse.errorMessage || 'Unknown error'}`);
+        }
+        if (!jsonResponse.ok) {
+             throw new Error(`API returned ok:false: ${jsonResponse.errorMessage}`);
+        }
+        if (!jsonResponse.assistantText) {
+            throw new Error('API response missing assistantText.');
+        }
 
         updateTestResult('SCENARIO_WARMUP_AUTO', { status: 'PASS', message: `Created session ${sessionRef.id.slice(0,5)} and got valid API response.` });
 
     } catch(e:any) {
         updateTestResult('SCENARIO_WARMUP_AUTO', { status: 'ERROR', message: e.message });
-        warmupScenarioSummary = null;
     }
 
     const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary };
