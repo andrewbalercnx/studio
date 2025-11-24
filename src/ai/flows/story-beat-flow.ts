@@ -92,31 +92,41 @@ export const storyBeatFlow = ai.defineFlow(
             // 5. Choose PromptConfig
             debug.stage = 'loading_promptConfig';
             const promptConfigsRef = collection(firestore, 'promptConfigs');
-            const q = query(
+            let configSnapshot;
+            let promptConfig: PromptConfig | null = null;
+
+            // First, try to get the specific level band
+            const specificQuery = query(
                 promptConfigsRef,
                 where('phase', '==', 'storyBeat'),
                 where('levelBand', '==', promptConfigLevelBand),
-                orderBy('status', 'desc'), // 'live' comes before 'draft'
                 where('status', '==', 'live')
             );
+            configSnapshot = await getDocs(specificQuery);
             
-            let configSnapshot = await getDocs(q);
-            let promptConfig: PromptConfig | null = null;
-
+            // If that fails, try a fallback for 'low'
             if (configSnapshot.empty) {
-                // Fallback to 'low' level band if the specific one is not found
                 const fallbackQuery = query(
                     promptConfigsRef,
                     where('phase', '==', 'storyBeat'),
                     where('levelBand', '==', 'low'),
-                    where('status', '==', 'live'),
-                    orderBy('status', 'desc')
+                    where('status', '==', 'live')
                 );
                 configSnapshot = await getDocs(fallbackQuery);
             }
 
+            // If still empty, get ANY live storyBeat config
             if (configSnapshot.empty) {
-                 return { ok: false, sessionId, errorMessage: `No 'storyBeat' prompt config found for levelBand '${promptConfigLevelBand}' or fallback 'low'.` };
+                const anyLiveQuery = query(
+                    promptConfigsRef,
+                    where('phase', '==', 'storyBeat'),
+                    where('status', '==', 'live')
+                );
+                configSnapshot = await getDocs(anyLiveQuery);
+            }
+
+            if (configSnapshot.empty) {
+                 return { ok: false, sessionId, errorMessage: `No 'storyBeat' prompt config with status 'live' found for levelBand '${promptConfigLevelBand}' or any fallback.` };
             }
             promptConfig = configSnapshot.docs[0].data() as PromptConfig;
 
@@ -143,13 +153,14 @@ Important: Return only a single JSON object. Do not include any extra text, expl
 
             // 7. Call Genkit AI
             debug.stage = 'ai_generate';
+            const maxOutputTokens = promptConfig.model?.maxOutputTokens ?? 10000;
             
             const llmResponse = await ai.generate({
                 model: 'googleai/gemini-2.5-flash',
                 prompt: finalPrompt,
                 config: {
                     temperature: promptConfig.model?.temperature ?? 0.7,
-                    maxOutputTokens: promptConfig.model?.maxOutputTokens ?? 10000,
+                    maxOutputTokens: maxOutputTokens,
                 }
             });
             
@@ -250,7 +261,7 @@ Important: Return only a single JSON object. Do not include any extra text, expl
                     storySoFarLength: storySoFar.length,
                     arcStepIndex,
                     modelName: 'googleai/gemini-2.5-flash',
-                    maxOutputTokens: promptConfig.model?.maxOutputTokens,
+                    maxOutputTokens: maxOutputTokens,
                     temperature: promptConfig.model?.temperature,
                     promptPreview: finalPrompt.substring(0, 500) + '...',
                 }
