@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, Wand2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffect, useState } from 'react';
 import { useFirestore } from '@/firebase';
@@ -21,13 +22,7 @@ const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>[] = [
             kind: "self",
             label: "You"
         },
-        traits: {
-            ageApprox: "about your age",
-            size: "medium",
-            bravery: "brave",
-            energy: "playful",
-            moodDefault: "curious"
-        },
+        traits: ["brave", "curious", "playful"],
         visualNotes: {
             hair: "short hair",
             clothing: "bright jumper",
@@ -43,10 +38,7 @@ const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>[] = [
             kind: "family",
             label: "Grown-up helper"
         },
-        traits: {
-            size: "big",
-            moodDefault: "kind"
-        }
+        traits: ["kind", "big"],
     },
     {
         ownerChildId: "sample-child-1",
@@ -57,10 +49,7 @@ const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>[] = [
             kind: "friend",
             label: "Friend from school"
         },
-        traits: {
-            energy: "bouncy",
-            moodDefault: "silly"
-        }
+        traits: ["bouncy", "silly"],
     }
 ];
 
@@ -75,6 +64,10 @@ export default function AdminCharactersPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [isLoadingTraits, setIsLoadingTraits] = useState(false);
+  const [lastTraitsCall, setLastTraitsCall] = useState<{ ok: boolean; characterId: string | null; sessionId: string | null; errorMessage: string | null; questionPreview: string | null } | null>(null);
+
 
   useEffect(() => {
     if (!firestore || !isAdmin) {
@@ -124,9 +117,64 @@ export default function AdminCharactersPage() {
     }
   };
 
+  const handleAskTraits = async (characterId: string, sessionId: string | undefined) => {
+    if (!sessionId) {
+      setLastTraitsCall({
+        ok: false,
+        characterId,
+        sessionId: null,
+        errorMessage: "Character has no sessionId; cannot call traits flow.",
+        questionPreview: null,
+      });
+      toast({ title: "Cannot ask traits", description: "Character is not associated with a session.", variant: "destructive" });
+      return;
+    }
+
+    setIsLoadingTraits(true);
+    setLastTraitsCall(null);
+
+    try {
+      const res = await fetch("/api/characterTraits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ characterId, sessionId })
+      });
+
+      const json = await res.json().catch(() => null);
+
+      const result = {
+        ok: json?.ok === true,
+        characterId,
+        sessionId,
+        errorMessage: json?.errorMessage || (res.ok ? null : `Status ${res.status}`),
+        questionPreview: json?.question?.slice(0, 100) || null
+      };
+
+      setLastTraitsCall(result);
+      if (result.ok) {
+        toast({ title: "Traits flow succeeded!", description: `Question: ${result.questionPreview}` });
+      } else {
+        toast({ title: "Traits flow failed", description: result.errorMessage, variant: "destructive" });
+      }
+
+    } catch (err: any) {
+      const errorMessage = err?.message || "Unexpected error calling /api/characterTraits";
+      setLastTraitsCall({
+        ok: false,
+        characterId,
+        sessionId,
+        errorMessage,
+        questionPreview: null
+      });
+      toast({ title: "API Error", description: errorMessage, variant: "destructive" });
+    } finally {
+      setIsLoadingTraits(false);
+    }
+  }
+
   const getTraitsSummary = (character: Character) => {
-      if (!character.traits) return '-';
-      return Object.values(character.traits).filter(Boolean).join(', ');
+      if (!character.traits || character.traits.length === 0) return '-';
+      return character.traits.join(', ');
   }
 
 
@@ -138,7 +186,8 @@ export default function AdminCharactersPage() {
         count: characters.length,
         sampleIds: characters.slice(0, 3).map(c => c.id),
     },
-    ...(error ? { firestoreError: error } : {})
+    ...(error ? { firestoreError: error } : {}),
+    lastTraitsCall
   };
 
   const renderContent = () => {
@@ -173,6 +222,7 @@ export default function AdminCharactersPage() {
                   <TableHead>Role</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Traits Summary</TableHead>
+                  <TableHead>Actions</TableHead>
               </TableRow>
           </TableHeader>
           <TableBody>
@@ -184,6 +234,16 @@ export default function AdminCharactersPage() {
                       <TableCell>{char.role}</TableCell>
                       <TableCell>{char.name}</TableCell>
                       <TableCell className="text-xs">{getTraitsSummary(char)}</TableCell>
+                      <TableCell>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleAskTraits(char.id, char.sessionId)}
+                            disabled={!char.sessionId || isLoadingTraits}
+                          >
+                             <Wand2 className="mr-2 h-4 w-4"/> Ask traits
+                          </Button>
+                      </TableCell>
                   </TableRow>
               ))}
           </TableBody>

@@ -24,7 +24,7 @@ export type ChatMessage = {
     role?: 'user' | 'model' | 'system' | 'tool';
     content?: string;
     // New structured fields
-    kind?: 'beat_continuation' | 'beat_options' | 'child_choice' | 'character_traits_question';
+    kind?: 'beat_continuation' | 'beat_options' | 'child_choice' | 'character_traits_question' | 'character_traits_answer';
     options?: Choice[];
     selectedOptionId?: string;
 };
@@ -54,6 +54,12 @@ export type StorySession = {
     // NEW FIELDS
     mainCharacterId?: string;
     supportingCharacterIds?: string[];
+    pendingCharacterTraits?: {
+      characterId: string;
+      characterLabel: string;
+      questionText: string;
+      askedAt?: any;
+    };
     // This is a client-side representation and not stored in Firestore directly
     // with the session document. It's populated from the messages sub-collection.
     messages: ChatMessage[];

@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "UserProfile": {
@@ -166,6 +167,16 @@
             "type": "string"
           },
           "description": "IDs of supporting characters, referencing characters/{id}."
+        },
+        "pendingCharacterTraits": {
+          "type": "object",
+          "properties": {
+            "characterId": { "type": "string" },
+            "characterLabel": { "type": "string" },
+            "questionText": { "type": "string" },
+            "askedAt": { "type": "string", "format": "date-time" }
+          },
+          "required": ["characterId", "characterLabel", "questionText"]
         }
       },
       "required": [

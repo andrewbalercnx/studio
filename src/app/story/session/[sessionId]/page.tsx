@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -9,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
-import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion, DocumentReference, getDoc } from 'firebase/firestore';
+import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion, DocumentReference, getDoc, deleteField } from 'firebase/firestore';
 import type { StorySession, ChatMessage as Message, Choice, Character } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
@@ -35,7 +36,7 @@ type BeatGenkitDiagnostics = {
 };
 
 type BeatInteractionDiagnostics = {
-    lastRequestType: 'choose' | 'more_options' | null;
+    lastRequestType: 'choose' | 'more_options' | 'traits_answer' | null;
     lastChosenOptionId: string | null;
     lastChosenOptionTextPreview: string | null;
     lastArcStepIndexAfterChoice: number | null;
@@ -50,7 +51,10 @@ type CharacterTraitsDiagnostics = {
     lastCharacterLabel?: string;
     lastTraitsQuestionPreview?: string | null;
     lastTraitsUpdateCount?: number | null;
+    lastTraitsAnswerPreview?: string | null;
     errorMessage?: string;
+    sessionHasPendingCharacterTraits?: boolean;
+    pendingCharacterTraits?: any;
 };
 
 
@@ -106,6 +110,19 @@ export default function StorySessionPage() {
     const currentStoryTypeId = session?.storyTypeId ?? null;
     const currentStoryPhaseId = session?.storyPhaseId ?? null;
     const currentArcStepIndex = typeof session?.arcStepIndex === 'number' ? session.arcStepIndex : null;
+    const pendingCharacterTraits = session?.pendingCharacterTraits ?? null;
+
+    useEffect(() => {
+        setCharacterTraitsDiagnostics(prev => ({
+            ...prev,
+            sessionHasPendingCharacterTraits: !!pendingCharacterTraits,
+            pendingCharacterTraits: pendingCharacterTraits ? {
+                characterId: pendingCharacterTraits.characterId,
+                characterLabel: pendingCharacterTraits.characterLabel,
+                questionPreview: pendingCharacterTraits.questionText.slice(0, 80),
+            } : null,
+        }))
+    }, [pendingCharacterTraits]);
 
     const latestOptionsMessage = useMemo(() => {
         if (!messages) return null;
@@ -121,70 +138,92 @@ export default function StorySessionPage() {
 
 
     const handleSendMessage = async () => {
-        if (!input.trim() || !firestore || !user) return;
+        if (!input.trim() || !firestore || !user || !sessionRef) return;
 
         setIsSending(true);
         const childMessageText = input.trim();
         setInput('');
 
         const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+
         try {
-            // 1. Write child message to Firestore
-            await addDoc(messagesRef, {
-                sender: 'child',
-                text: childMessageText,
-                createdAt: serverTimestamp(),
-            });
-
-            // 2. Call warmup reply API
-            const response = await fetch('/api/warmupReply', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId }),
-            });
-
-            const result = await response.json();
-
-            if (response.ok && result.ok) {
-                // 3. Write assistant message to Firestore
+            if (pendingCharacterTraits) {
+                 // This is an answer to a traits question
                 await addDoc(messagesRef, {
-                    sender: 'assistant',
-                    text: result.assistantText,
+                    sender: 'child',
+                    text: childMessageText,
+                    kind: 'character_traits_answer',
                     createdAt: serverTimestamp(),
                 });
-                 setWarmupDiagnostics({
-                    lastCallOk: true,
-                    lastErrorMessage: null,
-                    lastUsedPromptConfigId: result.usedPromptConfigId,
-                    lastAssistantTextPreview: result.assistantTextPreview || null,
-                    debug: null,
+
+                const characterRef = doc(firestore, 'characters', pendingCharacterTraits.characterId);
+                await updateDoc(characterRef, {
+                    traits: arrayUnion(childMessageText),
+                    traitsLastUpdatedAt: serverTimestamp()
                 });
+
+                await updateDoc(sessionRef, {
+                    pendingCharacterTraits: deleteField()
+                });
+                
+                setCharacterTraitsDiagnostics(prev => ({
+                    ...prev,
+                    lastTraitsAnswerPreview: childMessageText.slice(0, 80),
+                }));
+                setBeatInteractionDiagnostics(prev => ({
+                    ...prev,
+                    lastRequestType: 'traits_answer',
+                }))
+
+                // Now run the next story beat
+                await runBeatAndAppendMessages();
+
             } else {
-                // 4. Handle API error
-                const friendlyErrorMessage = 'The Story Guide is having trouble thinking of a reply. Please try again.';
+                // This is a normal warmup/chat message
                 await addDoc(messagesRef, {
-                    sender: 'assistant',
-                    text: friendlyErrorMessage,
+                    sender: 'child',
+                    text: childMessageText,
                     createdAt: serverTimestamp(),
                 });
-                toast({ title: 'API Error', description: result.errorMessage, variant: 'destructive' });
-                setWarmupDiagnostics({
-                    lastCallOk: false,
-                    lastErrorMessage: result.errorMessage || 'An unknown error occurred.',
-                    lastUsedPromptConfigId: result.usedPromptConfigId || null,
-                    lastAssistantTextPreview: null,
-                    debug: result.debug || null, // Store debug info
+
+                const response = await fetch('/api/warmupReply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId }),
                 });
+
+                const result = await response.json();
+                if (response.ok && result.ok) {
+                    await addDoc(messagesRef, {
+                        sender: 'assistant',
+                        text: result.assistantText,
+                        createdAt: serverTimestamp(),
+                    });
+                    setWarmupDiagnostics({
+                        lastCallOk: true,
+                        lastErrorMessage: null,
+                        lastUsedPromptConfigId: result.usedPromptConfigId,
+                        lastAssistantTextPreview: result.assistantTextPreview || null,
+                        debug: null,
+                    });
+                } else {
+                    const friendlyErrorMessage = 'The Story Guide is having trouble thinking of a reply. Please try again.';
+                    await addDoc(messagesRef, { sender: 'assistant', text: friendlyErrorMessage, createdAt: serverTimestamp() });
+                    toast({ title: 'API Error', description: result.errorMessage, variant: 'destructive' });
+                    setWarmupDiagnostics({
+                        lastCallOk: false,
+                        lastErrorMessage: result.errorMessage || 'An unknown error occurred.',
+                        lastUsedPromptConfigId: result.usedPromptConfigId || null,
+                        lastAssistantTextPreview: null,
+                        debug: result.debug || null,
+                    });
+                }
             }
 
         } catch (e: any) {
             console.error("Error in send message flow:", e);
             const friendlyErrorMessage = 'The Story Guide is having trouble thinking of a reply. Please try again.';
-            await addDoc(messagesRef, {
-                sender: 'assistant',
-                text: friendlyErrorMessage,
-                createdAt: serverTimestamp(),
-            });
+            await addDoc(messagesRef, { sender: 'assistant', text: friendlyErrorMessage, createdAt: serverTimestamp() });
             toast({ title: 'Error', description: e.message, variant: 'destructive' });
              setWarmupDiagnostics({
                 lastCallOk: false,
@@ -256,8 +295,8 @@ export default function StorySessionPage() {
         }
     };
 
-    const runCharacterTraitsQuestion = async (sessionId: string, characterId: string) => {
-        if (!firestore) return;
+    const runCharacterTraitsQuestion = async (sessionId: string, characterId: string, characterLabel: string) => {
+        if (!firestore || !sessionRef) return;
 
         try {
             const response = await fetch('/api/characterTraits', {
@@ -274,7 +313,6 @@ export default function StorySessionPage() {
 
             const { question, suggestedTraits } = result;
 
-            // Write question message
             const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
             await addDoc(messagesRef, {
                 sender: 'assistant',
@@ -282,29 +320,36 @@ export default function StorySessionPage() {
                 kind: 'character_traits_question',
                 createdAt: serverTimestamp(),
             });
-            
-            // Update character with traits
-            const characterRef = doc(firestore, 'characters', characterId);
-            const characterDoc = await getDoc(characterRef);
-            const existingTraits = characterDoc.data()?.traits || [];
-            const combinedTraits = [...new Set([...existingTraits, ...suggestedTraits])];
 
+            const characterRef = doc(firestore, 'characters', characterId);
             await updateDoc(characterRef, {
-                traits: combinedTraits,
+                traits: suggestedTraits,
                 traitsLastUpdatedAt: serverTimestamp(),
+            });
+
+            await updateDoc(sessionRef, {
+                pendingCharacterTraits: {
+                    characterId: characterId,
+                    characterLabel: characterLabel,
+                    questionText: question,
+                    askedAt: serverTimestamp(),
+                }
             });
 
             setCharacterTraitsDiagnostics({
                 lastCharacterId: characterId,
-                lastCharacterLabel: characterDoc.data()?.name,
+                lastCharacterLabel: characterLabel,
                 lastTraitsQuestionPreview: question.slice(0, 80),
                 lastTraitsUpdateCount: suggestedTraits.length,
             });
 
+            return true; // Indicate success
+
         } catch (e: any) {
             console.error("Error in runCharacterTraitsQuestion:", e);
             setCharacterTraitsDiagnostics(prev => ({ ...prev, errorMessage: e.message }));
-            // Don't toast, fail silently
+            // On failure, do not set pendingCharacterTraits and allow beat to continue
+            return false;
         }
     };
     
@@ -324,6 +369,16 @@ export default function StorySessionPage() {
         const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
         
         let newCharacterId: string | undefined = undefined;
+        let traitsQuestionAsked = false;
+
+        // Write child's choice message first
+        await addDoc(messagesRef, {
+            sender: 'child',
+            text: chosenOption.text,
+            kind: 'child_choice',
+            selectedOptionId: chosenOption.id,
+            createdAt: serverTimestamp(),
+        });
 
         // 1. If the option introduces a character, create it first
         if (chosenOption.introducesCharacter) {
@@ -344,41 +399,36 @@ export default function StorySessionPage() {
              await updateDoc(sessionRef, {
                 supportingCharacterIds: arrayUnion(newCharacterId)
             });
+
+            // Ask a traits question
+            traitsQuestionAsked = await runCharacterTraitsQuestion(sessionId, newCharacterId, newCharacterData.name);
         }
 
-        // 2. Write child's choice message
-        await addDoc(messagesRef, {
-            sender: 'child',
-            text: chosenOption.text,
-            kind: 'child_choice',
-            selectedOptionId: chosenOption.id,
-            createdAt: serverTimestamp(),
-        });
-
-        // 3. Increment arc step
-        const newArcStepIndex = (currentArcStepIndex ?? -1) + 1;
-        await updateDoc(sessionRef, {
-            arcStepIndex: newArcStepIndex
-        });
-
-        // 4. Update beat interaction diagnostics
-        setBeatInteractionDiagnostics(prev => ({
+        // 2. Update beat interaction diagnostics
+         setBeatInteractionDiagnostics(prev => ({
             ...prev,
             lastRequestType: 'choose',
             lastChosenOptionId: chosenOption.id,
             lastChosenOptionTextPreview: chosenOption.text.slice(0, 80),
-            lastArcStepIndexAfterChoice: newArcStepIndex,
             lastNewCharacterId: newCharacterId,
             lastNewCharacterLabel: newCharacterId ? (chosenOption.newCharacterLabel || chosenOption.text) : undefined,
         }));
 
-        // 5. If new character, ask a traits question
-        if (newCharacterId) {
-            await runCharacterTraitsQuestion(sessionId, newCharacterId);
+        // 3. If a traits question was asked, STOP. Otherwise, continue to next beat.
+        if (traitsQuestionAsked) {
+            // The flow now waits for user input, handled by handleSendMessage
+        } else {
+            // No new character or traits API failed, so proceed to next beat immediately.
+            const newArcStepIndex = (currentArcStepIndex ?? -1) + 1;
+            await updateDoc(sessionRef, {
+                arcStepIndex: newArcStepIndex
+            });
+            setBeatInteractionDiagnostics(prev => ({
+                ...prev,
+                lastArcStepIndexAfterChoice: newArcStepIndex,
+            }));
+            await runBeatAndAppendMessages();
         }
-
-        // 6. Trigger next story beat
-        await runBeatAndAppendMessages();
     };
     
     const handleMoreOptions = async () => {
@@ -481,6 +531,8 @@ export default function StorySessionPage() {
              return <p className="text-destructive text-center p-8">Could not find story session with ID: {sessionId}</p>;
         }
         
+        const isWaitingForTraitsAnswer = !!pendingCharacterTraits;
+        
         return (
              <Card className="w-full max-w-2xl flex flex-col">
                 <CardHeader>
@@ -501,7 +553,7 @@ export default function StorySessionPage() {
                                                 key={opt.id}
                                                 variant="outline"
                                                 onClick={() => handleChooseOption(msg, opt)}
-                                                disabled={isBeatRunning || isGeneratingMoreOptions || latestOptionsMessage?.id !== msg.id}
+                                                disabled={isBeatRunning || isGeneratingMoreOptions || latestOptionsMessage?.id !== msg.id || isWaitingForTraitsAnswer}
                                                 className="justify-start h-auto"
                                             >
                                                 <div className="flex items-center gap-2">
@@ -519,7 +571,7 @@ export default function StorySessionPage() {
                                             variant="ghost"
                                             className="text-muted-foreground"
                                             onClick={handleMoreOptions}
-                                            disabled={isBeatRunning || isGeneratingMoreOptions || latestOptionsMessage?.id !== msg.id}
+                                            disabled={isBeatRunning || isGeneratingMoreOptions || latestOptionsMessage?.id !== msg.id || isWaitingForTraitsAnswer}
                                         >
                                            <RefreshCw className="mr-2 h-4 w-4"/> More choices
                                         </Button>
@@ -558,7 +610,7 @@ export default function StorySessionPage() {
                   <div className="flex w-full items-center space-x-2">
                     <Input
                       id="message"
-                      placeholder="Type your message..."
+                      placeholder={isWaitingForTraitsAnswer ? `What is ${pendingCharacterTraits?.characterLabel} like?` : "Type your message..."}
                       className="flex-1"
                       autoComplete="off"
                       value={input}
@@ -582,6 +634,7 @@ export default function StorySessionPage() {
         }
 
         const canRunBeat = !!session?.storyTypeId && !!session?.storyPhaseId;
+        const isWaitingForTraitsAnswer = !!pendingCharacterTraits;
 
         return (
             <Card className="w-full max-w-2xl">
@@ -606,10 +659,11 @@ export default function StorySessionPage() {
                         )}
                     </div>
                     <div className="text-center">
-                        <Button onClick={handleRunStoryBeat} disabled={!canRunBeat || isBeatRunning || isGeneratingMoreOptions}>
+                        <Button onClick={handleRunStoryBeat} disabled={!canRunBeat || isBeatRunning || isGeneratingMoreOptions || isWaitingForTraitsAnswer}>
                             {isBeatRunning ? <><LoaderCircle className="animate-spin mr-2"/>Running Beat...</> : 'Run Next Story Beat'}
                         </Button>
                          {!canRunBeat && <p className="text-xs text-muted-foreground mt-2">Requires Story Type and Phase to be set.</p>}
+                         {isWaitingForTraitsAnswer && <p className="text-xs text-amber-600 mt-2">Story is paused, waiting for traits answer.</p>}
                     </div>
                 </CardContent>
             </Card>
