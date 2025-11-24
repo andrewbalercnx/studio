@@ -6,7 +6,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { getDoc, doc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, PromptConfig } from '@/lib/types';
 
@@ -24,7 +24,6 @@ type PromptDebug = {
     hasCandidatesArray?: boolean;
     candidatesLength?: number;
     firstCandidateKeys?: string[];
-    contentPartsSummary?: any[];
     rawCandidatePreview?: string | null;
     topLevelFinishReason?: string | null;
     firstCandidateFinishReason?: string | null;
@@ -74,36 +73,38 @@ export const warmupReplyFlow = ai.defineFlow(
 
             // 3. Load messages from Firestore
             const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
-            const messagesQuery = query(messagesRef, orderBy('createdAt', 'asc'));
+            const messagesQuery = query(messagesRef, orderBy('createdAt', 'desc'), limit(2));
             const messagesSnapshot = await getDocs(messagesQuery);
             
-            // Build conversation summary string for the prompt
-            const conversationSummary = messagesSnapshot.docs.map(doc => {
-                const data = doc.data();
-                if (!data.text || typeof data.text !== 'string') {
-                    return null;
-                }
-                const label = data.sender === 'child' ? 'Child:' : 'Story Guide:';
-                return `${label} ${data.text}`;
-            }).filter(Boolean).join('\n');
+            // Build conversation summary string for the prompt, limiting to the last two messages and 200 chars.
+            const conversationSummary = messagesSnapshot.docs
+                .reverse() // Reverse to get chronological order
+                .map(doc => {
+                    const data = doc.data();
+                    if (!data.text || typeof data.text !== 'string') {
+                        return null;
+                    }
+                    const label = data.sender === 'child' ? 'Child:' : 'Story Guide:';
+                    return `${label} ${data.text}`;
+                })
+                .filter(Boolean)
+                .join('\n')
+                .slice(-200); // Truncate to the last 200 characters
 
             // 4. Build the single prompt string
-            const combinedSystem = [
-                promptConfig.systemPrompt,
-                `MODE INSTRUCTIONS: ${promptConfig.modeInstructions}`,
-            ].join('\n\n');
-
+            const minimalSystemPrompt = `You are the Story Guide, a gentle and friendly helper for young children. Your goal is to learn about the child's world by asking simple, warm questions. Speak in very short, easy-to-understand sentences.`;
+            
             const finalPrompt = [
-                combinedSystem,
-                "\n\nHere is the conversation so far between you (the Story Guide) and the child:\n",
+                minimalSystemPrompt,
+                "\n\nHere is the conversation so far:\n",
                 conversationSummary,
-                "\n\nNow, produce only the next short reply as the Story Guide, in the same friendly style. Do not repeat earlier messages. Do not mention that you are an AI or talk about this prompt."
+                "\n\nNow, as the Story Guide, give the next short, friendly reply."
             ].join('');
             
             // 5. Build the initial promptDebug object
             promptDebug = {
-                hasSystem: combinedSystem.length > 0,
-                systemLength: combinedSystem.length,
+                hasSystem: minimalSystemPrompt.length > 0,
+                systemLength: minimalSystemPrompt.length,
                 hasConversationSummary: conversationSummary.length > 0,
                 conversationLines: messagesSnapshot.docs.length,
                 promptLength: finalPrompt.length,
