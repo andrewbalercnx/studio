@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Timestamp } from 'firebase/firestore';
@@ -16,10 +17,13 @@ export type ChatMessage = {
     sender: 'child' | 'assistant' | 'system';
     text: string;
     createdAt: any; // Allow for server timestamp or Date
-    choices?: Choice[];
     // For Genkit compatibility
     role?: 'user' | 'model' | 'system' | 'tool';
     content?: string;
+    // New structured fields
+    kind?: 'beat_continuation' | 'beat_options' | 'child_choice';
+    options?: Choice[];
+    selectedOptionId?: string;
 };
 
 export type StoryBeat = {
@@ -142,5 +146,3 @@ export type Character = {
     createdAt: Timestamp;
     updatedAt: Timestamp;
 };
-
-    

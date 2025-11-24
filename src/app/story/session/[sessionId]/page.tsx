@@ -9,8 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { LoaderCircle, Send, CheckCircle, Bot } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
-import { doc, collection, addDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
-import type { StorySession, ChatMessage as Message } from '@/lib/types';
+import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc } from 'firebase/firestore';
+import type { StorySession, ChatMessage as Message, Choice } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import { useToast } from '@/hooks/use-toast';
@@ -33,6 +33,13 @@ type BeatGenkitDiagnostics = {
     lastBeatStoryContinuationPreview: string | null;
 };
 
+type BeatInteractionDiagnostics = {
+    lastChosenOptionId: string | null;
+    lastChosenOptionTextPreview: string | null;
+    lastArcStepIndexAfterChoice: number | null;
+};
+
+
 export default function StorySessionPage() {
     const params = useParams<{ sessionId: string }>();
     const sessionId = params.sessionId;
@@ -51,6 +58,12 @@ export default function StorySessionPage() {
         lastBeatPromptConfigId: null,
         lastBeatArcStep: null,
         lastBeatStoryContinuationPreview: null,
+    });
+    
+    const [beatInteractionDiagnostics, setBeatInteractionDiagnostics] = useState<BeatInteractionDiagnostics>({
+        lastChosenOptionId: null,
+        lastChosenOptionTextPreview: null,
+        lastArcStepIndexAfterChoice: null,
     });
 
 
@@ -72,6 +85,18 @@ export default function StorySessionPage() {
     const currentStoryTypeId = session?.storyTypeId ?? null;
     const currentStoryPhaseId = session?.storyPhaseId ?? null;
     const currentArcStepIndex = typeof session?.arcStepIndex === 'number' ? session.arcStepIndex : null;
+
+    const latestOptionsMessage = useMemo(() => {
+        if (!messages) return null;
+        // Find the most recent message that has interactive options
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const msg = messages[i];
+            if (msg.kind === 'beat_options' && msg.options && msg.options.length > 0) {
+                return msg;
+            }
+        }
+        return null;
+    }, [messages]);
 
 
     const handleSendMessage = async () => {
@@ -151,15 +176,10 @@ export default function StorySessionPage() {
             setIsSending(false);
         }
     };
-    
-    const handleRunStoryBeat = async () => {
-        if (!user || !sessionId || !firestore) return;
 
-        if (!session?.storyTypeId || !session?.storyPhaseId) {
-            toast({ title: "Cannot run beat", description: "Session must have a story type and phase ID.", variant: "destructive" });
-            return;
-        }
-
+    const runBeatAndAppendMessages = async () => {
+        if (!firestore) return;
+        
         setIsBeatRunning(true);
         setBeatDiagnostics({ ...beatDiagnostics, lastBeatErrorMessage: null });
 
@@ -169,19 +189,10 @@ export default function StorySessionPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sessionId }),
             });
-
             const flowResult = await response.json();
-
+            
             if (!response.ok || !flowResult.ok) {
-                 setBeatDiagnostics({
-                    lastBeatOk: false,
-                    lastBeatErrorMessage: flowResult.errorMessage || "An unknown API error occurred.",
-                    lastBeatPromptConfigId: null,
-                    lastBeatArcStep: null,
-                    lastBeatStoryContinuationPreview: null,
-                });
-                toast({ title: "Story Beat Failed", description: flowResult.errorMessage, variant: "destructive" });
-                return;
+                throw new Error(flowResult.errorMessage || "An unknown API error occurred.");
             }
 
             // On success, write to Firestore
@@ -191,13 +202,15 @@ export default function StorySessionPage() {
             await addDoc(messagesRef, {
                 sender: 'assistant',
                 text: storyContinuation,
+                kind: 'beat_continuation',
                 createdAt: serverTimestamp(),
             });
             
-            const optionsText = `Choices:\nA: ${options[0].text}\nB: ${options[1].text}\nC: ${options[2].text}`;
             await addDoc(messagesRef, {
                 sender: 'assistant',
-                text: optionsText,
+                text: "What happens next?",
+                kind: 'beat_options',
+                options: options,
                 createdAt: serverTimestamp(),
             });
 
@@ -211,7 +224,7 @@ export default function StorySessionPage() {
             toast({ title: "Story Beat Succeeded!" });
 
         } catch (e: any) {
-            setBeatDiagnostics({
+             setBeatDiagnostics({
                 lastBeatOk: false,
                 lastBeatErrorMessage: e.message || "Failed to run story beat.",
                 lastBeatPromptConfigId: null,
@@ -220,8 +233,47 @@ export default function StorySessionPage() {
             });
             toast({ title: "Error running beat", description: e.message, variant: "destructive" });
         } finally {
-            setIsBeatRunning(false);
+             setIsBeatRunning(false);
         }
+    };
+    
+    const handleRunStoryBeat = async () => {
+        if (!user || !sessionId || !firestore) return;
+        if (!session?.storyTypeId || !session?.storyPhaseId) {
+            toast({ title: "Cannot run beat", description: "Session must have a story type and phase ID.", variant: "destructive" });
+            return;
+        }
+        await runBeatAndAppendMessages();
+    };
+    
+    const handleChooseOption = async (optionsMessage: Message, chosenOption: Choice) => {
+        if (!user || !sessionId || !firestore || !sessionRef || isBeatRunning) return;
+
+        // 1. Write child's choice message
+        const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+        await addDoc(messagesRef, {
+            sender: 'child',
+            text: chosenOption.text,
+            kind: 'child_choice',
+            selectedOptionId: chosenOption.id,
+            createdAt: serverTimestamp(),
+        });
+
+        // 2. Increment arc step
+        const newArcStepIndex = (currentArcStepIndex ?? -1) + 1;
+        await updateDoc(sessionRef, {
+            arcStepIndex: newArcStepIndex
+        });
+
+        // 3. Update beat interaction diagnostics
+        setBeatInteractionDiagnostics({
+            lastChosenOptionId: chosenOption.id,
+            lastChosenOptionTextPreview: chosenOption.text.slice(0, 80),
+            lastArcStepIndexAfterChoice: newArcStepIndex,
+        });
+
+        // 4. Trigger next story beat
+        await runBeatAndAppendMessages();
     };
 
 
@@ -244,6 +296,7 @@ export default function StorySessionPage() {
         },
         genkitWarmup: warmupDiagnostics,
         genkitBeat: beatDiagnostics,
+        beatInteraction: beatInteractionDiagnostics,
         error: sessionError?.message || messagesError?.message || null,
     };
 
@@ -278,14 +331,34 @@ export default function StorySessionPage() {
                 <CardContent className="flex-grow overflow-y-auto pr-6 space-y-4">
                    {messagesLoading && <div className="flex items-center gap-2"><LoaderCircle className="animate-spin mr-2" />Loading messages...</div>}
                    {messagesError && <p className="text-destructive">Error loading messages: {messagesError.message}</p>}
-                   {messages && messages.map((msg: any) => (
+                   {messages && messages.map((msg: Message) => (
                        <div key={msg.id} className={`flex flex-col ${msg.sender === 'child' ? 'items-end' : 'items-start'}`}>
-                           <span className="text-xs font-bold text-muted-foreground">
-                               {msg.sender === 'assistant' ? 'Story Guide' : 'You'}
-                           </span>
-                           <p className={`whitespace-pre-wrap p-2 rounded-md ${msg.sender === 'child' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                               {msg.text}
-                           </p>
+                            {msg.kind === 'beat_options' && msg.options ? (
+                                <div className="p-2 rounded-lg bg-muted w-full">
+                                    <p className="text-sm text-muted-foreground mb-2">{msg.text}</p>
+                                    <div className="flex flex-col gap-2">
+                                        {msg.options.map(opt => (
+                                            <Button
+                                                key={opt.id}
+                                                variant="outline"
+                                                onClick={() => handleChooseOption(msg, opt)}
+                                                disabled={isBeatRunning || latestOptionsMessage?.id !== msg.id}
+                                            >
+                                                {opt.text}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                               <>
+                                <span className="text-xs font-bold text-muted-foreground">
+                                    {msg.sender === 'assistant' ? 'Story Guide' : 'You'}
+                                </span>
+                                <p className={`whitespace-pre-wrap p-2 rounded-md ${msg.sender === 'child' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                                    {msg.text}
+                                </p>
+                               </>
+                            )}
                        </div>
                    ))}
                    {isSending && (
@@ -293,6 +366,14 @@ export default function StorySessionPage() {
                             <div className="bg-muted p-3 rounded-lg flex items-center gap-2">
                                 <LoaderCircle className="h-5 w-5 animate-spin" />
                                 <span className="text-sm text-muted-foreground">Thinking...</span>
+                            </div>
+                        </div>
+                    )}
+                     {isBeatRunning && (
+                        <div className="flex justify-start">
+                            <div className="bg-muted p-3 rounded-lg flex items-center gap-2">
+                                <LoaderCircle className="h-5 w-5 animate-spin" />
+                                <span className="text-sm text-muted-foreground">Creating what's next...</span>
                             </div>
                         </div>
                     )}
@@ -382,4 +463,3 @@ export default function StorySessionPage() {
         </div>
     );
 }
-
