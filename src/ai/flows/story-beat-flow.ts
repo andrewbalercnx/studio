@@ -153,7 +153,10 @@ Important: Return only a single JSON object. Do not include any extra text, expl
 
             // 7. Call Genkit AI
             debug.stage = 'ai_generate';
-            const maxOutputTokens = promptConfig.model?.maxOutputTokens ?? 10000;
+            const configMax = promptConfig.model?.maxOutputTokens;
+            const defaultMax = 1000; // Fallback if not specified in config
+            const rawResolved = typeof configMax === 'number' && configMax > 0 ? configMax : defaultMax;
+            const maxOutputTokens = Math.max(rawResolved, 10000); // Enforce a high minimum
             
             const llmResponse = await ai.generate({
                 model: 'googleai/gemini-2.5-flash',
@@ -279,5 +282,3 @@ Important: Return only a single JSON object. Do not include any extra text, expl
         }
     }
 );
-
-    
