@@ -6,7 +6,7 @@
 
 import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
+import { getDoc, doc, collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, PromptConfig, StoryType, Character } from '@/lib/types';
 
@@ -97,7 +97,7 @@ export const storyBeatFlow = ai.defineFlow(
                 where('phase', '==', 'storyBeat'),
                 where('levelBand', '==', promptConfigLevelBand),
                 orderBy('status', 'desc'), // 'live' comes before 'draft'
-                limit(1)
+                where('status', '==', 'live')
             );
             const configSnapshot = await getDocs(q);
             if (configSnapshot.empty) {
