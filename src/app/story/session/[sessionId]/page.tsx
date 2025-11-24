@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import { useToast } from '@/hooks/use-toast';
 import { useAdminStatus } from '@/hooks/use-admin-status';
+import { Badge } from '@/components/ui/badge';
 
 
 type WarmupGenkitDiagnostics = {
@@ -570,5 +571,3 @@ export default function StorySessionPage() {
         </div>
     );
 }
-
-    
