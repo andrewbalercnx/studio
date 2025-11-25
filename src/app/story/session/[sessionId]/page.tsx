@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -7,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles } from 'lucide-react';
+import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
 import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion, DocumentReference, getDoc, deleteField, increment } from 'firebase/firestore';
@@ -57,6 +56,14 @@ type CharacterTraitsDiagnostics = {
     pendingCharacterTraits?: any;
 };
 
+type EndingGenkitDiagnostics = {
+    lastEndingOk: boolean | null;
+    lastEndingErrorMessage: string | null;
+    lastEndingStoryTypeId: string | null;
+    lastEndingArcStep: string | null;
+    lastEndingPreview: string | null;
+};
+
 
 export default function StorySessionPage() {
     const params = useParams<{ sessionId: string }>();
@@ -71,6 +78,8 @@ export default function StorySessionPage() {
     
     const [isBeatRunning, setIsBeatRunning] = useState(false);
     const [isGeneratingMoreOptions, setIsGeneratingMoreOptions] = useState(false);
+    const [isEndingRunning, setIsEndingRunning] = useState(false);
+
 
     const [beatDiagnostics, setBeatDiagnostics] = useState<BeatGenkitDiagnostics>({
         lastBeatOk: null,
@@ -99,6 +108,13 @@ export default function StorySessionPage() {
     });
 
     const [characterTraitsDiagnostics, setCharacterTraitsDiagnostics] = useState<CharacterTraitsDiagnostics>({});
+    const [endingDiagnostics, setEndingDiagnostics] = useState<EndingGenkitDiagnostics>({
+        lastEndingOk: null,
+        lastEndingErrorMessage: null,
+        lastEndingStoryTypeId: null,
+        lastEndingArcStep: null,
+        lastEndingPreview: null,
+    });
     
     // Firestore Hooks
     const sessionRef = useMemo(() => firestore ? doc(firestore, 'storySessions', sessionId) : null, [firestore, sessionId]);
@@ -361,6 +377,43 @@ export default function StorySessionPage() {
         }
         await runBeatAndAppendMessages();
     };
+
+    const handleRunEndingFlow = async () => {
+        if (!user || !sessionId || !firestore) return;
+
+        setIsEndingRunning(true);
+        setEndingDiagnostics({ ...endingDiagnostics, lastEndingErrorMessage: null });
+
+        try {
+            const response = await fetch('/api/storyEnding', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result.ok) {
+                throw new Error(result.errorMessage || "An unknown error occurred in ending flow.");
+            }
+
+            setEndingDiagnostics({
+                lastEndingOk: true,
+                lastEndingErrorMessage: null,
+                lastEndingStoryTypeId: result.storyTypeId,
+                lastEndingArcStep: result.arcStep,
+                lastEndingPreview: result.endings[0]?.text.slice(0, 80) || null,
+            });
+            toast({ title: "Ending Flow Succeeded!", description: `Generated ${result.endings.length} endings.` });
+
+            // For now, just log to console. In future, would append to chat.
+            console.log("Generated Endings:", result.endings);
+
+        } catch (e: any) {
+            setEndingDiagnostics(prev => ({ ...prev, lastEndingOk: false, lastEndingErrorMessage: e.message }));
+            toast({ title: "Error running ending flow", description: e.message, variant: "destructive" });
+        } finally {
+            setIsEndingRunning(false);
+        }
+    };
     
     const handleChooseOption = async (optionsMessage: Message, chosenOption: Choice) => {
         if (!user || !sessionId || !firestore || !sessionRef || !session || isBeatRunning) return;
@@ -520,6 +573,7 @@ export default function StorySessionPage() {
         },
         genkitWarmup: warmupDiagnostics,
         genkitBeat: beatDiagnostics,
+        genkitEnding: endingDiagnostics,
         beatInteraction: beatInteractionDiagnostics,
         characterTraits: characterTraitsDiagnostics,
         error: sessionError?.message || messagesError?.message || null,
@@ -613,7 +667,7 @@ export default function StorySessionPage() {
                             </div>
                         </div>
                     )}
-                     {(isBeatRunning || isGeneratingMoreOptions) && (
+                     {(isBeatRunning || isGeneratingMoreOptions || isEndingRunning) && (
                         <div className="flex justify-start">
                             <div className="bg-muted p-3 rounded-lg flex items-center gap-2">
                                 <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -632,9 +686,9 @@ export default function StorySessionPage() {
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && !isSending && handleSendMessage()}
-                      disabled={isSending || isBeatRunning || isGeneratingMoreOptions}
+                      disabled={isSending || isBeatRunning || isGeneratingMoreOptions || isEndingRunning}
                     />
-                    <Button onClick={handleSendMessage} disabled={isSending || isBeatRunning || isGeneratingMoreOptions}>
+                    <Button onClick={handleSendMessage} disabled={isSending || isBeatRunning || isGeneratingMoreOptions || isEndingRunning}>
                       <Send className="h-4 w-4" />
                       <span className="sr-only">Send</span>
                     </Button>
@@ -674,12 +728,15 @@ export default function StorySessionPage() {
                             </div>
                         )}
                     </div>
-                    <div className="text-center">
-                        <Button onClick={handleRunStoryBeat} disabled={!canRunBeat || isBeatRunning || isGeneratingMoreOptions || isWaitingForTraitsAnswer}>
+                    <div className="text-center grid grid-cols-2 gap-4">
+                        <Button onClick={handleRunStoryBeat} disabled={!canRunBeat || isBeatRunning || isGeneratingMoreOptions || isWaitingForTraitsAnswer || isEndingRunning}>
                             {isBeatRunning ? <><LoaderCircle className="animate-spin mr-2"/>Running Beat...</> : 'Run Next Story Beat'}
                         </Button>
-                         {!canRunBeat && <p className="text-xs text-muted-foreground mt-2">Requires Story Type and Phase to be set.</p>}
-                         {isWaitingForTraitsAnswer && <p className="text-xs text-amber-600 mt-2">Story is paused, waiting for traits answer.</p>}
+                        <Button onClick={handleRunEndingFlow} disabled={!canRunBeat || isEndingRunning || isBeatRunning}>
+                           {isEndingRunning ? <><LoaderCircle className="animate-spin mr-2"/>Running Endings...</> : <><Star className="mr-2"/>Run Ending Flow</>}
+                        </Button>
+                         {!canRunBeat && <p className="text-xs text-muted-foreground mt-2 col-span-2">Requires Story Type and Phase to be set.</p>}
+                         {isWaitingForTraitsAnswer && <p className="text-xs text-amber-600 mt-2 col-span-2">Story is paused, waiting for traits answer.</p>}
                     </div>
                 </CardContent>
             </Card>
@@ -709,5 +766,3 @@ export default function StorySessionPage() {
         </div>
     );
 }
-
-    

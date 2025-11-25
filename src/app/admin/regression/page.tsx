@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState } from 'react';
@@ -85,8 +84,17 @@ type ScenarioArcBoundsResult = {
     error?: string;
 } | null;
 
+type ScenarioEndingResult = {
+    childId: string | null;
+    sessionId: string | null;
+    endingsCount: number | null;
+    sampleEnding: string | null;
+    error?: string;
+} | null;
+
 
 const initialTests: TestResult[] = [
+  { id: 'SCENARIO_ENDING_FLOW', name: 'Scenario: Ending Flow', status: 'PENDING', message: '' },
   { id: 'SCENARIO_ARC_BOUNDS', name: 'Scenario: Arc Bounds', status: 'PENDING', message: '' },
   { id: 'SCENARIO_ARC_STEP_ADVANCE', name: 'Scenario: Arc Step Advance', status: 'PENDING', message: '' },
   { id: 'SCENARIO_CHARACTER_TRAITS', name: 'Scenario: Character Traits Flow', status: 'PENDING', message: '' },
@@ -314,8 +322,8 @@ export default function AdminRegressionPage() {
       }
   };
 
-  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult, arcAdvance: ScenarioArcAdvanceResult, arcBounds: ScenarioArcBoundsResult }> => {
-    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null, arcAdvance: null, arcBounds: null };
+  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult, arcAdvance: ScenarioArcAdvanceResult, arcBounds: ScenarioArcBoundsResult, ending: ScenarioEndingResult }> => {
+    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null, arcAdvance: null, arcBounds: null, ending: null };
     
     let beatScenarioSummary: ScenarioResult = null;
     let warmupScenarioSummary: ScenarioWarmupResult = null;
@@ -324,6 +332,7 @@ export default function AdminRegressionPage() {
     let characterTraitsScenarioSummary: ScenarioCharacterTraitsResult = null;
     let arcAdvanceScenarioSummary: ScenarioArcAdvanceResult = null;
     let arcBoundsScenarioSummary: ScenarioArcBoundsResult = null;
+    let endingScenarioSummary: ScenarioEndingResult = null;
     let apiSummary: any = {};
 
     // Test: SCENARIO_BEAT_AUTO
@@ -711,7 +720,49 @@ export default function AdminRegressionPage() {
         updateTestResult('SCENARIO_ARC_BOUNDS', { status: 'ERROR', message: e.message, details: arcBoundsScenarioSummary });
     }
 
-    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary };
+    // Test: SCENARIO_ENDING_FLOW
+    try {
+        const storyTypeId = 'animal_adventure_v1';
+        const storyTypeRef = doc(firestore, 'storyTypes', storyTypeId);
+        const storyTypeSnap = await getDoc(storyTypeRef);
+        if (!storyTypeSnap.exists()) throw new Error(`Required story type '${storyTypeId}' not found.`);
+        const storyType = storyTypeSnap.data() as StoryType;
+        const steps = storyType.arcTemplate?.steps;
+        if (!steps || steps.length === 0) throw new Error(`Story type '${storyTypeId}' has no arc steps.`);
+        
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Ending Test Child', createdAt: serverTimestamp() });
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id, storyTypeId, storyPhaseId: storyType.endingPhaseId,
+            arcStepIndex: steps.length - 1, // Set to final step
+            promptConfigLevelBand: 'low', status: 'in_progress',
+        });
+        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), { sender: 'assistant', text: 'The story is almost over!', createdAt: serverTimestamp() });
+        
+        const response = await fetch('/api/storyEnding', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
+        });
+        const result = await response.json();
+        
+        endingScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, endingsCount: null, sampleEnding: null, error: result.errorMessage };
+        
+        if (!response.ok || !result.ok) {
+            throw new Error(result.errorMessage || `API returned status ${response.status}`);
+        }
+        if (!Array.isArray(result.endings) || result.endings.length !== 3) {
+            throw new Error('API response did not contain 3 endings.');
+        }
+
+        endingScenarioSummary.endingsCount = result.endings.length;
+        endingScenarioSummary.sampleEnding = result.endings[0]?.text.slice(0, 80);
+
+        updateTestResult('SCENARIO_ENDING_FLOW', { status: 'PASS', message: `Generated 3 endings. Sample: "${endingScenarioSummary.sampleEnding}"` });
+        
+    } catch(e: any) {
+        if (endingScenarioSummary) endingScenarioSummary.error = e.message;
+        updateTestResult('SCENARIO_ENDING_FLOW', { status: 'ERROR', message: e.message, details: endingScenarioSummary });
+    }
+
+    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary };
     
     // --- API Tests ---
     
@@ -891,5 +942,3 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
-
-    
