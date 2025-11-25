@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
-import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion, DocumentReference, getDoc, deleteField } from 'firebase/firestore';
+import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion, DocumentReference, getDoc, deleteField, increment } from 'firebase/firestore';
 import type { StorySession, ChatMessage as Message, Choice, Character } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
@@ -413,19 +413,19 @@ export default function StorySessionPage() {
             lastNewCharacterId: newCharacterId,
             lastNewCharacterLabel: newCharacterId ? (chosenOption.newCharacterLabel || chosenOption.text) : undefined,
         }));
-
-        // 3. If a traits question was asked, STOP. Otherwise, continue to next beat.
+        
+        // 3. Increment arc step and run next beat OR wait for traits answer
         if (traitsQuestionAsked) {
             // The flow now waits for user input, handled by handleSendMessage
         } else {
             // No new character or traits API failed, so proceed to next beat immediately.
-            const newArcStepIndex = (currentArcStepIndex ?? -1) + 1;
             await updateDoc(sessionRef, {
-                arcStepIndex: newArcStepIndex
+                arcStepIndex: increment(1),
+                updatedAt: serverTimestamp(),
             });
             setBeatInteractionDiagnostics(prev => ({
                 ...prev,
-                lastArcStepIndexAfterChoice: newArcStepIndex,
+                lastArcStepIndexAfterChoice: (session.arcStepIndex ?? -1) + 1,
             }));
             await runBeatAndAppendMessages();
         }

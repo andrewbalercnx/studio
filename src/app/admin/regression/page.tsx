@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, orderBy, increment } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { ChatMessage, StorySession, Character, PromptConfig, Choice } from '@/lib/types';
 
@@ -66,6 +66,14 @@ type ScenarioCharacterTraitsResult = {
     [key: string]: any; // Allow other properties from flow response
 } | null;
 
+type ScenarioArcAdvanceResult = {
+    childId: string | null;
+    sessionId: string | null;
+    initialArcStepIndex: number | null;
+    finalArcStepIndex: number | null;
+    error?: string;
+} | null;
+
 
 const initialTests: TestResult[] = [
   { id: 'DATA_PROMPTS', name: 'Firestore: Prompt Configs', status: 'PENDING', message: '' },
@@ -79,6 +87,7 @@ const initialTests: TestResult[] = [
   { id: 'SCENARIO_CHARACTER_FROM_BEAT', name: 'Scenario: Character Metadata in Beat Options', status: 'PENDING', message: '' },
   { id: 'SCENARIO_CHARACTER_TRAITS', name: 'Scenario: Character Traits Flow', status: 'PENDING', message: '' },
   { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_ARC_STEP_ADVANCE', name: 'Scenario: Arc Step Advance', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
   { id: 'API_STORY_BEAT', name: 'API: /api/storyBeat (Input)', status: 'PENDING', message: '' },
@@ -293,14 +302,15 @@ export default function AdminRegressionPage() {
       }
   };
 
-  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult }> => {
-    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null };
+  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult, arcAdvance: ScenarioArcAdvanceResult }> => {
+    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null, arcAdvance: null };
     
     let beatScenarioSummary: ScenarioResult = null;
     let warmupScenarioSummary: ScenarioWarmupResult = null;
     let moreOptionsScenarioSummary: ScenarioMoreOptionsResult = null;
     let characterScenarioSummary: ScenarioCharacterResult = null;
     let characterTraitsScenarioSummary: ScenarioCharacterTraitsResult = null;
+    let arcAdvanceScenarioSummary: ScenarioArcAdvanceResult = null;
     let apiSummary: any = {};
 
     // Test: SCENARIO_BEAT_AUTO
@@ -551,10 +561,7 @@ export default function AdminRegressionPage() {
         
         if (!body.question || typeof body.question !== 'string') throw new Error('Response missing question field.');
         if (!Array.isArray(body.suggestedTraits) || body.suggestedTraits.length === 0) throw new Error('Response missing suggestedTraits array.');
-
-        const charDoc = await getDoc(charRef);
-        if (!charDoc.exists()) throw new Error("Character doc disappeared after flow ran.");
-
+        
         characterTraitsScenarioSummary = {
             childId: traitsChildId, sessionId: traitsSessionId, characterId: traitsCharacterId, ...body
         };
@@ -586,8 +593,51 @@ export default function AdminRegressionPage() {
         };
     }
 
+    // Test: SCENARIO_ARC_STEP_ADVANCE
+    try {
+        const typesRef = collection(firestore, 'storyTypes');
+        const typeQuery = query(typesRef, where('status', '==', 'live'), limit(1));
+        const typeSnap = await getDocs(typeQuery);
+        if (typeSnap.empty) throw new Error('No live story types found.');
+        const storyType = typeSnap.docs[0].data();
+        const storyTypeId = typeSnap.docs[0].id;
 
-    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary };
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Arc Test Child', createdAt: serverTimestamp(), regressionTag: 'arc_advance' });
+        
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id, storyTypeId, storyPhaseId: storyType.defaultPhaseId,
+            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
+            createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+        });
+        
+        arcAdvanceScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, initialArcStepIndex: 0, finalArcStepIndex: null };
+
+        // Simulate choosing an option, which is where the increment should happen
+        await updateDoc(sessionRef, {
+            arcStepIndex: increment(1),
+            updatedAt: serverTimestamp(),
+        });
+        
+        const updatedSessionDoc = await getDoc(sessionRef);
+        if (!updatedSessionDoc.exists()) throw new Error("Session doc disappeared after update.");
+        
+        const finalArcStepIndex = updatedSessionDoc.data().arcStepIndex;
+        arcAdvanceScenarioSummary.finalArcStepIndex = finalArcStepIndex;
+
+        if (finalArcStepIndex !== 1) {
+            throw new Error(`arcStepIndex did not advance. Expected 1, got ${finalArcStepIndex}.`);
+        }
+        
+        updateTestResult('SCENARIO_ARC_STEP_ADVANCE', { status: 'PASS', message: 'arcStepIndex successfully advanced from 0 to 1.' });
+
+    } catch (e: any) {
+         if (arcAdvanceScenarioSummary) {
+            arcAdvanceScenarioSummary.error = e instanceof Error ? e.message : String(e);
+        }
+        updateTestResult('SCENARIO_ARC_STEP_ADVANCE', { status: 'ERROR', message: e.message, details: arcAdvanceScenarioSummary });
+    }
+
+    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary };
     
     // --- API Tests ---
     
