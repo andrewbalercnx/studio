@@ -59,11 +59,13 @@ type ScenarioCharacterTraitsResult = {
     childId: string | null;
     sessionId: string | null;
     characterId: string | null;
-    questionPreview?: string | null;
-    traitsCount?: number | null;
-    error?: any;
-    [key: string]: any; // Allow other properties from flow response
+    question?: string | null;
+    suggestedTraits?: string[];
+    ok?: boolean;
+    errorMessage?: string;
+    [key: string]: any;
 } | null;
+
 
 type ScenarioArcAdvanceResult = {
     childId: string | null;
@@ -348,6 +350,11 @@ export default function AdminRegressionPage() {
     // Test: SCENARIO_STORY_COMPILE
     try {
         const storyTypeId = 'animal_adventure_v1';
+        const storyTypeRef = doc(firestore, 'storyTypes', storyTypeId);
+        const storyTypeSnap = await getDoc(storyTypeRef);
+        if (!storyTypeSnap.exists()) throw new Error(`Required story type '${storyTypeId}' not found.`);
+        const storyType = storyTypeSnap.data() as StoryType;
+        
         const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Compile Test Child', createdAt: serverTimestamp() });
         const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
             childId: childRef.id, storyTypeId, storyPhaseId: storyType.endingPhaseId,
@@ -550,7 +557,7 @@ export default function AdminRegressionPage() {
             body: JSON.stringify({ sessionId, characterId: charRef.id })
         });
         
-        const body = await response.json().catch(() => null);
+        const body = await response.json().catch(() => ({ ok: false, errorMessage: "Could not parse JSON response" }));
         characterTraitsScenarioSummary = { childId: childRef.id, sessionId, characterId: charRef.id, ...body };
 
         if (!response.ok || !body?.ok) {
@@ -982,3 +989,5 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
+
+    
