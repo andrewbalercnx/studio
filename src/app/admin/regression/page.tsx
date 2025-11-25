@@ -114,7 +114,6 @@ type ScenarioPhaseStateResult = {
 
 
 const initialTests: TestResult[] = [
-  { id: 'DATA_STORY_OUTPUTS', name: 'Firestore: Story Output Types', status: 'PENDING', message: '' },
   { id: 'SCENARIO_PHASE_STATE_MACHINE', name: 'Scenario: Phase State Machine', status: 'PENDING', message: '' },
   { id: 'SCENARIO_STORY_COMPILE', name: 'Scenario: Story Compile', status: 'PENDING', message: '' },
   { id: 'SCENARIO_ENDING_FLOW', name: 'Scenario: Ending Flow', status: 'PENDING', message: '' },
@@ -131,6 +130,7 @@ const initialTests: TestResult[] = [
   { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure (Input)', status: 'PENDING', message: '' },
   { id: 'DATA_SESSIONS_OVERVIEW', name: 'Firestore: Sessions Overview', status: 'PENDING', message: '' },
   { id: 'DATA_CHILDREN', name: 'Firestore: Children', status: 'PENDING', message: '' },
+  { id: 'DATA_STORY_OUTPUTS', name: 'Firestore: Story Output Types', status: 'PENDING', message: '' },
   { id: 'DATA_STORY_PHASES', name: 'Firestore: Story Phases', status: 'PENDING', message: '' },
   { id: 'DATA_STORY_TYPES', name: 'Firestore: Story Types', status: 'PENDING', message: '' },
   { id: 'DATA_PROMPTS_STORY_BEAT_LIVE', name: 'Firestore: StoryBeat Live Configs', status: 'PENDING', message: '' },
@@ -162,23 +162,6 @@ export default function AdminRegressionPage() {
   const runDataTests = async () => {
       if (!firestore) return;
       let fsSummary: any = {};
-
-      // Test: DATA_STORY_OUTPUTS
-       try {
-        const outputsRef = collection(firestore, 'storyOutputTypes');
-        const snap = await getDocs(query(outputsRef, limit(10)));
-        fsSummary.storyOutputTypesCount = snap.size;
-        if (snap.empty) {
-          throw new Error('Collection is empty or does not exist.');
-        }
-        const firstDoc = snap.docs[0].data();
-        if (!firstDoc.name || !firstDoc.category || !firstDoc.ageRange || !firstDoc.status) {
-          throw new Error('First doc is missing required fields (name, category, ageRange, status).');
-        }
-        updateTestResult('DATA_STORY_OUTPUTS', { status: 'PASS', message: `Found ${snap.size} output types. First doc OK.` });
-      } catch (e: any) {
-        updateTestResult('DATA_STORY_OUTPUTS', { status: 'FAIL', message: e.message });
-      }
 
       // Test: DATA_PROMPTS
       try {
@@ -259,6 +242,23 @@ export default function AdminRegressionPage() {
         updateTestResult('DATA_STORY_PHASES', { status: 'PASS', message: 'Found all required phases.' });
       } catch (e: any) {
         updateTestResult('DATA_STORY_PHASES', { status: 'FAIL', message: e.message });
+      }
+
+      // Test: DATA_STORY_OUTPUTS
+       try {
+        const outputsRef = collection(firestore, 'storyOutputTypes');
+        const snap = await getDocs(query(outputsRef, limit(10)));
+        fsSummary.storyOutputTypesCount = snap.size;
+        if (snap.empty) {
+          throw new Error('Collection is empty or does not exist.');
+        }
+        const firstDoc = snap.docs[0].data();
+        if (!firstDoc.name || !firstDoc.category || !firstDoc.ageRange || !firstDoc.status) {
+          throw new Error('First doc is missing required fields (name, category, ageRange, status).');
+        }
+        updateTestResult('DATA_STORY_OUTPUTS', { status: 'PASS', message: `Found ${snap.size} output types. First doc OK.` });
+      } catch (e: any) {
+        updateTestResult('DATA_STORY_OUTPUTS', { status: 'FAIL', message: e.message });
       }
 
       // Test: DATA_CHILDREN
@@ -941,13 +941,13 @@ export default function AdminRegressionPage() {
 
   const runTest = async (testId: string) => {
     switch (testId) {
-        case 'DATA_STORY_OUTPUTS':
-        case 'DATA_PROMPTS':
-        case 'DATA_PROMPTS_STORY_BEAT_LIVE':
-        case 'DATA_STORY_TYPES':
-        case 'DATA_STORY_PHASES':
-        case 'DATA_CHILDREN':
         case 'DATA_SESSIONS_OVERVIEW':
+        case 'DATA_CHILDREN':
+        case 'DATA_STORY_OUTPUTS':
+        case 'DATA_STORY_PHASES':
+        case 'DATA_STORY_TYPES':
+        case 'DATA_PROMPTS_STORY_BEAT_LIVE':
+        case 'DATA_PROMPTS':
             await runDataTests();
             break;
         case 'SESSION_BEAT_STRUCTURE':
@@ -1091,3 +1091,5 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
+
+    

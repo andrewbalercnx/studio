@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { LoaderCircle, PlusCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useFirestore } from '@/firebase';
-import { collection, doc, onSnapshot, query, orderBy, writeBatch, serverTimestamp, addDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, orderBy, writeBatch, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { StoryOutputType } from '@/lib/types';
@@ -142,7 +142,6 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
                 toast({ title: 'Success', description: 'Output type updated.' });
             } else {
                 const id = `${slugify(data.name)}_v1`;
-                docData.id = id;
                 docData.createdAt = serverTimestamp();
                 docData.tags = [data.category]; // default tag
                 const docRef = doc(firestore, 'storyOutputTypes', id);
@@ -241,31 +240,6 @@ export default function AdminStoryOutputsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingType, setEditingType] = useState<StoryOutputType | null>(null);
 
-  useEffect(() => {
-    if (!firestore || !isAdmin) {
-      setLoading(false);
-      return;
-    }
-    
-    setLoading(true);
-    const outputsRef = collection(firestore, 'storyOutputTypes');
-    const q = query(outputsRef, orderBy('category'), orderBy('name'));
-    
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        setOutputTypes(snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as StoryOutputType));
-        setLoading(false);
-        setError(null);
-      },
-      (err) => {
-        setError("Could not fetch story output types.");
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [firestore, isAdmin]);
-  
   const handleCreateSampleData = async () => {
     if (!firestore) return;
     try {
@@ -280,6 +254,35 @@ export default function AdminStoryOutputsPage() {
         toast({ title: 'Error', description: e.message, variant: 'destructive' });
     }
   };
+
+  useEffect(() => {
+    if (!firestore || !isAdmin) {
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
+    const outputsRef = collection(firestore, 'storyOutputTypes');
+    const q = query(outputsRef, orderBy('category'), orderBy('name'));
+    
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        if (snapshot.empty) {
+            handleCreateSampleData();
+        } else {
+            setOutputTypes(snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as StoryOutputType));
+        }
+        setLoading(false);
+        setError(null);
+      },
+      (err) => {
+        setError("Could not fetch story output types.");
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [firestore, isAdmin]);
   
   const handleAddNew = () => {
       setEditingType(null);
@@ -307,11 +310,11 @@ export default function AdminStoryOutputsPage() {
     if (!isAuthenticated || !isAdmin) return <p>Admin access required.</p>;
     if (error) return <p className="text-destructive">{error}</p>;
 
-    if (outputTypes.length === 0) {
+    if (outputTypes.length === 0 && !loading) {
         return (
             <div className="text-center py-8 border-2 border-dashed rounded-lg">
-                <p className="text-muted-foreground mb-4">No output types found.</p>
-                <Button onClick={handleCreateSampleData}>Create sample data</Button>
+                <p className="text-muted-foreground mb-4">No output types found. Seeding initial data...</p>
+                <LoaderCircle className="h-8 w-8 animate-spin mx-auto" />
             </div>
         )
     }
@@ -376,3 +379,5 @@ export default function AdminStoryOutputsPage() {
     </div>
   );
 }
+
+    

@@ -41,7 +41,6 @@ export type StorySession = {
     // The overall status of the story session.
     status: 'in_progress' | 'completed';
     // The current phase of the story creation process.
-    // warmup: gathering info, story: main beats, ending: choosing an ending, final: story is compiled.
     currentPhase: 'warmup' | 'story' | 'ending' | 'final';
     currentStepIndex: number;
     storyTitle?: string;
@@ -179,3 +178,5 @@ export type StoryOutputType = {
     createdAt?: any;
     updatedAt?: any;
 };
+
+    
