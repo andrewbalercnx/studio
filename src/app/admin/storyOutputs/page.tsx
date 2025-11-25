@@ -4,9 +4,9 @@
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { LoaderCircle, PlusCircle } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useFirestore } from '@/firebase';
-import { collection, doc, onSnapshot, query, orderBy, writeBatch, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, orderBy, writeBatch, serverTimestamp, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { StoryOutputType } from '@/lib/types';
@@ -138,14 +138,14 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
         try {
             if (editingType) {
                 const docRef = doc(firestore, 'storyOutputTypes', editingType.id);
-                await updateDoc(docRef, docData);
+                await writeBatch(firestore).update(docRef, docData).commit();
                 toast({ title: 'Success', description: 'Output type updated.' });
             } else {
                 const id = `${slugify(data.name)}_v1`;
                 docData.createdAt = serverTimestamp();
                 docData.tags = [data.category]; // default tag
                 const docRef = doc(firestore, 'storyOutputTypes', id);
-                await updateDoc(docRef, docData, { merge: true });
+                await writeBatch(firestore).set(docRef, docData, { merge: true }).commit();
                 toast({ title: 'Success', description: 'New output type created.' });
             }
             onSave();
@@ -240,7 +240,7 @@ export default function AdminStoryOutputsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingType, setEditingType] = useState<StoryOutputType | null>(null);
 
-  const handleCreateSampleData = async () => {
+  const handleCreateSampleData = useCallback(async () => {
     if (!firestore) return;
     try {
         const batch = writeBatch(firestore);
@@ -251,9 +251,10 @@ export default function AdminStoryOutputsPage() {
         await batch.commit();
         toast({ title: 'Success', description: 'Sample output types created.' });
     } catch (e: any) {
-        toast({ title: 'Error', description: e.message, variant: 'destructive' });
+        console.error('Error seeding data:', e);
+        toast({ title: 'Error Seeding Data', description: e.message, variant: 'destructive' });
     }
-  };
+  }, [firestore, toast]);
 
   useEffect(() => {
     if (!firestore || !isAdmin) {
@@ -267,22 +268,22 @@ export default function AdminStoryOutputsPage() {
     
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
-        if (snapshot.empty) {
+        if (snapshot.empty && !loading) {
             handleCreateSampleData();
-        } else {
-            setOutputTypes(snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as StoryOutputType));
         }
+        setOutputTypes(snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as StoryOutputType));
         setLoading(false);
         setError(null);
       },
       (err) => {
         setError("Could not fetch story output types.");
         setLoading(false);
+        console.error("Firestore onSnapshot error:", err);
       }
     );
 
     return () => unsubscribe();
-  }, [firestore, isAdmin]);
+  }, [firestore, isAdmin, handleCreateSampleData, loading]);
   
   const handleAddNew = () => {
       setEditingType(null);
@@ -379,7 +380,3 @@ export default function AdminStoryOutputsPage() {
     </div>
   );
 }
-
-    
-
-    
