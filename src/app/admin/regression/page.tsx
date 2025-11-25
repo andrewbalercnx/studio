@@ -15,7 +15,7 @@ import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTi
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType } from '@/lib/types';
 
-type TestStatus = 'PENDING' | 'PASS' | 'FAIL' | 'SKIP' | 'ERROR';
+type TestStatus = 'PENDING' | 'PASS' | 'FAIL' | 'ERROR' | 'SKIP';
 type TestResult = {
   id: string;
   name: string;
@@ -99,7 +99,7 @@ const initialTests: TestResult[] = [
   { id: 'SCENARIO_ARC_STEP_ADVANCE', name: 'Scenario: Arc Step Advance', status: 'PENDING', message: '' },
   { id: 'SCENARIO_CHARACTER_TRAITS', name: 'Scenario: Character Traits Flow', status: 'PENDING', message: '' },
   { id: 'SCENARIO_CHARACTER_FROM_BEAT', name: 'Scenario: Character Metadata in Beat Options', status: 'PENDING', message: '' },
-  { id: 'SCENARIO_BEAT_MORE_OPTIONS', name: 'Scenario: More Options on Beat', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_MORE_OPTIONS', name: 'Scenario: More Options on Beat', status: 'PENDING', message: '' },
   { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
   { id: 'SCENARIO_BEAT_AUTO', name: 'Scenario: Auto-Beat', status: 'PENDING', message: '' },
   { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
@@ -439,10 +439,10 @@ export default function AdminRegressionPage() {
         updateTestResult('SCENARIO_WARMUP_AUTO', { status: 'ERROR', message: e.message, details: warmupScenarioSummary });
     }
 
-    // Test: SCENARIO_BEAT_MORE_OPTIONS
+    // Test: SCENARIO_MORE_OPTIONS
     const moreOptionsSessionId = beatScenarioSummary?.sessionId;
     if (!moreOptionsSessionId) {
-        updateTestResult('SCENARIO_BEAT_MORE_OPTIONS', { status: 'SKIP', message: 'Depends on successful SCENARIO_BEAT_AUTO.' });
+        updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'SKIP', message: 'Depends on successful SCENARIO_BEAT_AUTO.' });
     } else {
         try {
             const res1 = await fetch('/api/storyBeat', {
@@ -472,13 +472,13 @@ export default function AdminRegressionPage() {
 
             if (result1.storyContinuation === result2.storyContinuation && result1.options[0]?.text === result2.options[0]?.text) {
                 // This is a soft failure; the model might just be uncreative. The main thing is it didn't crash.
-                updateTestResult('SCENARIO_BEAT_MORE_OPTIONS', { status: 'PASS', message: 'Ran twice, but options/continuation were identical.' });
+                updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'PASS', message: 'Ran twice, but options/continuation were identical.' });
             } else {
-                updateTestResult('SCENARIO_BEAT_MORE_OPTIONS', { status: 'PASS', message: 'Successfully ran storyBeat twice with different results.' });
+                updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'PASS', message: 'Successfully ran storyBeat twice with different results.' });
             }
 
         } catch (e: any) {
-            updateTestResult('SCENARIO_BEAT_MORE_OPTIONS', { status: 'ERROR', message: `More-options scenario failed: ${e.message}`, details: moreOptionsScenarioSummary });
+            updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'ERROR', message: `More-options scenario failed: ${e.message}`, details: moreOptionsScenarioSummary });
         }
     }
 
@@ -836,9 +836,29 @@ export default function AdminRegressionPage() {
     setTests(initialTests.map(t => ({...t, status: 'PENDING', message: '', details: undefined })));
     setDiagnostics(prev => ({ ...prev, firestoreSummary: {}, apiSummary: {}, scenario: {} }));
 
-    await runDataTests();
-    await runSessionTests();
-    await runScenarioAndApiTests();
+    // Create a reversed copy of the tests to run them last to first
+    const testsToRun = [...tests].reverse();
+
+    for (const test of testsToRun) {
+        if (test.id.startsWith('DATA_')) {
+            await runDataTests(); // This runs all data tests together
+            break; // Exit after running the group
+        }
+    }
+    for (const test of testsToRun) {
+        if (test.id.startsWith('SESSION_')) {
+            await runSessionTests();
+            break;
+        }
+    }
+    
+    // Scenarios and API tests are combined as they often depend on each other
+    // and scenarios create sessions used by API tests.
+    // We can run this function once as it internally handles all of them.
+    const scenarioAndApiTestIds = testsToRun.filter(t => t.id.startsWith('SCENARIO_') || t.id.startsWith('API_')).map(t => t.id);
+    if(scenarioAndApiTestIds.length > 0) {
+        await runScenarioAndApiTests();
+    }
     
     setIsRunning(false);
     toast({ title: 'Regression tests complete!' });
@@ -942,3 +962,5 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
+
+    
