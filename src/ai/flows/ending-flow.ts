@@ -9,10 +9,10 @@ import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
 import { getDoc, doc, collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { z } from 'genkit';
-import type { StorySession, ChatMessage, PromptConfig, StoryType, Character } from '@/lib/types';
+import type { StorySession, ChatMessage, StoryType, Character } from '@/lib/types';
 
 type EndingFlowDebugInfo = {
-    stage: 'loading_session' | 'loading_storyType' | 'loading_promptConfig' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate' | 'unknown';
+    stage: 'loading_session' | 'loading_storyType' | 'loading_messages_and_characters' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate' | 'unknown';
     details: Record<string, any>;
 };
 
@@ -86,8 +86,7 @@ export const endingFlow = ai.defineFlow(
 
 
             // 4. Build Final Prompt
-            const finalPrompt = `
-You are the Story Guide, a gentle storyteller for very young children (3-5). Your task is to propose three possible happy endings for a story.
+            const finalPrompt = `You are the Story Guide, a gentle storyteller for very young children (3-5). Your task is to propose three possible happy endings for a story.
 - Your tone must be warm, gentle, and safe.
 - Endings must be short (2-3 very simple sentences).
 - Do not use scary topics, complex words, lists, or emojis.
@@ -100,11 +99,29 @@ ${characterRoster || '- No characters found.'}
 STORY SO FAR:
 ${storySoFar}
 
-Based on all the above, generate three distinct, gentle, happy endings. Output your response as a single, valid JSON object that matches this exact Zod schema:
-${JSON.stringify(EndingFlowOutputSchema.jsonSchema, null, 2)}
-Important: Return only a single JSON object. Do not include any extra text, explanation, or formatting. Do not wrap the JSON in markdown or code fences. The output must start with { and end with }.
-`;
+OUTPUT FORMAT (important):
+You MUST return a single JSON object with this exact shape:
+{
+  "endings": [
+    { "id": "A", "text": "ending one in 2 or 3 very short sentences" },
+    { "id": "B", "text": "ending two in 2 or 3 very short sentences" },
+    { "id": "C", "text": "ending three in 2 or 3 very short sentences" }
+  ]
+}
 
+Rules:
+- The value of "endings" MUST be an array of exactly 3 objects.
+- Each object MUST have an "id" field with one of "A", "B", or "C".
+- Each object MUST have a "text" field that is a single string.
+- Do NOT return an array of strings. Each item MUST be an object with "id" and "text".
+- Do NOT include code fences.
+- Do NOT include markdown.
+- Do NOT include any explanation or extra fields.
+- The entire response MUST be valid JSON starting with { and ending with }.
+
+Based on all the above, return ONLY the JSON object containing three endings.`;
+
+            debug.details.promptLength = finalPrompt.length;
             debug.details.promptPreview = finalPrompt.slice(0, 500) + '...';
 
             // 5. Call Genkit AI
@@ -121,11 +138,12 @@ Important: Return only a single JSON object. Do not include any extra text, expl
                 config: modelConfig,
             });
             
-            let rawText = llmResponse.text;
             debug.stage = 'ai_generate_result';
+            const rawText = llmResponse.text;
             debug.details.finishReason = (llmResponse as any).finishReason ?? (llmResponse as any).raw?.candidates?.[0]?.finishReason;
             debug.details.topLevelFinishReason = (llmResponse as any).finishReason ?? null;
             debug.details.firstCandidateFinishReason = (llmResponse as any).raw?.candidates?.[0]?.finishReason ?? null;
+            debug.details.rawTextPreview = rawText ? rawText.slice(0, 200) : null;
 
 
             if (!rawText || rawText.trim() === '') {
@@ -142,13 +160,15 @@ Important: Return only a single JSON object. Do not include any extra text, expl
                 const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
                 const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
                 parsed = JSON.parse(jsonToParse);
-            } catch (err) {
+            } catch (err: any) {
+                debug.details.parseError = err.message;
                 throw new Error("Model output is not valid JSON for endings.");
             }
 
             debug.stage = 'json_validate';
             const validationResult = EndingFlowOutputSchema.safeParse(parsed);
             if (!validationResult.success) {
+                debug.details.validationErrors = validationResult.error.issues;
                  throw new Error(`Model JSON does not match expected ending shape. Errors: ${validationResult.error.message}`);
             }
 

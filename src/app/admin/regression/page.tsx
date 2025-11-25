@@ -335,7 +335,114 @@ export default function AdminRegressionPage() {
     let endingScenarioSummary: ScenarioEndingResult = null;
     let apiSummary: any = {};
 
-    // Test: SCENARIO_BEAT_AUTO
+    // Test: SCENARIO_ENDING_FLOW
+    try {
+        const storyTypeId = 'animal_adventure_v1';
+        const storyTypeRef = doc(firestore, 'storyTypes', storyTypeId);
+        const storyTypeSnap = await getDoc(storyTypeRef);
+        if (!storyTypeSnap.exists()) throw new Error(`Required story type '${storyTypeId}' not found.`);
+        const storyType = storyTypeSnap.data() as StoryType;
+        const steps = storyType.arcTemplate?.steps;
+        if (!steps || steps.length === 0) throw new Error(`Story type '${storyTypeId}' has no arc steps.`);
+        
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Ending Test Child', createdAt: serverTimestamp() });
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id, storyTypeId, storyPhaseId: storyType.endingPhaseId,
+            arcStepIndex: steps.length - 1, // Set to final step
+            promptConfigLevelBand: 'low', status: 'in_progress',
+        });
+        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), { sender: 'assistant', text: 'The story is almost over!', createdAt: serverTimestamp() });
+        
+        const response = await fetch('/api/storyEnding', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
+        });
+        const result = await response.json();
+        
+        endingScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, endingsCount: null, sampleEnding: null, error: result.errorMessage };
+        
+        if (!response.ok || !result.ok) {
+            throw new Error(result.errorMessage || `API returned status ${response.status}`);
+        }
+        if (!Array.isArray(result.endings) || result.endings.length !== 3) {
+            throw new Error('API response did not contain 3 endings.');
+        }
+
+        if (!result.endings.every((e: any) => e.id && e.text)) {
+            throw new Error('One or more endings are missing id or text fields.');
+        }
+
+        endingScenarioSummary.endingsCount = result.endings.length;
+        endingScenarioSummary.sampleEnding = result.endings[0]?.text.slice(0, 80);
+
+        updateTestResult('SCENARIO_ENDING_FLOW', { status: 'PASS', message: `Generated 3 endings. Sample: "${endingScenarioSummary.sampleEnding}"` });
+        
+    } catch(e: any) {
+        if (endingScenarioSummary) endingScenarioSummary.error = e.message;
+        updateTestResult('SCENARIO_ENDING_FLOW', { status: 'ERROR', message: e.message, details: endingScenarioSummary });
+    }
+
+    // Test: SCENARIO_ARC_BOUNDS
+    try {
+        const storyTypeId = 'animal_adventure_v1';
+        const storyTypeRef = doc(firestore, 'storyTypes', storyTypeId);
+        const storyTypeSnap = await getDoc(storyTypeRef);
+        if (!storyTypeSnap.exists()) throw new Error(`Required story type '${storyTypeId}' not found.`);
+        const storyType = storyTypeSnap.data() as StoryType;
+        const steps = storyType.arcTemplate?.steps;
+        if (!steps || steps.length === 0) throw new Error(`Story type '${storyTypeId}' has no arc steps.`);
+        
+        const stepsCount = steps.length;
+        const maxIndex = stepsCount - 1;
+        const lastStepId = steps[maxIndex];
+
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Arc Bounds Child', createdAt: serverTimestamp() });
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id, storyTypeId, storyPhaseId: 'story_beat_phase_v1',
+            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
+        });
+        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), { sender: 'assistant', text: 'Hi', createdAt: serverTimestamp() });
+        
+        let maxObservedArcStepIndex = 0;
+        let lastArcStepIdFromApi: string | null = null;
+        const maxBeats = stepsCount + 5;
+
+        for (let i = 0; i < maxBeats; i++) {
+            const beatRes = await fetch('/api/storyBeat', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
+            });
+            const beatResult = await beatRes.json();
+            if (!beatResult.ok) throw new Error(`Beat call #${i+1} failed: ${beatResult.errorMessage}`);
+            lastArcStepIdFromApi = beatResult.arcStep;
+
+            const sessionSnap = await getDoc(sessionRef);
+            const currentArcStepIndex = sessionSnap.data()?.arcStepIndex ?? 0;
+            maxObservedArcStepIndex = Math.max(maxObservedArcStepIndex, currentArcStepIndex);
+            
+            // Only increment if not at the end
+            if (currentArcStepIndex < maxIndex) {
+                 await updateDoc(sessionRef, { arcStepIndex: increment(1) });
+            }
+        }
+        
+        arcBoundsScenarioSummary = {
+            sessionId: sessionRef.id, storyTypeId, stepsCount, maxAllowedIndex: maxIndex,
+            maxObservedArcStepIndex, lastArcStepId: lastArcStepIdFromApi, expectedLastArcStepId: lastStepId,
+        };
+
+        if (maxObservedArcStepIndex > maxIndex) {
+            throw new Error(`arcStepIndex exceeded bounds: max observed was ${maxObservedArcStepIndex}, but max allowed is ${maxIndex}.`);
+        }
+        if (lastArcStepIdFromApi !== lastStepId) {
+            throw new Error(`Last arc step mismatch: API returned '${lastArcStepIdFromApi}', expected '${lastStepId}'.`);
+        }
+
+        updateTestResult('SCENARIO_ARC_BOUNDS', { status: 'PASS', message: `Arc index clamped at ${maxIndex} and last step was '${lastStepId}'.` });
+    } catch(e: any) {
+        if (arcBoundsScenarioSummary) arcBoundsScenarioSummary.error = e.message;
+        updateTestResult('SCENARIO_ARC_BOUNDS', { status: 'ERROR', message: e.message, details: arcBoundsScenarioSummary });
+    }
+
+    // Test: SCENARIO_ARC_STEP_ADVANCE
     try {
         const typesRef = collection(firestore, 'storyTypes');
         const typeQuery = query(typesRef, where('status', '==', 'live'), limit(1));
@@ -344,39 +451,172 @@ export default function AdminRegressionPage() {
         const storyType = typeSnap.docs[0].data();
         const storyTypeId = typeSnap.docs[0].id;
 
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Child', createdAt: serverTimestamp(), regressionTag: 'auto_beat' });
-
-        const mainCharRef = await addDoc(collection(firestore, 'characters'), { ownerChildId: childRef.id, name: 'Reggie', role: 'child' });
-
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Arc Test Child', createdAt: serverTimestamp(), regressionTag: 'arc_advance' });
+        
         const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
-            childId: childRef.id,
-            storyTypeId: storyTypeId,
-            storyPhaseId: storyType.defaultPhaseId,
-            arcStepIndex: 0,
-            mainCharacterId: mainCharRef.id,
-            promptConfigLevelBand: 'low',
-            status: 'in_progress',
-            createdAt: serverTimestamp(),
+            childId: childRef.id, storyTypeId, storyPhaseId: storyType.defaultPhaseId,
+            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
+            createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+        });
+        
+        arcAdvanceScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, initialArcStepIndex: 0, finalArcStepIndex: null };
+
+        // Simulate choosing an option, which is where the increment should happen
+        await updateDoc(sessionRef, {
+            arcStepIndex: increment(1),
             updatedAt: serverTimestamp(),
         });
         
-        beatScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id };
+        const updatedSessionDoc = await getDoc(sessionRef);
+        if (!updatedSessionDoc.exists()) throw new Error("Session doc disappeared after update.");
+        
+        const finalArcStepIndex = updatedSessionDoc.data().arcStepIndex;
+        arcAdvanceScenarioSummary.finalArcStepIndex = finalArcStepIndex;
 
-        const response = await fetch('/api/storyBeat', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
-        });
-        if (!response.ok) throw new Error(`API returned ${response.status}`);
-        const result = await response.json();
-        if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
-        if (!result.storyContinuation || result.options?.length < 3) throw new Error('API response has invalid shape.');
-
-        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'PASS', message: `Created session ${sessionRef.id.slice(0,5)} and got valid API response.` });
+        if (finalArcStepIndex !== 1) {
+            throw new Error(`arcStepIndex did not advance. Expected 1, got ${finalArcStepIndex}.`);
+        }
+        
+        updateTestResult('SCENARIO_ARC_STEP_ADVANCE', { status: 'PASS', message: 'arcStepIndex successfully advanced from 0 to 1.' });
 
     } catch (e: any) {
-        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'ERROR', message: e.message });
-        beatScenarioSummary = null;
+         if (arcAdvanceScenarioSummary) {
+            arcAdvanceScenarioSummary.error = e instanceof Error ? e.message : String(e);
+        }
+        updateTestResult('SCENARIO_ARC_STEP_ADVANCE', { status: 'ERROR', message: e.message, details: arcAdvanceScenarioSummary });
     }
     
+    // Test: SCENARIO_CHARACTER_TRAITS
+    try {
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Traits Test Child', createdAt: serverTimestamp() });
+        const sessionId = (await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id, storyTypeId: 'animal_adventure_v1', storyPhaseId: 'story_beat_phase_v1',
+            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress'
+        })).id;
+        const charRef = await addDoc(collection(firestore, 'characters'), {
+            ownerChildId: childRef.id, sessionId: sessionId, name: 'Test Bunny',
+            role: 'pet', traits: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+        });
+        await addDoc(collection(firestore, `storySessions/${sessionId}/messages`), {
+            sender: 'assistant', text: 'Once upon a time...', createdAt: serverTimestamp()
+        });
+
+        const response = await fetch('/api/characterTraits', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, characterId: charRef.id })
+        });
+        
+        const body = await response.json().catch(() => null);
+        characterTraitsScenarioSummary = { childId: childRef.id, sessionId, characterId: charRef.id, ...body };
+
+        if (!response.ok || !body?.ok) {
+            throw new Error(`API returned status ${response.status}${body?.errorMessage ? ': ' + body.errorMessage : ''}`);
+        }
+        if (!body.question || typeof body.question !== 'string') throw new Error('Response missing question field.');
+        if (!Array.isArray(body.suggestedTraits) || body.suggestedTraits.length === 0) throw new Error('Response missing suggestedTraits array.');
+        
+        updateTestResult('SCENARIO_CHARACTER_TRAITS', { 
+            status: 'PASS', 
+            message: 'API returned ok:true with a character trait question.',
+            details: { questionPreview: body.question.slice(0, 80), traitsCount: body.suggestedTraits.length, characterId: charRef.id }
+        });
+    } catch (e: any) {
+        updateTestResult('SCENARIO_CHARACTER_TRAITS', { status: 'ERROR', message: e.message, details: characterTraitsScenarioSummary });
+    }
+
+    // Test: SCENARIO_CHARACTER_FROM_BEAT
+    try {
+        const typesRef = collection(firestore, 'storyTypes');
+        const typeQuery = query(typesRef, where('status', '==', 'live'), limit(1));
+        const typeSnap = await getDocs(typeQuery);
+        if (typeSnap.empty) throw new Error('No live story types found.');
+        const storyType = typeSnap.docs[0].data();
+        const storyTypeId = typeSnap.docs[0].id;
+
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Char Test Child', createdAt: serverTimestamp(), regressionTag: 'char_beat' });
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id, storyTypeId, storyPhaseId: storyType.defaultPhaseId,
+            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
+            createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+        });
+        
+        characterScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, optionsCount: null, sampleOption: null };
+
+        const response = await fetch('/api/storyBeat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id })
+        });
+        if (!response.ok) throw new Error(`API returned status ${response.status}`);
+        const result = await response.json();
+        if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
+        
+        const options = result.options as Choice[];
+        if (!Array.isArray(options) || options.length < 3) throw new Error(`API returned ${options?.length ?? 0} options, expected 3.`);
+        
+        characterScenarioSummary.optionsCount = options.length;
+        characterScenarioSummary.sampleOption = options[0];
+
+        // Validate shape
+        for (const opt of options) {
+            if (typeof opt.id !== 'string' || typeof opt.text !== 'string') {
+                throw new Error('Option missing required id or text fields.');
+            }
+            if ('introducesCharacter' in opt && typeof opt.introducesCharacter !== 'boolean') {
+                 throw new Error('Option field introducesCharacter has wrong type.');
+            }
+             if ('newCharacterLabel' in opt && opt.newCharacterLabel !== null && typeof opt.newCharacterLabel !== 'string') {
+                throw new Error('Option field newCharacterLabel has wrong type.');
+            }
+        }
+        
+        updateTestResult('SCENARIO_CHARACTER_FROM_BEAT', { status: 'PASS', message: 'Beat returned options with valid character metadata shape.' });
+        
+    } catch(e: any) {
+        updateTestResult('SCENARIO_CHARACTER_FROM_BEAT', { status: 'ERROR', message: e.message, details: characterScenarioSummary });
+    }
+
+    // Test: SCENARIO_MORE_OPTIONS
+    const moreOptionsSessionId = beatScenarioSummary?.sessionId;
+    if (!moreOptionsSessionId) {
+        updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'SKIP', message: 'Depends on successful SCENARIO_BEAT_AUTO.' });
+    } else {
+        try {
+            const res1 = await fetch('/api/storyBeat', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: moreOptionsSessionId }),
+            });
+            const result1 = await res1.json();
+            if (!result1.ok) throw new Error(`First beat call failed: ${result1.errorMessage}`);
+            
+            const messagesRef = collection(firestore, `storySessions/${moreOptionsSessionId}/messages`);
+            await addDoc(messagesRef, { sender: 'assistant', text: result1.storyContinuation, kind: 'beat_continuation', createdAt: serverTimestamp() });
+            await addDoc(messagesRef, { sender: 'assistant', text: 'What happens next?', kind: 'beat_options', options: result1.options, createdAt: serverTimestamp() });
+
+            const res2 = await fetch('/api/storyBeat', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: moreOptionsSessionId }),
+            });
+            const result2 = await res2.json();
+             if (!result2.ok) throw new Error(`Second beat call (more choices) failed: ${result2.errorMessage}`);
+            
+            moreOptionsScenarioSummary = {
+                childId: beatScenarioSummary!.childId,
+                sessionId: moreOptionsSessionId,
+                firstCallStatus: res1.status,
+                secondCallStatus: res2.status,
+                firstContinuationPreview: result1.storyContinuation?.slice(0, 80),
+                secondContinuationPreview: result2.storyContinuation?.slice(0, 80),
+            };
+
+            if (result1.storyContinuation === result2.storyContinuation && result1.options[0]?.text === result2.options[0]?.text) {
+                // This is a soft failure; the model might just be uncreative. The main thing is it didn't crash.
+                updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'PASS', message: 'Ran twice, but options/continuation were identical.' });
+            } else {
+                updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'PASS', message: 'Successfully ran storyBeat twice with different results.' });
+            }
+
+        } catch (e: any) {
+            updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'ERROR', message: `More-options scenario failed: ${e.message}`, details: moreOptionsScenarioSummary });
+        }
+    }
+
     // Test: SCENARIO_WARMUP_AUTO
     try {
         const promptQuery = query(collection(firestore, 'promptConfigs'), where('phase', '==', 'warmup'), where('levelBand', '==', 'low'), where('status', '==', 'live'), limit(1));
@@ -439,50 +679,7 @@ export default function AdminRegressionPage() {
         updateTestResult('SCENARIO_WARMUP_AUTO', { status: 'ERROR', message: e.message, details: warmupScenarioSummary });
     }
 
-    // Test: SCENARIO_MORE_OPTIONS
-    const moreOptionsSessionId = beatScenarioSummary?.sessionId;
-    if (!moreOptionsSessionId) {
-        updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'SKIP', message: 'Depends on successful SCENARIO_BEAT_AUTO.' });
-    } else {
-        try {
-            const res1 = await fetch('/api/storyBeat', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: moreOptionsSessionId }),
-            });
-            const result1 = await res1.json();
-            if (!result1.ok) throw new Error(`First beat call failed: ${result1.errorMessage}`);
-            
-            const messagesRef = collection(firestore, `storySessions/${moreOptionsSessionId}/messages`);
-            await addDoc(messagesRef, { sender: 'assistant', text: result1.storyContinuation, kind: 'beat_continuation', createdAt: serverTimestamp() });
-            await addDoc(messagesRef, { sender: 'assistant', text: 'What happens next?', kind: 'beat_options', options: result1.options, createdAt: serverTimestamp() });
-
-            const res2 = await fetch('/api/storyBeat', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: moreOptionsSessionId }),
-            });
-            const result2 = await res2.json();
-             if (!result2.ok) throw new Error(`Second beat call (more choices) failed: ${result2.errorMessage}`);
-            
-            moreOptionsScenarioSummary = {
-                childId: beatScenarioSummary!.childId,
-                sessionId: moreOptionsSessionId,
-                firstCallStatus: res1.status,
-                secondCallStatus: res2.status,
-                firstContinuationPreview: result1.storyContinuation?.slice(0, 80),
-                secondContinuationPreview: result2.storyContinuation?.slice(0, 80),
-            };
-
-            if (result1.storyContinuation === result2.storyContinuation && result1.options[0]?.text === result2.options[0]?.text) {
-                // This is a soft failure; the model might just be uncreative. The main thing is it didn't crash.
-                updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'PASS', message: 'Ran twice, but options/continuation were identical.' });
-            } else {
-                updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'PASS', message: 'Successfully ran storyBeat twice with different results.' });
-            }
-
-        } catch (e: any) {
-            updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'ERROR', message: `More-options scenario failed: ${e.message}`, details: moreOptionsScenarioSummary });
-        }
-    }
-
-    // Test: SCENARIO_CHARACTER_FROM_BEAT
+    // Test: SCENARIO_BEAT_AUTO
     try {
         const typesRef = collection(firestore, 'storyTypes');
         const typeQuery = query(typesRef, where('status', '==', 'live'), limit(1));
@@ -491,278 +688,38 @@ export default function AdminRegressionPage() {
         const storyType = typeSnap.docs[0].data();
         const storyTypeId = typeSnap.docs[0].id;
 
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Char Test Child', createdAt: serverTimestamp(), regressionTag: 'char_beat' });
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
-            childId: childRef.id, storyTypeId, storyPhaseId: storyType.defaultPhaseId,
-            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
-            createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-        });
-        
-        characterScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, optionsCount: null, sampleOption: null };
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Child', createdAt: serverTimestamp(), regressionTag: 'auto_beat' });
 
-        const response = await fetch('/api/storyBeat', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id })
-        });
-        if (!response.ok) throw new Error(`API returned status ${response.status}`);
-        const result = await response.json();
-        if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
-        
-        const options = result.options as Choice[];
-        if (!Array.isArray(options) || options.length < 3) throw new Error(`API returned ${options?.length ?? 0} options, expected 3.`);
-        
-        characterScenarioSummary.optionsCount = options.length;
-        characterScenarioSummary.sampleOption = options[0];
-
-        // Validate shape
-        for (const opt of options) {
-            if (typeof opt.id !== 'string' || typeof opt.text !== 'string') {
-                throw new Error('Option missing required id or text fields.');
-            }
-            if ('introducesCharacter' in opt && typeof opt.introducesCharacter !== 'boolean') {
-                 throw new Error('Option field introducesCharacter has wrong type.');
-            }
-             if ('newCharacterLabel' in opt && opt.newCharacterLabel !== null && typeof opt.newCharacterLabel !== 'string') {
-                throw new Error('Option field newCharacterLabel has wrong type.');
-            }
-        }
-        
-        updateTestResult('SCENARIO_CHARACTER_FROM_BEAT', { status: 'PASS', message: 'Beat returned options with valid character metadata shape.' });
-        
-    } catch(e: any) {
-        updateTestResult('SCENARIO_CHARACTER_FROM_BEAT', { status: 'ERROR', message: e.message, details: characterScenarioSummary });
-    }
-
-    // Test: SCENARIO_CHARACTER_TRAITS
-    let traitsChildId: string | null = null;
-    let traitsSessionId: string | null = null;
-    let traitsCharacterId: string | null = null;
-    let traitsErrorDetails: any = null;
-
-    try {
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Traits Test Child', createdAt: serverTimestamp() });
-        traitsChildId = childRef.id;
+        const mainCharRef = await addDoc(collection(firestore, 'characters'), { ownerChildId: childRef.id, name: 'Reggie', role: 'child' });
 
         const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
-            childId: childRef.id, storyTypeId: 'animal_adventure_v1', storyPhaseId: 'story_beat_phase_v1',
-            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress'
-        });
-        traitsSessionId = sessionRef.id;
-        
-        const charRef = await addDoc(collection(firestore, 'characters'), {
-            ownerChildId: childRef.id, sessionId: sessionRef.id, name: 'Test Bunny',
-            role: 'pet', traits: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-        });
-        traitsCharacterId = charRef.id;
-        
-        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), {
-            sender: 'assistant', text: 'Once upon a time...', createdAt: serverTimestamp()
-        });
-        
-        const response = await fetch('/api/characterTraits', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId: traitsSessionId, characterId: traitsCharacterId })
-        });
-        
-        let body: any = null;
-        try {
-            body = await response.json();
-        } catch (e) {
-             throw new Error(`API did not return valid JSON. Status: ${response.status}`);
-        }
-        
-        traitsErrorDetails = body;
-
-        if (!response.ok || !body.ok) {
-            updateTestResult('SCENARIO_CHARACTER_TRAITS', { 
-                status: 'ERROR', 
-                message: `API returned status ${response.status}${body?.errorMessage ? ': ' + body.errorMessage : ''}`, 
-                details: body || { rawError: 'No JSON body returned' }
-            });
-            throw new Error(`API returned status ${response.status}`);
-        }
-        
-        if (!body.question || typeof body.question !== 'string') throw new Error('Response missing question field.');
-        if (!Array.isArray(body.suggestedTraits) || body.suggestedTraits.length === 0) throw new Error('Response missing suggestedTraits array.');
-        
-        characterTraitsScenarioSummary = {
-            childId: traitsChildId, sessionId: traitsSessionId, characterId: traitsCharacterId, ...body
-        };
-        
-        updateTestResult('SCENARIO_CHARACTER_TRAITS', { 
-            status: 'PASS', 
-            message: 'API returned ok:true with a character trait question.',
-            details: {
-                questionPreview: body.question.slice(0, 80),
-                traitsCount: body.suggestedTraits.length,
-                characterId: traitsCharacterId,
-            }
-        });
-
-    } catch (e: any) {
-        if (e instanceof Error && e.message.includes('API returned status')) {
-             // The specific error was already set, so we don't need a generic one.
-        } else {
-             updateTestResult('SCENARIO_CHARACTER_TRAITS', { 
-                status: 'ERROR', 
-                message: `Exception in character traits scenario: ${e instanceof Error ? e.message : String(e)}`, 
-                details: traitsErrorDetails || { rawError: String(e) }
-            });
-        }
-       
-        characterTraitsScenarioSummary = {
-            childId: traitsChildId, sessionId: traitsSessionId, characterId: traitsCharacterId,
-            error: traitsErrorDetails || { message: e instanceof Error ? e.message : String(e) }
-        };
-    }
-
-    // Test: SCENARIO_ARC_STEP_ADVANCE
-    try {
-        const typesRef = collection(firestore, 'storyTypes');
-        const typeQuery = query(typesRef, where('status', '==', 'live'), limit(1));
-        const typeSnap = await getDocs(typeQuery);
-        if (typeSnap.empty) throw new Error('No live story types found.');
-        const storyType = typeSnap.docs[0].data();
-        const storyTypeId = typeSnap.docs[0].id;
-
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Arc Test Child', createdAt: serverTimestamp(), regressionTag: 'arc_advance' });
-        
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
-            childId: childRef.id, storyTypeId, storyPhaseId: storyType.defaultPhaseId,
-            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
-            createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-        });
-        
-        arcAdvanceScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, initialArcStepIndex: 0, finalArcStepIndex: null };
-
-        // Simulate choosing an option, which is where the increment should happen
-        await updateDoc(sessionRef, {
-            arcStepIndex: increment(1),
+            childId: childRef.id,
+            storyTypeId: storyTypeId,
+            storyPhaseId: storyType.defaultPhaseId,
+            arcStepIndex: 0,
+            mainCharacterId: mainCharRef.id,
+            promptConfigLevelBand: 'low',
+            status: 'in_progress',
+            createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
         
-        const updatedSessionDoc = await getDoc(sessionRef);
-        if (!updatedSessionDoc.exists()) throw new Error("Session doc disappeared after update.");
-        
-        const finalArcStepIndex = updatedSessionDoc.data().arcStepIndex;
-        arcAdvanceScenarioSummary.finalArcStepIndex = finalArcStepIndex;
+        beatScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id };
 
-        if (finalArcStepIndex !== 1) {
-            throw new Error(`arcStepIndex did not advance. Expected 1, got ${finalArcStepIndex}.`);
-        }
-        
-        updateTestResult('SCENARIO_ARC_STEP_ADVANCE', { status: 'PASS', message: 'arcStepIndex successfully advanced from 0 to 1.' });
+        const response = await fetch('/api/storyBeat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
+        });
+        if (!response.ok) throw new Error(`API returned ${response.status}`);
+        const result = await response.json();
+        if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
+        if (!result.storyContinuation || result.options?.length < 3) throw new Error('API response has invalid shape.');
+
+        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'PASS', message: `Created session ${sessionRef.id.slice(0,5)} and got valid API response.` });
 
     } catch (e: any) {
-         if (arcAdvanceScenarioSummary) {
-            arcAdvanceScenarioSummary.error = e instanceof Error ? e.message : String(e);
-        }
-        updateTestResult('SCENARIO_ARC_STEP_ADVANCE', { status: 'ERROR', message: e.message, details: arcAdvanceScenarioSummary });
+        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'ERROR', message: e.message });
+        beatScenarioSummary = null;
     }
-    
-    // Test: SCENARIO_ARC_BOUNDS
-    try {
-        const storyTypeId = 'animal_adventure_v1';
-        const storyTypeRef = doc(firestore, 'storyTypes', storyTypeId);
-        const storyTypeSnap = await getDoc(storyTypeRef);
-        if (!storyTypeSnap.exists()) throw new Error(`Required story type '${storyTypeId}' not found.`);
-        const storyType = storyTypeSnap.data() as StoryType;
-        const steps = storyType.arcTemplate?.steps;
-        if (!steps || steps.length === 0) throw new Error(`Story type '${storyTypeId}' has no arc steps.`);
-        
-        const stepsCount = steps.length;
-        const maxIndex = stepsCount - 1;
-        const lastStepId = steps[maxIndex];
-
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Arc Bounds Child', createdAt: serverTimestamp() });
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
-            childId: childRef.id, storyTypeId, storyPhaseId: 'story_beat_phase_v1',
-            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
-        });
-        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), { sender: 'assistant', text: 'Hi', createdAt: serverTimestamp() });
-        
-        let maxObservedArcStepIndex = 0;
-        let lastArcStepIdFromApi: string | null = null;
-        const maxBeats = stepsCount + 5;
-
-        for (let i = 0; i < maxBeats; i++) {
-            const beatRes = await fetch('/api/storyBeat', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
-            });
-            const beatResult = await beatRes.json();
-            if (!beatResult.ok) throw new Error(`Beat call #${i+1} failed: ${beatResult.errorMessage}`);
-            lastArcStepIdFromApi = beatResult.arcStep;
-
-            const sessionSnap = await getDoc(sessionRef);
-            const currentArcStepIndex = sessionSnap.data()?.arcStepIndex ?? 0;
-            maxObservedArcStepIndex = Math.max(maxObservedArcStepIndex, currentArcStepIndex);
-            
-            // Only increment if not at the end
-            if (currentArcStepIndex < maxIndex) {
-                 await updateDoc(sessionRef, { arcStepIndex: increment(1) });
-            }
-        }
-        
-        arcBoundsScenarioSummary = {
-            sessionId: sessionRef.id, storyTypeId, stepsCount, maxAllowedIndex: maxIndex,
-            maxObservedArcStepIndex, lastArcStepId: lastArcStepIdFromApi, expectedLastArcStepId: lastStepId,
-        };
-
-        if (maxObservedArcStepIndex > maxIndex) {
-            throw new Error(`arcStepIndex exceeded bounds: max observed was ${maxObservedArcStepIndex}, but max allowed is ${maxIndex}.`);
-        }
-        if (lastArcStepIdFromApi !== lastStepId) {
-            throw new Error(`Last arc step mismatch: API returned '${lastArcStepIdFromApi}', expected '${lastStepId}'.`);
-        }
-
-        updateTestResult('SCENARIO_ARC_BOUNDS', { status: 'PASS', message: `Arc index clamped at ${maxIndex} and last step was '${lastStepId}'.` });
-    } catch(e: any) {
-        if (arcBoundsScenarioSummary) arcBoundsScenarioSummary.error = e.message;
-        updateTestResult('SCENARIO_ARC_BOUNDS', { status: 'ERROR', message: e.message, details: arcBoundsScenarioSummary });
-    }
-
-    // Test: SCENARIO_ENDING_FLOW
-    try {
-        const storyTypeId = 'animal_adventure_v1';
-        const storyTypeRef = doc(firestore, 'storyTypes', storyTypeId);
-        const storyTypeSnap = await getDoc(storyTypeRef);
-        if (!storyTypeSnap.exists()) throw new Error(`Required story type '${storyTypeId}' not found.`);
-        const storyType = storyTypeSnap.data() as StoryType;
-        const steps = storyType.arcTemplate?.steps;
-        if (!steps || steps.length === 0) throw new Error(`Story type '${storyTypeId}' has no arc steps.`);
-        
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Ending Test Child', createdAt: serverTimestamp() });
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
-            childId: childRef.id, storyTypeId, storyPhaseId: storyType.endingPhaseId,
-            arcStepIndex: steps.length - 1, // Set to final step
-            promptConfigLevelBand: 'low', status: 'in_progress',
-        });
-        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), { sender: 'assistant', text: 'The story is almost over!', createdAt: serverTimestamp() });
-        
-        const response = await fetch('/api/storyEnding', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
-        });
-        const result = await response.json();
-        
-        endingScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, endingsCount: null, sampleEnding: null, error: result.errorMessage };
-        
-        if (!response.ok || !result.ok) {
-            throw new Error(result.errorMessage || `API returned status ${response.status}`);
-        }
-        if (!Array.isArray(result.endings) || result.endings.length !== 3) {
-            throw new Error('API response did not contain 3 endings.');
-        }
-
-        endingScenarioSummary.endingsCount = result.endings.length;
-        endingScenarioSummary.sampleEnding = result.endings[0]?.text.slice(0, 80);
-
-        updateTestResult('SCENARIO_ENDING_FLOW', { status: 'PASS', message: `Generated 3 endings. Sample: "${endingScenarioSummary.sampleEnding}"` });
-        
-    } catch(e: any) {
-        if (endingScenarioSummary) endingScenarioSummary.error = e.message;
-        updateTestResult('SCENARIO_ENDING_FLOW', { status: 'ERROR', message: e.message, details: endingScenarioSummary });
-    }
-
-    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary };
     
     // --- API Tests ---
     
@@ -793,7 +750,7 @@ export default function AdminRegressionPage() {
     }
 
     // Test: API_WARMUP_REPLY
-    const warmupTestSessionId = warmupSessionId || scenarioResults.warmup?.sessionId;
+    const warmupTestSessionId = warmupSessionId || warmupScenarioSummary?.sessionId;
     if (!warmupTestSessionId) {
         updateTestResult('API_WARMUP_REPLY', { status: 'SKIP', message: 'No warmup sessionId provided and scenario failed.' });
     } else {
@@ -826,38 +783,56 @@ export default function AdminRegressionPage() {
         }
     }
     
+    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary };
     setDiagnostics(prev => ({...prev, apiSummary: {...prev.apiSummary, ...apiSummary }, scenario: scenarioResults }));
     return scenarioResults;
   };
+
+  const runTest = async (testId: string) => {
+    switch (testId) {
+        case 'DATA_PROMPTS':
+        case 'DATA_PROMPTS_STORY_BEAT_LIVE':
+        case 'DATA_STORY_TYPES':
+        case 'DATA_STORY_PHASES':
+        case 'DATA_CHILDREN':
+        case 'DATA_SESSIONS_OVERVIEW':
+            await runDataTests();
+            break;
+        case 'SESSION_BEAT_STRUCTURE':
+        case 'SESSION_BEAT_MESSAGES':
+            await runSessionTests();
+            break;
+        case 'SCENARIO_ENDING_FLOW':
+        case 'SCENARIO_ARC_BOUNDS':
+        case 'SCENARIO_ARC_STEP_ADVANCE':
+        case 'SCENARIO_CHARACTER_TRAITS':
+        case 'SCENARIO_CHARACTER_FROM_BEAT':
+        case 'SCENARIO_MORE_OPTIONS':
+        case 'SCENARIO_WARMUP_AUTO':
+        case 'SCENARIO_BEAT_AUTO':
+        case 'API_WARMUP_REPLY':
+        case 'API_STORY_BEAT':
+            await runScenarioAndApiTests();
+            break;
+        default:
+            break;
+    }
+  }
 
 
   const runAllTests = async () => {
     setIsRunning(true);
     setTests(initialTests.map(t => ({...t, status: 'PENDING', message: '', details: undefined })));
     setDiagnostics(prev => ({ ...prev, firestoreSummary: {}, apiSummary: {}, scenario: {} }));
-
-    // Create a reversed copy of the tests to run them last to first
-    const testsToRun = [...tests].reverse();
-
-    for (const test of testsToRun) {
-        if (test.id.startsWith('DATA_')) {
-            await runDataTests(); // This runs all data tests together
-            break; // Exit after running the group
-        }
-    }
-    for (const test of testsToRun) {
-        if (test.id.startsWith('SESSION_')) {
-            await runSessionTests();
-            break;
-        }
-    }
     
-    // Scenarios and API tests are combined as they often depend on each other
-    // and scenarios create sessions used by API tests.
-    // We can run this function once as it internally handles all of them.
-    const scenarioAndApiTestIds = testsToRun.filter(t => t.id.startsWith('SCENARIO_') || t.id.startsWith('API_')).map(t => t.id);
-    if(scenarioAndApiTestIds.length > 0) {
-        await runScenarioAndApiTests();
+    // Create a reversed copy of the tests to run them last to first
+    const testsToRun = [...initialTests];
+
+    for (const test of testsToRun) {
+        // Find all tests that share the same handler group
+        if (tests.find(t => t.id === test.id)?.status === 'PENDING') {
+            await runTest(test.id);
+        }
     }
     
     setIsRunning(false);
@@ -962,5 +937,3 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
-
-    
