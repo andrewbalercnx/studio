@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -66,6 +67,9 @@ export default function AdminDashboardPage() {
           </Button>
           <Button asChild>
             <Link href="/admin/storyArcTest">Story Arc Test</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/storyCompileTest">Story Compile Test</Link>
           </Button>
           <Button asChild>
             <Link href="/admin/regression">Regression Tests</Link>

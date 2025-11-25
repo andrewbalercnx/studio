@@ -92,8 +92,17 @@ type ScenarioEndingResult = {
     error?: string;
 } | null;
 
+type ScenarioStoryCompileResult = {
+    childId: string | null;
+    sessionId: string | null;
+    storyLength: number | null;
+    storyPreview: string | null;
+    error?: string;
+} | null;
+
 
 const initialTests: TestResult[] = [
+  { id: 'SCENARIO_STORY_COMPILE', name: 'Scenario: Story Compile', status: 'PENDING', message: '' },
   { id: 'SCENARIO_ENDING_FLOW', name: 'Scenario: Ending Flow', status: 'PENDING', message: '' },
   { id: 'SCENARIO_ARC_BOUNDS', name: 'Scenario: Arc Bounds', status: 'PENDING', message: '' },
   { id: 'SCENARIO_ARC_STEP_ADVANCE', name: 'Scenario: Arc Step Advance', status: 'PENDING', message: '' },
@@ -322,8 +331,8 @@ export default function AdminRegressionPage() {
       }
   };
 
-  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult, arcAdvance: ScenarioArcAdvanceResult, arcBounds: ScenarioArcBoundsResult, ending: ScenarioEndingResult }> => {
-    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null, arcAdvance: null, arcBounds: null, ending: null };
+  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult, arcAdvance: ScenarioArcAdvanceResult, arcBounds: ScenarioArcBoundsResult, ending: ScenarioEndingResult, storyCompile: ScenarioStoryCompileResult }> => {
+    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null, arcAdvance: null, arcBounds: null, ending: null, storyCompile: null };
     
     let beatScenarioSummary: ScenarioResult = null;
     let warmupScenarioSummary: ScenarioWarmupResult = null;
@@ -333,7 +342,42 @@ export default function AdminRegressionPage() {
     let arcAdvanceScenarioSummary: ScenarioArcAdvanceResult = null;
     let arcBoundsScenarioSummary: ScenarioArcBoundsResult = null;
     let endingScenarioSummary: ScenarioEndingResult = null;
+    let storyCompileScenarioSummary: ScenarioStoryCompileResult = null;
     let apiSummary: any = {};
+
+    // Test: SCENARIO_STORY_COMPILE
+    try {
+        const storyTypeId = 'animal_adventure_v1';
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Compile Test Child', createdAt: serverTimestamp() });
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id, storyTypeId, storyPhaseId: storyType.endingPhaseId,
+            arcStepIndex: 5, status: 'in_progress',
+        });
+        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), { sender: 'assistant', text: 'The story is now complete!', createdAt: serverTimestamp() });
+
+        const response = await fetch('/api/storyCompile', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
+        });
+        const result = await response.json();
+        
+        storyCompileScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, storyLength: null, storyPreview: null, error: result.errorMessage };
+
+        if (!response.ok || !result.ok) {
+            throw new Error(result.errorMessage || `API returned status ${response.status}`);
+        }
+        if (!result.storyText || typeof result.storyText !== 'string' || result.storyText.length < 50) {
+            throw new Error(`API response storyText is invalid or too short. Length: ${result.storyText?.length ?? 0}`);
+        }
+
+        storyCompileScenarioSummary.storyLength = result.storyText.length;
+        storyCompileScenarioSummary.storyPreview = result.storyText.slice(0, 120);
+
+        updateTestResult('SCENARIO_STORY_COMPILE', { status: 'PASS', message: `Compiled story length ${result.storyText.length} chars. Sample: "${result.storyText.slice(0, 80)}..."` });
+
+    } catch (e: any) {
+        if (storyCompileScenarioSummary) storyCompileScenarioSummary.error = e.message;
+        updateTestResult('SCENARIO_STORY_COMPILE', { status: 'ERROR', message: e.message, details: storyCompileScenarioSummary });
+    }
 
     // Test: SCENARIO_ENDING_FLOW
     try {
@@ -783,7 +827,7 @@ export default function AdminRegressionPage() {
         }
     }
     
-    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary };
+    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary, storyCompile: storyCompileScenarioSummary };
     setDiagnostics(prev => ({...prev, apiSummary: {...prev.apiSummary, ...apiSummary }, scenario: scenarioResults }));
     return scenarioResults;
   };
@@ -802,6 +846,7 @@ export default function AdminRegressionPage() {
         case 'SESSION_BEAT_MESSAGES':
             await runSessionTests();
             break;
+        case 'SCENARIO_STORY_COMPILE':
         case 'SCENARIO_ENDING_FLOW':
         case 'SCENARIO_ARC_BOUNDS':
         case 'SCENARIO_ARC_STEP_ADVANCE':

@@ -1,3 +1,4 @@
+
 import { config } from 'dotenv';
 config();
 
@@ -7,3 +8,4 @@ import '@/ai/flows/story-beat-flow.ts';
 import '@/ai/flows/character-traits-flow.ts';
 import '@/ai/flows/story-arc-flow.ts';
 import '@/ai/flows/ending-flow.ts';
+import '@/ai/flows/story-compile-flow.ts';
