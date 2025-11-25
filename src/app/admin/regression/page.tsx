@@ -250,7 +250,7 @@ export default function AdminRegressionPage() {
         const snap = await getDocs(query(outputsRef, limit(10)));
         fsSummary.storyOutputTypesCount = snap.size;
         if (snap.empty) {
-          throw new Error('Collection is empty or does not exist.');
+          throw new Error('Collection is empty. Visit /admin/storyOutputs to seed data.');
         }
         const firstDoc = snap.docs[0].data();
         if (!firstDoc.name || !firstDoc.category || !firstDoc.ageRange || !firstDoc.status) {
@@ -397,7 +397,7 @@ export default function AdminRegressionPage() {
 
         // 2. First Beat
         await updateDoc(sessionRef, {
-            currentPhase: 'story', storyPhaseId: 'story_beat_phase_v1', storyTypeId: 'animal_adventure_v1', promptConfigId: 'story_beat_low_v1'
+            currentPhase: 'story', storyPhaseId: 'story_beat_phase_v1', storyTypeId: 'animal_adventure_v1', promptConfigId: 'story_beat_level_low_v1'
         });
         sessionSnap = await getDoc(sessionRef);
         phaseStateScenarioSummary.phaseAfterFirstBeat = sessionSnap.data()?.currentPhase;
@@ -1091,5 +1091,7 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
+
+    
 
     
