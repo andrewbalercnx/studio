@@ -38,8 +38,11 @@ export type StoryBeat = {
 export type StorySession = {
     id: string;
     childId: string;
+    // The overall status of the story session.
     status: 'in_progress' | 'completed';
-    currentPhase: string;
+    // The current phase of the story creation process.
+    // warmup: gathering info, story: main beats, ending: choosing an ending, final: story is compiled.
+    currentPhase: 'warmup' | 'story' | 'ending' | 'final';
     currentStepIndex: number;
     storyTitle?: string;
     storyVibe?: string;
@@ -152,5 +155,3 @@ export type Character = {
     introducedFromOptionId?: string;
     introducedFromMessageId?: string;
 };
-
-    

@@ -7,7 +7,7 @@
 
 import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { getDoc, doc, collection, getDocs, query, orderBy, where, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, StoryType, Character, ChildProfile } from '@/lib/types';
 
@@ -63,7 +63,7 @@ export const storyCompileFlow = ai.defineFlow(
                 getDoc(childRef),
                 getDoc(storyTypeRef),
                 getDocs(charactersQuery),
-                getDocs(messagesQuery),
+                getDocs(messagesSnapshot),
             ]);
             
             if (!storyTypeDoc.exists()) throw new Error(`StoryType with id ${storyTypeId} not found.`);
@@ -166,6 +166,15 @@ Now, generate the JSON object containing the compiled story.
             }
             
             const { storyText, metadata } = validationResult.data;
+
+            // --- Phase State Correction ---
+            await updateDoc(sessionRef, {
+                currentPhase: 'final',
+                status: 'completed',
+                finalStoryText: storyText,
+                updatedAt: serverTimestamp(),
+            });
+            debug.details.phaseCorrected = `Set currentPhase to 'final' and status to 'completed'`;
 
             return {
                 ok: true,

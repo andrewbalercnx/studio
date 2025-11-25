@@ -102,8 +102,19 @@ type ScenarioStoryCompileResult = {
     error?: string;
 } | null;
 
+type ScenarioPhaseStateResult = {
+    sessionId: string | null;
+    phaseAfterWarmup?: string;
+    phaseAfterFirstBeat?: string;
+    phaseAtFinalBeat?: string;
+    phaseAfterEnding?: string;
+    phaseAfterCompile?: string;
+    [key: string]: any; // for errors
+} | null;
+
 
 const initialTests: TestResult[] = [
+  { id: 'SCENARIO_PHASE_STATE_MACHINE', name: 'Scenario: Phase State Machine', status: 'PENDING', message: '' },
   { id: 'SCENARIO_STORY_COMPILE', name: 'Scenario: Story Compile', status: 'PENDING', message: '' },
   { id: 'SCENARIO_ENDING_FLOW', name: 'Scenario: Ending Flow', status: 'PENDING', message: '' },
   { id: 'SCENARIO_ARC_BOUNDS', name: 'Scenario: Arc Bounds', status: 'PENDING', message: '' },
@@ -333,8 +344,8 @@ export default function AdminRegressionPage() {
       }
   };
 
-  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult, arcAdvance: ScenarioArcAdvanceResult, arcBounds: ScenarioArcBoundsResult, ending: ScenarioEndingResult, storyCompile: ScenarioStoryCompileResult }> => {
-    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null, arcAdvance: null, arcBounds: null, ending: null, storyCompile: null };
+  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult, arcAdvance: ScenarioArcAdvanceResult, arcBounds: ScenarioArcBoundsResult, ending: ScenarioEndingResult, storyCompile: ScenarioStoryCompileResult, phaseState: ScenarioPhaseStateResult }> => {
+    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null, arcAdvance: null, arcBounds: null, ending: null, storyCompile: null, phaseState: null };
     
     let beatScenarioSummary: ScenarioResult = null;
     let warmupScenarioSummary: ScenarioWarmupResult = null;
@@ -345,7 +356,63 @@ export default function AdminRegressionPage() {
     let arcBoundsScenarioSummary: ScenarioArcBoundsResult = null;
     let endingScenarioSummary: ScenarioEndingResult = null;
     let storyCompileScenarioSummary: ScenarioStoryCompileResult = null;
+    let phaseStateScenarioSummary: ScenarioPhaseStateResult = null;
     let apiSummary: any = {};
+
+    // Test: SCENARIO_PHASE_STATE_MACHINE
+    try {
+        phaseStateScenarioSummary = { sessionId: null };
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Phase Test Child', createdAt: serverTimestamp() });
+
+        // 1. Warmup
+        const warmupPromptSnap = await getDocs(query(collection(firestore, 'promptConfigs'), where('phase', '==', 'warmup'), where('status', '==', 'live'), limit(1)));
+        if (warmupPromptSnap.empty) throw new Error("No live warmup prompt config found.");
+        
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id, status: 'in_progress', currentPhase: 'warmup', storyPhaseId: 'warmup_phase_v1',
+            promptConfigId: warmupPromptSnap.docs[0].id, arcStepIndex: 0
+        });
+        phaseStateScenarioSummary.sessionId = sessionRef.id;
+        let sessionSnap = await getDoc(sessionRef);
+        phaseStateScenarioSummary.phaseAfterWarmup = sessionSnap.data()?.currentPhase;
+        if (sessionSnap.data()?.currentPhase !== 'warmup') throw new Error(`Phase after warmup was ${sessionSnap.data()?.currentPhase}, expected 'warmup'`);
+
+        // 2. First Beat
+        await updateDoc(sessionRef, {
+            currentPhase: 'story', storyPhaseId: 'story_beat_phase_v1', storyTypeId: 'animal_adventure_v1', promptConfigId: 'story_beat_low_v1'
+        });
+        sessionSnap = await getDoc(sessionRef);
+        phaseStateScenarioSummary.phaseAfterFirstBeat = sessionSnap.data()?.currentPhase;
+        if (sessionSnap.data()?.currentPhase !== 'story') throw new Error(`Phase after first beat was ${sessionSnap.data()?.currentPhase}, expected 'story'`);
+        
+        // 3. Final Beat (state before ending)
+        await updateDoc(sessionRef, { arcStepIndex: 5 });
+        sessionSnap = await getDoc(sessionRef);
+        phaseStateScenarioSummary.phaseAtFinalBeat = sessionSnap.data()?.currentPhase;
+        if (sessionSnap.data()?.currentPhase !== 'story') throw new Error(`Phase at final beat was ${sessionSnap.data()?.currentPhase}, expected 'story'`);
+        
+        // 4. Ending
+        const endingRes = await fetch('/api/storyEnding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }) });
+        if (!endingRes.ok) { const body = await endingRes.json(); throw new Error(`Ending API failed: ${body.errorMessage}`); }
+        sessionSnap = await getDoc(sessionRef);
+        phaseStateScenarioSummary.phaseAfterEnding = sessionSnap.data()?.currentPhase;
+        if (sessionSnap.data()?.currentPhase !== 'ending') throw new Error(`Phase after ending was ${sessionSnap.data()?.currentPhase}, expected 'ending'`);
+
+        // 5. Compile
+        const compileRes = await fetch('/api/storyCompile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }) });
+        if (!compileRes.ok) { const body = await compileRes.json(); throw new Error(`Compile API failed: ${body.errorMessage}`); }
+        sessionSnap = await getDoc(sessionRef);
+        phaseStateScenarioSummary.phaseAfterCompile = sessionSnap.data()?.currentPhase;
+        if (sessionSnap.data()?.currentPhase !== 'final' || sessionSnap.data()?.status !== 'completed') {
+            throw new Error(`Phase/status after compile was ${sessionSnap.data()?.currentPhase}/${sessionSnap.data()?.status}, expected 'final'/'completed'`);
+        }
+        
+        updateTestResult('SCENARIO_PHASE_STATE_MACHINE', { status: 'PASS', message: 'Session correctly transitioned through all phases.' });
+    } catch (e: any) {
+        if(phaseStateScenarioSummary) phaseStateScenarioSummary.error = e.message;
+        updateTestResult('SCENARIO_PHASE_STATE_MACHINE', { status: 'ERROR', message: e.message, details: phaseStateScenarioSummary });
+    }
+
 
     // Test: SCENARIO_STORY_COMPILE
     try {
@@ -358,7 +425,7 @@ export default function AdminRegressionPage() {
         const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Compile Test Child', createdAt: serverTimestamp() });
         const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
             childId: childRef.id, storyTypeId, storyPhaseId: storyType.endingPhaseId,
-            arcStepIndex: 5, status: 'in_progress',
+            arcStepIndex: 5, status: 'in_progress', currentPhase: 'ending'
         });
         await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), { sender: 'assistant', text: 'The story is now complete!', createdAt: serverTimestamp() });
 
@@ -400,7 +467,7 @@ export default function AdminRegressionPage() {
         const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
             childId: childRef.id, storyTypeId, storyPhaseId: storyType.endingPhaseId,
             arcStepIndex: steps.length - 1, // Set to final step
-            promptConfigLevelBand: 'low', status: 'in_progress',
+            promptConfigLevelBand: 'low', status: 'in_progress', currentPhase: 'story'
         });
         await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), { sender: 'assistant', text: 'The story is almost over!', createdAt: serverTimestamp() });
         
@@ -449,7 +516,7 @@ export default function AdminRegressionPage() {
         const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Arc Bounds Child', createdAt: serverTimestamp() });
         const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
             childId: childRef.id, storyTypeId, storyPhaseId: 'story_beat_phase_v1',
-            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
+            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress', currentPhase: 'story'
         });
         await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), { sender: 'assistant', text: 'Hi', createdAt: serverTimestamp() });
         
@@ -469,10 +536,14 @@ export default function AdminRegressionPage() {
             const currentArcStepIndex = sessionSnap.data()?.arcStepIndex ?? 0;
             maxObservedArcStepIndex = Math.max(maxObservedArcStepIndex, currentArcStepIndex);
             
-            // Only increment if not at the end
-            if (currentArcStepIndex < maxIndex) {
-                 await updateDoc(sessionRef, { arcStepIndex: increment(1) });
+            let nextIndex = currentArcStepIndex + 1;
+            if (steps.length > 0) {
+                const maxAllowedIndex = steps.length - 1;
+                if (nextIndex > maxAllowedIndex) {
+                    nextIndex = maxAllowedIndex;
+                }
             }
+            await updateDoc(sessionRef, { arcStepIndex: nextIndex });
         }
         
         arcBoundsScenarioSummary = {
@@ -506,7 +577,7 @@ export default function AdminRegressionPage() {
         
         const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
             childId: childRef.id, storyTypeId, storyPhaseId: storyType.defaultPhaseId,
-            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
+            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress', currentPhase: 'story',
             createdAt: serverTimestamp(), updatedAt: serverTimestamp()
         });
         
@@ -587,7 +658,7 @@ export default function AdminRegressionPage() {
         const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Char Test Child', createdAt: serverTimestamp(), regressionTag: 'char_beat' });
         const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
             childId: childRef.id, storyTypeId, storyPhaseId: storyType.defaultPhaseId,
-            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
+            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress', currentPhase: 'story',
             createdAt: serverTimestamp(), updatedAt: serverTimestamp()
         });
         
@@ -684,6 +755,7 @@ export default function AdminRegressionPage() {
             promptConfigId: warmupPromptConfigId,
             promptConfigLevelBand: warmupPromptConfigLevelBand,
             status: 'in_progress',
+            currentPhase: 'warmup',
             arcStepIndex: 0,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -747,8 +819,10 @@ export default function AdminRegressionPage() {
             childId: childRef.id,
             storyTypeId: storyTypeId,
             storyPhaseId: storyType.defaultPhaseId,
+            currentPhase: 'story',
             arcStepIndex: 0,
             mainCharacterId: mainCharRef.id,
+            promptConfigId: 'story_beat_low_v1',
             promptConfigLevelBand: 'low',
             status: 'in_progress',
             createdAt: serverTimestamp(),
@@ -834,7 +908,7 @@ export default function AdminRegressionPage() {
         }
     }
     
-    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary, storyCompile: storyCompileScenarioSummary };
+    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary, storyCompile: storyCompileScenarioSummary, phaseState: phaseStateScenarioSummary };
     setDiagnostics(prev => ({...prev, apiSummary: {...prev.apiSummary, ...apiSummary }, scenario: scenarioResults }));
     return scenarioResults;
   };
@@ -853,6 +927,7 @@ export default function AdminRegressionPage() {
         case 'SESSION_BEAT_MESSAGES':
             await runSessionTests();
             break;
+        case 'SCENARIO_PHASE_STATE_MACHINE':
         case 'SCENARIO_STORY_COMPILE':
         case 'SCENARIO_ENDING_FLOW':
         case 'SCENARIO_ARC_BOUNDS':
@@ -989,5 +1064,3 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
-
-    

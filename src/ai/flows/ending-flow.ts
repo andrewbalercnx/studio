@@ -7,7 +7,7 @@
 
 import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { getDoc, doc, collection, getDocs, query, orderBy, where, updateDoc } from 'firebase/firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, StoryType, Character } from '@/lib/types';
 
@@ -51,6 +51,16 @@ export const endingFlow = ai.defineFlow(
             }
             debug.details.storyTypeId = storyTypeId;
             debug.details.arcStepIndex = arcStepIndex;
+            
+            // --- Phase State Correction ---
+            if (session.currentPhase !== 'ending') {
+                await updateDoc(sessionRef, {
+                    currentPhase: 'ending',
+                    storyPhaseId: 'ending_phase_v1'
+                });
+                debug.details.phaseCorrected = `Set currentPhase to 'ending'`;
+            }
+
 
             // 2. Load StoryType
             debug.stage = 'loading_storyType';

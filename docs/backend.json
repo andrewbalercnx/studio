@@ -111,7 +111,8 @@
         },
         "currentPhase": {
           "type": "string",
-          "description": "The current phase of the story creation flow (e.g., 'warmup', 'planBeats')."
+          "enum": ["warmup", "story", "ending", "final"],
+          "description": "The current phase of the story creation flow (e.g., 'warmup', 'story')."
         },
         "currentStepIndex": {
           "type": "number",
@@ -350,7 +351,7 @@
           "type": "string",
           "description": "The story creation phase this config applies to (e.g., 'warmup', 'planBeats')."
         },
-        "languageLevel": {
+        "levelBand": {
           "type": "string",
           "enum": ["low", "medium", "high"],
           "description": "Optional language complexity level this config targets."

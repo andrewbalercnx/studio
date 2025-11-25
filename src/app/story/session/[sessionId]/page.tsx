@@ -254,12 +254,24 @@ export default function StorySessionPage() {
     };
 
     const runBeatAndAppendMessages = async () => {
-        if (!firestore) return;
+        if (!firestore || !sessionRef) return;
         
         setIsBeatRunning(true);
         setBeatDiagnostics({ ...beatDiagnostics, lastBeatErrorMessage: null });
 
         try {
+            // If this is the first beat, transition phase
+            const currentSession = (await getDoc(sessionRef)).data() as StorySession;
+            if (currentSession.currentPhase === 'warmup') {
+                await updateDoc(sessionRef, {
+                    currentPhase: 'story',
+                    storyPhaseId: 'story_beat_phase_v1',
+                    promptConfigId: 'story_beat_low_v1', // Or derive dynamically
+                    arcStepIndex: 0,
+                });
+            }
+
+
             const response = await fetch('/api/storyBeat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -371,7 +383,7 @@ export default function StorySessionPage() {
     
     const handleRunStoryBeat = async () => {
         if (!user || !sessionId || !firestore) return;
-        if (!session?.storyTypeId || !session?.storyPhaseId) {
+        if (!session?.storyTypeId) {
             toast({ title: "Cannot run beat", description: "Session must have a story type and phase ID.", variant: "destructive" });
             return;
         }
@@ -416,7 +428,7 @@ export default function StorySessionPage() {
     };
     
     const handleChooseOption = async (optionsMessage: Message, chosenOption: Choice) => {
-        if (!user || !sessionId || !firestore || !sessionRef || !session || isBeatRunning) return;
+        if (!user || !sessionId || !firestore || !sessionRef || !session || isBeatRunning || !session.storyTypeId) return;
     
         const charactersRef = collection(firestore, 'characters');
         const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
@@ -703,7 +715,7 @@ export default function StorySessionPage() {
             return null;
         }
 
-        const canRunBeat = !!session?.storyTypeId && !!session?.storyPhaseId;
+        const canRunBeat = !!session?.storyTypeId;
         const isWaitingForTraitsAnswer = !!pendingCharacterTraits;
 
         return (
