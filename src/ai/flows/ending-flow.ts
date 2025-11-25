@@ -12,7 +12,7 @@ import { z } from 'genkit';
 import type { StorySession, ChatMessage, PromptConfig, StoryType, Character } from '@/lib/types';
 
 type EndingFlowDebugInfo = {
-    stage: 'loading_session' | 'loading_storyType' | 'loading_promptConfig' | 'ai_generate' | 'json_parse' | 'json_validate' | 'unknown';
+    stage: 'loading_session' | 'loading_storyType' | 'loading_promptConfig' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate' | 'unknown';
     details: Record<string, any>;
 };
 
@@ -111,7 +111,7 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             debug.stage = 'ai_generate';
             const modelConfig = {
                 temperature: 0.4,
-                maxOutputTokens: 800,
+                maxOutputTokens: 2000,
             };
             debug.details.modelConfig = modelConfig;
             
@@ -124,9 +124,12 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             let rawText = llmResponse.text;
             debug.stage = 'ai_generate_result';
             debug.details.finishReason = (llmResponse as any).finishReason ?? (llmResponse as any).raw?.candidates?.[0]?.finishReason;
-            
+            debug.details.topLevelFinishReason = (llmResponse as any).finishReason ?? null;
+            debug.details.firstCandidateFinishReason = (llmResponse as any).raw?.candidates?.[0]?.finishReason ?? null;
+
+
             if (!rawText || rawText.trim() === '') {
-                if (debug.details.finishReason === 'MAX_TOKENS') {
+                if (debug.details.firstCandidateFinishReason === 'MAX_TOKENS' || debug.details.topLevelFinishReason === 'length') {
                      throw new Error("Model hit MAX_TOKENS during ending generation; increase maxOutputTokens.");
                 }
                 throw new Error("Model returned empty text for ending generation.");
