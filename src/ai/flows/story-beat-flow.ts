@@ -49,7 +49,7 @@ export const storyBeatFlow = ai.defineFlow(
             }
             const session = sessionDoc.data() as StorySession;
             
-            const { storyTypeId, storyPhaseId, arcStepIndex, promptConfigLevelBand, mainCharacterId } = session;
+            const { storyTypeId, storyPhaseId, promptConfigLevelBand, mainCharacterId } = session;
 
             if (!storyTypeId || !storyPhaseId || !promptConfigLevelBand) {
                 return { ok: false, sessionId, errorMessage: `Session is missing one or more required fields: storyTypeId, storyPhaseId, promptConfigLevelBand.` };
@@ -63,10 +63,19 @@ export const storyBeatFlow = ai.defineFlow(
                 return { ok: false, sessionId, errorMessage: `StoryType with id ${storyTypeId} not found.` };
             }
             const storyType = storyTypeDoc.data() as StoryType;
-            const arcStep = (arcStepIndex != null && storyType.arcTemplate.steps[arcStepIndex]) 
-                ? storyType.arcTemplate.steps[arcStepIndex]
-                // Fallback in case index is out of bounds or null
-                : "introduce_character";
+            
+            // BOUND the arc step index
+            const arcSteps = storyType.arcTemplate?.steps ?? [];
+            const rawArcStepIndex = session.arcStepIndex ?? 0;
+            let safeArcStepIndex = 0;
+            if (arcSteps.length > 0) {
+                const maxIndex = arcSteps.length - 1;
+                safeArcStepIndex = Math.max(0, Math.min(rawArcStepIndex, maxIndex));
+            }
+            const arcStep = arcSteps.length > 0 ? arcSteps[safeArcStepIndex] : "introduce_character";
+            debug.details.arcStepIndexRaw = rawArcStepIndex;
+            debug.details.arcStepIndexBounded = safeArcStepIndex;
+            debug.details.arcStepLabel = arcStep;
 
 
             // 3. Load Main Character
@@ -272,7 +281,7 @@ Important: Return only a single JSON object. Do not include any extra text, expl
                 options: structuredOutput.options,
                 debug: {
                     storySoFarLength: storySoFar.length,
-                    arcStepIndex,
+                    arcStepIndex: safeArcStepIndex,
                     modelName: 'googleai/gemini-2.5-flash',
                     maxOutputTokens: maxOutputTokens,
                     temperature: promptConfig.model?.temperature,

@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
 import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, orderBy, increment } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { ChatMessage, StorySession, Character, PromptConfig, Choice } from '@/lib/types';
+import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType } from '@/lib/types';
 
 type TestStatus = 'PENDING' | 'PASS' | 'FAIL' | 'SKIP' | 'ERROR';
 type TestResult = {
@@ -74,12 +74,24 @@ type ScenarioArcAdvanceResult = {
     error?: string;
 } | null;
 
+type ScenarioArcBoundsResult = {
+    sessionId: string | null,
+    storyTypeId: string,
+    stepsCount: number,
+    maxAllowedIndex: number,
+    maxObservedArcStepIndex: number,
+    lastArcStepId: string | null,
+    expectedLastArcStepId: string,
+    error?: string;
+} | null;
+
 
 const initialTests: TestResult[] = [
+  { id: 'SCENARIO_ARC_BOUNDS', name: 'Scenario: Arc Bounds', status: 'PENDING', message: '' },
   { id: 'SCENARIO_ARC_STEP_ADVANCE', name: 'Scenario: Arc Step Advance', status: 'PENDING', message: '' },
   { id: 'SCENARIO_CHARACTER_TRAITS', name: 'Scenario: Character Traits Flow', status: 'PENDING', message: '' },
   { id: 'SCENARIO_CHARACTER_FROM_BEAT', name: 'Scenario: Character Metadata in Beat Options', status: 'PENDING', message: '' },
-  { id: 'SCENARIO_BEAT_MORE_OPTIONS', name: 'Scenario: Beat More Options', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_BEAT_MORE_OPTIONS', name: 'Scenario: More Options on Beat', status: 'PENDING', message: '' },
   { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
   { id: 'SCENARIO_BEAT_AUTO', name: 'Scenario: Auto-Beat', status: 'PENDING', message: '' },
   { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
@@ -302,8 +314,8 @@ export default function AdminRegressionPage() {
       }
   };
 
-  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult, arcAdvance: ScenarioArcAdvanceResult }> => {
-    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null, arcAdvance: null };
+  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult, arcAdvance: ScenarioArcAdvanceResult, arcBounds: ScenarioArcBoundsResult }> => {
+    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null, arcAdvance: null, arcBounds: null };
     
     let beatScenarioSummary: ScenarioResult = null;
     let warmupScenarioSummary: ScenarioWarmupResult = null;
@@ -311,6 +323,7 @@ export default function AdminRegressionPage() {
     let characterScenarioSummary: ScenarioCharacterResult = null;
     let characterTraitsScenarioSummary: ScenarioCharacterTraitsResult = null;
     let arcAdvanceScenarioSummary: ScenarioArcAdvanceResult = null;
+    let arcBoundsScenarioSummary: ScenarioArcBoundsResult = null;
     let apiSummary: any = {};
 
     // Test: SCENARIO_BEAT_AUTO
@@ -636,8 +649,69 @@ export default function AdminRegressionPage() {
         }
         updateTestResult('SCENARIO_ARC_STEP_ADVANCE', { status: 'ERROR', message: e.message, details: arcAdvanceScenarioSummary });
     }
+    
+    // Test: SCENARIO_ARC_BOUNDS
+    try {
+        const storyTypeId = 'animal_adventure_v1';
+        const storyTypeRef = doc(firestore, 'storyTypes', storyTypeId);
+        const storyTypeSnap = await getDoc(storyTypeRef);
+        if (!storyTypeSnap.exists()) throw new Error(`Required story type '${storyTypeId}' not found.`);
+        const storyType = storyTypeSnap.data() as StoryType;
+        const steps = storyType.arcTemplate?.steps;
+        if (!steps || steps.length === 0) throw new Error(`Story type '${storyTypeId}' has no arc steps.`);
+        
+        const stepsCount = steps.length;
+        const maxIndex = stepsCount - 1;
+        const lastStepId = steps[maxIndex];
 
-    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary };
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Arc Bounds Child', createdAt: serverTimestamp() });
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id, storyTypeId, storyPhaseId: 'story_beat_phase_v1',
+            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
+        });
+        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), { sender: 'assistant', text: 'Hi', createdAt: serverTimestamp() });
+        
+        let maxObservedArcStepIndex = 0;
+        let lastArcStepIdFromApi: string | null = null;
+        const maxBeats = stepsCount + 5;
+
+        for (let i = 0; i < maxBeats; i++) {
+            const beatRes = await fetch('/api/storyBeat', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
+            });
+            const beatResult = await beatRes.json();
+            if (!beatResult.ok) throw new Error(`Beat call #${i+1} failed: ${beatResult.errorMessage}`);
+            lastArcStepIdFromApi = beatResult.arcStep;
+
+            const sessionSnap = await getDoc(sessionRef);
+            const currentArcStepIndex = sessionSnap.data()?.arcStepIndex ?? 0;
+            maxObservedArcStepIndex = Math.max(maxObservedArcStepIndex, currentArcStepIndex);
+            
+            // Only increment if not at the end
+            if (currentArcStepIndex < maxIndex) {
+                 await updateDoc(sessionRef, { arcStepIndex: increment(1) });
+            }
+        }
+        
+        arcBoundsScenarioSummary = {
+            sessionId: sessionRef.id, storyTypeId, stepsCount, maxAllowedIndex: maxIndex,
+            maxObservedArcStepIndex, lastArcStepId: lastArcStepIdFromApi, expectedLastArcStepId: lastStepId,
+        };
+
+        if (maxObservedArcStepIndex > maxIndex) {
+            throw new Error(`arcStepIndex exceeded bounds: max observed was ${maxObservedArcStepIndex}, but max allowed is ${maxIndex}.`);
+        }
+        if (lastArcStepIdFromApi !== lastStepId) {
+            throw new Error(`Last arc step mismatch: API returned '${lastArcStepIdFromApi}', expected '${lastStepId}'.`);
+        }
+
+        updateTestResult('SCENARIO_ARC_BOUNDS', { status: 'PASS', message: `Arc index clamped at ${maxIndex} and last step was '${lastStepId}'.` });
+    } catch(e: any) {
+        if (arcBoundsScenarioSummary) arcBoundsScenarioSummary.error = e.message;
+        updateTestResult('SCENARIO_ARC_BOUNDS', { status: 'ERROR', message: e.message, details: arcBoundsScenarioSummary });
+    }
+
+    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary };
     
     // --- API Tests ---
     

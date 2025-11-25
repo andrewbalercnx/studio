@@ -11,7 +11,7 @@ import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles } from 'lucide-rea
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
 import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion, DocumentReference, getDoc, deleteField, increment } from 'firebase/firestore';
-import type { StorySession, ChatMessage as Message, Choice, Character } from '@/lib/types';
+import type { StorySession, ChatMessage as Message, Choice, Character, StoryType } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import { useToast } from '@/hooks/use-toast';
@@ -419,14 +419,30 @@ export default function StorySessionPage() {
             // The flow now waits for user input, handled by handleSendMessage
         } else {
             // No new character or traits API failed, so proceed to next beat immediately.
+            const storyTypeRef = doc(firestore, 'storyTypes', session.storyTypeId!);
+            const storyTypeDoc = await getDoc(storyTypeRef);
+            const storyType = storyTypeDoc.data() as StoryType;
+            const arcSteps = storyType.arcTemplate?.steps ?? [];
+            const currentIndex = session.arcStepIndex ?? 0;
+            
+            let nextIndex = currentIndex + 1;
+            if (arcSteps.length > 0) {
+                const maxIndex = arcSteps.length - 1;
+                if (nextIndex > maxIndex) {
+                    nextIndex = maxIndex;
+                }
+            }
+            
             await updateDoc(sessionRef, {
-                arcStepIndex: increment(1),
+                arcStepIndex: nextIndex,
                 updatedAt: serverTimestamp(),
             });
+
             setBeatInteractionDiagnostics(prev => ({
                 ...prev,
-                lastArcStepIndexAfterChoice: (session.arcStepIndex ?? -1) + 1,
+                lastArcStepIndexAfterChoice: nextIndex,
             }));
+
             await runBeatAndAppendMessages();
         }
     };
