@@ -8,7 +8,9 @@ import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
 import { getDoc, doc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { z } from 'genkit';
-import type { StorySession, ChatMessage, PromptConfig } from '@/lib/types';
+import type { StorySession, ChatMessage } from '@/lib/types';
+import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
+
 
 // Define a type for the debug object
 type PromptDebug = {
@@ -51,8 +53,8 @@ export const warmupReplyFlow = ai.defineFlow(
 
         try {
             const { firestore } = initializeFirebase();
-
-            // 1. Load session
+            
+            // 1. Load session to get level band, etc.
             const sessionRef = doc(firestore, 'storySessions', sessionId);
             const sessionDoc = await getDoc(sessionRef);
             if (!sessionDoc.exists()) {
@@ -60,18 +62,9 @@ export const warmupReplyFlow = ai.defineFlow(
             }
             const session = sessionDoc.data() as StorySession;
 
-            // 2. Load prompt config
-            const { promptConfigId, promptConfigLevelBand } = session;
-            if (!promptConfigId) {
-                return { ok: false, errorMessage: `No promptConfigId found on session ${sessionId}.` };
-            }
+            // 2. Resolve prompt config using the shared helper
+            const { promptConfig, id: resolvedPromptConfigId, debug: resolverDebug } = await resolvePromptConfigForSession(sessionId, 'warmup');
 
-            const promptConfigRef = doc(firestore, 'promptConfigs', promptConfigId);
-            const promptConfigDoc = await getDoc(promptConfigRef);
-            if (!promptConfigDoc.exists()) {
-                return { ok: false, errorMessage: `Prompt config '${promptConfigId}' not found in promptConfigs collection.` };
-            }
-            const promptConfig = promptConfigDoc.data() as PromptConfig;
 
             // 3. Load messages from Firestore
             const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
@@ -186,13 +179,13 @@ export const warmupReplyFlow = ai.defineFlow(
                     return {
                         ok: false,
                         errorMessage: "Model hit MAX_TOKENS during warmup; increase maxOutputTokens or simplify the prompt.",
-                        debug: promptDebug,
+                        debug: { ...promptDebug, resolverDebug },
                     };
                 }
                 return {
                     ok: false,
                     errorMessage: "Model returned empty or malformed text in raw.candidates.",
-                    debug: promptDebug,
+                    debug: { ...promptDebug, resolverDebug },
                 };
             }
             
@@ -203,8 +196,9 @@ export const warmupReplyFlow = ai.defineFlow(
                 ok: true,
                 assistantText: trimmedAssistantText,
                 assistantTextPreview,
-                usedPromptConfigId: promptConfigId,
-                usedLevelBand: promptConfigLevelBand,
+                usedPromptConfigId: resolvedPromptConfigId,
+                usedLevelBand: session.promptConfigLevelBand,
+                debug: { ...promptDebug, resolverDebug },
             };
 
         } catch (e: any) {

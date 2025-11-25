@@ -123,7 +123,7 @@ const initialTests: TestResult[] = [
   { id: 'SCENARIO_CHARACTER_FROM_BEAT', name: 'Scenario: Character Metadata in Beat Options', status: 'PENDING', message: '' },
   { id: 'SCENARIO_MORE_OPTIONS', name: 'Scenario: More Options on Beat', status: 'PENDING', message: '' },
   { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
-  { id: 'SCENARIO_BEAT_AUTO', name: 'Scenario: Auto-Beat', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_BEAT_AUTO', name: 'Scenario: Auto-Beat (Legacy ID)', status: 'PENDING', message: '' },
   { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
   { id: 'API_STORY_BEAT', name: 'API: /api/storyBeat (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
@@ -815,14 +815,17 @@ export default function AdminRegressionPage() {
 
         const mainCharRef = await addDoc(collection(firestore, 'characters'), { ownerChildId: childRef.id, name: 'Reggie', role: 'child' });
 
+        // Use a legacy ID to test resolution
+        const legacyPromptConfigId = 'story_beat_low_v1';
+
         const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
             childId: childRef.id,
             storyTypeId: storyTypeId,
-            storyPhaseId: storyType.defaultPhaseId,
+            storyPhaseId: 'story_beat_phase_v1',
             currentPhase: 'story',
             arcStepIndex: 0,
             mainCharacterId: mainCharRef.id,
-            promptConfigId: 'story_beat_low_v1',
+            promptConfigId: legacyPromptConfigId,
             promptConfigLevelBand: 'low',
             status: 'in_progress',
             createdAt: serverTimestamp(),
@@ -838,8 +841,13 @@ export default function AdminRegressionPage() {
         const result = await response.json();
         if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
         if (!result.storyContinuation || result.options?.length < 3) throw new Error('API response has invalid shape.');
+        
+        const resolvedId = result.promptConfigId;
+        if (!resolvedId || resolvedId === legacyPromptConfigId) {
+            throw new Error(`Prompt ID resolution failed. Expected a canonical ID, got '${resolvedId}'`);
+        }
 
-        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'PASS', message: `Created session ${sessionRef.id.slice(0,5)} and got valid API response.` });
+        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'PASS', message: `Created session ${sessionRef.id.slice(0,5)} and resolved '${legacyPromptConfigId}' to '${resolvedId}'.` });
 
     } catch (e: any) {
         updateTestResult('SCENARIO_BEAT_AUTO', { status: 'ERROR', message: e.message });

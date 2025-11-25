@@ -8,7 +8,8 @@ import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
 import { getDoc, doc, collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { z } from 'genkit';
-import type { StorySession, ChatMessage, PromptConfig, StoryType, Character } from '@/lib/types';
+import type { StorySession, ChatMessage, StoryType, Character } from '@/lib/types';
+import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
 
 type StoryBeatDebugInfo = {
     stage: 'loading_session' | 'loading_storyType' | 'loading_promptConfig' | 'ai_generate' | 'json_parse' | 'json_validate' | 'unknown';
@@ -49,10 +50,10 @@ export const storyBeatFlow = ai.defineFlow(
             }
             const session = sessionDoc.data() as StorySession;
             
-            const { storyTypeId, storyPhaseId, promptConfigLevelBand, mainCharacterId } = session;
+            const { storyTypeId, mainCharacterId } = session;
 
-            if (!storyTypeId || !storyPhaseId || !promptConfigLevelBand) {
-                return { ok: false, sessionId, errorMessage: `Session is missing one or more required fields: storyTypeId, storyPhaseId, promptConfigLevelBand.` };
+            if (!storyTypeId) {
+                return { ok: false, sessionId, errorMessage: `Session is missing required field: storyTypeId.` };
             }
 
             // 2. Load StoryType
@@ -101,46 +102,10 @@ export const storyBeatFlow = ai.defineFlow(
                 return `${data.sender === 'assistant' ? 'Story Guide' : 'Child'}: ${data.text}`;
             }).join('\n');
 
-            // 5. Choose PromptConfig
+            // 5. Choose PromptConfig using shared helper
             debug.stage = 'loading_promptConfig';
-            const promptConfigsRef = collection(firestore, 'promptConfigs');
-            let configSnapshot;
-            let promptConfig: PromptConfig | null = null;
-
-            // First, try to get the specific level band
-            const specificQuery = query(
-                promptConfigsRef,
-                where('phase', '==', 'storyBeat'),
-                where('levelBand', '==', promptConfigLevelBand),
-                where('status', '==', 'live')
-            );
-            configSnapshot = await getDocs(specificQuery);
-            
-            // If that fails, try a fallback for 'low'
-            if (configSnapshot.empty) {
-                const fallbackQuery = query(
-                    promptConfigsRef,
-                    where('phase', '==', 'storyBeat'),
-                    where('levelBand', '==', 'low'),
-                    where('status', '==', 'live')
-                );
-                configSnapshot = await getDocs(fallbackQuery);
-            }
-
-            // If still empty, get ANY live storyBeat config
-            if (configSnapshot.empty) {
-                const anyLiveQuery = query(
-                    promptConfigsRef,
-                    where('phase', '==', 'storyBeat'),
-                    where('status', '==', 'live')
-                );
-                configSnapshot = await getDocs(anyLiveQuery);
-            }
-
-            if (configSnapshot.empty) {
-                 return { ok: false, sessionId, errorMessage: `No 'storyBeat' prompt config with status 'live' found for levelBand '${promptConfigLevelBand}' or any fallback.` };
-            }
-            promptConfig = configSnapshot.docs[0].data() as PromptConfig;
+            const { promptConfig, id: resolvedPromptConfigId, debug: resolverDebug } = await resolvePromptConfigForSession(sessionId, 'storyBeat');
+            debug.details.resolverDebug = resolverDebug;
 
 
             // 6. Build Final Prompt
@@ -220,7 +185,7 @@ Important: Return only a single JSON object. Do not include any extra text, expl
                         stage: 'ai_generate',
                         details: {
                             textPresent: !!rawText,
-                            rawResponsePreview: rawText ? rawText.slice(0, 500) : null,
+                            rawTextPreview: rawText ? rawText.slice(0, 500) : null,
                             llmResponseStringified: llmResponseStringified,
                         }
                     }
@@ -273,7 +238,7 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             return {
                 ok: true,
                 sessionId,
-                promptConfigId: promptConfig.id,
+                promptConfigId: resolvedPromptConfigId,
                 arcStep,
                 storyTypeId,
                 storyTypeName: storyType.name,
@@ -286,6 +251,7 @@ Important: Return only a single JSON object. Do not include any extra text, expl
                     maxOutputTokens: maxOutputTokens,
                     temperature: promptConfig.model?.temperature,
                     promptPreview: finalPrompt.substring(0, 500) + '...',
+                    resolverDebug: resolverDebug,
                 }
             };
 
@@ -301,5 +267,3 @@ Important: Return only a single JSON object. Do not include any extra text, expl
         }
     }
 );
-
-    
