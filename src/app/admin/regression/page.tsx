@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, orderBy, increment } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, increment } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType } from '@/lib/types';
 
@@ -114,6 +114,7 @@ type ScenarioPhaseStateResult = {
 
 
 const initialTests: TestResult[] = [
+  { id: 'DATA_STORY_OUTPUTS', name: 'Firestore: Story Output Types', status: 'PENDING', message: '' },
   { id: 'SCENARIO_PHASE_STATE_MACHINE', name: 'Scenario: Phase State Machine', status: 'PENDING', message: '' },
   { id: 'SCENARIO_STORY_COMPILE', name: 'Scenario: Story Compile', status: 'PENDING', message: '' },
   { id: 'SCENARIO_ENDING_FLOW', name: 'Scenario: Ending Flow', status: 'PENDING', message: '' },
@@ -122,8 +123,8 @@ const initialTests: TestResult[] = [
   { id: 'SCENARIO_CHARACTER_TRAITS', name: 'Scenario: Character Traits Flow', status: 'PENDING', message: '' },
   { id: 'SCENARIO_CHARACTER_FROM_BEAT', name: 'Scenario: Character Metadata in Beat Options', status: 'PENDING', message: '' },
   { id: 'SCENARIO_MORE_OPTIONS', name: 'Scenario: More Options on Beat', status: 'PENDING', message: '' },
-  { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
   { id: 'SCENARIO_BEAT_AUTO', name: 'Scenario: Auto-Beat (Legacy ID)', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
   { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
   { id: 'API_STORY_BEAT', name: 'API: /api/storyBeat (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
@@ -161,6 +162,23 @@ export default function AdminRegressionPage() {
   const runDataTests = async () => {
       if (!firestore) return;
       let fsSummary: any = {};
+
+      // Test: DATA_STORY_OUTPUTS
+       try {
+        const outputsRef = collection(firestore, 'storyOutputTypes');
+        const snap = await getDocs(query(outputsRef, limit(10)));
+        fsSummary.storyOutputTypesCount = snap.size;
+        if (snap.empty) {
+          throw new Error('Collection is empty or does not exist.');
+        }
+        const firstDoc = snap.docs[0].data();
+        if (!firstDoc.name || !firstDoc.category || !firstDoc.ageRange || !firstDoc.status) {
+          throw new Error('First doc is missing required fields (name, category, ageRange, status).');
+        }
+        updateTestResult('DATA_STORY_OUTPUTS', { status: 'PASS', message: `Found ${snap.size} output types. First doc OK.` });
+      } catch (e: any) {
+        updateTestResult('DATA_STORY_OUTPUTS', { status: 'FAIL', message: e.message });
+      }
 
       // Test: DATA_PROMPTS
       try {
@@ -482,7 +500,7 @@ export default function AdminRegressionPage() {
             throw new Error(result.errorMessage || `API returned status ${response.status}`);
         }
         if (!Array.isArray(result.endings) || result.endings.length !== 3) {
-            throw new Error('API response did not contain 3 endings.');
+            throw new Error(`API response did not contain 3 endings. Got: ${JSON.stringify(result.endings)}`);
         }
 
         if (!result.endings.every((e: any) => e.id && e.text)) {
@@ -739,6 +757,58 @@ export default function AdminRegressionPage() {
         }
     }
 
+    // Test: SCENARIO_BEAT_AUTO
+    try {
+        const typesRef = collection(firestore, 'storyTypes');
+        const typeQuery = query(typesRef, where('status', '==', 'live'), limit(1));
+        const typeSnap = await getDocs(typeQuery);
+        if (typeSnap.empty) throw new Error('No live story types found.');
+        const storyType = typeSnap.docs[0].data();
+        const storyTypeId = typeSnap.docs[0].id;
+
+        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Child', createdAt: serverTimestamp(), regressionTag: 'auto_beat' });
+
+        const mainCharRef = await addDoc(collection(firestore, 'characters'), { ownerChildId: childRef.id, name: 'Reggie', role: 'child' });
+
+        // Use a legacy ID to test resolution
+        const legacyPromptConfigId = 'story_beat_low_v1';
+
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id,
+            storyTypeId: storyTypeId,
+            storyPhaseId: 'story_beat_phase_v1',
+            currentPhase: 'story',
+            arcStepIndex: 0,
+            mainCharacterId: mainCharRef.id,
+            promptConfigId: legacyPromptConfigId,
+            promptConfigLevelBand: 'low',
+            status: 'in_progress',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+        
+        beatScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id };
+
+        const response = await fetch('/api/storyBeat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
+        });
+        if (!response.ok) throw new Error(`API returned ${response.status}`);
+        const result = await response.json();
+        if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
+        if (!result.storyContinuation || result.options?.length < 3) throw new Error('API response has invalid shape.');
+        
+        const resolvedId = result.promptConfigId;
+        if (!resolvedId || resolvedId === legacyPromptConfigId) {
+            throw new Error(`Prompt ID resolution failed. Expected a canonical ID, got '${resolvedId}'`);
+        }
+
+        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'PASS', message: `Created session ${sessionRef.id.slice(0,5)} and resolved '${legacyPromptConfigId}' to '${resolvedId}'.` });
+
+    } catch (e: any) {
+        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'ERROR', message: e.message });
+        beatScenarioSummary = null;
+    }
+
     // Test: SCENARIO_WARMUP_AUTO
     try {
         const promptQuery = query(collection(firestore, 'promptConfigs'), where('phase', '==', 'warmup'), where('levelBand', '==', 'low'), where('status', '==', 'live'), limit(1));
@@ -800,58 +870,6 @@ export default function AdminRegressionPage() {
 
     } catch(e:any) {
         updateTestResult('SCENARIO_WARMUP_AUTO', { status: 'ERROR', message: e.message, details: warmupScenarioSummary });
-    }
-
-    // Test: SCENARIO_BEAT_AUTO
-    try {
-        const typesRef = collection(firestore, 'storyTypes');
-        const typeQuery = query(typesRef, where('status', '==', 'live'), limit(1));
-        const typeSnap = await getDocs(typeQuery);
-        if (typeSnap.empty) throw new Error('No live story types found.');
-        const storyType = typeSnap.docs[0].data();
-        const storyTypeId = typeSnap.docs[0].id;
-
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Child', createdAt: serverTimestamp(), regressionTag: 'auto_beat' });
-
-        const mainCharRef = await addDoc(collection(firestore, 'characters'), { ownerChildId: childRef.id, name: 'Reggie', role: 'child' });
-
-        // Use a legacy ID to test resolution
-        const legacyPromptConfigId = 'story_beat_low_v1';
-
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
-            childId: childRef.id,
-            storyTypeId: storyTypeId,
-            storyPhaseId: 'story_beat_phase_v1',
-            currentPhase: 'story',
-            arcStepIndex: 0,
-            mainCharacterId: mainCharRef.id,
-            promptConfigId: legacyPromptConfigId,
-            promptConfigLevelBand: 'low',
-            status: 'in_progress',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        });
-        
-        beatScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id };
-
-        const response = await fetch('/api/storyBeat', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
-        });
-        if (!response.ok) throw new Error(`API returned ${response.status}`);
-        const result = await response.json();
-        if (!result.ok) throw new Error(`API returned ok:false: ${result.errorMessage}`);
-        if (!result.storyContinuation || result.options?.length < 3) throw new Error('API response has invalid shape.');
-        
-        const resolvedId = result.promptConfigId;
-        if (!resolvedId || resolvedId === legacyPromptConfigId) {
-            throw new Error(`Prompt ID resolution failed. Expected a canonical ID, got '${resolvedId}'`);
-        }
-
-        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'PASS', message: `Created session ${sessionRef.id.slice(0,5)} and resolved '${legacyPromptConfigId}' to '${resolvedId}'.` });
-
-    } catch (e: any) {
-        updateTestResult('SCENARIO_BEAT_AUTO', { status: 'ERROR', message: e.message });
-        beatScenarioSummary = null;
     }
     
     // --- API Tests ---
@@ -923,6 +941,7 @@ export default function AdminRegressionPage() {
 
   const runTest = async (testId: string) => {
     switch (testId) {
+        case 'DATA_STORY_OUTPUTS':
         case 'DATA_PROMPTS':
         case 'DATA_PROMPTS_STORY_BEAT_LIVE':
         case 'DATA_STORY_TYPES':

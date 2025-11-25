@@ -39,6 +39,9 @@ export default function AdminDashboardPage() {
         <p>Welcome to the Story Guide admin area.</p>
         <div className="flex flex-wrap gap-4">
           <Button asChild>
+            <Link href="/admin/storyDesigner">Story Designer (Beta)</Link>
+          </Button>
+          <Button asChild>
             <Link href="/admin/users">Manage Users</Link>
           </Button>
           <Button asChild>
@@ -58,6 +61,9 @@ export default function AdminDashboardPage() {
           </Button>
           <Button asChild>
             <Link href="/admin/storyTypes">Story Types</Link>
+          </Button>
+           <Button asChild>
+            <Link href="/admin/storyOutputs">Story Outputs</Link>
           </Button>
           <Button asChild>
             <Link href="/admin/characters">Characters</Link>

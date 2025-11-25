@@ -36,7 +36,7 @@ export type StoryBeat = {
 };
 
 export type StorySession = {
-    id: string;
+    id:string;
     childId: string;
     // The overall status of the story session.
     status: 'in_progress' | 'completed';
@@ -154,4 +154,28 @@ export type Character = {
     // New optional fields for tracking source
     introducedFromOptionId?: string;
     introducedFromMessageId?: string;
+};
+
+export type StoryOutputType = {
+    id: string;
+    name: string;
+    status: "live" | "draft" | "archived";
+    ageRange: string;
+    shortDescription: string;
+    childFacingLabel: string;
+    category: "picture_book" | "poem" | "coloring_pages" | "audio_script";
+    layoutHints: {
+        pageCount?: number;
+        needsImages?: boolean;
+        preferredAspectRatio?: "landscape" | "portrait" | "square";
+        textDensity?: "very_low" | "low" | "medium";
+    };
+    aiHints?: {
+        style?: string;
+        allowRhyme?: boolean;
+        maxPages?: number;
+    };
+    tags: string[];
+    createdAt?: any;
+    updatedAt?: any;
 };

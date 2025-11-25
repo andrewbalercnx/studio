@@ -416,6 +416,41 @@
             }
         },
         "required": ["id", "name", "shortDescription", "status", "tags", "defaultPhaseId", "endingPhaseId", "levelBands", "arcTemplate"]
+    },
+    "StoryOutputType": {
+        "title": "Story Output Type",
+        "description": "Defines a type of finished product the system can generate.",
+        "type": "object",
+        "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "status": { "type": "string", "enum": ["live", "draft", "archived"] },
+            "ageRange": { "type": "string" },
+            "shortDescription": { "type": "string" },
+            "childFacingLabel": { "type": "string" },
+            "category": { "type": "string", "enum": ["picture_book", "poem", "coloring_pages", "audio_script"] },
+            "layoutHints": {
+                "type": "object",
+                "properties": {
+                    "pageCount": { "type": "number" },
+                    "needsImages": { "type": "boolean" },
+                    "preferredAspectRatio": { "type": "string", "enum": ["landscape", "portrait", "square"] },
+                    "textDensity": { "type": "string", "enum": ["very_low", "low", "medium"] }
+                }
+            },
+            "aiHints": {
+                "type": "object",
+                "properties": {
+                    "style": { "type": "string" },
+                    "allowRhyme": { "type": "boolean" },
+                    "maxPages": { "type": "number" }
+                }
+            },
+            "tags": { "type": "array", "items": { "type": "string" } },
+            "createdAt": { "type": "string", "format": "date-time" },
+            "updatedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "name", "status", "ageRange", "category"]
     }
   },
   "auth": {
@@ -456,6 +491,10 @@
     "/storyTypes/{typeId}": {
         "schema": { "$ref": "#/entities/StoryType" },
         "description": "Stores templates for different types of stories."
+    },
+    "/storyOutputTypes/{outputTypeId}": {
+        "schema": { "$ref": "#/entities/StoryOutputType" },
+        "description": "Stores definitions for different kinds of final outputs (e.g. picture book, poem)."
     }
   }
 }
