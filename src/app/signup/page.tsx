@@ -42,9 +42,9 @@ export default function SignUpPage() {
         id: user.uid,
         email: user.email,
         roles: {
-            isAdmin: false,
-            isWriter: false,
-            isParent: true,
+            admin: false,
+            writer: false,
+            parent: true,
         },
         createdAt: serverTimestamp(),
       });
