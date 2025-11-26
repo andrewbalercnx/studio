@@ -63,12 +63,11 @@ export default function Header() {
   };
 
   const renderRoleBadges = () => {
-    if (!user || !idTokenResult?.claims) return null;
+    if (!idTokenResult?.claims) return null;
     const { isAdmin, isWriter, isParent } = idTokenResult.claims;
 
     return (
-      <div className="absolute top-full left-1/2 -translate-x-1/2 w-full bg-yellow-200 text-yellow-800 text-xs text-center py-1 flex justify-center items-center gap-2">
-        <strong>Roles:</strong>
+      <div className="flex items-center gap-2">
         {isAdmin && <Badge variant="destructive" className="gap-1"><Shield className="h-3 w-3" /> Admin</Badge>}
         {isWriter && <Badge variant="secondary" className="gap-1"><Pen className="h-3 w-3"/> Writer</Badge>}
         {isParent && <Badge variant="outline" className="gap-1"><UserIcon className="h-3 w-3"/> Parent</Badge>}
@@ -109,6 +108,10 @@ export default function Header() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                  {renderRoleBadges()}
+                </div>
+                <DropdownMenuSeparator />
                 {idTokenResult?.claims.isAdmin && (
                     <DropdownMenuItem onClick={() => router.push('/admin')}>
                     Admin Dashboard
@@ -135,7 +138,6 @@ export default function Header() {
           )}
         </nav>
       </div>
-       {idTokenResult && renderRoleBadges()}
     </header>
   );
 }
