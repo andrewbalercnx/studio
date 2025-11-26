@@ -18,6 +18,8 @@ import {
 import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
 import { useAuth } from '@/firebase';
+import { Badge } from './ui/badge';
+import { Shield, Pen, User as UserIcon } from 'lucide-react';
 
 export default function Header() {
   const auth = useAuth();
@@ -58,6 +60,20 @@ export default function Header() {
           </>
         );
     }
+  };
+
+  const renderRoleBadges = () => {
+    if (!user || !idTokenResult?.claims) return null;
+    const { isAdmin, isWriter, isParent } = idTokenResult.claims;
+
+    return (
+      <div className="absolute top-full left-1/2 -translate-x-1/2 w-full bg-yellow-200 text-yellow-800 text-xs text-center py-1 flex justify-center items-center gap-2">
+        <strong>Roles:</strong>
+        {isAdmin && <Badge variant="destructive" className="gap-1"><Shield className="h-3 w-3" /> Admin</Badge>}
+        {isWriter && <Badge variant="secondary" className="gap-1"><Pen className="h-3 w-3"/> Writer</Badge>}
+        {isParent && <Badge variant="outline" className="gap-1"><UserIcon className="h-3 w-3"/> Parent</Badge>}
+      </div>
+    );
   };
 
   return (
@@ -119,6 +135,7 @@ export default function Header() {
           )}
         </nav>
       </div>
+       {idTokenResult && renderRoleBadges()}
     </header>
   );
 }
