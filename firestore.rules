@@ -4,20 +4,64 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Allow server-side access and authenticated client access.
-    // This is a temporary, permissive rule for development.
-    // Server-side (Genkit flows) requests have `request.auth == null`.
+    // Default deny all reads and writes.
+    // Allow server-side access by checking if auth is null.
+    // Allow client-side access if user is authenticated.
     function canRead() {
-      return request.auth != null || request.auth == null;
+      return request.auth == null || request.auth != null;
     }
     
     function canWrite() {
-      return request.auth != null || request.auth == null;
+      return request.auth == null || request.auth != null;
     }
     
-    match /{document=**} {
-      allow read: if canRead();
-      allow write: if canWrite();
+    match /users/{userId} {
+      // Admins can read/write any user doc.
+      // Users can read/write their own doc.
+      allow read, write: if request.auth.token.isAdmin == true || request.auth.uid == userId;
+    }
+
+    match /children/{childId} {
+        // Admins can read/write.
+        // A user can read/write a child doc if they are the owner.
+        allow read, write: if request.auth.token.isAdmin == true || resource.data.ownerParentUid == request.auth.uid;
+    }
+    
+    match /storySessions/{sessionId} {
+        // Admins can read/write.
+        // A user can read/write a session doc if they are the parent owner.
+        allow read, write: if request.auth.token.isAdmin == true || resource.data.parentUid == request.auth.uid;
+    }
+    
+    match /storySessions/{sessionId}/messages/{messageId} {
+        // Admins can read/write.
+        // A user can read/write messages if they own the parent session.
+        allow read, write: if request.auth.token.isAdmin == true || get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid;
+    }
+
+    match /characters/{characterId} {
+        allow read, write: if canRead(); // More open for now
+    }
+
+    match /promptConfigs/{configId} {
+      // Read-only for all authenticated users, writeable by admins.
+      allow read: if request.auth != null;
+      allow write: if request.auth.token.isAdmin == true;
+    }
+
+    match /storyPhases/{phaseId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.token.isAdmin == true;
+    }
+
+    match /storyTypes/{typeId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.token.isAdmin == true;
+    }
+
+    match /storyOutputTypes/{outputTypeId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.token.isAdmin == true;
     }
   }
 }

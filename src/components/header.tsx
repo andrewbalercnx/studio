@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -49,8 +50,8 @@ export default function Header() {
             </Link>
           </Button>
           <Button asChild variant="ghost">
-            <Link href="/">
-              Chat
+            <Link href="/stories">
+              My Stories
             </Link>
           </Button>
           {user ? (

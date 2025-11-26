@@ -1,0 +1,29 @@
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Allow server-side access by checking if auth is null.
+    function isServer() {
+        return request.auth == null;
+    }
+
+    // By default, deny all reads and writes.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Allow a user to upload photos for their own children.
+    // The path contains the parent's UID, which we verify against their auth token.
+    match /users/{parentUid}/children/{childId}/photos/{fileName} {
+        allow write: if isServer() || request.auth.uid == parentUid;
+    }
+
+    // Allow public read access to child photos so they can be displayed in the app.
+    // In a production app, you might want to restrict this further, e.g., only to the parent.
+    match /users/{parentUid}/children/{childId}/photos/{fileName} {
+        allow read: if true;
+    }
+  }
+}
