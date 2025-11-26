@@ -18,8 +18,8 @@ service cloud.firestore {
 
     match /children/{childId} {
         // Admins can read/write any child doc.
-        // Parents can read/write their own child's doc.
-        allow read, write: if request.auth.token.isAdmin == true || request.resource.data.ownerParentUid == request.auth.uid;
+        // A user can only read/write a child doc they own.
+        allow read, write: if request.auth.token.isAdmin == true || (request.resource.data.ownerParentUid == request.auth.uid);
     }
     
     match /storySessions/{sessionId} {
