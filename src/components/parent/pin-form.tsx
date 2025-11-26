@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => void, onOpenChange: (open: boolean) => void }) {
   const { user } = useUser();
@@ -57,9 +58,19 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
     }
     setIsLoading(true);
     try {
+        const auth = getAuth();
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+            throw new Error("You must be logged in to verify a PIN.");
+        }
+        const idToken = await currentUser.getIdToken();
+
       const response = await fetch('/api/parent/verify-pin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
+        },
         body: JSON.stringify({ pin }),
       });
       const result = await response.json();

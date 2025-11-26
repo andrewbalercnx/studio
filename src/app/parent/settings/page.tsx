@@ -14,6 +14,7 @@ import { LoaderCircle } from 'lucide-react';
 import { ParentGuard } from '@/components/parent/parent-guard';
 import { useEffect } from 'react';
 import type { UserProfile } from '@/lib/types';
+import { getAuth } from 'firebase/auth';
 
 export default function ParentSettingsPage() {
   const { user, loading: userLoading } = useUser();
@@ -44,9 +45,19 @@ export default function ParentSettingsPage() {
 
     setIsSaving(true);
     try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error("You must be logged in to set a PIN.");
+      }
+      const idToken = await currentUser.getIdToken();
+
       const response = await fetch('/api/parent/set-pin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
+        },
         body: JSON.stringify({ pin }),
       });
       const result = await response.json();
@@ -114,5 +125,3 @@ export default function ParentSettingsPage() {
     </ParentGuard>
   );
 }
-
-    
