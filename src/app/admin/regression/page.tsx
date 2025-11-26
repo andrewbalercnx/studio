@@ -1148,15 +1148,25 @@ export default function AdminRegressionPage() {
     const currentAuthSummary = await runAuthTests();
     setAuthSummary(currentAuthSummary);
 
-    // Create a reversed copy of the tests to run them last to first
-    const testsToRun = [...initialTests].filter(t => !t.id.startsWith('DATA_AUTH_')); // Exclude auth tests as they just ran
+    const testGroups = tests.reduce((acc, test) => {
+        const prefix = test.id.split('_')[0];
+        if (!acc[prefix]) acc[prefix] = [];
+        acc[prefix].push(test);
+        return acc;
+    }, {} as Record<string, TestResult[]>);
 
-    for (const test of testsToRun) {
-        // Find all tests that share the same handler group
-        if (tests.find(t => t.id === test.id)?.status === 'PENDING') {
-            await runTest(test.id);
-        }
+    if (testGroups['DATA']) {
+        await runDataTests();
     }
+    if (testGroups['SESSION']) {
+        await runSessionTests();
+    }
+    if (testGroups['API'] || testGroups['SCENARIO']) {
+        await runScenarioAndApiTests();
+    }
+
+    // Mark any remaining PENDING tests as skipped if they weren't handled
+    setTests(prev => prev.map(t => t.status === 'PENDING' ? { ...t, status: 'SKIP', message: 'Test runner logic did not execute for this test.' } : t));
     
     setIsRunning(false);
     toast({ title: 'Regression tests complete!' });
@@ -1177,43 +1187,6 @@ export default function AdminRegressionPage() {
     navigator.clipboard.writeText(textToCopy);
     toast({ title: 'Copied to clipboard!' });
   };
-  
-    const runTest = async (testId: string) => {
-    switch (testId) {
-        case 'DATA_CHILDREN_EXTENDED':
-        case 'DATA_SESSIONS_OVERVIEW':
-        case 'DATA_CHILDREN':
-        case 'DATA_STORY_OUTPUTS':
-        case 'DATA_STORY_PHASES':
-        case 'DATA_STORY_TYPES':
-        case 'DATA_PROMPTS_STORY_BEAT_LIVE':
-        case 'DATA_PROMPTS':
-            await runDataTests();
-            break;
-        case 'SESSION_BEAT_STRUCTURE':
-        case 'SESSION_BEAT_MESSAGES':
-            await runSessionTests();
-            break;
-        case 'SCENARIO_CHILD_STORY_LIST':
-        case 'SCENARIO_PHASE_STATE_MACHINE':
-        case 'SCENARIO_STORY_COMPILE':
-        case 'SCENARIO_ENDING_FLOW':
-        case 'SCENARIO_ARC_BOUNDS':
-        case 'SCENARIO_ARC_STEP_ADVANCE':
-        case 'SCENARIO_CHARACTER_TRAITS':
-        case 'SCENARIO_CHARACTER_FROM_BEAT':
-        case 'SCENARIO_MORE_OPTIONS':
-        case 'SCENARIO_WARMUP_AUTO':
-        case 'SCENARIO_BEAT_AUTO':
-        case 'API_WARMUP_REPLY':
-        case 'API_STORY_BEAT':
-            await runScenarioAndApiTests();
-            break;
-        default:
-            break;
-    }
-  }
-
 
   const renderContent = () => {
     if (authLoading) return <LoaderCircle className="mx-auto h-8 w-8 animate-spin" />;
@@ -1307,4 +1280,3 @@ export default function AdminRegressionPage() {
   );
 }
 
-    
