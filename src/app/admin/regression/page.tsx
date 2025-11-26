@@ -14,6 +14,7 @@ import { useFirestore, useAuth } from '@/firebase';
 import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, increment } from 'firebase/firestore';
 import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile } from '@/lib/types';
 import { IdTokenResult } from 'firebase/auth';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 type TestStatus = 'PENDING' | 'PASS' | 'FAIL' | 'ERROR' | 'SKIP';
 type TestResult = {
@@ -1305,3 +1306,5 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
+
+    
