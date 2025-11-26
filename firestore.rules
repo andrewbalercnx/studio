@@ -4,78 +4,73 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    function isServer() {
+      return request.auth == null;
+    }
+    
     function canRead() {
-      return request.auth == null || request.auth != null;
+      return isServer() || request.auth != null;
     }
     
     function canWrite() {
-      return request.auth == null || request.auth != null;
+      return isServer() || request.auth != null;
     }
     
     match /users/{userId} {
-      allow read, write: if request.auth.token.isAdmin == true || request.auth.uid == userId;
+      allow read, write: if isServer() || request.auth.token.isAdmin == true || request.auth.uid == userId;
     }
 
     match /children/{childId} {
       // Read (get/list/query) existing docs
-      allow read: if request.auth != null
+      allow read: if isServer() || (request.auth != null
                   && (
                     request.auth.token.isAdmin == true ||
                     resource.data.ownerParentUid == request.auth.uid
-                  );
+                  ));
 
       // Create: use request.resource.data (doc being written)
-      allow create: if request.auth != null
-                    && request.resource.data.ownerParentUid == request.auth.uid;
+      allow create: if isServer() || (request.auth != null
+                    && request.resource.data.ownerParentUid == request.auth.uid);
 
       // Update/Delete: use resource.data (existing doc) to enforce ownership
-      allow update, delete: if request.auth != null
+      allow update, delete: if isServer() || (request.auth != null
                             && (
                               request.auth.token.isAdmin == true ||
                               resource.data.ownerParentUid == request.auth.uid
-                            );
+                            ));
     }
     
     match /storySessions/{sessionId} {
-      // Admins can list and get any session document.
-      // Parents can only get their own session document.
-      allow get: if request.auth.token.isAdmin == true || resource.data.parentUid == request.auth.uid;
-      allow list: if request.auth.token.isAdmin == true;
-
-      // Admins can write to any session.
-      // Parents can write to their own sessions.
-      allow write: if request.auth.token.isAdmin == true || request.resource.data.parentUid == request.auth.uid;
+      allow read, write: if isServer() || request.auth.token.isAdmin == true || resource.data.parentUid == request.auth.uid;
     }
     
     match /storySessions/{sessionId}/messages/{messageId} {
         // Access is inherited from the parent storySession
-        allow read, write: if get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid || request.auth.token.isAdmin == true;
+        allow read, write: if isServer() || get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid || request.auth.token.isAdmin == true;
     }
 
     match /characters/{characterId} {
-      // For now, allow read/write if admin or if the user owns the session the character is in.
-      // This is a simplification; a more robust rule would check ownership via the session document.
-      allow read, write: if canRead();
+      allow read, write: if isServer() || canRead();
     }
 
     match /promptConfigs/{configId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth.token.isAdmin == true;
+      allow read: if isServer() || request.auth != null;
+      allow write: if isServer() || request.auth.token.isAdmin == true;
     }
 
     match /storyPhases/{phaseId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth.token.isAdmin == true;
+      allow read: if isServer() || request.auth != null;
+      allow write: if isServer() || request.auth.token.isAdmin == true;
     }
 
     match /storyTypes/{typeId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth.token.isAdmin == true;
+      allow read: if isServer() || request.auth != null;
+      allow write: if isServer() || request.auth.token.isAdmin == true;
     }
 
     match /storyOutputTypes/{outputTypeId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth.token.isAdmin == true;
+      allow read: if isServer() || request.auth != null;
+      allow write: if isServer() || request.auth.token.isAdmin == true;
     }
   }
 }
