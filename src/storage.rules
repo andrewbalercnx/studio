@@ -17,7 +17,7 @@ service firebase.storage {
     // Allow a user to upload photos for their own children.
     // The path contains the parent's UID, which we verify against their auth token.
     match /users/{parentUid}/children/{childId}/photos/{fileName} {
-        allow write: if isServer() || request.auth.uid == parentUid;
+        allow write: if isServer() || (request.auth.uid == parentUid && request.resource.contentType.matches('image/.*'));
     }
 
     // Allow public read access to child photos so they can be displayed in the app.
