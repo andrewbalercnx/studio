@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle } from 'lucide-react';
+import { Copy, LoaderCircle } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffect, useState } from 'react';
 import { useFirestore } from '@/firebase';
@@ -18,7 +19,7 @@ type StorySession = StorySessionType & {
 };
 
 
-const sampleSession: Omit<StorySession, 'createdAt' | 'updatedAt' | 'messages' | 'characters' | 'beats'> = {
+const sampleSession: Omit<StorySession, 'createdAt' | 'updatedAt' | 'messages'> = {
     id: "sample-session-1",
     childId: "sample-child-1",
     status: "in_progress",
@@ -70,7 +71,7 @@ export default function AdminSessionsPage() {
     try {
         const docRef = doc(firestore, "storySessions", sampleSession.id);
         const now = serverTimestamp();
-        await setDoc(docRef, { ...sampleSession, characters: [], beats: [], createdAt: now, updatedAt: now });
+        await setDoc(docRef, { ...sampleSession, createdAt: now, updatedAt: now });
         toast({ title: 'Success', description: 'Sample story session created.' });
     } catch (e: any) {
         console.error("Error creating sample session:", e);
@@ -94,6 +95,12 @@ export default function AdminSessionsPage() {
         sampleIds: sessions.slice(0, 3).map(s => s.id),
     },
     ...(error ? { firestoreErrorSessions: error } : {})
+  };
+
+  const handleCopyDiagnostics = () => {
+    const textToCopy = `Page: admin-sessions\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
+    navigator.clipboard.writeText(textToCopy);
+    toast({ title: 'Copied to clipboard!' });
   };
 
   const renderContent = () => {
@@ -163,8 +170,11 @@ export default function AdminSessionsPage() {
       </Card>
       
       <Card className="mt-8">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Diagnostics</CardTitle>
+          <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}>
+            <Copy className="h-4 w-4" />
+          </Button>
         </CardHeader>
         <CardContent>
           <pre className="bg-muted p-4 rounded-lg overflow-x-auto">

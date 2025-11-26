@@ -3,7 +3,7 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, Wand2 } from 'lucide-react';
+import { LoaderCircle, Wand2, Copy } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffect, useState } from 'react';
 import { useFirestore } from '@/firebase';
@@ -190,6 +190,12 @@ export default function AdminCharactersPage() {
     lastTraitsCall
   };
 
+  const handleCopyDiagnostics = () => {
+    const textToCopy = `Page: admin-characters\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
+    navigator.clipboard.writeText(textToCopy);
+    toast({ title: 'Copied to clipboard!' });
+  };
+
   const renderContent = () => {
     if (authLoading || loading) {
       return <div className="flex items-center gap-2"><LoaderCircle className="h-5 w-5 animate-spin" /><span>Loading characters...</span></div>;
@@ -266,8 +272,11 @@ export default function AdminCharactersPage() {
       </Card>
       
       <Card className="mt-8">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Diagnostics</CardTitle>
+          <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}>
+            <Copy className="h-4 w-4" />
+          </Button>
         </CardHeader>
         <CardContent>
           <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
@@ -278,5 +287,3 @@ export default function AdminCharactersPage() {
     </div>
   );
 }
-
-    

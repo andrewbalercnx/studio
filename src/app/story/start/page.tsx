@@ -5,11 +5,12 @@ import { useState } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle } from 'lucide-react';
+import { Copy, LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, addDoc, collection, query, where, getDocs, limit, updateDoc } from 'firebase/firestore';
 import type { PromptConfig, ChildProfile } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
 
 
 type StartStoryResponse = {
@@ -36,6 +37,7 @@ type StartStoryResponse = {
 export default function StartStoryPage() {
     const { user, loading: userLoading } = useUser();
     const firestore = useFirestore();
+    const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [response, setResponse] = useState<StartStoryResponse | null>(null);
 
@@ -200,6 +202,12 @@ export default function StartStoryPage() {
             mainCharacterId: response && !response.error ? response.mainCharacterId : null,
         }
     };
+
+    const handleCopyDiagnostics = () => {
+        const textToCopy = `Page: story-start\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
+        navigator.clipboard.writeText(textToCopy);
+        toast({ title: 'Copied to clipboard!' });
+    };
     
     const renderContent = () => {
         if (userLoading) {
@@ -274,8 +282,11 @@ export default function StartStoryPage() {
             </Card>
 
             <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>Diagnostics</CardTitle>
+                    <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}>
+                        <Copy className="h-4 w-4" />
+                    </Button>
                 </CardHeader>
                 <CardContent>
                     <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
@@ -286,5 +297,3 @@ export default function StartStoryPage() {
         </div>
     );
 }
-
-    

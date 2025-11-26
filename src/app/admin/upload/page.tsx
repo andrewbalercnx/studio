@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle } from 'lucide-react';
+import { Copy, LoaderCircle } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -212,6 +213,12 @@ export default function AdminUploadPage() {
     save: saveState,
   };
 
+  const handleCopyDiagnostics = () => {
+    const textToCopy = `Page: admin-upload\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
+    navigator.clipboard.writeText(textToCopy);
+    toast({ title: 'Copied to clipboard!' });
+  };
+
   const renderContent = () => {
     if (loading) {
       return <LoaderCircle className="mx-auto h-8 w-8 animate-spin" />;
@@ -309,8 +316,11 @@ export default function AdminUploadPage() {
       </Card>
       
       <Card className="mt-8">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Diagnostics</CardTitle>
+          <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}>
+            <Copy className="h-4 w-4" />
+          </Button>
         </CardHeader>
         <CardContent>
           <pre className="bg-muted p-4 rounded-lg overflow-x-auto">

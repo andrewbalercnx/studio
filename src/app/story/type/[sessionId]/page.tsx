@@ -10,7 +10,7 @@ import { useDocument, useCollection } from '@/lib/firestore-hooks';
 import type { StorySession, StoryType } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, CheckCircle } from 'lucide-react';
+import { LoaderCircle, CheckCircle, Copy } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -110,6 +110,12 @@ export default function StoryTypeSelectionPage() {
         error: sessionError?.message || typesError?.message || null,
     };
 
+    const handleCopyDiagnostics = () => {
+        const textToCopy = `Page: story-type-select\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
+        navigator.clipboard.writeText(textToCopy);
+        toast({ title: 'Copied to clipboard!' });
+    };
+
     const renderContent = () => {
         if (userLoading || sessionLoading || typesLoading) {
             return <div className="flex items-center justify-center p-8"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -184,8 +190,11 @@ export default function StoryTypeSelectionPage() {
                {renderContent()}
             </Card>
             <Card className="w-full max-w-4xl">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>Diagnostics</CardTitle>
+                    <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}>
+                        <Copy className="h-4 w-4" />
+                    </Button>
                 </CardHeader>
                 <CardContent>
                     <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">

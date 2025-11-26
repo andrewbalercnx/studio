@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle } from 'lucide-react';
+import { Copy, LoaderCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -75,6 +75,12 @@ export default function AdminStoryCompileTestPage() {
         error: lastError,
     };
     
+    const handleCopyDiagnostics = () => {
+        const textToCopy = `Page: admin-storyCompileTest\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
+        navigator.clipboard.writeText(textToCopy);
+        toast({ title: 'Copied to clipboard!' });
+    };
+
     const renderResults = () => {
         if (!lastResponse && !lastError) return null;
 
@@ -157,8 +163,11 @@ export default function AdminStoryCompileTestPage() {
             {renderContent()}
 
             <Card className="mt-8">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>Diagnostics</CardTitle>
+                    <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}>
+                        <Copy className="h-4 w-4" />
+                    </Button>
                 </CardHeader>
                 <CardContent>
                     <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">

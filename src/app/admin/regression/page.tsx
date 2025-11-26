@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle } from 'lucide-react';
+import { Copy, LoaderCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -1003,6 +1003,12 @@ export default function AdminRegressionPage() {
     }
   };
 
+  const handleCopyDiagnostics = () => {
+    const textToCopy = `Page: admin-regression\n\nDiagnostics\n${JSON.stringify(finalDiagnostics, null, 2)}`;
+    navigator.clipboard.writeText(textToCopy);
+    toast({ title: 'Copied to clipboard!' });
+  };
+
   const renderContent = () => {
     if (authLoading) return <LoaderCircle className="mx-auto h-8 w-8 animate-spin" />;
     if (!isAuthenticated || !isAdmin) return <p>You must be an admin to run these tests.</p>;
@@ -1079,8 +1085,11 @@ export default function AdminRegressionPage() {
       {renderContent()}
 
       <Card className="mt-8">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Diagnostics</CardTitle>
+          <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}>
+            <Copy className="h-4 w-4" />
+          </Button>
         </CardHeader>
         <CardContent>
           <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
@@ -1091,7 +1100,3 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
-
-    
-
-    

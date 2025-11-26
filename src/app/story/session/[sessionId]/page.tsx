@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles, Star } from 'lucide-react';
+import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles, Star, Copy } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
 import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion, DocumentReference, getDoc, deleteField, increment } from 'firebase/firestore';
@@ -591,6 +591,12 @@ export default function StorySessionPage() {
         error: sessionError?.message || messagesError?.message || null,
     };
 
+    const handleCopyDiagnostics = () => {
+        const textToCopy = `Page: story-session\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
+        navigator.clipboard.writeText(textToCopy);
+        toast({ title: 'Copied to clipboard!' });
+    };
+
     const renderChatContent = () => {
         if (userLoading || sessionLoading) {
             return <div className="flex items-center justify-center p-8"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -766,8 +772,11 @@ export default function StorySessionPage() {
             </div>
             
             <Card className="w-full max-w-4xl">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>Diagnostics</CardTitle>
+                    <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}>
+                        <Copy className="h-4 w-4" />
+                    </Button>
                 </CardHeader>
                 <CardContent>
                     <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">

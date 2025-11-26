@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle } from 'lucide-react';
+import { Copy, LoaderCircle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AdminDashboardPage() {
   const { isAuthenticated, isAdmin, email, loading, error } = useAdminStatus();
+  const { toast } = useToast();
 
   const diagnostics = {
     page: 'admin-dashboard',
@@ -19,6 +21,12 @@ export default function AdminDashboardPage() {
       loading,
       error,
     },
+  };
+
+  const handleCopyDiagnostics = () => {
+    const textToCopy = `Page: admin-dashboard\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
+    navigator.clipboard.writeText(textToCopy);
+    toast({ title: 'Copied to clipboard!' });
   };
   
   const renderContent = () => {
@@ -100,8 +108,11 @@ export default function AdminDashboardPage() {
       </Card>
       
       <Card className="mt-8">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Diagnostics</CardTitle>
+          <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}>
+            <Copy className="h-4 w-4" />
+          </Button>
         </CardHeader>
         <CardContent>
           <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
