@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Copy, LoaderCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { ParentGuard } from '@/components/parent/parent-guard';
 
 export default function AdminDashboardPage() {
   const { isAuthenticated, isAdmin, email, loading, error } = useAdminStatus();
@@ -44,61 +43,59 @@ export default function AdminDashboardPage() {
       return <p>You are signed in but do not have admin rights.</p>;
     }
     return (
-      <ParentGuard>
-        <div className="space-y-4">
-          <p>Welcome to the Story Guide admin area.</p>
-          <div className="flex flex-wrap gap-4">
-            <Button asChild>
-              <Link href="/parent/settings">Parent Settings</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/create">Create Data (Dev)</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/storyDesigner">Story Designer (Beta)</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/users">Manage Users</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/prompts">Manage Prompt Configs</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/upload">Upload JSON Configs</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/children">Children</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/sessions">Story Sessions</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/storyPhases">Story Phases</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/storyTypes">Story Types</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/storyOutputs">Story Outputs</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/characters">Characters</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/storyBeatTest">Story Beat Test</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/storyArcTest">Story Arc Test</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/storyCompileTest">Story Compile Test</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/regression">Regression Tests</Link>
-            </Button>
-          </div>
+      <div className="space-y-4">
+        <p>Welcome to the Story Guide admin area.</p>
+        <div className="flex flex-wrap gap-4">
+          <Button asChild>
+            <Link href="/parent/settings">Parent Settings</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/create">Create Data (Dev)</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/storyDesigner">Story Designer (Beta)</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/users">Manage Users</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/prompts">Manage Prompt Configs</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/upload">Upload JSON Configs</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/children">Children</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/sessions">Story Sessions</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/storyPhases">Story Phases</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/storyTypes">Story Types</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/storyOutputs">Story Outputs</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/characters">Characters</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/storyBeatTest">Story Beat Test</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/storyArcTest">Story Arc Test</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/storyCompileTest">Story Compile Test</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/regression">Regression Tests</Link>
+          </Button>
         </div>
-      </ParentGuard>
+      </div>
     );
   };
 

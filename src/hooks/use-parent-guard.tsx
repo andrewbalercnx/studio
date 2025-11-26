@@ -4,6 +4,7 @@
 import { createContext, useContext, useState, ReactNode, useMemo, useCallback } from 'react';
 import { PinForm } from '@/components/parent/pin-form';
 import { useUser } from '@/firebase/auth/use-user';
+import { useAppContext } from './use-app-context';
 
 const GUARD_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -26,13 +27,18 @@ export function useParentGuard() {
 
 export function ParentGuardProvider({ children }: { children: ReactNode }) {
   const { user } = useUser();
+  const { roleMode } = useAppContext();
   const [lastValidatedAt, setLastValidatedAt] = useState<number | null>(null);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
 
   const isParentGuardValidated = useMemo(() => {
+    // Admins should always bypass the parent PIN guard.
+    if (roleMode === 'admin') {
+      return true;
+    }
     if (!lastValidatedAt) return false;
     return Date.now() - lastValidatedAt < GUARD_TIMEOUT_MS;
-  }, [lastValidatedAt]);
+  }, [lastValidatedAt, roleMode]);
 
   const showPinModal = useCallback(() => setIsPinModalOpen(true), []);
   const hidePinModal = useCallback(() => setIsPinModalOpen(false), []);
@@ -52,7 +58,7 @@ export function ParentGuardProvider({ children }: { children: ReactNode }) {
   return (
     <ParentGuardContext.Provider value={value}>
       {children}
-      {isPinModalOpen && user && (
+      {isPinModalOpen && user && roleMode !== 'admin' && (
         <PinForm onPinVerified={validateGuard} onOpenChange={setIsPinModalOpen} />
       )}
     </ParentGuardContext.Provider>
