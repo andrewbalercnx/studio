@@ -22,9 +22,10 @@ service cloud.firestore {
     }
 
     match /children/{childId} {
-        // Admins can read/write.
         // A user can read/write a child doc if they are the owner.
+        // Admins can read/write any child document and list the collection.
         allow read, write: if request.auth.token.isAdmin == true || resource.data.ownerParentUid == request.auth.uid;
+        allow list: if request.auth.token.isAdmin == true;
     }
     
     match /storySessions/{sessionId} {
