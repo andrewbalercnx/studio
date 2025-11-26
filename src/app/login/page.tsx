@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -33,7 +34,7 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       toast({ title: 'Signed in successfully!' });
-      router.push('/create');
+      router.push('/');
     } catch (error: any) {
       toast({
         title: 'Sign-in failed',

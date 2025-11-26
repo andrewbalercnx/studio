@@ -50,7 +50,7 @@ export default function SignUpPage() {
       });
       
       toast({ title: 'Account created successfully!' });
-      router.push('/create');
+      router.push('/');
     } catch (error: any) {
       toast({
         title: 'Sign-up failed',
