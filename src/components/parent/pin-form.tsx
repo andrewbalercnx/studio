@@ -63,7 +63,7 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
         if (!currentUser) {
             throw new Error("You must be logged in to verify a PIN.");
         }
-        const idToken = await currentUser.getIdToken();
+        const idToken = await currentUser.getIdToken(true); // Force refresh
 
       const response = await fetch('/api/parent/verify-pin', {
         method: 'POST',
