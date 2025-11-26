@@ -47,8 +47,8 @@ export type StorySession = {
     storyTitle?: string;
     storyVibe?: string;
     finalStoryText?: string;
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: any; // Allow for server timestamp or Date
+    updatedAt: any; // Allow for server timestamp or Date
     promptConfigId?: string;
     promptConfigLevelBand?: string;
     storyTypeId?: string;
@@ -65,7 +65,7 @@ export type StorySession = {
     };
     // This is a client-side representation and not stored in Firestore directly
     // with the session document. It's populated from the messages sub-collection.
-    messages: ChatMessage[];
+    messages?: ChatMessage[];
 };
 
 export type ArtStyle = {

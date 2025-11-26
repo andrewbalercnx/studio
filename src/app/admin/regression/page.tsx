@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
 import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, increment } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType } from '@/lib/types';
+import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile } from '@/lib/types';
 
 type TestStatus = 'PENDING' | 'PASS' | 'FAIL' | 'ERROR' | 'SKIP';
 type TestResult = {
@@ -112,8 +112,17 @@ type ScenarioPhaseStateResult = {
     [key: string]: any; // for errors
 } | null;
 
+type ScenarioChildStoryListResult = {
+    childId: string;
+    parentUid: string;
+    storyCount: number;
+    firstStoryId?: string;
+    error?: string;
+} | null;
+
 
 const initialTests: TestResult[] = [
+  { id: 'SCENARIO_CHILD_STORY_LIST', name: 'Scenario: Child Story List', status: 'PENDING', message: '' },
   { id: 'SCENARIO_PHASE_STATE_MACHINE', name: 'Scenario: Phase State Machine', status: 'PENDING', message: '' },
   { id: 'SCENARIO_STORY_COMPILE', name: 'Scenario: Story Compile', status: 'PENDING', message: '' },
   { id: 'SCENARIO_ENDING_FLOW', name: 'Scenario: Ending Flow', status: 'PENDING', message: '' },
@@ -129,6 +138,7 @@ const initialTests: TestResult[] = [
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure (Input)', status: 'PENDING', message: '' },
   { id: 'DATA_SESSIONS_OVERVIEW', name: 'Firestore: Sessions Overview', status: 'PENDING', message: '' },
+  { id: 'DATA_CHILDREN_EXTENDED', name: 'Firestore: Children (Extended)', status: 'PENDING', message: '' },
   { id: 'DATA_CHILDREN', name: 'Firestore: Children', status: 'PENDING', message: '' },
   { id: 'DATA_STORY_OUTPUTS', name: 'Firestore: Story Output Types', status: 'PENDING', message: '' },
   { id: 'DATA_STORY_PHASES', name: 'Firestore: Story Phases', status: 'PENDING', message: '' },
@@ -278,6 +288,28 @@ export default function AdminRegressionPage() {
       } catch (e: any) {
         updateTestResult('DATA_CHILDREN', { status: 'FAIL', message: e.message });
       }
+      
+      // Test: DATA_CHILDREN_EXTENDED
+      try {
+          const childrenRef = collection(firestore, 'children');
+          const snap = await getDocs(query(childrenRef, limit(1)));
+          fsSummary.childrenExtendedCount = snap.size;
+          if (snap.empty) {
+              updateTestResult('DATA_CHILDREN_EXTENDED', { status: 'SKIP', message: 'No children found to test.' });
+          } else {
+              const child = snap.docs[0].data() as ChildProfile;
+              if (!child.ownerParentUid) {
+                  throw new Error('First child document is missing ownerParentUid.');
+              }
+              if (!child.displayName) {
+                  throw new Error('First child document is missing displayName.');
+              }
+              updateTestResult('DATA_CHILDREN_EXTENDED', { status: 'PASS', message: 'First child has ownerParentUid.' });
+          }
+      } catch (e: any) {
+          updateTestResult('DATA_CHILDREN_EXTENDED', { status: 'FAIL', message: e.message });
+      }
+
 
       // Test: DATA_SESSIONS_OVERVIEW
       try {
@@ -362,8 +394,8 @@ export default function AdminRegressionPage() {
       }
   };
 
-  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult, arcAdvance: ScenarioArcAdvanceResult, arcBounds: ScenarioArcBoundsResult, ending: ScenarioEndingResult, storyCompile: ScenarioStoryCompileResult, phaseState: ScenarioPhaseStateResult }> => {
-    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null, arcAdvance: null, arcBounds: null, ending: null, storyCompile: null, phaseState: null };
+  const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult, arcAdvance: ScenarioArcAdvanceResult, arcBounds: ScenarioArcBoundsResult, ending: ScenarioEndingResult, storyCompile: ScenarioStoryCompileResult, phaseState: ScenarioPhaseStateResult, childStoryList: ScenarioChildStoryListResult }> => {
+    if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null, arcAdvance: null, arcBounds: null, ending: null, storyCompile: null, phaseState: null, childStoryList: null };
     
     let beatScenarioSummary: ScenarioResult = null;
     let warmupScenarioSummary: ScenarioWarmupResult = null;
@@ -375,7 +407,53 @@ export default function AdminRegressionPage() {
     let endingScenarioSummary: ScenarioEndingResult = null;
     let storyCompileScenarioSummary: ScenarioStoryCompileResult = null;
     let phaseStateScenarioSummary: ScenarioPhaseStateResult = null;
+    let childStoryListScenarioSummary: ScenarioChildStoryListResult = null;
     let apiSummary: any = {};
+
+    // Test: SCENARIO_CHILD_STORY_LIST
+    try {
+        const parentUid = `parent_${Date.now()}`;
+        const childRef = await addDoc(collection(firestore, 'children'), {
+            displayName: 'Story List Test Child',
+            ownerParentUid: parentUid,
+            createdAt: serverTimestamp()
+        });
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+            childId: childRef.id,
+            parentUid: parentUid,
+            storyTitle: 'Test Story for List',
+            status: 'completed',
+            createdAt: serverTimestamp()
+        });
+        
+        childStoryListScenarioSummary = { childId: childRef.id, parentUid, storyCount: 0 };
+        
+        // This simulates the query from the /stories page
+        const storiesQuery = query(
+            collection(firestore, 'storySessions'),
+            where('parentUid', '==', parentUid),
+            where('childId', '==', childRef.id)
+        );
+        const storiesSnap = await getDocs(storiesQuery);
+        childStoryListScenarioSummary.storyCount = storiesSnap.size;
+        
+        if (storiesSnap.size !== 1) {
+            throw new Error(`Expected 1 story for child, but found ${storiesSnap.size}.`);
+        }
+        
+        const storyData = storiesSnap.docs[0].data();
+        childStoryListScenarioSummary.firstStoryId = storiesSnap.docs[0].id;
+        
+        if (storyData.childId !== childRef.id) {
+            throw new Error('Found story does not belong to the correct child.');
+        }
+
+        updateTestResult('SCENARIO_CHILD_STORY_LIST', { status: 'PASS', message: 'Successfully created and queried story for a specific child.' });
+
+    } catch (e: any) {
+        if(childStoryListScenarioSummary) childStoryListScenarioSummary.error = e.message;
+        updateTestResult('SCENARIO_CHILD_STORY_LIST', { status: 'ERROR', message: e.message, details: childStoryListScenarioSummary });
+    }
 
     // Test: SCENARIO_PHASE_STATE_MACHINE
     try {
@@ -934,13 +1012,14 @@ export default function AdminRegressionPage() {
         }
     }
     
-    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary, storyCompile: storyCompileScenarioSummary, phaseState: phaseStateScenarioSummary };
+    const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary, storyCompile: storyCompileScenarioSummary, phaseState: phaseStateScenarioSummary, childStoryList: childStoryListScenarioSummary };
     setDiagnostics(prev => ({...prev, apiSummary: {...prev.apiSummary, ...apiSummary }, scenario: scenarioResults }));
     return scenarioResults;
   };
 
   const runTest = async (testId: string) => {
     switch (testId) {
+        case 'DATA_CHILDREN_EXTENDED':
         case 'DATA_SESSIONS_OVERVIEW':
         case 'DATA_CHILDREN':
         case 'DATA_STORY_OUTPUTS':
@@ -954,6 +1033,7 @@ export default function AdminRegressionPage() {
         case 'SESSION_BEAT_MESSAGES':
             await runSessionTests();
             break;
+        case 'SCENARIO_CHILD_STORY_LIST':
         case 'SCENARIO_PHASE_STATE_MACHINE':
         case 'SCENARIO_STORY_COMPILE':
         case 'SCENARIO_ENDING_FLOW':

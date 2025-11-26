@@ -13,7 +13,7 @@ export function useUploadFile() {
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
-    const uploadFile = async (path: string, dataUrl: string) => {
+    const uploadFile = async (path: string, dataUrl: string): Promise<string | null> => {
         if (!storage || !user) {
             const err = new Error('User or storage not available');
             setError(err);
@@ -25,28 +25,25 @@ export function useUploadFile() {
         
         const storageRef = ref(storage, path);
         
-        uploadString(storageRef, dataUrl, 'data_url').then(snapshot => {
+        try {
+            const snapshot = await uploadString(storageRef, dataUrl, 'data_url');
             setIsUploading(false);
-            return getDownloadURL(snapshot.ref);
-        }).catch(err => {
+            const downloadURL = await getDownloadURL(snapshot.ref);
+            return downloadURL;
+        } catch (err: any) {
             setIsUploading(false);
             setError(err);
 
-            // Create and emit the contextual permission error
             const permissionError = new FirestorePermissionError({
                 path: path,
-                operation: 'create', // upload is essentially a create operation
-                requestResourceData: {
-                    name: storageRef.name,
-                    fullPath: storageRef.fullPath,
-                    bucket: storageRef.bucket,
-                    size: dataUrl.length // Approximate size
-                }
+                operation: 'create',
+                requestResourceData: { name: storageRef.name, fullPath: storageRef.fullPath, bucket: storageRef.bucket }
             });
             errorEmitter.emit('permission-error', permissionError);
             
-            // We don't re-throw here because the listener will handle it.
-        });
+            // Return null or throw to indicate failure
+            return null;
+        }
     };
 
     return { uploadFile, isUploading, error };
