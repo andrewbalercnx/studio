@@ -223,6 +223,20 @@ export default function ManageChildrenPage() {
         toast({ title: 'Copied to clipboard!' });
     };
 
+    const getDisplayDate = (date: any) => {
+        if (!date) return '';
+        // Firestore timestamp objects have a toDate() method
+        if (date.toDate) {
+            return date.toDate().toLocaleDateString();
+        }
+        // Handle case where it might already be a Date object or a string
+        const d = new Date(date);
+        if (!isNaN(d.getTime())) {
+            return d.toLocaleDateString();
+        }
+        return 'Invalid Date';
+    };
+
     const renderContent = () => {
         if (userLoading || loading) {
             return <div className="flex items-center gap-2 justify-center py-8"><LoaderCircle className="h-5 w-5 animate-spin" /><span>Loading children...</span></div>;
@@ -253,7 +267,7 @@ export default function ManageChildrenPage() {
                             </Avatar>
                             <div>
                                 <CardTitle>{child.displayName}</CardTitle>
-                                {child.dateOfBirth && <CardDescription>Born: {new Date(child.dateOfBirth).toLocaleDateString()}</CardDescription>}
+                                {child.dateOfBirth && <CardDescription>Born: {getDisplayDate(child.dateOfBirth)}</CardDescription>}
                             </div>
                         </CardHeader>
                         <CardFooter className="flex justify-end gap-2">
@@ -315,3 +329,5 @@ export default function ManageChildrenPage() {
         </ParentGuard>
     );
 }
+
+    
