@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
@@ -13,13 +14,13 @@ import type { ChildProfile } from '@/lib/types';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
+const sampleChildId = "sample-child-1";
 const sampleChild: Omit<ChildProfile, 'id' | 'createdAt' | 'updatedAt' | 'ownerParentUid'> = {
     displayName: "Sample Child",
     dateOfBirth: new Date(new Date().setFullYear(new Date().getFullYear() - 4)).toISOString(),
     avatarUrl: `https://picsum.photos/seed/${sampleChildId}/200/200`,
     photos: [],
 };
-const sampleChildId = "sample-child-1";
 
 
 export default function AdminChildrenPage() {
@@ -77,9 +78,6 @@ export default function AdminChildrenPage() {
     };
 
     setDoc(docRef, dataToSet, { merge: true })
-      .then(() => {
-        toast({ title: 'Success', description: 'Sample child profile created.' });
-      })
       .catch((serverError) => {
         // Create and emit the contextual permission error
         const permissionError = new FirestorePermissionError({
@@ -186,7 +184,7 @@ export default function AdminChildrenPage() {
           </Button>
         </CardHeader>
         <CardContent>
-          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
+          <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
             <code>{JSON.stringify(diagnostics, null, 2)}</code>
           </pre>
         </CardContent>
