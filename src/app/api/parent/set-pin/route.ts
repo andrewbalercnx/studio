@@ -21,6 +21,9 @@ async function getUserIdFromToken() {
 
 function hashPin(pin: string): string {
     const salt = process.env.PIN_SALT || 'default-super-secret-salt';
+    if (!salt) {
+        throw new Error('PIN_SALT environment variable is not set.');
+    }
     return createHmac('sha256', salt).update(pin).digest('hex');
 }
 
@@ -42,7 +45,8 @@ export async function POST(request: Request) {
 
     const pinHash = hashPin(pin);
 
-    await userRef.update({ pinHash });
+    // Using `set` with `merge: true` is safer as it won't overwrite the whole doc
+    await userRef.set({ pinHash }, { merge: true });
 
     return NextResponse.json({ ok: true, message: 'PIN set successfully' });
 
@@ -54,5 +58,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: 'An unexpected error occurred.' }, { status: 500 });
   }
 }
-
-    

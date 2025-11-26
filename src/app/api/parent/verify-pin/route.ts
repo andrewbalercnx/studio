@@ -21,6 +21,9 @@ async function getUserIdFromToken() {
 
 function hashPin(pin: string): string {
     const salt = process.env.PIN_SALT || 'default-super-secret-salt';
+     if (!salt) {
+        throw new Error('PIN_SALT environment variable is not set.');
+    }
     return createHmac('sha256', salt).update(pin).digest('hex');
 }
 
@@ -66,5 +69,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: 'An unexpected error occurred.' }, { status: 500 });
   }
 }
-
-    

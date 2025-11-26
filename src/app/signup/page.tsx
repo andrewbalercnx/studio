@@ -12,15 +12,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { createHmac } from 'crypto';
-
-function hashPin(pin: string): string {
-    // This should ideally use a server-side endpoint with a secret salt,
-    // but for client-side hashing, we'll use a placeholder.
-    // IMPORTANT: In a real app, move this to a Cloud Function.
-    const salt = process.env.NEXT_PUBLIC_PIN_SALT || 'default-super-secret-salt';
-    return createHmac('sha256', salt).update(pin).digest('hex');
-}
 
 export default function SignUpPage() {
   const [email, setEmail] = useState('');
@@ -57,9 +48,7 @@ export default function SignUpPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      const pinHash = hashPin(pin);
-
-      // Create a user document in Firestore
+      // Create a user document in Firestore first, without the PIN
       await setDoc(doc(firestore, 'users', user.uid), {
         id: user.uid,
         email: user.email,
@@ -68,9 +57,24 @@ export default function SignUpPage() {
             writer: false,
             parent: true,
         },
-        pinHash: pinHash,
         createdAt: serverTimestamp(),
       });
+      
+      // Now, call the API to securely set the PIN hash
+      const idToken = await user.getIdToken();
+      const pinResponse = await fetch('/api/parent/set-pin', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ pin }),
+      });
+
+      if (!pinResponse.ok) {
+          const errorResult = await pinResponse.json();
+          throw new Error(errorResult.message || 'Failed to set PIN after signup.');
+      }
       
       toast({ title: 'Account created successfully!' });
       router.push('/');
