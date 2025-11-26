@@ -47,6 +47,9 @@ export default function AdminDashboardPage() {
         <p>Welcome to the Story Guide admin area.</p>
         <div className="flex flex-wrap gap-4">
           <Button asChild>
+            <Link href="/admin/create">Create Data (Dev)</Link>
+          </Button>
+          <Button asChild>
             <Link href="/admin/storyDesigner">Story Designer (Beta)</Link>
           </Button>
           <Button asChild>

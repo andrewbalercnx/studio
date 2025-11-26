@@ -1,86 +1,58 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import type { StorySession, ChatMessage as ChatMessageType } from '@/lib/types';
-import { ChatMessage } from '@/components/chat-message';
-import { LoaderCircle, Send } from 'lucide-react';
+import { useMemo } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
+import { useFirestore } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
+import { useCollection } from '@/lib/firestore-hooks';
+import type { ChildProfile } from '@/lib/types';
+import { LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useRouter } from 'next/navigation';
 
-// Create a mock story session for development
-const createMockStorySession = (user: any): StorySession => ({
-  id: 'session-1',
-  childId: user.uid,
-  status: 'in_progress',
-  currentPhase: 'warmup',
-  currentStepIndex: 0,
-  characters: [],
-  beats: [],
-  messages: [],
-  createdAt: new Date(),
-  updatedAt: new Date(),
-});
+function ChildIcon({ profile }: { profile: ChildProfile }) {
+  const router = useRouter();
 
+  const handleSelectChild = () => {
+    // In a real app, you'd set this in a global context
+    localStorage.setItem('activeChildId', profile.id);
+    localStorage.setItem('activeChildName', profile.displayName);
+    router.push('/story/start');
+  };
 
-export default function Home() {
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <button onClick={handleSelectChild} className="rounded-full hover:ring-4 hover:ring-primary/50 transition-all">
+        <Avatar className="h-24 w-24 border-4 border-white shadow-md">
+          <AvatarImage src={profile.avatarUrl} alt={profile.displayName} />
+          <AvatarFallback className="text-3xl bg-secondary text-secondary-foreground">
+            {profile.displayName.charAt(0)}
+          </AvatarFallback>
+        </Avatar>
+      </button>
+      <p className="font-bold text-lg">{profile.displayName}</p>
+    </div>
+  );
+}
+
+export default function ChildSelectionPage() {
   const { user, loading: userLoading } = useUser();
-  const [session, setSession] = useState<StorySession | null>(null);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const firestore = useFirestore();
 
-  // Start the conversation when the component loads
-  useEffect(() => {
-    if (user && !session) {
-      const newSession = createMockStorySession(user);
-      const initialMessage: ChatMessageType = {
-        id: `assistant-${Date.now()}`,
-        sender: 'assistant',
-        role: 'assistant',
-        content: "Hi! I'm your Story Guide. I'm so excited to help you create a story. First, what's your name?",
-        createdAt: new Date(),
-      };
-      newSession.messages.push(initialMessage);
-      setSession(newSession);
-    }
-  }, [user, session]);
+  const childrenQuery = useMemo(() => {
+    if (!user || !firestore) return null;
+    return query(
+      collection(firestore, 'children'),
+      where('ownerParentUid', '==', user.uid)
+    );
+  }, [user, firestore]);
 
-  // Scroll to bottom when new messages are added
-  useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
-    }
-  }, [session?.messages]);
+  const { data: children, loading: childrenLoading, error: childrenError } = useCollection<ChildProfile>(childrenQuery);
 
-  const sendMessage = async (messageContent: string) => {
-    if (!messageContent.trim() || !session) return;
-
-    const userMessage: ChatMessageType = {
-      id: `user-${Date.now()}`,
-      sender: 'child',
-      role: 'user',
-      content: messageContent,
-      createdAt: new Date(),
-    };
-    
-    // In this step, we only add the user's message.
-    // The call to `continueChat` is removed to prevent auto-replies.
-    setSession(prev => prev ? { ...prev, messages: [...prev.messages, userMessage] } : null);
-    setInput('');
-  };
-
-  const handleSend = () => {
-    sendMessage(input);
-  };
-  
-  const handleChoiceClick = (choiceText: string) => {
-    sendMessage(choiceText);
-  };
-
-  if (userLoading) {
+  if (userLoading || childrenLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center">
         <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
@@ -90,59 +62,45 @@ export default function Home() {
 
   if (!user) {
     return (
-        <div className="container mx-auto px-4 py-12 sm:py-16 md:py-24 flex items-center justify-center h-screen">
-            <Card className="text-center p-8">
-                <CardHeader>
-                    <CardTitle className="text-3xl font-headline">Welcome to StoryPic Kids!</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-muted-foreground mb-6">Please sign in to start creating your story.</p>
-                    <Button asChild>
-                        <Link href="/login">Sign In</Link>
-                    </Button>
-                </CardContent>
-            </Card>
-        </div>
-    )
+      <div className="container mx-auto px-4 py-12 sm:py-16 md:py-24 flex items-center justify-center h-screen">
+        <Card className="text-center p-8">
+          <CardHeader>
+            <CardTitle className="text-3xl font-headline">Welcome to StoryPic Kids!</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-6">Please sign in to start creating your story.</p>
+            <Button asChild>
+              <Link href="/login">Sign In</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  if (childrenError) {
+      return <div className="text-center p-8 text-destructive">Error loading profiles: {childrenError.message}</div>
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] justify-center items-center p-4">
-      <Card className="w-full max-w-2xl h-full flex flex-col">
-        <CardHeader>
-          <CardTitle className="font-headline text-center">Story Chat</CardTitle>
+    <div className="container mx-auto px-4 py-12 sm:py-16 md:py-24">
+      <Card className="max-w-4xl mx-auto">
+        <CardHeader className="text-center">
+          <CardTitle className="text-4xl font-headline">Who's playing?</CardTitle>
+          <CardDescription>Select a profile to start a new story or continue an old one.</CardDescription>
         </CardHeader>
-        <CardContent ref={scrollAreaRef} className="flex-grow overflow-y-auto pr-6 space-y-4">
-          {session?.messages.map((msg) => (
-            <ChatMessage key={msg.id} message={msg} onChoiceClick={handleChoiceClick} />
-          ))}
-           {isLoading && (
-            <div className="flex justify-start">
-                <div className="bg-muted p-3 rounded-lg flex items-center gap-2">
-                    <LoaderCircle className="h-5 w-5 animate-spin" />
-                    <span className="text-sm text-muted-foreground">Thinking...</span>
-                </div>
-            </div>
-           )}
+        <CardContent className="flex flex-wrap items-start justify-center gap-8 md:gap-12 pt-8">
+          {children && children.length > 0 ? (
+            children.map(child => <ChildIcon key={child.id} profile={child} />)
+          ) : (
+             <div className="text-center py-8">
+                <p className="text-muted-foreground mb-4">No child profiles found.</p>
+                <Button asChild>
+                    <Link href="/admin/create">Create a Child Profile</Link>
+                </Button>
+             </div>
+          )}
         </CardContent>
-        <CardFooter className="border-t pt-6">
-          <div className="flex w-full items-center space-x-2">
-            <Input
-              id="message"
-              placeholder="Type your message..."
-              className="flex-1"
-              autoComplete="off"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleSend()}
-              disabled={isLoading}
-            />
-            <Button onClick={handleSend} disabled={isLoading}>
-              <Send className="h-4 w-4" />
-              <span className="sr-only">Send</span>
-            </Button>
-          </div>
-        </CardFooter>
       </Card>
     </div>
   );

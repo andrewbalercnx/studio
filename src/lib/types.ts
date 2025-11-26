@@ -38,6 +38,7 @@ export type StoryBeat = {
 export type StorySession = {
     id:string;
     childId: string;
+    parentUid: string;
     // The overall status of the story session.
     status: 'in_progress' | 'completed';
     // The current phase of the story creation process.
@@ -96,12 +97,17 @@ export type PromptConfig = {
 export type ChildProfile = {
     id: string;
 	displayName: string;
-	createdAt: Date;
-	estimatedLevel: number;
-	favouriteGenres: string[];
-	favouriteCharacterTypes: string[];
-	preferredStoryLength: 'short' | 'medium' | 'long';
-	helpPreference: 'more_scaffolding' | 'balanced' | 'independent';
+    ownerParentUid: string;
+    dateOfBirth?: any;
+    photos?: string[];
+    avatarUrl?: string;
+	createdAt: any;
+    updatedAt?: any;
+	estimatedLevel?: number;
+	favouriteGenres?: string[];
+	favouriteCharacterTypes?: string[];
+	preferredStoryLength?: 'short' | 'medium' | 'long';
+	helpPreference?: 'more_scaffolding' | 'balanced' | 'independent';
 };
 
 export type StoryPhase = {
@@ -163,7 +169,7 @@ export type StoryOutputType = {
     shortDescription: string;
     childFacingLabel: string;
     category: "picture_book" | "poem" | "coloring_pages" | "audio_script";
-    layoutHints: {
+    layoutHints?: {
         pageCount?: number;
         needsImages?: boolean;
         preferredAspectRatio?: "landscape" | "portrait" | "square";
@@ -178,5 +184,3 @@ export type StoryOutputType = {
     createdAt?: any;
     updatedAt?: any;
 };
-
-    

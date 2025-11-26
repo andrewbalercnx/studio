@@ -3,7 +3,7 @@
   "entities": {
     "UserProfile": {
       "title": "User Profile",
-      "description": "Stores user-specific information.",
+      "description": "Stores user-specific information, representing the parent account.",
       "type": "object",
       "properties": {
         "id": {
@@ -16,8 +16,8 @@
           "description": "The user's email address."
         },
         "isAdmin": {
-            "type": "boolean",
-            "description": "Whether the user has administrative privileges."
+          "type": "boolean",
+          "description": "Whether the user has administrative privileges."
         },
         "createdAt": {
           "type": "string",
@@ -25,65 +25,54 @@
           "description": "Timestamp when the profile was created."
         }
       },
-      "required": ["id", "email", "createdAt"]
+      "required": [
+        "id",
+        "email",
+        "createdAt"
+      ]
     },
     "ChildProfile": {
       "title": "Child Profile",
-      "description": "Stores information about a child using the app.",
+      "description": "Stores information about a child, owned by a parent (UserProfile).",
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
           "description": "Unique identifier for the child."
         },
+        "ownerParentUid": {
+          "type": "string",
+          "description": "The Firebase Auth UID of the parent who owns this profile."
+        },
         "displayName": {
           "type": "string",
           "description": "The child's chosen display name."
+        },
+        "dateOfBirth": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The child's date of birth."
+        },
+        "photos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Array of Firebase Storage URLs for the child's photos."
+        },
+        "avatarUrl": {
+          "type": "string",
+          "description": "URL to the child's chosen avatar image."
         },
         "createdAt": {
           "type": "string",
           "format": "date-time",
           "description": "Timestamp when the profile was created."
-        },
-        "estimatedLevel": {
-          "type": "number",
-          "description": "AI-estimated reading/writing level (e.g., 1-5)."
-        },
-        "favouriteGenres": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "List of genres the child enjoys (e.g., 'funny', 'magical')."
-        },
-        "favouriteCharacterTypes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Common character types the child likes (e.g., 'self', 'pet')."
-        },
-        "preferredStoryLength": {
-          "type": "string",
-          "enum": [
-            "short",
-            "medium",
-            "long"
-          ],
-          "description": "The typical story length the child prefers."
-        },
-        "helpPreference": {
-          "type": "string",
-          "enum": [
-            "more_scaffolding",
-            "balanced",
-            "independent"
-          ],
-          "description": "How much guidance the child prefers."
         }
       },
       "required": [
         "id",
+        "ownerParentUid",
         "displayName",
         "createdAt"
       ]
@@ -101,6 +90,10 @@
           "type": "string",
           "description": "Reference to the child who owns this session."
         },
+        "parentUid": {
+          "type": "string",
+          "description": "Reference to the parent account that owns this session."
+        },
         "status": {
           "type": "string",
           "enum": [
@@ -111,7 +104,12 @@
         },
         "currentPhase": {
           "type": "string",
-          "enum": ["warmup", "story", "ending", "final"],
+          "enum": [
+            "warmup",
+            "story",
+            "ending",
+            "final"
+          ],
           "description": "The current phase of the story creation flow (e.g., 'warmup', 'story')."
         },
         "currentStepIndex": {
@@ -143,8 +141,8 @@
           "description": "The ID of the prompt config used for this session."
         },
         "promptConfigLevelBand": {
-            "type": "string",
-            "description": "The level band of the prompt config used for this session."
+          "type": "string",
+          "description": "The level band of the prompt config used for this session."
         },
         "storyTypeId": {
           "type": "string",
@@ -172,17 +170,31 @@
         "pendingCharacterTraits": {
           "type": "object",
           "properties": {
-            "characterId": { "type": "string" },
-            "characterLabel": { "type": "string" },
-            "questionText": { "type": "string" },
-            "askedAt": { "type": "string", "format": "date-time" }
+            "characterId": {
+              "type": "string"
+            },
+            "characterLabel": {
+              "type": "string"
+            },
+            "questionText": {
+              "type": "string"
+            },
+            "askedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
           },
-          "required": ["characterId", "characterLabel", "questionText"]
+          "required": [
+            "characterId",
+            "characterLabel",
+            "questionText"
+          ]
         }
       },
       "required": [
         "id",
         "childId",
+        "parentUid",
         "status",
         "currentPhase",
         "currentStepIndex",
@@ -208,7 +220,13 @@
         },
         "role": {
           "type": "string",
-          "enum": ["child", "family", "friend", "pet", "other"]
+          "enum": [
+            "child",
+            "family",
+            "friend",
+            "pet",
+            "other"
+          ]
         },
         "name": {
           "type": "string"
@@ -216,8 +234,17 @@
         "realPersonRef": {
           "type": "object",
           "properties": {
-            "kind": { "type": "string", "enum": ["self", "family", "friend"]},
-            "label": { "type": "string" }
+            "kind": {
+              "type": "string",
+              "enum": [
+                "self",
+                "family",
+                "friend"
+              ]
+            },
+            "label": {
+              "type": "string"
+            }
           }
         },
         "traits": {
@@ -228,17 +255,25 @@
           "description": "A list of short, child-level adjectives/phrases (e.g., [“soft”, “quiet”, “brave”])."
         },
         "traitsLastUpdatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Timestamp when traits were last updated."
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when traits were last updated."
         },
         "visualNotes": {
           "type": "object",
           "properties": {
-            "hair": { "type": "string" },
-            "clothing": { "type": "string" },
-            "specialItem": { "type": "string" },
-            "styleHint": { "type": "string" }
+            "hair": {
+              "type": "string"
+            },
+            "clothing": {
+              "type": "string"
+            },
+            "specialItem": {
+              "type": "string"
+            },
+            "styleHint": {
+              "type": "string"
+            }
           }
         },
         "createdAt": {
@@ -250,27 +285,36 @@
           "format": "date-time"
         }
       },
-      "required": ["id", "ownerChildId", "role", "name", "createdAt", "updatedAt"]
+      "required": [
+        "id",
+        "ownerChildId",
+        "role",
+        "name",
+        "createdAt",
+        "updatedAt"
+      ]
     },
     "StoryBeat": {
-        "title": "Story Beat",
-        "description": "A single plot point or section of the story.",
-        "type": "object",
-        "properties": {
-            "label": {
-                "type": "string",
-                "description": "A machine-readable label for the beat (e.g., 'start', 'problem')."
-            },
-            "childPlanText": {
-                "type": "string",
-                "description": "The child's one or two sentence plan for this beat."
-            },
-            "draftText": {
-                "type": "string",
-                "description": "The AI-drafted paragraph for this beat."
-            }
+      "title": "Story Beat",
+      "description": "A single plot point or section of the story.",
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "A machine-readable label for the beat (e.g., 'start', 'problem')."
         },
-        "required": ["label"]
+        "childPlanText": {
+          "type": "string",
+          "description": "The child's one or two sentence plan for this beat."
+        },
+        "draftText": {
+          "type": "string",
+          "description": "The AI-drafted paragraph for this beat."
+        }
+      },
+      "required": [
+        "label"
+      ]
     },
     "ChatMessage": {
       "title": "Chat Message",
@@ -332,11 +376,20 @@
         },
         "newCharacterKind": {
           "type": "string",
-          "enum": ["toy", "pet", "friend", "family", "other"],
+          "enum": [
+            "toy",
+            "pet",
+            "friend",
+            "family",
+            "other"
+          ],
           "description": "The kind of the new character."
         }
       },
-      "required": ["label", "value"]
+      "required": [
+        "label",
+        "value"
+      ]
     },
     "PromptConfig": {
       "title": "Prompt Configuration",
@@ -353,7 +406,11 @@
         },
         "levelBand": {
           "type": "string",
-          "enum": ["low", "medium", "high"],
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
           "description": "Optional language complexity level this config targets."
         },
         "systemPrompt": {
@@ -376,81 +433,228 @@
           "description": "Defines the types of responses the AI is allowed to make (e.g. 'ask_short_question')."
         }
       },
-      "required": ["id", "phase", "systemPrompt", "modeInstructions"]
+      "required": [
+        "id",
+        "phase",
+        "systemPrompt",
+        "modeInstructions"
+      ]
     },
     "StoryPhase": {
-        "title": "Story Phase",
-        "description": "A phase of the story interaction.",
-        "type": "object",
-        "properties": {
-            "id": { "type": "string" },
-            "name": { "type": "string" },
-            "phaseType": { "type": "string", "enum": ["warmup", "storyBeat", "ending"] },
-            "description": { "type": "string" },
-            "choiceCount": { "type": "number" },
-            "allowMore": { "type": "boolean" },
-            "status": { "type": "string", "enum": ["live", "draft"] },
-            "orderIndex": { "type": "number" }
+      "title": "Story Phase",
+      "description": "A phase of the story interaction.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
         },
-        "required": ["id", "name", "phaseType", "choiceCount", "allowMore", "status", "orderIndex"]
+        "name": {
+          "type": "string"
+        },
+        "phaseType": {
+          "type": "string",
+          "enum": [
+            "warmup",
+            "storyBeat",
+            "ending"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "choiceCount": {
+          "type": "number"
+        },
+        "allowMore": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "live",
+            "draft"
+          ]
+        },
+        "orderIndex": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "phaseType",
+        "choiceCount",
+        "allowMore",
+        "status",
+        "orderIndex"
+      ]
     },
     "StoryType": {
-        "title": "Story Type",
-        "description": "A template for a story.",
-        "type": "object",
-        "properties": {
-            "id": { "type": "string" },
-            "name": { "type": "string" },
-            "shortDescription": { "type": "string" },
-            "ageRange": { "type": "string" },
-            "status": { "type": "string", "enum": ["live", "draft"] },
-            "tags": { "type": "array", "items": { "type": "string" } },
-            "defaultPhaseId": { "type": "string" },
-            "endingPhaseId": { "type": "string" },
-            "levelBands": { "type": "array", "items": { "type": "string" } },
-            "arcTemplate": {
-                "type": "object",
-                "properties": {
-                    "steps": { "type": "array", "items": { "type": "string" } }
-                }
-            }
+      "title": "Story Type",
+      "description": "A template for a story.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
         },
-        "required": ["id", "name", "shortDescription", "status", "tags", "defaultPhaseId", "endingPhaseId", "levelBands", "arcTemplate"]
+        "name": {
+          "type": "string"
+        },
+        "shortDescription": {
+          "type": "string"
+        },
+        "ageRange": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "live",
+            "draft"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "defaultPhaseId": {
+          "type": "string"
+        },
+        "endingPhaseId": {
+          "type": "string"
+        },
+        "levelBands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "arcTemplate": {
+          "type": "object",
+          "properties": {
+            "steps": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "shortDescription",
+        "status",
+        "tags",
+        "defaultPhaseId",
+        "endingPhaseId",
+        "levelBands",
+        "arcTemplate"
+      ]
     },
     "StoryOutputType": {
-        "title": "Story Output Type",
-        "description": "Defines a type of finished product the system can generate.",
-        "type": "object",
-        "properties": {
-            "id": { "type": "string" },
-            "name": { "type": "string" },
-            "status": { "type": "string", "enum": ["live", "draft", "archived"] },
-            "ageRange": { "type": "string" },
-            "shortDescription": { "type": "string" },
-            "childFacingLabel": { "type": "string" },
-            "category": { "type": "string", "enum": ["picture_book", "poem", "coloring_pages", "audio_script"] },
-            "layoutHints": {
-                "type": "object",
-                "properties": {
-                    "pageCount": { "type": "number" },
-                    "needsImages": { "type": "boolean" },
-                    "preferredAspectRatio": { "type": "string", "enum": ["landscape", "portrait", "square"] },
-                    "textDensity": { "type": "string", "enum": ["very_low", "low", "medium"] }
-                }
-            },
-            "aiHints": {
-                "type": "object",
-                "properties": {
-                    "style": { "type": "string" },
-                    "allowRhyme": { "type": "boolean" },
-                    "maxPages": { "type": "number" }
-                }
-            },
-            "tags": { "type": "array", "items": { "type": "string" } },
-            "createdAt": { "type": "string", "format": "date-time" },
-            "updatedAt": { "type": "string", "format": "date-time" }
+      "title": "Story Output Type",
+      "description": "Defines a type of finished product the system can generate.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
         },
-        "required": ["id", "name", "status", "ageRange", "category"]
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "live",
+            "draft",
+            "archived"
+          ]
+        },
+        "ageRange": {
+          "type": "string"
+        },
+        "shortDescription": {
+          "type": "string"
+        },
+        "childFacingLabel": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "picture_book",
+            "poem",
+            "coloring_pages",
+            "audio_script"
+          ]
+        },
+        "layoutHints": {
+          "type": "object",
+          "properties": {
+            "pageCount": {
+              "type": "number"
+            },
+            "needsImages": {
+              "type": "boolean"
+            },
+            "preferredAspectRatio": {
+              "type": "string",
+              "enum": [
+                "landscape",
+                "portrait",
+                "square"
+              ]
+            },
+            "textDensity": {
+              "type": "string",
+              "enum": [
+                "very_low",
+                "low",
+                "medium"
+              ]
+            }
+          }
+        },
+        "aiHints": {
+          "type": "object",
+          "properties": {
+            "style": {
+              "type": "string"
+            },
+            "allowRhyme": {
+              "type": "boolean"
+            },
+            "maxPages": {
+              "type": "number"
+            }
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "status",
+        "ageRange",
+        "category"
+      ]
     }
   },
   "auth": {
@@ -461,42 +665,58 @@
   },
   "firestore": {
     "/users/{userId}": {
-        "schema": { "$ref": "#/entities/UserProfile" },
-        "description": "Stores public profiles for users."
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Stores public profiles for users."
     },
     "/children/{childId}": {
-      "schema": { "$ref": "#/entities/ChildProfile" },
-      "description": "Stores individual child profiles."
+      "schema": {
+        "$ref": "#/entities/ChildProfile"
+      },
+      "description": "Stores individual child profiles, owned by a parent."
     },
     "/storySessions/{storySessionId}": {
-      "schema": { "$ref": "#/entities/StorySession" },
+      "schema": {
+        "$ref": "#/entities/StorySession"
+      },
       "description": "Stores story creation sessions."
     },
     "/storySessions/{storySessionId}/messages/{messageId}": {
-      "schema": { "$ref": "#/entities/ChatMessage" },
+      "schema": {
+        "$ref": "#/entities/ChatMessage"
+      },
       "description": "Stores the sequence of messages for a given story session."
     },
     "/characters/{characterId}": {
-      "schema": { "$ref": "#/entities/Character" },
+      "schema": {
+        "$ref": "#/entities/Character"
+      },
       "description": "Stores characters for stories."
     },
     "/promptConfigs/{configId}": {
-      "schema": { "$ref": "#/entities/PromptConfig" },
+      "schema": {
+        "$ref": "#/entities/PromptConfig"
+      },
       "description": "Stores the prompt configurations that drive the AI's behavior."
     },
     "/storyPhases/{phaseId}": {
-        "schema": { "$ref": "#/entities/StoryPhase" },
-        "description": "Stores the configuration for story interaction phases."
+      "schema": {
+        "$ref": "#/entities/StoryPhase"
+      },
+      "description": "Stores the configuration for story interaction phases."
     },
     "/storyTypes/{typeId}": {
-        "schema": { "$ref": "#/entities/StoryType" },
-        "description": "Stores templates for different types of stories."
+      "schema": {
+        "$ref": "#/entities/StoryType"
+      },
+      "description": "Stores templates for different types of stories."
     },
     "/storyOutputTypes/{outputTypeId}": {
-        "schema": { "$ref": "#/entities/StoryOutputType" },
-        "description": "Stores definitions for different kinds of final outputs (e.g. picture book, poem)."
+      "schema": {
+        "$ref": "#/entities/StoryOutputType"
+      },
+      "description": "Stores definitions for different kinds of final outputs (e.g. picture book, poem)."
     }
   }
 }
-
-    
