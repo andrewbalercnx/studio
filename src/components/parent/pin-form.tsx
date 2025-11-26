@@ -18,15 +18,27 @@ import Link from 'next/link';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import type { UserProfile } from '@/lib/types';
+import { createHmac } from 'crypto';
+
+function hashPin(pin: string): string {
+    const salt = process.env.NEXT_PUBLIC_PIN_SALT || 'default-super-secret-salt';
+    if (!salt) {
+        console.warn('PIN_SALT environment variable is not set. Using a default salt.');
+    }
+    return createHmac('sha256', salt).update(pin).digest('hex');
+}
+
 
 export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => void, onOpenChange: (open: boolean) => void }) {
   const { user } = useUser();
   const firestore = useFirestore();
   const [pin, setPin] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [hasPinSetup, setHasPinSetup] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const { toast } = useToast();
+
+  const hasPinSetup = !!userProfile?.pinHash;
 
   useEffect(() => {
     async function checkPinStatus() {
@@ -36,55 +48,42 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
       }
       try {
         const userDoc = await getDoc(doc(firestore, 'users', user.uid));
-        if (userDoc.exists() && userDoc.data().pinHash) {
-          setHasPinSetup(true);
-        } else {
-          setHasPinSetup(false);
+        if (userDoc.exists()) {
+          setUserProfile(userDoc.data() as UserProfile);
         }
       } catch (e) {
         console.error("Failed to check for PIN", e);
-        setHasPinSetup(false);
+        toast({ title: "Error", description: "Could not fetch user profile for PIN check.", variant: "destructive" });
       } finally {
         setIsLoading(false);
       }
     }
     checkPinStatus();
-  }, [user, firestore]);
+  }, [user, firestore, toast]);
 
   const handleSubmit = async () => {
     if (pin.length !== 4) {
       toast({ title: 'PIN must be 4 digits', variant: 'destructive' });
       return;
     }
-    setIsLoading(true);
-    try {
-        const auth = getAuth();
-        const currentUser = auth.currentUser;
-        if (!currentUser) {
-            throw new Error("You must be logged in to verify a PIN.");
-        }
-        const idToken = await currentUser.getIdToken(true); // Force refresh
-
-      const response = await fetch('/api/parent/verify-pin', {
-        method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({ pin }),
-      });
-      const result = await response.json();
-      if (!response.ok || !result.ok) {
-        throw new Error(result.message || 'Incorrect PIN');
-      }
-      toast({ title: 'PIN Verified!' });
-      onPinVerified();
-    } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-      setPin('');
-    } finally {
-      setIsLoading(false);
+    if (!userProfile?.pinHash) {
+        toast({ title: 'Error', description: 'No PIN is set for this account.', variant: 'destructive'});
+        return;
     }
+
+    setIsLoading(true);
+    
+    const enteredPinHash = hashPin(pin);
+
+    if (enteredPinHash === userProfile.pinHash) {
+        toast({ title: 'PIN Verified!' });
+        onPinVerified();
+    } else {
+        toast({ title: 'Incorrect PIN', variant: 'destructive' });
+        setPin('');
+    }
+
+    setIsLoading(false);
   };
 
   if (isLoading) {
@@ -138,6 +137,7 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             placeholder="****"
             className="text-center text-2xl tracking-[1rem]"
+            autoComplete="one-time-code"
           />
         </div>
         <DialogFooter>
