@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
@@ -11,17 +10,19 @@ import { collection, doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/f
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { ChildProfile } from '@/lib/types';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
-const sampleChild: ChildProfile = {
-    id: "sample-child-1",
+const sampleChild: Omit<ChildProfile, 'id' | 'createdAt' | 'updatedAt' | 'ownerParentUid'> = {
     displayName: "Sample Child",
-    createdAt: new Date(), // This will be replaced by serverTimestamp
     estimatedLevel: 2,
     favouriteGenres: ["funny", "magical"],
     favouriteCharacterTypes: ["self", "pet"],
     preferredStoryLength: "short",
     helpPreference: "more_scaffolding"
 };
+const sampleChildId = "sample-child-1";
+
 
 export default function AdminChildrenPage() {
   const { isAuthenticated, isAdmin, email, loading: authLoading } = useAdminStatus();
@@ -60,14 +61,35 @@ export default function AdminChildrenPage() {
   
   const handleCreateSampleChild = async () => {
     if (!firestore) return;
-    try {
-        const docRef = doc(firestore, "children", sampleChild.id);
-        await setDoc(docRef, { ...sampleChild, createdAt: serverTimestamp() });
+    
+    const docRef = doc(firestore, "children", sampleChildId);
+    const dataToSet = { 
+        ...sampleChild, 
+        id: sampleChildId,
+        ownerParentUid: 'sample-parent-uid', // This will be the user's UID in a real scenario
+        createdAt: serverTimestamp() 
+    };
+
+    setDoc(docRef, dataToSet)
+      .then(() => {
         toast({ title: 'Success', description: 'Sample child profile created.' });
-    } catch (e: any) {
-        console.error("Error creating sample child:", e);
-        toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
+      })
+      .catch((serverError) => {
+        // Create and emit the contextual permission error
+        const permissionError = new FirestorePermissionError({
+          path: docRef.path,
+          operation: 'create',
+          requestResourceData: dataToSet,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        
+        // Also show a generic toast to the user
+        toast({
+          title: 'Error Creating Sample Child',
+          description: 'Check the developer console for permission details.',
+          variant: 'destructive',
+        });
+      });
   };
 
 
