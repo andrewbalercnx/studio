@@ -29,7 +29,8 @@ service cloud.firestore {
     }
 
     match /children/{childId} {
-      allow read, write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || request.resource.data.ownerParentUid == request.auth.uid;
+      allow read: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || resource.data.ownerParentUid == request.auth.uid;
+      allow write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || request.resource.data.ownerParentUid == request.auth.uid;
     }
     
     match /storySessions/{sessionId} {
