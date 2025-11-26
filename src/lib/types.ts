@@ -1,9 +1,18 @@
 
+
 'use client';
 
 import type { Timestamp } from 'firebase/firestore';
 
 export type Role = 'user' | 'assistant' | 'system';
+
+export type UserProfile = {
+  id: string;
+  email: string;
+  isAdmin?: boolean;
+  createdAt: any;
+  pinHash?: string;
+};
 
 export type Choice = {
     id: string;
@@ -184,3 +193,5 @@ export type StoryOutputType = {
     createdAt?: any;
     updatedAt?: any;
 };
+
+    

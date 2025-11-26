@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
@@ -18,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { useUser } from '@/firebase/auth/use-user';
 import { useUploadFile } from '@/firebase/storage/use-upload-file';
 import Image from 'next/image';
+import { ParentGuard } from '@/components/parent/parent-guard';
 
 function slugify(text: string) {
     return text
@@ -41,6 +43,7 @@ function ChildForm({ parentUid, onSave }: { parentUid: string, onSave: () => voi
         setIsSaving(true);
         const childId = `${slugify(name)}-${Date.now().toString().slice(-6)}`;
         const initialAvatarSeed = name || 'avatar';
+        
         const newChildData: Omit<ChildProfile, 'id' | 'createdAt' | 'updatedAt'> = {
             displayName: name,
             ownerParentUid: parentUid,
@@ -48,16 +51,24 @@ function ChildForm({ parentUid, onSave }: { parentUid: string, onSave: () => voi
             avatarUrl: `https://picsum.photos/seed/${initialAvatarSeed}/200/200`,
             photos: [],
         };
+
         try {
-            await setDoc(doc(firestore, 'children', childId), {
+            const docRef = doc(firestore, 'children', childId);
+            await setDoc(docRef, {
                 ...newChildData,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             });
             toast({ title: 'Child profile created!', description: `${name} has been added.` });
             onSave();
-        } catch (e: any) {
-            toast({ title: 'Error creating child', description: e.message, variant: 'destructive' });
+        } catch (serverError: any) {
+            const permissionError = new FirestorePermissionError({
+                path: `children/${childId}`,
+                operation: 'create',
+                requestResourceData: newChildData,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+            toast({ title: 'Error creating child', description: 'Check the console for permission details.', variant: 'destructive' });
         } finally {
             setIsSaving(false);
         }
@@ -168,8 +179,11 @@ export default function AdminChildrenPage() {
 
     const childrenQuery = useMemo(() => {
         if (!user || !firestore) return null;
-        return query(collection(firestore, 'children'), where('ownerParentUid', '==', user.uid));
-    }, [user, firestore]);
+        // Admins see all, parents see their own
+        return isAdmin 
+            ? collection(firestore, 'children')
+            : query(collection(firestore, 'children'), where('ownerParentUid', '==', user.uid));
+    }, [user, firestore, isAdmin]);
 
     useEffect(() => {
         if (!childrenQuery) {
@@ -185,7 +199,7 @@ export default function AdminChildrenPage() {
                 setError(null);
             },
             (serverError) => {
-                const permissionError = new FirestorePermissionError({ path: childrenQuery.path, operation: 'list' });
+                const permissionError = new FirestorePermissionError({ path: 'children', operation: 'list' });
                 errorEmitter.emit('permission-error', permissionError);
                 setError("Could not fetch children profiles. Check console for details.");
                 setChildren([]);
@@ -258,47 +272,51 @@ export default function AdminChildrenPage() {
     };
 
     return (
-        <div className="container mx-auto p-4 sm:p-6 md:p-8">
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                 <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Create New Child Profile</DialogTitle>
-                    </DialogHeader>
-                    {user && <ChildForm parentUid={user.uid} onSave={() => setIsCreateOpen(false)} />}
-                </DialogContent>
-            </Dialog>
+        <ParentGuard>
+            <div className="container mx-auto p-4 sm:p-6 md:p-8">
+                <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Create New Child Profile</DialogTitle>
+                        </DialogHeader>
+                        {user && <ChildForm parentUid={user.uid} onSave={() => setIsCreateOpen(false)} />}
+                    </DialogContent>
+                </Dialog>
 
-            <Dialog open={isPhotosOpen} onOpenChange={setIsPhotosOpen}>
-                 <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Manage Photos for {selectedChild?.displayName}</DialogTitle>
-                    </DialogHeader>
-                    {selectedChild && <ManagePhotos child={selectedChild} onOpenChange={setIsPhotosOpen}/>}
-                </DialogContent>
-            </Dialog>
+                <Dialog open={isPhotosOpen} onOpenChange={setIsPhotosOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Manage Photos for {selectedChild?.displayName}</DialogTitle>
+                        </DialogHeader>
+                        {selectedChild && <ManagePhotos child={selectedChild} onOpenChange={setIsPhotosOpen}/>}
+                    </DialogContent>
+                </Dialog>
 
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold">Manage Children</h1>
-                <Button onClick={() => setIsCreateOpen(true)}><PlusCircle className="mr-2"/> Add New Child</Button>
+                <div className="flex justify-between items-center mb-6">
+                    <h1 className="text-3xl font-bold">Manage Children</h1>
+                    <Button onClick={() => setIsCreateOpen(true)}><PlusCircle className="mr-2"/> Add New Child</Button>
+                </div>
+                
+                <Card>
+                    <CardContent className="pt-6">
+                        {renderContent()}
+                    </CardContent>
+                </Card>
+
+                <Card className="mt-8">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle>Diagnostics</CardTitle>
+                        <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}><Copy className="h-4 w-4" /></Button>
+                    </CardHeader>
+                    <CardContent>
+                        <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
+                            <code>{JSON.stringify(diagnostics, null, 2)}</code>
+                        </pre>
+                    </CardContent>
+                </Card>
             </div>
-            
-            <Card>
-                <CardContent className="pt-6">
-                    {renderContent()}
-                </CardContent>
-            </Card>
-
-            <Card className="mt-8">
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Diagnostics</CardTitle>
-                    <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}><Copy className="h-4 w-4" /></Button>
-                </CardHeader>
-                <CardContent>
-                    <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
-                        <code>{JSON.stringify(diagnostics, null, 2)}</code>
-                    </pre>
-                </CardContent>
-            </Card>
-        </div>
+        </ParentGuard>
     );
 }
+
+    

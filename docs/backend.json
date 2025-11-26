@@ -23,6 +23,10 @@
           "type": "string",
           "format": "date-time",
           "description": "Timestamp when the profile was created."
+        },
+        "pinHash": {
+          "type": "string",
+          "description": "A securely hashed version of the parent's 4-digit PIN."
         }
       },
       "required": [
@@ -720,3 +724,5 @@
     }
   }
 }
+
+    
