@@ -15,11 +15,9 @@ import { FirestorePermissionError } from '@/firebase/errors';
 
 const sampleChild: Omit<ChildProfile, 'id' | 'createdAt' | 'updatedAt' | 'ownerParentUid'> = {
     displayName: "Sample Child",
-    estimatedLevel: 2,
-    favouriteGenres: ["funny", "magical"],
-    favouriteCharacterTypes: ["self", "pet"],
-    preferredStoryLength: "short",
-    helpPreference: "more_scaffolding"
+    dateOfBirth: new Date(new Date().setFullYear(new Date().getFullYear() - 4)).toISOString(),
+    avatarUrl: `https://picsum.photos/seed/${sampleChildId}/200/200`,
+    photos: [],
 };
 const sampleChildId = "sample-child-1";
 
@@ -48,9 +46,16 @@ export default function AdminChildrenPage() {
         setLoading(false);
         setError(null);
       },
-      (err) => {
-        console.error("Error fetching children:", err);
-        setError("Could not fetch children profiles.");
+      (serverError) => {
+        // Create and emit the contextual permission error
+        const permissionError = new FirestorePermissionError({
+          path: childrenRef.path,
+          operation: 'list',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+
+        // Update UI state
+        setError("Could not fetch children profiles. Check console for details.");
         setChildren([]);
         setLoading(false);
       }
@@ -67,10 +72,11 @@ export default function AdminChildrenPage() {
         ...sampleChild, 
         id: sampleChildId,
         ownerParentUid: 'sample-parent-uid', // This will be the user's UID in a real scenario
-        createdAt: serverTimestamp() 
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
     };
 
-    setDoc(docRef, dataToSet)
+    setDoc(docRef, dataToSet, { merge: true })
       .then(() => {
         toast({ title: 'Success', description: 'Sample child profile created.' });
       })
@@ -144,8 +150,6 @@ export default function AdminChildrenPage() {
               <TableRow>
                   <TableHead>ID</TableHead>
                   <TableHead>Display Name</TableHead>
-                  <TableHead>Est. Level</TableHead>
-                  <TableHead>Story Length</TableHead>
               </TableRow>
           </TableHeader>
           <TableBody>
@@ -153,8 +157,6 @@ export default function AdminChildrenPage() {
                   <TableRow key={child.id}>
                       <TableCell className="font-mono">{child.id}</TableCell>
                       <TableCell>{child.displayName}</TableCell>
-                      <TableCell>{child.estimatedLevel}</TableCell>
-                      <TableCell>{child.preferredStoryLength}</TableCell>
                   </TableRow>
               ))}
           </TableBody>
