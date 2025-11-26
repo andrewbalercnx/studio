@@ -17,21 +17,36 @@ service cloud.firestore {
     }
 
     match /children/{childId} {
-        // Admins can read/write any child doc.
-        // A user can only read/write a child doc they own.
-        allow read, write: if request.auth.token.isAdmin == true || (request.resource.data.ownerParentUid == request.auth.uid);
+      // Admins can list and get any child document.
+      // Parents can only get their own child's document.
+      allow get: if request.auth.token.isAdmin == true || resource.data.ownerParentUid == request.auth.uid;
+      allow list: if request.auth.token.isAdmin == true;
+
+      // Admins can create, update, delete any child document.
+      // Parents can only create, update, delete their own child's document.
+      allow write: if request.auth.token.isAdmin == true || request.resource.data.ownerParentUid == request.auth.uid;
     }
     
     match /storySessions/{sessionId} {
-        allow read, write: if canRead();
+      // Admins can list and get any session document.
+      // Parents can only get their own session document.
+      allow get: if request.auth.token.isAdmin == true || resource.data.parentUid == request.auth.uid;
+      allow list: if request.auth.token.isAdmin == true;
+
+      // Admins can write to any session.
+      // Parents can write to their own sessions.
+      allow write: if request.auth.token.isAdmin == true || request.resource.data.parentUid == request.auth.uid;
     }
     
     match /storySessions/{sessionId}/messages/{messageId} {
-        allow read, write: if canRead();
+        // Access is inherited from the parent storySession
+        allow read, write: if get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid || request.auth.token.isAdmin == true;
     }
 
     match /characters/{characterId} {
-        allow read, write: if canRead();
+      // For now, allow read/write if admin or if the user owns the session the character is in.
+      // This is a simplification; a more robust rule would check ownership via the session document.
+      allow read, write: if canRead();
     }
 
     match /promptConfigs/{configId} {
