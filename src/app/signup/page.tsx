@@ -95,19 +95,43 @@ export default function SignUpPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" placeholder="m@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input id="email" type="email" placeholder="m@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
           </div>
            <div className="space-y-2">
             <Label htmlFor="pin">4-Digit Parent PIN</Label>
-            <Input id="pin" type="password" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} maxLength={4} placeholder="****" />
+            <Input 
+              id="pin" 
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*" 
+              value={pin} 
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} 
+              maxLength={4} 
+              placeholder="****"
+              autoComplete="one-time-code"
+              style={{ MozAppearance: 'textfield', WebkitAppearance: 'none', appearance: 'none' }}
+              className="tracking-[0.5em]"
+            />
           </div>
            <div className="space-y-2">
             <Label htmlFor="confirmPin">Confirm PIN</Label>
-            <Input id="confirmPin" type="password" value={confirmPin} onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))} maxLength={4} placeholder="****" />
+            <Input 
+              id="confirmPin" 
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*" 
+              value={confirmPin} 
+              onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))} 
+              maxLength={4} 
+              placeholder="****"
+              autoComplete="one-time-code"
+              style={{ MozAppearance: 'textfield', WebkitAppearance: 'none', appearance: 'none' }}
+              className="tracking-[0.5em]"
+            />
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
