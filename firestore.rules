@@ -17,14 +17,23 @@ service cloud.firestore {
     }
 
     match /children/{childId} {
-      // Admins can list and get any child document.
-      // Parents can only get their own child's document.
-      allow get: if request.auth.token.isAdmin == true || resource.data.ownerParentUid == request.auth.uid;
-      allow list: if request.auth.token.isAdmin == true;
+      // Read (get/list/query) existing docs
+      allow read: if request.auth != null
+                  && (
+                    request.auth.token.isAdmin == true ||
+                    resource.data.ownerParentUid == request.auth.uid
+                  );
 
-      // Admins can create, update, delete any child document.
-      // Parents can only create, update, delete their own child's document.
-      allow write: if request.auth.token.isAdmin == true || request.resource.data.ownerParentUid == request.auth.uid;
+      // Create: use request.resource.data (doc being written)
+      allow create: if request.auth != null
+                    && request.resource.data.ownerParentUid == request.auth.uid;
+
+      // Update/Delete: use resource.data (existing doc) to enforce ownership
+      allow update, delete: if request.auth != null
+                            && (
+                              request.auth.token.isAdmin == true ||
+                              resource.data.ownerParentUid == request.auth.uid
+                            );
     }
     
     match /storySessions/{sessionId} {
