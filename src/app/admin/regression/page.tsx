@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -10,10 +10,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useAuth } from '@/firebase';
 import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, increment } from 'firebase/firestore';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile } from '@/lib/types';
+import { IdTokenResult } from 'firebase/auth';
 
 type TestStatus = 'PENDING' | 'PASS' | 'FAIL' | 'ERROR' | 'SKIP';
 type TestResult = {
@@ -120,8 +120,21 @@ type ScenarioChildStoryListResult = {
     error?: string;
 } | null;
 
+type AuthSummary = {
+    uid: string | null;
+    email: string | null;
+    isAdmin: boolean;
+    isWriter: boolean;
+    isParent: boolean;
+    rawClaims?: Record<string, unknown>;
+};
+
 
 const initialTests: TestResult[] = [
+  { id: 'DATA_AUTH_CLAIMS', name: 'Auth: Claims Visibility', status: 'PENDING', message: '' },
+  { id: 'DATA_AUTH_ADMIN_FIRESTORE', name: 'Auth: Admin Firestore Access', status: 'PENDING', message: '' },
+  { id: 'DATA_AUTH_PARENT_CHILDREN', name: 'Auth: Parent Child Access', status: 'PENDING', message: '' },
+  { id: 'DATA_AUTH_WRITER_CONFIGS', name: 'Auth: Writer Config Access', status: 'PENDING', message: '' },
   { id: 'SCENARIO_CHILD_STORY_LIST', name: 'Scenario: Child Story List', status: 'PENDING', message: '' },
   { id: 'SCENARIO_PHASE_STATE_MACHINE', name: 'Scenario: Phase State Machine', status: 'PENDING', message: '' },
   { id: 'SCENARIO_STORY_COMPILE', name: 'Scenario: Story Compile', status: 'PENDING', message: '' },
@@ -149,14 +162,16 @@ const initialTests: TestResult[] = [
 
 
 export default function AdminRegressionPage() {
-  const { isAuthenticated, isAdmin, loading: authLoading } = useAdminStatus();
+  const { isAuthenticated, isAdmin: statusIsAdmin, loading: authLoading } = useAdminStatus();
   const firestore = useFirestore();
+  const auth = useAuth();
   const { toast } = useToast();
 
   const [beatSessionId, setBeatSessionId] = useState('');
   const [warmupSessionId, setWarmupSessionId] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [tests, setTests] = useState<TestResult[]>(initialTests);
+  const [authSummary, setAuthSummary] = useState<AuthSummary | null>(null);
 
   const [diagnostics, setDiagnostics] = useState<any>({
     page: 'admin-regression',
@@ -164,9 +179,116 @@ export default function AdminRegressionPage() {
     apiSummary: {},
     scenario: {},
   });
-
+  
   const updateTestResult = (id: string, result: Partial<TestResult>) => {
     setTests(prev => prev.map(t => t.id === id ? { ...t, ...result } : t));
+  };
+  
+  const runAuthTests = async (): Promise<AuthSummary> => {
+      const user = auth?.currentUser;
+      if (!user) {
+          const summary = { uid: null, email: null, isAdmin: false, isWriter: false, isParent: false };
+          updateTestResult('DATA_AUTH_CLAIMS', { status: 'FAIL', message: "No authenticated user found." });
+          updateTestResult('DATA_AUTH_ADMIN_FIRESTORE', { status: 'SKIP', message: "Requires authenticated user." });
+          updateTestResult('DATA_AUTH_PARENT_CHILDREN', { status: 'SKIP', message: "Requires authenticated user." });
+          updateTestResult('DATA_AUTH_WRITER_CONFIGS', { status: 'SKIP', message: "Requires authenticated user." });
+          return summary;
+      }
+      
+      const tokenResult = await user.getIdTokenResult(true);
+      const claims = tokenResult.claims;
+      const summary: AuthSummary = {
+          uid: user.uid,
+          email: user.email,
+          isAdmin: !!claims.isAdmin,
+          isWriter: !!claims.isWriter,
+          isParent: !!claims.isParent,
+          rawClaims: { ...claims }
+      };
+
+      // Test: DATA_AUTH_CLAIMS
+      updateTestResult('DATA_AUTH_CLAIMS', {
+          status: 'PASS',
+          message: `Auth as ${summary.email}; roles: admin=${summary.isAdmin}, writer=${summary.isWriter}, parent=${summary.isParent}`,
+          details: { claims: summary.rawClaims }
+      });
+
+      // Test: DATA_AUTH_ADMIN_FIRESTORE
+      if (!summary.isAdmin) {
+          updateTestResult('DATA_AUTH_ADMIN_FIRESTORE', { status: 'SKIP', message: 'Not an admin.' });
+      } else {
+          try {
+              const collectionsToTest = ['promptConfigs', 'storyTypes', 'storyPhases', 'storyOutputTypes', 'children'];
+              const promises = collectionsToTest.map(c => getDocs(query(collection(firestore!, c), limit(1))));
+              await Promise.all(promises);
+              updateTestResult('DATA_AUTH_ADMIN_FIRESTORE', { status: 'PASS', message: 'Admin can read core config and children collections.' });
+          } catch(e:any) {
+              updateTestResult('DATA_AUTH_ADMIN_FIRESTORE', { status: 'FAIL', message: `Admin read failed: ${e.message}` });
+          }
+      }
+
+      // Test: DATA_AUTH_PARENT_CHILDREN
+      if (summary.isAdmin || summary.isWriter) {
+          updateTestResult('DATA_AUTH_PARENT_CHILDREN', { status: 'SKIP', message: 'Skipping parent test for admin/writer.' });
+      } else {
+          try {
+              const ownChildrenQuery = query(collection(firestore!, 'children'), where('ownerParentUid', '==', user.uid));
+              const otherChildrenQuery = query(collection(firestore!, 'children'), where('ownerParentUid', '!=', user.uid), limit(1));
+              
+              await getDocs(ownChildrenQuery); // Should succeed
+              let failedAsExpected = false;
+              try {
+                  await getDocs(otherChildrenQuery); // Should fail
+              } catch(e: any) {
+                  if (e.code === 'permission-denied') failedAsExpected = true;
+              }
+
+              if (failedAsExpected) {
+                  updateTestResult('DATA_AUTH_PARENT_CHILDREN', { status: 'PASS', message: "Parent can read own children and is blocked from others'." });
+              } else {
+                  updateTestResult('DATA_AUTH_PARENT_CHILDREN', { status: 'FAIL', message: "Parent was able to read other children's data." });
+              }
+          } catch(e:any) {
+              updateTestResult('DATA_AUTH_PARENT_CHILDREN', { status: 'FAIL', message: `Parent test failed unexpectedly: ${e.message}` });
+          }
+      }
+
+      // Test: DATA_AUTH_WRITER_CONFIGS
+      if (!summary.isWriter || summary.isAdmin) {
+          updateTestResult('DATA_AUTH_WRITER_CONFIGS', { status: 'SKIP', message: 'Skipping for non-writers or admins.' });
+      } else {
+          let writerTestPassed = true;
+          let failMessage = '';
+          try {
+              await getDocs(query(collection(firestore!, 'promptConfigs'), limit(1)));
+              await getDocs(query(collection(firestore!, 'storyTypes'), limit(1)));
+              // Assuming writers can write to a test config. Create a temp one.
+              const testConfigRef = doc(firestore!, 'promptConfigs', `test_${user.uid}`);
+              await addDoc(collection(firestore!, `promptConfigs`), { id: `test_${user.uid}`, phase: 'test' });
+              
+              let failedChildReadAsExpected = false;
+              try {
+                   await getDocs(query(collection(firestore!, 'children'), limit(1)));
+              } catch (e: any) {
+                  if (e.code === 'permission-denied') failedChildReadAsExpected = true;
+              }
+
+              if (!failedChildReadAsExpected) {
+                  writerTestPassed = false;
+                  failMessage = 'Writer was able to read children collection.';
+              }
+          } catch(e:any) {
+              writerTestPassed = false;
+              failMessage = `Writer test failed unexpectedly: ${e.message}`;
+          }
+
+          if (writerTestPassed) {
+              updateTestResult('DATA_AUTH_WRITER_CONFIGS', { status: 'PASS', message: 'Writer can manage configs and is blocked from children.' });
+          } else {
+              updateTestResult('DATA_AUTH_WRITER_CONFIGS', { status: 'FAIL', message: failMessage });
+          }
+      }
+      return summary;
   };
   
   const runDataTests = async () => {
@@ -359,7 +481,7 @@ export default function AdminRegressionPage() {
                   throw new Error('Session doc is missing storyTypeId, arcStepIndex, or mainCharacterId');
               }
               updateTestResult('SESSION_BEAT_STRUCTURE', { status: 'PASS', message: 'Doc exists and has required fields.' });
-          } catch(e:any) {
+          } catch (e:any) {
                updateTestResult('SESSION_BEAT_STRUCTURE', { status: 'FAIL', message: e.message });
           }
       }
@@ -1017,7 +1139,45 @@ export default function AdminRegressionPage() {
     return scenarioResults;
   };
 
-  const runTest = async (testId: string) => {
+  const runAllTests = async () => {
+    setIsRunning(true);
+    setTests(initialTests.map(t => ({...t, status: 'PENDING', message: '', details: undefined })));
+    setDiagnostics(prev => ({ ...prev, firestoreSummary: {}, apiSummary: {}, scenario: {} }));
+    
+    const currentAuthSummary = await runAuthTests();
+    setAuthSummary(currentAuthSummary);
+
+    // Create a reversed copy of the tests to run them last to first
+    const testsToRun = [...initialTests].filter(t => !t.id.startsWith('DATA_AUTH_')); // Exclude auth tests as they just ran
+
+    for (const test of testsToRun) {
+        // Find all tests that share the same handler group
+        if (tests.find(t => t.id === test.id)?.status === 'PENDING') {
+            await runTest(test.id);
+        }
+    }
+    
+    setIsRunning(false);
+    toast({ title: 'Regression tests complete!' });
+  };
+  
+   const getStatusVariant = (status: TestStatus) => {
+    switch (status) {
+      case 'PASS': return 'default';
+      case 'FAIL': return 'destructive';
+      case 'ERROR': return 'destructive';
+      case 'SKIP': return 'secondary';
+      default: return 'outline';
+    }
+  };
+
+  const handleCopyDiagnostics = () => {
+    const textToCopy = `Page: admin-regression\n\nDiagnostics\n${JSON.stringify(finalDiagnostics, null, 2)}`;
+    navigator.clipboard.writeText(textToCopy);
+    toast({ title: 'Copied to clipboard!' });
+  };
+  
+    const runTest = async (testId: string) => {
     switch (testId) {
         case 'DATA_CHILDREN_EXTENDED':
         case 'DATA_SESSIONS_OVERVIEW':
@@ -1054,44 +1214,9 @@ export default function AdminRegressionPage() {
   }
 
 
-  const runAllTests = async () => {
-    setIsRunning(true);
-    setTests(initialTests.map(t => ({...t, status: 'PENDING', message: '', details: undefined })));
-    setDiagnostics(prev => ({ ...prev, firestoreSummary: {}, apiSummary: {}, scenario: {} }));
-    
-    // Create a reversed copy of the tests to run them last to first
-    const testsToRun = [...initialTests];
-
-    for (const test of testsToRun) {
-        // Find all tests that share the same handler group
-        if (tests.find(t => t.id === test.id)?.status === 'PENDING') {
-            await runTest(test.id);
-        }
-    }
-    
-    setIsRunning(false);
-    toast({ title: 'Regression tests complete!' });
-  };
-  
-   const getStatusVariant = (status: TestStatus) => {
-    switch (status) {
-      case 'PASS': return 'default';
-      case 'FAIL': return 'destructive';
-      case 'ERROR': return 'destructive';
-      case 'SKIP': return 'secondary';
-      default: return 'outline';
-    }
-  };
-
-  const handleCopyDiagnostics = () => {
-    const textToCopy = `Page: admin-regression\n\nDiagnostics\n${JSON.stringify(finalDiagnostics, null, 2)}`;
-    navigator.clipboard.writeText(textToCopy);
-    toast({ title: 'Copied to clipboard!' });
-  };
-
   const renderContent = () => {
     if (authLoading) return <LoaderCircle className="mx-auto h-8 w-8 animate-spin" />;
-    if (!isAuthenticated || !isAdmin) return <p>You must be an admin to run these tests.</p>;
+    if (!isAuthenticated || !statusIsAdmin) return <p>You must be an admin to run these tests.</p>;
 
     return (
         <>
@@ -1149,7 +1274,7 @@ export default function AdminRegressionPage() {
 
   const finalDiagnostics = {
       ...diagnostics,
-      auth: { isAuthenticated, isAdmin },
+      authSummary: authSummary,
       input: { beatSessionId, warmupSessionId },
       tests
   };
