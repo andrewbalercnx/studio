@@ -21,23 +21,7 @@ service cloud.firestore {
     }
 
     match /children/{childId} {
-      // Read (get/list/query) existing docs
-      allow read: if isServer() || (request.auth != null
-                  && (
-                    request.auth.token.isAdmin == true ||
-                    resource.data.ownerParentUid == request.auth.uid
-                  ));
-
-      // Create: use request.resource.data (doc being written)
-      allow create: if isServer() || (request.auth != null
-                    && request.resource.data.ownerParentUid == request.auth.uid);
-
-      // Update/Delete: use resource.data (existing doc) to enforce ownership
-      allow update, delete: if isServer() || (request.auth != null
-                            && (
-                              request.auth.token.isAdmin == true ||
-                              resource.data.ownerParentUid == request.auth.uid
-                            ));
+      allow read, write: if isServer() || request.auth.token.isAdmin == true || resource.data.ownerParentUid == request.auth.uid;
     }
     
     match /storySessions/{sessionId} {
@@ -46,11 +30,11 @@ service cloud.firestore {
     
     match /storySessions/{sessionId}/messages/{messageId} {
         // Access is inherited from the parent storySession
-        allow read, write: if isServer() || get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid || request.auth.token.isAdmin == true;
+        allow read, write: if isServer() || request.auth.token.isAdmin == true || get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid;
     }
 
     match /characters/{characterId} {
-      allow read, write: if isServer() || canRead();
+      allow read, write: if isServer() || request.auth.token.isAdmin == true;
     }
 
     match /promptConfigs/{configId} {
