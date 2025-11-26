@@ -15,9 +15,19 @@
           "format": "email",
           "description": "The user's email address."
         },
-        "isAdmin": {
-          "type": "boolean",
-          "description": "Whether the user has administrative privileges."
+        "roles": {
+          "type": "object",
+          "properties": {
+            "isAdmin": {
+              "type": "boolean"
+            },
+            "isWriter": {
+              "type": "boolean"
+            },
+            "isParent": {
+              "type": "boolean"
+            }
+          }
         },
         "createdAt": {
           "type": "string",
@@ -724,5 +734,3 @@
     }
   }
 }
-
-    

@@ -164,7 +164,7 @@ function ManagePhotos({ child, onOpenChange }: { child: ChildProfile, onOpenChan
 }
 
 
-export default function AdminChildrenPage() {
+export default function ManageChildrenPage() {
     const { user, loading: userLoading } = useUser();
     const { isAdmin, loading: adminLoading } = useAdminStatus();
     const firestore = useFirestore();
@@ -179,11 +179,8 @@ export default function AdminChildrenPage() {
 
     const childrenQuery = useMemo(() => {
         if (!user || !firestore) return null;
-        // Admins see all, parents see their own
-        return isAdmin 
-            ? collection(firestore, 'children')
-            : query(collection(firestore, 'children'), where('ownerParentUid', '==', user.uid));
-    }, [user, firestore, isAdmin]);
+        return query(collection(firestore, 'children'), where('ownerParentUid', '==', user.uid));
+    }, [user, firestore]);
 
     useEffect(() => {
         if (!childrenQuery) {
@@ -215,14 +212,14 @@ export default function AdminChildrenPage() {
     }
 
     const diagnostics = {
-        page: 'admin-children',
+        page: 'parent-children',
         auth: { isAuthenticated: !!user, isAdmin, loading: userLoading || adminLoading, error: null, },
         firestore: { collection: 'children', count: children.length, sampleIds: children.slice(0, 3).map(c => c.id), },
         ...(error ? { firestoreErrorChildren: error } : {})
     };
 
     const handleCopyDiagnostics = () => {
-        navigator.clipboard.writeText(`Page: admin-children\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`);
+        navigator.clipboard.writeText(`Page: parent-children\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`);
         toast({ title: 'Copied to clipboard!' });
     };
 
@@ -318,5 +315,3 @@ export default function AdminChildrenPage() {
         </ParentGuard>
     );
 }
-
-    

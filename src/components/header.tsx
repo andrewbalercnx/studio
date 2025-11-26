@@ -4,9 +4,8 @@
 import Link from 'next/link';
 import { Logo } from '@/components/icons';
 import { Button } from './ui/button';
-import { useAuth } from '@/firebase';
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { useEffect, useState } from 'react';
+import { useUser } from '@/firebase/auth/use-user';
+import { signOut } from 'firebase/auth';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import {
   DropdownMenu,
@@ -17,24 +16,48 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
+import { useAppContext } from '@/hooks/use-app-context';
+import { useAuth } from '@/firebase';
 
 export default function Header() {
   const auth = useAuth();
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    if (!auth) return;
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-    });
-    return () => unsubscribe();
-  }, [auth]);
+  const { user, idTokenResult } = useUser();
+  const { roleMode, switchToParentMode } = useAppContext();
 
   const handleSignOut = async () => {
     if (!auth) return;
     await signOut(auth);
-    router.push('/');
+    router.push('/login');
+  };
+
+  const renderNavLinks = () => {
+    switch (roleMode) {
+      case 'admin':
+        return (
+          <>
+            <Button asChild variant="ghost"><Link href="/admin">Dashboard</Link></Button>
+            <Button asChild variant="ghost"><Link href="/admin/users">Users</Link></Button>
+            <Button asChild variant="ghost"><Link href="/writer">Writer Tools</Link></Button>
+          </>
+        );
+      case 'writer':
+        return (
+          <>
+            <Button asChild variant="ghost"><Link href="/writer">Story Designer</Link></Button>
+          </>
+        );
+      case 'parent':
+      case 'child':
+      default:
+        return (
+          <>
+            <Button asChild variant="ghost"><Link href="/parent">Home</Link></Button>
+            <Button asChild variant="ghost"><Link href="/stories">My Stories</Link></Button>
+            <Button asChild variant="ghost"><Link href="/parent/children">Manage Children</Link></Button>
+          </>
+        );
+    }
   };
 
   return (
@@ -42,18 +65,14 @@ export default function Header() {
       <div className="container flex h-14 max-w-screen-2xl items-center justify-between">
         <Link href="/" className="flex items-center space-x-2">
           <Logo />
+          {roleMode === 'child' && (
+            <Button variant="outline" size="sm" onClick={switchToParentMode} className="ml-4">
+              Switch to Parent
+            </Button>
+          )}
         </Link>
         <nav className="flex items-center gap-4">
-          <Button asChild variant="ghost">
-            <Link href="/story/start">
-              Start Story
-            </Link>
-          </Button>
-          <Button asChild variant="ghost">
-            <Link href="/stories">
-              My Stories
-            </Link>
-          </Button>
+          {renderNavLinks()}
           {user ? (
              <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -74,8 +93,18 @@ export default function Header() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => router.push('/admin')}>
-                  Admin
+                {idTokenResult?.claims.isAdmin && (
+                    <DropdownMenuItem onClick={() => router.push('/admin')}>
+                    Admin Dashboard
+                    </DropdownMenuItem>
+                )}
+                 {idTokenResult?.claims.isWriter && !idTokenResult?.claims.isAdmin && (
+                    <DropdownMenuItem onClick={() => router.push('/writer')}>
+                    Writer Dashboard
+                    </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => router.push('/parent/settings')}>
+                  Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>

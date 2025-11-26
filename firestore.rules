@@ -7,54 +7,59 @@ service cloud.firestore {
     function isServer() {
       return request.auth == null;
     }
-    
-    function canRead() {
-      return isServer() || request.auth != null;
+
+    function isAdmin() {
+      return request.auth != null && request.auth.token.isAdmin == true;
     }
-    
-    function canWrite() {
-      return isServer() || request.auth != null;
+
+    function isWriter() {
+      return request.auth != null && request.auth.token.isWriter == true;
     }
     
     match /users/{userId} {
-      allow read, write: if isServer() || request.auth.token.isAdmin == true || request.auth.uid == userId;
+      allow read: if isServer() || isAdmin() || request.auth.uid == userId;
+      allow write: if isServer() || isAdmin() || request.auth.uid == userId;
     }
 
     match /children/{childId} {
-      allow read, write: if isServer() || request.auth.token.isAdmin == true || resource.data.ownerParentUid == request.auth.uid;
+      allow read: if isServer() || isAdmin() || resource.data.ownerParentUid == request.auth.uid;
+      allow create: if isServer() || isAdmin() || request.resource.data.ownerParentUid == request.auth.uid;
+      allow update, delete: if isServer() || isAdmin() || resource.data.ownerParentUid == request.auth.uid;
     }
     
     match /storySessions/{sessionId} {
-      allow read, write: if isServer() || request.auth.token.isAdmin == true || resource.data.parentUid == request.auth.uid;
+      allow read, write: if isServer() || isAdmin() || resource.data.parentUid == request.auth.uid;
+      allow create: if isServer() || isAdmin() || request.resource.data.parentUid == request.auth.uid;
     }
     
     match /storySessions/{sessionId}/messages/{messageId} {
-        // Access is inherited from the parent storySession
-        allow read, write: if isServer() || request.auth.token.isAdmin == true || get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid;
+        allow read, write: if isServer() || isAdmin() || get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid;
+        allow create: if isServer() || isAdmin() || get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid;
     }
 
     match /characters/{characterId} {
-      allow read, write: if isServer() || request.auth.token.isAdmin == true;
+      allow read: if isServer() || isAdmin() || request.auth != null; // Parents and writers can read
+      allow write: if isServer() || isAdmin() || request.auth != null; // Allow logged-in users to create/update characters for their sessions
     }
 
     match /promptConfigs/{configId} {
-      allow read: if isServer() || request.auth != null;
-      allow write: if isServer() || request.auth.token.isAdmin == true;
+      allow read: if isServer() || isAdmin() || isWriter();
+      allow write: if isServer() || isAdmin() || isWriter();
     }
 
     match /storyPhases/{phaseId} {
-      allow read: if isServer() || request.auth != null;
-      allow write: if isServer() || request.auth.token.isAdmin == true;
+      allow read: if isServer() || isAdmin() || isWriter();
+      allow write: if isServer() || isAdmin() || isWriter();
     }
 
     match /storyTypes/{typeId} {
-      allow read: if isServer() || request.auth != null;
-      allow write: if isServer() || request.auth.token.isAdmin == true;
+      allow read: if isServer() || isAdmin() || isWriter();
+      allow write: if isServer() || isAdmin() || isWriter();
     }
 
     match /storyOutputTypes/{outputTypeId} {
-      allow read: if isServer() || request.auth != null;
-      allow write: if isServer() || request.auth.token.isAdmin == true;
+      allow read: if isServer() || isAdmin() || isWriter();
+      allow write: if isServer() || isAdmin() || isWriter();
     }
   }
 }

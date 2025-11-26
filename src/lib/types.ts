@@ -9,7 +9,11 @@ export type Role = 'user' | 'assistant' | 'system';
 export type UserProfile = {
   id: string;
   email: string;
-  isAdmin?: boolean;
+  roles: {
+    isAdmin: boolean;
+    isWriter: boolean;
+    isParent: boolean;
+  };
   createdAt: any;
   pinHash?: string;
 };
@@ -194,4 +198,5 @@ export type StoryOutputType = {
     updatedAt?: any;
 };
 
+export type AppRoleMode = 'admin' | 'writer' | 'parent' | 'child' | 'unknown';
     

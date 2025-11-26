@@ -1,9 +1,9 @@
 
 'use client';
 import {useEffect, useState, useMemo} from 'react';
-import {onAuthStateChanged} from 'firebase/auth';
+import {onAuthStateChanged, getIdTokenResult} from 'firebase/auth';
 import {useAuth} from '../provider';
-import type {User} from 'firebase/auth';
+import type {User, IdTokenResult} from 'firebase/auth';
 
 /**
  * A hook that returns the currently authenticated user.
@@ -18,12 +18,19 @@ import type {User} from 'firebase/auth';
 export function useUser() {
   const auth = useAuth();
   const [user, setUser] = useState<User | null>(null);
+  const [idTokenResult, setIdTokenResult] = useState<IdTokenResult | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (auth) {
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
+      const unsubscribe = onAuthStateChanged(auth, async (user) => {
         setUser(user);
+        if (user) {
+          const tokenResult = await getIdTokenResult(user);
+          setIdTokenResult(tokenResult);
+        } else {
+          setIdTokenResult(null);
+        }
         setLoading(false);
       });
       return () => unsubscribe();
@@ -32,19 +39,9 @@ export function useUser() {
     }
   }, [auth]);
 
-  const idToken = useMemo(() => {
-    if (!user) return null;
-    // This is a simplified way to get the token.
-    // In a real app, you'd handle token refresh.
-    // @ts-ignore
-    return user.stsTokenManager?.accessToken;
-  }, [user]);
-
   return {
     user,
+    idTokenResult,
     loading,
-    idToken,
   };
 }
-
-    

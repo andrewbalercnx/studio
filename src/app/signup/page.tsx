@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -40,7 +41,11 @@ export default function SignUpPage() {
       await setDoc(doc(firestore, 'users', user.uid), {
         id: user.uid,
         email: user.email,
-        isAdmin: false, // Set default admin status
+        roles: {
+            isAdmin: false,
+            isWriter: false,
+            isParent: true,
+        },
         createdAt: serverTimestamp(),
       });
       
