@@ -34,11 +34,7 @@ service cloud.firestore {
     }
     
     match /storySessions/{sessionId} {
-      // Allow reading a single document if the user is the parent
-      allow get: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || resource.data.parentUid == request.auth.uid;
-      // Allow listing documents when each returned document belongs to the requesting parent
-      allow list: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || resource.data.parentUid == request.auth.uid;
-      // Allow writing if the user is the parent
+      allow read: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || resource.data.parentUid == request.auth.uid;
       allow write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || request.resource.data.parentUid == request.auth.uid;
     }
     

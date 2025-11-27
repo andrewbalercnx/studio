@@ -102,6 +102,13 @@ export default function ParentHomePage() {
                 <p className="font-bold text-lg">Add Child</p>
             </div>
         </CardContent>
+        <div className="border-t px-6 py-4 flex flex-col items-center gap-2 text-center">
+          <p className="text-sm text-muted-foreground">Need to manage kids or settings?</p>
+          <Button asChild variant="secondary">
+            <Link href="/parent/children">Go to Parent Tools</Link>
+          </Button>
+          <p className="text-xs text-muted-foreground">You’ll be asked for your Parent PIN.</p>
+        </div>
       </Card>
     </div>
   );

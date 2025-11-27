@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { useUser } from '@/firebase/auth/use-user';
 import { useUploadFile } from '@/firebase/storage/use-upload-file';
 import Image from 'next/image';
+import { ParentGuard } from '@/components/parent/parent-guard';
 
 function slugify(text: string) {
     return text
@@ -293,6 +294,7 @@ export default function ManageChildrenPage() {
     };
 
     return (
+        <ParentGuard>
             <div className="container mx-auto p-4 sm:p-6 md:p-8">
                 <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                     <DialogContent>
@@ -335,5 +337,6 @@ export default function ManageChildrenPage() {
                     </CardContent>
                 </Card>
             </div>
+        </ParentGuard>
     );
 }

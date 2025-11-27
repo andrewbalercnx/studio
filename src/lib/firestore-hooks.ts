@@ -27,6 +27,8 @@ export function useCollection<T>(query: Query | null): UseCollectionReturn<T> {
     }
     
     setLoading(true);
+    const path = (query as any)?._query?.path?.canonicalString?.() ?? 'unknown';
+    console.debug('[useCollection] subscribe', path);
 
     const unsubscribe = onSnapshot(
       query,
@@ -51,8 +53,11 @@ export function useCollection<T>(query: Query | null): UseCollectionReturn<T> {
       }
     );
 
-    return () => unsubscribe();
-  }, [JSON.stringify(query)]); // Simple serialization for dependency check
+    return () => {
+      console.debug('[useCollection] unsubscribe', path);
+      unsubscribe();
+    };
+  }, [query]);
 
   return { data, loading, error };
 }
@@ -76,6 +81,8 @@ export function useDocument<T>(docRef: DocumentReference | null): UseDocumentRet
     }
     
     setLoading(true);
+    const path = docRef?.path ?? 'unknown';
+    console.debug('[useDocument] subscribe', path);
 
     const unsubscribe = onSnapshot(
       docRef,
@@ -103,8 +110,11 @@ export function useDocument<T>(docRef: DocumentReference | null): UseDocumentRet
       }
     );
 
-    return () => unsubscribe();
-  }, [docRef?.path]);
+    return () => {
+      console.debug('[useDocument] unsubscribe', path);
+      unsubscribe();
+    };
+  }, [docRef]);
 
   return { data, loading, error };
 }

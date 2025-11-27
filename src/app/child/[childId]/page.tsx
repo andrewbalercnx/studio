@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { use, useEffect, useMemo } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
 import { collection, orderBy, query, where } from 'firebase/firestore';
@@ -41,7 +41,9 @@ function ChildStoryCard({ story }: { story: StorySession }) {
   );
 }
 
-export default function ChildExperiencePage({ params }: { params: { childId: string } }) {
+export default function ChildExperiencePage({ params }: { params: Promise<{ childId: string }> }) {
+  const resolvedParams = use(params);
+  const routeChildId = resolvedParams.childId;
   const { user, loading: userLoading } = useUser();
   const firestore = useFirestore();
   const {
@@ -55,10 +57,20 @@ export default function ChildExperiencePage({ params }: { params: { childId: str
   const router = useRouter();
 
   useEffect(() => {
-    if (params.childId && params.childId !== activeChildId) {
-      setActiveChildId(params.childId);
+    console.debug('[ChildPage] route/ctx state', {
+      routeChildId,
+      activeChildId,
+      profileLoading: activeChildProfileLoading,
+      hasProfile: !!activeChildProfile,
+    });
+  }, [routeChildId, activeChildId, activeChildProfileLoading, activeChildProfile]);
+
+  useEffect(() => {
+    if (routeChildId && routeChildId !== activeChildId) {
+      console.debug('[ChildPage] syncing activeChildId to route', routeChildId);
+      setActiveChildId(routeChildId);
     }
-  }, [params.childId, activeChildId, setActiveChildId]);
+  }, [routeChildId, activeChildId, setActiveChildId]);
 
   const storiesQuery = useMemo(() => {
     if (!user || !firestore || !activeChildId) return null;

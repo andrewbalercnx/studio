@@ -46,21 +46,26 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     const storedChildId = typeof window !== 'undefined' ? localStorage.getItem('activeChildId') : null;
     if (storedChildId) {
       setActiveChildIdState(storedChildId);
+      console.debug('[AppContext] hydrated activeChildId from storage', storedChildId);
     }
   }, []);
 
   useEffect(() => {
+    if (userLoading) return;
     if (!user) {
+      console.debug('[AppContext] clearing activeChildId because user signed out');
       setActiveChildIdState(null);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('activeChildId');
       }
     }
-  }, [user]);
+  }, [user, userLoading]);
 
-  useEffect(() => {
+useEffect(() => {
     if (!activeChildId) return;
-    if (activeChildProfileRaw === null && !activeChildProfileLoading) {
+    if (activeChildProfileLoading) return;
+    if (activeChildProfileRaw === null) {
+      console.debug('[AppContext] clearing activeChildId because profile missing');
       setActiveChildIdState(null);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('activeChildId');
@@ -69,6 +74,7 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
   }, [activeChildId, activeChildProfileRaw, activeChildProfileLoading]);
 
   const setActiveChildId = (childId: string | null) => {
+    console.debug('[AppContext] setActiveChildId called with', childId);
     setActiveChildIdState(childId);
     if (typeof window === 'undefined') return;
     if (childId) {
@@ -77,6 +83,10 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
       localStorage.removeItem('activeChildId');
     }
   };
+
+  useEffect(() => {
+    console.debug('[AppContext] activeChildId now', activeChildId);
+  }, [activeChildId]);
 
   const switchToParentMode = useCallback(() => {
     setActiveChildId(null);
