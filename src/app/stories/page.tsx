@@ -14,6 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 import { useAppContext } from '@/hooks/use-app-context';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 function StoryCard({ story }: { story: StorySession }) {
   const createdAt = story.createdAt?.toDate ? story.createdAt.toDate() : new Date();
@@ -50,17 +52,29 @@ export default function MyStoriesPage() {
 
   const storiesQuery = useMemo(() => {
     if (!user || !firestore || !activeChildId) return null;
+    // This query now correctly includes the parentUid filter required by security rules.
     return query(
       collection(firestore, 'storySessions'),
-      where('childId', '==', activeChildId),
       where('parentUid', '==', user.uid),
+      where('childId', '==', activeChildId),
       orderBy('createdAt', 'desc')
     );
   }, [user, firestore, activeChildId]);
 
   const { data: stories, loading: storiesLoading, error: storiesError } = useCollection<StorySession>(storiesQuery);
 
-  if (userLoading || storiesLoading) {
+  useEffect(() => {
+    if (storiesError) {
+      const permissionError = new FirestorePermissionError({
+        path: 'storySessions',
+        operation: 'list',
+      });
+      errorEmitter.emit('permission-error', permissionError);
+    }
+  }, [storiesError]);
+
+
+  if (userLoading || (storiesLoading && !stories)) {
     return (
       <div className="h-screen w-screen flex items-center justify-center">
         <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
@@ -84,7 +98,7 @@ export default function MyStoriesPage() {
     );
   }
   
-  if (storiesError) {
+  if (storiesError && !stories) {
       return <div className="text-center p-8 text-destructive">Error loading stories. You may not have permission to view them.</div>
   }
   
