@@ -70,12 +70,14 @@
         "photos": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "format": "uri"
           },
           "description": "Array of Firebase Storage URLs for the child's photos."
         },
         "avatarUrl": {
           "type": "string",
+          "format": "uri",
           "description": "URL to the child's chosen avatar image."
         },
         "createdAt": {

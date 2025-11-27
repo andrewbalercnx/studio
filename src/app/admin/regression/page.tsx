@@ -427,7 +427,11 @@ export default function AdminRegressionPage() {
               if (!child.displayName) {
                   throw new Error('First child document is missing displayName.');
               }
-              updateTestResult('DATA_CHILDREN_EXTENDED', { status: 'PASS', message: 'First child has ownerParentUid.' });
+               if (!('avatarUrl' in child) || !('photos' in child)) {
+                    throw new Error('Child doc missing avatarUrl or photos fields.');
+                }
+
+              updateTestResult('DATA_CHILDREN_EXTENDED', { status: 'PASS', message: 'First child has ownerParentUid, displayName, and photo fields.' });
           }
       } catch (e: any) {
           updateTestResult('DATA_CHILDREN_EXTENDED', { status: 'FAIL', message: e.message });

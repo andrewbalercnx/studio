@@ -7,7 +7,7 @@ import { useFirestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
 import type { ChildProfile } from '@/lib/types';
-import { LoaderCircle, Plus } from 'lucide-react';
+import { LoaderCircle, Plus, User } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -25,16 +25,16 @@ function ChildIcon({ profile }: { profile: ChildProfile }) {
   };
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-center gap-2 text-center w-32">
       <button onClick={handleSelectChild} className="rounded-full hover:ring-4 hover:ring-primary/50 transition-all">
         <Avatar className="h-24 w-24 border-4 border-white shadow-md">
           <AvatarImage src={profile.avatarUrl} alt={profile.displayName} />
           <AvatarFallback className="text-3xl bg-secondary text-secondary-foreground">
-            {profile.displayName.charAt(0)}
+             {profile.displayName ? profile.displayName.charAt(0) : <User />}
           </AvatarFallback>
         </Avatar>
       </button>
-      <p className="font-bold text-lg">{profile.displayName}</p>
+      <p className="font-bold text-lg truncate w-full">{profile.displayName}</p>
     </div>
   );
 }
@@ -95,7 +95,7 @@ export default function ParentHomePage() {
           {children && children.length > 0 && (
             children.map(child => <ChildIcon key={child.id} profile={child} />)
           )}
-           <div className="flex flex-col items-center gap-2">
+           <div className="flex flex-col items-center gap-2 text-center w-32">
                 <Link href="/parent/children" className="rounded-full hover:ring-4 hover:ring-primary/50 transition-all flex items-center justify-center h-24 w-24 border-4 border-dashed border-muted-foreground bg-muted/50 text-muted-foreground">
                     <Plus className="h-8 w-8"/>
                 </Link>
