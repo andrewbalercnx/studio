@@ -15,6 +15,7 @@ import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTi
 import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile } from '@/lib/types';
 import { IdTokenResult } from 'firebase/auth';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Progress } from '@/components/ui/progress';
 
 type TestStatus = 'PENDING' | 'PASS' | 'FAIL' | 'ERROR' | 'SKIP';
 type TestResult = {
@@ -161,6 +162,15 @@ const initialTests: TestResult[] = [
   { id: 'DATA_PROMPTS', name: 'Firestore: Prompt Configs', status: 'PENDING', message: '' },
 ];
 
+const resetTestState = (): TestResult[] =>
+  initialTests.map((test) => ({
+    ...test,
+    status: 'PENDING',
+    message: '',
+    details: undefined,
+  }));
+
+const totalTests = initialTests.length;
 
 export default function AdminRegressionPage() {
   const { isAuthenticated, isAdmin: statusIsAdmin, loading: authLoading } = useAdminStatus();
@@ -180,6 +190,15 @@ export default function AdminRegressionPage() {
     apiSummary: {},
     scenario: {},
   });
+
+  const completedCount = useMemo(
+    () => tests.filter((test) => test.status !== 'PENDING').length,
+    [tests]
+  );
+  const progressPercent = useMemo(() => {
+    if (totalTests === 0) return 0;
+    return Math.round((completedCount / totalTests) * 100);
+  }, [completedCount]);
   
   const updateTestResult = (id: string, result: Partial<TestResult>) => {
     setTests(prev => prev.map(t => t.id === id ? { ...t, ...result } : t));
@@ -1144,36 +1163,56 @@ export default function AdminRegressionPage() {
     return scenarioResults;
   };
 
+  const markPendingTests = (status: TestStatus, message: string) => {
+    setTests(prev => prev.map(t => (t.status === 'PENDING' ? { ...t, status, message } : t)));
+  };
+
   const runAllTests = async () => {
+    if (!firestore) {
+      toast({
+        title: 'Firestore client unavailable',
+        description: 'Hold on a moment and try again—client Firestore has not finished initializing.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsRunning(true);
-    setTests(initialTests.map(t => ({...t, status: 'PENDING', message: '', details: undefined })));
+    setTests(resetTestState());
     setDiagnostics(prev => ({ ...prev, firestoreSummary: {}, apiSummary: {}, scenario: {} }));
     
-    const currentAuthSummary = await runAuthTests();
-    setAuthSummary(currentAuthSummary);
+    try {
+      const currentAuthSummary = await runAuthTests();
+      setAuthSummary(currentAuthSummary);
 
-    const testGroups = tests.reduce((acc, test) => {
-        const prefix = test.id.split('_')[0];
-        if (!acc[prefix]) acc[prefix] = [];
-        acc[prefix].push(test);
-        return acc;
-    }, {} as Record<string, TestResult[]>);
+      const testGroups = initialTests.reduce((acc, test) => {
+          const prefix = test.id.split('_')[0];
+          if (!acc[prefix]) acc[prefix] = [];
+          acc[prefix].push(test);
+          return acc;
+      }, {} as Record<string, TestResult[]>);
 
-    if (testGroups['DATA']) {
-        await runDataTests();
-    }
-    if (testGroups['SESSION']) {
-        await runSessionTests();
-    }
-    if (testGroups['API'] || testGroups['SCENARIO']) {
-        await runScenarioAndApiTests();
-    }
+      if (testGroups['DATA']) {
+          await runDataTests();
+      }
+      if (testGroups['SESSION']) {
+          await runSessionTests();
+      }
+      if (testGroups['API'] || testGroups['SCENARIO']) {
+          await runScenarioAndApiTests();
+      }
 
-    // Mark any remaining PENDING tests as skipped if they weren't handled
-    setTests(prev => prev.map(t => t.status === 'PENDING' ? { ...t, status: 'SKIP', message: 'Test runner logic did not execute for this test.' } : t));
-    
-    setIsRunning(false);
-    toast({ title: 'Regression tests complete!' });
+      // Mark any remaining PENDING tests as skipped if they weren't handled
+      markPendingTests('SKIP', 'Test runner logic did not execute for this test.');
+      toast({ title: 'Regression tests complete!' });
+    } catch (error: any) {
+      console.error('Regression test run failed', error);
+      const message = error?.message || 'Unexpected error while running tests.';
+      toast({ title: 'Regression suite failed', description: message, variant: 'destructive' });
+      markPendingTests('ERROR', `Runner crashed: ${message}`);
+    } finally {
+      setIsRunning(false);
+    }
   };
   
    const getStatusVariant = (status: TestStatus) => {
@@ -1202,16 +1241,25 @@ export default function AdminRegressionPage() {
             <CardHeader>
                 <CardTitle>Test Parameters</CardTitle>
             </CardHeader>
-            <CardContent className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                    <Label htmlFor="beatSessionId">Beat-ready Session ID</Label>
-                    <Input id="beatSessionId" value={beatSessionId} onChange={e => setBeatSessionId(e.target.value)} placeholder="Uses auto-scenario if blank"/>
-                    <p className="text-xs text-muted-foreground">A session with storyTypeId, phaseId, arcStepIndex set.</p>
+            <CardContent className="space-y-4">
+                <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="beatSessionId">Beat-ready Session ID</Label>
+                        <Input id="beatSessionId" value={beatSessionId} onChange={e => setBeatSessionId(e.target.value)} placeholder="Uses auto-scenario if blank"/>
+                        <p className="text-xs text-muted-foreground">A session with storyTypeId, phaseId, arcStepIndex set.</p>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="warmupSessionId">Warmup Session ID</Label>
+                        <Input id="warmupSessionId" value={warmupSessionId} onChange={e => setWarmupSessionId(e.target.value)} placeholder="Uses auto-scenario if blank"/>
+                        <p className="text-xs text-muted-foreground">A session in warmup phase with at least one message.</p>
+                    </div>
                 </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="warmupSessionId">Warmup Session ID</Label>
-                    <Input id="warmupSessionId" value={warmupSessionId} onChange={e => setWarmupSessionId(e.target.value)} placeholder="Uses auto-scenario if blank"/>
-                    <p className="text-xs text-muted-foreground">A session in warmup phase with at least one message.</p>
+                <div className="space-y-2 rounded-lg border bg-muted/40 p-4">
+                    <div className="flex items-center justify-between text-sm font-medium">
+                        <span>{isRunning ? 'Running regression suite…' : 'Suite progress'}</span>
+                        <span className="text-muted-foreground">{completedCount}/{totalTests} complete</span>
+                    </div>
+                    <Progress value={progressPercent} className="h-2" />
                 </div>
             </CardContent>
              <CardFooter>
@@ -1283,4 +1331,3 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
-

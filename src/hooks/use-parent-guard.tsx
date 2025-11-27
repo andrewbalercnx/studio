@@ -1,12 +1,13 @@
 
 'use client';
 
-import { createContext, useContext, useState, ReactNode, useMemo, useCallback } from 'react';
+import { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect, useRef } from 'react';
 import { PinForm } from '@/components/parent/pin-form';
 import { useUser } from '@/firebase/auth/use-user';
 import { useAppContext } from './use-app-context';
 
 const GUARD_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const STORAGE_KEY_PREFIX = 'storypic.parentGuard.lastValidatedAt';
 
 type ParentGuardContextType = {
   isParentGuardValidated: boolean;
@@ -30,14 +31,82 @@ export function ParentGuardProvider({ children }: { children: ReactNode }) {
   const { roleMode } = useAppContext();
   const [lastValidatedAt, setLastValidatedAt] = useState<number | null>(null);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const lockTimeoutRef = useRef<number | null>(null);
+
+  const storageKey = useMemo(() => {
+    if (!user) return null;
+    return `${STORAGE_KEY_PREFIX}:${user.uid}`;
+  }, [user]);
+
+  // Hydrate persisted validation timestamp for the current user session.
+  useEffect(() => {
+    if (!storageKey) {
+      setLastValidatedAt(null);
+      return;
+    }
+    const storedValue = sessionStorage.getItem(storageKey);
+    if (!storedValue) return;
+
+    const parsed = Number(storedValue);
+    if (Number.isNaN(parsed)) {
+      sessionStorage.removeItem(storageKey);
+      return;
+    }
+    const isExpired = Date.now() - parsed >= GUARD_TIMEOUT_MS;
+    if (isExpired) {
+      sessionStorage.removeItem(storageKey);
+      setLastValidatedAt(null);
+      return;
+    }
+    setLastValidatedAt(parsed);
+  }, [storageKey]);
+
+  // Persist validation timestamp per user so navigating between routes keeps the guard open.
+  useEffect(() => {
+    if (!storageKey) return;
+    if (lastValidatedAt) {
+      sessionStorage.setItem(storageKey, lastValidatedAt.toString());
+    } else {
+      sessionStorage.removeItem(storageKey);
+    }
+  }, [storageKey, lastValidatedAt]);
+
+  // Auto-lock after the timeout elapses.
+  useEffect(() => {
+    if (lockTimeoutRef.current) {
+      window.clearTimeout(lockTimeoutRef.current);
+      lockTimeoutRef.current = null;
+    }
+    if (!lastValidatedAt) return;
+
+    const msUntilLock = Math.max(lastValidatedAt + GUARD_TIMEOUT_MS - Date.now(), 0);
+    lockTimeoutRef.current = window.setTimeout(() => {
+      setLastValidatedAt(null);
+      setIsPinModalOpen(true);
+    }, msUntilLock);
+
+    return () => {
+      if (lockTimeoutRef.current) {
+        window.clearTimeout(lockTimeoutRef.current);
+        lockTimeoutRef.current = null;
+      }
+    };
+  }, [lastValidatedAt]);
+
+  // Reset guard state when the user signs out.
+  useEffect(() => {
+    if (!user) {
+      setLastValidatedAt(null);
+      setIsPinModalOpen(false);
+    }
+  }, [user]);
 
   const isParentGuardValidated = useMemo(() => {
     // Admins should always bypass the parent PIN guard.
     if (roleMode === 'admin') {
       return true;
     }
-    if (!lastValidatedAt) return false;
-    return Date.now() - lastValidatedAt < GUARD_TIMEOUT_MS;
+    return !!lastValidatedAt;
   }, [lastValidatedAt, roleMode]);
 
   const showPinModal = useCallback(() => setIsPinModalOpen(true), []);

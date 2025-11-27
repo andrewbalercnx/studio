@@ -20,17 +20,25 @@ import { useAppContext } from '@/hooks/use-app-context';
 import { useAuth } from '@/firebase';
 import { Badge } from './ui/badge';
 import { Shield, Pen, User as UserIcon } from 'lucide-react';
+import { useParentGuard } from '@/hooks/use-parent-guard';
 
 export default function Header() {
   const auth = useAuth();
   const router = useRouter();
   const { user, idTokenResult } = useUser();
-  const { roleMode, switchToParentMode } = useAppContext();
+  const { roleMode, switchToParentMode, activeChildId } = useAppContext();
+  const { showPinModal } = useParentGuard();
 
   const handleSignOut = async () => {
     if (!auth) return;
     await signOut(auth);
     router.push('/login');
+  };
+
+  const handleSwitchToParent = () => {
+    switchToParentMode();
+    showPinModal();
+    router.push('/parent');
   };
 
   const renderNavLinks = () => {
@@ -49,8 +57,16 @@ export default function Header() {
             <Button asChild variant="ghost"><Link href="/writer">Story Designer</Link></Button>
           </>
         );
-      case 'parent':
       case 'child':
+        return (
+          <>
+            {activeChildId && (
+              <Button asChild variant="ghost"><Link href={`/child/${activeChildId}`}>My Stories</Link></Button>
+            )}
+            <Button asChild variant="ghost"><Link href="/story/start">New Story</Link></Button>
+          </>
+        );
+      case 'parent':
       default:
         return (
           <>
@@ -83,7 +99,7 @@ export default function Header() {
             <Logo />
           </Link>
           {roleMode === 'child' && (
-            <Button variant="outline" size="sm" onClick={switchToParentMode} className="ml-4">
+            <Button variant="outline" size="sm" onClick={handleSwitchToParent} className="ml-4">
               Switch to Parent
             </Button>
           )}

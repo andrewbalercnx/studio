@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { LoaderCircle, Shield, ShieldOff, BrainCircuit, Pencil } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useFirestore } from '@/firebase';
-import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, deleteField } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -58,6 +58,22 @@ export default function AdminUsersPage() {
   };
 
 
+  const revokePin = async (user: UserProfile) => {
+    if (!firestore) return;
+    const userRef = doc(firestore, 'users', user.id);
+    try {
+      await updateDoc(userRef, {
+        pinHash: deleteField(),
+        pinSalt: deleteField(),
+        pinUpdatedAt: deleteField(),
+      });
+      toast({ title: 'PIN revoked', description: `${user.email} will be asked to create a new PIN on next login.` });
+    } catch (e: any) {
+      console.error('Error revoking PIN:', e);
+      toast({ title: 'Error revoking PIN', description: e.message, variant: 'destructive' });
+    }
+  };
+
   const renderContent = () => {
     if (loading || usersLoading) {
       return <LoaderCircle className="mx-auto h-8 w-8 animate-spin" />;
@@ -97,6 +113,14 @@ export default function AdminUsersPage() {
                             <Button variant="outline" size="sm" onClick={() => toggleRole(user, 'isAdmin')}>
                                 {user.roles?.isAdmin ? <ShieldOff /> : <Shield />}
                                 {user.roles?.isAdmin ? 'Demote Admin' : 'Promote Admin'}
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              disabled={!user.pinHash}
+                              onClick={() => revokePin(user)}
+                            >
+                              Revoke PIN
                             </Button>
                         </TableCell>
                     </TableRow>

@@ -16,6 +16,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useAppContext } from '@/hooks/use-app-context';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { useRouter } from 'next/navigation';
 
 function StoryCard({ story }: { story: StorySession }) {
   const createdAt = story.createdAt?.toDate ? story.createdAt.toDate() : new Date();
@@ -48,7 +49,14 @@ function StoryCard({ story }: { story: StorySession }) {
 export default function MyStoriesPage() {
   const { user, loading: userLoading } = useUser();
   const firestore = useFirestore();
-  const { activeChildId } = useAppContext();
+  const { activeChildId, roleMode } = useAppContext();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (roleMode === 'child' && activeChildId) {
+      router.replace(`/child/${activeChildId}`);
+    }
+  }, [roleMode, activeChildId, router]);
 
   const storiesQuery = useMemo(() => {
     if (!user || !firestore || !activeChildId) return null;
@@ -102,6 +110,14 @@ export default function MyStoriesPage() {
       return <div className="text-center p-8 text-destructive">Error loading stories. You may not have permission to view them.</div>
   }
   
+  if (roleMode === 'child' && activeChildId) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center">
+        <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   if (!activeChildId) {
     return (
       <div className="text-center py-16 border-2 border-dashed rounded-lg container mx-auto">

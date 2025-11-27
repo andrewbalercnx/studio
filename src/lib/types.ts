@@ -16,6 +16,8 @@ export type UserProfile = {
   };
   createdAt: any;
   pinHash?: string;
+  pinSalt?: string;
+  pinUpdatedAt?: any;
 };
 
 export type Choice = {

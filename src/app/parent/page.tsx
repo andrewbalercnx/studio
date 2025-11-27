@@ -21,7 +21,7 @@ function ChildIcon({ profile }: { profile: ChildProfile }) {
 
   const handleSelectChild = () => {
     setActiveChildId(profile.id);
-    router.push('/stories');
+    router.push(`/child/${profile.id}`);
   };
 
   return (

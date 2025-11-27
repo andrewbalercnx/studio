@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
-import type { AppRoleMode } from '@/lib/types';
+import type { AppRoleMode, ChildProfile } from '@/lib/types';
 import { useDocument } from '@/lib/firestore-hooks';
 import { doc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -11,6 +11,8 @@ import { useFirestore } from '@/firebase';
 interface AppContextType {
   roleMode: AppRoleMode;
   activeChildId: string | null;
+  activeChildProfile: ChildProfile | null;
+  activeChildProfileLoading: boolean;
   setActiveChildId: (childId: string | null) => void;
   switchToParentMode: () => void;
 }
@@ -20,16 +22,55 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppContextProvider({ children }: { children: React.ReactNode }) {
   const { user, idTokenResult, loading: userLoading } = useUser();
   const [activeChildId, setActiveChildIdState] = useState<string | null>(null);
+  const firestore = useFirestore();
+
+  const childDocRef = useMemo(() => {
+    if (!firestore || !activeChildId) return null;
+    return doc(firestore, 'children', activeChildId);
+  }, [firestore, activeChildId]);
+
+  const {
+    data: activeChildProfileRaw,
+    loading: activeChildProfileLoading,
+  } = useDocument<ChildProfile>(childDocRef);
+
+  const activeChildProfile = useMemo(() => {
+    if (!user || !activeChildProfileRaw) return null;
+    if (activeChildProfileRaw.ownerParentUid !== user.uid) {
+      return null;
+    }
+    return activeChildProfileRaw;
+  }, [activeChildProfileRaw, user]);
 
   useEffect(() => {
-    const storedChildId = localStorage.getItem('activeChildId');
+    const storedChildId = typeof window !== 'undefined' ? localStorage.getItem('activeChildId') : null;
     if (storedChildId) {
       setActiveChildIdState(storedChildId);
     }
   }, []);
 
+  useEffect(() => {
+    if (!user) {
+      setActiveChildIdState(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('activeChildId');
+      }
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!activeChildId) return;
+    if (activeChildProfileRaw === null && !activeChildProfileLoading) {
+      setActiveChildIdState(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('activeChildId');
+      }
+    }
+  }, [activeChildId, activeChildProfileRaw, activeChildProfileLoading]);
+
   const setActiveChildId = (childId: string | null) => {
     setActiveChildIdState(childId);
+    if (typeof window === 'undefined') return;
     if (childId) {
       localStorage.setItem('activeChildId', childId);
     } else {
@@ -49,14 +90,16 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     if (claims?.isAdmin) return 'admin';
     if (claims?.isWriter) return 'writer';
 
-    if (activeChildId) return 'child';
+    if (activeChildId && activeChildProfile) return 'child';
 
     return 'parent';
-  }, [user, idTokenResult, userLoading, activeChildId]);
+  }, [user, idTokenResult, userLoading, activeChildId, activeChildProfile]);
 
   const value = {
     roleMode,
     activeChildId,
+    activeChildProfile,
+    activeChildProfileLoading,
     setActiveChildId,
     switchToParentMode,
   };

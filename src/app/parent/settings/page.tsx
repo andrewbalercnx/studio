@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { LoaderCircle } from 'lucide-react';
-import { ParentGuard } from '@/components/parent/parent-guard';
 import { useEffect } from 'react';
 import type { UserProfile } from '@/lib/types';
 import { getAuth } from 'firebase/auth';
@@ -79,49 +78,47 @@ export default function ParentSettingsPage() {
   }
 
   return (
-    <ParentGuard>
-      <div className="container mx-auto p-4 sm:p-6 md:p-8">
-        <Card className="max-w-2xl mx-auto">
-          <CardHeader>
-            <CardTitle>Parent Settings</CardTitle>
-            <CardDescription>Manage your account settings and security.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4 rounded-lg border p-4">
-              <h3 className="font-semibold">{userProfile?.pinHash ? 'Change your PIN' : 'Set your Parent PIN'}</h3>
-              <p className="text-sm text-muted-foreground">
-                This 4-digit PIN is used to access parent-only sections of the app.
-              </p>
-              <div className="space-y-2">
-                <Label htmlFor="pin">New PIN</Label>
-                <Input
-                  id="pin"
-                  type="password"
-                  maxLength={4}
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-                  placeholder="****"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPin">Confirm New PIN</Label>
-                <Input
-                  id="confirmPin"
-                  type="password"
-                  maxLength={4}
-                  value={confirmPin}
-                  onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                  placeholder="****"
-                />
-              </div>
-              <Button onClick={handleSetPin} disabled={isSaving}>
-                {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : null}
-                {userProfile?.pinHash ? 'Change PIN' : 'Set PIN'}
-              </Button>
+    <div className="container mx-auto p-4 sm:p-6 md:p-8">
+      <Card className="max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle>Parent Settings</CardTitle>
+          <CardDescription>Manage your account settings and security.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-4 rounded-lg border p-4">
+            <h3 className="font-semibold">{userProfile?.pinHash ? 'Change your PIN' : 'Set your Parent PIN'}</h3>
+            <p className="text-sm text-muted-foreground">
+              This 4-digit PIN is used to access parent-only sections of the app.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="pin">New PIN</Label>
+              <Input
+                id="pin"
+                type="password"
+                maxLength={4}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                placeholder="****"
+              />
             </div>
-          </CardContent>
-        </Card>
-      </div>
-    </ParentGuard>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPin">Confirm New PIN</Label>
+              <Input
+                id="confirmPin"
+                type="password"
+                maxLength={4}
+                value={confirmPin}
+                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                placeholder="****"
+              />
+            </div>
+            <Button onClick={handleSetPin} disabled={isSaving}>
+              {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : null}
+              {userProfile?.pinHash ? 'Change PIN' : 'Set PIN'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

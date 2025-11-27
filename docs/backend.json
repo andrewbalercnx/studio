@@ -36,7 +36,16 @@
         },
         "pinHash": {
           "type": "string",
-          "description": "A securely hashed version of the parent's 4-digit PIN."
+          "description": "A securely hashed version of the parent's 4-digit PIN (derived with scrypt)."
+        },
+        "pinSalt": {
+          "type": "string",
+          "description": "Unique salt paired with the hashed PIN."
+        },
+        "pinUpdatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the last successful PIN update."
         }
       },
       "required": [
