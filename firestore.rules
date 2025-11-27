@@ -13,7 +13,7 @@ service cloud.firestore {
     }
 
     function isUserAdmin(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data.roles.isAdmin == true;
+      return get(/databases/$(database)/documents/users/$(userId)).data.roles.admin == true;
     }
 
     function isWriter() {
@@ -21,7 +21,7 @@ service cloud.firestore {
     }
 
     function isUserWriter(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data.roles.isWriter == true;
+      return get(/databases/$(database)/documents/users/$(userId)).data.roles.writer == true;
     }
     
     match /users/{userId} {
@@ -34,7 +34,12 @@ service cloud.firestore {
     }
     
     match /storySessions/{sessionId} {
-      allow read, write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || request.resource.data.parentUid == request.auth.uid;
+      // Allow reading a single document if the user is the parent
+      allow get: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || resource.data.parentUid == request.auth.uid;
+      // Allow listing documents if the query is filtered by the parent's UID
+      allow list: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || request.query.get('parentUid') == request.auth.uid;
+      // Allow writing if the user is the parent
+      allow write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || request.resource.data.parentUid == request.auth.uid;
     }
     
     match /storySessions/{sessionId}/messages/{messageId} {
