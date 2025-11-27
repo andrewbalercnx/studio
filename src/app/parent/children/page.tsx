@@ -52,26 +52,29 @@ function ChildForm({ parentUid, onSave }: { parentUid: string, onSave: () => voi
             photos: [],
         };
 
-        try {
-            const docRef = doc(firestore, 'children', childId);
-            await setDoc(docRef, {
-                ...newChildData,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
+        const docRef = doc(firestore, 'children', childId);
+        const docWithTimestamp = {
+            ...newChildData,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+
+        setDoc(docRef, docWithTimestamp)
+            .then(() => {
+                toast({ title: 'Child profile created!', description: `${name} has been added.` });
+                onSave();
+            })
+            .catch((serverError: any) => {
+                const permissionError = new FirestorePermissionError({
+                    path: docRef.path,
+                    operation: 'create',
+                    requestResourceData: newChildData, // use data without serverTimestamp for debugging
+                });
+                errorEmitter.emit('permission-error', permissionError);
+            })
+            .finally(() => {
+                setIsSaving(false);
             });
-            toast({ title: 'Child profile created!', description: `${name} has been added.` });
-            onSave();
-        } catch (serverError: any) {
-            const permissionError = new FirestorePermissionError({
-                path: `children/${childId}`,
-                operation: 'create',
-                requestResourceData: newChildData,
-            });
-            errorEmitter.emit('permission-error', permissionError);
-            toast({ title: 'Error creating child', description: 'Check the console for permission details.', variant: 'destructive' });
-        } finally {
-            setIsSaving(false);
-        }
     };
 
     return (
@@ -129,13 +132,21 @@ function ManagePhotos({ child, onOpenChange }: { child: ChildProfile, onOpenChan
     const handleSetAvatar = async (photoUrl: string) => {
         if (!firestore) return;
         const childRef = doc(firestore, 'children', child.id);
-        try {
-            await updateDoc(childRef, { avatarUrl: photoUrl });
-            toast({ title: 'Avatar updated!' });
-            onOpenChange(false);
-        } catch(e: any) {
-            toast({ title: 'Error setting avatar', description: e.message, variant: 'destructive' });
-        }
+        const updateData = { avatarUrl: photoUrl };
+
+        updateDoc(childRef, updateData)
+            .then(() => {
+                toast({ title: 'Avatar updated!' });
+                onOpenChange(false);
+            })
+            .catch((serverError: any) => {
+                const permissionError = new FirestorePermissionError({
+                    path: childRef.path,
+                    operation: 'update',
+                    requestResourceData: updateData,
+                });
+                errorEmitter.emit('permission-error', permissionError);
+            });
     }
 
     return (
@@ -330,4 +341,3 @@ export default function ManageChildrenPage() {
     );
 }
 
-    
