@@ -78,14 +78,16 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 max-w-screen-2xl items-center justify-between">
-        <Link href="/" className="flex items-center space-x-2">
-          <Logo />
+        <div className="flex items-center gap-4">
+          <Link href="/" className="flex items-center space-x-2">
+            <Logo />
+          </Link>
           {roleMode === 'child' && (
             <Button variant="outline" size="sm" onClick={switchToParentMode} className="ml-4">
               Switch to Parent
             </Button>
           )}
-        </Link>
+        </div>
         <nav className="flex items-center gap-4">
           {renderNavLinks()}
           {user ? (

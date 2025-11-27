@@ -4,6 +4,9 @@
 import { useState, useEffect } from 'react';
 import { onSnapshot, Query, DocumentData, QuerySnapshot, DocumentSnapshot, DocumentReference } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
+
 
 interface UseCollectionReturn<T> {
   data: T[] | null;
@@ -18,6 +21,7 @@ export function useCollection<T>(query: Query | null): UseCollectionReturn<T> {
 
   useEffect(() => {
     if (!query) {
+      setData(null);
       setLoading(false);
       return;
     }
@@ -36,7 +40,12 @@ export function useCollection<T>(query: Query | null): UseCollectionReturn<T> {
         setError(null);
       },
       (err: Error) => {
-        console.error("Error in useCollection:", err);
+        const permissionError = new FirestorePermissionError({
+          path: (query as any)._query.path.segments.join('/'),
+          operation: 'list',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+
         setError(err);
         setLoading(false);
       }
@@ -61,6 +70,7 @@ export function useDocument<T>(docRef: DocumentReference | null): UseDocumentRet
 
   useEffect(() => {
     if (!docRef) {
+      setData(null);
       setLoading(false);
       return;
     }
@@ -83,7 +93,11 @@ export function useDocument<T>(docRef: DocumentReference | null): UseDocumentRet
         setError(null);
       },
       (err: Error) => {
-        console.error("Error in useDocument:", err);
+        const permissionError = new FirestorePermissionError({
+          path: docRef.path,
+          operation: 'get',
+        });
+        errorEmitter.emit('permission-error', permissionError);
         setError(err);
         setLoading(false);
       }
@@ -94,6 +108,3 @@ export function useDocument<T>(docRef: DocumentReference | null): UseDocumentRet
 
   return { data, loading, error };
 }
-
-
-    

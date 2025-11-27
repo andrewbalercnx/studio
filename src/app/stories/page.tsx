@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
 import { collection, query, where, orderBy } from 'firebase/firestore';
@@ -13,19 +13,22 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
+import { useAppContext } from '@/hooks/use-app-context';
 
 function StoryCard({ story }: { story: StorySession }) {
+  const createdAt = story.createdAt?.toDate ? story.createdAt.toDate() : new Date();
+  
   return (
     <Card className="flex flex-col">
       <CardHeader>
         <CardTitle>{story.storyTitle || 'Untitled Story'}</CardTitle>
         <CardDescription>
-          Created {formatDistanceToNow(story.createdAt.toDate(), { addSuffix: true })}
+          Created {formatDistanceToNow(createdAt, { addSuffix: true })}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-grow">
         <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">{story.storyVibe}</Badge>
+            {story.storyVibe && <Badge variant="outline">{story.storyVibe}</Badge>}
             <Badge variant="secondary">{story.currentPhase}</Badge>
         </div>
       </CardContent>
@@ -43,16 +46,14 @@ function StoryCard({ story }: { story: StorySession }) {
 export default function MyStoriesPage() {
   const { user, loading: userLoading } = useUser();
   const firestore = useFirestore();
-
-  // For now, we'll use the parent's UID as the childId for their own stories.
-  // This will be updated when we have a proper child selection flow.
-  const activeChildId = user?.uid;
+  const { activeChildId } = useAppContext();
 
   const storiesQuery = useMemo(() => {
     if (!user || !firestore || !activeChildId) return null;
     return query(
       collection(firestore, 'storySessions'),
       where('childId', '==', activeChildId),
+      where('parentUid', '==', user.uid),
       orderBy('createdAt', 'desc')
     );
   }, [user, firestore, activeChildId]);
@@ -84,7 +85,22 @@ export default function MyStoriesPage() {
   }
   
   if (storiesError) {
-      return <div className="text-center p-8 text-destructive">Error loading stories: {storiesError.message}</div>
+      return <div className="text-center p-8 text-destructive">Error loading stories. You may not have permission to view them.</div>
+  }
+  
+  if (!activeChildId) {
+    return (
+      <div className="text-center py-16 border-2 border-dashed rounded-lg container mx-auto">
+        <BookOpen className="mx-auto h-12 w-12 text-muted-foreground" />
+        <h3 className="mt-4 text-lg font-medium">No child selected!</h3>
+        <p className="mt-1 text-sm text-muted-foreground">Please go to the homepage to select a child profile first.</p>
+        <div className="mt-6">
+            <Button asChild>
+                <Link href="/">Select a Child</Link>
+            </Button>
+        </div>
+     </div>
+    );
   }
 
   return (
