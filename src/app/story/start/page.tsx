@@ -55,25 +55,30 @@ export default function StartStoryPage() {
 
         try {
             // 1. Ensure a child profile exists
-            const childRef = doc(firestore, 'children', childId);
-            const childDoc = await getDoc(childRef);
-            let childProfile: ChildProfile;
+        const childRef = doc(firestore, 'children', childId);
+        const childDoc = await getDoc(childRef);
+        let childProfile: ChildProfile;
 
-            if (!childDoc.exists()) {
-                const newChildProfileData = {
-                    id: childId,
-                    displayName: childDisplayName,
-                    createdAt: serverTimestamp(),
-                    estimatedLevel: 2,
-                    favouriteGenres: ["funny", "magical"],
-                    favouriteCharacterTypes: ["self", "pet"],
-                    preferredStoryLength: "short",
+        if (!childDoc.exists()) {
+            const newChildProfileData = {
+                id: childId,
+                displayName: childDisplayName,
+                ownerParentUid: user.uid,
+                createdAt: serverTimestamp(),
+                estimatedLevel: 2,
+                favouriteGenres: ["funny", "magical"],
+                favouriteCharacterTypes: ["self", "pet"],
+                preferredStoryLength: "short",
                     helpPreference: "more_scaffolding",
                 };
                 await setDoc(childRef, newChildProfileData);
                 childProfile = { ...newChildProfileData, createdAt: new Date() } as ChildProfile;
             } else {
                 childProfile = childDoc.data() as ChildProfile;
+                if (!childProfile.ownerParentUid) {
+                    await updateDoc(childRef, { ownerParentUid: user.uid });
+                    childProfile.ownerParentUid = user.uid;
+                }
             }
 
             // 2. Determine child level band

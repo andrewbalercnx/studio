@@ -3,6 +3,12 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   // Restarting the server as requested.
+  // Restarting the server again.
+  // Restarting the server again.
+  // Restarting the server again.
+  // Restarting the server again.
+  // Restarting the server again.
+  // And restarting again.
   typescript: {
     ignoreBuildErrors: true,
   },
