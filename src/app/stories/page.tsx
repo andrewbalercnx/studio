@@ -4,7 +4,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
-import { collection, query, where, orderBy } from 'firebase/firestore';
+import { collection, query, orderBy } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
 import type { StorySession } from '@/lib/types';
 import { LoaderCircle, BookOpen } from 'lucide-react';
@@ -59,22 +59,19 @@ export default function MyStoriesPage() {
   }, [roleMode, activeChildId, router]);
 
   const storiesQuery = useMemo(() => {
-    if (!user || !firestore || !activeChildId) return null;
-    // This query now correctly includes the parentUid filter required by security rules.
+    if (!firestore || !activeChildId) return null;
     return query(
-      collection(firestore, 'storySessions'),
-      where('parentUid', '==', user.uid),
-      where('childId', '==', activeChildId),
+      collection(firestore, 'children', activeChildId, 'sessions'),
       orderBy('createdAt', 'desc')
     );
-  }, [user, firestore, activeChildId]);
+  }, [firestore, activeChildId]);
 
   const { data: stories, loading: storiesLoading, error: storiesError } = useCollection<StorySession>(storiesQuery);
 
   useEffect(() => {
     if (storiesError) {
       const permissionError = new FirestorePermissionError({
-        path: 'storySessions',
+        path: `children/${activeChildId}/sessions`,
         operation: 'list',
       });
       errorEmitter.emit('permission-error', permissionError);

@@ -3,7 +3,7 @@
 import { use, useEffect, useMemo } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
-import { collection, orderBy, query, where } from 'firebase/firestore';
+import { collection, orderBy, query } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
 import type { StorySession } from '@/lib/types';
 import { useAppContext } from '@/hooks/use-app-context';
@@ -73,18 +73,15 @@ export default function ChildExperiencePage({ params }: { params: Promise<{ chil
   }, [routeChildId, activeChildId, setActiveChildId]);
 
   const storiesQuery = useMemo(() => {
-    if (!user || !firestore || !activeChildId) return null;
+    if (!firestore || !activeChildId) return null;
     console.debug('[ChildPage] building storiesQuery', {
-      parentUid: user.uid,
       activeChildId,
     });
     return query(
-      collection(firestore, 'storySessions'),
-      where('parentUid', '==', user.uid),
-      where('childId', '==', activeChildId),
+      collection(firestore, 'children', activeChildId, 'sessions'),
       orderBy('createdAt', 'desc')
     );
-  }, [user, firestore, activeChildId]);
+  }, [firestore, activeChildId]);
 
   const { data: stories, loading: storiesLoading } = useCollection<StorySession>(storiesQuery);
 

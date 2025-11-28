@@ -111,9 +111,13 @@ export default function StartStoryPage() {
             }
             
             // 4. Create a new story session
-            const storySessionsRef = collection(firestore, 'storySessions');
+            const childSessionsRef = collection(firestore, 'children', childId, 'sessions');
+            const childSessionRef = doc(childSessionsRef);
+            const storySessionId = childSessionRef.id;
+
             const newSessionData = {
                 childId: childId,
+                parentUid: user.uid,
                 status: "in_progress",
                 currentPhase: "warmup",
                 currentStepIndex: 0,
@@ -123,9 +127,11 @@ export default function StartStoryPage() {
                 updatedAt: serverTimestamp(),
                 promptConfigId: promptConfig.id,
                 promptConfigLevelBand: chosenLevelBand,
+                id: storySessionId,
             };
-            const newSessionRef = await addDoc(storySessionsRef, newSessionData);
-            const storySessionId = newSessionRef.id;
+
+            await setDoc(childSessionRef, newSessionData);
+            await setDoc(doc(firestore, 'storySessions', storySessionId), newSessionData, { merge: true });
 
             // 5. Create the main character
             const charactersRef = collection(firestore, 'characters');
@@ -145,20 +151,21 @@ export default function StartStoryPage() {
             const mainCharacterId = newCharacterRef.id;
 
             // 6. Link character to session and set session ID on session doc
-            await updateDoc(newSessionRef, {
-                id: storySessionId,
-                mainCharacterId: mainCharacterId
-            });
+            await Promise.all([
+                updateDoc(childSessionRef, { mainCharacterId: mainCharacterId }),
+                setDoc(doc(firestore, 'storySessions', storySessionId), { mainCharacterId: mainCharacterId }, { merge: true }),
+            ]);
             
             const initialAssistantMessage = "Hi! I am your Story Guide. What would you like me to call you?";
 
             // 7. Store initial message in subcollection
-            const messagesRef = collection(firestore, 'storySessions', storySessionId, 'messages');
-            await addDoc(messagesRef, {
+            const messagePayload = {
                 sender: 'assistant',
                 text: initialAssistantMessage,
                 createdAt: serverTimestamp()
-            });
+            };
+            await addDoc(collection(firestore, 'storySessions', storySessionId, 'messages'), messagePayload);
+            await addDoc(collection(firestore, 'children', childId, 'sessions', storySessionId, 'messages'), messagePayload);
 
             // 8. Build response object
             const result: StartStoryResponse = {

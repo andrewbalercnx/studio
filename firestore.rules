@@ -31,13 +31,34 @@ service cloud.firestore {
     match /children/{childId} {
       allow read: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || resource.data.ownerParentUid == request.auth.uid;
       allow write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || request.resource.data.ownerParentUid == request.auth.uid;
+
+      match /sessions/{sessionId} {
+        allow read, write: if request.auth != null &&
+          get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid;
+
+        match /messages/{messageId} {
+          allow read, write: if request.auth != null &&
+            get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid;
+        }
+      }
     }
     
+    function sessionReadableByParent() {
+      return request.auth != null && (
+        resource.data.parentUid == request.auth.uid ||
+        (
+          !(resource.data.parentUid is string) &&
+          resource.data.childId is string &&
+          get(/databases/$(database)/documents/children/$(resource.data.childId)).data.ownerParentUid == request.auth.uid
+        )
+      );
+    }
+
     match /storySessions/{sessionId} {
       allow read: if isServer()
         || isAdmin()
         || isUserAdmin(request.auth.uid)
-        || resource.data.parentUid == request.auth.uid;
+        || sessionReadableByParent();
       allow write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || request.resource.data.parentUid == request.auth.uid;
     }
     

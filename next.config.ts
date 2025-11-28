@@ -2,7 +2,7 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  // Triggering yet another server restart for the user.
+  // Restarting the server as requested.
   typescript: {
     ignoreBuildErrors: true,
   },
