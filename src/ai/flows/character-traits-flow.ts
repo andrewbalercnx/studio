@@ -56,7 +56,7 @@ export const characterTraitsFlow = ai.defineFlow(
 
             // 3. Load last 10 messages for context
             debug.stage = 'loading_messages';
-            const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+            const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
             const messagesQuery = query(messagesRef, orderBy('createdAt', 'desc'), limit(10));
             const messagesSnapshot = await getDocs(messagesQuery);
             const storySoFar = messagesSnapshot.docs

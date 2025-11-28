@@ -1,13 +1,13 @@
 
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { collection, query, orderBy, where } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
-import type { StorySession } from '@/lib/types';
-import { LoaderCircle, BookOpen } from 'lucide-react';
+import type { StorySession, StoryBook } from '@/lib/types';
+import { LoaderCircle, BookOpen, Copy, Lock } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -18,8 +18,51 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useRouter } from 'next/navigation';
 
-function StoryCard({ story }: { story: StorySession }) {
+type FinalizationBadge = { label: string; variant: 'default' | 'secondary' | 'outline' };
+
+function deriveFinalizationBadge(storyBook?: StoryBook | null): FinalizationBadge {
+  const status = storyBook?.storybookFinalization?.status;
+  if (status === 'ordered') return { label: 'Ordered', variant: 'default' };
+  if (status === 'printable_ready') return { label: 'Printable Ready', variant: 'secondary' };
+  if (status === 'finalized' || storyBook?.isLocked) return { label: 'Finalized', variant: 'default' };
+  if (storyBook?.imageGeneration?.status === 'ready') return { label: 'Ready to Finalize', variant: 'outline' };
+  return { label: 'Draft', variant: 'outline' };
+}
+
+function StoryCard({ story, storyBook, bookLoading }: { story: StorySession; storyBook?: StoryBook | null; bookLoading: boolean }) {
   const createdAt = story.createdAt?.toDate ? story.createdAt.toDate() : new Date();
+  const hasStoryBook = !!storyBook;
+  const pageGenerationStatus = storyBook?.pageGeneration?.status;
+  const pageCount = storyBook?.pageGeneration?.pagesCount;
+  const imageGenerationStatus = storyBook?.imageGeneration?.status;
+  const imageReadyCount = storyBook?.imageGeneration?.pagesReady ?? null;
+  const imageTotalCount = storyBook?.imageGeneration?.pagesTotal ?? null;
+  const canOpenViewer = hasStoryBook && storyBook?.pageGeneration?.status === 'ready';
+  const viewerHref = storyBook?.id ? `/storybook/${storyBook.id}` : `/storybook/${story.storySessionId ?? story.id}`;
+  const finalBadge = deriveFinalizationBadge(storyBook);
+  const openStorybookButton = (
+    <Button asChild className="w-full" disabled={!canOpenViewer}>
+      <Link href={viewerHref}>
+        {canOpenViewer ? 'Open Storybook' : bookLoading ? 'Loading storybook…' : 'Open Storybook'}
+      </Link>
+    </Button>
+  );
+  const viewStoryTextButton = hasStoryBook ? (
+    <Button asChild variant="outline" className="w-full">
+      <Link href={`/story/session/${story.id}/compiled`}>
+        View Story Text
+      </Link>
+    </Button>
+  ) : (
+    <Button variant="outline" className="w-full" disabled title="Story text is only available after compiling.">
+      {bookLoading ? 'Checking for book…' : 'View Story Text'}
+    </Button>
+  );
+  const helperMessage = hasStoryBook
+    ? null
+    : story.status === 'completed'
+      ? 'Run the compile step on this session to unlock the finished text.'
+      : 'Finish the adventure to compile the story text.';
   
   return (
     <Card className="flex flex-col">
@@ -33,14 +76,40 @@ function StoryCard({ story }: { story: StorySession }) {
         <div className="flex flex-wrap gap-2">
             {story.storyVibe && <Badge variant="outline">{story.storyVibe}</Badge>}
             <Badge variant="secondary">{story.currentPhase}</Badge>
+            <Badge variant={finalBadge.variant}>{finalBadge.label}</Badge>
+            {storyBook?.isLocked && (
+              <Badge variant="default" className="gap-1">
+                <Lock className="h-3 w-3" />
+                Locked
+              </Badge>
+            )}
+            {pageGenerationStatus && (
+              <Badge variant="outline">Pages: {pageGenerationStatus}</Badge>
+            )}
+            {imageGenerationStatus && (
+              <Badge variant="outline">Art: {imageGenerationStatus}</Badge>
+            )}
         </div>
+        {pageCount ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Saved pages: {pageCount}
+          </p>
+        ) : null}
+        {imageReadyCount !== null && imageTotalCount !== null && (
+          <p className="text-xs text-muted-foreground mt-1">Illustrated pages: {imageReadyCount}/{imageTotalCount}</p>
+        )}
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex flex-col gap-2">
         <Button asChild className="w-full">
           <Link href={`/story/session/${story.id}`}>
-            {story.status === 'completed' ? 'View Story' : 'Continue Story'}
+            {story.status === 'completed' ? 'Open Session' : 'Continue Story'}
           </Link>
         </Button>
+        {openStorybookButton}
+        {viewStoryTextButton}
+        {helperMessage && (
+          <p className="text-xs text-muted-foreground text-center w-full">{bookLoading ? 'Looking for the compiled book…' : helperMessage}</p>
+        )}
       </CardFooter>
     </Card>
   );
@@ -67,6 +136,26 @@ export default function MyStoriesPage() {
   }, [firestore, activeChildId]);
 
   const { data: stories, loading: storiesLoading, error: storiesError } = useCollection<StorySession>(storiesQuery);
+  const storyBooksQuery = useMemo(() => {
+    if (!firestore || !activeChildId) return null;
+    return query(
+      collection(firestore, 'storyBooks'),
+      where('childId', '==', activeChildId)
+    );
+  }, [firestore, activeChildId]);
+  const { data: storyBooks, loading: storyBooksLoading } = useCollection<StoryBook>(storyBooksQuery);
+  const storyBooksBySessionId = useMemo(() => {
+    const map: Record<string, StoryBook> = {};
+    if (storyBooks) {
+      for (const book of storyBooks) {
+        if (book?.storySessionId) {
+          map[book.storySessionId] = book;
+        }
+      }
+    }
+    return map;
+  }, [storyBooks]);
+  const isStoryBookLookupPending = storyBooksLoading && !storyBooks;
 
   useEffect(() => {
     if (storiesError) {
@@ -76,8 +165,32 @@ export default function MyStoriesPage() {
       });
       errorEmitter.emit('permission-error', permissionError);
     }
-  }, [storiesError]);
+  }, [storiesError, activeChildId]);
 
+  const diagnostics = useMemo(() => ({
+    page: 'stories',
+    activeChildId,
+    storyCount: stories?.length ?? 0,
+    storyBookCount: storyBooks?.length ?? 0,
+    pageGenerationStatuses: storyBooks?.map((book) => {
+      const completedAtValue = (book.pageGeneration?.lastCompletedAt as any)?.toDate?.();
+      return {
+        bookId: book.id ?? book.storySessionId,
+        sessionId: book.storySessionId,
+        status: book.pageGeneration?.status ?? null,
+        pagesCount: book.pageGeneration?.pagesCount ?? null,
+        lastCompletedAt: completedAtValue ? completedAtValue.toISOString() : null,
+        imageStatus: book.imageGeneration?.status ?? null,
+        imageReady: book.imageGeneration?.pagesReady ?? null,
+        imageTotal: book.imageGeneration?.pagesTotal ?? null,
+      };
+    }) ?? [],
+  }), [activeChildId, stories, storyBooks]);
+
+  const handleCopyDiagnostics = () => {
+    const textToCopy = `Page: stories\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
+    navigator.clipboard.writeText(textToCopy);
+  };
 
   if (userLoading || (storiesLoading && !stories)) {
     return (
@@ -131,6 +244,7 @@ export default function MyStoriesPage() {
   }
 
   return (
+    <>
     <div className="container mx-auto px-4 py-8 sm:py-12">
         <div className="flex justify-between items-center mb-8">
             <h1 className="text-4xl font-bold font-headline">My Stories</h1>
@@ -141,7 +255,14 @@ export default function MyStoriesPage() {
 
       {stories && stories.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {stories.map(story => <StoryCard key={story.id} story={story} />)}
+            {stories.map(story => (
+              <StoryCard
+                key={story.id}
+                story={story}
+                storyBook={storyBooksBySessionId[story.id]}
+                bookLoading={isStoryBookLookupPending}
+              />
+            ))}
         </div>
       ) : (
          <div className="text-center py-16 border-2 border-dashed rounded-lg">
@@ -156,5 +277,22 @@ export default function MyStoriesPage() {
          </div>
       )}
     </div>
+    <Card className="mx-auto mt-10 max-w-4xl">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>Diagnostics</CardTitle>
+          <CardDescription>Includes storybook page generation status.</CardDescription>
+        </div>
+        <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics} title="Copy diagnostics">
+          <Copy className="h-4 w-4" />
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <pre className="max-h-64 overflow-auto rounded bg-muted/50 p-4 text-xs">
+          <code>{JSON.stringify(diagnostics, null, 2)}</code>
+        </pre>
+      </CardContent>
+    </Card>
+    </>
   );
 }

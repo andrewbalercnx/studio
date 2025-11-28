@@ -39,7 +39,7 @@ export type ChatMessage = {
     role?: 'user' | 'model' | 'system' | 'tool';
     content?: string;
     // New structured fields
-    kind?: 'beat_continuation' | 'beat_options' | 'child_choice' | 'character_traits_question' | 'character_traits_answer';
+    kind?: 'beat_continuation' | 'beat_options' | 'child_choice' | 'character_traits_question' | 'character_traits_answer' | 'ending_options' | 'child_ending_choice' | 'system_status';
     options?: Choice[];
     selectedOptionId?: string;
 };
@@ -67,7 +67,9 @@ export type StorySession = {
     promptConfigId?: string;
     promptConfigLevelBand?: string;
     storyTypeId?: string;
+    storyTypeName?: string;
     storyPhaseId?: string;
+    endingPhaseId?: string;
     arcStepIndex?: number;
     // NEW FIELDS
     mainCharacterId?: string;
@@ -78,9 +80,203 @@ export type StorySession = {
       questionText: string;
       askedAt?: any;
     };
+    selectedEndingId?: string;
+    selectedEndingText?: string;
+    progress?: {
+      warmupCompletedAt?: any;
+      storyTypeChosenAt?: any;
+      storyArcCompletedAt?: any;
+      endingGeneratedAt?: any;
+      endingChosenAt?: any;
+      compileCompletedAt?: any;
+      pagesGeneratedAt?: any;
+      artGeneratedAt?: any;
+    };
     // This is a client-side representation and not stored in Firestore directly
     // with the session document. It's populated from the messages sub-collection.
     messages?: ChatMessage[];
+};
+
+export type StoryBookStatus = 'text_ready' | 'images_pending';
+
+export type StoryBookFinalizationStatus =
+  | 'draft'
+  | 'ready_to_finalize'
+  | 'finalized'
+  | 'printable_pending'
+  | 'printable_ready'
+  | 'ordered';
+
+export type StoryBookFinalizedPage = {
+  pageNumber: number;
+  kind: StoryBookPage['kind'];
+  title?: string;
+  bodyText?: string;
+  imageUrl?: string;
+  imagePrompt?: string;
+  layoutHints?: StoryBookPage['layoutHints'];
+};
+
+export type PrintableAssetMetadata = {
+  dpi: number;
+  trimSize: string;
+  pageCount: number;
+  spreadCount: number;
+};
+
+export type StoryBookFinalization = {
+  version: number;
+  status: StoryBookFinalizationStatus;
+  lockedAt?: any;
+  lockedBy?: string;
+  lockedByEmail?: string | null;
+  lockedByDisplayName?: string | null;
+  printablePdfUrl?: string | null;
+  printableGeneratedAt?: any;
+  printableStoragePath?: string | null;
+  printableMetadata?: PrintableAssetMetadata | null;
+  printableStatus?: 'idle' | 'generating' | 'ready' | 'error';
+  printableErrorMessage?: string | null;
+  shareId?: string | null;
+  shareLink?: string | null;
+  shareExpiresAt?: any;
+  shareRequiresPasscode?: boolean;
+  sharePasscodeHint?: string | null;
+  shareLastGeneratedAt?: any;
+  lastOrderId?: string | null;
+  regressionTag?: string | null;
+};
+
+export type StoryBookFinalizedMetadata = {
+  bookTitle?: string;
+  childName?: string;
+  pageCount: number;
+  capturedAt: any;
+  version: number;
+  storySessionId?: string;
+  lockedByUid?: string;
+  lockedByDisplayName?: string | null;
+};
+
+export type StoryBookShareTokenStatus = 'active' | 'revoked' | 'expired';
+
+export type StoryBookShareToken = {
+  id: string;
+  bookId: string;
+  status: StoryBookShareTokenStatus;
+  expiresAt?: any;
+  createdAt: any;
+  createdBy: string;
+  finalizationVersion: number;
+  requiresPasscode: boolean;
+  tokenHash?: string | null;
+  tokenSalt?: string | null;
+  passcodeHint?: string | null;
+  revokedAt?: any;
+  revokedBy?: string | null;
+  regressionTag?: string | null;
+};
+
+export type StoryBook = {
+  id?: string;
+  storySessionId: string;
+  childId: string;
+  parentUid: string;
+  storyText: string;
+  metadata?: {
+    paragraphs?: number;
+    estimatedPages?: number;
+    [key: string]: unknown;
+  };
+  status?: StoryBookStatus;
+  pageGeneration?: StoryBookPageGenerationStatus;
+  imageGeneration?: StoryBookImageGenerationStatus;
+  storybookFinalization?: StoryBookFinalization | null;
+  finalizedPages?: StoryBookFinalizedPage[] | null;
+  finalizedMetadata?: StoryBookFinalizedMetadata | null;
+  finalizedSnapshotAt?: any;
+  isLocked?: boolean;
+  createdAt: any;
+  updatedAt: any;
+};
+
+export type StoryBookPageGenerationStatus = {
+    status: 'idle' | 'running' | 'ready' | 'error';
+    lastRunAt?: any;
+    lastCompletedAt?: any;
+    lastErrorMessage?: string | null;
+    pagesCount?: number;
+};
+
+export type StoryBookImageGenerationStatus = {
+    status: 'idle' | 'running' | 'ready' | 'error';
+    lastRunAt?: any;
+    lastCompletedAt?: any;
+    lastErrorMessage?: string | null;
+    pagesReady?: number;
+    pagesTotal?: number;
+};
+
+export type StoryBookPage = {
+    id?: string;
+    pageNumber: number;
+    kind: 'cover_front' | 'cover_back' | 'text' | 'image';
+    title?: string;
+    bodyText?: string;
+    imagePrompt?: string;
+    imageUrl?: string;
+    imageStatus?: 'pending' | 'generating' | 'ready' | 'error';
+    imageMetadata?: {
+        model?: string | null;
+        width?: number | null;
+        height?: number | null;
+        mimeType?: string | null;
+        sizeBytes?: number | null;
+        storagePath?: string | null;
+        downloadToken?: string | null;
+        aspectRatioHint?: 'square' | 'portrait' | 'landscape' | null;
+        generatedAt?: any;
+        lastErrorMessage?: string | null;
+        regressionTag?: string | null;
+    };
+    layoutHints?: {
+        aspectRatio?: 'square' | 'portrait' | 'landscape';
+        textPlacement?: 'top' | 'bottom';
+    };
+    regressionTag?: string;
+    regressionTest?: boolean;
+    createdAt: any;
+    updatedAt: any;
+};
+
+export type PrintOrderAddress = {
+  name: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+};
+
+export type PrintOrder = {
+  id?: string;
+  parentUid: string;
+  bookId: string;
+  version: number;
+  quantity: number;
+  shippingAddress: PrintOrderAddress;
+  contactEmail: string;
+  paymentStatus: 'unpaid' | 'paid' | 'refunded';
+  fulfillmentStatus: 'pending' | 'printing' | 'shipped' | 'delivered' | 'cancelled';
+  createdAt: any;
+  updatedAt: any;
+  paymentMarkedAt?: any;
+  paymentMarkedBy?: string | null;
+  fulfillmentUpdatedAt?: any;
+  fulfillmentNotes?: string | null;
+  printablePdfUrl?: string | null;
+  regressionTag?: string | null;
 };
 
 export type ArtStyle = {
@@ -109,6 +305,13 @@ export type PromptConfig = {
     }
 };
 
+export type ChildPreferences = {
+    favoriteColors?: string[];
+    favoriteFoods?: string[];
+    favoriteGames?: string[];
+    favoriteSubjects?: string[];
+};
+
 export type ChildProfile = {
     id: string;
 	displayName: string;
@@ -123,6 +326,7 @@ export type ChildProfile = {
 	favouriteCharacterTypes?: string[];
 	preferredStoryLength?: 'short' | 'medium' | 'long';
 	helpPreference?: 'more_scaffolding' | 'balanced' | 'independent';
+    preferences?: ChildPreferences;
 };
 
 export type StoryPhase = {

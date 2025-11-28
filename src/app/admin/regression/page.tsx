@@ -11,8 +11,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useAuth } from '@/firebase';
-import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, increment } from 'firebase/firestore';
-import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile } from '@/lib/types';
+import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, increment, orderBy, deleteDoc } from 'firebase/firestore';
+import type { Firestore, DocumentReference } from 'firebase/firestore';
+import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile, StoryBookPage } from '@/lib/types';
 import { IdTokenResult } from 'firebase/auth';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
@@ -101,6 +102,14 @@ type ScenarioStoryCompileResult = {
     sessionId: string | null;
     storyLength: number | null;
     storyPreview: string | null;
+    hasStoryBook?: boolean;
+    bookId?: string | null;
+    storyBookStatus?: string | null;
+    pagesCount?: number | null;
+    firstPageKind?: string | null;
+    lastPageKind?: string | null;
+    interiorPlacementsAlternate?: boolean | null;
+    imageLogs?: string[] | null;
     error?: string;
 } | null;
 
@@ -122,6 +131,21 @@ type ScenarioChildStoryListResult = {
     error?: string;
 } | null;
 
+type ScenarioStorybookE2EResult = {
+    childId: string;
+    sessionId: string;
+    storyTypeId: string;
+    beatCount: number;
+    endingsGenerated: number;
+    bookId?: string;
+    pagesReady?: number;
+    artReady?: boolean;
+    finalized?: boolean;
+    printableReady?: boolean;
+    orderId?: string | null;
+    error?: string;
+} | null;
+
 type AuthSummary = {
     uid: string | null;
     email: string | null;
@@ -131,6 +155,111 @@ type AuthSummary = {
     rawClaims?: Record<string, unknown>;
 };
 
+const REGRESSION_SUITE_TAG = 'admin-regression';
+
+type RegressionArtifactTracker = {
+    children: Set<string>;
+    sessions: Set<string>;
+    characters: Set<string>;
+    storyBooks: Set<string>;
+    promptConfigs: Set<string>;
+};
+
+const createArtifactTracker = (): RegressionArtifactTracker => ({
+    children: new Set(),
+    sessions: new Set(),
+    characters: new Set(),
+    storyBooks: new Set(),
+    promptConfigs: new Set(),
+});
+
+const addRegressionMeta = <T extends Record<string, any>>(data: T, scenarioId: string) => ({
+    ...data,
+    regressionTest: true,
+    regressionTag: `${REGRESSION_SUITE_TAG}:${scenarioId}`,
+});
+
+const trackArtifact = (
+    tracker: RegressionArtifactTracker,
+    category: keyof RegressionArtifactTracker,
+    id: string | null | undefined
+) => {
+    if (id) {
+        tracker[category].add(id);
+    }
+};
+
+const tracedCollection = (
+    firestore: Firestore | null,
+    context: string,
+    ...segments: [string, ...string[]]
+) => {
+    if (!firestore) {
+        const error = new Error(`[${context}] Firestore instance is not initialized.`);
+        console.error(error.message);
+        throw error;
+    }
+    try {
+        return collection(firestore, ...segments);
+    } catch (err) {
+        console.error(`[Regression][collection] ${context}`, {
+            segments,
+            errorMessage: (err as Error)?.message,
+            stack: (err as Error)?.stack,
+        });
+        throw err;
+    }
+};
+
+const deleteSubcollectionDocs = async (firestore: Firestore, segments: string[]) => {
+    const collectionRef = collection(firestore, ...(segments as [string, ...string[]]));
+    const snapshot = await getDocs(collectionRef);
+    await Promise.all(snapshot.docs.map((docSnap) => deleteDoc(docSnap.ref)));
+};
+
+const cleanupRegressionArtifacts = async (firestore: Firestore, tracker: RegressionArtifactTracker) => {
+    const deleteWithLogging = async (label: string, fn: () => Promise<void>) => {
+        try {
+            await fn();
+        } catch (error) {
+            console.error(`[RegressionCleanup] Failed to delete ${label}`, error);
+        }
+    };
+
+    for (const sessionId of tracker.sessions) {
+        await deleteWithLogging(`storySessions/${sessionId}`, async () => {
+            await deleteSubcollectionDocs(firestore, ['storySessions', sessionId, 'messages']);
+            await deleteDoc(doc(firestore, 'storySessions', sessionId));
+        });
+    }
+
+    for (const childId of tracker.children) {
+        await deleteWithLogging(`children/${childId}`, async () => {
+            await deleteSubcollectionDocs(firestore, ['children', childId, 'sessions']);
+            await deleteDoc(doc(firestore, 'children', childId));
+        });
+    }
+
+    for (const characterId of tracker.characters) {
+        await deleteWithLogging(`characters/${characterId}`, async () => {
+            await deleteDoc(doc(firestore, 'characters', characterId));
+        });
+    }
+
+    for (const bookId of tracker.storyBooks) {
+        await deleteWithLogging(`storyBooks/${bookId}`, async () => {
+            await deleteSubcollectionDocs(firestore, ['storyBooks', bookId, 'pages']);
+            await deleteDoc(doc(firestore, 'storyBooks', bookId));
+        });
+    }
+
+    for (const configId of tracker.promptConfigs) {
+        await deleteWithLogging(`promptConfigs/${configId}`, async () => {
+            await deleteDoc(doc(firestore, 'promptConfigs', configId));
+        });
+    }
+};
+
 
 const initialTests: TestResult[] = [
   { id: 'DATA_AUTH_CLAIMS', name: 'Auth: Claims Visibility', status: 'PENDING', message: '' },
@@ -138,6 +267,7 @@ const initialTests: TestResult[] = [
   { id: 'DATA_AUTH_PARENT_CHILDREN', name: 'Auth: Parent Child Access', status: 'PENDING', message: '' },
   { id: 'DATA_AUTH_WRITER_CONFIGS', name: 'Auth: Writer Config Access', status: 'PENDING', message: '' },
   { id: 'SCENARIO_CHILD_STORY_LIST', name: 'Scenario: Child Story List', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_STORYBOOK_E2E', name: 'Scenario: Storybook E2E Flow', status: 'PENDING', message: '' },
   { id: 'SCENARIO_PHASE_STATE_MACHINE', name: 'Scenario: Phase State Machine', status: 'PENDING', message: '' },
   { id: 'SCENARIO_STORY_COMPILE', name: 'Scenario: Story Compile', status: 'PENDING', message: '' },
   { id: 'SCENARIO_ENDING_FLOW', name: 'Scenario: Ending Flow', status: 'PENDING', message: '' },
@@ -279,12 +409,14 @@ export default function AdminRegressionPage() {
       } else {
           let writerTestPassed = true;
           let failMessage = '';
+          let tempWriterConfigRef: DocumentReference | null = null;
           try {
               await getDocs(query(collection(firestore!, 'promptConfigs'), limit(1)));
               await getDocs(query(collection(firestore!, 'storyTypes'), limit(1)));
-              // Assuming writers can write to a test config. Create a temp one.
-              const testConfigRef = doc(firestore!, 'promptConfigs', `test_${user.uid}`);
-              await addDoc(collection(firestore!, `promptConfigs`), { id: `test_${user.uid}`, phase: 'test' });
+              tempWriterConfigRef = await addDoc(
+                  collection(firestore!, 'promptConfigs'),
+                  addRegressionMeta({ id: `test_${user.uid}`, phase: 'test' }, 'DATA_AUTH_WRITER_CONFIGS')
+              );
               
               let failedChildReadAsExpected = false;
               try {
@@ -300,6 +432,10 @@ export default function AdminRegressionPage() {
           } catch(e:any) {
               writerTestPassed = false;
               failMessage = `Writer test failed unexpectedly: ${e.message}`;
+          } finally {
+              if (tempWriterConfigRef) {
+                  await deleteDoc(tempWriterConfigRef);
+              }
           }
 
           if (writerTestPassed) {
@@ -486,7 +622,7 @@ export default function AdminRegressionPage() {
         updateTestResult('DATA_SESSIONS_OVERVIEW', { status: 'FAIL', message: e.message });
       }
        
-       setDiagnostics(prev => ({...prev, firestoreSummary: {...prev.firestoreSummary, ...fsSummary }}));
+       setDiagnostics((prev: any) => ({...prev, firestoreSummary: {...prev.firestoreSummary, ...fsSummary }}));
   };
   
   const runSessionTests = async () => {
@@ -515,7 +651,7 @@ export default function AdminRegressionPage() {
         updateTestResult('SESSION_BEAT_MESSAGES', { status: 'SKIP', message: 'No beat-ready sessionId provided.' });
       } else {
         try {
-            const messagesRef = collection(firestore, `storySessions/${beatSessionId}/messages`);
+        const messagesRef = collection(firestore, 'storySessions', beatSessionId, 'messages');
             const snap = await getDocs(query(messagesRef, orderBy('createdAt', 'asc')));
             const messages = snap.docs.map(d => d.data() as ChatMessage);
             const total = messages.length;
@@ -543,6 +679,34 @@ export default function AdminRegressionPage() {
   const runScenarioAndApiTests = async (): Promise<{ beat: ScenarioResult, warmup: ScenarioWarmupResult, moreOptions: ScenarioMoreOptionsResult, character: ScenarioCharacterResult, characterTraits: ScenarioCharacterTraitsResult, arcAdvance: ScenarioArcAdvanceResult, arcBounds: ScenarioArcBoundsResult, ending: ScenarioEndingResult, storyCompile: ScenarioStoryCompileResult, phaseState: ScenarioPhaseStateResult, childStoryList: ScenarioChildStoryListResult }> => {
     if (!firestore) return { beat: null, warmup: null, moreOptions: null, character: null, characterTraits: null, arcAdvance: null, arcBounds: null, ending: null, storyCompile: null, phaseState: null, childStoryList: null };
     
+    const artifacts = createArtifactTracker();
+
+    const createRegressionChild = async (data: Record<string, any>, scenarioId: string) => {
+        const childRef = await addDoc(collection(firestore, 'children'), addRegressionMeta(data, scenarioId));
+        trackArtifact(artifacts, 'children', childRef.id);
+        return childRef;
+    };
+
+    const createRegressionSession = async (data: Record<string, any>, scenarioId: string) => {
+        const payload = {
+            ...data,
+            parentUid: data.parentUid ?? `${REGRESSION_SUITE_TAG}-parent`,
+        };
+        const sessionRef = await addDoc(collection(firestore, 'storySessions'), addRegressionMeta(payload, scenarioId));
+        trackArtifact(artifacts, 'sessions', sessionRef.id);
+        return sessionRef;
+    };
+
+    const createRegressionCharacter = async (data: Record<string, any>, scenarioId: string) => {
+        const characterRef = await addDoc(collection(firestore, 'characters'), addRegressionMeta(data, scenarioId));
+        trackArtifact(artifacts, 'characters', characterRef.id);
+        return characterRef;
+    };
+
+    const tagExistingDoc = async (docRef: DocumentReference, scenarioId: string) => {
+        await updateDoc(docRef, addRegressionMeta({}, scenarioId));
+    };
+
     let beatScenarioSummary: ScenarioResult = null;
     let warmupScenarioSummary: ScenarioWarmupResult = null;
     let moreOptionsScenarioSummary: ScenarioMoreOptionsResult = null;
@@ -554,23 +718,26 @@ export default function AdminRegressionPage() {
     let storyCompileScenarioSummary: ScenarioStoryCompileResult = null;
     let phaseStateScenarioSummary: ScenarioPhaseStateResult = null;
     let childStoryListScenarioSummary: ScenarioChildStoryListResult = null;
+    let storybookE2EScenarioSummary: ScenarioStorybookE2EResult = null;
     let apiSummary: any = {};
+
+    try {
 
     // Test: SCENARIO_CHILD_STORY_LIST
     try {
         const parentUid = `parent_${Date.now()}`;
-        const childRef = await addDoc(collection(firestore, 'children'), {
+        const childRef = await createRegressionChild({
             displayName: 'Story List Test Child',
             ownerParentUid: parentUid,
             createdAt: serverTimestamp()
-        });
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+        }, 'SCENARIO_CHILD_STORY_LIST');
+        const sessionRef = await createRegressionSession({
             childId: childRef.id,
             parentUid: parentUid,
             storyTitle: 'Test Story for List',
             status: 'completed',
             createdAt: serverTimestamp()
-        });
+        }, 'SCENARIO_CHILD_STORY_LIST');
         
         childStoryListScenarioSummary = { childId: childRef.id, parentUid, storyCount: 0 };
         
@@ -604,16 +771,17 @@ export default function AdminRegressionPage() {
     // Test: SCENARIO_PHASE_STATE_MACHINE
     try {
         phaseStateScenarioSummary = { sessionId: null };
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Phase Test Child', createdAt: serverTimestamp() });
+        const childRef = await createRegressionChild({ displayName: 'Phase Test Child', createdAt: serverTimestamp() }, 'SCENARIO_PHASE_STATE_MACHINE');
 
         // 1. Warmup
         const warmupPromptSnap = await getDocs(query(collection(firestore, 'promptConfigs'), where('phase', '==', 'warmup'), where('status', '==', 'live'), limit(1)));
         if (warmupPromptSnap.empty) throw new Error("No live warmup prompt config found.");
         
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+        const sessionRef = await createRegressionSession({
             childId: childRef.id, status: 'in_progress', currentPhase: 'warmup', storyPhaseId: 'warmup_phase_v1',
+            parentUid: 'regression-phase-parent',
             promptConfigId: warmupPromptSnap.docs[0].id, arcStepIndex: 0
-        });
+        }, 'SCENARIO_PHASE_STATE_MACHINE');
         phaseStateScenarioSummary.sessionId = sessionRef.id;
         let sessionSnap = await getDoc(sessionRef);
         phaseStateScenarioSummary.phaseAfterWarmup = sessionSnap.data()?.currentPhase;
@@ -664,19 +832,34 @@ export default function AdminRegressionPage() {
         if (!storyTypeSnap.exists()) throw new Error(`Required story type '${storyTypeId}' not found.`);
         const storyType = storyTypeSnap.data() as StoryType;
         
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Compile Test Child', createdAt: serverTimestamp() });
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+        const childRef = await createRegressionChild({ displayName: 'Compile Test Child', createdAt: serverTimestamp() }, 'SCENARIO_STORY_COMPILE');
+        const sessionRef = await createRegressionSession({
             childId: childRef.id, storyTypeId, storyPhaseId: storyType.endingPhaseId,
-            arcStepIndex: 5, status: 'in_progress', currentPhase: 'ending'
-        });
-        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), { sender: 'assistant', text: 'The story is now complete!', createdAt: serverTimestamp() });
+            arcStepIndex: 5, status: 'in_progress', currentPhase: 'ending', parentUid: 'regression-compile-parent'
+        }, 'SCENARIO_STORY_COMPILE');
+        await addDoc(collection(firestore, 'storySessions', sessionRef.id, 'messages'), { sender: 'assistant', text: 'The story is now complete!', createdAt: serverTimestamp() });
 
         const response = await fetch('/api/storyCompile', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
         });
         const result = await response.json();
         
-        storyCompileScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, storyLength: null, storyPreview: null, error: result.errorMessage };
+        storyCompileScenarioSummary = {
+            childId: childRef.id,
+            sessionId: sessionRef.id,
+            storyLength: null,
+            storyPreview: null,
+            hasStoryBook: false,
+            bookId: null,
+            storyBookStatus: null,
+            pagesCount: null,
+            firstPageKind: null,
+            lastPageKind: null,
+            interiorPlacementsAlternate: null,
+            imageReadyCount: null,
+            imageStatus: null,
+            error: result.errorMessage
+        };
 
         if (!response.ok || !result.ok) {
             throw new Error(result.errorMessage || `API returned status ${response.status}`);
@@ -687,12 +870,320 @@ export default function AdminRegressionPage() {
 
         storyCompileScenarioSummary.storyLength = result.storyText.length;
         storyCompileScenarioSummary.storyPreview = result.storyText.slice(0, 120);
+        const storyBookRef = doc(firestore, 'storyBooks', sessionRef.id);
+        const storyBookSnap = await getDoc(storyBookRef);
+        if (!storyBookSnap.exists()) {
+            throw new Error('storyBooks document missing after compile flow.');
+        }
+        await tagExistingDoc(storyBookRef, 'SCENARIO_STORY_COMPILE');
+        trackArtifact(artifacts, 'storyBooks', storyBookRef.id);
+        storyCompileScenarioSummary.hasStoryBook = true;
+        storyCompileScenarioSummary.bookId = storyBookRef.id;
+        storyCompileScenarioSummary.storyBookStatus = storyBookSnap.data()?.status ?? null;
+        const bookStoryText: string | undefined = storyBookSnap.data()?.storyText;
+        if (!bookStoryText || bookStoryText.length < 50) {
+            throw new Error('storyBooks document has invalid storyText.');
+        }
+
+        const pagesResponse = await fetch('/api/storyBook/pages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookId: storyBookRef.id, regressionTag: `${REGRESSION_SUITE_TAG}:SCENARIO_STORY_COMPILE` }),
+        });
+        const pagesResult = await pagesResponse.json();
+        if (!pagesResponse.ok || !pagesResult?.ok) {
+            throw new Error(pagesResult?.errorMessage || 'Storybook page generation API failed.');
+        }
+
+        const pagesCollectionRef = tracedCollection(firestore, 'SCENARIO_STORY_COMPILE:pagesCollection', 'storyBooks', storyBookRef.id, 'pages');
+        const pagesSnapshot = await getDocs(query(pagesCollectionRef, orderBy('pageNumber', 'asc')));
+        const pageDocs = pagesSnapshot.docs.map(docSnap => docSnap.data());
+
+        if (pagesSnapshot.size === 0) {
+            throw new Error('No storyBook pages were created.');
+        }
+        if (Array.isArray(pagesResult.pages) && pagesResult.pages.length !== pagesSnapshot.size) {
+            throw new Error(`Page count mismatch: API returned ${pagesResult.pages.length} but Firestore has ${pagesSnapshot.size}.`);
+        }
+
+        const firstPageKind = pageDocs[0]?.kind ?? null;
+        const lastPageKind = pageDocs[pageDocs.length - 1]?.kind ?? null;
+        if (firstPageKind !== 'cover_front') {
+            throw new Error(`First storybook page kind was ${firstPageKind}, expected cover_front.`);
+        }
+        if (lastPageKind !== 'cover_back') {
+            throw new Error(`Last storybook page kind was ${lastPageKind}, expected cover_back.`);
+        }
+
+        const interiorPages = pageDocs.slice(1, -1);
+        const allInteriorText = interiorPages.every((page) => page?.kind === 'text');
+        if (!allInteriorText) {
+            throw new Error('One or more interior pages are not text kind.');
+        }
+
+        const placementsAlternate = interiorPages.every((page, idx) => {
+            const expectedPlacement = idx % 2 === 0 ? 'bottom' : 'top';
+            return page?.layoutHints?.textPlacement === expectedPlacement;
+        });
+        if (!placementsAlternate) {
+            throw new Error('Interior page text placement failed to alternate top/bottom.');
+        }
+
+        storyCompileScenarioSummary.pagesCount = pagesSnapshot.size;
+        storyCompileScenarioSummary.firstPageKind = firstPageKind;
+        storyCompileScenarioSummary.lastPageKind = lastPageKind;
+        storyCompileScenarioSummary.interiorPlacementsAlternate = placementsAlternate;
+
+        const imagesResponse = await fetch('/api/storyBook/images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                bookId: storyBookRef.id,
+                regressionTag: `${REGRESSION_SUITE_TAG}:SCENARIO_STORY_COMPILE`,
+                forceRegenerate: true,
+            }),
+        });
+        const imagesResult = await imagesResponse.json();
+        if (!imagesResponse.ok || !imagesResult?.ok) {
+            throw new Error(imagesResult?.errorMessage || 'Storybook image generation API failed.');
+        }
+        storyCompileScenarioSummary.imageLogs = imagesResult?.logs ?? null;
+
+        const imagesSnapshot = await getDocs(query(pagesCollectionRef, orderBy('pageNumber', 'asc')));
+        const imagePages = imagesSnapshot.docs.map((docSnap) => docSnap.data() as StoryBookPage);
+        const allImagesReady = imagePages.every((page) => page.imageStatus === 'ready' && typeof page.imageUrl === 'string' && page.imageUrl.length > 0);
+        if (!allImagesReady) {
+            const logPreview = Array.isArray(imagesResult?.logs) ? imagesResult.logs.slice(0, 5).join(' | ') : 'No logs';
+            throw new Error(`One or more storyBook pages failed to generate art. Logs: ${logPreview}`);
+        }
+
+        storyCompileScenarioSummary.imageReadyCount = imagePages.length;
+        storyCompileScenarioSummary.imageStatus = imagesResult.status ?? 'ready';
 
         updateTestResult('SCENARIO_STORY_COMPILE', { status: 'PASS', message: `Compiled story length ${result.storyText.length} chars. Sample: "${result.storyText.slice(0, 80)}..."` });
 
     } catch (e: any) {
         if (storyCompileScenarioSummary) storyCompileScenarioSummary.error = e.message;
         updateTestResult('SCENARIO_STORY_COMPILE', { status: 'ERROR', message: e.message, details: storyCompileScenarioSummary });
+    }
+
+    // Test: SCENARIO_STORYBOOK_E2E
+    try {
+        const scenarioId = 'SCENARIO_STORYBOOK_E2E';
+        const regressionScenarioTag = `${REGRESSION_SUITE_TAG}:${scenarioId}`;
+        const parentUid = `${REGRESSION_SUITE_TAG}-parent-${Date.now()}`;
+        const childRef = await createRegressionChild({
+            displayName: 'E2E Story Kid',
+            ownerParentUid: parentUid,
+            createdAt: serverTimestamp(),
+            photos: ['https://picsum.photos/seed/regression-story-kid/200/200'],
+            preferences: {
+                favoriteColors: ['blue', 'green'],
+                favoriteFoods: ['mac and cheese'],
+                favoriteGames: ['hide and seek'],
+                favoriteSubjects: ['art'],
+            },
+        }, scenarioId);
+        const storyTypeId = 'animal_adventure_v1';
+        const storyTypeSnap = await getDoc(doc(firestore, 'storyTypes', storyTypeId));
+        if (!storyTypeSnap.exists()) {
+            throw new Error(`Required story type '${storyTypeId}' not found.`);
+        }
+        const storyType = storyTypeSnap.data() as StoryType;
+        const arcSteps = storyType.arcTemplate?.steps ?? [];
+        const sessionRef = await createRegressionSession({
+            childId: childRef.id,
+            parentUid,
+            status: 'in_progress',
+            currentPhase: 'story',
+            storyTypeId,
+            storyTypeName: storyType.name,
+            storyPhaseId: storyType.defaultPhaseId,
+            endingPhaseId: storyType.endingPhaseId,
+            arcStepIndex: 0,
+        }, scenarioId);
+        storybookE2EScenarioSummary = {
+            childId: childRef.id,
+            sessionId: sessionRef.id,
+            storyTypeId,
+            beatCount: 0,
+            endingsGenerated: 0,
+        };
+        const messagesRef = collection(firestore, 'storySessions', sessionRef.id, 'messages');
+        await addDoc(messagesRef, { sender: 'assistant', text: 'Hi friend! Ready to make a story?', createdAt: serverTimestamp() });
+        for (let i = 0; i < arcSteps.length; i++) {
+            const beatRes = await fetch('/api/storyBeat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: sessionRef.id }),
+            });
+            const beatPayload = await beatRes.json();
+            if (!beatRes.ok || !beatPayload?.ok) {
+                throw new Error(beatPayload?.errorMessage || `Beat API failed at step ${i + 1}`);
+            }
+            storybookE2EScenarioSummary.beatCount += 1;
+            const choiceList: Choice[] = beatPayload.options ?? [];
+            const chosenOption = choiceList.find((opt) => !opt.introducesCharacter) ?? choiceList[0];
+            if (chosenOption) {
+                await addDoc(messagesRef, {
+                    sender: 'child',
+                    text: chosenOption.text,
+                    kind: 'child_choice',
+                    selectedOptionId: chosenOption.id,
+                    createdAt: serverTimestamp(),
+                });
+            }
+            await updateDoc(sessionRef, {
+                arcStepIndex: Math.min(i + 1, Math.max(arcSteps.length - 1, 0)),
+                updatedAt: serverTimestamp(),
+            });
+        }
+        const endingRes = await fetch('/api/storyEnding', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: sessionRef.id }),
+        });
+        const endingPayload = await endingRes.json();
+        if (!endingRes.ok || !endingPayload?.ok) {
+            throw new Error(endingPayload?.errorMessage || 'Ending API failed for E2E scenario.');
+        }
+        storybookE2EScenarioSummary.endingsGenerated = endingPayload.endings?.length ?? 0;
+        const chosenEnding = endingPayload.endings?.[0];
+        if (chosenEnding) {
+            await updateDoc(sessionRef, {
+                selectedEndingId: chosenEnding.id,
+                selectedEndingText: chosenEnding.text,
+                currentPhase: 'ending',
+                updatedAt: serverTimestamp(),
+            });
+            await addDoc(messagesRef, {
+                sender: 'child',
+                text: chosenEnding.text,
+                kind: 'child_ending_choice',
+                selectedOptionId: chosenEnding.id,
+                createdAt: serverTimestamp(),
+            });
+        }
+        const compileRes = await fetch('/api/storyCompile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: sessionRef.id }),
+        });
+        const compilePayload = await compileRes.json();
+        if (!compileRes.ok || !compilePayload?.ok) {
+            throw new Error(compilePayload?.errorMessage || 'Story compile failed for E2E scenario.');
+        }
+        const bookRef = doc(firestore, 'storyBooks', sessionRef.id);
+        const bookSnap = await getDoc(bookRef);
+        if (!bookSnap.exists()) {
+            throw new Error('storyBook document missing after compile in E2E scenario.');
+        }
+        await tagExistingDoc(bookRef, scenarioId);
+        trackArtifact(artifacts, 'storyBooks', bookRef.id);
+        const pagesResponse = await fetch('/api/storyBook/pages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookId: bookRef.id, regressionTag: regressionScenarioTag }),
+        });
+        const pagesPayload = await pagesResponse.json();
+        if (!pagesResponse.ok || !pagesPayload?.ok) {
+            throw new Error(pagesPayload?.errorMessage || 'Page generation API failed for E2E scenario.');
+        }
+        const pagesCollectionRef = tracedCollection(firestore, 'SCENARIO_STORYBOOK_E2E:pagesCollection', 'storyBooks', bookRef.id, 'pages');
+        const pagesSnapshot = await getDocs(query(pagesCollectionRef, orderBy('pageNumber', 'asc')));
+        if (pagesSnapshot.empty) {
+            throw new Error('No storybook pages created in E2E scenario.');
+        }
+        const imagesResponse = await fetch('/api/storyBook/images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                bookId: bookRef.id,
+                regressionTag: regressionScenarioTag,
+                forceRegenerate: true,
+            }),
+        });
+        const imagesPayload = await imagesResponse.json();
+        if (!imagesResponse.ok || !imagesPayload?.ok) {
+            throw new Error(imagesPayload?.errorMessage || 'Image generation API failed for E2E scenario.');
+        }
+        const refreshedPages = await getDocs(query(pagesCollectionRef, orderBy('pageNumber', 'asc')));
+        const allImagesReady = refreshedPages.docs.every((docSnap) => {
+            const page = docSnap.data() as StoryBookPage;
+            return page.imageStatus === 'ready' && typeof page.imageUrl === 'string' && page.imageUrl.length > 0;
+        });
+        storybookE2EScenarioSummary.bookId = bookRef.id;
+        storybookE2EScenarioSummary.pagesReady = refreshedPages.size;
+        storybookE2EScenarioSummary.artReady = allImagesReady;
+        if (!allImagesReady) {
+            throw new Error('One or more images failed to reach ready state in E2E scenario.');
+        }
+        const authToken = await auth?.currentUser?.getIdToken?.();
+        if (!authToken) {
+            throw new Error('Admin authentication required for finalize pipeline.');
+        }
+        const authedHeaders = {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+        };
+        const finalizeResponse = await fetch('/api/storyBook/finalize', {
+            method: 'POST',
+            headers: authedHeaders,
+            body: JSON.stringify({ bookId: bookRef.id, action: 'finalize', regressionTag: regressionScenarioTag }),
+        });
+        const finalizePayload = await finalizeResponse.json();
+        if (!finalizeResponse.ok || !finalizePayload?.ok) {
+            throw new Error(finalizePayload?.errorMessage || 'Finalize API failed for E2E scenario.');
+        }
+        storybookE2EScenarioSummary.finalized = true;
+        const printableResponse = await fetch('/api/storyBook/printable', {
+            method: 'POST',
+            headers: authedHeaders,
+            body: JSON.stringify({ bookId: bookRef.id, regressionTag: regressionScenarioTag }),
+        });
+        const printablePayload = await printableResponse.json();
+        if (!printableResponse.ok || !printablePayload?.ok) {
+            throw new Error(printablePayload?.errorMessage || 'Printable API failed for E2E scenario.');
+        }
+        storybookE2EScenarioSummary.printableReady = true;
+        const orderResponse = await fetch('/api/printOrders', {
+            method: 'POST',
+            headers: authedHeaders,
+            body: JSON.stringify({
+                bookId: bookRef.id,
+                quantity: 1,
+                contactEmail: 'regression@example.com',
+                shippingAddress: {
+                    name: 'Regression Tester',
+                    line1: '123 QA Lane',
+                    line2: 'Suite 5',
+                    city: 'Testville',
+                    state: 'CA',
+                    postalCode: '94000',
+                    country: 'USA',
+                },
+                regressionTag: regressionScenarioTag,
+            }),
+        });
+        const orderPayload = await orderResponse.json();
+        if (!orderResponse.ok || !orderPayload?.ok) {
+            throw new Error(orderPayload?.errorMessage || 'Print order API failed for E2E scenario.');
+        }
+        storybookE2EScenarioSummary.orderId = orderPayload.orderId ?? null;
+        const payResponse = await fetch(`/api/printOrders/${orderPayload.orderId}/pay`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${authToken}`,
+            },
+        });
+        const payPayload = await payResponse.json();
+        if (!payResponse.ok || !payPayload?.ok) {
+            throw new Error(payPayload?.errorMessage || 'Mark-as-paid API failed for E2E scenario.');
+        }
+        updateTestResult('SCENARIO_STORYBOOK_E2E', { status: 'PASS', message: `E2E flow completed with ${refreshedPages.size} pages and printable order.` });
+    } catch (e: any) {
+        if (storybookE2EScenarioSummary) storybookE2EScenarioSummary.error = e.message;
+        updateTestResult('SCENARIO_STORYBOOK_E2E', { status: 'ERROR', message: e.message, details: storybookE2EScenarioSummary });
     }
 
     // Test: SCENARIO_ENDING_FLOW
@@ -705,13 +1196,14 @@ export default function AdminRegressionPage() {
         const steps = storyType.arcTemplate?.steps;
         if (!steps || steps.length === 0) throw new Error(`Story type '${storyTypeId}' has no arc steps.`);
         
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Ending Test Child', createdAt: serverTimestamp() });
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+        const childRef = await createRegressionChild({ displayName: 'Ending Test Child', createdAt: serverTimestamp() }, 'SCENARIO_ENDING_FLOW');
+        const sessionRef = await createRegressionSession({
             childId: childRef.id, storyTypeId, storyPhaseId: storyType.endingPhaseId,
             arcStepIndex: steps.length - 1, // Set to final step
-            promptConfigLevelBand: 'low', status: 'in_progress', currentPhase: 'story'
-        });
-        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), { sender: 'assistant', text: 'The story is almost over!', createdAt: serverTimestamp() });
+            promptConfigLevelBand: 'low', status: 'in_progress', currentPhase: 'story',
+            parentUid: 'regression-ending-parent'
+        }, 'SCENARIO_ENDING_FLOW');
+        await addDoc(collection(firestore, 'storySessions', sessionRef.id, 'messages'), { sender: 'assistant', text: 'The story is almost over!', createdAt: serverTimestamp() });
         
         const response = await fetch('/api/storyEnding', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
@@ -755,12 +1247,13 @@ export default function AdminRegressionPage() {
         const maxIndex = stepsCount - 1;
         const lastStepId = steps[maxIndex];
 
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Arc Bounds Child', createdAt: serverTimestamp() });
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+        const childRef = await createRegressionChild({ displayName: 'Arc Bounds Child', createdAt: serverTimestamp() }, 'SCENARIO_ARC_BOUNDS');
+        const sessionRef = await createRegressionSession({
             childId: childRef.id, storyTypeId, storyPhaseId: 'story_beat_phase_v1',
-            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress', currentPhase: 'story'
-        });
-        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), { sender: 'assistant', text: 'Hi', createdAt: serverTimestamp() });
+            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress', currentPhase: 'story',
+            parentUid: 'regression-arc-bounds-parent'
+        }, 'SCENARIO_ARC_BOUNDS');
+        await addDoc(collection(firestore, 'storySessions', sessionRef.id, 'messages'), { sender: 'assistant', text: 'Hi', createdAt: serverTimestamp() });
         
         let maxObservedArcStepIndex = 0;
         let lastArcStepIdFromApi: string | null = null;
@@ -815,13 +1308,13 @@ export default function AdminRegressionPage() {
         const storyType = typeSnap.docs[0].data();
         const storyTypeId = typeSnap.docs[0].id;
 
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Arc Test Child', createdAt: serverTimestamp(), regressionTag: 'arc_advance' });
+        const childRef = await createRegressionChild({ displayName: 'Arc Test Child', createdAt: serverTimestamp() }, 'SCENARIO_ARC_STEP_ADVANCE');
         
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+        const sessionRef = await createRegressionSession({
             childId: childRef.id, storyTypeId, storyPhaseId: storyType.defaultPhaseId,
             arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress', currentPhase: 'story',
             createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-        });
+        }, 'SCENARIO_ARC_STEP_ADVANCE');
         
         arcAdvanceScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, initialArcStepIndex: 0, finalArcStepIndex: null };
 
@@ -852,16 +1345,17 @@ export default function AdminRegressionPage() {
     
     // Test: SCENARIO_CHARACTER_TRAITS
     try {
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Traits Test Child', createdAt: serverTimestamp() });
-        const sessionId = (await addDoc(collection(firestore, 'storySessions'), {
+        const childRef = await createRegressionChild({ displayName: 'Traits Test Child', createdAt: serverTimestamp() }, 'SCENARIO_CHARACTER_TRAITS');
+        const sessionId = (await createRegressionSession({
             childId: childRef.id, storyTypeId: 'animal_adventure_v1', storyPhaseId: 'story_beat_phase_v1',
-            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress'
-        })).id;
-        const charRef = await addDoc(collection(firestore, 'characters'), {
+            arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
+            parentUid: 'regression-character-traits-parent'
+        }, 'SCENARIO_CHARACTER_TRAITS')).id;
+        const charRef = await createRegressionCharacter({
             ownerChildId: childRef.id, sessionId: sessionId, name: 'Test Bunny',
             role: 'pet', traits: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-        });
-        await addDoc(collection(firestore, `storySessions/${sessionId}/messages`), {
+        }, 'SCENARIO_CHARACTER_TRAITS');
+        await addDoc(collection(firestore, 'storySessions', sessionId, 'messages'), {
             sender: 'assistant', text: 'Once upon a time...', createdAt: serverTimestamp()
         });
 
@@ -897,12 +1391,12 @@ export default function AdminRegressionPage() {
         const storyType = typeSnap.docs[0].data();
         const storyTypeId = typeSnap.docs[0].id;
 
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Char Test Child', createdAt: serverTimestamp(), regressionTag: 'char_beat' });
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+        const childRef = await createRegressionChild({ displayName: 'Char Test Child', createdAt: serverTimestamp() }, 'SCENARIO_CHARACTER_FROM_BEAT');
+        const sessionRef = await createRegressionSession({
             childId: childRef.id, storyTypeId, storyPhaseId: storyType.defaultPhaseId,
             arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress', currentPhase: 'story',
             createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-        });
+        }, 'SCENARIO_CHARACTER_FROM_BEAT');
         
         characterScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, optionsCount: null, sampleOption: null };
 
@@ -939,7 +1433,7 @@ export default function AdminRegressionPage() {
     }
 
     // Test: SCENARIO_MORE_OPTIONS
-    const moreOptionsSessionId = beatScenarioSummary?.sessionId;
+    const moreOptionsSessionId = beatScenarioSummary ? beatScenarioSummary.sessionId : null;
     if (!moreOptionsSessionId) {
         updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'SKIP', message: 'Depends on successful SCENARIO_BEAT_AUTO.' });
     } else {
@@ -950,7 +1444,7 @@ export default function AdminRegressionPage() {
             const result1 = await res1.json();
             if (!result1.ok) throw new Error(`First beat call failed: ${result1.errorMessage}`);
             
-            const messagesRef = collection(firestore, `storySessions/${moreOptionsSessionId}/messages`);
+            const messagesRef = collection(firestore, 'storySessions', moreOptionsSessionId, 'messages');
             await addDoc(messagesRef, { sender: 'assistant', text: result1.storyContinuation, kind: 'beat_continuation', createdAt: serverTimestamp() });
             await addDoc(messagesRef, { sender: 'assistant', text: 'What happens next?', kind: 'beat_options', options: result1.options, createdAt: serverTimestamp() });
 
@@ -990,14 +1484,20 @@ export default function AdminRegressionPage() {
         const storyType = typeSnap.docs[0].data();
         const storyTypeId = typeSnap.docs[0].id;
 
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Child', createdAt: serverTimestamp(), regressionTag: 'auto_beat' });
+        const childRef = await createRegressionChild({ displayName: 'Regression Child', createdAt: serverTimestamp() }, 'SCENARIO_BEAT_AUTO');
 
-        const mainCharRef = await addDoc(collection(firestore, 'characters'), { ownerChildId: childRef.id, name: 'Reggie', role: 'child' });
+        const mainCharRef = await createRegressionCharacter({
+            ownerChildId: childRef.id,
+            name: 'Reggie',
+            role: 'child',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        }, 'SCENARIO_BEAT_AUTO');
 
         // Use a legacy ID to test resolution
         const legacyPromptConfigId = 'story_beat_low_v1';
 
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+        const sessionRef = await createRegressionSession({
             childId: childRef.id,
             storyTypeId: storyTypeId,
             storyPhaseId: 'story_beat_phase_v1',
@@ -1007,9 +1507,10 @@ export default function AdminRegressionPage() {
             promptConfigId: legacyPromptConfigId,
             promptConfigLevelBand: 'low',
             status: 'in_progress',
+            parentUid: 'regression-beat-parent',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-        });
+        }, 'SCENARIO_BEAT_AUTO');
         
         beatScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id };
 
@@ -1041,9 +1542,9 @@ export default function AdminRegressionPage() {
         const warmupPromptConfigId = promptSnap.docs[0].id;
         const warmupPromptConfigLevelBand = promptSnap.docs[0].data().levelBand;
 
-        const childRef = await addDoc(collection(firestore, 'children'), { displayName: 'Regression Warmup Child', createdAt: serverTimestamp(), regressionTag: 'auto_warmup' });
+        const childRef = await createRegressionChild({ displayName: 'Regression Warmup Child', createdAt: serverTimestamp() }, 'SCENARIO_WARMUP_AUTO');
         
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), {
+        const sessionRef = await createRegressionSession({
             childId: childRef.id,
             storyPhaseId: 'warmup_phase_v1',
             promptConfigId: warmupPromptConfigId,
@@ -1053,9 +1554,9 @@ export default function AdminRegressionPage() {
             arcStepIndex: 0,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-        });
+        }, 'SCENARIO_WARMUP_AUTO');
 
-        await addDoc(collection(firestore, `storySessions/${sessionRef.id}/messages`), {
+        await addDoc(collection(firestore, 'storySessions', sessionRef.id, 'messages'), {
              sender: 'assistant', text: 'Hi! I am your Story Guide. What should I call you?', createdAt: serverTimestamp()
         });
 
@@ -1159,8 +1660,11 @@ export default function AdminRegressionPage() {
     }
     
     const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary, storyCompile: storyCompileScenarioSummary, phaseState: phaseStateScenarioSummary, childStoryList: childStoryListScenarioSummary };
-    setDiagnostics(prev => ({...prev, apiSummary: {...prev.apiSummary, ...apiSummary }, scenario: scenarioResults }));
+    setDiagnostics((prev: any) => ({...prev, apiSummary: {...prev.apiSummary, ...apiSummary }, scenario: scenarioResults }));
     return scenarioResults;
+    } finally {
+        await cleanupRegressionArtifacts(firestore, artifacts);
+    }
   };
 
   const markPendingTests = (status: TestStatus, message: string) => {
@@ -1179,7 +1683,7 @@ export default function AdminRegressionPage() {
 
     setIsRunning(true);
     setTests(resetTestState());
-    setDiagnostics(prev => ({ ...prev, firestoreSummary: {}, apiSummary: {}, scenario: {} }));
+    setDiagnostics((prev: any) => ({ ...prev, firestoreSummary: {}, apiSummary: {}, scenario: {} }));
     
     try {
       const currentAuthSummary = await runAuthTests();

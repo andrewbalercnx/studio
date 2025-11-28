@@ -61,7 +61,7 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     }
   }, [user, userLoading]);
 
-  const setActiveChildId = (childId: string | null) => {
+  const setActiveChildId = useCallback((childId: string | null) => {
     if (childId === activeChildId) {
       console.debug('[AppContext] setActiveChildId called with same value, skipping', childId);
       return;
@@ -74,7 +74,7 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     } else {
       localStorage.removeItem('activeChildId');
     }
-  };
+  }, [activeChildId]);
 
   useEffect(() => {
     console.debug('[AppContext] activeChildId now', activeChildId);
@@ -82,7 +82,7 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
 
   const switchToParentMode = useCallback(() => {
     setActiveChildId(null);
-  }, []);
+  }, [setActiveChildId]);
 
   const roleMode = useMemo((): AppRoleMode => {
     if (userLoading) return 'unknown';

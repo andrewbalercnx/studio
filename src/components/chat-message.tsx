@@ -1,6 +1,6 @@
 'use client';
 
-import type { ChatMessage as ChatMessageType } from '@/lib/types';
+import type { ChatMessage as ChatMessageType, Choice } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Bot, User } from 'lucide-react';
 import { Button } from './ui/button';
@@ -11,7 +11,10 @@ type ChatMessageProps = {
 };
 
 export function ChatMessage({ message, onChoiceClick }: ChatMessageProps) {
-  const isAssistant = message.role === 'assistant';
+  const role = message.role ?? (message.sender === 'assistant' ? 'assistant' : 'user');
+  const isAssistant = role === 'assistant' || role === 'model';
+  const text = message.text ?? message.content ?? '';
+  const choices: Choice[] = message.options ?? [];
 
   return (
     <div className={cn('flex items-start gap-3', isAssistant ? 'justify-start' : 'justify-end')}>
@@ -27,11 +30,11 @@ export function ChatMessage({ message, onChoiceClick }: ChatMessageProps) {
             isAssistant ? 'bg-muted' : 'bg-primary text-primary-foreground'
           )}
         >
-          <p className="text-sm">{message.content}</p>
+          <p className="text-sm">{text}</p>
         </div>
-        {message.choices && message.choices.length > 0 && (
+        {choices.length > 0 && (
             <div className="flex flex-wrap gap-2">
-                {message.choices.map(choice => (
+                {choices.map(choice => (
                     <Button key={choice.id} variant="outline" size="sm" onClick={() => onChoiceClick(choice.text)}>
                         {choice.text}
                     </Button>

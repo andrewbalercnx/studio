@@ -1,21 +1,23 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles, Star, Copy } from 'lucide-react';
+import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles, Star, Copy, Image as ImageIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
-import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion, DocumentReference, getDoc, deleteField, increment } from 'firebase/firestore';
-import type { StorySession, ChatMessage as Message, Choice, Character, StoryType } from '@/lib/types';
+import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion, DocumentReference, getDoc, deleteField, increment, where } from 'firebase/firestore';
+import type { StorySession, ChatMessage as Message, Choice, Character, StoryType, StoryBook, ChildProfile } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import { useToast } from '@/hooks/use-toast';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Badge } from '@/components/ui/badge';
+import { logSessionEvent } from '@/lib/session-events';
+import { cn } from '@/lib/utils';
 
 
 type WarmupGenkitDiagnostics = {
@@ -65,6 +67,50 @@ type EndingGenkitDiagnostics = {
 };
 
 
+function getChildAgeYears(child?: ChildProfile | null): number | null {
+    if (!child?.dateOfBirth) return null;
+    let dob: Date | null = null;
+    if (typeof child.dateOfBirth?.toDate === 'function') {
+        dob = child.dateOfBirth.toDate();
+    } else {
+        const parsed = new Date(child.dateOfBirth);
+        dob = isNaN(parsed.getTime()) ? null : parsed;
+    }
+    if (!dob) return null;
+    const diff = Date.now() - dob.getTime();
+    if (diff <= 0) return null;
+    return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
+}
+
+function matchesAgeRange(ageRange: string, age: number | null): boolean {
+    if (age === null) return true;
+    const rangeMatch = ageRange.match(/(\d+)\s*-\s*(\d+)/);
+    if (rangeMatch) {
+        const min = parseInt(rangeMatch[1], 10);
+        const max = parseInt(rangeMatch[2], 10);
+        return age >= min && age <= max;
+    }
+    const plusMatch = ageRange.match(/(\d+)\s*\+/);
+    if (plusMatch) {
+        const min = parseInt(plusMatch[1], 10);
+        return age >= min;
+    }
+    return true;
+}
+
+function buildPreferenceKeywords(child?: ChildProfile | null): string[] {
+    if (!child?.preferences) return [];
+    const values = [
+        ...(child.preferences.favoriteColors ?? []),
+        ...(child.preferences.favoriteFoods ?? []),
+        ...(child.preferences.favoriteGames ?? []),
+        ...(child.preferences.favoriteSubjects ?? []),
+        ...(child.favouriteGenres ?? []),
+        ...(child.favouriteCharacterTypes ?? []),
+    ];
+    return values.map((value) => value.toLowerCase());
+}
+
 export default function StorySessionPage() {
     const params = useParams<{ sessionId: string }>();
     const sessionId = params.sessionId;
@@ -79,6 +125,14 @@ export default function StorySessionPage() {
     const [isBeatRunning, setIsBeatRunning] = useState(false);
     const [isGeneratingMoreOptions, setIsGeneratingMoreOptions] = useState(false);
     const [isEndingRunning, setIsEndingRunning] = useState(false);
+    const [isImageJobRunning, setIsImageJobRunning] = useState(false);
+    const [imageJobError, setImageJobError] = useState<string | null>(null);
+    const [isSelectingStoryType, setIsSelectingStoryType] = useState(false);
+    const [isCompiling, setIsCompiling] = useState(false);
+    const [compileError, setCompileError] = useState<string | null>(null);
+    const [isGeneratingPages, setIsGeneratingPages] = useState(false);
+    const [pagesError, setPagesError] = useState<string | null>(null);
+    const [hasTriggeredCompile, setHasTriggeredCompile] = useState(false);
 
 
     const [beatDiagnostics, setBeatDiagnostics] = useState<BeatGenkitDiagnostics>({
@@ -119,8 +173,54 @@ export default function StorySessionPage() {
     // Firestore Hooks
     const sessionRef = useMemo(() => firestore ? doc(firestore, 'storySessions', sessionId) : null, [firestore, sessionId]);
     const { data: session, loading: sessionLoading, error: sessionError } = useDocument<StorySession>(sessionRef);
-    const messagesQuery = useMemo(() => firestore ? query(collection(firestore, `storySessions/${sessionId}/messages`), orderBy('createdAt')) : null, [firestore, sessionId]);
+    const storyBookRef = useMemo(() => firestore ? doc(firestore, 'storyBooks', sessionId) : null, [firestore, sessionId]);
+    const { data: storyBook, loading: storyBookLoading, error: storyBookError } = useDocument<StoryBook>(storyBookRef);
+    const messagesQuery = useMemo(() => firestore ? query(collection(firestore, 'storySessions', sessionId, 'messages'), orderBy('createdAt')) : null, [firestore, sessionId]);
     const { data: messages, loading: messagesLoading, error: messagesError } = useCollection<Message>(messagesQuery);
+    const childRef = useMemo(() => (session?.childId && firestore) ? doc(firestore, 'children', session.childId) : null, [firestore, session?.childId]);
+    const { data: childProfile } = useDocument<ChildProfile>(childRef);
+    const storyTypesQuery = useMemo(() => firestore ? query(collection(firestore, 'storyTypes'), where('status', '==', 'live')) : null, [firestore]);
+    const { data: storyTypes } = useCollection<StoryType>(storyTypesQuery);
+    const childAge = useMemo(() => getChildAgeYears(childProfile), [childProfile]);
+    const preferenceKeywords = useMemo(() => buildPreferenceKeywords(childProfile), [childProfile]);
+    const curatedStoryTypes = useMemo(() => {
+        if (!storyTypes) return [];
+        return storyTypes
+            .map((type) => {
+                const tagMatches = preferenceKeywords.reduce((score, keyword) => {
+                    const matchesTag = type.tags?.some((tag) => tag.toLowerCase().includes(keyword));
+                    return matchesTag ? score + 1 : score;
+                }, 0);
+                return {
+                    type,
+                    score: tagMatches,
+                    matchesAge: matchesAgeRange(type.ageRange || '', childAge),
+                };
+            })
+            .filter(({ matchesAge }) => matchesAge)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 4)
+            .map(({ type }) => type);
+    }, [storyTypes, preferenceKeywords, childAge]);
+    const activeStoryType = useMemo(() => {
+        if (!storyTypes || !session?.storyTypeId) return null;
+        return storyTypes.find((type) => type.id === session.storyTypeId) ?? null;
+    }, [storyTypes, session?.storyTypeId]);
+    const logClientStage = useCallback(async (event: string, attributes: Record<string, unknown> = {}) => {
+        if (!firestore) return;
+        try {
+            await logSessionEvent({
+                firestore,
+                sessionId,
+                event,
+                status: 'info',
+                source: 'client',
+                attributes,
+            });
+        } catch (err) {
+            console.warn('[story-session] Failed to log event', event, err);
+        }
+    }, [firestore, sessionId]);
     
     // Derived state from session
     const currentStoryTypeId = session?.storyTypeId ?? null;
@@ -151,6 +251,10 @@ export default function StorySessionPage() {
         }
         return null;
     }, [messages]);
+    const hasEndingOptions = useMemo(() => {
+        if (!messages) return false;
+        return messages.some((msg) => msg.kind === 'ending_options');
+    }, [messages]);
 
 
     const handleSendMessage = async () => {
@@ -160,7 +264,7 @@ export default function StorySessionPage() {
         const childMessageText = input.trim();
         setInput('');
 
-        const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+        const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
 
         try {
             if (pendingCharacterTraits) {
@@ -253,6 +357,44 @@ export default function StorySessionPage() {
         }
     };
 
+    const handleStoryTypeSelect = async (storyType: StoryType) => {
+        if (!firestore || !sessionRef) return;
+        setIsSelectingStoryType(true);
+        try {
+            const timestamp = serverTimestamp();
+            const displayName = session?.storyTitle || childProfile?.displayName
+                ? `${childProfile?.displayName || 'Your'} ${storyType.name}`
+                : storyType.name;
+            await updateDoc(sessionRef, {
+                storyTypeId: storyType.id,
+                storyTypeName: storyType.name,
+                storyPhaseId: storyType.defaultPhaseId,
+                endingPhaseId: storyType.endingPhaseId,
+                arcStepIndex: 0,
+                currentPhase: 'story',
+                storyTitle: session?.storyTitle || displayName,
+                updatedAt: timestamp,
+                'progress.warmupCompletedAt': timestamp,
+                'progress.storyTypeChosenAt': timestamp,
+            });
+            await logClientStage('warmup.completed', { storyTypeId: storyType.id });
+            await logClientStage('story_type.chosen', { storyTypeId: storyType.id });
+            toast({
+                title: 'Story type selected!',
+                description: `The Story Guide will create a ${storyType.name} tale.`,
+            });
+            await runBeatAndAppendMessages();
+        } catch (e: any) {
+            toast({
+                title: 'Could not start story',
+                description: e.message || 'Please try another type.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsSelectingStoryType(false);
+        }
+    };
+
     const runBeatAndAppendMessages = async () => {
         if (!firestore || !sessionRef) return;
         
@@ -262,13 +404,16 @@ export default function StorySessionPage() {
         try {
             // If this is the first beat, transition phase
             const currentSession = (await getDoc(sessionRef)).data() as StorySession;
+            const updates: Record<string, any> = {};
             if (currentSession.currentPhase === 'warmup') {
-                await updateDoc(sessionRef, {
-                    currentPhase: 'story',
-                    storyPhaseId: 'story_beat_phase_v1',
-                    promptConfigId: 'story_beat_low_v1', // Or derive dynamically
-                    arcStepIndex: 0,
-                });
+                updates.currentPhase = 'story';
+            }
+            if (typeof currentSession.arcStepIndex !== 'number') {
+                updates.arcStepIndex = 0;
+            }
+            if (Object.keys(updates).length > 0) {
+                updates.updatedAt = serverTimestamp();
+                await updateDoc(sessionRef, updates);
             }
 
 
@@ -285,7 +430,7 @@ export default function StorySessionPage() {
 
             // On success, write to Firestore
             const { storyContinuation, options, promptConfigId, arcStep } = flowResult;
-            const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+            const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
 
             await addDoc(messagesRef, {
                 sender: 'assistant',
@@ -324,7 +469,7 @@ export default function StorySessionPage() {
     };
 
     const runCharacterTraitsQuestion = async (sessionId: string, characterId: string, characterLabel: string) => {
-        if (!firestore || !sessionRef) return;
+        if (!firestore || !sessionRef) return false;
 
         try {
             const response = await fetch('/api/characterTraits', {
@@ -341,7 +486,7 @@ export default function StorySessionPage() {
 
             const { question, suggestedTraits } = result;
 
-            const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+            const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
             await addDoc(messagesRef, {
                 sender: 'assistant',
                 text: question,
@@ -381,6 +526,59 @@ export default function StorySessionPage() {
         }
     };
     
+    const generateEndingChoices = useCallback(async () => {
+        if (!firestore || !sessionRef || hasEndingOptions) return;
+        setIsEndingRunning(true);
+        setEndingDiagnostics(prev => ({ ...prev, lastEndingErrorMessage: null }));
+        try {
+            const response = await fetch('/api/storyEnding', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result.ok) {
+                throw new Error(result.errorMessage || 'An unknown error occurred in ending flow.');
+            }
+            const endings: Choice[] = result.endings.map((ending: { id: string; text: string }) => ({
+                id: ending.id,
+                text: ending.text,
+            }));
+            const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
+            await addDoc(messagesRef, {
+                sender: 'assistant',
+                text: 'Here are a few endings. Pick your favorite to finish the book!',
+                kind: 'system_status',
+                createdAt: serverTimestamp(),
+            });
+            await addDoc(messagesRef, {
+                sender: 'assistant',
+                text: 'Which ending do you like best?',
+                kind: 'ending_options',
+                options: endings,
+                createdAt: serverTimestamp(),
+            });
+            await updateDoc(sessionRef, {
+                currentPhase: 'ending',
+                updatedAt: serverTimestamp(),
+                'progress.storyArcCompletedAt': serverTimestamp(),
+            });
+            setEndingDiagnostics({
+                lastEndingOk: true,
+                lastEndingErrorMessage: null,
+                lastEndingStoryTypeId: result.storyTypeId,
+                lastEndingArcStep: result.arcStep,
+                lastEndingPreview: endings[0]?.text.slice(0, 80) || null,
+            });
+            await logClientStage('ending.presented', { endings: endings.length });
+        } catch (e: any) {
+            setEndingDiagnostics(prev => ({ ...prev, lastEndingOk: false, lastEndingErrorMessage: e.message }));
+            toast({ title: 'Error running ending flow', description: e.message, variant: 'destructive' });
+        } finally {
+            setIsEndingRunning(false);
+        }
+    }, [firestore, sessionRef, hasEndingOptions, sessionId, toast, logClientStage]);
+
     const handleRunStoryBeat = async () => {
         if (!user || !sessionId || !firestore) return;
         if (!session?.storyTypeId) {
@@ -391,47 +589,14 @@ export default function StorySessionPage() {
     };
 
     const handleRunEndingFlow = async () => {
-        if (!user || !sessionId || !firestore) return;
-
-        setIsEndingRunning(true);
-        setEndingDiagnostics({ ...endingDiagnostics, lastEndingErrorMessage: null });
-
-        try {
-            const response = await fetch('/api/storyEnding', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId }),
-            });
-            const result = await response.json();
-            if (!response.ok || !result.ok) {
-                throw new Error(result.errorMessage || "An unknown error occurred in ending flow.");
-            }
-
-            setEndingDiagnostics({
-                lastEndingOk: true,
-                lastEndingErrorMessage: null,
-                lastEndingStoryTypeId: result.storyTypeId,
-                lastEndingArcStep: result.arcStep,
-                lastEndingPreview: result.endings[0]?.text.slice(0, 80) || null,
-            });
-            toast({ title: "Ending Flow Succeeded!", description: `Generated ${result.endings.length} endings.` });
-
-            // For now, just log to console. In future, would append to chat.
-            console.log("Generated Endings:", result.endings);
-
-        } catch (e: any) {
-            setEndingDiagnostics(prev => ({ ...prev, lastEndingOk: false, lastEndingErrorMessage: e.message }));
-            toast({ title: "Error running ending flow", description: e.message, variant: "destructive" });
-        } finally {
-            setIsEndingRunning(false);
-        }
+        await generateEndingChoices();
     };
     
     const handleChooseOption = async (optionsMessage: Message, chosenOption: Choice) => {
         if (!user || !sessionId || !firestore || !sessionRef || !session || isBeatRunning || !session.storyTypeId) return;
     
         const charactersRef = collection(firestore, 'characters');
-        const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+        const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
         
         let newCharacterId: string | undefined = undefined;
         let traitsQuestionAsked = false;
@@ -484,20 +649,27 @@ export default function StorySessionPage() {
             // The flow now waits for user input, handled by handleSendMessage
         } else {
             // No new character or traits API failed, so proceed to next beat immediately.
-            const storyTypeRef = doc(firestore, 'storyTypes', session.storyTypeId!);
-            const storyTypeDoc = await getDoc(storyTypeRef);
-            const storyType = storyTypeDoc.data() as StoryType;
-            const arcSteps = storyType.arcTemplate?.steps ?? [];
+            let arcSteps = activeStoryType?.arcTemplate?.steps;
+            if (!arcSteps && session?.storyTypeId) {
+                const storyTypeRef = doc(firestore, 'storyTypes', session.storyTypeId);
+                const storyTypeDoc = await getDoc(storyTypeRef);
+                const fallbackType = storyTypeDoc.data() as StoryType;
+                arcSteps = fallbackType.arcTemplate?.steps;
+            }
+            const stepsArray = arcSteps ?? [];
+            const totalSteps = stepsArray.length;
             const currentIndex = session.arcStepIndex ?? 0;
-            
             let nextIndex = currentIndex + 1;
-            if (arcSteps.length > 0) {
-                const maxIndex = arcSteps.length - 1;
+            const maxIndex = totalSteps > 0 ? totalSteps - 1 : 0;
+            let reachedEnd = false;
+            if (totalSteps > 0) {
                 if (nextIndex > maxIndex) {
+                    reachedEnd = true;
                     nextIndex = maxIndex;
                 }
+            } else {
+                reachedEnd = true;
             }
-            
             await updateDoc(sessionRef, {
                 arcStepIndex: nextIndex,
                 updatedAt: serverTimestamp(),
@@ -507,11 +679,94 @@ export default function StorySessionPage() {
                 ...prev,
                 lastArcStepIndexAfterChoice: nextIndex,
             }));
-
-            await runBeatAndAppendMessages();
+            if (reachedEnd) {
+                await logClientStage('arc.completed', { totalSteps: totalSteps || null });
+                await generateEndingChoices();
+            } else {
+                await runBeatAndAppendMessages();
+            }
         }
     };
+
+    const handleChooseEnding = async (_optionsMessage: Message, chosenOption: Choice) => {
+        if (!sessionRef || !firestore || session?.selectedEndingId) return;
+        const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
+        await addDoc(messagesRef, {
+            sender: 'child',
+            text: chosenOption.text,
+            kind: 'child_ending_choice',
+            selectedOptionId: chosenOption.id,
+            createdAt: serverTimestamp(),
+        });
+        await updateDoc(sessionRef, {
+            selectedEndingId: chosenOption.id,
+            selectedEndingText: chosenOption.text,
+            updatedAt: serverTimestamp(),
+            'progress.endingChosenAt': serverTimestamp(),
+        });
+        await logClientStage('ending.chosen', { endingId: chosenOption.id });
+        toast({
+            title: 'Ending selected',
+            description: 'Great choice! Compiling your story...',
+        });
+        await triggerCompile();
+    };
     
+    const triggerCompile = useCallback(async () => {
+        if (!sessionRef || !firestore) return;
+        if (isCompiling) return;
+        if (session?.status === 'completed' && storyBook) return;
+        setIsCompiling(true);
+        setCompileError(null);
+        try {
+            await logClientStage('compile.started', {});
+            const response = await fetch('/api/storyCompile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result?.ok) {
+                throw new Error(result?.errorMessage || 'Failed to compile story.');
+            }
+            setHasTriggeredCompile(true);
+            toast({ title: 'Compiling story…', description: 'We are stitching all of your choices together.' });
+        } catch (e: any) {
+            setCompileError(e.message || 'Compile failed.');
+            toast({ title: 'Compile failed', description: e.message, variant: 'destructive' });
+        } finally {
+            setIsCompiling(false);
+        }
+    }, [sessionRef, firestore, isCompiling, session?.status, storyBook, sessionId, logClientStage, toast]);
+
+    const handleGeneratePages = async () => {
+        if (!storyBook) {
+            toast({ title: 'Story not compiled yet', description: 'Compile your story before building pages.' });
+            return;
+        }
+        if (isGeneratingPages) return;
+        setIsGeneratingPages(true);
+        setPagesError(null);
+        try {
+            await logClientStage('pages.started', { bookId: storyBook.id });
+            const response = await fetch('/api/storyBook/pages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookId: storyBook.id }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result?.ok) {
+                throw new Error(result?.errorMessage || 'Page generation failed.');
+            }
+            toast({ title: 'Pages queued', description: 'We are laying out your storybook pages.' });
+        } catch (e: any) {
+            setPagesError(e.message || 'Page generation failed.');
+            toast({ title: 'Page generation failed', description: e.message, variant: 'destructive' });
+        } finally {
+            setIsGeneratingPages(false);
+        }
+    };
+
     const handleMoreOptions = async () => {
         if (!firestore || !sessionId) return;
         setIsGeneratingMoreOptions(true);
@@ -529,7 +784,7 @@ export default function StorySessionPage() {
                 throw new Error(flowResult.errorMessage || "An unknown error occurred while getting more options.");
             }
 
-            const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+            const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
             const q = query(messagesRef, orderBy('createdAt', 'desc'), limit(1));
             const snapshot = await getDocs(q);
             
@@ -583,6 +838,13 @@ export default function StorySessionPage() {
             currentStoryPhaseId: currentStoryPhaseId,
             currentArcStepIndex: currentArcStepIndex,
         },
+        storyBook: {
+            hasStoryBook: !!storyBook,
+            status: storyBook?.status || null,
+            loading: storyBookLoading,
+            error: storyBookError?.message || null,
+            pageGeneration: storyBook?.pageGeneration ?? null,
+        },
         genkitWarmup: warmupDiagnostics,
         genkitBeat: beatDiagnostics,
         genkitEnding: endingDiagnostics,
@@ -595,6 +857,175 @@ export default function StorySessionPage() {
         const textToCopy = `Page: story-session\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
         navigator.clipboard.writeText(textToCopy);
         toast({ title: 'Copied to clipboard!' });
+    };
+
+    const handleGenerateArt = async (force = false) => {
+        const bookId = storyBook?.id ?? sessionId;
+        if (!bookId) {
+            setImageJobError('Storybook not available for this session yet.');
+            return;
+        }
+        setIsImageJobRunning(true);
+        setImageJobError(null);
+        try {
+            await logClientStage('art.started', { bookId, force });
+            const response = await fetch('/api/storyBook/images', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    bookId,
+                    forceRegenerate: force,
+                }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result?.ok) {
+                throw new Error(result?.errorMessage || 'Failed to generate art.');
+            }
+            toast({ title: 'Art generation started', description: `Status: ${result.status}` });
+        } catch (error: any) {
+            const message = error?.message || 'Unexpected art generation error.';
+            setImageJobError(message);
+            toast({ title: 'Art generation failed', description: message, variant: 'destructive' });
+        } finally {
+            setIsImageJobRunning(false);
+        }
+    };
+
+    const renderCreateBookPanel = () => {
+        if (!session) return null;
+        const compileReady = session.status === 'completed' || !!storyBook;
+        const showPanel = session.selectedEndingId || compileReady;
+        if (!showPanel) return null;
+        const compileStatus: 'pending' | 'running' | 'ready' = compileReady ? 'ready' : isCompiling ? 'running' : 'pending';
+        const pagesStatus: 'pending' | 'running' | 'ready' = storyBook?.pageGeneration?.status === 'ready'
+            ? 'ready'
+            : storyBook?.pageGeneration?.status === 'running' || isGeneratingPages
+                ? 'running'
+                : 'pending';
+        const artStatus: 'pending' | 'running' | 'ready' = storyBook?.imageGeneration?.status === 'ready'
+            ? 'ready'
+            : storyBook?.imageGeneration?.status === 'running' || isImageJobRunning
+                ? 'running'
+                : 'pending';
+        const statusBadge = (status: 'pending' | 'running' | 'ready') => (
+            <Badge variant={status === 'ready' ? 'secondary' : status === 'running' ? 'outline' : 'default'}>
+                {status === 'ready' ? 'Ready' : status === 'running' ? 'In progress' : 'Waiting'}
+            </Badge>
+        );
+
+        return (
+            <Card className="w-full max-w-2xl">
+                <CardHeader>
+                    <CardTitle>Create My Book</CardTitle>
+                    <CardDescription>Follow these steps to turn the story into a shareable picture book.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between gap-4">
+                        <div>
+                            <p className="font-semibold">1. Compile Story Text</p>
+                            <p className="text-sm text-muted-foreground">Bundle the chat into a smooth story.</p>
+                            {compileError && <p className="text-xs text-destructive mt-1">{compileError}</p>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {statusBadge(compileStatus)}
+                            <Button size="sm" variant="outline" onClick={triggerCompile} disabled={compileStatus === 'ready' || isCompiling}>
+                                {isCompiling ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                {compileStatus === 'ready' ? 'Compiled' : 'Compile'}
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                        <div>
+                            <p className="font-semibold">2. Build Pages</p>
+                            <p className="text-sm text-muted-foreground">Lay out each page with headings and prompts.</p>
+                            {pagesError && <p className="text-xs text-destructive mt-1">{pagesError}</p>}
+                            {storyBook?.pageGeneration?.lastErrorMessage && (
+                                <p className="text-xs text-destructive mt-1">{storyBook.pageGeneration.lastErrorMessage}</p>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {statusBadge(pagesStatus)}
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleGeneratePages}
+                                disabled={!compileReady || pagesStatus === 'ready' || isGeneratingPages}
+                            >
+                                {isGeneratingPages ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                {pagesStatus === 'ready' ? 'Pages Ready' : 'Generate Pages'}
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                        <div>
+                            <p className="font-semibold">3. Paint Art</p>
+                            <p className="text-sm text-muted-foreground">Create watercolor scenes for each page.</p>
+                            {imageJobError && <p className="text-xs text-destructive mt-1">{imageJobError}</p>}
+                            {storyBook?.imageGeneration?.lastErrorMessage && (
+                                <p className="text-xs text-destructive mt-1">{storyBook.imageGeneration.lastErrorMessage}</p>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {statusBadge(artStatus)}
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleGenerateArt(false)}
+                                disabled={!compileReady || pagesStatus !== 'ready' || isImageJobRunning || artStatus === 'ready'}
+                            >
+                                {isImageJobRunning ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                {artStatus === 'ready' ? 'Art Ready' : 'Generate Art'}
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    };
+
+    const renderProgressTracker = () => {
+        if (!session) return null;
+        const warmupComplete = session.currentPhase !== 'warmup' && !!session.storyTypeId;
+        const storyComplete = session.currentPhase === 'ending' || session.status === 'completed';
+        const endingComplete = !!session.selectedEndingId;
+        const compileComplete = !!storyBook;
+        const pagesComplete = storyBook?.pageGeneration?.status === 'ready';
+        const artComplete = storyBook?.imageGeneration?.status === 'ready';
+        const steps = [
+            { key: 'warmup', label: 'Warmup', complete: warmupComplete, active: session.currentPhase === 'warmup' },
+            { key: 'story', label: 'Story', complete: storyComplete, active: session.currentPhase === 'story' },
+            { key: 'ending', label: 'Ending', complete: endingComplete, active: !endingComplete && session.currentPhase === 'ending' },
+            { key: 'compile', label: 'Compile', complete: compileComplete, active: isCompiling },
+            { key: 'pages', label: 'Pages', complete: pagesComplete, active: isGeneratingPages || storyBook?.pageGeneration?.status === 'running' },
+            { key: 'art', label: 'Art', complete: artComplete, active: isImageJobRunning || storyBook?.imageGeneration?.status === 'running' },
+        ];
+        return (
+            <div className="rounded-lg border bg-muted/40 px-4 py-3 flex flex-wrap items-center gap-3">
+                {steps.map((step, index) => (
+                    <div key={step.key} className="flex items-center gap-2">
+                        <div
+                            className={cn(
+                                'h-3 w-3 rounded-full border',
+                                step.complete
+                                    ? 'bg-green-500 border-green-500'
+                                    : step.active
+                                        ? 'bg-primary border-primary'
+                                        : 'bg-muted-foreground/30 border-muted-foreground/30'
+                            )}
+                        />
+                        <span
+                            className={cn(
+                                'text-xs font-semibold',
+                                step.complete ? 'text-foreground' : step.active ? 'text-primary' : 'text-muted-foreground'
+                            )}
+                        >
+                            {step.label}
+                        </span>
+                        {index < steps.length - 1 && <div className="h-px w-8 bg-border" />}
+                    </div>
+                ))}
+            </div>
+        );
     };
 
     const renderChatContent = () => {
@@ -620,12 +1051,115 @@ export default function StorySessionPage() {
         }
         
         const isWaitingForTraitsAnswer = !!pendingCharacterTraits;
+        const hasStoryBook = !!storyBook;
+        const storyBookHelperText = hasStoryBook
+            ? null
+            : storyBookLoading
+                ? 'Checking for a compiled story...'
+                : session.status === 'completed'
+                    ? 'Run the compile action to unlock the finished text.'
+                    : 'Finish this session to generate the storybook.';
+        const imageStatus = storyBook?.imageGeneration?.status ?? 'idle';
+        const imageReadyCount = storyBook?.imageGeneration?.pagesReady ?? 0;
+        const imageTotal = storyBook?.imageGeneration?.pagesTotal ?? storyBook?.pageGeneration?.pagesCount ?? 0;
+        const viewerHref = storyBook?.id ? `/storybook/${storyBook.id}` : `/storybook/${sessionId}`;
         
+        const showStoryTypePicker = !session.storyTypeId && curatedStoryTypes.length > 0;
         return (
+            <div className="space-y-4">
+                {renderProgressTracker()}
+                {showStoryTypePicker && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Pick Your Kind of Story</CardTitle>
+                            <CardDescription>The Story Guide suggests these based on favorite colors, foods, and games.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid grid-cols-1 gap-4">
+                            {curatedStoryTypes.map((type) => (
+                                <Card key={type.id} className="border-muted">
+                                    <CardHeader>
+                                        <CardTitle>{type.name}</CardTitle>
+                                        <CardDescription>{type.shortDescription}</CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="flex flex-wrap gap-2 mb-3">
+                                            {type.tags?.map((tag) => (
+                                                <Badge key={tag} variant="outline">{tag}</Badge>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                    <CardFooter>
+                                        <Button className="w-full" onClick={() => handleStoryTypeSelect(type)} disabled={isSelectingStoryType}>
+                                            {isSelectingStoryType ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                            {isSelectingStoryType ? 'Preparing...' : 'Tell this story'}
+                                        </Button>
+                                    </CardFooter>
+                                </Card>
+                            ))}
+                        </CardContent>
+                    </Card>
+                )}
              <Card className="w-full max-w-2xl flex flex-col">
                 <CardHeader>
-                    <CardTitle>Story Chat</CardTitle>
-                    <CardDescription>Session ID: <span className="font-mono">{sessionId}</span></CardDescription>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <CardTitle>Story Chat</CardTitle>
+                            <CardDescription>Session ID: <span className="font-mono">{sessionId}</span></CardDescription>
+                        </div>
+                        <div className="flex flex-col gap-1 w-full sm:w-auto">
+                            {hasStoryBook ? (
+                                <Button asChild size="sm" variant="secondary">
+                                    <Link href={`/story/session/${sessionId}/compiled`}>View Compiled Story</Link>
+                                </Button>
+                            ) : (
+                                <Button size="sm" variant="secondary" disabled>
+                                    {storyBookLoading ? 'Checking…' : 'View Compiled Story'}
+                                </Button>
+                            )}
+                            {storyBookHelperText && (
+                                <span className="text-xs text-muted-foreground text-center sm:text-left">{storyBookHelperText}</span>
+                            )}
+                            {storyBookError && (
+                                <span className="text-xs text-destructive text-center sm:text-left">Storybook error: {storyBookError.message}</span>
+                            )}
+                            {hasStoryBook && (
+                                <div className="mt-4 rounded-md border border-dashed bg-muted/30 p-3 text-xs sm:text-sm space-y-2">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                        <div>
+                                            <p className="font-semibold text-sm">Storybook Art</p>
+                                            <p className="text-muted-foreground">
+                                                Status: {imageStatus} · {imageReadyCount}/{imageTotal} ready
+                                            </p>
+                                            {storyBook?.imageGeneration?.status === 'ready' && (
+                                                <p className="text-green-600 font-semibold text-xs mt-1">All done! Open the storybook to read & share.</p>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Button
+                                                size="xs"
+                                                variant="outline"
+                                                onClick={() => handleGenerateArt(false)}
+                                                disabled={isImageJobRunning || imageStatus === 'running'}
+                                            >
+                                                {isImageJobRunning ? (
+                                                    <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />
+                                                ) : (
+                                                    <ImageIcon className="mr-1 h-3.5 w-3.5" />
+                                                )}
+                                                Generate Art
+                                            </Button>
+                                            <Button size="xs" variant="ghost" asChild>
+                                                <Link href={viewerHref}>Open Storybook</Link>
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    {imageJobError && (
+                                        <p className="text-destructive">{imageJobError}</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent className="flex-grow overflow-y-auto pr-6 space-y-4">
                    {messagesLoading && <div className="flex items-center gap-2"><LoaderCircle className="animate-spin mr-2" />Loading messages...</div>}
@@ -641,7 +1175,7 @@ export default function StorySessionPage() {
                                                 key={opt.id}
                                                 variant="outline"
                                                 onClick={() => handleChooseOption(msg, opt)}
-                                                disabled={isBeatRunning || isGeneratingMoreOptions || latestOptionsMessage?.id !== msg.id || isWaitingForTraitsAnswer}
+                                                disabled={isBeatRunning || isGeneratingMoreOptions || latestOptionsMessage?.id !== msg.id || isWaitingForTraitsAnswer || session.currentPhase !== 'story'}
                                                 className="justify-start h-auto"
                                             >
                                                 <div className="flex items-center gap-2">
@@ -655,14 +1189,34 @@ export default function StorySessionPage() {
                                                 </div>
                                             </Button>
                                         ))}
-                                         <Button
-                                            variant="ghost"
-                                            className="text-muted-foreground"
-                                            onClick={handleMoreOptions}
-                                            disabled={isBeatRunning || isGeneratingMoreOptions || latestOptionsMessage?.id !== msg.id || isWaitingForTraitsAnswer}
+                                        <Button
+                                           variant="ghost"
+                                           className="text-muted-foreground"
+                                           onClick={handleMoreOptions}
+                                            disabled={isBeatRunning || isGeneratingMoreOptions || latestOptionsMessage?.id !== msg.id || isWaitingForTraitsAnswer || session.currentPhase !== 'story'}
                                         >
                                            <RefreshCw className="mr-2 h-4 w-4"/> More choices
                                         </Button>
+                                    </div>
+                                </div>
+                            ) : msg.kind === 'ending_options' && msg.options ? (
+                                <div className="p-2 rounded-lg bg-secondary/50 w-full">
+                                    <p className="text-sm text-muted-foreground mb-2">Pick your favorite ending:</p>
+                                    <div className="flex flex-col gap-2">
+                                        {msg.options.map(opt => (
+                                            <Button
+                                                key={opt.id}
+                                                variant="secondary"
+                                                onClick={() => handleChooseEnding(msg, opt)}
+                                                disabled={!!session.selectedEndingId || isCompiling}
+                                                className="justify-start h-auto"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <Star className="h-3.5 w-3.5 text-amber-500" />
+                                                    <span>{opt.text}</span>
+                                                </div>
+                                            </Button>
+                                        ))}
                                     </div>
                                 </div>
                             ) : (
@@ -713,6 +1267,7 @@ export default function StorySessionPage() {
                   </div>
                 </CardFooter>
             </Card>
+        </div>
         )
     };
     
@@ -766,7 +1321,9 @@ export default function StorySessionPage() {
             <div className="w-full max-w-2xl">
               {renderChatContent()}
             </div>
-            
+            <div className="w-full max-w-2xl">
+                {renderCreateBookPanel()}
+            </div>
             <div className="w-full max-w-2xl">
                 {renderAdminControls()}
             </div>

@@ -67,7 +67,7 @@ export const warmupReplyFlow = ai.defineFlow(
 
 
             // 3. Load messages from Firestore
-            const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+            const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
             const messagesQuery = query(messagesRef, orderBy('createdAt', 'desc'), limit(2));
             const messagesSnapshot = await getDocs(messagesQuery);
             

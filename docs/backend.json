@@ -89,6 +89,32 @@
           "format": "uri",
           "description": "URL to the child's chosen avatar image."
         },
+        "preferences": {
+          "type": "object",
+          "description": "Optional favorites captured during onboarding to personalize prompts and art.",
+          "properties": {
+            "favoriteColors": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Preferred colors to weave into characters or settings."
+            },
+            "favoriteFoods": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Snacks or meals the child loves."
+            },
+            "favoriteGames": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Outdoor or pretend games to reference in prompts."
+            },
+            "favoriteSubjects": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "School topics (science, art, music, etc.)."
+            }
+          }
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -173,9 +199,17 @@
           "type": "string",
           "description": "Reference to storyTypes/{id}."
         },
+        "storyTypeName": {
+          "type": "string",
+          "description": "Cached name of the selected story type for quick display."
+        },
         "storyPhaseId": {
           "type": "string",
           "description": "Reference to storyPhases/{id}."
+        },
+        "endingPhaseId": {
+          "type": "string",
+          "description": "Reference to the ending phase, provided by the selected story type."
         },
         "arcStepIndex": {
           "type": "number",
@@ -214,6 +248,52 @@
             "characterLabel",
             "questionText"
           ]
+        },
+        "selectedEndingId": {
+          "type": "string",
+          "description": "ID of the ending option chosen by the child."
+        },
+        "selectedEndingText": {
+          "type": "string",
+          "description": "Snapshot of the chosen ending text for compile flow context."
+        },
+        "progress": {
+          "type": "object",
+          "description": "Timestamps for key pipeline milestones to drive UI and analytics.",
+          "properties": {
+            "warmupCompletedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "storyTypeChosenAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "storyArcCompletedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "endingGeneratedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "endingChosenAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "compileCompletedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "pagesGeneratedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "artGeneratedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
         }
       },
       "required": [
@@ -223,6 +303,169 @@
         "status",
         "currentPhase",
         "currentStepIndex",
+        "createdAt",
+      "updatedAt"
+      ]
+    },
+    "StoryBook": {
+      "title": "Story Book",
+      "description": "Durable compiled output for a completed story session.",
+      "type": "object",
+      "properties": {
+        "storySessionId": {
+          "type": "string",
+          "description": "ID of the storySessions/{id} document that produced this book."
+        },
+        "childId": {
+          "type": "string",
+          "description": "Convenience pointer back to the child profile."
+        },
+        "parentUid": {
+          "type": "string",
+          "description": "Auth UID for the parent that owns the session/book."
+        },
+        "storyText": {
+          "type": "string",
+          "description": "Compiled, linear narrative produced by the story compile flow."
+        },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "paragraphs": {
+              "type": "number",
+              "description": "Paragraph count detected in storyText."
+            },
+            "estimatedPages": {
+              "type": "number",
+              "description": "Optional pagination guidance."
+            }
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "text_ready",
+            "images_pending"
+          ],
+          "description": "Pipeline status for downstream illustration steps."
+        },
+        "pageGeneration": {
+          "type": "object",
+          "description": "Tracks the most recent storybook page generation attempt.",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "idle",
+                "running",
+                "ready",
+                "error"
+              ]
+            },
+            "lastRunAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "lastCompletedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "lastErrorMessage": {
+              "type": "string"
+            },
+            "pagesCount": {
+              "type": "number"
+            }
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the book document was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the book document was last updated."
+        }
+      },
+      "required": [
+        "storySessionId",
+        "childId",
+        "parentUid",
+        "storyText",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "StoryBookPage": {
+      "title": "Story Book Page",
+      "description": "Structured content for each page of a compiled story book, including cover and interior spreads.",
+      "type": "object",
+      "properties": {
+        "pageNumber": {
+          "type": "number",
+          "description": "Zero-based index. 0 = front cover, last page = back cover."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "cover_front",
+            "cover_back",
+            "text",
+            "image"
+          ],
+          "description": "Determines whether the page is a cover or an interior text/image block."
+        },
+        "title": {
+          "type": "string",
+          "description": "Optional title displayed on cover or chapter pages."
+        },
+        "bodyText": {
+          "type": "string",
+          "description": "Primary text for the page, typically 1–2 short sentences."
+        },
+        "imagePrompt": {
+          "type": "string",
+          "description": "Short prompt describing the visual scene for future illustration generation."
+        },
+        "imageUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Placeholder or generated illustration for the page."
+        },
+        "layoutHints": {
+          "type": "object",
+          "properties": {
+            "aspectRatio": {
+              "type": "string",
+              "enum": [
+                "square",
+                "portrait",
+                "landscape"
+              ]
+            },
+            "textPlacement": {
+              "type": "string",
+              "enum": [
+                "top",
+                "bottom"
+              ]
+            }
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "pageNumber",
+        "kind",
         "createdAt",
         "updatedAt"
       ]
@@ -742,6 +985,12 @@
         "$ref": "#/entities/StoryOutputType"
       },
       "description": "Stores definitions for different kinds of final outputs (e.g. picture book, poem)."
+    },
+    "/storyBooks/{bookId}/pages/{pageId}": {
+      "schema": {
+        "$ref": "#/entities/StoryBookPage"
+      },
+      "description": "Sub-collection containing the ordered pages of a compiled story book."
     }
   }
 }

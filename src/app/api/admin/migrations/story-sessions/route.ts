@@ -8,7 +8,7 @@ initFirebaseAdminApp();
 
 export async function POST() {
   try {
-    const headerList = headers();
+    const headerList = await headers();
     const authorization = headerList.get('Authorization');
     if (!authorization || !authorization.startsWith('Bearer ')) {
       return NextResponse.json({ ok: false, message: 'Unauthorized' }, { status: 401 });

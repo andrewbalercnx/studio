@@ -22,12 +22,19 @@ import { Badge } from './ui/badge';
 import { Shield, Pen, User as UserIcon } from 'lucide-react';
 import { useParentGuard } from '@/hooks/use-parent-guard';
 
+type RoleClaims = {
+  isAdmin?: boolean;
+  isWriter?: boolean;
+  isParent?: boolean;
+};
+
 export default function Header() {
   const auth = useAuth();
   const router = useRouter();
   const { user, idTokenResult } = useUser();
   const { roleMode, switchToParentMode, activeChildId } = useAppContext();
   const { showPinModal } = useParentGuard();
+  const roleClaims: RoleClaims | null = idTokenResult?.claims ? (idTokenResult.claims as RoleClaims) : null;
 
   const handleSignOut = async () => {
     if (!auth) return;
@@ -73,14 +80,15 @@ export default function Header() {
             <Button asChild variant="ghost"><Link href="/parent">Home</Link></Button>
             <Button asChild variant="ghost"><Link href="/stories">My Stories</Link></Button>
             <Button asChild variant="ghost"><Link href="/parent/children">Manage Children</Link></Button>
+            <Button asChild variant="ghost"><Link href="/parent/orders">Orders</Link></Button>
           </>
         );
     }
   };
 
   const renderRoleBadges = () => {
-    if (!idTokenResult?.claims) return null;
-    const { isAdmin, isWriter, isParent } = idTokenResult.claims;
+    if (!roleClaims) return null;
+    const { isAdmin, isWriter, isParent } = roleClaims;
 
     return (
       <div className="flex items-center gap-2">
@@ -130,12 +138,12 @@ export default function Header() {
                   {renderRoleBadges()}
                 </div>
                 <DropdownMenuSeparator />
-                {idTokenResult?.claims.isAdmin && (
+                {roleClaims?.isAdmin && (
                     <DropdownMenuItem onClick={() => router.push('/admin')}>
                     Admin Dashboard
                     </DropdownMenuItem>
                 )}
-                 {idTokenResult?.claims.isWriter && !idTokenResult?.claims.isAdmin && (
+                 {roleClaims?.isWriter && !roleClaims?.isAdmin && (
                     <DropdownMenuItem onClick={() => router.push('/writer')}>
                     Writer Dashboard
                     </DropdownMenuItem>

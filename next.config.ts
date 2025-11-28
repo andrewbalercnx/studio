@@ -2,13 +2,8 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  // Restarting the server as requested.
-  // Restarting the server again.
-  // Restarting the server again.
-  // Restarting the server again.
-  // Restarting the server again.
-  // Restarting the server again.
-  // And restarting again.
+  // Restarting the server again as requested.
+ 
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -35,8 +30,10 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
-    ],
-  },
-};
-
+      {
+        protocol: 'https'
+      }
+    ]
+  }
+}
 export default nextConfig;

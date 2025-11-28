@@ -22,6 +22,7 @@ type StorySession = StorySessionType & {
 const sampleSession: Omit<StorySession, 'createdAt' | 'updatedAt' | 'messages'> = {
     id: "sample-session-1",
     childId: "sample-child-1",
+    parentUid: "sample-parent-1",
     status: "in_progress",
     currentPhase: "warmup",
     currentStepIndex: 0,

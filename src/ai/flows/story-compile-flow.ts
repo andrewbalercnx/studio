@@ -7,9 +7,11 @@
 
 import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, query, orderBy, where, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { getDoc, doc, collection, getDocs, query, orderBy, where, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, StoryType, Character, ChildProfile } from '@/lib/types';
+import { summarizeChildPreferences } from '@/lib/child-preferences';
+import { logSessionEvent } from '@/lib/session-events';
 
 type StoryCompileDebugInfo = {
     stage: 'init' | 'loading_session' | 'loading_dependencies' | 'building_prompt' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate' | 'unknown';
@@ -45,19 +47,20 @@ export const storyCompileFlow = ai.defineFlow(
                 throw new Error(`Session with id ${sessionId} not found.`);
             }
             const session = sessionDoc.data() as StorySession;
-            const { childId, storyTypeId } = session;
-            if (!childId || !storyTypeId) {
-                throw new Error(`Session is missing childId or storyTypeId.`);
+            const { childId, storyTypeId, parentUid } = session;
+            if (!childId || !storyTypeId || !parentUid) {
+                throw new Error(`Session is missing childId, storyTypeId, or parentUid.`);
             }
             debug.details.childId = childId;
             debug.details.storyTypeId = storyTypeId;
+            debug.details.parentUid = parentUid;
 
             // 2. Load dependencies
             debug.stage = 'loading_dependencies';
             const childRef = doc(firestore, 'children', childId);
             const storyTypeRef = doc(firestore, 'storyTypes', storyTypeId);
             const charactersQuery = query(collection(firestore, 'characters'), where('sessionId', '==', sessionId));
-            const messagesQuery = query(collection(firestore, `storySessions/${sessionId}/messages`), orderBy('createdAt', 'asc'));
+            const messagesQuery = query(collection(firestore, 'storySessions', sessionId, 'messages'), orderBy('createdAt', 'asc'));
 
             const [childDoc, storyTypeDoc, charactersSnapshot, messagesSnapshot] = await Promise.all([
                 getDoc(childRef),
@@ -72,6 +75,7 @@ export const storyCompileFlow = ai.defineFlow(
             const storyType = storyTypeDoc.data() as StoryType;
             const characters = charactersSnapshot.docs.map(d => d.data() as Character);
             const messages = messagesSnapshot.docs.map(d => d.data() as ChatMessage);
+            const childPreferenceSummary = summarizeChildPreferences(childProfile);
 
             debug.details.childName = childProfile?.displayName;
             debug.details.storyTypeName = storyType.name;
@@ -97,6 +101,8 @@ ${systemPrompt}
 **Story Context:**
 - **Story Type:** ${storyType.name} (${storyType.shortDescription})
 - **Main Character:** ${characters.find(c => c.role === 'child')?.name || 'The hero'}
+- **Child Preferences:** 
+${childPreferenceSummary}
 - **Other Characters:**
 ${characterRoster}
 
@@ -176,11 +182,57 @@ Now, generate the JSON object containing the compiled story.
             });
             debug.details.phaseCorrected = `Set currentPhase to 'final' and status to 'completed'`;
 
+            // --- StoryBook upsert ---
+            const bookRef = doc(firestore, 'storyBooks', sessionId);
+            const existingBookSnap = await getDoc(bookRef);
+            const now = serverTimestamp();
+            const createdAtValue = existingBookSnap.exists()
+                ? (existingBookSnap.data()?.createdAt ?? serverTimestamp())
+                : now;
+
+            const bookPayload: Record<string, any> = {
+                storySessionId: sessionId,
+                childId,
+                parentUid,
+                storyText,
+                status: 'text_ready',
+                updatedAt: now,
+                createdAt: createdAtValue,
+            };
+
+            if (metadata) {
+                bookPayload.metadata = metadata;
+            }
+
+            if (!existingBookSnap.exists() || !existingBookSnap.data()?.pageGeneration) {
+                bookPayload.pageGeneration = { status: 'idle' };
+            }
+            if (!existingBookSnap.exists() || !existingBookSnap.data()?.imageGeneration) {
+                bookPayload.imageGeneration = { status: 'idle' };
+            }
+
+            await setDoc(bookRef, bookPayload, { merge: true });
+            debug.details.storyBookDocId = bookRef.id;
+
+            await logSessionEvent({
+                firestore,
+                sessionId,
+                event: 'compile.completed',
+                status: 'completed',
+                source: 'server',
+                attributes: {
+                    storyTypeId,
+                    bookId: bookRef.id,
+                    storyLength: storyText.length,
+                },
+            });
+
             return {
                 ok: true,
                 sessionId,
                 storyText,
                 metadata,
+                bookId: bookRef.id,
                 debug: process.env.NODE_ENV === 'development' ? {
                     ...debug,
                     storyLength: storyText.length,

@@ -1,8 +1,8 @@
 import { BookOpen } from 'lucide-react';
-import type { SVGProps } from 'react';
+import type { HTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
-export function Logo({ className, ...props }: SVGProps<SVGSVGElement> & {className?: string}) {
+export function Logo({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div className={cn("flex items-center gap-2", className)} {...props}>
       <div className="bg-primary/20 p-2 rounded-lg">

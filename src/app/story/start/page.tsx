@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { useFirestore } from '@/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, addDoc, collection, query, where, getDocs, limit, updateDoc } from 'firebase/firestore';
 import type { PromptConfig, ChildProfile } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { useAppContext } from '@/hooks/use-app-context';
 
 
 type StartStoryResponse = {
@@ -35,51 +36,46 @@ type StartStoryResponse = {
 
 
 export default function StartStoryPage() {
-    const { user, loading: userLoading } = useUser();
-    const firestore = useFirestore();
-    const { toast } = useToast();
-    const [isLoading, setIsLoading] = useState(false);
-    const [response, setResponse] = useState<StartStoryResponse | null>(null);
+  const { user, loading: userLoading } = useUser();
+  const firestore = useFirestore();
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [response, setResponse] = useState<StartStoryResponse | null>(null);
+  const { activeChildId, activeChildProfile } = useAppContext();
+  const selectedChildName = useMemo(
+    () => activeChildProfile?.displayName || activeChildId || 'Your child',
+    [activeChildProfile, activeChildId]
+  );
 
     const handleStartStory = async () => {
         if (!user || !firestore) return;
+        if (!activeChildId) {
+            setResponse({ error: true, message: 'Please select a child profile before starting a story.' });
+            toast({ title: 'No child selected', description: 'Choose a child from My Stories first.' });
+            return;
+        }
         
         setIsLoading(true);
         setResponse(null);
 
-        const childDisplayName = user.displayName 
-            || (user.email ? user.email.split('@')[0] : null)
-            || "Unnamed Child";
-        
-        const childId = user.uid;
+        const childId = activeChildId;
 
         try {
             // 1. Ensure a child profile exists
         const childRef = doc(firestore, 'children', childId);
         const childDoc = await getDoc(childRef);
-        let childProfile: ChildProfile;
-
         if (!childDoc.exists()) {
-            const newChildProfileData = {
-                id: childId,
-                displayName: childDisplayName,
-                ownerParentUid: user.uid,
-                createdAt: serverTimestamp(),
-                estimatedLevel: 2,
-                favouriteGenres: ["funny", "magical"],
-                favouriteCharacterTypes: ["self", "pet"],
-                preferredStoryLength: "short",
-                    helpPreference: "more_scaffolding",
-                };
-                await setDoc(childRef, newChildProfileData);
-                childProfile = { ...newChildProfileData, createdAt: new Date() } as ChildProfile;
-            } else {
-                childProfile = childDoc.data() as ChildProfile;
-                if (!childProfile.ownerParentUid) {
-                    await updateDoc(childRef, { ownerParentUid: user.uid });
-                    childProfile.ownerParentUid = user.uid;
-                }
-            }
+            throw new Error('Selected child profile was not found.');
+        }
+
+        const childProfile = childDoc.data() as ChildProfile;
+        if (childProfile.ownerParentUid && childProfile.ownerParentUid !== user.uid) {
+            throw new Error('You do not have permission to use this child profile.');
+        }
+        if (!childProfile.ownerParentUid) {
+            await updateDoc(childRef, { ownerParentUid: user.uid });
+            childProfile.ownerParentUid = user.uid;
+        }
 
             // 2. Determine child level band
             const childEstimatedLevel = childProfile.estimatedLevel || 2;
@@ -141,7 +137,7 @@ export default function StartStoryPage() {
             // 5. Create the main character
             const charactersRef = collection(firestore, 'characters');
             const newCharacterData = {
-                ownerChildId: user.uid,
+                ownerChildId: childId,
                 sessionId: storySessionId,
                 role: 'child',
                 name: childProfile.displayName || 'You',
@@ -212,6 +208,7 @@ export default function StartStoryPage() {
             chosenLevelBand: response && !response.error ? response.chosenLevelBand : null,
             hasMainCharacter: !!(response && !response.error && response.mainCharacterId),
             mainCharacterId: response && !response.error ? response.mainCharacterId : null,
+            activeChildId: activeChildId || null,
         }
     };
 
@@ -238,7 +235,10 @@ export default function StartStoryPage() {
         return (
             <div className="space-y-6">
                 <div className="text-center">
-                    <Button onClick={handleStartStory} disabled={isLoading}>
+                    <div className="mb-4 text-sm text-muted-foreground">
+                        {activeChildId ? `Starting a story for ${selectedChildName}` : 'Select a child from My Stories before starting.'}
+                    </div>
+                    <Button onClick={handleStartStory} disabled={isLoading || !activeChildId}>
                         {isLoading ? <><LoaderCircle className="animate-spin mr-2" /> Starting...</> : 'Start a new story'}
                     </Button>
                 </div>

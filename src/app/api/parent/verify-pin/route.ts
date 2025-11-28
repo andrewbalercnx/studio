@@ -26,8 +26,8 @@ function respondUnauthorized(reason: UnauthorizedReason, diag?: TokenDiagnostics
   return NextResponse.json({ ok: false, message: 'Unauthorized', code: reason, details: diag }, { status: 401 });
 }
 
-function extractBearerToken(): string | null {
-  const headerList = headers();
+async function extractBearerToken(): Promise<string | null> {
+  const headerList = await headers();
   const authorization = headerList.get('Authorization') ?? headerList.get('authorization');
   if (authorization?.startsWith('Bearer ')) {
     return authorization.split('Bearer ')[1];
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, code: 'INVALID_PIN_FORMAT', message: 'Invalid PIN format. Must be 4 digits.' }, { status: 400 });
     }
 
-    const headerToken = extractBearerToken();
+    const headerToken = await extractBearerToken();
     const queryToken = extractQueryToken(request);
     const diag: TokenDiagnostics = {
       hasHeaderToken: !!headerToken,

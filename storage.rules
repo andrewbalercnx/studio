@@ -9,6 +9,15 @@ service firebase.storage {
         return request.auth == null;
     }
 
+    function isAdmin() {
+        return request.auth != null && request.auth.token.isAdmin == true;
+    }
+
+    function storyBookOwnedByParent(bookId) {
+        return request.auth != null
+            && get(/databases/(default)/documents/storyBooks/$(bookId)).data.parentUid == request.auth.uid;
+    }
+
     // By default, deny all reads and writes.
     match /{allPaths=**} {
       allow read, write: if false;
@@ -24,6 +33,16 @@ service firebase.storage {
     // In a production app, you might want to restrict this further, e.g., only to the parent.
     match /users/{parentUid}/children/{childId}/photos/{fileName} {
         allow read: if true;
+    }
+
+    match /storyBooks/{bookId}/{restOfPath=**} {
+        allow read: if isServer() || isAdmin() || storyBookOwnedByParent(bookId);
+        allow write: if isServer() || isAdmin() || storyBookOwnedByParent(bookId);
+    }
+
+    match /storybook_printables/{bookId}/{restOfPath=**} {
+        allow read: if isServer() || isAdmin() || storyBookOwnedByParent(bookId);
+        allow write: if isServer() || isAdmin();
     }
   }
 }

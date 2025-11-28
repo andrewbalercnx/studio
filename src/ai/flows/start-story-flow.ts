@@ -58,24 +58,24 @@ export async function startWarmupStory(input: StartWarmupStoryInput): Promise<St
         const childDoc = await childRef.get();
 
         if (!childDoc.exists) {
-            const newChildProfile: Omit<ChildProfile, 'createdAt'> = {
+            const createdAt = new Date();
+            const newChildProfile: ChildProfile = {
                 id: childId,
                 displayName: childDisplayName || 'Unnamed Child',
+                ownerParentUid: 'legacy-parent',
+                createdAt,
                 estimatedLevel: 2,
                 favouriteGenres: ["funny", "magical"],
                 favouriteCharacterTypes: ["self", "pet"],
                 preferredStoryLength: "short",
                 helpPreference: "more_scaffolding"
             };
-            await childRef.set({
-                ...newChildProfile,
-                createdAt: new Date(),
-            });
-            childProfile = { ...newChildProfile, createdAt: new Date() };
-            childEstimatedLevel = newChildProfile.estimatedLevel;
+            await childRef.set(newChildProfile);
+            childProfile = newChildProfile;
+            childEstimatedLevel = newChildProfile.estimatedLevel ?? 2;
         } else {
             childProfile = childDoc.data() as ChildProfile;
-            childEstimatedLevel = childProfile.estimatedLevel || 2;
+            childEstimatedLevel = typeof childProfile.estimatedLevel === 'number' ? childProfile.estimatedLevel : 2;
         }
 
         // Determine level band
@@ -92,13 +92,12 @@ export async function startWarmupStory(input: StartWarmupStoryInput): Promise<St
         const newSessionData: Omit<StorySession, 'messages'> = {
             id: newSessionRef.id,
             childId: childId,
+            parentUid: childProfile.ownerParentUid,
             status: "in_progress",
             currentPhase: "warmup",
             currentStepIndex: 0,
             storyTitle: "",
             storyVibe: "",
-            characters: [],
-            beats: [],
             createdAt: now,
             updatedAt: now,
         };

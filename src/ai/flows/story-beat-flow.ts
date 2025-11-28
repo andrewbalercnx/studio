@@ -8,8 +8,10 @@ import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
 import { getDoc, doc, collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { z } from 'genkit';
-import type { StorySession, ChatMessage, StoryType, Character } from '@/lib/types';
+import type { StorySession, ChatMessage, StoryType, Character, ChildProfile } from '@/lib/types';
 import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
+import { logSessionEvent } from '@/lib/session-events';
+import { summarizeChildPreferences } from '@/lib/child-preferences';
 
 type StoryBeatDebugInfo = {
     stage: 'loading_session' | 'loading_storyType' | 'loading_promptConfig' | 'ai_generate' | 'json_parse' | 'json_validate' | 'unknown';
@@ -28,6 +30,18 @@ const StoryBeatOutputSchema = z.object({
   })).min(3).max(3).describe("An array of exactly 3 choices for the child.")
 });
 
+const StoryBeatOutputSchemaDescription = JSON.stringify({
+  storyContinuation: 'string',
+  options: [
+    {
+      id: 'string',
+      text: 'string',
+      introducesCharacter: 'boolean (optional)',
+      newCharacterLabel: 'string | null (required when introducesCharacter is true)',
+      newCharacterKind: "'toy' | 'pet' | 'friend' | 'family' | 'other' (required when introducesCharacter is true)",
+    },
+  ],
+}, null, 2);
 
 export const storyBeatFlow = ai.defineFlow(
     {
@@ -64,6 +78,16 @@ export const storyBeatFlow = ai.defineFlow(
                 return { ok: false, sessionId, errorMessage: `StoryType with id ${storyTypeId} not found.` };
             }
             const storyType = storyTypeDoc.data() as StoryType;
+            let childProfile: ChildProfile | null = null;
+            if (session.childId) {
+                const childRef = doc(firestore, 'children', session.childId);
+                const childDoc = await getDoc(childRef);
+                if (childDoc.exists()) {
+                    childProfile = childDoc.data() as ChildProfile;
+                }
+            }
+            const childPreferenceSummary = summarizeChildPreferences(childProfile);
+            debug.details.childPreferenceSummary = childPreferenceSummary.slice(0, 400);
             
             // BOUND the arc step index
             const arcSteps = storyType.arcTemplate?.steps ?? [];
@@ -94,7 +118,7 @@ export const storyBeatFlow = ai.defineFlow(
             }
 
             // 4. Build Story So Far
-            const messagesRef = collection(firestore, `storySessions/${sessionId}/messages`);
+            const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
             const messagesQuery = query(messagesRef, orderBy('createdAt', 'asc'));
             const messagesSnapshot = await getDocs(messagesQuery);
             const storySoFar = messagesSnapshot.docs.map(doc => {
@@ -126,12 +150,14 @@ CONTEXT:
 Story Type: ${storyType.name} (${storyTypeId})
 Current Arc Step: ${arcStep}
 ${mainCharacterSummary}
+Child Preferences and inspirations:
+${childPreferenceSummary}
 
 STORY SO FAR:
 ${storySoFar}
 
-Based on all the above, continue the story. Generate the next paragraph and three choices for the child. Output your response as a single, valid JSON object that matches this Zod schema:
-${JSON.stringify(StoryBeatOutputSchema.jsonSchema, null, 2)}
+Based on all the above, continue the story. Generate the next paragraph and three choices for the child. Output your response as a single, valid JSON object that matches this structure:
+${StoryBeatOutputSchemaDescription}
 Important: Return only a single JSON object. Do not include any extra text, explanation, or formatting. Do not wrap the JSON in markdown or code fences. The output must start with { and end with }.
 `;
 
@@ -234,6 +260,19 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             }
 
             const structuredOutput = validationResult.data;
+
+            await logSessionEvent({
+                firestore,
+                sessionId,
+                event: 'storyBeat.generated',
+                status: 'completed',
+                source: 'server',
+                attributes: {
+                    arcStep,
+                    promptConfigId: resolvedPromptConfigId,
+                    storyTypeId,
+                },
+            });
 
             return {
                 ok: true,

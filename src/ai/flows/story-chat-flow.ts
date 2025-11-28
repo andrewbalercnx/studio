@@ -69,11 +69,6 @@ const ContinueChatOutputSchema = z.object({
 export type ContinueChatOutput = z.infer<typeof ContinueChatOutputSchema>;
 
 
-export async function continueChat(input: ContinueChatInput): Promise<ContinueChatOutput> {
-  return continueChatFlow(input);
-}
-
-
 const continueChatFlow = ai.defineFlow(
   {
     name: 'continueChatFlow',
@@ -90,7 +85,7 @@ const continueChatFlow = ai.defineFlow(
         return {
             message: {
                 id: `assistant-${Date.now()}`,
-                role: 'assistant',
+                role: 'assistant' as const,
                 content: "Hi! I'm your Story Guide. I'm so excited to help you create a story. First, what's your name?",
             }
         }
@@ -104,7 +99,7 @@ const continueChatFlow = ai.defineFlow(
          return {
             message: {
                 id: `assistant-${Date.now()}`,
-                role: 'assistant',
+                role: 'assistant' as const,
                 content: `That's a great name! Now, what kind of story should we make?`,
                 choices: [
                     { id: 'vibe-1', text: 'Funny' },
@@ -118,9 +113,13 @@ const continueChatFlow = ai.defineFlow(
     return {
         message: {
             id: `assistant-${Date.now()}`,
-            role: 'assistant',
+            role: 'assistant' as const,
             content: "That sounds wonderful! Let's add a character. Who is the main character in our story?",
         }
     }
   }
 );
+
+export async function continueChat(input: ContinueChatInput): Promise<ContinueChatOutput> {
+  return continueChatFlow(input);
+}

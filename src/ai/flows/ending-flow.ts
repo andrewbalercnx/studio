@@ -7,9 +7,11 @@
 
 import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, query, orderBy, where, updateDoc } from 'firebase/firestore';
+import { getDoc, doc, collection, getDocs, query, orderBy, where, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { z } from 'genkit';
-import type { StorySession, ChatMessage, StoryType, Character } from '@/lib/types';
+import type { StorySession, ChatMessage, StoryType, Character, ChildProfile } from '@/lib/types';
+import { summarizeChildPreferences } from '@/lib/child-preferences';
+import { logSessionEvent } from '@/lib/session-events';
 
 type EndingFlowDebugInfo = {
     stage: 'loading_session' | 'loading_storyType' | 'loading_messages_and_characters' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate' | 'unknown';
@@ -70,6 +72,16 @@ export const endingFlow = ai.defineFlow(
                 return { ok: false, sessionId, errorMessage: `StoryType with id ${storyTypeId} not found.` };
             }
             const storyType = storyTypeDoc.data() as StoryType;
+            let childProfile: ChildProfile | null = null;
+            if (session.childId) {
+                const childRef = doc(firestore, 'children', session.childId);
+                const childDoc = await getDoc(childRef);
+                if (childDoc.exists()) {
+                    childProfile = childDoc.data() as ChildProfile;
+                }
+            }
+            const childPreferenceSummary = summarizeChildPreferences(childProfile);
+            debug.details.childPreferenceSummary = childPreferenceSummary.slice(0, 400);
             const arcSteps = storyType.arcTemplate?.steps ?? [];
             const maxIndex = arcSteps.length > 0 ? arcSteps.length - 1 : 0;
             const isAtFinalStep = arcStepIndex >= maxIndex;
@@ -85,7 +97,7 @@ export const endingFlow = ai.defineFlow(
                 return `- ${char.name} (role: ${char.role}, traits: ${char.traits?.join(', ') || 'none'})`;
             }).join('\n');
 
-            const messagesQuery = query(collection(firestore, `storySessions/${sessionId}/messages`), orderBy('createdAt', 'asc'));
+            const messagesQuery = query(collection(firestore, 'storySessions', sessionId, 'messages'), orderBy('createdAt', 'asc'));
             const messagesSnapshot = await getDocs(messagesQuery);
             const storySoFar = messagesSnapshot.docs.map(d => {
                 const msg = d.data() as ChatMessage;
@@ -103,6 +115,8 @@ export const endingFlow = ai.defineFlow(
 
 CONTEXT:
 Story Type: ${storyType.name}
+Child preferences:
+${childPreferenceSummary}
 Characters:
 ${characterRoster || '- No characters found.'}
 
@@ -181,6 +195,22 @@ Based on all the above, return ONLY the JSON object containing three endings.`;
                 debug.details.validationErrors = validationResult.error.issues;
                  throw new Error(`Model JSON does not match expected ending shape. Errors: ${validationResult.error.message}`);
             }
+
+            await updateDoc(sessionRef, {
+                'progress.endingGeneratedAt': serverTimestamp(),
+            });
+
+            await logSessionEvent({
+                firestore,
+                sessionId,
+                event: 'ending.generated',
+                status: 'completed',
+                source: 'server',
+                attributes: {
+                    storyTypeId: storyType.id,
+                    arcStep: arcSteps[arcStepIndex] || null,
+                },
+            });
 
             return {
                 ok: true,
