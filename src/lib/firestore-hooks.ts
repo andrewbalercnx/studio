@@ -42,6 +42,12 @@ export function useCollection<T>(query: Query | null): UseCollectionReturn<T> {
         setError(null);
       },
       (err: Error) => {
+        console.error('[useCollection] snapshot error', {
+          code: (err as any)?.code,
+          message: err?.message,
+          path,
+          query: (query as any)?._query ?? null,
+        });
         const permissionError = new FirestorePermissionError({
           path: (query as any)._query.path.segments.join('/'),
           operation: 'list',

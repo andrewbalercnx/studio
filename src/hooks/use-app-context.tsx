@@ -61,19 +61,11 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     }
   }, [user, userLoading]);
 
-useEffect(() => {
-    if (!activeChildId) return;
-    if (activeChildProfileLoading) return;
-    if (activeChildProfileRaw === null) {
-      console.debug('[AppContext] clearing activeChildId because profile missing');
-      setActiveChildIdState(null);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('activeChildId');
-      }
-    }
-  }, [activeChildId, activeChildProfileRaw, activeChildProfileLoading]);
-
   const setActiveChildId = (childId: string | null) => {
+    if (childId === activeChildId) {
+      console.debug('[AppContext] setActiveChildId called with same value, skipping', childId);
+      return;
+    }
     console.debug('[AppContext] setActiveChildId called with', childId);
     setActiveChildIdState(childId);
     if (typeof window === 'undefined') return;

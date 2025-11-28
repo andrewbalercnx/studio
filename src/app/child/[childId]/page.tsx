@@ -74,6 +74,10 @@ export default function ChildExperiencePage({ params }: { params: Promise<{ chil
 
   const storiesQuery = useMemo(() => {
     if (!user || !firestore || !activeChildId) return null;
+    console.debug('[ChildPage] building storiesQuery', {
+      parentUid: user.uid,
+      activeChildId,
+    });
     return query(
       collection(firestore, 'storySessions'),
       where('parentUid', '==', user.uid),

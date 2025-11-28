@@ -34,7 +34,10 @@ service cloud.firestore {
     }
     
     match /storySessions/{sessionId} {
-      allow read: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || resource.data.parentUid == request.auth.uid;
+      allow read: if isServer()
+        || isAdmin()
+        || isUserAdmin(request.auth.uid)
+        || resource.data.parentUid == request.auth.uid;
       allow write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || request.resource.data.parentUid == request.auth.uid;
     }
     
