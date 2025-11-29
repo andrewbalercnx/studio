@@ -3,7 +3,7 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Copy, LoaderCircle, PlusCircle, Image as ImageIcon, User as UserIcon, Pencil, X, Sparkles } from 'lucide-react';
+import { Copy, LoaderCircle, Plus, User, Pencil, X, Sparkles, Image as ImageIcon } from 'lucide-react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useFirestore } from '@/firebase';
 import { collection, doc, onSnapshot, setDoc, serverTimestamp, query, where, writeBatch, updateDoc } from 'firebase/firestore';
@@ -22,6 +22,8 @@ import Image from 'next/image';
 import { ParentGuard } from '@/components/parent/parent-guard';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { useRouter } from 'next/navigation';
+import { useAppContext } from '@/hooks/use-app-context';
 
 function slugify(text: string) {
     return text
@@ -270,7 +272,7 @@ function AvatarGenerator({ child, onAvatarUpdate }: { child: ChildProfile, onAva
                             <LoaderCircle className="h-10 w-10 animate-spin text-primary" />
                         </div>
                     ) : generatedAvatar ? (
-                        <Image src={generatedAvatar} alt="Generated avatar" width={160} height={160} className="rounded-full border-4 border-primary shadow-md" />
+                        <Image src={generatedAvatar} alt="Generated avatar" width={160} height={160} className="rounded-full border-4 border-primary shadow-md object-cover" />
                     ) : (
                         <div className="h-40 w-40 flex items-center justify-center bg-muted rounded-full text-muted-foreground">
                             <UserIcon className="h-10 w-10" />
@@ -379,6 +381,30 @@ function ManagePhotos({ child, onOpenChange }: { child: ChildProfile, onOpenChan
             )}
         </div>
     );
+}
+
+function ChildIcon({ profile }: { profile: ChildProfile }) {
+  const router = useRouter();
+  const { setActiveChildId } = useAppContext();
+
+  const handleSelectChild = () => {
+    setActiveChildId(profile.id);
+    router.push(`/child/${profile.id}`);
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-2 text-center w-32">
+      <button onClick={handleSelectChild} className="rounded-full hover:ring-4 hover:ring-primary/50 transition-all">
+        <Avatar className="h-24 w-24 border-4 border-white shadow-md">
+          <AvatarImage src={profile.avatarUrl} alt={profile.displayName} className="object-cover" />
+          <AvatarFallback className="text-3xl bg-secondary text-secondary-foreground">
+             {profile.displayName ? profile.displayName.charAt(0) : <User />}
+          </AvatarFallback>
+        </Avatar>
+      </button>
+      <p className="font-bold text-lg truncate w-full">{profile.displayName}</p>
+    </div>
+  );
 }
 
 
@@ -494,7 +520,7 @@ export default function ManageChildrenPage() {
                         <Card key={child.id}>
                             <CardHeader className="flex flex-row items-center gap-4">
                                 <Avatar className="h-16 w-16">
-                                    <AvatarImage src={child.avatarUrl} alt={child.displayName} />
+                                    <AvatarImage src={child.avatarUrl} alt={child.displayName} className="object-cover" />
                                     <AvatarFallback>{child.displayName.charAt(0)}</AvatarFallback>
                                 </Avatar>
                                 <div>
@@ -566,7 +592,7 @@ export default function ManageChildrenPage() {
 
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold">Manage Children</h1>
-                    <Button onClick={() => setIsCreateOpen(true)}><PlusCircle className="mr-2"/> Add New Child</Button>
+                    <Button onClick={() => setIsCreateOpen(true)}><Plus className="mr-2"/> Add New Child</Button>
                 </div>
                 
                 <Card>
