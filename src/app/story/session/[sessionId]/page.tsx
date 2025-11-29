@@ -68,19 +68,26 @@ type EndingGenkitDiagnostics = {
 
 function buildImagePrompt(text: string, child?: ChildProfile | null, storyTitle?: string | null) {
   const summary = text.length > 160 ? `${text.slice(0, 157)}…` : text;
-  const childName = child?.displayName;
-  const nameFragment = childName ? `featuring ${childName}` : 'featuring the main character';
-  const titleFragment = storyTitle ? `from "${storyTitle}"` : 'from the bedtime story';
+  
+  // Base prompt
+  let prompt = `Scene: ${summary}.`;
+
+  // Add character guidance if the child's name is known
+  if (child?.displayName) {
+    prompt += ` The main character should resemble the child.`;
+  }
+  
+  // Add style hints
   const colorHint = child?.preferences?.favoriteColors?.length
-    ? `Palette inspired by ${child.preferences.favoriteColors.slice(0, 2).join(' and ')}`
+    ? ` Use a palette inspired by ${child.preferences.favoriteColors.slice(0, 2).join(' and ')}.`
     : '';
   const gameHint = child?.preferences?.favoriteGames?.length
-    ? `, playful energy of ${child.preferences.favoriteGames[0]}`
+    ? ` The scene should have the playful energy of ${child.preferences.favoriteGames[0]}.`
     : '';
-  const subjectHint = child?.preferences?.favoriteSubjects?.length
-    ? `. Mood should feel like a ${child.preferences.favoriteSubjects[0]} activity`
-    : '';
-  return `${summary} ${nameFragment} ${titleFragment} in watercolor style. ${colorHint}${gameHint}${subjectHint}`.trim();
+  
+  prompt += `${colorHint}${gameHint}`;
+
+  return prompt.trim();
 }
 
 function getChildAgeYears(child?: ChildProfile | null): number | null {
@@ -1081,40 +1088,43 @@ export default function StorySessionPage() {
         const viewerHref = storyBook?.id ? `/storybook/${storyBook.id}` : `/storybook/${sessionId}`;
         
         const showStoryTypePicker = !session.storyTypeId && curatedStoryTypes.length > 0;
+
+        if (showStoryTypePicker) {
+            return (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Pick Your Kind of Story</CardTitle>
+                        <CardDescription>The Story Guide suggests these based on favorite colors, foods, and games.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 gap-4">
+                        {curatedStoryTypes.map((type) => (
+                            <Card key={type.id} className="border-muted">
+                                <CardHeader>
+                                    <CardTitle>{type.name}</CardTitle>
+                                    <CardDescription>{type.shortDescription}</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="flex flex-wrap gap-2 mb-3">
+                                        {type.tags?.map((tag) => (
+                                            <Badge key={tag} variant="outline">{tag}</Badge>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                                <CardFooter>
+                                    <Button className="w-full" onClick={() => handleStoryTypeSelect(type)} disabled={isSelectingStoryType}>
+                                        {isSelectingStoryType ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                        {isSelectingStoryType ? 'Preparing...' : 'Tell this story'}
+                                    </Button>
+                                </CardFooter>
+                            </Card>
+                        ))}
+                    </CardContent>
+                </Card>
+            );
+        }
+
         return (
-            <div className="space-y-4">
-                {renderProgressTracker()}
-                {showStoryTypePicker && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Pick Your Kind of Story</CardTitle>
-                            <CardDescription>The Story Guide suggests these based on favorite colors, foods, and games.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="grid grid-cols-1 gap-4">
-                            {curatedStoryTypes.map((type) => (
-                                <Card key={type.id} className="border-muted">
-                                    <CardHeader>
-                                        <CardTitle>{type.name}</CardTitle>
-                                        <CardDescription>{type.shortDescription}</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="flex flex-wrap gap-2 mb-3">
-                                            {type.tags?.map((tag) => (
-                                                <Badge key={tag} variant="outline">{tag}</Badge>
-                                            ))}
-                                        </div>
-                                    </CardContent>
-                                    <CardFooter>
-                                        <Button className="w-full" onClick={() => handleStoryTypeSelect(type)} disabled={isSelectingStoryType}>
-                                            {isSelectingStoryType ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                            {isSelectingStoryType ? 'Preparing...' : 'Tell this story'}
-                                        </Button>
-                                    </CardFooter>
-                                </Card>
-                            ))}
-                        </CardContent>
-                    </Card>
-                )}
+            <>
              <Card className="w-full max-w-2xl flex flex-col">
                 <CardHeader>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1283,7 +1293,7 @@ export default function StorySessionPage() {
                   </div>
                 </CardFooter>
             </Card>
-        </div>
+            </>
         )
     };
     
