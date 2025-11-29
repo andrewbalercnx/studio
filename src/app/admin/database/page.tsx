@@ -43,7 +43,7 @@ import {
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { LoaderCircle, Trash2, Search, AlertTriangle } from 'lucide-react';
+import { LoaderCircle, Trash2, Search, AlertTriangle, FileJson } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 const COLLECTIONS = [
@@ -75,14 +75,15 @@ export default function AdminDatabasePage() {
   const [filterValue, setFilterValue] = useState('');
   const [documents, setDocuments] = useState<DocumentData[]>([]);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
+  const [viewingDoc, setViewingDoc] = useState<DocumentData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleSearch = async () => {
-    if (!firestore || !selectedCollection || !filterField || !filterValue) {
+    if (!firestore || !selectedCollection) {
       toast({
         title: 'Missing Information',
-        description: 'Please select a collection and provide a field and value to search.',
+        description: 'Please select a collection to search.',
         variant: 'destructive',
       });
       return;
@@ -90,19 +91,24 @@ export default function AdminDatabasePage() {
     setIsLoading(true);
     setDocuments([]);
     setSelectedDocs(new Set());
+    setViewingDoc(null);
     try {
       const collRef = collection(firestore, selectedCollection);
       let q;
-      if (filterOperator === 'startsWith') {
-        q = query(
-          collRef,
-          orderBy(filterField),
-          startAt(filterValue),
-          endAt(filterValue + '\uf8ff'),
-          limit(50)
-        );
+      if (filterField && filterValue) {
+        if (filterOperator === 'startsWith') {
+          q = query(
+            collRef,
+            orderBy(filterField),
+            startAt(filterValue),
+            endAt(filterValue + '\uf8ff'),
+            limit(50)
+          );
+        } else {
+          q = query(collRef, where(filterField, '==', filterValue), limit(50));
+        }
       } else {
-        q = query(collRef, where(filterField, '==', filterValue), limit(50));
+        q = query(collRef, limit(50));
       }
 
       const querySnapshot = await getDocs(q);
@@ -195,7 +201,7 @@ export default function AdminDatabasePage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="field">Field</Label>
+                <Label htmlFor="field">Field (optional)</Label>
                 <Input id="field" placeholder="e.g., email" value={filterField} onChange={(e) => setFilterField(e.target.value)} />
               </div>
               <div className="space-y-2">
@@ -211,7 +217,7 @@ export default function AdminDatabasePage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="value">Value</Label>
+                <Label htmlFor="value">Value (optional)</Label>
                 <Input id="value" placeholder="Value to match" value={filterValue} onChange={(e) => setFilterValue(e.target.value)} />
               </div>
             </div>
@@ -220,12 +226,12 @@ export default function AdminDatabasePage() {
               Search
             </Button>
           </div>
-
-          {documents.length > 0 && (
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-medium">
-                  Found {documents.length} documents
+                  {documents.length > 0 ? `Found ${documents.length} documents` : 'No documents found'}
                 </h3>
                 <Button variant="destructive" onClick={handleDelete} disabled={selectedDocs.size === 0 || isDeleting}>
                   {isDeleting ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
@@ -248,25 +254,30 @@ export default function AdminDatabasePage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {documents.map((doc) => (
-                        <TableRow key={doc.id}>
-                          <TableCell>
+                      {documents.map((docData) => (
+                        <TableRow 
+                          key={docData.id}
+                          onClick={() => setViewingDoc(docData)}
+                          className="cursor-pointer"
+                          data-state={viewingDoc?.id === docData.id ? 'selected' : undefined}
+                        >
+                          <TableCell onClick={(e) => e.stopPropagation()}>
                             <Checkbox
-                              checked={selectedDocs.has(doc.id)}
+                              checked={selectedDocs.has(docData.id)}
                               onCheckedChange={(checked) => {
                                 setSelectedDocs((prev) => {
                                   const newSet = new Set(prev);
                                   if (checked) {
-                                    newSet.add(doc.id);
+                                    newSet.add(docData.id);
                                   } else {
-                                    newSet.delete(doc.id);
+                                    newSet.delete(docData.id);
                                   }
                                   return newSet;
                                 });
                               }}
                             />
                           </TableCell>
-                          <TableCell className="font-mono text-xs">{doc.id}</TableCell>
+                          <TableCell className="font-mono text-xs">{docData.id}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -274,7 +285,29 @@ export default function AdminDatabasePage() {
                 </ScrollArea>
               </Card>
             </div>
-          )}
+
+            <div>
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Document Viewer</h3>
+                 <Card>
+                   <ScrollArea className="h-96">
+                    <CardContent className="pt-6">
+                      {viewingDoc ? (
+                         <pre className="text-xs font-mono bg-muted p-4 rounded-md">
+                           <code>{JSON.stringify(viewingDoc, null, 2)}</code>
+                         </pre>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center p-8">
+                          <FileJson className="h-10 w-10 mb-4"/>
+                          <p>Select a document from the list to view its contents.</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </ScrollArea>
+                 </Card>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
