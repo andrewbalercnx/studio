@@ -153,7 +153,7 @@ export default function StartStoryPage() {
         await addDoc(collection(firestore, 'storySessions', storySessionId, 'messages'), messagePayload);
         await addDoc(collection(firestore, 'children', childId, 'sessions', storySessionId, 'messages'), messagePayload);
 
-        router.push(`/story/session/${storySessionId}`);
+        router.push(`/story/play/${storySessionId}`);
 
       } catch (e: any) {
         console.error("Error starting story:", e);
