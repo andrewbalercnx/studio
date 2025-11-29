@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -49,7 +50,7 @@ async function fetchImageBytes(url: string): Promise<ArrayBuffer | null> {
 async function renderPrintablePdf(pages: Array<Record<string, any>>) {
   const pdfDoc = await PDFDocument.create();
   const bodyFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-  const titleFont = await pdfDoc.embedFont(StandardFonts.TimesBold);
+  const titleFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
 
   for (const page of pages) {
     const pdfPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
