@@ -196,6 +196,7 @@ export const storyImageFlow = ai.defineFlow(
     const logs: string[] = [];
     const {firestore} = initializeFirebase();
     const pageRef = doc(firestore, 'storyBooks', bookId, 'pages', pageId);
+    let generated: GenerateImageResult | null = null;
     try {
       const pageSnap = await getDoc(pageRef);
       if (!pageSnap.exists()) {
@@ -222,7 +223,7 @@ export const storyImageFlow = ai.defineFlow(
       });
 
       const aspectRatio = mapAspectRatio(page.layoutHints);
-      let generated: GenerateImageResult;
+      
       try {
         generated = await createImage(page.imagePrompt, aspectRatio);
       } catch (generationError: any) {
@@ -235,6 +236,11 @@ export const storyImageFlow = ai.defineFlow(
         logs.push(`[info] Using mock artwork fallback for ${pageId}.`);
         generated = buildMockSvg(page.imagePrompt);
       }
+
+      if (!generated) {
+        throw new Error('Image generation failed and no fallback was created.');
+      }
+      
       let uploadResult:
         | {imageUrl: string; objectPath: string | null; downloadToken: string | null}
         | null = null;
@@ -311,6 +317,7 @@ export const storyImageFlow = ai.defineFlow(
         logs.push(`[warn] Failed to record error state: ${(updateError as Error)?.message}`);
       }
       logs.push(`[error] ${message}`);
+      const fallbackImageUrl = generated ? `data:${generated.mimeType};base64,${generated.buffer.toString('base64')}` : 'error.png';
       return {
         ok: false as const,
         bookId,

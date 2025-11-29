@@ -77,9 +77,14 @@ function summarizeCounts(pages: PageWithId[]) {
 }
 
 export async function POST(request: Request) {
+  const allLogs: string[] = [];
+  let bookIdFromRequest: string | undefined;
+
   try {
     const body = (await request.json()) as ImageJobRequest;
     const {bookId, forceRegenerate = false, regressionTag, pageId} = body;
+    bookIdFromRequest = bookId;
+
     if (!bookId || typeof bookId !== 'string') {
       return NextResponse.json({ok: false, errorMessage: 'Missing bookId'}, {status: 400});
     }
@@ -121,10 +126,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const logs: string[] = [];
     for (const page of pages) {
       if (!page.imagePrompt || page.imagePrompt.trim().length === 0) {
-        logs.push(`[skip] ${page.id} has no imagePrompt.`);
+        allLogs.push(`[skip] ${page.id} has no imagePrompt.`);
         await firestore
           .collection('storyBooks')
           .doc(bookId)
@@ -139,7 +143,7 @@ export async function POST(request: Request) {
       }
 
       if (!forceRegenerate && page.imageStatus === 'ready' && page.imageUrl) {
-        logs.push(`[skip] ${page.id} already ready.`);
+        allLogs.push(`[skip] ${page.id} already ready.`);
         continue;
       }
 
@@ -151,10 +155,14 @@ export async function POST(request: Request) {
         forceRegenerate,
       });
 
+      if (flowResult.logs) {
+        allLogs.push(...flowResult.logs);
+      }
+
       if (!flowResult.ok) {
-        logs.push(`[error] ${page.id}: ${flowResult.errorMessage}`);
+        allLogs.push(`[error] ${page.id}: ${flowResult.errorMessage}`);
       } else {
-        logs.push(`[ready] ${page.id}`);
+        allLogs.push(`[ready] ${page.id}`);
       }
     }
 
@@ -198,12 +206,17 @@ export async function POST(request: Request) {
       status: finalStatus,
       ready: counts.ready,
       total: counts.total,
-      logs,
+      logs: allLogs,
     });
   } catch (error: any) {
     console.error('[storyBook/images] error', error);
     return NextResponse.json(
-      {ok: false, errorMessage: error?.message ?? 'Unexpected /api/storyBook/images error.'},
+      {
+        ok: false,
+        errorMessage: error?.message ?? 'Unexpected /api/storyBook/images error.',
+        logs: allLogs,
+        bookId: bookIdFromRequest,
+      },
       {status: 500}
     );
   }

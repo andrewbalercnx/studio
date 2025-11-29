@@ -80,6 +80,7 @@ export default function CompiledStoryBookPage() {
     }
     setIsGeneratingImages(true);
     setImageGenerationError(null);
+    setImageLogs([]);
     try {
       const response = await fetch('/api/storyBook/images', {
         method: 'POST',
