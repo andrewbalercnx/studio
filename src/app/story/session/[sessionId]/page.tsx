@@ -66,6 +66,22 @@ type EndingGenkitDiagnostics = {
     lastEndingPreview: string | null;
 };
 
+function buildImagePrompt(text: string, child?: ChildProfile | null, storyTitle?: string | null) {
+  const summary = text.length > 160 ? `${text.slice(0, 157)}…` : text;
+  const childName = child?.displayName;
+  const nameFragment = childName ? `featuring ${childName}` : 'featuring the main character';
+  const titleFragment = storyTitle ? `from "${storyTitle}"` : 'from the bedtime story';
+  const colorHint = child?.preferences?.favoriteColors?.length
+    ? `Palette inspired by ${child.preferences.favoriteColors.slice(0, 2).join(' and ')}`
+    : '';
+  const gameHint = child?.preferences?.favoriteGames?.length
+    ? `, playful energy of ${child.preferences.favoriteGames[0]}`
+    : '';
+  const subjectHint = child?.preferences?.favoriteSubjects?.length
+    ? `. Mood should feel like a ${child.preferences.favoriteSubjects[0]} activity`
+    : '';
+  return `${summary} ${nameFragment} ${titleFragment} in watercolor style. ${colorHint}${gameHint}${subjectHint}`.trim();
+}
 
 function getChildAgeYears(child?: ChildProfile | null): number | null {
     if (!child?.dateOfBirth) return null;

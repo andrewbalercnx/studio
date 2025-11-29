@@ -1,3 +1,4 @@
+
 import type { ChildProfile } from '@/lib/types';
 
 export function summarizeChildPreferences(child: ChildProfile | null | undefined): string {

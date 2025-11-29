@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -5,12 +6,29 @@ import { useParams } from 'next/navigation';
 import { useFirestore } from '@/firebase';
 import { collection, doc, orderBy, query } from 'firebase/firestore';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
-import type { StoryBook, StorySession, StoryBookPage } from '@/lib/types';
+import type { StoryBook, StorySession, StoryBookPage, ChildProfile } from '@/lib/types';
 import { LoaderCircle, BookOpen, RefreshCw, Image as ImageIcon } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
+
+function buildImagePrompt(text: string, child?: ChildProfile | null, storyTitle?: string | null) {
+  const summary = text.length > 160 ? `${text.slice(0, 157)}…` : text;
+  const childName = child?.displayName;
+  const nameFragment = childName ? `featuring ${childName}` : 'featuring the main character';
+  const titleFragment = storyTitle ? `from "${storyTitle}"` : 'from the bedtime story';
+  const colorHint = child?.preferences?.favoriteColors?.length
+    ? `Palette inspired by ${child.preferences.favoriteColors.slice(0, 2).join(' and ')}`
+    : '';
+  const gameHint = child?.preferences?.favoriteGames?.length
+    ? `, playful energy of ${child.preferences.favoriteGames[0]}`
+    : '';
+  const subjectHint = child?.preferences?.favoriteSubjects?.length
+    ? `. Mood should feel like a ${child.preferences.favoriteSubjects[0]} activity`
+    : '';
+  return `${summary} ${nameFragment} ${titleFragment} in watercolor style. ${colorHint}${gameHint}${subjectHint}`.trim();
+}
 
 export default function CompiledStoryBookPage() {
   const params = useParams<{ sessionId: string }>();
