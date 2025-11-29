@@ -211,6 +211,7 @@ function ChildForm({ parentUid, onSave, child }: { parentUid: string, onSave: ()
 }
 
 function AvatarGenerator({ child, onAvatarUpdate }: { child: ChildProfile, onAvatarUpdate: (url: string) => void }) {
+    const { user } = useUser();
     const [isLoading, setIsLoading] = useState(false);
     const [generatedAvatar, setGeneratedAvatar] = useState<string | null>(null);
     const [feedback, setFeedback] = useState('');
@@ -218,12 +219,21 @@ function AvatarGenerator({ child, onAvatarUpdate }: { child: ChildProfile, onAva
     const { toast } = useToast();
 
     const handleGenerate = async () => {
+        if (!user) {
+            toast({ title: 'Authentication Error', description: 'Please sign in again to generate an avatar.', variant: 'destructive' });
+            return;
+        }
+
         setIsLoading(true);
         setError(null);
         try {
+            const idToken = await user.getIdToken();
             const res = await fetch('/api/generateAvatar', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`,
+                },
                 body: JSON.stringify({ childId: child.id, feedback }),
             });
             const result = await res.json();
