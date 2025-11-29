@@ -15,6 +15,10 @@ interface AppContextType {
   activeChildProfileLoading: boolean;
   setActiveChildId: (childId: string | null) => void;
   switchToParentMode: () => void;
+  activeWizard: { id: string; step: number } | null;
+  startWizard: (wizardId: string) => void;
+  advanceWizard: () => void;
+  closeWizard: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -22,6 +26,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppContextProvider({ children }: { children: React.ReactNode }) {
   const { user, idTokenResult, loading: userLoading } = useUser();
   const [activeChildId, setActiveChildIdState] = useState<string | null>(null);
+  const [activeWizard, setActiveWizard] = useState<{ id: string; step: number } | null>(null);
   const firestore = useFirestore();
 
   const childDocRef = useMemo(() => {
@@ -96,6 +101,10 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
 
     return 'parent';
   }, [user, idTokenResult, userLoading, activeChildId, activeChildProfile]);
+  
+  const startWizard = (wizardId: string) => setActiveWizard({ id: wizardId, step: 0 });
+  const advanceWizard = () => setActiveWizard(prev => prev ? { ...prev, step: prev.step + 1 } : null);
+  const closeWizard = () => setActiveWizard(null);
 
   const value = {
     roleMode,
@@ -104,6 +113,10 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     activeChildProfileLoading,
     setActiveChildId,
     switchToParentMode,
+    activeWizard,
+    startWizard,
+    advanceWizard,
+    closeWizard,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

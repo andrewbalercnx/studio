@@ -5,13 +5,20 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAuth, useFirestore } from '@/firebase';
-import { doc, setDoc, serverTimestamp }from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, addDoc, collection }from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+
+function slugify(text: string) {
+    return text
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+}
 
 export default function SignUpPage() {
   const [email, setEmail] = useState('');
@@ -53,8 +60,8 @@ export default function SignUpPage() {
         id: user.uid,
         email: user.email,
         roles: {
-            admin: false,
-            writer: false,
+            isAdmin: false,
+            isWriter: false,
             parent: true,
         },
         createdAt: serverTimestamp(),
@@ -76,6 +83,20 @@ export default function SignUpPage() {
           throw new Error(errorResult.message || 'Failed to set PIN after signup.');
       }
       
+      // Create a default child for the new parent
+      const childName = "My First Child";
+      const childId = `${slugify(childName)}-${Date.now().toString().slice(-6)}`;
+      const childData = {
+        id: childId,
+        displayName: childName,
+        ownerParentUid: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        avatarUrl: `https://picsum.photos/seed/${childId}/200/200`,
+        photos: [],
+      };
+      await setDoc(doc(firestore, 'children', childId), childData);
+
       toast({ title: 'Account created successfully!' });
       router.push('/');
     } catch (error: any) {

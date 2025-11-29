@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 import { ParentGuardProvider } from '@/hooks/use-parent-guard';
 import { AppContextProvider } from '@/hooks/use-app-context';
+import { HelpWizard } from '@/components/help-wizard';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -19,6 +20,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           </div>
           <Toaster />
           <FirebaseErrorListener />
+          <HelpWizard />
         </ParentGuardProvider>
       </AppContextProvider>
     </FirebaseClientProvider>

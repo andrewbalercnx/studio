@@ -170,5 +170,10 @@ service cloud.firestore {
         || isWriter()
         || isUserWriter(request.auth.uid);
     }
+
+    match /helpWizards/{wizardId} {
+      allow read: if isServer() || request.auth != null;
+      allow write: if isServer() || isAdmin();
+    }
   }
 }

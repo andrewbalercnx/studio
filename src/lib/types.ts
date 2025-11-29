@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import type { Timestamp } from 'firebase/firestore';
@@ -408,4 +407,18 @@ export type StoryOutputType = {
 };
 
 export type AppRoleMode = 'admin' | 'writer' | 'parent' | 'child' | 'unknown';
-    
+
+export type HelpWizardPage = {
+  title: string;
+  description: string;
+  route: string;
+};
+
+export type HelpWizard = {
+  id: string;
+  title: string;
+  pages: HelpWizardPage[];
+  status: 'draft' | 'live';
+  createdAt: any;
+  updatedAt: any;
+};
