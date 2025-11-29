@@ -63,6 +63,7 @@ type StoryOutputForm = {
   childFacingLabel: string;
   category: 'picture_book' | 'poem' | 'coloring_pages' | 'audio_script';
   status: 'draft' | 'live' | 'archived';
+  pageCount: string;
 };
 
 const LEVEL_BANDS = ['low', 'mid', 'high'];
@@ -775,6 +776,7 @@ function StoryOutputsPanel() {
     childFacingLabel: '',
     category: 'picture_book',
     status: 'draft',
+    pageCount: '8',
   };
   const [form, setForm] = useState<StoryOutputForm>(defaultForm);
 
@@ -792,6 +794,7 @@ function StoryOutputsPanel() {
       childFacingLabel: output.childFacingLabel || '',
       category: output.category,
       status: output.status || 'draft',
+      pageCount: String(output.layoutHints?.pageCount ?? '8'),
     });
     setDialogOpen(true);
   };
@@ -810,6 +813,9 @@ function StoryOutputsPanel() {
       childFacingLabel: form.childFacingLabel,
       category: form.category,
       status: form.status,
+      layoutHints: {
+        pageCount: Number(form.pageCount) || 8,
+      },
       updatedAt: serverTimestamp(),
     };
     try {
@@ -852,6 +858,7 @@ function StoryOutputsPanel() {
                 <TableHead>Category</TableHead>
                 <TableHead>Age Range</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Pages</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -862,6 +869,7 @@ function StoryOutputsPanel() {
                   <TableCell className="capitalize">{output.category.replace('_', ' ')}</TableCell>
                   <TableCell>{output.ageRange}</TableCell>
                   <TableCell className="capitalize">{output.status}</TableCell>
+                  <TableCell>{output.layoutHints?.pageCount ?? '?'}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={() => openEdit(output)}>
                       <Edit className="mr-1 h-4 w-4" /> Edit
@@ -922,6 +930,10 @@ function StoryOutputsPanel() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="grid gap-2">
+                <Label>Page Count</Label>
+                <Input type="number" value={form.pageCount} onChange={(e) => setForm({ ...form, pageCount: e.target.value })} placeholder="e.g. 8" />
             </div>
           </div>
           <DialogFooter>
