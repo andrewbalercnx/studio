@@ -4,13 +4,14 @@
 import {ai} from '@/ai/genkit';
 import {initializeFirebase} from '@/firebase';
 import {getStoryBucket, deleteStorageObject} from '@/firebase/admin/storage';
-import type {StoryBookPage} from '@/lib/types';
+import type {ChildProfile, StoryBook, StoryBookPage} from '@/lib/types';
 import {randomUUID} from 'crypto';
 import {doc, getDoc, serverTimestamp, updateDoc} from 'firebase/firestore';
 import {z} from 'genkit';
 import imageSize from 'image-size';
+import { Gaxios, GaxiosError } from 'gaxios';
 
-const DEFAULT_IMAGE_MODEL = process.env.STORYBOOK_IMAGE_MODEL ?? 'googleai/imagen-4.0-fast-generate-001';
+const DEFAULT_IMAGE_MODEL = process.env.STORYBOOK_IMAGE_MODEL ?? 'googleai/gemini-2.5-flash-image-preview';
 const MOCK_IMAGES = process.env.MOCK_STORYBOOK_IMAGES === 'true';
 
 type GenerateImageResult = {
@@ -43,6 +44,32 @@ const StoryImageFlowOutput = z.object({
     logs: z.array(z.string()).optional(),
   })
 );
+
+async function fetchImageAsDataUri(url: string): Promise<string | null> {
+  try {
+    const gaxios = new Gaxios();
+    const response = await gaxios.request<ArrayBuffer>({
+      url,
+      responseType: 'arraybuffer',
+    });
+
+    if (response.status !== 200 || !response.data) {
+      console.warn(`[story-image-flow] Failed to fetch image ${url}, status: ${response.status}`);
+      return null;
+    }
+
+    const mimeType = response.headers['content-type'] || 'image/jpeg';
+    const buffer = Buffer.from(response.data);
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+  } catch (error) {
+    if (error instanceof GaxiosError) {
+      console.error(`[story-image-flow] Gaxios error fetching ${url}: ${error.message}`);
+    } else {
+      console.error(`[story-image-flow] Unexpected error fetching ${url}:`, error);
+    }
+    return null;
+  }
+}
 
 function mapAspectRatio(layout?: StoryBookPage['layoutHints']): string | undefined {
   if (!layout?.aspectRatio) return undefined;
@@ -160,14 +187,28 @@ async function uploadImageToStorage(params: {
   return {imageUrl, objectPath, downloadToken};
 }
 
-async function createImage(prompt: string, aspectRatio?: string): Promise<GenerateImageResult> {
+async function createImage(prompt: string, childPhotos: string[], artStyle: string, aspectRatio?: string): Promise<GenerateImageResult> {
   if (MOCK_IMAGES) {
     return buildMockSvg(prompt);
   }
+  
+  const imageParts = (await Promise.all(
+    childPhotos.map(async (url) => {
+      const dataUri = await fetchImageAsDataUri(url);
+      return dataUri ? { media: { url: dataUri } } : null;
+    })
+  )).filter((part): part is { media: { url: string } } => part !== null);
+
+  const promptParts: any[] = [
+    ...imageParts,
+    { text: `Art style: ${artStyle}. Scene: ${prompt}` },
+  ];
+
   const generation = await ai.generate({
     model: DEFAULT_IMAGE_MODEL,
-    prompt,
+    prompt: promptParts,
     config: {
+      responseModalities: ['TEXT', 'IMAGE'],
       ...(aspectRatio ? {aspectRatio} : {}),
       numberOfImages: 1,
     },
@@ -198,6 +239,20 @@ export const storyImageFlow = ai.defineFlow(
     const pageRef = doc(firestore, 'storyBooks', bookId, 'pages', pageId);
     let generated: GenerateImageResult | null = null;
     try {
+      const bookSnap = await getDoc(doc(firestore, 'storyBooks', bookId));
+      if (!bookSnap.exists()) {
+        throw new Error(`storyBooks/${bookId} not found.`);
+      }
+      const bookData = bookSnap.data() as StoryBook;
+
+      let childProfile: ChildProfile | null = null;
+      if (bookData.childId) {
+        const childSnap = await getDoc(doc(firestore, 'children', bookData.childId));
+        if (childSnap.exists()) {
+          childProfile = childSnap.data() as ChildProfile;
+        }
+      }
+
       const pageSnap = await getDoc(pageRef);
       if (!pageSnap.exists()) {
         throw new Error(`storyBooks/${bookId}/pages/${pageId} not found.`);
@@ -225,7 +280,9 @@ export const storyImageFlow = ai.defineFlow(
       const aspectRatio = mapAspectRatio(page.layoutHints);
       
       try {
-        generated = await createImage(page.imagePrompt, aspectRatio);
+        const childPhotos = childProfile?.photos?.slice(0, 3) ?? [];
+        const artStyle = bookData.metadata?.artStyleHint ?? "a gentle, vibrant watercolor style";
+        generated = await createImage(page.imagePrompt, childPhotos, artStyle, aspectRatio);
       } catch (generationError: any) {
         const fallbackAllowed = MOCK_IMAGES || !!regressionTag || process.env.STORYBOOK_IMAGE_FALLBACK === 'true';
         const errMessage = generationError?.message ?? String(generationError);

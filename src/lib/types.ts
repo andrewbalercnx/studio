@@ -186,6 +186,7 @@ export type StoryBook = {
   metadata?: {
     paragraphs?: number;
     estimatedPages?: number;
+    artStyleHint?: string;
     [key: string]: unknown;
   };
   status?: StoryBookStatus;
