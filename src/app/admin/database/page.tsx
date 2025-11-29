@@ -64,6 +64,8 @@ type DocumentData = {
   [key: string]: any;
 };
 
+type FilterOperator = '==' | 'startsWith' | 'exists' | 'does_not_exist';
+
 export default function AdminDatabasePage() {
   const { isAdmin, loading: adminLoading } = useAdminStatus();
   const firestore = useFirestore();
@@ -71,13 +73,15 @@ export default function AdminDatabasePage() {
 
   const [selectedCollection, setSelectedCollection] = useState('');
   const [filterField, setFilterField] = useState('');
-  const [filterOperator, setFilterOperator] = useState<'==' | 'startsWith'>('==');
+  const [filterOperator, setFilterOperator] = useState<FilterOperator>('==');
   const [filterValue, setFilterValue] = useState('');
   const [documents, setDocuments] = useState<DocumentData[]>([]);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
   const [viewingDoc, setViewingDoc] = useState<DocumentData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const isValueInputDisabled = filterOperator === 'exists' || filterOperator === 'does_not_exist';
 
   const handleSearch = async () => {
     if (!firestore || !selectedCollection) {
@@ -95,7 +99,7 @@ export default function AdminDatabasePage() {
     try {
       const collRef = collection(firestore, selectedCollection);
       let q;
-      if (filterField && filterValue) {
+      if (filterField && (filterValue || isValueInputDisabled)) {
         if (filterOperator === 'startsWith') {
           q = query(
             collRef,
@@ -104,6 +108,10 @@ export default function AdminDatabasePage() {
             endAt(filterValue + '\uf8ff'),
             limit(50)
           );
+        } else if (filterOperator === 'exists') {
+            q = query(collRef, where(filterField, '!=', null), limit(50));
+        } else if (filterOperator === 'does_not_exist') {
+            q = query(collRef, where(filterField, '==', null), limit(50));
         } else {
           q = query(collRef, where(filterField, '==', filterValue), limit(50));
         }
@@ -213,12 +221,21 @@ export default function AdminDatabasePage() {
                   <SelectContent>
                     <SelectItem value="==">Equals</SelectItem>
                     <SelectItem value="startsWith">Starts With</SelectItem>
+                    <SelectItem value="exists">Exists</SelectItem>
+                    <SelectItem value="does_not_exist">Does Not Exist</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="value">Value (optional)</Label>
-                <Input id="value" placeholder="Value to match" value={filterValue} onChange={(e) => setFilterValue(e.target.value)} />
+                <Input 
+                  id="value"
+                  placeholder="Value to match"
+                  value={filterValue}
+                  onChange={(e) => setFilterValue(e.target.value)}
+                  disabled={isValueInputDisabled}
+                />
+                 {filterOperator === 'does_not_exist' && <p className="text-xs text-muted-foreground mt-1">Note: This checks for fields explicitly set to `null`.</p>}
               </div>
             </div>
             <Button onClick={handleSearch} disabled={isLoading}>
