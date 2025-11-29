@@ -30,7 +30,9 @@ service cloud.firestore {
 
     match /children/{childId} {
       allow read: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || resource.data.ownerParentUid == request.auth.uid;
-      allow write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || request.resource.data.ownerParentUid == request.auth.uid;
+      // Allow write if the user is creating a new doc for themselves, or updating one they already own.
+      allow write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) ||
+                   (request.resource.data.ownerParentUid == request.auth.uid && (resource == null || resource.data.ownerParentUid == request.auth.uid));
 
       match /sessions/{sessionId} {
         allow read, write: if request.auth != null &&
