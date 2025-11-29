@@ -1,0 +1,31 @@
+{
+  "wizards": [
+    {
+      "id": "parent-onboarding",
+      "title": "Welcome to StoryPic Kids!",
+      "status": "live",
+      "pages": [
+        {
+          "title": "Welcome! Let's get started.",
+          "description": "This is the Parent Dashboard. From here, you can select a child to play as, or manage your family's profiles and settings.",
+          "route": "/parent"
+        },
+        {
+          "title": "Manage Your Children",
+          "description": "This is where you add or edit profiles for your children. You can upload photos to help personalize their story's illustrations.",
+          "route": "/parent/children"
+        },
+        {
+          "title": "Create Your Book",
+          "description": "After a story is finished, come here to turn it into a book! Use the 'Create My Book' panel to compile the text, build the pages, and paint the art.",
+          "route": "/story/session/sample-session-1"
+        },
+        {
+          "title": "Ready to Play!",
+          "description": "Now you're all set. Select a child from the main dashboard to start creating a magical story together.",
+          "route": "/parent"
+        }
+      ]
+    }
+  ]
+}
