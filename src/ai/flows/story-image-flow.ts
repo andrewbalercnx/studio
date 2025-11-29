@@ -1,3 +1,4 @@
+
 'use server';
 
 import {ai} from '@/ai/genkit';
@@ -9,7 +10,7 @@ import {doc, getDoc, serverTimestamp, updateDoc} from 'firebase/firestore';
 import {z} from 'genkit';
 import imageSize from 'image-size';
 
-const DEFAULT_IMAGE_MODEL = process.env.STORYBOOK_IMAGE_MODEL ?? 'googleai/imagen-3.0-generate-002';
+const DEFAULT_IMAGE_MODEL = process.env.STORYBOOK_IMAGE_MODEL ?? 'googleai/imagen-4.0-fast-generate-001';
 const MOCK_IMAGES = process.env.MOCK_STORYBOOK_IMAGES === 'true';
 
 type GenerateImageResult = {
