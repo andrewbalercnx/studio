@@ -56,6 +56,9 @@ export default function AdminDashboardPage() {
             <Link href="/admin/storyDesigner">Story Designer (Beta)</Link>
           </Button>
           <Button asChild>
+            <Link href="/admin/database">Database Manager</Link>
+          </Button>
+          <Button asChild>
             <Link href="/admin/users">Manage Users</Link>
           </Button>
           <Button asChild>
