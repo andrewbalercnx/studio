@@ -27,6 +27,8 @@ export type Choice = {
     introducesCharacter?: boolean;
     newCharacterLabel?: string | null;
     newCharacterKind?: 'toy' | 'pet' | 'friend' | 'family' | 'other' | null;
+    existingCharacterId?: string | null;
+    avatarUrl?: string | null;
 };
 
 export type ChatMessage = {

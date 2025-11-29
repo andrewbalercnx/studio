@@ -6,7 +6,7 @@
 
 import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { getDoc, doc, collection, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, StoryType, Character, ChildProfile } from '@/lib/types';
 import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
@@ -27,6 +27,8 @@ const StoryBeatOutputSchema = z.object({
     introducesCharacter: z.boolean().optional().describe("Set to true if this option clearly brings a new character into the story."),
     newCharacterLabel: z.string().optional().nullable().describe("If introducesCharacter is true, a short noun phrase for the character (e.g., 'a friendly mailman')."),
     newCharacterKind: z.enum(['toy', 'pet', 'friend', 'family', 'other']).optional().nullable().describe("If introducesCharacter is true, the kind of character."),
+    existingCharacterId: z.string().optional().nullable().describe("If this choice is about an existing character, provide their ID here."),
+    avatarUrl: z.string().optional().nullable().describe("If this choice is about an existing character, provide their avatar URL here."),
   })).min(3).max(3).describe("An array of exactly 3 choices for the child.")
 });
 
@@ -39,6 +41,8 @@ const StoryBeatOutputSchemaDescription = JSON.stringify({
       introducesCharacter: 'boolean (optional)',
       newCharacterLabel: 'string | null (required when introducesCharacter is true)',
       newCharacterKind: "'toy' | 'pet' | 'friend' | 'family' | 'other' (required when introducesCharacter is true)",
+      existingCharacterId: 'string | null (optional)',
+      avatarUrl: 'string | null (optional)',
     },
   ],
 }, null, 2);
@@ -64,10 +68,13 @@ export const storyBeatFlow = ai.defineFlow(
             }
             const session = sessionDoc.data() as StorySession;
             
-            const { storyTypeId, mainCharacterId } = session;
+            const { storyTypeId, mainCharacterId, parentUid } = session;
 
             if (!storyTypeId) {
                 return { ok: false, sessionId, errorMessage: `Session is missing required field: storyTypeId.` };
+            }
+            if (!parentUid) {
+                return { ok: false, sessionId, errorMessage: `Session is missing required field: parentUid.` };
             }
 
             // 2. Load StoryType
@@ -102,20 +109,17 @@ export const storyBeatFlow = ai.defineFlow(
             debug.details.arcStepIndexBounded = safeArcStepIndex;
             debug.details.arcStepLabel = arcStep;
 
-
-            // 3. Load Main Character
-            let mainCharacterSummary = "Main character: unknown";
-            if (mainCharacterId) {
-                const charRef = doc(firestore, 'characters', mainCharacterId);
-                const charDoc = await getDoc(charRef);
-                if (charDoc.exists()) {
-                    const char = charDoc.data() as Character;
-                    mainCharacterSummary = `Main character: ${char.name}, role: ${char.role}.`;
-                    if (char.traits) {
-                         mainCharacterSummary += ` Traits: ${Object.values(char.traits).filter(Boolean).join(', ')}.`;
-                    }
-                }
-            }
+            // Load all characters for this parent
+            const charactersQuery = query(
+                collection(firestore, 'characters'),
+                where('ownerParentUid', '==', parentUid),
+                limit(10) // Limit to 10 existing characters to avoid overwhelming the prompt
+            );
+            const charactersSnapshot = await getDocs(charactersQuery);
+            const existingCharacters = charactersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Character));
+            const existingCharacterSummary = existingCharacters.map(c => `- ${c.name} (ID: ${c.id}, Role: ${c.role})`).join('\n');
+            debug.details.existingCharacterCount = existingCharacters.length;
+            debug.details.existingCharacterSummary = existingCharacterSummary;
 
             // 4. Build Story So Far
             const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
@@ -139,7 +143,9 @@ ${promptConfig.systemPrompt}
 MODE INSTRUCTIONS:
 ${promptConfig.modeInstructions}
 
-For each option, you MUST decide if it introduces a new character.
+Your goal is to present up to 3 choices. One of those choices should be to introduce an existing character if appropriate for the story.
+- If you create an option to use an existing character, you MUST populate 'existingCharacterId' with their ID from the roster.
+- For each option, you MUST decide if it introduces a new character.
 - Set 'introducesCharacter' to true if the option brings in a new person, animal, or talking object who could appear again.
   - Examples: "a new friend", "a talking squirrel", "a kind robot".
   - If true, you MUST also provide a 'newCharacterLabel' (e.g., "a talking squirrel") and a 'newCharacterKind' ('toy', 'pet', 'friend', 'family', or 'other').
@@ -149,9 +155,11 @@ For each option, you MUST decide if it introduces a new character.
 CONTEXT:
 Story Type: ${storyType.name} (${storyTypeId})
 Current Arc Step: ${arcStep}
-${mainCharacterSummary}
 Child Preferences and inspirations:
 ${childPreferenceSummary}
+
+Existing Character Roster (use these if possible):
+${existingCharacterSummary || "No existing characters available."}
 
 STORY SO FAR:
 ${storySoFar}
@@ -260,6 +268,17 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             }
 
             const structuredOutput = validationResult.data;
+
+            // Post-process to add avatar URLs
+            for (const option of structuredOutput.options) {
+                if (option.existingCharacterId) {
+                    const char = existingCharacters.find(c => c.id === option.existingCharacterId);
+                    if (char) {
+                        option.avatarUrl = char.avatarUrl || null;
+                    }
+                }
+            }
+
 
             await logSessionEvent({
                 firestore,
