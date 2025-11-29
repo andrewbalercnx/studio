@@ -11,6 +11,8 @@ import { getDoc, doc } from 'firebase/firestore';
 import { z } from 'genkit';
 import type { ChildProfile } from '@/lib/types';
 import { Gaxios, GaxiosError } from 'gaxios';
+import { getStoryBucket } from '@/firebase/admin/storage';
+import { randomUUID } from 'crypto';
 
 const AvatarFlowInputSchema = z.object({
   childId: z.string(),
@@ -20,7 +22,7 @@ const AvatarFlowInputSchema = z.object({
 export type AvatarFlowInput = z.infer<typeof AvatarFlowInputSchema>;
 
 const AvatarFlowOutputSchema = z.object({
-  imageUrl: z.string().describe('The generated avatar image as a data URI.'),
+  imageUrl: z.string().describe('The generated avatar image as a public Firebase Storage URL.'),
 });
 
 async function fetchImageAsDataUri(url: string): Promise<string | null> {
@@ -48,6 +50,44 @@ async function fetchImageAsDataUri(url: string): Promise<string | null> {
     return null;
   }
 }
+
+function parseDataUrl(dataUrl: string): {mimeType: string; buffer: Buffer} {
+  const match = /^data:(.+);base64,(.*)$/i.exec(dataUrl);
+  if (!match) {
+    throw new Error('Model returned an invalid media payload.');
+  }
+  return {
+    mimeType: match[1],
+    buffer: Buffer.from(match[2], 'base64'),
+  };
+}
+
+async function uploadAvatarToStorage(params: {
+  buffer: Buffer;
+  mimeType: string;
+  childId: string;
+  parentUid: string;
+}): Promise<string> {
+  const bucket = await getStoryBucket();
+  const objectPath = `users/${params.parentUid}/children/${params.childId}/avatars/avatar-${Date.now()}.png`;
+  const downloadToken = randomUUID();
+
+  await bucket.file(objectPath).save(params.buffer, {
+    contentType: params.mimeType,
+    resumable: false,
+    metadata: {
+      metadata: {
+        ownerParentUid: params.parentUid,
+        childId: params.childId,
+        firebaseStorageDownloadTokens: downloadToken,
+      },
+    },
+    cacheControl: 'public,max-age=3600',
+  });
+
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(objectPath)}?alt=media&token=${downloadToken}`;
+}
+
 
 export const avatarFlow = ai.defineFlow(
   {
@@ -102,10 +142,19 @@ export const avatarFlow = ai.defineFlow(
       },
     });
 
-    const imageUrl = llmResponse.media?.url;
-    if (!imageUrl) {
+    const dataUrl = llmResponse.media?.url;
+    if (!dataUrl) {
       throw new Error('The model did not return an image.');
     }
+
+    const { buffer, mimeType } = parseDataUrl(dataUrl);
+
+    const imageUrl = await uploadAvatarToStorage({
+      buffer,
+      mimeType,
+      childId,
+      parentUid: child.ownerParentUid,
+    });
     
     return { imageUrl };
   }
