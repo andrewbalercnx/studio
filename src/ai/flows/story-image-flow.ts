@@ -187,7 +187,7 @@ async function uploadImageToStorage(params: {
   return {imageUrl, objectPath, downloadToken};
 }
 
-async function createImage(prompt: string, childPhotos: string[], artStyle: string, aspectRatio?: string): Promise<GenerateImageResult> {
+async function createImage(prompt: string, childPhotos: string[], artStyle: string): Promise<GenerateImageResult> {
   if (MOCK_IMAGES) {
     return buildMockSvg(prompt);
   }
@@ -209,8 +209,6 @@ async function createImage(prompt: string, childPhotos: string[], artStyle: stri
     prompt: promptParts,
     config: {
       responseModalities: ['TEXT', 'IMAGE'],
-      ...(aspectRatio ? {aspectRatio} : {}),
-      numberOfImages: 1,
     },
   });
 
@@ -277,12 +275,10 @@ export const storyImageFlow = ai.defineFlow(
         updatedAt: serverTimestamp(),
       });
 
-      const aspectRatio = mapAspectRatio(page.layoutHints);
-      
       try {
         const childPhotos = childProfile?.photos?.slice(0, 3) ?? [];
         const artStyle = bookData.metadata?.artStyleHint ?? "a gentle, vibrant watercolor style";
-        generated = await createImage(page.imagePrompt, childPhotos, artStyle, aspectRatio);
+        generated = await createImage(page.imagePrompt, childPhotos, artStyle);
       } catch (generationError: any) {
         const fallbackAllowed = MOCK_IMAGES || !!regressionTag || process.env.STORYBOOK_IMAGE_FALLBACK === 'true';
         const errMessage = generationError?.message ?? String(generationError);
