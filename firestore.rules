@@ -32,8 +32,8 @@ service cloud.firestore {
       allow read: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || resource.data.ownerParentUid == request.auth.uid;
       // Allow write if the user is creating a new doc for themselves, or updating one they already own.
       allow write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) ||
-                   (resource == null && request.resource.data.ownerParentUid == request.auth.uid) || // Create
-                   (resource != null && resource.data.ownerParentUid == request.auth.uid); // Update
+                   (request.auth.uid == request.resource.data.ownerParentUid && resource == null) || // Create
+                   (request.auth.uid == resource.data.ownerParentUid); // Update
 
       match /sessions/{sessionId} {
         allow read, write: if request.auth != null &&
