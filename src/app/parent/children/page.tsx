@@ -225,7 +225,8 @@ function ManagePhotos({ child, onOpenChange }: { child: ChildProfile, onOpenChan
         reader.readAsDataURL(file);
         reader.onload = async () => {
             const dataUrl = reader.result as string;
-            const path = `users/${user.uid}/children/${child.id}/photos/${Date.now()}_${file.name}`;
+            const safeFileName = encodeURIComponent(file.name.replace(/\s+/g, '_'));
+            const path = `users/${user.uid}/children/${child.id}/photos/${Date.now()}_${safeFileName}`;
 
             try {
                 const downloadURL = await uploadFile(path, dataUrl);
