@@ -189,6 +189,7 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
                 className="text-center tracking-[1rem]"
                 autoComplete="one-time-code"
                 disabled={isSettingPin}
+                autoFocus
               />
             </div>
             <div className="space-y-2">
@@ -239,6 +240,7 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
           className="text-center text-2xl tracking-[1rem]"
           autoComplete="one-time-code"
           disabled={isVerifying}
+          autoFocus
         />
       </div>
       <DialogFooter>
