@@ -1,11 +1,17 @@
 'use server';
 
-import { initializeApp, getApp, getApps, App } from 'firebase-admin/app';
+import { initializeApp, getApp, getApps, App, AppOptions } from 'firebase-admin/app';
 import { ServiceAccount, credential } from 'firebase-admin';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { firebaseConfig } from '@/firebase/config';
 
 let adminApp: App;
+
+function getStorageBucketOption(): Pick<AppOptions, 'storageBucket'> | Record<string, never> {
+  const bucket = process.env.FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket;
+  return bucket ? { storageBucket: bucket } : {};
+}
 
 export async function initFirebaseAdminApp() {
   if (getApps().length) {
@@ -16,7 +22,8 @@ export async function initFirebaseAdminApp() {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY) as ServiceAccount;
     adminApp = initializeApp({
-      credential: credential.cert(serviceAccount)
+      credential: credential.cert(serviceAccount),
+      ...getStorageBucketOption(),
     });
     return adminApp;
   }
@@ -27,17 +34,21 @@ export async function initFirebaseAdminApp() {
     const serviceAccount = JSON.parse(contents) as ServiceAccount;
     adminApp = initializeApp({
       credential: credential.cert(serviceAccount),
+      ...getStorageBucketOption(),
     });
     return adminApp;
   }
   
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     adminApp = initializeApp({
-      credential: credential.applicationDefault()
+      credential: credential.applicationDefault(),
+      ...getStorageBucketOption(),
     });
     return adminApp;
   }
 
-  adminApp = initializeApp();
+  adminApp = initializeApp({
+    ...getStorageBucketOption(),
+  });
   return adminApp;
 }

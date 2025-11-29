@@ -3,7 +3,7 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Copy, LoaderCircle, PlusCircle, Image as ImageIcon, User as UserIcon, Pencil, X } from 'lucide-react';
+import { Copy, LoaderCircle, PlusCircle, Image as ImageIcon, User as UserIcon, Pencil, X, Sparkles } from 'lucide-react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useFirestore } from '@/firebase';
 import { collection, doc, onSnapshot, setDoc, serverTimestamp, query, where, writeBatch, updateDoc } from 'firebase/firestore';
@@ -21,6 +21,7 @@ import { useUploadFile } from '@/firebase/storage/use-upload-file';
 import Image from 'next/image';
 import { ParentGuard } from '@/components/parent/parent-guard';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 
 function slugify(text: string) {
     return text
@@ -209,6 +210,80 @@ function ChildForm({ parentUid, onSave, child }: { parentUid: string, onSave: ()
     )
 }
 
+function AvatarGenerator({ child, onAvatarUpdate }: { child: ChildProfile, onAvatarUpdate: (url: string) => void }) {
+    const [isLoading, setIsLoading] = useState(false);
+    const [generatedAvatar, setGeneratedAvatar] = useState<string | null>(null);
+    const [feedback, setFeedback] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const { toast } = useToast();
+
+    const handleGenerate = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const res = await fetch('/api/generateAvatar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ childId: child.id, feedback }),
+            });
+            const result = await res.json();
+            if (!res.ok || !result.ok) {
+                throw new Error(result.errorMessage || 'Failed to generate avatar.');
+            }
+            setGeneratedAvatar(result.imageUrl);
+            setFeedback('');
+        } catch (err: any) {
+            setError(err.message);
+            toast({ title: 'Avatar Generation Failed', description: err.message, variant: 'destructive' });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleAccept = () => {
+        if (generatedAvatar) {
+            onAvatarUpdate(generatedAvatar);
+            toast({ title: 'Avatar Updated!', description: 'The new avatar has been saved.' });
+        }
+    };
+
+    return (
+        <Card className="bg-muted/50">
+            <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2"><Sparkles className="text-primary" /> AI Avatar Generator</CardTitle>
+                <CardDescription>Create a cartoon avatar from your child's photos.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="flex justify-center">
+                    {isLoading ? (
+                        <div className="h-40 w-40 flex items-center justify-center bg-muted rounded-full">
+                            <LoaderCircle className="h-10 w-10 animate-spin text-primary" />
+                        </div>
+                    ) : generatedAvatar ? (
+                        <Image src={generatedAvatar} alt="Generated avatar" width={160} height={160} className="rounded-full border-4 border-primary shadow-md" />
+                    ) : (
+                        <div className="h-40 w-40 flex items-center justify-center bg-muted rounded-full text-muted-foreground">
+                            <UserIcon className="h-10 w-10" />
+                        </div>
+                    )}
+                </div>
+                {error && <p className="text-sm text-destructive text-center">{error}</p>}
+                <div className="space-y-2">
+                    <Label htmlFor="feedback">Feedback (optional)</Label>
+                    <Textarea id="feedback" value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="e.g., make the hair blonder, add glasses..." />
+                </div>
+                <div className="flex gap-2">
+                    <Button onClick={handleGenerate} disabled={isLoading} className="flex-1">
+                        {isLoading ? 'Generating...' : (generatedAvatar ? 'Regenerate' : 'Generate Avatar')}
+                    </Button>
+                    {generatedAvatar && <Button onClick={handleAccept} className="flex-1">Accept</Button>}
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+
 function ManagePhotos({ child, onOpenChange }: { child: ChildProfile, onOpenChange: (open: boolean) => void }) {
     const firestore = useFirestore();
     const { toast } = useToast();
@@ -225,19 +300,24 @@ function ManagePhotos({ child, onOpenChange }: { child: ChildProfile, onOpenChan
         reader.readAsDataURL(file);
         reader.onload = async () => {
             const dataUrl = reader.result as string;
-            const safeFileName = encodeURIComponent(file.name.replace(/\s+/g, '_'));
-            const path = `users/${user.uid}/children/${child.id}/photos/${Date.now()}_${safeFileName}`;
 
             try {
-                const downloadURL = await uploadFile(path, dataUrl);
-                if (downloadURL) {
-                    const childRef = doc(firestore, 'children', child.id);
-                    await updateDoc(childRef, {
-                        photos: [...optimisticPhotos, downloadURL],
-                    });
-                    setOptimisticPhotos(prev => [...prev, downloadURL]);
-                    toast({ title: 'Photo uploaded!' });
+                const downloadURL = await uploadFile({
+                    childId: child.id,
+                    dataUrl,
+                    fileName: file.name,
+                });
+                if (!downloadURL) {
+                    toast({ title: 'Upload failed', description: 'Please try again in a moment.', variant: 'destructive' });
+                    return;
                 }
+                const childRef = doc(firestore, 'children', child.id);
+                const updatedPhotos = [...optimisticPhotos, downloadURL];
+                await updateDoc(childRef, {
+                    photos: updatedPhotos,
+                });
+                setOptimisticPhotos(updatedPhotos);
+                toast({ title: 'Photo uploaded!' });
             } catch (e: any) {
                 toast({ title: 'Upload failed', description: e.message, variant: 'destructive' });
             }
@@ -265,8 +345,10 @@ function ManagePhotos({ child, onOpenChange }: { child: ChildProfile, onOpenChan
     }
 
     return (
-        <div>
-            <div className="mb-4">
+        <div className="space-y-6">
+            <AvatarGenerator child={child} onAvatarUpdate={handleSetAvatar} />
+
+            <div>
                 <Label htmlFor="photo-upload" className="block text-sm font-medium text-gray-700 mb-2">Upload a new photo</Label>
                 <Input id="photo-upload" type="file" accept="image/*" onChange={handleFileChange} disabled={isUploading} />
                 {isUploading && <p className="text-sm text-muted-foreground mt-2 flex items-center"><LoaderCircle className="animate-spin mr-2" /> Uploading...</p>}
