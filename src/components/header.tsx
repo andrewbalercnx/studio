@@ -77,7 +77,6 @@ export default function Header() {
       default:
         return (
           <>
-            <Button asChild variant="ghost"><Link href="/parent">Home</Link></Button>
             <Button asChild variant="ghost"><Link href="/stories">My Stories</Link></Button>
             <Button asChild variant="ghost"><Link href="/parent/children">Manage Children</Link></Button>
             <Button asChild variant="ghost"><Link href="/parent/orders">Orders</Link></Button>

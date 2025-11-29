@@ -28,7 +28,7 @@ function ChildIcon({ profile }: { profile: ChildProfile }) {
     <div className="flex flex-col items-center gap-2 text-center w-32">
       <button onClick={handleSelectChild} className="rounded-full hover:ring-4 hover:ring-primary/50 transition-all">
         <Avatar className="h-24 w-24 border-4 border-white shadow-md">
-          <AvatarImage src={profile.avatarUrl} alt={profile.displayName} />
+          <AvatarImage src={profile.avatarUrl} alt={profile.displayName} className="object-cover" />
           <AvatarFallback className="text-3xl bg-secondary text-secondary-foreground">
              {profile.displayName ? profile.displayName.charAt(0) : <User />}
           </AvatarFallback>

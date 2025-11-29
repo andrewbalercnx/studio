@@ -1,3 +1,4 @@
+
 'use client';
 
 import { ReactNode } from 'react';
@@ -15,6 +16,11 @@ const NAV_LINKS = [
 
 export default function ParentLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const showSidebar = pathname !== '/parent';
+
+  if (!showSidebar) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="container mx-auto flex flex-col gap-6 px-4 py-8 lg:flex-row">
