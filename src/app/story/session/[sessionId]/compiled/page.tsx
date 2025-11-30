@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useFirestore } from '@/firebase';
 import { collection, doc, orderBy, query } from 'firebase/firestore';
@@ -12,30 +12,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-
-function buildImagePrompt(text: string, child?: ChildProfile | null, storyTitle?: string | null) {
-  const summary = text.length > 160 ? `${text.slice(0, 157)}…` : text;
-  
-  // Base prompt
-  let prompt = `Scene: ${summary}.`;
-
-  // Add character guidance if the child's name is known
-  if (child?.displayName) {
-    prompt += ` The main character should resemble the child.`;
-  }
-  
-  // Add style hints
-  const colorHint = child?.preferences?.favoriteColors?.length
-    ? ` Use a palette inspired by ${child.preferences.favoriteColors.slice(0, 2).join(' and ')}.`
-    : '';
-  const gameHint = child?.preferences?.favoriteGames?.length
-    ? ` The scene should have the playful energy of ${child.preferences.favoriteGames[0]}.`
-    : '';
-  
-  prompt += `${colorHint}${gameHint}`;
-
-  return prompt.trim();
-}
+import { resolvePlaceholders } from '@/lib/resolve-placeholders';
 
 export default function CompiledStoryBookPage() {
   const params = useParams<{ sessionId: string }>();
@@ -53,11 +30,41 @@ export default function CompiledStoryBookPage() {
     [firestore, bookId]
   );
   const { data: pages, loading: pagesLoading, error: pagesError } = useCollection<StoryBookPage>(pagesQuery);
+
+  const [resolvedPages, setResolvedPages] = useState<StoryBookPage[] | null>(null);
+
   const [isGeneratingPages, setIsGeneratingPages] = useState(false);
   const [pageGenerationError, setPageGenerationError] = useState<string | null>(null);
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
   const [imageGenerationError, setImageGenerationError] = useState<string | null>(null);
   const [imageLogs, setImageLogs] = useState<string[]>([]);
+
+  useEffect(() => {
+    async function processPages() {
+      if (!pages || pages.length === 0) {
+        setResolvedPages([]);
+        return;
+      }
+
+      const pagesToProcess = pages.filter(page => !page.displayText && page.bodyText);
+      if (pagesToProcess.length === 0) {
+        setResolvedPages(pages);
+        return;
+      }
+
+      const allBodyText = pagesToProcess.map(p => p.bodyText!).join(' ');
+      const resolvedTexts = await resolvePlaceholders(allBodyText);
+
+      const updatedPages = pages.map(page => {
+        if (!page.displayText && page.bodyText && resolvedTexts[page.bodyText]) {
+          return { ...page, displayText: resolvedTexts[page.bodyText] };
+        }
+        return page;
+      });
+      setResolvedPages(updatedPages);
+    }
+    processPages();
+  }, [pages]);
 
   const pageStatus = storyBook?.pageGeneration?.status ?? 'idle';
   const lastCompletedAt = (storyBook?.pageGeneration?.lastCompletedAt as any)?.toDate?.();
@@ -139,7 +146,7 @@ export default function CompiledStoryBookPage() {
           )}
         </CardHeader>
         <CardContent className="space-y-4">
-          {storyBookLoading && (
+          {(storyBookLoading || pagesLoading) && (
             <div className="flex items-center justify-center py-10">
               <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
             </div>
@@ -173,8 +180,8 @@ export default function CompiledStoryBookPage() {
                 )}
               </div>
               <div className="space-y-4 leading-relaxed text-lg">
-                {pages && pages.length > 0 ? (
-                  pages
+                {resolvedPages && resolvedPages.length > 0 ? (
+                  resolvedPages
                     .filter((page) => page.displayText)
                     .map((page) => <p key={page.id}>{page.displayText}</p>)
                 ) : (
@@ -353,5 +360,3 @@ export default function CompiledStoryBookPage() {
     </div>
   );
 }
-
-    

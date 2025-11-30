@@ -8,6 +8,8 @@ import { z } from 'genkit';
 import type { StoryBook, StorySession, ChildProfile, Character } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { logSessionEvent } from '@/lib/session-events';
+import { resolveEntities, replacePlaceholders, getEntitiesInText } from '@/lib/resolve-placeholders';
+
 
 type StoryPageFlowDiagnostics = {
   stage: 'init' | 'loading' | 'chunking' | 'building_pages' | 'done' | 'error';
@@ -132,46 +134,6 @@ function choosePlaceholderImage(index: number): string | undefined {
   return image?.imageUrl;
 }
 
-// New helper to resolve all character/child IDs in the text
-async function resolveEntities(firestore: FirebaseFirestore.Firestore, text: string): Promise<Map<string, { displayName: string, document: Character | ChildProfile }>> {
-  const entityMap = new Map<string, { displayName: string, document: Character | ChildProfile }>();
-  const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
-  if (ids.length === 0) return entityMap;
-
-  const uniqueIds = [...new Set(ids)];
-  
-  const characterDocs = await getDocs(query(collection(firestore, 'characters'), where('__name__', 'in', uniqueIds)));
-  characterDocs.forEach(doc => {
-    const char = doc.data() as Character;
-    entityMap.set(doc.id, { displayName: char.displayName, document: char });
-  });
-
-  const remainingIds = uniqueIds.filter(id => !entityMap.has(id));
-  if (remainingIds.length > 0) {
-    const childrenDocs = await getDocs(query(collection(firestore, 'children'), where('__name__', 'in', remainingIds)));
-    childrenDocs.forEach(doc => {
-      const child = doc.data() as ChildProfile;
-      entityMap.set(doc.id, { displayName: child.displayName, document: child });
-    });
-  }
-
-  return entityMap;
-}
-
-function replacePlaceholders(text: string, entityMap: Map<string, { displayName: string }>): string {
-    return text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
-        return entityMap.get(id)?.displayName || match;
-    });
-}
-
-function getEntitiesInText(text: string, entityMap: Map<string, { document: Character | ChildProfile }>): Character[] {
-    const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
-    const uniqueIds = [...new Set(ids)];
-    return uniqueIds
-        .map(id => entityMap.get(id)?.document)
-        .filter((doc): doc is Character => !!doc && 'displayName' in doc && 'role' in doc); // Filter to only Characters
-}
-
 export const storyPageFlow = ai.defineFlow(
   {
     name: 'storyPageFlow',
@@ -204,7 +166,7 @@ export const storyPageFlow = ai.defineFlow(
         throw new Error(`storyBooks/${bookId} is missing storyText.`);
       }
       
-      const entityMap = await resolveEntities(firestore, book.storyText);
+      const entityMap = await resolveEntities(book.storyText);
       diagnostics.details.resolvedEntities = entityMap.size;
 
       diagnostics = {
@@ -330,5 +292,3 @@ export const storyPageFlow = ai.defineFlow(
     }
   }
 );
-
-    
