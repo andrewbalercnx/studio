@@ -225,6 +225,7 @@ export type StoryBookPage = {
     kind: 'cover_front' | 'cover_back' | 'text' | 'image';
     title?: string;
     bodyText?: string;
+    readableText?: string;
     imagePrompt?: string;
     imageUrl?: string;
     imageStatus?: 'pending' | 'generating' | 'ready' | 'error';

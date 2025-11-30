@@ -347,7 +347,7 @@ export default function StorybookViewerPage() {
               </div>
             </div>
             {currentPage.title && <h3 className="text-2xl font-semibold">{currentPage.title}</h3>}
-            {currentPage.bodyText && <p className="text-lg leading-relaxed">{currentPage.bodyText}</p>}
+            {(currentPage.readableText || currentPage.bodyText) && <p className="text-lg leading-relaxed">{currentPage.readableText || currentPage.bodyText}</p>}
             {currentPage.imagePrompt && (
               <p className="text-xs text-muted-foreground">
                 Prompt: <span className="font-medium">{currentPage.imagePrompt}</span>
