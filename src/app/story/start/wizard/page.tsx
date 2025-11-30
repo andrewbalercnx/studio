@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -8,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, addDoc, collection, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, addDoc, collection, updateDoc, writeBatch } from 'firebase/firestore';
 import type { ChildProfile } from '@/lib/types';
 import { useAppContext } from '@/hooks/use-app-context';
 
@@ -65,7 +66,13 @@ export default function StartWizardStoryPage() {
           updatedAt: serverTimestamp(),
           id: storySessionId,
         };
-        await setDoc(storySessionRef, newSessionData);
+
+        const batch = writeBatch(firestore);
+        batch.set(storySessionRef, newSessionData);
+        
+        // Also create the session in the child's subcollection
+        const childSessionRef = doc(firestore, 'children', childId, 'sessions', storySessionId);
+        batch.set(childSessionRef, newSessionData);
 
         const charactersRef = collection(firestore, 'characters');
         const newCharacterData = {
@@ -79,8 +86,12 @@ export default function StartWizardStoryPage() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         };
-        const newCharacterRef = await addDoc(charactersRef, newCharacterData);
-        await updateDoc(storySessionRef, { mainCharacterId: newCharacterRef.id });
+        const newCharacterRef = doc(collection(firestore, 'characters'));
+        batch.set(newCharacterRef, newCharacterData);
+        batch.update(storySessionRef, { mainCharacterId: newCharacterRef.id });
+        batch.update(childSessionRef, { mainCharacterId: newCharacterRef.id });
+
+        await batch.commit();
 
         router.push(`/story/wizard/${storySessionId}`);
 
