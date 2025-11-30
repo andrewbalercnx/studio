@@ -3,9 +3,9 @@
 
 import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { z } from 'genkit';
-import type { ChildProfile, Character } from '@/lib/types';
+import type { ChildProfile, Character, StoryBook } from '@/lib/types';
 
 // Schemas for the wizard flow
 const StoryWizardChoiceSchema = z.object({
@@ -39,6 +39,7 @@ const StoryWizardOutputSchema = z.discriminatedUnion('state', [
     title: z.string().describe('A suitable title for the generated story.'),
     vibe: z.string().describe('The overall vibe or genre of the story.'),
     storyText: z.string().describe('The complete, generated story text.'),
+    bookId: z.string().describe('The ID of the created StoryBook document.'),
     ok: z.literal(true),
   }),
   z.object({
@@ -150,7 +151,27 @@ INSTRUCTIONS:
           if (!parsed.title || !parsed.storyText || !parsed.vibe) {
             throw new Error('Missing required fields in story generation output.');
           }
-          return { state: 'finished', ok: true, ...parsed };
+
+          // Create the StoryBook document
+          const bookRef = doc(firestore, 'storyBooks', sessionId);
+          const bookPayload: StoryBook = {
+            storySessionId: sessionId,
+            childId,
+            parentUid: child.ownerParentUid,
+            storyText: parsed.storyText,
+            status: 'text_ready',
+            metadata: {
+              title: parsed.title,
+              vibe: parsed.vibe,
+            },
+            pageGeneration: { status: 'idle' },
+            imageGeneration: { status: 'idle' },
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          };
+          await setDoc(bookRef, bookPayload, { merge: true });
+
+          return { state: 'finished', ok: true, ...parsed, bookId: bookRef.id };
         } catch (e) {
           console.error("Failed to parse story generation JSON:", rawText, e);
           return { state: 'error', ok: false, error: 'The wizard had trouble writing the final story. Please try again.' };

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
@@ -54,6 +54,7 @@ export default function StoryWizardPage() {
           title: 'Story Complete!',
           description: 'Your magical story has been created.',
         });
+        // Redirect to the session page to view the compiled story and next steps
         router.push(`/story/session/${sessionId}`);
       }
     } catch (e: any) {
