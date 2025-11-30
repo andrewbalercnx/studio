@@ -8,8 +8,10 @@ import { z } from 'genkit';
 import type { StoryBook, StorySession, ChildProfile, Character } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { logSessionEvent } from '@/lib/session-events';
-import { resolveEntities, replacePlaceholders, getEntitiesInText } from '@/lib/resolve-placeholders';
+import { resolveEntities, replacePlaceholders } from '@/lib/resolve-placeholders';
 
+
+type EntityMap = Map<string, { displayName: string; document: Character | ChildProfile }>;
 
 type StoryPageFlowDiagnostics = {
   stage: 'init' | 'loading' | 'chunking' | 'building_pages' | 'done' | 'error';
@@ -47,6 +49,15 @@ const StoryPageFlowOutput = z.object({
 });
 
 type FlowPage = z.infer<typeof FlowPageSchema>;
+
+function getEntitiesInText(text: string, entityMap: EntityMap): Character[] {
+    if (!text) return [];
+    const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
+    const uniqueIds = [...new Set(ids)];
+    return uniqueIds
+        .map(id => entityMap.get(id)?.document)
+        .filter((doc): doc is Character => !!doc && 'displayName' in doc && 'role' in doc);
+}
 
 function splitSentences(storyText: string): string[] {
   if (!storyText || typeof storyText !== 'string') return [];
@@ -207,7 +218,6 @@ export const storyPageFlow = ai.defineFlow(
         displayText: replacePlaceholders(coverText, entityMap),
         imagePrompt: buildImagePrompt(`Front cover artwork for "${derivedTitle}"`, child, derivedTitle, coverEntities),
         imageUrl: choosePlaceholderImage(0),
-        imageStatus: 'pending',
         layoutHints: { aspectRatio: 'portrait', textPlacement: 'bottom' },
       });
 
@@ -221,7 +231,6 @@ export const storyPageFlow = ai.defineFlow(
           displayText: replacePlaceholders(text, entityMap),
           imagePrompt: buildImagePrompt(text, child, derivedTitle, entitiesOnPage),
           imageUrl: choosePlaceholderImage(index + 1),
-          imageStatus: 'pending',
           layoutHints: {
             aspectRatio: 'landscape',
             textPlacement: index % 2 === 0 ? 'bottom' : 'top',
@@ -238,7 +247,6 @@ export const storyPageFlow = ai.defineFlow(
         displayText: replacePlaceholders(backCoverText, entityMap),
         imagePrompt: buildImagePrompt(`Back cover illustration for "${derivedTitle}" showing a gentle closing scene`, child, derivedTitle, backCoverEntities),
         imageUrl: choosePlaceholderImage(pages.length),
-        imageStatus: 'pending',
         layoutHints: { aspectRatio: 'portrait', textPlacement: 'bottom' },
       });
 
