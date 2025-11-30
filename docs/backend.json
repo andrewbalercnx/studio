@@ -1,4 +1,5 @@
 
+
 {
   "entities": {
     "UserProfile": {
@@ -482,6 +483,17 @@
           "type": "string",
           "description": "Firebase auth uid of the child who owns this character."
         },
+        "displayName": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string",
+          "description": "A full description of the character."
+        },
+        "relatedTo": {
+          "type": "string",
+          "description": "Optional: ID of the child this character is primarily associated with."
+        },
         "sessionId": {
           "type": "string",
           "description": "Optional: specific story session this character is tied to."
@@ -489,15 +501,11 @@
         "role": {
           "type": "string",
           "enum": [
-            "child",
             "family",
             "friend",
             "pet",
-            "other"
+            "toy"
           ]
-        },
-        "name": {
-          "type": "string"
         },
         "realPersonRef": {
           "type": "object",
@@ -544,6 +552,10 @@
             }
           }
         },
+        "avatarUrl": {
+          "type": "string",
+          "format": "uri"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -557,7 +569,7 @@
         "id",
         "ownerChildId",
         "role",
-        "name",
+        "displayName",
         "createdAt",
         "updatedAt"
       ]
@@ -648,8 +660,7 @@
             "toy",
             "pet",
             "friend",
-            "family",
-            "other"
+            "family"
           ],
           "description": "The kind of the new character."
         }

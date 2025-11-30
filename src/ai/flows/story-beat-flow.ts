@@ -26,7 +26,7 @@ const StoryBeatOutputSchema = z.object({
     text: z.string().describe("A short, child-friendly choice for what happens next."),
     introducesCharacter: z.boolean().optional().describe("Set to true if this option clearly brings a new character into the story."),
     newCharacterLabel: z.string().optional().nullable().describe("If introducesCharacter is true, a short noun phrase for the character (e.g., 'a friendly mailman')."),
-    newCharacterKind: z.enum(['toy', 'pet', 'friend', 'family', 'other']).optional().nullable().describe("If introducesCharacter is true, the kind of character."),
+    newCharacterKind: z.enum(['toy', 'pet', 'friend', 'family']).optional().nullable().describe("If introducesCharacter is true, the kind of character."),
     existingCharacterId: z.string().optional().nullable().describe("If this choice is about an existing character, provide their ID here."),
     avatarUrl: z.string().optional().nullable().describe("If this choice is about an existing character, provide their avatar URL here."),
   })).min(3).max(3).describe("An array of exactly 3 choices for the child.")
@@ -40,7 +40,7 @@ const StoryBeatOutputSchemaDescription = JSON.stringify({
       text: 'string',
       introducesCharacter: 'boolean (optional)',
       newCharacterLabel: 'string | null (required when introducesCharacter is true)',
-      newCharacterKind: "'toy' | 'pet' | 'friend' | 'family' | 'other' (required when introducesCharacter is true)",
+      newCharacterKind: "'toy' | 'pet' | 'friend' | 'family' (required when introducesCharacter is true)",
       existingCharacterId: 'string | null (optional)',
       avatarUrl: 'string | null (optional)',
     },
@@ -117,7 +117,7 @@ export const storyBeatFlow = ai.defineFlow(
             );
             const charactersSnapshot = await getDocs(charactersQuery);
             const existingCharacters = charactersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Character));
-            const existingCharacterSummary = existingCharacters.map(c => `- ${c.name} (ID: ${c.id}, Role: ${c.role})`).join('\n');
+            const existingCharacterSummary = existingCharacters.map(c => `- ${c.displayName} (ID: ${c.id}, Role: ${c.role})`).join('\n');
             debug.details.existingCharacterCount = existingCharacters.length;
             debug.details.existingCharacterSummary = existingCharacterSummary;
 
@@ -148,7 +148,7 @@ Your goal is to present up to 3 choices. One of those choices should be to intro
 - For each option, you MUST decide if it introduces a new character.
 - Set 'introducesCharacter' to true if the option brings in a new person, animal, or talking object who could appear again.
   - Examples: "a new friend", "a talking squirrel", "a kind robot".
-  - If true, you MUST also provide a 'newCharacterLabel' (e.g., "a talking squirrel") and a 'newCharacterKind' ('toy', 'pet', 'friend', 'family', or 'other').
+  - If true, you MUST also provide a 'newCharacterLabel' (e.g., "a talking squirrel") and a 'newCharacterKind' ('toy', 'pet', 'friend', or 'family').
 - Set 'introducesCharacter' to false if the option is just an action or observation.
   - Examples: "he sings a song", "the sun shines brighter", "he finds a shiny rock".
 
@@ -164,7 +164,7 @@ ${existingCharacterSummary || "No existing characters available."}
 STORY SO FAR:
 ${storySoFar}
 
-Based on all the above, continue the story. Generate the next paragraph and three choices for the child. Output your response as a single, valid JSON object that matches this structure:
+Based on all the above, continue the story. Generate the next paragraph and three choices for the child. Use placeholders like '$$childId$$' or '$$characterId$$' instead of names. Output your response as a single, valid JSON object that matches this structure:
 ${StoryBeatOutputSchemaDescription}
 Important: Return only a single JSON object. Do not include any extra text, explanation, or formatting. Do not wrap the JSON in markdown or code fences. The output must start with { and end with }.
 `;

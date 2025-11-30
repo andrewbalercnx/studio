@@ -25,7 +25,7 @@ export type Choice = {
     value?: string;
     introducesCharacter?: boolean;
     newCharacterLabel?: string | null;
-    newCharacterKind?: 'toy' | 'pet' | 'friend' | 'family' | 'other' | null;
+    newCharacterKind?: 'toy' | 'pet' | 'friend' | 'family' | null;
     existingCharacterId?: string | null;
     avatarUrl?: string | null;
 };
@@ -359,10 +359,12 @@ export type StoryType = {
 
 export type Character = {
     id: string;
-    ownerChildId: string;
-    sessionId?: string;
-    role: 'child' | 'family' | 'friend' | 'pet' | 'other';
-    name: string;
+    ownerChildId: string; // The child who 'owns' or created this character
+    displayName: string;
+    role: 'family' | 'friend' | 'pet' | 'toy';
+    description?: string; // AI-generated or parent-edited description
+    relatedTo?: string; // Optional: childId this character is primarily associated with
+    sessionId?: string; // Optional: specific story session this character is tied to
     realPersonRef?: {
         kind: 'self' | 'family' | 'friend';
         label: string;
@@ -375,12 +377,14 @@ export type Character = {
         specialItem?: string;
         styleHint?: string;
     };
+    avatarUrl?: string;
     createdAt: Timestamp;
     updatedAt: Timestamp;
     // New optional fields for tracking source
     introducedFromOptionId?: string;
     introducedFromMessageId?: string;
 };
+
 
 export type StoryOutputType = {
     id: string;

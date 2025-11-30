@@ -50,7 +50,7 @@ export const characterTraitsFlow = ai.defineFlow(
             }
             const character = characterDoc.data() as Character;
             debug.characterExists = true;
-            debug.characterName = character.name;
+            debug.characterName = character.displayName;
             debug.characterRole = character.role;
 
 
@@ -92,7 +92,7 @@ ${systemPrompt}
 ${modeInstructions}
 
 CONTEXT:
-Character Name: ${character.name}
+Character Name: ${character.displayName}
 Character Kind: ${character.role}
 Existing Traits: ${character.traits?.join(', ') || 'none'}
 Story So Far:

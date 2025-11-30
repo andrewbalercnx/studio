@@ -12,12 +12,11 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Character } from '@/lib/types';
 
-const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>[] = [
+const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt' | 'ownerChildId'>[] = [
     {
-        ownerChildId: "sample-child-1",
         sessionId: "sample-session-1",
-        role: "child",
-        name: "Sample Hero",
+        role: "family",
+        displayName: "Sample Hero",
         realPersonRef: {
             kind: "self",
             label: "You"
@@ -30,10 +29,9 @@ const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>[] = [
         }
     },
     {
-        ownerChildId: "sample-child-1",
         sessionId: "sample-session-1",
         role: "family",
-        name: "Sample Grown-Up",
+        displayName: "Sample Grown-Up",
         realPersonRef: {
             kind: "family",
             label: "Grown-up helper"
@@ -41,10 +39,9 @@ const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>[] = [
         traits: ["kind", "big"],
     },
     {
-        ownerChildId: "sample-child-1",
         sessionId: "sample-session-1",
         role: "friend",
-        name: "Sample Friend",
+        displayName: "Sample Friend",
         realPersonRef: {
             kind: "friend",
             label: "Friend from school"
@@ -106,7 +103,7 @@ export default function AdminCharactersPage() {
         sampleCharacters.forEach((charData, index) => {
             const docId = sampleCharacterIds[index];
             const docRef = doc(firestore, "characters", docId);
-            batch.set(docRef, { ...charData, createdAt: now, updatedAt: now });
+            batch.set(docRef, { ...charData, ownerChildId: 'sample-child-1', createdAt: now, updatedAt: now });
         });
         
         await batch.commit();
@@ -238,7 +235,7 @@ export default function AdminCharactersPage() {
                       <TableCell className="font-mono text-xs">{char.ownerChildId}</TableCell>
                       <TableCell className="font-mono text-xs">{char.sessionId || '-'}</TableCell>
                       <TableCell>{char.role}</TableCell>
-                      <TableCell>{char.name}</TableCell>
+                      <TableCell>{char.displayName}</TableCell>
                       <TableCell className="text-xs">{getTraitsSummary(char)}</TableCell>
                       <TableCell>
                           <Button 
