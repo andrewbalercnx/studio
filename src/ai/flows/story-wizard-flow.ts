@@ -1,3 +1,4 @@
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -7,7 +8,7 @@ import { z } from 'genkit';
 import type { ChildProfile, Character } from '@/lib/types';
 
 // Schemas for the wizard flow
-export const StoryWizardChoiceSchema = z.object({
+const StoryWizardChoiceSchema = z.object({
   text: z.string().describe('A short, child-friendly option for the story.'),
 });
 export type StoryWizardChoice = z.infer<typeof StoryWizardChoiceSchema>;
@@ -16,15 +17,16 @@ const StoryWizardAnswerSchema = z.object({
   question: z.string(),
   answer: z.string(),
 });
+export type StoryWizardAnswer = z.infer<typeof StoryWizardAnswerSchema>;
 
-export const StoryWizardInputSchema = z.object({
+const StoryWizardInputSchema = z.object({
   childId: z.string(),
   sessionId: z.string(),
   answers: z.array(StoryWizardAnswerSchema).optional().default([]),
 });
 export type StoryWizardInput = z.infer<typeof StoryWizardInputSchema>;
 
-export const StoryWizardOutputSchema = z.discriminatedUnion('state', [
+const StoryWizardOutputSchema = z.discriminatedUnion('state', [
   z.object({
     state: z.literal('asking'),
     question: z.string().describe('The next question to ask the child.'),
@@ -63,7 +65,7 @@ function getChildAgeYears(child?: ChildProfile | null): number | null {
   return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
 }
 
-export const storyWizardFlow = ai.defineFlow(
+const storyWizardFlowInternal = ai.defineFlow(
   {
     name: 'storyWizardFlow',
     inputSchema: StoryWizardInputSchema,
@@ -207,3 +209,7 @@ INSTRUCTIONS:
     }
   }
 );
+
+export async function storyWizardFlow(input: StoryWizardInput): Promise<StoryWizardOutput> {
+    return await storyWizardFlowInternal(input);
+}
