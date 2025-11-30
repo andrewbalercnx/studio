@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
@@ -76,6 +77,8 @@ export default function StoryWizardPage() {
 
   const handleSelectChoice = (choice: StoryWizardChoice) => {
     if (!session || !wizardState || isProcessing) return;
+
+    if (wizardState.state !== 'asking') return;
 
     const currentAnswers = wizardState.answers || [];
     const newAnswers = [...currentAnswers, { question: wizardState.question!, answer: choice.text }];
