@@ -1,3 +1,4 @@
+
 'use client';
 
 import { use, useEffect, useMemo } from 'react';
@@ -30,10 +31,12 @@ function ChildStoryCard({ story, storyBook, bookLoading }: { story: StorySession
   const isLocked = storyBook?.isLocked ?? false;
   const finalStatus = storyBook?.storybookFinalization?.status;
   const isCelebratory = isLocked || finalStatus === 'finalized' || finalStatus === 'printable_ready' || finalStatus === 'ordered';
+  const cardTitle = storyBook?.metadata?.title || story.storyTitle || 'Your Adventure';
+
   return (
     <Card className="flex flex-col border-2 border-primary/20 bg-primary/5">
       <CardHeader>
-        <CardTitle className="text-xl">{story.storyTitle || 'Your Adventure'}</CardTitle>
+        <CardTitle className="text-xl">{cardTitle}</CardTitle>
         <CardDescription>Created {formatDistanceToNow(createdAt, { addSuffix: true })}</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow">
@@ -338,3 +341,5 @@ export default function ChildExperiencePage({ params }: { params: Promise<{ chil
     </>
   );
 }
+
+    

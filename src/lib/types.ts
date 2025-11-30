@@ -58,7 +58,7 @@ export type StorySession = {
     // The overall status of the story session.
     status: 'in_progress' | 'completed';
     // The current phase of the story creation process.
-    currentPhase: 'warmup' | 'story' | 'ending' | 'final';
+    currentPhase: 'warmup' | 'story' | 'ending' | 'final' | 'wizard';
     currentStepIndex: number;
     storyTitle?: string;
     storyVibe?: string;
@@ -83,6 +83,7 @@ export type StorySession = {
     };
     selectedEndingId?: string;
     selectedEndingText?: string;
+    storyOutputTypeId?: string;
     progress?: {
       warmupCompletedAt?: any;
       storyTypeChosenAt?: any;
@@ -185,9 +186,13 @@ export type StoryBook = {
   parentUid: string;
   storyText: string;
   metadata?: {
+    title?: string;
+    vibe?: string;
     paragraphs?: number;
     estimatedPages?: number;
     artStyleHint?: string;
+    storyOutputTypeId?: string;
+    storyOutputTypeName?: string;
     [key: string]: unknown;
   };
   status?: StoryBookStatus;
@@ -225,7 +230,7 @@ export type StoryBookPage = {
     kind: 'cover_front' | 'cover_back' | 'text' | 'image';
     title?: string;
     bodyText?: string;
-    readableText?: string;
+    displayText?: string;
     imagePrompt?: string;
     imageUrl?: string;
     imageStatus?: 'pending' | 'generating' | 'ready' | 'error';
@@ -362,10 +367,10 @@ export type Character = {
     id: string;
     ownerChildId: string; // The child who 'owns' or created this character
     displayName: string;
+    description?: string;
+    relatedTo?: string;
+    sessionId?: string;
     role: 'family' | 'friend' | 'pet' | 'toy';
-    description?: string; // AI-generated or parent-edited description
-    relatedTo?: string; // Optional: childId this character is primarily associated with
-    sessionId?: string; // Optional: specific story session this character is tied to
     realPersonRef?: {
         kind: 'self' | 'family' | 'friend';
         label: string;
@@ -419,6 +424,15 @@ export type HelpWizardPage = {
   route: string;
 };
 
+export type StoryWizardAnswer = {
+  question: string;
+  answer: string;
+};
+
+export type StoryWizardChoice = {
+  text: string;
+};
+
 export type HelpWizard = {
   id: string;
   title: string;
@@ -427,3 +441,5 @@ export type HelpWizard = {
   createdAt: any;
   updatedAt: any;
 };
+
+    

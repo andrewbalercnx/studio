@@ -1,3 +1,4 @@
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -23,7 +24,7 @@ const FlowPageSchema = z.object({
   kind: z.enum(['cover_front', 'cover_back', 'text', 'image']),
   title: z.string().optional(),
   bodyText: z.string().optional(),
-  readableText: z.string().optional(),
+  displayText: z.string().optional(),
   imagePrompt: z.string().optional(),
   imageUrl: z.string().optional(),
   layoutHints: PageLayoutSchema.optional(),
@@ -241,7 +242,7 @@ export const storyPageFlow = ai.defineFlow(
         kind: 'cover_front',
         title: derivedTitle,
         bodyText: coverText,
-        readableText: replacePlaceholders(coverText, entityMap),
+        displayText: replacePlaceholders(coverText, entityMap),
         imagePrompt: buildImagePrompt(`Front cover artwork for "${derivedTitle}"`, child, derivedTitle, coverEntities),
         imageUrl: choosePlaceholderImage(0),
         imageStatus: 'pending',
@@ -255,7 +256,7 @@ export const storyPageFlow = ai.defineFlow(
           pageNumber: pageNumber++,
           kind: 'text',
           bodyText: text,
-          readableText: replacePlaceholders(text, entityMap),
+          displayText: replacePlaceholders(text, entityMap),
           imagePrompt: buildImagePrompt(text, child, derivedTitle, entitiesOnPage),
           imageUrl: choosePlaceholderImage(index + 1),
           imageStatus: 'pending',
@@ -272,7 +273,7 @@ export const storyPageFlow = ai.defineFlow(
         pageNumber: pageNumber++,
         kind: 'cover_back',
         bodyText: backCoverText,
-        readableText: replacePlaceholders(backCoverText, entityMap),
+        displayText: replacePlaceholders(backCoverText, entityMap),
         imagePrompt: buildImagePrompt(`Back cover illustration for "${derivedTitle}" showing a gentle closing scene`, child, derivedTitle, backCoverEntities),
         imageUrl: choosePlaceholderImage(pages.length),
         imageStatus: 'pending',
@@ -329,3 +330,5 @@ export const storyPageFlow = ai.defineFlow(
     }
   }
 );
+
+    

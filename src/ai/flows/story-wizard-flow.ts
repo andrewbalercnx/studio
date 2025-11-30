@@ -5,26 +5,39 @@ import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
 import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { z } from 'genkit';
-import type { ChildProfile, Character, StoryBook } from '@/lib/types';
+import type { ChildProfile, Character, StoryBook, StoryWizardAnswer, StoryWizardChoice, StoryWizardInput, StoryWizardOutput } from '@/lib/types';
 
-// Schemas for the wizard flow
+
+// Helper to get child's age in years
+function getChildAgeYears(child?: ChildProfile | null): number | null {
+  if (!child?.dateOfBirth) return null;
+  let dob: Date | null = null;
+  if (typeof (child.dateOfBirth as any).toDate === 'function') {
+    dob = (child.dateOfBirth as any).toDate();
+  } else {
+    const parsed = new Date(child.dateOfBirth as any);
+    dob = isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (!dob) return null;
+  const diff = Date.now() - dob.getTime();
+  if (diff <= 0) return null;
+  return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
+}
+
 const StoryWizardChoiceSchema = z.object({
   text: z.string().describe('A short, child-friendly option for the story.'),
 });
-export type StoryWizardChoice = z.infer<typeof StoryWizardChoiceSchema>;
 
 const StoryWizardAnswerSchema = z.object({
   question: z.string(),
   answer: z.string(),
 });
-export type StoryWizardAnswer = z.infer<typeof StoryWizardAnswerSchema>;
 
 const StoryWizardInputSchema = z.object({
   childId: z.string(),
   sessionId: z.string(),
   answers: z.array(StoryWizardAnswerSchema).optional().default([]),
 });
-export type StoryWizardInput = z.infer<typeof StoryWizardInputSchema>;
 
 const StoryWizardOutputSchema = z.discriminatedUnion('state', [
   z.object({
@@ -48,23 +61,7 @@ const StoryWizardOutputSchema = z.discriminatedUnion('state', [
     ok: z.literal(false),
   }),
 ]);
-export type StoryWizardOutput = z.infer<typeof StoryWizardOutputSchema>;
 
-// Helper to get child's age in years
-function getChildAgeYears(child?: ChildProfile | null): number | null {
-  if (!child?.dateOfBirth) return null;
-  let dob: Date | null = null;
-  if (typeof (child.dateOfBirth as any).toDate === 'function') {
-    dob = (child.dateOfBirth as any).toDate();
-  } else {
-    const parsed = new Date(child.dateOfBirth as any);
-    dob = isNaN(parsed.getTime()) ? null : parsed;
-  }
-  if (!dob) return null;
-  const diff = Date.now() - dob.getTime();
-  if (diff <= 0) return null;
-  return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
-}
 
 const storyWizardFlowInternal = ai.defineFlow(
   {
@@ -234,3 +231,5 @@ INSTRUCTIONS:
 export async function storyWizardFlow(input: StoryWizardInput): Promise<StoryWizardOutput> {
     return await storyWizardFlowInternal(input);
 }
+
+    

@@ -59,9 +59,6 @@ export default function CompiledStoryBookPage() {
   const [imageGenerationError, setImageGenerationError] = useState<string | null>(null);
   const [imageLogs, setImageLogs] = useState<string[]>([]);
 
-  const paragraphs = storyBook?.storyText
-    ? storyBook.storyText.split(/\n\s*\n/).filter((block) => block.trim().length > 0)
-    : [];
   const pageStatus = storyBook?.pageGeneration?.status ?? 'idle';
   const lastCompletedAt = (storyBook?.pageGeneration?.lastCompletedAt as any)?.toDate?.();
   const lastRunAt = (storyBook?.pageGeneration?.lastRunAt as any)?.toDate?.();
@@ -176,11 +173,15 @@ export default function CompiledStoryBookPage() {
                 )}
               </div>
               <div className="space-y-4 leading-relaxed text-lg">
-                {paragraphs.length > 0
-                  ? paragraphs.map((paragraph, idx) => (
-                      <p key={idx}>{paragraph.trim()}</p>
-                    ))
-                  : <p>{storyBook.storyText}</p>}
+                {pages && pages.length > 0 ? (
+                  pages
+                    .filter((page) => page.displayText)
+                    .map((page) => <p key={page.id}>{page.displayText}</p>)
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    Generate pages to see the full, readable story text here. The raw compiled text below may contain placeholders.
+                  </p>
+                )}
               </div>
               <div className="space-y-4 border-t pt-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -303,7 +304,7 @@ export default function CompiledStoryBookPage() {
                             </div>
                           )}
                           {page.bodyText && (
-                            <p className="text-sm leading-relaxed">{page.bodyText}</p>
+                            <p className="text-sm leading-relaxed">{page.displayText}</p>
                           )}
                           {page.imagePrompt && (
                             <p className="text-xs text-muted-foreground">
@@ -352,3 +353,5 @@ export default function CompiledStoryBookPage() {
     </div>
   );
 }
+
+    
