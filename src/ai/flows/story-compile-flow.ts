@@ -66,7 +66,7 @@ export const storyCompileFlow = ai.defineFlow(
                 getDoc(childRef),
                 getDoc(storyTypeRef),
                 getDocs(charactersQuery),
-                getDocs(messagesSnapshot),
+                getDocs(messagesQuery),
             ]);
             
             if (!storyTypeDoc.exists()) throw new Error(`StoryType with id ${storyTypeId} not found.`);
@@ -84,11 +84,11 @@ export const storyCompileFlow = ai.defineFlow(
 
             // 3. Build story skeleton for the prompt
             debug.stage = 'building_prompt';
-            const characterRoster = characters.map(c => `- ${c.name} (${c.role}, traits: ${c.traits?.join(', ') || 'none'})`).join('\n');
+            const characterRoster = characters.map(c => `- ${c.displayName} (${c.role}, traits: ${c.traits?.join(', ') || 'none'})`).join('\n');
             const storySoFar = messages
                 .filter(m => m.kind !== 'beat_options' && m.kind !== 'character_traits_question') // Exclude non-narrative prompts
                 .map(m => {
-                    const prefix = m.sender === 'child' ? `${childProfile?.displayName || 'Child'}:` : 'Story Guide:';
+                    const prefix = m.sender === 'child' ? `$$${childId}$$:` : 'Story Guide:';
                     return `${prefix} ${m.text}`;
                 })
                 .join('\n');
@@ -100,7 +100,7 @@ ${systemPrompt}
 
 **Story Context:**
 - **Story Type:** ${storyType.name} (${storyType.shortDescription})
-- **Main Character:** ${characters.find(c => c.role === 'child')?.name || 'The hero'}
+- **Main Character:** ${characters.find(c => c.role === 'child')?.displayName || 'The hero'}
 - **Child Preferences:** 
 ${childPreferenceSummary}
 - **Other Characters:**
