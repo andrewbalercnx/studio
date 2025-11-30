@@ -40,14 +40,14 @@ async function fetchEntities(ids: string[]): Promise<EntityMap> {
   return entityMap;
 }
 
-export function replacePlaceholders(text: string, entityMap: EntityMap): string {
+function replacePlaceholders(text: string, entityMap: EntityMap): string {
     if (!text) return '';
     return text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
         return entityMap.get(id)?.displayName || match;
     });
 }
 
-export function getEntitiesInText(text: string, entityMap: EntityMap): Character[] {
+function getEntitiesInText(text: string, entityMap: EntityMap): Character[] {
     if (!text) return [];
     const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
     const uniqueIds = [...new Set(ids)];
