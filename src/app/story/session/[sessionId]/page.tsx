@@ -10,7 +10,7 @@ import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles, Star, Copy, Image
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
 import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion, DocumentReference, getDoc, deleteField, increment, where } from 'firebase/firestore';
-import type { StorySession, ChatMessage as Message, Choice, Character, StoryType, StoryBook, ChildProfile } from '@/lib/types';
+import type { StorySession, ChatMessage as Message, Choice, Character, StoryType, StoryBook, ChildProfile, StoryOutputType } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +18,8 @@ import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Badge } from '@/components/ui/badge';
 import { logSessionEvent } from '@/lib/session-events';
 import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 
 type WarmupGenkitDiagnostics = {
@@ -157,6 +159,8 @@ export default function StorySessionPage() {
     const [pagesError, setPagesError] = useState<string | null>(null);
     const [hasTriggeredCompile, setHasTriggeredCompile] = useState(false);
 
+    const [selectedOutputTypeId, setSelectedOutputTypeId] = useState<string>('');
+
 
     const [beatDiagnostics, setBeatDiagnostics] = useState<BeatGenkitDiagnostics>({
         lastBeatOk: null,
@@ -204,6 +208,8 @@ export default function StorySessionPage() {
     const { data: childProfile } = useDocument<ChildProfile>(childRef);
     const storyTypesQuery = useMemo(() => firestore ? query(collection(firestore, 'storyTypes'), where('status', '==', 'live')) : null, [firestore]);
     const { data: storyTypes } = useCollection<StoryType>(storyTypesQuery);
+    const storyOutputTypesQuery = useMemo(() => firestore ? query(collection(firestore, 'storyOutputTypes'), where('status', '==', 'live')) : null, [firestore]);
+    const { data: storyOutputTypes, loading: outputTypesLoading } = useCollection<StoryOutputType>(storyOutputTypesQuery);
     const childAge = useMemo(() => getChildAgeYears(childProfile), [childProfile]);
     const preferenceKeywords = useMemo(() => buildPreferenceKeywords(childProfile), [childProfile]);
     const curatedStoryTypes = useMemo(() => {
@@ -250,6 +256,12 @@ export default function StorySessionPage() {
     const currentStoryPhaseId = session?.storyPhaseId ?? null;
     const currentArcStepIndex = typeof session?.arcStepIndex === 'number' ? session.arcStepIndex : null;
     const pendingCharacterTraits = session?.pendingCharacterTraits ?? null;
+
+    useEffect(() => {
+        if (storyOutputTypes && storyOutputTypes.length > 0 && !selectedOutputTypeId) {
+            setSelectedOutputTypeId(storyOutputTypes[0].id);
+        }
+    }, [storyOutputTypes, selectedOutputTypeId]);
 
     useEffect(() => {
         setCharacterTraitsDiagnostics(prev => ({
@@ -739,14 +751,19 @@ export default function StorySessionPage() {
         if (!sessionRef || !firestore) return;
         if (isCompiling) return;
         if (session?.status === 'completed' && storyBook) return;
+        if (!selectedOutputTypeId) {
+            toast({ title: 'Please select an output type', variant: 'destructive' });
+            return;
+        }
+
         setIsCompiling(true);
         setCompileError(null);
         try {
-            await logClientStage('compile.started', {});
+            await logClientStage('compile.started', { storyOutputTypeId: selectedOutputTypeId });
             const response = await fetch('/api/storyCompile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId }),
+                body: JSON.stringify({ sessionId, storyOutputTypeId: selectedOutputTypeId }),
             });
             const result = await response.json();
             if (!response.ok || !result?.ok) {
@@ -760,7 +777,7 @@ export default function StorySessionPage() {
         } finally {
             setIsCompiling(false);
         }
-    }, [sessionRef, firestore, isCompiling, session?.status, storyBook, sessionId, logClientStage, toast]);
+    }, [sessionRef, firestore, isCompiling, session?.status, storyBook, sessionId, logClientStage, toast, selectedOutputTypeId]);
 
     const handleGeneratePages = async () => {
         if (!storyBook) {
@@ -943,6 +960,25 @@ export default function StorySessionPage() {
                     <CardDescription>Follow these steps to turn the story into a shareable picture book.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="output-type-select">Output Format</Label>
+                        <Select value={selectedOutputTypeId} onValueChange={setSelectedOutputTypeId} disabled={outputTypesLoading || !storyOutputTypes}>
+                            <SelectTrigger id="output-type-select">
+                                <SelectValue placeholder={outputTypesLoading ? "Loading formats..." : "Select a format"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {storyOutputTypes?.map((type) => (
+                                    <SelectItem key={type.id} value={type.id}>
+                                        {type.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {storyOutputTypes?.find(t => t.id === selectedOutputTypeId)?.shortDescription && (
+                            <p className="text-xs text-muted-foreground">{storyOutputTypes.find(t => t.id === selectedOutputTypeId)?.shortDescription}</p>
+                        )}
+                    </div>
+
                     <div className="flex items-center justify-between gap-4">
                         <div>
                             <p className="font-semibold">1. Compile Story Text</p>
@@ -951,7 +987,7 @@ export default function StorySessionPage() {
                         </div>
                         <div className="flex items-center gap-2">
                             {statusBadge(compileStatus)}
-                            <Button size="sm" variant="outline" onClick={triggerCompile} disabled={compileStatus === 'ready' || isCompiling}>
+                            <Button size="sm" variant="outline" onClick={triggerCompile} disabled={compileStatus === 'ready' || isCompiling || !selectedOutputTypeId}>
                                 {isCompiling ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
                                 {compileStatus === 'ready' ? 'Compiled' : 'Compile'}
                             </Button>

@@ -4,13 +4,16 @@ import { storyCompileFlow } from '@/ai/flows/story-compile-flow';
 
 export async function POST(request: Request) {
     try {
-        const { sessionId } = await request.json();
+        const { sessionId, storyOutputTypeId } = await request.json();
 
         if (!sessionId) {
             return NextResponse.json({ ok: false, errorMessage: 'Missing sessionId' }, { status: 400 });
         }
+        if (!storyOutputTypeId) {
+            return NextResponse.json({ ok: false, errorMessage: 'Missing storyOutputTypeId' }, { status: 400 });
+        }
 
-        const result = await storyCompileFlow({ sessionId });
+        const result = await storyCompileFlow({ sessionId, storyOutputTypeId });
 
         if (result.ok) {
             return NextResponse.json(result, { status: 200 });

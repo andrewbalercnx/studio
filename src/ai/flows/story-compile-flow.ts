@@ -9,7 +9,7 @@ import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
 import { getDoc, doc, collection, getDocs, query, orderBy, where, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { z } from 'genkit';
-import type { StorySession, ChatMessage, StoryType, Character, ChildProfile } from '@/lib/types';
+import type { StorySession, ChatMessage, StoryType, Character, ChildProfile, StoryOutputType } from '@/lib/types';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
 import { logSessionEvent } from '@/lib/session-events';
 
@@ -30,11 +30,11 @@ const StoryCompileResultSchema = z.object({
 export const storyCompileFlow = ai.defineFlow(
     {
         name: 'storyCompileFlow',
-        inputSchema: z.object({ sessionId: z.string() }),
+        inputSchema: z.object({ sessionId: z.string(), storyOutputTypeId: z.string() }),
         outputSchema: z.any(), // Using any to allow for custom error/success shapes
     },
-    async ({ sessionId }) => {
-        let debug: StoryCompileDebugInfo = { stage: 'init', details: { sessionId } };
+    async ({ sessionId, storyOutputTypeId }) => {
+        let debug: StoryCompileDebugInfo = { stage: 'init', details: { sessionId, storyOutputTypeId } };
 
         try {
             const { firestore } = initializeFirebase();
@@ -59,26 +59,31 @@ export const storyCompileFlow = ai.defineFlow(
             debug.stage = 'loading_dependencies';
             const childRef = doc(firestore, 'children', childId);
             const storyTypeRef = doc(firestore, 'storyTypes', storyTypeId);
+            const storyOutputTypeRef = doc(firestore, 'storyOutputTypes', storyOutputTypeId);
             const charactersQuery = query(collection(firestore, 'characters'), where('sessionId', '==', sessionId));
             const messagesQuery = query(collection(firestore, 'storySessions', sessionId, 'messages'), orderBy('createdAt', 'asc'));
 
-            const [childDoc, storyTypeDoc, charactersSnapshot, messagesSnapshot] = await Promise.all([
+            const [childDoc, storyTypeDoc, storyOutputTypeDoc, charactersSnapshot, messagesSnapshot] = await Promise.all([
                 getDoc(childRef),
                 getDoc(storyTypeRef),
+                getDoc(storyOutputTypeRef),
                 getDocs(charactersQuery),
-                getDocs(messagesQuery),
+                getDocs(messagesSnapshot),
             ]);
             
             if (!storyTypeDoc.exists()) throw new Error(`StoryType with id ${storyTypeId} not found.`);
+            if (!storyOutputTypeDoc.exists()) throw new Error(`StoryOutputType with id ${storyOutputTypeId} not found.`);
             
             const childProfile = childDoc.exists() ? childDoc.data() as ChildProfile : null;
             const storyType = storyTypeDoc.data() as StoryType;
+            const storyOutputType = storyOutputTypeDoc.data() as StoryOutputType;
             const characters = charactersSnapshot.docs.map(d => d.data() as Character);
             const messages = messagesSnapshot.docs.map(d => d.data() as ChatMessage);
             const childPreferenceSummary = summarizeChildPreferences(childProfile);
 
             debug.details.childName = childProfile?.displayName;
             debug.details.storyTypeName = storyType.name;
+            debug.details.storyOutputTypeName = storyOutputType.name;
             debug.details.characterCount = characters.length;
             debug.details.messageCount = messages.length;
 
@@ -98,6 +103,11 @@ export const storyCompileFlow = ai.defineFlow(
             const finalPrompt = `
 ${systemPrompt}
 
+**Output Style Requirements:**
+- **Target Format:** A ${storyOutputType.name} (${storyOutputType.shortDescription})
+- **AI Hints:** ${storyOutputType.aiHints?.style || 'Standard picture book prose.'}
+${storyOutputType.aiHints?.allowRhyme ? '- The output MUST rhyme.' : ''}
+
 **Story Context:**
 - **Story Type:** ${storyType.name} (${storyType.shortDescription})
 - **Main Character:** ${characters.find(c => c.role === 'child')?.displayName || 'The hero'}
@@ -110,7 +120,7 @@ ${characterRoster}
 ${storySoFar}
 
 **Your Task:**
-Based on the session log and context, rewrite the entire interaction into a single, coherent story. The story should flow from beginning to end without any interruptions.
+Based on the session log and context, rewrite the entire interaction into a single, coherent story. The story should flow from beginning to end without any interruptions. Pay close attention to the **Output Style Requirements**.
 
 **Output Format (Crucial):**
 You MUST return a single JSON object matching this exact shape. Do not include any markdown, code fences, or explanatory text.
@@ -179,6 +189,7 @@ Now, generate the JSON object containing the compiled story.
                 status: 'completed',
                 finalStoryText: storyText,
                 updatedAt: serverTimestamp(),
+                storyOutputTypeId: storyOutputTypeId, // Save the selected output type
             });
             debug.details.phaseCorrected = `Set currentPhase to 'final' and status to 'completed'`;
 
@@ -198,10 +209,13 @@ Now, generate the JSON object containing the compiled story.
                 status: 'text_ready',
                 updatedAt: now,
                 createdAt: createdAtValue,
+                'metadata.storyOutputTypeId': storyOutputTypeId,
+                'metadata.storyOutputTypeName': storyOutputType.name,
+                'metadata.artStyleHint': storyOutputType.aiHints?.style,
             };
 
             if (metadata) {
-                bookPayload.metadata = metadata;
+                bookPayload.metadata = {...(bookPayload.metadata || {}), ...metadata};
             }
 
             if (!existingBookSnap.exists() || !existingBookSnap.data()?.pageGeneration) {
@@ -222,6 +236,7 @@ Now, generate the JSON object containing the compiled story.
                 source: 'server',
                 attributes: {
                     storyTypeId,
+                    storyOutputTypeId,
                     bookId: bookRef.id,
                     storyLength: storyText.length,
                 },
