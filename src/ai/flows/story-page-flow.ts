@@ -5,7 +5,7 @@ import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { z } from 'genkit';
-import type { StoryBook, StorySession, ChildProfile, Character } from '@/lib/types';
+import type { StoryBook, StorySession, ChildProfile, Character, StoryBookPage as StoryBookPageType } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { logSessionEvent } from '@/lib/session-events';
 import { resolveEntities, replacePlaceholders } from '@/lib/resolve-placeholders';
