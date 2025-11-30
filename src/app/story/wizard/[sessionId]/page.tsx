@@ -41,7 +41,7 @@ export default function StoryWizardPage() {
       }
       setWizardState(result);
       if (result.state === 'finished' && result.storyText) {
-        if (sessionRef) {
+        if (sessionRef && session) {
           await updateDoc(sessionRef, {
             status: 'completed',
             storyTitle: result.title || session?.storyTitle || 'A Magical Story',
@@ -54,8 +54,8 @@ export default function StoryWizardPage() {
           title: 'Story Complete!',
           description: 'Your magical story has been created.',
         });
-        // Redirect to the session page to view the compiled story and next steps
-        router.push(`/story/session/${sessionId}`);
+        // Redirect to the child's dashboard to see the new story
+        router.push(`/child/${session?.childId}`);
       }
     } catch (e: any) {
       setError(e.message || 'An unexpected error occurred in the story wizard.');
