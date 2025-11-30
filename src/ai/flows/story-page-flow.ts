@@ -34,20 +34,6 @@ const FlowPageSchema = z.object({
   layoutHints: PageLayoutSchema.optional(),
 });
 
-const StoryPageFlowOutput = z.object({
-  ok: z.boolean(),
-  bookId: z.string(),
-  pages: z.array(FlowPageSchema).optional(),
-  stats: z
-    .object({
-      totalSentences: z.number().int().nonnegative().optional(),
-      interiorPages: z.number().int().nonnegative().optional(),
-    })
-    .optional(),
-  errorMessage: z.string().optional(),
-  diagnostics: z.any().optional(),
-});
-
 type FlowPage = z.infer<typeof FlowPageSchema>;
 
 function getEntitiesInText(text: string, entityMap: EntityMap): Character[] {
@@ -144,6 +130,23 @@ function choosePlaceholderImage(index: number): string | undefined {
   const image = PlaceHolderImages[index % PlaceHolderImages.length];
   return image?.imageUrl;
 }
+
+const StoryPageFlowOutput = z.object({
+  ok: z.literal(true),
+  bookId: z.string(),
+  pages: z.array(FlowPageSchema),
+  stats: z.object({
+    totalSentences: z.number(),
+    interiorPages: z.number(),
+  }),
+  diagnostics: z.any(),
+}).or(z.object({
+  ok: z.literal(false),
+  bookId: z.string(),
+  errorMessage: z.string(),
+  diagnostics: z.any(),
+}));
+
 
 export const storyPageFlow = ai.defineFlow(
   {
@@ -300,3 +303,5 @@ export const storyPageFlow = ai.defineFlow(
     }
   }
 );
+
+    
