@@ -48,13 +48,20 @@ const StoryImageFlowOutput = z.object({
 async function fetchImageAsDataUri(url: string): Promise<string | null> {
   try {
     const gaxios = new Gaxios();
+    // Use URL to correctly handle query parameters
+    const urlObject = new URL(url);
+    if (process.env.GEMINI_API_KEY) {
+      urlObject.searchParams.append('key', process.env.GEMINI_API_KEY);
+    }
+    const finalUrl = urlObject.toString();
+    
     const response = await gaxios.request<ArrayBuffer>({
-      url,
+      url: finalUrl,
       responseType: 'arraybuffer',
     });
 
     if (response.status !== 200 || !response.data) {
-      console.warn(`[story-image-flow] Failed to fetch image ${url}, status: ${response.status}`);
+      console.warn(`[story-image-flow] Failed to fetch image ${finalUrl}, status: ${response.status}`);
       return null;
     }
 
@@ -64,6 +71,8 @@ async function fetchImageAsDataUri(url: string): Promise<string | null> {
   } catch (error) {
     if (error instanceof GaxiosError) {
       console.error(`[story-image-flow] Gaxios error fetching ${url}: ${error.message}`);
+    } else if (error instanceof TypeError && error.message.includes('Invalid URL')) {
+      console.error(`[story-image-flow] Invalid URL provided: ${url}`);
     } else {
       console.error(`[story-image-flow] Unexpected error fetching ${url}:`, error);
     }
