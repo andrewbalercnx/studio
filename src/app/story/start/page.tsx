@@ -1,195 +1,70 @@
-
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useUser } from '@/firebase/auth/use-user';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Copy, LoaderCircle } from 'lucide-react';
-import Link from 'next/link';
-import { useFirestore } from '@/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, addDoc, collection, query, where, getDocs, limit, updateDoc } from 'firebase/firestore';
-import type { PromptConfig, ChildProfile } from '@/lib/types';
-import { useToast } from '@/hooks/use-toast';
 import { useAppContext } from '@/hooks/use-app-context';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoaderCircle, MessageCircle, Wand2 } from 'lucide-react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
+export default function StartStoryChoicePage() {
+  const { activeChildProfile, activeChildProfileLoading } = useAppContext();
 
-type StartStoryResponse = {
-    storySessionId: string;
-    childId: string;
-    childEstimatedLevel: number;
-    chosenLevelBand: string;
-    promptConfigSummary: {
-        id: string;
-        phase: string;
-        levelBand: string;
-        version: number;
-        status: string;
-    };
-    initialAssistantMessage: string;
-    mainCharacterId: string;
-    error?: undefined;
-} | {
-    error: true;
-    message: string;
-};
+  if (activeChildProfileLoading) {
+    return (
+      <div className="container mx-auto flex min-h-screen items-center justify-center p-4">
+        <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
 
-
-export default function StartStoryPage() {
-  const { user, loading: userLoading } = useUser();
-  const firestore = useFirestore();
-  const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const { activeChildId, activeChildProfile } = useAppContext();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (userLoading) return; // Wait for user info
-    if (!user || !firestore) {
-      setError('You must be signed in to start a story.');
-      setIsLoading(false);
-      return;
-    }
-    if (!activeChildId) {
-      setError('Please select a child profile before starting a story.');
-      setIsLoading(false);
-      return;
-    }
-    
-    const startStoryProcess = async () => {
-      const childId = activeChildId;
-      try {
-        const childRef = doc(firestore, 'children', childId);
-        const childDoc = await getDoc(childRef);
-        if (!childDoc.exists()) {
-          throw new Error('Selected child profile was not found.');
-        }
-
-        const childProfile = childDoc.data() as ChildProfile;
-        if (childProfile.ownerParentUid && childProfile.ownerParentUid !== user.uid) {
-          throw new Error('You do not have permission to use this child profile.');
-        }
-        if (!childProfile.ownerParentUid) {
-          await updateDoc(childRef, { ownerParentUid: user.uid });
-          childProfile.ownerParentUid = user.uid;
-        }
-
-        const childEstimatedLevel = childProfile.estimatedLevel || 2;
-        let chosenLevelBand: 'low' | 'medium' | 'high';
-        if (childEstimatedLevel <= 2) chosenLevelBand = "low";
-        else if (childEstimatedLevel === 3) chosenLevelBand = "medium";
-        else chosenLevelBand = "high";
-
-        const promptConfigsRef = collection(firestore, 'promptConfigs');
-        const q = query(
-          promptConfigsRef,
-          where('phase', '==', 'warmup'),
-          where('levelBand', '==', chosenLevelBand),
-          where('status', '==', 'live'),
-          limit(1)
-        );
-        const querySnapshot = await getDocs(q);
-        let promptConfig: PromptConfig | null = null;
-        if (!querySnapshot.empty) {
-          promptConfig = querySnapshot.docs[0].data() as PromptConfig;
-        } else {
-          const fallbackRef = doc(firestore, 'promptConfigs', 'warmup_level_low_v1');
-          const fallbackDoc = await getDoc(fallbackRef);
-          if (fallbackDoc.exists()) {
-            promptConfig = fallbackDoc.data() as PromptConfig;
-          }
-        }
-        if (!promptConfig) {
-          throw new Error("No warmup promptConfig found (including fallback).");
-        }
-
-        const childSessionsRef = collection(firestore, 'children', childId, 'sessions');
-        const childSessionRef = doc(childSessionsRef);
-        const storySessionId = childSessionRef.id;
-
-        const newSessionData = {
-          childId: childId,
-          parentUid: user.uid,
-          status: "in_progress",
-          currentPhase: "warmup",
-          currentStepIndex: 0,
-          storyTitle: "",
-          storyVibe: "",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          promptConfigId: promptConfig.id,
-          promptConfigLevelBand: chosenLevelBand,
-          id: storySessionId,
-        };
-        await setDoc(childSessionRef, newSessionData);
-        await setDoc(doc(firestore, 'storySessions', storySessionId), newSessionData, { merge: true });
-
-        const charactersRef = collection(firestore, 'characters');
-        const newCharacterData = {
-          ownerChildId: childId,
-          sessionId: storySessionId,
-          name: childProfile.displayName || 'You',
-          role: 'child' as const,
-          realPersonRef: { kind: 'self' as const, label: 'You' },
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        };
-        const newCharacterRef = await addDoc(charactersRef, newCharacterData);
-        const mainCharacterId = newCharacterRef.id;
-
-        await Promise.all([
-          updateDoc(childSessionRef, { mainCharacterId: mainCharacterId }),
-          setDoc(doc(firestore, 'storySessions', storySessionId), { mainCharacterId: mainCharacterId }, { merge: true }),
-        ]);
-
-        const initialAssistantMessage = "Hi! I am your Story Guide. What would you like me to call you?";
-        const messagePayload = {
-          sender: 'assistant' as const,
-          text: initialAssistantMessage,
-          createdAt: serverTimestamp()
-        };
-        await addDoc(collection(firestore, 'storySessions', storySessionId, 'messages'), messagePayload);
-        await addDoc(collection(firestore, 'children', childId, 'sessions', storySessionId, 'messages'), messagePayload);
-
-        router.push(`/story/play/${storySessionId}`);
-
-      } catch (e: any) {
-        console.error("Error starting story:", e);
-        setError(e.message || 'An unknown error occurred.');
-        setIsLoading(false);
-      }
-    };
-
-    startStoryProcess();
-  }, [user, firestore, activeChildId, userLoading, router]);
+  if (!activeChildProfile) {
+    return (
+      <div className="container mx-auto flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle>Choose a Profile</CardTitle>
+            <CardDescription>
+              Please select a child profile from the parent dashboard before starting a new story.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href="/parent">Back to Parent Dashboard</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="container mx-auto flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md text-center">
-        <CardHeader>
-          <CardTitle>Starting a New Story</CardTitle>
-          <CardDescription>
-            Hold on tight, we're preparing a new adventure for you!
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center justify-center gap-4 py-8">
-          {isLoading ? (
-            <>
-              <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
-              <p className="text-muted-foreground">Creating your story session...</p>
-            </>
-          ) : error ? (
-            <div className="space-y-4">
-              <p className="text-destructive">{error}</p>
-              <Button asChild variant="secondary">
-                <Link href="/parent">Back to Parent Dashboard</Link>
-              </Button>
+    <div className="container mx-auto flex min-h-screen flex-col items-center justify-center gap-10 p-4">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold font-headline">How do you want to create your story?</h1>
+        <p className="mt-2 text-lg text-muted-foreground">
+          Choose a way to begin your adventure, {activeChildProfile.displayName}.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+        <Link href="/story/start/chat">
+          <div className="flex cursor-pointer flex-col items-center gap-4 rounded-full border-4 border-transparent p-8 text-center transition-all hover:border-primary/50 hover:bg-primary/10">
+            <div className="flex h-32 w-32 items-center justify-center rounded-full bg-accent text-accent-foreground">
+              <MessageCircle className="h-16 w-16" />
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
+            <h2 className="text-2xl font-semibold">Create with Chat</h2>
+            <p className="max-w-xs text-muted-foreground">Talk with the Story Guide step-by-step to build your tale.</p>
+          </div>
+        </Link>
+        <Link href="/story/start/wizard">
+          <div className="flex cursor-pointer flex-col items-center gap-4 rounded-full border-4 border-transparent p-8 text-center transition-all hover:border-primary/50 hover:bg-primary/10">
+            <div className="flex h-32 w-32 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <Wand2 className="h-16 w-16" />
+            </div>
+            <h2 className="text-2xl font-semibold">Magic Story Wizard</h2>
+            <p className="max-w-xs text-muted-foreground">Answer a few questions and let the AI create a full story for you!</p>
+          </div>
+        </Link>
+      </div>
     </div>
   );
 }
