@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-import { resolvePlaceholders, resolveEntitiesInText, replacePlaceholders as replacePlaceholdersInText } from '@/lib/resolve-placeholders';
+import { resolvePlaceholders, resolveEntitiesInText, replacePlaceholdersInText } from '@/lib/resolve-placeholders';
 
 export default function CompiledStoryBookPage() {
   const params = useParams<{ sessionId: string }>();

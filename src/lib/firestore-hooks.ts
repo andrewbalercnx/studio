@@ -41,14 +41,6 @@ export function useCollection<T>(query: Query | null): UseCollectionReturn<T> {
         setError(null);
       },
       (err: Error) => {
-        console.error(
-          '[useCollection] snapshot error:',
-          {
-            path: path,
-            code: (err as any)?.code,
-            message: err?.message,
-          }
-        );
         const permissionError = new FirestorePermissionError({
           path: path,
           operation: 'list',
@@ -105,14 +97,6 @@ export function useDocument<T>(docRef: DocumentReference | null): UseDocumentRet
         setError(null);
       },
       (err: Error) => {
-        console.error(
-          '[useDocument] snapshot error:',
-          {
-            path: path,
-            code: (err as any)?.code,
-            message: err?.message,
-          }
-        );
         const permissionError = new FirestorePermissionError({
           path: docRef.path,
           operation: 'get',
