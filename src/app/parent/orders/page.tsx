@@ -1,3 +1,4 @@
+
 'use client';
 
 import {useMemo, useState} from 'react';
@@ -88,7 +89,7 @@ export default function ParentOrdersPage() {
           <p className="text-muted-foreground">Track every shipment and simulate payments for testing.</p>
         </div>
         <Button asChild variant="outline">
-          <Link href="/stories">Back to Storybooks</Link>
+          <Link href="/stories">Back to Stories</Link>
         </Button>
       </div>
 
@@ -118,7 +119,7 @@ export default function ParentOrdersPage() {
                     <Badge variant="outline">Version v{order.version}</Badge>
                   </div>
                   <p>
-                    Book:{' '}
+                    Story Output:{' '}
                     <Link href={`/storybook/${order.bookId}`} className="font-medium text-primary underline">
                       {order.bookId}
                     </Link>
@@ -147,7 +148,7 @@ export default function ParentOrdersPage() {
                 </CardContent>
                 <CardFooter className="flex flex-wrap gap-2">
                   <Button asChild variant="outline">
-                    <Link href="/stories">Open Storybooks</Link>
+                    <Link href="/stories">Back to Stories</Link>
                   </Button>
                   <Button
                     variant="secondary"
@@ -175,3 +176,5 @@ export default function ParentOrdersPage() {
     </div>
   );
 }
+
+    

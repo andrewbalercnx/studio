@@ -307,14 +307,14 @@
       "updatedAt"
       ]
     },
-    "StoryBook": {
-      "title": "Story Book",
+    "Story": {
+      "title": "Story",
       "description": "Durable compiled output for a completed story session.",
       "type": "object",
       "properties": {
         "storySessionId": {
           "type": "string",
-          "description": "ID of the storySessions/{id} document that produced this book."
+          "description": "ID of the storySessions/{id} document that produced this story."
         },
         "childId": {
           "type": "string",
@@ -322,7 +322,7 @@
         },
         "parentUid": {
           "type": "string",
-          "description": "Auth UID for the parent that owns the session/book."
+          "description": "Auth UID for the parent that owns the session/story."
         },
         "storyText": {
           "type": "string",
@@ -334,24 +334,46 @@
             "paragraphs": {
               "type": "number",
               "description": "Paragraph count detected in storyText."
-            },
-            "estimatedPages": {
-              "type": "number",
-              "description": "Optional pagination guidance."
             }
           }
         },
-        "status": {
+        "createdAt": {
           "type": "string",
-          "enum": [
-            "text_ready",
-            "images_pending"
-          ],
-          "description": "Pipeline status for downstream illustration steps."
+          "format": "date-time",
+          "description": "Timestamp when the story document was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the story document was last updated."
+        }
+      },
+      "required": [
+        "storySessionId",
+        "childId",
+        "parentUid",
+        "storyText",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "StoryOutput": {
+      "title": "Story Output",
+      "description": "A generated creative asset from a story, like a picture book or poem.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "storyId": {
+          "type": "string"
+        },
+        "storyOutputTypeId": {
+          "type": "string"
         },
         "pageGeneration": {
           "type": "object",
-          "description": "Tracks the most recent storybook page generation attempt.",
+          "description": "Tracks the most recent page generation attempt.",
           "properties": {
             "status": {
               "type": "string",
@@ -378,29 +400,32 @@
             }
           }
         },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Timestamp when the book document was created."
+        "imageGeneration": {
+           "type": "object",
+           "description": "Tracks the most recent image generation attempt.",
+           "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["idle", "running", "ready", "error"]
+            },
+            "lastRunAt": { "type": "string", "format": "date-time" },
+            "lastCompletedAt": { "type": "string", "format": "date-time" },
+            "lastErrorMessage": { "type": "string" },
+            "pagesReady": { "type": "number" },
+            "pagesTotal": { "type": "number" }
+           }
         },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Timestamp when the book document was last updated."
-        }
+        "finalization": {
+            "type": "object"
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "storySessionId",
-        "childId",
-        "parentUid",
-        "storyText",
-        "createdAt",
-        "updatedAt"
-      ]
+      "required": ["id", "storyId", "storyOutputTypeId", "createdAt", "updatedAt"]
     },
-    "StoryBookPage": {
-      "title": "Story Book Page",
-      "description": "Structured content for each page of a compiled story book, including cover and interior spreads.",
+    "StoryOutputPage": {
+      "title": "Story Output Page",
+      "description": "Structured content for each page of a compiled story output.",
       "type": "object",
       "properties": {
         "pageNumber": {
@@ -1054,11 +1079,23 @@
       },
       "description": "Stores definitions for different kinds of final outputs (e.g. picture book, poem)."
     },
-    "/storyBooks/{bookId}/pages/{pageId}": {
+    "/stories/{storyId}": {
       "schema": {
-        "$ref": "#/entities/StoryBookPage"
+        "$ref": "#/entities/Story"
       },
-      "description": "Sub-collection containing the ordered pages of a compiled story book."
+      "description": "Stores the compiled text of a story."
+    },
+    "/stories/{storyId}/outputs/{outputId}": {
+      "schema": {
+        "$ref": "#/entities/StoryOutput"
+      },
+      "description": "Sub-collection for generated outputs from a story."
+    },
+    "/stories/{storyId}/outputs/{outputId}/pages/{pageId}": {
+      "schema": {
+        "$ref": "#/entities/StoryOutputPage"
+      },
+      "description": "Sub-collection containing the ordered pages of a generated story output."
     },
     "/aiFlowLogs/{logId}": {
       "schema": {
@@ -1068,3 +1105,5 @@
     }
   }
 }
+
+    
