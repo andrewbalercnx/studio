@@ -11,7 +11,7 @@ import { ParentGuard } from '@/components/parent/parent-guard';
 const NAV_LINKS = [
   { href: '/parent', label: 'Overview', icon: Home },
   { href: '/parent/children', label: 'Manage Children', icon: Users },
-  { href: '/parent/billing', label: 'Billing & Orders', icon: CreditCard, disabled: true },
+  { href: '/parent/orders', label: 'Orders', icon: CreditCard },
   { href: '/parent/settings', label: 'Settings', icon: Settings },
 ];
 
