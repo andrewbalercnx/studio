@@ -99,7 +99,7 @@ export type StorySession = {
     messages?: ChatMessage[];
 };
 
-export type StoryBookStatus = 'text_ready' | 'images_pending';
+export type StoryStatus = 'text_ready' | 'images_pending';
 
 export type StoryBookFinalizationStatus =
   | 'draft'
@@ -180,7 +180,7 @@ export type StoryBookShareToken = {
   regressionTag?: string | null;
 };
 
-export type StoryBook = {
+export type Story = {
   id?: string;
   storySessionId: string;
   childId: string;
@@ -196,7 +196,7 @@ export type StoryBook = {
     storyOutputTypeName?: string;
     [key: string]: unknown;
   };
-  status?: StoryBookStatus;
+  status?: StoryStatus;
   pageGeneration?: StoryBookPageGenerationStatus;
   imageGeneration?: StoryBookImageGenerationStatus;
   storybookFinalization?: StoryBookFinalization | null;
@@ -207,6 +207,8 @@ export type StoryBook = {
   createdAt: any;
   updatedAt: any;
 };
+
+export type StoryBook = Story;
 
 export type StoryBookPageGenerationStatus = {
     status: 'idle' | 'running' | 'ready' | 'error';
@@ -482,6 +484,3 @@ export type PrintLayout = {
     height: number;
   }>;
 };
-
-
-export type Story = StoryBook;

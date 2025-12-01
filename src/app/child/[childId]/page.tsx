@@ -6,7 +6,7 @@ import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
 import { collection, orderBy, query, where } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
-import type { StorySession, StoryBook } from '@/lib/types';
+import type { StorySession, Story } from '@/lib/types';
 import { useAppContext } from '@/hooks/use-app-context';
 import { LoaderCircle, BookOpen, Sparkles, Copy } from 'lucide-react';
 import Link from 'next/link';
@@ -17,7 +17,7 @@ import { useRouter } from 'next/navigation';
 import { useParentGuard } from '@/hooks/use-parent-guard';
 import { formatDistanceToNow } from 'date-fns';
 
-function ChildStoryCard({ story, storyBook, bookLoading }: { story: StorySession; storyBook?: StoryBook | null; bookLoading: boolean }) {
+function ChildStoryCard({ story, storyBook, bookLoading }: { story: StorySession; storyBook?: Story | null; bookLoading: boolean }) {
   const createdAt = story.createdAt?.toDate ? story.createdAt.toDate() : new Date();
   const hasStoryBook = !!storyBook;
   const pageGenerationStatus = storyBook?.pageGeneration?.status;
@@ -102,7 +102,7 @@ function ChildStoryCard({ story, storyBook, bookLoading }: { story: StorySession
   );
 }
 
-function deriveStoryStage(story: StorySession, storyBook?: StoryBook | null): string {
+function deriveStoryStage(story: StorySession, storyBook?: Story | null): string {
   if (storyBook?.imageGeneration?.status === 'ready') {
     return 'Book complete';
   }
@@ -173,11 +173,11 @@ export default function ChildExperiencePage({ params }: { params: Promise<{ chil
   const storyBooksQuery = useMemo(() => {
     if (!firestore || !activeChildId) return null;
     return query(
-      collection(firestore, 'storyBooks'),
+      collection(firestore, 'stories'),
       where('childId', '==', activeChildId)
     );
   }, [firestore, activeChildId]);
-  const { data: storyBooks, loading: storyBooksLoading } = useCollection<StoryBook>(storyBooksQuery);
+  const { data: storyBooks, loading: storyBooksLoading } = useCollection<Story>(storyBooksQuery);
   const hasCelebration = useMemo(
     () =>
       (storyBooks ?? []).some(
@@ -189,7 +189,7 @@ export default function ChildExperiencePage({ params }: { params: Promise<{ chil
     [storyBooks]
   );
   const storyBooksBySessionId = useMemo(() => {
-    const map: Record<string, StoryBook> = {};
+    const map: Record<string, Story> = {};
     if (storyBooks) {
       for (const book of storyBooks) {
         if (book?.storySessionId) {
@@ -341,5 +341,3 @@ export default function ChildExperiencePage({ params }: { params: Promise<{ chil
     </>
   );
 }
-
-    
