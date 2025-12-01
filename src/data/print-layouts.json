@@ -1,0 +1,30 @@
+
+{
+  "printLayouts": [
+    {
+      "id": "a4-portrait-spread-v1",
+      "name": "A4 Portrait Spread",
+      "leafWidth": 8.27,
+      "leafHeight": 11.69,
+      "leavesPerSpread": 2,
+      "textBoxes": [
+        {
+          "leaf": 1,
+          "x": 0.827,
+          "y": 1.169,
+          "width": 6.616,
+          "height": 9.352
+        }
+      ],
+      "imageBoxes": [
+        {
+          "leaf": 2,
+          "x": 0,
+          "y": 0,
+          "width": 8.27,
+          "height": 11.69
+        }
+      ]
+    }
+  ]
+}

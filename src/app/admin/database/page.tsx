@@ -1,8 +1,9 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useFirestore } from '@/firebase';
+import { useUser } from '@/firebase/auth/use-user';
 import {
   collection,
   query,
@@ -45,7 +46,7 @@ import {
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { LoaderCircle, Trash2, Search, FileJson, Eraser } from 'lucide-react';
+import { LoaderCircle, Trash2, Search, FileJson } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import backendConfig from '@/../docs/backend.json';
 
@@ -56,8 +57,26 @@ const COLLECTIONS = Object.keys(backendConfig.firestore)
 
 const DOCUMENT_ID_ALIASES = ['id', 'docId', 'documentId', '__name__'];
 
+type DocumentMeta = {
+  exists: boolean;
+  createTime: string | null;
+  updateTime: string | null;
+  readTime: string | null;
+};
+
+type ServerListedDocument = {
+  id: string;
+  exists: boolean;
+  data: Record<string, any> | null;
+  createTime: string | null;
+  updateTime: string | null;
+  readTime: string | null;
+};
+
 type DocumentDataWithId = {
   id: string;
+  __meta?: DocumentMeta;
+  __missingDoc?: boolean;
   [key: string]: any;
 };
 
@@ -66,6 +85,7 @@ type FilterOperator = '==' | 'exists';
 export default function AdminDatabasePage() {
   const { isAdmin, loading: adminLoading } = useAdminStatus();
   const firestore = useFirestore();
+  const { user } = useUser();
   const { toast } = useToast();
 
   const [selectedCollection, setSelectedCollection] = useState('');
@@ -80,8 +100,44 @@ export default function AdminDatabasePage() {
 
   const isValueInputDisabled = filterOperator === 'exists';
 
+  const fetchDocumentsFromAdmin = async (collectionName: string): Promise<DocumentDataWithId[]> => {
+    if (!user) {
+      throw new Error('You must be signed in to query documents.');
+    }
+
+    const idToken = await user.getIdToken();
+    const response = await fetch('/api/admin/database/listDocuments', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ collection: collectionName, limit: 200 }),
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error ?? 'Failed to fetch documents.');
+    }
+
+    const documents: ServerListedDocument[] = payload.documents ?? [];
+    return documents.map((doc) => {
+      const data = (doc.data && typeof doc.data === 'object') ? doc.data : {};
+      return {
+        id: doc.id,
+        ...data,
+        __missingDoc: !doc.exists,
+        __meta: {
+          exists: doc.exists,
+          createTime: doc.createTime,
+          updateTime: doc.updateTime,
+          readTime: doc.readTime,
+        },
+      } as DocumentDataWithId;
+    });
+  };
+
   const handleSearch = async () => {
-    if (!firestore || !selectedCollection) {
+    if (!selectedCollection) {
       toast({
         title: 'Missing Information',
         description: 'Please select a collection to search.',
@@ -89,28 +145,50 @@ export default function AdminDatabasePage() {
       });
       return;
     }
+
+    const trimmedField = filterField.trim();
+    const trimmedValue = filterValue.trim();
+    const isDocumentIdField = DOCUMENT_ID_ALIASES.includes(trimmedField);
+    const fieldReference = trimmedField
+      ? (isDocumentIdField ? documentId() : trimmedField)
+      : null;
+    const hasFilter =
+      Boolean(trimmedField) &&
+      (filterOperator === 'exists' || Boolean(trimmedValue));
+
+    if (hasFilter && !firestore) {
+      toast({
+        title: 'Firestore not ready',
+        description: 'Please wait for Firestore to initialize and try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsLoading(true);
     setDocuments([]);
     setSelectedDocs(new Set());
     setViewingDoc(null);
 
     try {
-      const collRef = collection(firestore, selectedCollection);
-      let q: Query<DocumentData, DocumentData>;
+      if (!hasFilter) {
+        const fetchedDocs = await fetchDocumentsFromAdmin(selectedCollection);
+        setDocuments(fetchedDocs);
+        if (fetchedDocs.length === 0) {
+          toast({ title: 'No documents found matching your query.' });
+        }
+        return;
+      }
 
-      const trimmedField = filterField.trim();
-      const trimmedValue = filterValue.trim();
-      const isDocumentIdField = DOCUMENT_ID_ALIASES.includes(trimmedField);
-      const fieldReference = trimmedField
-        ? (isDocumentIdField ? documentId() : trimmedField)
-        : null;
-      const hasFilter =
-        Boolean(trimmedField) &&
-        (filterOperator === 'exists' || Boolean(trimmedValue));
+      const db = firestore;
+      if (!db) {
+        throw new Error('Firestore is not initialized.');
+      }
 
+      const collRef = collection(db, selectedCollection);
       const constraints: QueryConstraint[] = [];
 
-      if (hasFilter && fieldReference) {
+      if (fieldReference) {
         if (filterOperator === 'exists') {
           constraints.push(where(fieldReference, '!=', null));
           constraints.push(orderBy(fieldReference));
@@ -122,14 +200,12 @@ export default function AdminDatabasePage() {
           constraints.push(orderBy(documentId()));
         }
       } else {
-        // The most basic query: get all documents, sorted by their ID.
-        // This guarantees all documents are returned, including those with no fields.
         constraints.push(orderBy(documentId()));
       }
 
       constraints.push(limit(200));
 
-      q = query(collRef, ...constraints);
+      const q: Query<DocumentData, DocumentData> = query(collRef, ...constraints);
 
       const querySnapshot = await getDocs(q);
       const fetchedDocs = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -308,7 +384,14 @@ export default function AdminDatabasePage() {
                               }}
                             />
                           </TableCell>
-                          <TableCell className="font-mono text-xs">{docData.id}</TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {docData.id}
+                            {docData.__missingDoc && (
+                              <span className="ml-2 rounded bg-muted px-1 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                                empty
+                              </span>
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -324,9 +407,16 @@ export default function AdminDatabasePage() {
                    <ScrollArea className="h-96">
                     <CardContent className="pt-6">
                       {viewingDoc ? (
-                         <pre className="text-xs font-mono bg-muted p-4 rounded-md">
-                           <code>{JSON.stringify(viewingDoc, null, 2)}</code>
-                         </pre>
+                        <>
+                          {viewingDoc.__missingDoc && (
+                            <div className="mb-4 rounded-md border border-dashed border-muted-foreground/40 bg-muted/40 p-3 text-xs text-muted-foreground">
+                              This document has no stored fields and only exists because one or more subcollections contain data.
+                            </div>
+                          )}
+                          <pre className="text-xs font-mono bg-muted p-4 rounded-md">
+                            <code>{JSON.stringify(viewingDoc, null, 2)}</code>
+                          </pre>
+                        </>
                       ) : (
                         <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center p-8">
                           <FileJson className="h-10 w-10 mb-4"/>
