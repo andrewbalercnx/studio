@@ -9,7 +9,7 @@ import { z } from 'genkit';
 import type { StoryBook, StorySession, ChildProfile, Character, StoryBookPage as StoryBookPageType } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { logSessionEvent } from '@/lib/session-events';
-import { resolveEntitiesInText, replacePlaceholders, getEntitiesInText } from '@/lib/resolve-placeholders';
+import { resolveEntitiesInText, replacePlaceholders as replacePlaceholdersInText, getEntitiesInText } from '@/lib/resolve-placeholders';
 
 
 type EntityMap = Map<string, { displayName: string; document: Character | ChildProfile }>;
@@ -204,7 +204,7 @@ export const storyPageFlow = ai.defineFlow(
       let pageNumber = 0;
       
       const coverText = childName ? `A story just for $$${child?.id}$$` : 'A story made with love.';
-      const coverDisplayText = replacePlaceholders(coverText, entityMap);
+      const coverDisplayText = replacePlaceholdersInText(coverText, entityMap);
       const coverEntities = getEntitiesInText(coverText, entityMap);
       pages.push({
         pageNumber: pageNumber++,
@@ -219,7 +219,7 @@ export const storyPageFlow = ai.defineFlow(
 
       chunks.forEach((chunk, index) => {
         const text = chunk.join(' ').trim();
-        const displayText = replacePlaceholders(text, entityMap);
+        const displayText = replacePlaceholdersInText(text, entityMap);
         const entitiesOnPage = getEntitiesInText(text, entityMap);
         pages.push({
           pageNumber: pageNumber++,
@@ -236,7 +236,7 @@ export const storyPageFlow = ai.defineFlow(
       });
       
       const backCoverText = childName ? `Thanks for reading with $$${child?.id}$$!` : 'The adventure continues next time.';
-      const backCoverDisplayText = replacePlaceholders(backCoverText, entityMap);
+      const backCoverDisplayText = replacePlaceholdersInText(backCoverText, entityMap);
       const backCoverEntities = getEntitiesInText(backCoverText, entityMap);
       pages.push({
         pageNumber: pageNumber++,
