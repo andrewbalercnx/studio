@@ -111,12 +111,12 @@ export type StoryBookFinalizationStatus =
 
 export type StoryBookFinalizedPage = {
   pageNumber: number;
-  kind: StoryBookPage['kind'];
+  kind: StoryOutputPage['kind'];
   title?: string;
   bodyText?: string;
   imageUrl?: string;
   imagePrompt?: string;
-  layoutHints?: StoryBookPage['layoutHints'];
+  layoutHints?: StoryOutputPage['layoutHints'];
 };
 
 export type PrintableAssetMetadata = {
@@ -224,7 +224,7 @@ export type StoryBookImageGenerationStatus = {
     pagesTotal?: number;
 };
 
-export type StoryBookPage = {
+export type StoryOutputPage = {
     id?: string;
     pageNumber: number;
     kind: 'cover_front' | 'cover_back' | 'text' | 'image';
@@ -270,7 +270,8 @@ export type PrintOrderAddress = {
 export type PrintOrder = {
   id?: string;
   parentUid: string;
-  bookId: string;
+  storyId: string;
+  outputId: string;
   version: number;
   quantity: number;
   shippingAddress: PrintOrderAddress;
@@ -365,7 +366,7 @@ export type StoryType = {
 
 export type Character = {
     id: string;
-    ownerChildId: string; // The child who 'owns' or created this character
+    ownerParentUid: string; // The parent who 'owns' or created this character
     displayName: string;
     description?: string;
     relatedTo?: string;
@@ -456,3 +457,5 @@ export type AIFlowLog = {
   errorMessage?: string;
   createdAt: any;
 };
+
+export type Story = StoryBook;

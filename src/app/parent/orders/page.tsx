@@ -100,7 +100,7 @@ export default function ParentOrdersPage() {
             const updatedAt = order.updatedAt?.toDate ? order.updatedAt.toDate() : null;
             const isPaid = order.paymentStatus === 'paid';
             return (
-              <Card key={order.id ?? order.bookId}>
+              <Card key={order.id ?? order.storyId}>
                 <CardHeader className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-lg">Order #{(order.id ?? '').slice(-6) || 'pending'}</CardTitle>
@@ -120,8 +120,8 @@ export default function ParentOrdersPage() {
                   </div>
                   <p>
                     Story Output:{' '}
-                    <Link href={`/storybook/${order.bookId}`} className="font-medium text-primary underline">
-                      {order.bookId}
+                    <Link href={`/storybook/${order.storyId}`} className="font-medium text-primary underline">
+                      {order.outputId}
                     </Link>
                   </p>
                   <p className="flex items-center gap-2 text-muted-foreground">
@@ -176,5 +176,3 @@ export default function ParentOrdersPage() {
     </div>
   );
 }
-
-    

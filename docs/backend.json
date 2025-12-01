@@ -501,15 +501,15 @@
     },
     "Character": {
       "title": "Story Character",
-      "description": "Represents a character in a story, owned by a child.",
+      "description": "Represents a character in a story, owned by a parent.",
       "type": "object",
       "properties": {
         "id": {
           "type": "string"
         },
-        "ownerChildId": {
+        "ownerParentUid": {
           "type": "string",
-          "description": "Firebase auth uid of the child who owns this character."
+          "description": "Firebase auth uid of the parent who owns this character."
         },
         "displayName": {
           "type": "string"
@@ -595,7 +595,7 @@
       },
       "required": [
         "id",
-        "ownerChildId",
+        "ownerParentUid",
         "role",
         "displayName",
         "createdAt",
@@ -1016,6 +1016,46 @@
         "status",
         "createdAt"
       ]
+    },
+    "PrintOrder": {
+      "title": "Print Order",
+      "description": "An order placed by a parent for printed copies of a story output.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "parentUid": {
+          "type": "string"
+        },
+        "storyId": {
+          "type": "string"
+        },
+        "outputId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "number"
+        },
+        "quantity": {
+          "type": "number"
+        },
+        "shippingAddress": {
+          "type": "object"
+        },
+        "contactEmail": {
+          "type": "string"
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["unpaid", "paid", "refunded"]
+        },
+        "fulfillmentStatus": {
+          "type": "string",
+          "enum": ["pending", "printing", "shipped", "delivered", "cancelled"]
+        }
+      },
+      "required": ["id", "parentUid", "storyId", "outputId", "quantity", "shippingAddress", "contactEmail", "paymentStatus", "fulfillmentStatus"]
     }
   },
   "auth": {
@@ -1102,8 +1142,12 @@
         "$ref": "#/entities/AIFlowLog"
       },
       "description": "Stores logs of Genkit AI flow executions for debugging."
+    },
+    "/printOrders/{orderId}": {
+      "schema": {
+        "$ref": "#/entities/PrintOrder"
+      },
+      "description": "Stores print order requests from parents."
     }
   }
 }
-
-    
