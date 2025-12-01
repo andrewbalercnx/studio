@@ -95,6 +95,12 @@ export default function AdminDashboardPage() {
             <Link href="/admin/storyCompileTest">Story Compile Test</Link>
           </Button>
           <Button asChild>
+            <Link href="/admin/ai-logs">AI Flow Logs</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/helpWizards">Manage Help Wizards</Link>
+          </Button>
+          <Button asChild>
             <Link href="/admin/regression">Regression Tests</Link>
           </Button>
         </div>
@@ -132,5 +138,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
-    
