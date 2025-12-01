@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState, useEffect, useCallback } from 'react';
@@ -146,19 +147,19 @@ function PrintLayoutForm({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">X</Label>
-            <Input type="number" step="0.1" {...register(`${prefix}.${index}.x`)} defaultValue={field.x} />
+            <Input type="number" step="0.01" {...register(`${prefix}.${index}.x`)} defaultValue={field.x} />
           </div>
            <div className="space-y-1">
             <Label className="text-xs">Y</Label>
-            <Input type="number" step="0.1" {...register(`${prefix}.${index}.y`)} defaultValue={field.y} />
+            <Input type="number" step="0.01" {...register(`${prefix}.${index}.y`)} defaultValue={field.y} />
           </div>
            <div className="space-y-1">
             <Label className="text-xs">W</Label>
-            <Input type="number" step="0.1" {...register(`${prefix}.${index}.width`)} defaultValue={field.width} />
+            <Input type="number" step="0.01" {...register(`${prefix}.${index}.width`)} defaultValue={field.width} />
           </div>
            <div className="space-y-1">
             <Label className="text-xs">H</Label>
-            <Input type="number" step="0.1" {...register(`${prefix}.${index}.height`)} defaultValue={field.height} />
+            <Input type="number" step="0.01" {...register(`${prefix}.${index}.height`)} defaultValue={field.height} />
           </div>
            <Button variant="ghost" size="icon" onClick={() => removeFn(index)} className="self-end">
              <Trash2 className="h-4 w-4 text-destructive" />
@@ -357,3 +358,5 @@ export default function AdminPrintLayoutsPage() {
         </div>
     );
 }
+
+    
