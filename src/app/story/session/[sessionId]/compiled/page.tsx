@@ -6,30 +6,30 @@ import { useParams } from 'next/navigation';
 import { useFirestore } from '@/firebase';
 import { collection, doc, orderBy, query } from 'firebase/firestore';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
-import type { StoryBook, StorySession, StoryBookPage, ChildProfile } from '@/lib/types';
+import type { Story, StorySession, StoryOutputPage } from '@/lib/types';
 import { LoaderCircle, BookOpen, RefreshCw, Image as ImageIcon } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-import { resolvePlaceholders, resolveEntitiesInText, replacePlaceholdersInText } from '@/lib/resolve-placeholders';
+import { resolveEntitiesInText, replacePlaceholdersInText } from '@/lib/resolve-placeholders';
 
 export default function CompiledStoryBookPage() {
   const params = useParams<{ sessionId: string }>();
   const sessionId = params.sessionId;
   const firestore = useFirestore();
 
-  const bookRef = useMemo(() => (firestore ? doc(firestore, 'storyBooks', sessionId) : null), [firestore, sessionId]);
+  const storyRef = useMemo(() => (firestore ? doc(firestore, 'stories', sessionId) : null), [firestore, sessionId]);
   const sessionRef = useMemo(() => (firestore ? doc(firestore, 'storySessions', sessionId) : null), [firestore, sessionId]);
 
-  const { data: storyBook, loading: storyBookLoading, error: storyBookError } = useDocument<StoryBook>(bookRef);
+  const { data: storyBook, loading: storyBookLoading, error: storyBookError } = useDocument<Story>(storyRef);
   const { data: session } = useDocument<StorySession>(sessionRef);
-  const bookId = storyBook?.id ?? sessionId;
+  const storyId = storyBook?.id ?? sessionId;
   const pagesQuery = useMemo(
-    () => (firestore && bookId ? query(collection(firestore, 'storyBooks', bookId, 'pages'), orderBy('pageNumber', 'asc')) : null),
-    [firestore, bookId]
+    () => (firestore && storyId ? query(collection(firestore, 'stories', storyId, 'pages'), orderBy('pageNumber', 'asc')) : null),
+    [firestore, storyId]
   );
-  const { data: pages, loading: pagesLoading, error: pagesError } = useCollection<StoryBookPage>(pagesQuery);
+  const { data: pages, loading: pagesLoading, error: pagesError } = useCollection<StoryOutputPage>(pagesQuery);
 
   const [resolvedStoryText, setResolvedStoryText] = useState<string | null>(null);
 
@@ -74,8 +74,8 @@ export default function CompiledStoryBookPage() {
     0;
 
   const handleGeneratePages = async () => {
-    if (!bookId) {
-      setPageGenerationError('No storyBook id available for this session.');
+    if (!storyId) {
+      setPageGenerationError('No story id available for this session.');
       return;
     }
     setIsGeneratingPages(true);
@@ -84,7 +84,7 @@ export default function CompiledStoryBookPage() {
       const response = await fetch('/api/storyBook/pages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId }),
+        body: JSON.stringify({ storyId }),
       });
       const body = await response.json();
       if (!response.ok || !body.ok) {
@@ -98,8 +98,8 @@ export default function CompiledStoryBookPage() {
   };
 
   const runImageJob = async (payload?: {forceRegenerate?: boolean; pageId?: string}) => {
-    if (!bookId) {
-      setImageGenerationError('No storyBook id available for this session.');
+    if (!storyId) {
+      setImageGenerationError('No story id available for this session.');
       return;
     }
     setIsGeneratingImages(true);
@@ -110,7 +110,7 @@ export default function CompiledStoryBookPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bookId,
+          storyId,
           ...(payload ?? {}),
         }),
       });
@@ -251,7 +251,7 @@ export default function CompiledStoryBookPage() {
                           Force Regenerate
                         </Button>
                         <Button variant="ghost" className="flex-1" asChild>
-                          <Link href={`/storybook/${bookId}`}>Open Viewer</Link>
+                          <Link href={`/storybook/${storyId}`}>Open Viewer</Link>
                         </Button>
                       </div>
                     </div>
