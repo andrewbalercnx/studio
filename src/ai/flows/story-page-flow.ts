@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -203,27 +204,29 @@ export const storyPageFlow = ai.defineFlow(
       let pageNumber = 0;
       
       const coverText = childName ? `A story just for $$${child?.id}$$` : 'A story made with love.';
+      const coverDisplayText = replacePlaceholders(coverText, entityMap);
       const coverEntities = getEntitiesInText(coverText, entityMap);
       pages.push({
         pageNumber: pageNumber++,
         kind: 'cover_front',
         title: derivedTitle,
         bodyText: coverText,
-        displayText: replacePlaceholders(coverText, entityMap),
-        imagePrompt: buildImagePrompt(`Front cover artwork for "${derivedTitle}"`, child, derivedTitle, coverEntities),
+        displayText: coverDisplayText,
+        imagePrompt: buildImagePrompt(coverDisplayText, child, derivedTitle, coverEntities),
         imageUrl: choosePlaceholderImage(0),
         layoutHints: { aspectRatio: 'portrait', textPlacement: 'bottom' },
       });
 
       chunks.forEach((chunk, index) => {
         const text = chunk.join(' ').trim();
+        const displayText = replacePlaceholders(text, entityMap);
         const entitiesOnPage = getEntitiesInText(text, entityMap);
         pages.push({
           pageNumber: pageNumber++,
           kind: 'text',
           bodyText: text,
-          displayText: replacePlaceholders(text, entityMap),
-          imagePrompt: buildImagePrompt(text, child, derivedTitle, entitiesOnPage),
+          displayText: displayText,
+          imagePrompt: buildImagePrompt(displayText, child, derivedTitle, entitiesOnPage),
           imageUrl: choosePlaceholderImage(index + 1),
           layoutHints: {
             aspectRatio: 'landscape',
@@ -233,13 +236,14 @@ export const storyPageFlow = ai.defineFlow(
       });
       
       const backCoverText = childName ? `Thanks for reading with $$${child?.id}$$!` : 'The adventure continues next time.';
+      const backCoverDisplayText = replacePlaceholders(backCoverText, entityMap);
       const backCoverEntities = getEntitiesInText(backCoverText, entityMap);
       pages.push({
         pageNumber: pageNumber++,
         kind: 'cover_back',
         bodyText: backCoverText,
-        displayText: replacePlaceholders(backCoverText, entityMap),
-        imagePrompt: buildImagePrompt(`Back cover illustration for "${derivedTitle}" showing a gentle closing scene`, child, derivedTitle, backCoverEntities),
+        displayText: backCoverDisplayText,
+        imagePrompt: buildImagePrompt(backCoverDisplayText, child, derivedTitle, backCoverEntities),
         imageUrl: choosePlaceholderImage(pages.length),
         layoutHints: { aspectRatio: 'portrait', textPlacement: 'bottom' },
       });
