@@ -1,10 +1,11 @@
+
 'use client';
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { LoaderCircle, PlusCircle, Copy, BookOpen, Edit } from 'lucide-react';
 import { useFirestore } from '@/firebase';
-import { collection, onSnapshot, query, orderBy, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, writeBatch, doc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -27,6 +28,7 @@ export default function AdminHelpWizardsPage() {
 
   const handleSeedWizards = useCallback(async () => {
     if (!firestore) return;
+    setLoading(true);
     try {
       const batch = writeBatch(firestore);
       SampleWizardData.wizards.forEach((wizard) => {
@@ -41,6 +43,8 @@ export default function AdminHelpWizardsPage() {
       toast({ title: 'Success', description: 'Sample help wizards have been seeded.' });
     } catch (e: any) {
       toast({ title: 'Error seeding data', description: e.message, variant: 'destructive' });
+    } finally {
+        // setLoading(false) is handled by the onSnapshot listener which will fire after seeding
     }
   }, [firestore, toast]);
 
