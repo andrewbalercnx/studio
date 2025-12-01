@@ -9,9 +9,10 @@ import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
 import { getDoc, doc, collection, getDocs, query, orderBy, where, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { z } from 'genkit';
-import type { StorySession, ChatMessage, StoryType, Character, ChildProfile, StoryOutputType } from '@/lib/types';
+import type { StorySession, ChatMessage, StoryType, Character, ChildProfile, StoryOutputType, Story } from '@/lib/types';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
 import { logSessionEvent } from '@/lib/session-events';
+import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders';
 
 type StoryCompileDebugInfo = {
     stage: 'init' | 'loading_session' | 'loading_dependencies' | 'building_prompt' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate' | 'unknown';
@@ -90,13 +91,14 @@ export const storyCompileFlow = ai.defineFlow(
             // 3. Build story skeleton for the prompt
             debug.stage = 'building_prompt';
             const characterRoster = characters.map(c => `- ${c.displayName} (${c.role}, traits: ${c.traits?.join(', ') || 'none'})`).join('\n');
-            const storySoFar = messages
+            const rawStorySoFar = messages
                 .filter(m => m.kind !== 'beat_options' && m.kind !== 'character_traits_question') // Exclude non-narrative prompts
                 .map(m => {
                     const prefix = m.sender === 'child' ? `$$${childId}$$:` : 'Story Guide:';
                     return `${prefix} ${m.text}`;
                 })
                 .join('\n');
+            const storySoFar = await replacePlaceholdersWithDescriptions(rawStorySoFar);
             
             const systemPrompt = `You are a master storyteller who specializes in compiling interactive chat sessions into a single, beautifully written story for a very young child (age 3-5). The story must be gentle, warm, and safe, with very short, simple sentences. It must be written in the third person. Do not include any meta-commentary, choices, or system prompts from the original chat. The final text should read like a classic, calm picture-book narrative.`;
             
@@ -120,7 +122,7 @@ ${characterRoster}
 ${storySoFar}
 
 **Your Task:**
-Based on the session log and context, rewrite the entire interaction into a single, coherent story. The story should flow from beginning to end without any interruptions. Pay close attention to the **Output Style Requirements**.
+Based on the session log and context, rewrite the entire interaction into a single, coherent story. The story should flow from beginning to end without any interruptions. Pay close attention to the **Output Style Requirements**. The final story text must use $$characterId$$ placeholders for all characters.
 
 **Output Format (Crucial):**
 You MUST return a single JSON object matching this exact shape. Do not include any markdown, code fences, or explanatory text.
@@ -193,40 +195,31 @@ Now, generate the JSON object containing the compiled story.
             });
             debug.details.phaseCorrected = `Set currentPhase to 'final' and status to 'completed'`;
 
-            // --- StoryBook upsert ---
-            const bookRef = doc(firestore, 'storyBooks', sessionId);
-            const existingBookSnap = await getDoc(bookRef);
+            // --- Story upsert ---
+            const storyRef = doc(firestore, 'stories', sessionId);
+            const existingStorySnap = await getDoc(storyRef);
             const now = serverTimestamp();
-            const createdAtValue = existingBookSnap.exists()
-                ? (existingBookSnap.data()?.createdAt ?? serverTimestamp())
+            const createdAtValue = existingStorySnap.exists()
+                ? (existingStorySnap.data()?.createdAt ?? serverTimestamp())
                 : now;
 
-            const bookPayload: Record<string, any> = {
+            const storyPayload: Story = {
                 storySessionId: sessionId,
                 childId,
                 parentUid,
                 storyText,
-                status: 'text_ready',
-                updatedAt: now,
+                metadata: {
+                    ...(metadata || {}),
+                    storyOutputTypeId: storyOutputTypeId,
+                    storyOutputTypeName: storyOutputType.name,
+                    artStyleHint: storyOutputType.aiHints?.style,
+                },
                 createdAt: createdAtValue,
-                'metadata.storyOutputTypeId': storyOutputTypeId,
-                'metadata.storyOutputTypeName': storyOutputType.name,
-                'metadata.artStyleHint': storyOutputType.aiHints?.style,
+                updatedAt: now,
             };
 
-            if (metadata) {
-                bookPayload.metadata = {...(bookPayload.metadata || {}), ...metadata};
-            }
-
-            if (!existingBookSnap.exists() || !existingBookSnap.data()?.pageGeneration) {
-                bookPayload.pageGeneration = { status: 'idle' };
-            }
-            if (!existingBookSnap.exists() || !existingBookSnap.data()?.imageGeneration) {
-                bookPayload.imageGeneration = { status: 'idle' };
-            }
-
-            await setDoc(bookRef, bookPayload, { merge: true });
-            debug.details.storyBookDocId = bookRef.id;
+            await setDoc(storyRef, storyPayload, { merge: true });
+            debug.details.storyDocId = storyRef.id;
 
             await logSessionEvent({
                 firestore,
@@ -237,7 +230,7 @@ Now, generate the JSON object containing the compiled story.
                 attributes: {
                     storyTypeId,
                     storyOutputTypeId,
-                    bookId: bookRef.id,
+                    storyId: storyRef.id,
                     storyLength: storyText.length,
                 },
             });
@@ -247,7 +240,7 @@ Now, generate the JSON object containing the compiled story.
                 sessionId,
                 storyText,
                 metadata,
-                bookId: bookRef.id,
+                storyId: storyRef.id,
                 debug: process.env.NODE_ENV === 'development' ? {
                     ...debug,
                     storyLength: storyText.length,

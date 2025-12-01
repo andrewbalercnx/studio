@@ -12,6 +12,7 @@ import type { StorySession, ChatMessage, StoryType, Character, ChildProfile } fr
 import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
 import { logSessionEvent } from '@/lib/session-events';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
+import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders';
 
 type StoryBeatDebugInfo = {
     stage: 'loading_session' | 'loading_storyType' | 'loading_promptConfig' | 'ai_generate' | 'json_parse' | 'json_validate' | 'unknown';
@@ -125,10 +126,12 @@ export const storyBeatFlow = ai.defineFlow(
             const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
             const messagesQuery = query(messagesRef, orderBy('createdAt', 'asc'));
             const messagesSnapshot = await getDocs(messagesQuery);
-            const storySoFar = messagesSnapshot.docs.map(doc => {
+            const rawStorySoFar = messagesSnapshot.docs.map(doc => {
                 const data = doc.data() as ChatMessage;
                 return `${data.sender === 'assistant' ? 'Story Guide' : 'Child'}: ${data.text}`;
             }).join('\n');
+            const storySoFar = await replacePlaceholdersWithDescriptions(rawStorySoFar);
+
 
             // 5. Choose PromptConfig using shared helper
             debug.stage = 'loading_promptConfig';
@@ -164,7 +167,7 @@ ${existingCharacterSummary || "No existing characters available."}
 STORY SO FAR:
 ${storySoFar}
 
-Based on all the above, continue the story. Generate the next paragraph and three choices for the child. Use placeholders like '$$childId$$' or '$$characterId$$' instead of names. Output your response as a single, valid JSON object that matches this structure:
+Based on all the above, continue the story. Generate the next paragraph and three choices for the child. The next paragraph must use placeholders like '$$characterId$$' instead of names where appropriate. Output your response as a single, valid JSON object that matches this structure:
 ${StoryBeatOutputSchemaDescription}
 Important: Return only a single JSON object. Do not include any extra text, explanation, or formatting. Do not wrap the JSON in markdown or code fences. The output must start with { and end with }.
 `;

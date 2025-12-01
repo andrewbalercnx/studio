@@ -1,9 +1,16 @@
 
+'use server';
+
 import { initializeFirebase } from '@/firebase';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import type { Character, ChildProfile } from '@/lib/types';
 
 type EntityMap = Map<string, { displayName: string; document: Character | ChildProfile }>;
+
+function buildCharacterDescription(character: Character): string {
+    const traits = character.traits?.length ? `, is ${character.traits.join(', ')}` : '';
+    return `[${character.displayName}, a ${character.role}${traits}]`;
+}
 
 async function fetchEntities(ids: string[]): Promise<EntityMap> {
   const { firestore } = initializeFirebase();
@@ -49,6 +56,25 @@ export function replacePlaceholders(text: string, entityMap: EntityMap): string 
         return entityMap.get(id)?.displayName || match;
     });
 }
+
+export async function replacePlaceholdersWithDescriptions(text: string): Promise<string> {
+    const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
+    const entityMap = await fetchEntities(ids);
+    
+    if (!text) return '';
+    return text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
+        const entity = entityMap.get(id);
+        if (!entity) return match;
+        
+        // Check if it's a Character or ChildProfile and format accordingly
+        if ('role' in entity.document) { // It's a Character
+            return buildCharacterDescription(entity.document as Character);
+        }
+        
+        return entity.displayName; // Fallback for ChildProfile
+    });
+}
+
 
 export async function resolveEntitiesInText(text: string): Promise<EntityMap> {
   const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
