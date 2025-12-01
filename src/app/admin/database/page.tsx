@@ -99,11 +99,20 @@ export default function AdminDatabasePage() {
       const hasFilter = filterField && (filterValue || isValueInputDisabled);
 
       if (hasFilter) {
-          q = query(collRef, where(filterField, '==', filterValue), limit(50));
+          q = query(collRef, where(filterField, '==', filterValue), orderBy(documentId()), limit(50));
       } else {
-          // Default sort: Use createdAt if it exists, otherwise it might not show all docs.
-          // The "Find Empty" button is the correct way to find docs without fields.
-          q = query(collRef, orderBy('createdAt', 'desc'), limit(50));
+          try {
+            q = query(collRef, orderBy('createdAt', 'desc'), orderBy(documentId()), limit(50));
+            await getDocs(q); // Try the query to see if the index exists
+          } catch (indexError) {
+            // If the createdAt index doesn't exist, fall back to a simple query
+            q = query(collRef, orderBy(documentId()), limit(50));
+            toast({
+              title: 'Notice',
+              description: `Sorting by 'createdAt' is not indexed for this collection. Showing documents by ID.`,
+              variant: 'default',
+            });
+          }
       }
 
       const querySnapshot = await getDocs(q);
@@ -141,26 +150,24 @@ export default function AdminDatabasePage() {
 
     try {
         const collRef = collection(firestore, selectedCollection);
-        // This is the simplest possible query, guaranteed not to require a composite index.
+        // The simplest query to get all documents, including those without fields.
         const q = query(collRef, orderBy(documentId()), limit(200));
 
         const querySnapshot = await getDocs(q);
         
-        // Client-side filter for empty documents
-        const emptyDocs = querySnapshot.docs
-            .filter(doc => Object.keys(doc.data()).length === 0) // Correctly check if the data object from Firestore is empty
-            .map((doc) => ({ id: doc.id, ...doc.data() }));
+        // No client-side filtering, just show what Firestore returns.
+        const allDocs = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         
-        setDocuments(emptyDocs);
+        setDocuments(allDocs);
 
-        if (emptyDocs.length === 0) {
-            toast({ title: 'No empty documents found in the first 200 checked.' });
+        if (allDocs.length === 0) {
+            toast({ title: 'No documents found in this collection.' });
         } else {
-            toast({ title: `Found ${emptyDocs.length} empty documents.` });
+            toast({ title: `Showing all ${allDocs.length} documents found.` });
         }
 
     } catch (error: any) {
-        console.error('Error finding empty documents:', error);
+        console.error('Error finding documents:', error);
         toast({
             title: 'Error',
             description: error.message,
@@ -279,7 +286,7 @@ export default function AdminDatabasePage() {
                 </Button>
                  <Button onClick={handleFindEmpty} disabled={isLoading} variant="secondary">
                     {isLoading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Eraser className="mr-2 h-4 w-4" />}
-                    Find Empty Docs
+                    Show All Docs
                 </Button>
             </div>
           </div>
