@@ -22,23 +22,30 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+const positiveNumber = z.preprocess(
+  (val) => (val === '' ? undefined : parseFloat(String(val))),
+  z.number({ required_error: "Value is required." }).positive("Must be a positive number.").optional()
+);
+
 const boxSchema = z.object({
-  leaf: z.coerce.number().min(1).max(2),
-  x: z.coerce.number(),
-  y: z.coerce.number(),
-  width: z.coerce.number(),
-  height: z.coerce.number(),
+  leaf: z.coerce.number().min(1, "Leaf must be 1 or 2.").max(2, "Leaf must be 1 or 2."),
+  x: z.preprocess((val) => parseFloat(String(val)), z.number()),
+  y: z.preprocess((val) => parseFloat(String(val)), z.number()),
+  width: positiveNumber,
+  height: positiveNumber,
 });
+
 
 const printLayoutFormSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, 'Name is required'),
-  leafWidth: z.coerce.number(),
-  leafHeight: z.coerce.number(),
+  leafWidth: positiveNumber,
+  leafHeight: positiveNumber,
   leavesPerSpread: z.enum(['1', '2']),
   textBoxes: z.array(boxSchema).min(1, 'At least one text box is required'),
   imageBoxes: z.array(boxSchema).min(1, 'At least one image box is required'),
 });
+
 
 type PrintLayoutFormValues = z.infer<typeof printLayoutFormSchema>;
 
