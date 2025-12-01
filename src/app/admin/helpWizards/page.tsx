@@ -53,8 +53,14 @@ export default function AdminHelpWizardsPage() {
 
     const unsubscribe = onSnapshot(q,
       (snapshot) => {
-        setWizards(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as HelpWizard)));
-        setLoading(false);
+        if (snapshot.empty) {
+          handleSeedWizards();
+          // The listener will fire again once seeding is complete.
+          // We keep loading true until then.
+        } else {
+          setWizards(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as HelpWizard)));
+          setLoading(false);
+        }
         setError(null);
       },
       (err) => {
@@ -65,7 +71,7 @@ export default function AdminHelpWizardsPage() {
     );
 
     return () => unsubscribe();
-  }, [firestore, isAdmin]);
+  }, [firestore, isAdmin, handleSeedWizards]);
 
   const renderContent = () => {
     if (authLoading || loading) return <div className="flex items-center gap-2"><LoaderCircle className="h-5 w-5 animate-spin" /><span>Loading wizards...</span></div>;
