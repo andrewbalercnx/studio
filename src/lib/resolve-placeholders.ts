@@ -50,7 +50,7 @@ async function fetchEntities(ids: string[]): Promise<EntityMap> {
   return entityMap;
 }
 
-export function replacePlaceholders(text: string, entityMap: EntityMap): string {
+export async function replacePlaceholdersInText(text: string, entityMap: EntityMap): Promise<string> {
     if (!text) return '';
     return text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
         return entityMap.get(id)?.displayName || match;
@@ -98,14 +98,14 @@ export async function resolvePlaceholders(text: string | string[]): Promise<Reco
   const originalTexts = Array.isArray(text) ? text : [text];
   const resolved: Record<string, string> = {};
 
-  originalTexts.forEach(originalText => {
-    resolved[originalText] = replacePlaceholders(originalText, entityMap);
-  });
+  for (const originalText of originalTexts) {
+    resolved[originalText] = await replacePlaceholdersInText(originalText, entityMap);
+  }
 
   return resolved;
 }
 
-export function getEntitiesInText(text: string, entityMap: EntityMap): Character[] {
+export async function getEntitiesInText(text: string, entityMap: EntityMap): Promise<Character[]> {
   if (!text) return [];
   const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
   const uniqueIds = [...new Set(ids)];

@@ -6,10 +6,10 @@ import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { z } from 'genkit';
-import type { StoryBook, StorySession, ChildProfile, Character, StoryBookPage as StoryBookPageType } from '@/lib/types';
+import type { Story, StorySession, ChildProfile, Character, StoryBookPage as StoryBookPageType } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { logSessionEvent } from '@/lib/session-events';
-import { resolveEntitiesInText, replacePlaceholders as replacePlaceholdersInText, getEntitiesInText } from '@/lib/resolve-placeholders';
+import { resolveEntitiesInText, replacePlaceholdersInText as replacePlaceholders, getEntitiesInText } from '@/lib/resolve-placeholders';
 
 
 type EntityMap = Map<string, { displayName: string; document: Character | ChildProfile }>;
@@ -143,41 +143,41 @@ const StoryPageFlowOutput = z.object({
 export const storyPageFlow = ai.defineFlow(
   {
     name: 'storyPageFlow',
-    inputSchema: z.object({ bookId: z.string() }),
+    inputSchema: z.object({ storyId: z.string() }),
     outputSchema: StoryPageFlowOutput,
   },
-  async ({ bookId }) => {
-    let diagnostics: StoryPageFlowDiagnostics = { stage: 'init', details: { bookId } };
+  async ({ storyId }) => {
+    let diagnostics: StoryPageFlowDiagnostics = { stage: 'init', details: { storyId } };
 
     try {
       const { firestore } = initializeFirebase();
-      diagnostics = { stage: 'loading', details: { bookId } };
+      diagnostics = { stage: 'loading', details: { storyId } };
 
-      const bookRef = doc(firestore, 'storyBooks', bookId);
-      const bookSnap = await getDoc(bookRef);
-      if (!bookSnap.exists()) {
-        throw new Error(`storyBooks/${bookId} not found.`);
+      const storyRef = doc(firestore, 'stories', storyId);
+      const storySnap = await getDoc(storyRef);
+      if (!storySnap.exists()) {
+        throw new Error(`stories/${storyId} not found.`);
       }
-      const book = bookSnap.data() as StoryBook;
+      const story = storySnap.data() as Story;
 
       const [sessionSnap, childSnap] = await Promise.all([
-        book.storySessionId ? getDoc(doc(firestore, 'storySessions', book.storySessionId)) : Promise.resolve(null),
-        book.childId ? getDoc(doc(firestore, 'children', book.childId)) : Promise.resolve(null),
+        story.storySessionId ? getDoc(doc(firestore, 'storySessions', story.storySessionId)) : Promise.resolve(null),
+        story.childId ? getDoc(doc(firestore, 'children', story.childId)) : Promise.resolve(null),
       ]);
 
       const session = sessionSnap?.exists() ? (sessionSnap.data() as StorySession) : null;
       const child = childSnap?.exists() ? (childSnap.data() as ChildProfile) : null;
 
-      if (!book.storyText || book.storyText.trim().length === 0) {
-        throw new Error(`storyBooks/${bookId} is missing storyText.`);
+      if (!story.storyText || story.storyText.trim().length === 0) {
+        throw new Error(`stories/${storyId} is missing storyText.`);
       }
       
       const childName = child?.displayName;
-      const derivedTitle = session?.storyTitle ?? (childName ? `${childName}'s Adventure` : 'Storybook Adventure');
-      const coverText = childName ? `A story just for $$${child?.id}$$` : 'A story made with love.';
-      const backCoverText = childName ? `Thanks for reading with $$${child?.id}$$!` : 'The adventure continues next time.';
+      const derivedTitle = story.metadata?.title ?? session?.storyTitle ?? (childName ? `${childName}'s Adventure` : 'Storybook Adventure');
+      const coverText = child?.id ? `A story just for $$${child?.id}$$` : 'A story made with love.';
+      const backCoverText = child?.id ? `Thanks for reading with $$${child?.id}$$!` : 'The adventure continues next time.';
 
-      const combinedTextForResolution = [book.storyText, coverText, backCoverText].join(' ');
+      const combinedTextForResolution = [story.storyText, coverText, backCoverText].join(' ');
       const entityMap = await resolveEntitiesInText(combinedTextForResolution);
       diagnostics.details.resolvedEntities = entityMap.size;
 
@@ -185,13 +185,13 @@ export const storyPageFlow = ai.defineFlow(
         stage: 'chunking',
         details: {
           ...diagnostics.details,
-          storyTextLength: book.storyText.length,
+          storyTextLength: story.storyText.length,
           hasChildProfile: !!child,
           hasSession: !!session,
         },
       };
 
-      const sentences = splitSentences(book.storyText);
+      const sentences = splitSentences(story.storyText);
       const chunks = chunkSentences(sentences);
 
       diagnostics = {
@@ -206,8 +206,8 @@ export const storyPageFlow = ai.defineFlow(
       const pages: FlowPage[] = [];
       let pageNumber = 0;
       
-      const coverDisplayText = replacePlaceholdersInText(coverText, entityMap);
-      const coverEntities = getEntitiesInText(coverText, entityMap);
+      const coverDisplayText = await replacePlaceholders(coverText, entityMap);
+      const coverEntities = await getEntitiesInText(coverText, entityMap);
       pages.push({
         pageNumber: pageNumber++,
         kind: 'cover_front',
@@ -219,10 +219,10 @@ export const storyPageFlow = ai.defineFlow(
         layoutHints: { aspectRatio: 'portrait', textPlacement: 'bottom' },
       });
 
-      chunks.forEach((chunk, index) => {
+      for (const [index, chunk] of chunks.entries()) {
         const text = chunk.join(' ').trim();
-        const displayText = replacePlaceholdersInText(text, entityMap);
-        const entitiesOnPage = getEntitiesInText(text, entityMap);
+        const displayText = await replacePlaceholders(text, entityMap);
+        const entitiesOnPage = await getEntitiesInText(text, entityMap);
         pages.push({
           pageNumber: pageNumber++,
           kind: 'text',
@@ -235,10 +235,10 @@ export const storyPageFlow = ai.defineFlow(
             textPlacement: index % 2 === 0 ? 'bottom' : 'top',
           },
         });
-      });
+      };
       
-      const backCoverDisplayText = replacePlaceholdersInText(backCoverText, entityMap);
-      const backCoverEntities = getEntitiesInText(backCoverText, entityMap);
+      const backCoverDisplayText = await replacePlaceholders(backCoverText, entityMap);
+      const backCoverEntities = await getEntitiesInText(backCoverText, entityMap);
       pages.push({
         pageNumber: pageNumber++,
         kind: 'cover_back',
@@ -258,7 +258,7 @@ export const storyPageFlow = ai.defineFlow(
         },
       };
 
-      const sessionIdForEvent = sessionSnap?.id ?? book.storySessionId ?? null;
+      const sessionIdForEvent = sessionSnap?.id ?? story.storySessionId ?? null;
       if (sessionIdForEvent) {
         await logSessionEvent({
           firestore,
@@ -267,7 +267,7 @@ export const storyPageFlow = ai.defineFlow(
           status: 'completed',
           source: 'server',
           attributes: {
-            bookId,
+            storyId,
             pageCount: pages.length,
           },
         });
@@ -275,7 +275,7 @@ export const storyPageFlow = ai.defineFlow(
 
       return {
         ok: true,
-        bookId,
+        bookId: storyId, // The input is storyId which is the bookId now
         pages,
         stats: {
           totalSentences: sentences.length,
@@ -292,7 +292,7 @@ export const storyPageFlow = ai.defineFlow(
       };
       return {
         ok: false,
-        bookId,
+        bookId: storyId,
         errorMessage: error?.message ?? 'Unexpected storyPageFlow error.',
         diagnostics,
       };
