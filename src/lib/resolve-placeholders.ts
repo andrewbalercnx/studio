@@ -1,3 +1,4 @@
+
 import { initializeFirebase } from '@/firebase';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import type { Character, ChildProfile } from '@/lib/types';
@@ -10,6 +11,7 @@ async function fetchEntities(ids: string[]): Promise<EntityMap> {
   if (ids.length === 0) return entityMap;
 
   const uniqueIds = [...new Set(ids)];
+  console.debug('[resolveEntities] Fetching entities for IDs:', uniqueIds);
 
   try {
     const characterDocs = await getDocs(query(collection(firestore, 'characters'), where('__name__', 'in', uniqueIds)));
@@ -17,23 +19,27 @@ async function fetchEntities(ids: string[]): Promise<EntityMap> {
       const char = doc.data() as Character;
       entityMap.set(doc.id, { displayName: char.displayName, document: char });
     });
+    console.debug(`[resolveEntities] Found ${characterDocs.size} characters.`);
   } catch (e) {
     console.warn('[resolveEntities] Error fetching characters:', e);
   }
 
   const remainingIds = uniqueIds.filter(id => !entityMap.has(id));
   if (remainingIds.length > 0) {
+    console.debug('[resolveEntities] Remaining IDs to check in children:', remainingIds);
     try {
       const childrenDocs = await getDocs(query(collection(firestore, 'children'), where('__name__', 'in', remainingIds)));
       childrenDocs.forEach(doc => {
         const child = doc.data() as ChildProfile;
         entityMap.set(doc.id, { displayName: child.displayName, document: child });
       });
+      console.debug(`[resolveEntities] Found ${childrenDocs.size} children.`);
     } catch (e) {
       console.warn('[resolveEntities] Error fetching children:', e);
     }
   }
 
+  console.debug(`[resolveEntities] Final map contains ${entityMap.size} of ${uniqueIds.length} unique IDs.`);
   return entityMap;
 }
 
@@ -44,7 +50,7 @@ export function replacePlaceholders(text: string, entityMap: EntityMap): string 
     });
 }
 
-export async function resolveEntities(text: string): Promise<EntityMap> {
+export async function resolveEntitiesInText(text: string): Promise<EntityMap> {
   const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
   return fetchEntities(ids);
 }
@@ -79,5 +85,3 @@ export function getEntitiesInText(text: string, entityMap: EntityMap): Character
     .map(id => entityMap.get(id)?.document)
     .filter((doc): doc is Character => !!doc && 'displayName' in doc && 'role' in doc);
 }
-
-    
