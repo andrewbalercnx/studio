@@ -172,7 +172,13 @@ export const storyPageFlow = ai.defineFlow(
         throw new Error(`storyBooks/${bookId} is missing storyText.`);
       }
       
-      const entityMap = await resolveEntitiesInText(book.storyText);
+      const childName = child?.displayName;
+      const derivedTitle = session?.storyTitle ?? (childName ? `${childName}'s Adventure` : 'Storybook Adventure');
+      const coverText = childName ? `A story just for $$${child?.id}$$` : 'A story made with love.';
+      const backCoverText = childName ? `Thanks for reading with $$${child?.id}$$!` : 'The adventure continues next time.';
+
+      const combinedTextForResolution = [book.storyText, coverText, backCoverText].join(' ');
+      const entityMap = await resolveEntitiesInText(combinedTextForResolution);
       diagnostics.details.resolvedEntities = entityMap.size;
 
       diagnostics = {
@@ -198,12 +204,8 @@ export const storyPageFlow = ai.defineFlow(
       };
 
       const pages: FlowPage[] = [];
-      const childName = child?.displayName;
-      const derivedTitle = session?.storyTitle ?? (childName ? `${childName}'s Adventure` : 'Storybook Adventure');
-
       let pageNumber = 0;
       
-      const coverText = childName ? `A story just for $$${child?.id}$$` : 'A story made with love.';
       const coverDisplayText = replacePlaceholdersInText(coverText, entityMap);
       const coverEntities = getEntitiesInText(coverText, entityMap);
       pages.push({
@@ -235,7 +237,6 @@ export const storyPageFlow = ai.defineFlow(
         });
       });
       
-      const backCoverText = childName ? `Thanks for reading with $$${child?.id}$$!` : 'The adventure continues next time.';
       const backCoverDisplayText = replacePlaceholdersInText(backCoverText, entityMap);
       const backCoverEntities = getEntitiesInText(backCoverText, entityMap);
       pages.push({

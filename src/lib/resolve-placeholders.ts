@@ -55,6 +55,8 @@ export async function resolveEntitiesInText(text: string): Promise<EntityMap> {
   return fetchEntities(ids);
 }
 
+export const resolveEntities = resolveEntitiesInText;
+
 // New function for client-side usage
 export async function resolvePlaceholders(text: string | string[]): Promise<Record<string, string>> {
   const textToProcess = Array.isArray(text) ? text.join(' ') : text;
