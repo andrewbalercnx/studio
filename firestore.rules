@@ -185,6 +185,11 @@ service cloud.firestore {
         || isUserWriter(request.auth.uid);
     }
 
+    match /printLayouts/{layoutId} {
+      allow read: if true;
+      allow write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid);
+    }
+
     match /helpWizards/{wizardId} {
       allow read: if true;
       allow write: if isServer() || isAdmin();

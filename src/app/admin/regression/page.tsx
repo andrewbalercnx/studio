@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useAuth } from '@/firebase';
 import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, increment, orderBy, deleteDoc, writeBatch } from 'firebase/firestore';
 import type { Firestore, DocumentReference } from 'firebase/firestore';
-import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile, StoryOutputPage as StoryBookPage, StoryOutput } from '@/lib/types';
+import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile, StoryOutputPage as StoryBookPage, StoryOutput, PrintLayout } from '@/lib/types';
 import { IdTokenResult } from 'firebase/auth';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
@@ -165,6 +165,7 @@ type RegressionArtifactTracker = {
     stories: Set<string>;
     promptConfigs: Set<string>;
     printOrders: Set<string>;
+    printLayouts: Set<string>;
 };
 
 const createArtifactTracker = (): RegressionArtifactTracker => ({
@@ -174,6 +175,7 @@ const createArtifactTracker = (): RegressionArtifactTracker => ({
     stories: new Set(),
     promptConfigs: new Set(),
     printOrders: new Set(),
+    printLayouts: new Set(),
 });
 
 const addRegressionMeta = <T extends Record<string, any>>(data: T, scenarioId: string) => ({
@@ -271,6 +273,11 @@ const cleanupRegressionArtifacts = async (firestore: Firestore, tracker: Regress
             await deleteDoc(doc(firestore, 'promptConfigs', configId));
         });
     }
+    for (const layoutId of tracker.printLayouts) {
+        await deleteWithLogging(`printLayouts/${layoutId}`, async () => {
+            await deleteDoc(doc(firestore, 'printLayouts', layoutId));
+        });
+    }
 };
 
 
@@ -301,6 +308,7 @@ const initialTests: TestResult[] = [
   { id: 'DATA_STORY_OUTPUTS', name: 'Firestore: Story Output Types', status: 'PENDING', message: '' },
   { id: 'DATA_STORY_PHASES', name: 'Firestore: Story Phases', status: 'PENDING', message: '' },
   { id: 'DATA_STORY_TYPES', name: 'Firestore: Story Types', status: 'PENDING', message: '' },
+  { id: 'DATA_PRINT_LAYOUTS', name: 'Firestore: Print Layouts', status: 'PENDING', message: '' },
   { id: 'DATA_PROMPTS_STORY_BEAT_LIVE', name: 'Firestore: StoryBeat Live Configs', status: 'PENDING', message: '' },
   { id: 'DATA_PROMPTS', name: 'Firestore: Prompt Configs', status: 'PENDING', message: '' },
 ];
@@ -562,6 +570,24 @@ export default function AdminRegressionPage() {
       } catch (e: any) {
         updateTestResult('DATA_STORY_OUTPUTS', { status: 'FAIL', message: e.message });
       }
+      
+      // Test: DATA_PRINT_LAYOUTS
+      try {
+          const layoutsRef = collection(firestore, 'printLayouts');
+          const snap = await getDocs(layoutsRef);
+          fsSummary.printLayoutsCount = snap.size;
+          if(snap.empty) {
+              throw new Error("Collection is empty. Visit /admin/print-layouts to seed data.");
+          }
+          const firstLayout = snap.docs[0].data() as PrintLayout;
+          if (!firstLayout.name || !firstLayout.leafWidth || !firstLayout.leafHeight || !firstLayout.leavesPerSpread) {
+              throw new Error("First layout doc is missing required fields.");
+          }
+          updateTestResult('DATA_PRINT_LAYOUTS', {status: 'PASS', message: `Found ${snap.size} layouts. First doc OK.`});
+      } catch(e: any) {
+          updateTestResult('DATA_PRINT_LAYOUTS', {status: 'FAIL', message: e.message});
+      }
+
 
       // Test: DATA_CHILDREN
       try {
@@ -1739,7 +1765,7 @@ export default function AdminRegressionPage() {
     }
     setIsCleaning(true);
     try {
-        const collectionsToClean = ['children', 'storySessions', 'characters', 'stories', 'promptConfigs', 'printOrders'];
+        const collectionsToClean = ['children', 'storySessions', 'characters', 'stories', 'promptConfigs', 'printOrders', 'printLayouts'];
         const batch = writeBatch(firestore);
         let deletedCount = 0;
 
@@ -1879,3 +1905,5 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
+
+    
