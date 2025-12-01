@@ -9,7 +9,7 @@ import { z } from 'genkit';
 import type { StoryBook, StorySession, ChildProfile, Character, StoryBookPage as StoryBookPageType } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { logSessionEvent } from '@/lib/session-events';
-import { resolveEntities, replacePlaceholders, getEntitiesInText } from '@/lib/resolve-placeholders';
+import { resolveEntitiesInText, replacePlaceholders, getEntitiesInText } from '@/lib/resolve-placeholders';
 
 
 type EntityMap = Map<string, { displayName: string; document: Character | ChildProfile }>;
@@ -172,7 +172,7 @@ export const storyPageFlow = ai.defineFlow(
         throw new Error(`storyBooks/${bookId} is missing storyText.`);
       }
       
-      const entityMap = await resolveEntities(book.storyText);
+      const entityMap = await resolveEntitiesInText(book.storyText);
       diagnostics.details.resolvedEntities = entityMap.size;
 
       diagnostics = {
@@ -298,5 +298,3 @@ export const storyPageFlow = ai.defineFlow(
     }
   }
 );
-
-    
