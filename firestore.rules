@@ -172,7 +172,9 @@ service cloud.firestore {
     }
 
     match /helpWizards/{wizardId} {
-      allow read: if true; // Publicly readable content
+      // Publicly readable content, allow unauthenticated access
+      allow read: if true;
+      // Write access restricted to server or admin
       allow write: if isServer() || isAdmin();
     }
   }
