@@ -41,7 +41,8 @@ export function useCollection<T>(query: Query | null): UseCollectionReturn<T> {
         setError(null);
       },
       (err: Error) => {
-        console.error('[useCollection] snapshot error:', {
+        console.error({
+          hook: 'useCollection',
           path: path,
           code: (err as any)?.code,
           message: err?.message,
@@ -102,6 +103,12 @@ export function useDocument<T>(docRef: DocumentReference | null): UseDocumentRet
         setError(null);
       },
       (err: Error) => {
+        console.error({
+          hook: 'useDocument',
+          path: path,
+          code: (err as any)?.code,
+          message: err?.message,
+        });
         const permissionError = new FirestorePermissionError({
           path: docRef.path,
           operation: 'get',
