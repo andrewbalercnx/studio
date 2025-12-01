@@ -69,7 +69,7 @@ export const storyCompileFlow = ai.defineFlow(
                 getDoc(storyTypeRef),
                 getDoc(storyOutputTypeRef),
                 getDocs(charactersQuery),
-                getDocs(messagesSnapshot),
+                getDocs(messagesQuery),
             ]);
             
             if (!storyTypeDoc.exists()) throw new Error(`StoryType with id ${storyTypeId} not found.`);

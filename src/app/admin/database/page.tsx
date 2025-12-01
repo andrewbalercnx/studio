@@ -45,19 +45,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { LoaderCircle, Trash2, Search, AlertTriangle, FileJson } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import backendConfig from '@/../docs/backend.json';
 
-const COLLECTIONS = [
-  'users',
-  'children',
-  'storySessions',
-  'characters',
-  'promptConfigs',
-  'storyPhases',
-  'storyTypes',
-  'storyOutputTypes',
-  'storyBooks',
-  'printOrders',
-];
+const COLLECTIONS = Object.keys(backendConfig.firestore)
+  .map(path => path.split('/')[1]) // Get the root collection name
+  .filter((value, index, self) => self.indexOf(value) === index) // Get unique names
+  .sort();
+
 
 type DocumentData = {
   id: string;

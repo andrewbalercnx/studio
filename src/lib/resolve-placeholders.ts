@@ -1,6 +1,4 @@
 
-'use server';
-
 import { initializeFirebase } from '@/firebase';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import type { Character, ChildProfile } from '@/lib/types';
