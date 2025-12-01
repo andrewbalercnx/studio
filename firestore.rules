@@ -57,7 +57,7 @@ service cloud.firestore {
       );
     }
 
-    function storyBookReadableByParent() {
+    function storyReadableByParent() {
       return resource != null && request.auth != null && (
         resource.data.parentUid == request.auth.uid ||
         (
@@ -68,15 +68,15 @@ service cloud.firestore {
       );
     }
 
-    function sessionOwnedByParent(bookId) {
-      return request.auth != null && exists(/databases/$(database)/documents/storySessions/$(bookId)) &&
-        get(/databases/$(database)/documents/storySessions/$(bookId)).data.parentUid == request.auth.uid;
+    function sessionOwnedByParent(storyId) {
+      return request.auth != null && exists(/databases/$(database)/documents/storySessions/$(storyId)) &&
+        get(/databases/$(database)/documents/storySessions/$(storyId)).data.parentUid == request.auth.uid;
     }
     
-    function storyBookOwnedByParent(bookId) {
+    function storyOwnedByParent(storyId) {
       return request.auth != null
-        && exists(/databases/$(database)/documents/storyBooks/$(bookId))
-        && get(/databases/$(database)/documents/storyBooks/$(bookId)).data.parentUid == request.auth.uid;
+        && exists(/databases/$(database)/documents/stories/$(storyId))
+        && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid;
     }
 
     match /storySessions/{sessionId} {
@@ -122,32 +122,46 @@ service cloud.firestore {
       allow write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || isWriter() || isUserWriter(request.auth.uid);
     }
 
-    match /storyBooks/{bookId} {
+    match /stories/{storyId} {
       allow read: if isServer()
         || isAdmin()
         || isUserAdmin(request.auth.uid)
         || isWriter()
         || isUserWriter(request.auth.uid)
-        || storyBookReadableByParent()
-        || sessionOwnedByParent(bookId);
+        || storyReadableByParent()
+        || sessionOwnedByParent(storyId);
       allow write: if isServer()
         || isAdmin()
         || isUserAdmin(request.auth.uid)
         || (request.auth != null && request.resource.data.parentUid == request.auth.uid);
       allow list: if request.auth != null;
 
-      match /pages/{pageId} {
+      match /outputs/{outputId} {
         allow read: if isServer()
           || isAdmin()
           || isUserAdmin(request.auth.uid)
           || isWriter()
           || isUserWriter(request.auth.uid)
-          || storyBookOwnedByParent(bookId)
-          || sessionOwnedByParent(bookId);
+          || storyOwnedByParent(storyId)
+          || sessionOwnedByParent(storyId);
         allow write: if isServer()
           || isAdmin()
           || isUserAdmin(request.auth.uid)
-          || storyBookOwnedByParent(bookId);
+          || storyOwnedByParent(storyId);
+          
+        match /pages/{pageId} {
+          allow read: if isServer()
+            || isAdmin()
+            || isUserAdmin(request.auth.uid)
+            || isWriter()
+            || isUserWriter(request.auth.uid)
+            || storyOwnedByParent(storyId)
+            || sessionOwnedByParent(storyId);
+          allow write: if isServer()
+            || isAdmin()
+            || isUserAdmin(request.auth.uid)
+            || storyOwnedByParent(storyId);
+        }
       }
 
       match /shareTokens/{shareId} {
@@ -182,3 +196,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
