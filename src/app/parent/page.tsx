@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useUser } from '@/firebase/auth/use-user';
 import { Users, CreditCard, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
