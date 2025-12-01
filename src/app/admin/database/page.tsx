@@ -101,18 +101,7 @@ export default function AdminDatabasePage() {
       if (hasFilter) {
           q = query(collRef, where(filterField, '==', filterValue), orderBy(documentId()), limit(50));
       } else {
-          try {
-            q = query(collRef, orderBy('createdAt', 'desc'), orderBy(documentId()), limit(50));
-            await getDocs(q); // Try the query to see if the index exists
-          } catch (indexError) {
-            // If the createdAt index doesn't exist, fall back to a simple query
-            q = query(collRef, orderBy(documentId()), limit(50));
-            toast({
-              title: 'Notice',
-              description: `Sorting by 'createdAt' is not indexed for this collection. Showing documents by ID.`,
-              variant: 'default',
-            });
-          }
+          q = query(collRef, orderBy(documentId()), limit(50));
       }
 
       const querySnapshot = await getDocs(q);
@@ -150,20 +139,18 @@ export default function AdminDatabasePage() {
 
     try {
         const collRef = collection(firestore, selectedCollection);
-        // The simplest query to get all documents, including those without fields.
         const q = query(collRef, orderBy(documentId()), limit(200));
-
         const querySnapshot = await getDocs(q);
         
-        // No client-side filtering, just show what Firestore returns.
-        const allDocs = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const emptyDocs = querySnapshot.docs.filter(doc => Object.keys(doc.data()).length === 0)
+          .map((doc) => ({ id: doc.id, ...doc.data() }));
         
-        setDocuments(allDocs);
+        setDocuments(emptyDocs);
 
-        if (allDocs.length === 0) {
-            toast({ title: 'No documents found in this collection.' });
+        if (emptyDocs.length === 0) {
+            toast({ title: 'No empty documents found in the first 200 checked.' });
         } else {
-            toast({ title: `Showing all ${allDocs.length} documents found.` });
+            toast({ title: `Found ${emptyDocs.length} empty documents.` });
         }
 
     } catch (error: any) {
@@ -286,7 +273,7 @@ export default function AdminDatabasePage() {
                 </Button>
                  <Button onClick={handleFindEmpty} disabled={isLoading} variant="secondary">
                     {isLoading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Eraser className="mr-2 h-4 w-4" />}
-                    Show All Docs
+                    Find Empty Docs
                 </Button>
             </div>
           </div>
