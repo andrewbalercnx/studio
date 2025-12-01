@@ -15,6 +15,8 @@ import {
   endAt,
   doc,
   documentId,
+  Query,
+  DocumentData,
 } from 'firebase/firestore';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
@@ -54,7 +56,7 @@ const COLLECTIONS = Object.keys(backendConfig.firestore)
   .sort();
 
 
-type DocumentData = {
+type DocumentDataWithId = {
   id: string;
   [key: string]: any;
 };
@@ -70,9 +72,9 @@ export default function AdminDatabasePage() {
   const [filterField, setFilterField] = useState('');
   const [filterOperator, setFilterOperator] = useState<FilterOperator>('==');
   const [filterValue, setFilterValue] = useState('');
-  const [documents, setDocuments] = useState<DocumentData[]>([]);
+  const [documents, setDocuments] = useState<DocumentDataWithId[]>([]);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
-  const [viewingDoc, setViewingDoc] = useState<DocumentData | null>(null);
+  const [viewingDoc, setViewingDoc] = useState<DocumentDataWithId | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -93,20 +95,19 @@ export default function AdminDatabasePage() {
     setViewingDoc(null);
     try {
       const collRef = collection(firestore, selectedCollection);
-      let q;
+      let q: Query<DocumentData, DocumentData>;
       
       const hasFilter = filterField && (filterValue || isValueInputDisabled);
 
       if (hasFilter) {
           if (filterOperator === 'exists') {
-              q = query(collRef, where(filterField, '!=', null), orderBy(filterField), limit(50));
+              q = query(collRef, where(filterField, '!=', null), orderBy(filterField), orderBy(documentId()), limit(50));
           } else if (filterOperator === 'does_not_exist') {
               q = query(collRef, where(filterField, '==', null), orderBy(documentId()), limit(50));
           } else { // '=='
-              q = query(collRef, where(filterField, '==', filterValue), limit(50));
+              q = query(collRef, where(filterField, '==', filterValue), orderBy(documentId()), limit(50));
           }
       } else {
-        // Default query: order by creation time desc, and then by document ID to ensure all docs appear
         q = query(collRef, orderBy('createdAt', 'desc'), orderBy(documentId()), limit(50));
       }
 
