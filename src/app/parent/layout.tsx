@@ -17,7 +17,6 @@ const NAV_LINKS = [
 
 export default function ParentLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const showSidebar = pathname !== '/parent';
 
   const layoutContent = (
     <div className="container mx-auto flex flex-col gap-6 px-4 py-8 lg:flex-row">
@@ -27,26 +26,17 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
           <p className="text-sm text-muted-foreground">Manage profiles, security, and orders.</p>
         </div>
         <nav className="rounded-xl border bg-card p-2">
-          {NAV_LINKS.map(({ href, label, icon: Icon, disabled }) => {
+          {NAV_LINKS.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href;
-            const baseClasses = cn(
-              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition',
-              isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted'
-            );
-
-            if (disabled) {
-              return (
-                <div key={href} className={cn(baseClasses, 'cursor-not-allowed opacity-50 hover:bg-transparent')}>
-                  <Icon className="h-4 w-4" />
-                  <span className="flex-1 text-left">
-                    {label} <span className="text-xs">(coming soon)</span>
-                  </span>
-                </div>
-              );
-            }
-
             return (
-              <Link key={href} href={href} className={baseClasses}>
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition',
+                  isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted'
+                )}
+              >
                 <Icon className="h-4 w-4" />
                 <span className="flex-1 text-left">{label}</span>
               </Link>
@@ -59,10 +49,6 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
       </section>
     </div>
   );
-
-  if (!showSidebar) {
-    return <ParentGuard>{children}</ParentGuard>;
-  }
 
   return <ParentGuard>{layoutContent}</ParentGuard>;
 }
