@@ -11,8 +11,6 @@ import {
   writeBatch,
   limit,
   orderBy,
-  startAt,
-  endAt,
   doc,
   documentId,
   Query,
@@ -46,7 +44,7 @@ import {
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { LoaderCircle, Trash2, Search, FileJson } from 'lucide-react';
+import { LoaderCircle, Trash2, Search, FileJson, Eraser } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import backendConfig from '@/../docs/backend.json';
 
@@ -101,22 +99,13 @@ export default function AdminDatabasePage() {
       const hasFilter = filterField && (filterValue || isValueInputDisabled);
 
       if (hasFilter) {
-        // When filtering, only order by document ID to avoid composite index errors.
         if (filterOperator === 'exists') {
           q = query(collRef, where(filterField, '!=', null), orderBy(documentId()), limit(50));
-        } else { // '=='
+        } else {
           q = query(collRef, where(filterField, '==', filterValue), orderBy(documentId()), limit(50));
         }
       } else {
-        // Default query: try ordering by createdAt, fall back to just documentId.
-        // This ensures all documents are shown, even those without a createdAt field.
-        try {
-          const testQuery = query(collRef, orderBy('createdAt', 'desc'), limit(1));
-          await getDocs(testQuery);
-          q = query(collRef, orderBy('createdAt', 'desc'), orderBy(documentId()), limit(50));
-        } catch (e) {
-          q = query(collRef, orderBy(documentId()), limit(50));
-        }
+        q = query(collRef, orderBy('createdAt', 'desc'), orderBy(documentId()), limit(50));
       }
 
       const querySnapshot = await getDocs(q);
@@ -138,6 +127,52 @@ export default function AdminDatabasePage() {
     }
   };
 
+  const handleFindEmpty = async () => {
+    if (!firestore || !selectedCollection) {
+      toast({
+        title: 'Missing Information',
+        description: 'Please select a collection to search.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setIsLoading(true);
+    setDocuments([]);
+    setSelectedDocs(new Set());
+    setViewingDoc(null);
+
+    try {
+        const collRef = collection(firestore, selectedCollection);
+        // This is the simplest possible query, guaranteed not to require a composite index.
+        const q = query(collRef, orderBy(documentId()), limit(200));
+
+        const querySnapshot = await getDocs(q);
+        
+        // Client-side filter for empty documents
+        const emptyDocs = querySnapshot.docs
+            .map((doc) => ({ id: doc.id, ...doc.data() }))
+            .filter(doc => Object.keys(doc).length === 1); // Only has 'id' field
+        
+        setDocuments(emptyDocs);
+
+        if (emptyDocs.length === 0) {
+            toast({ title: 'No empty documents found in the first 200 checked.' });
+        } else {
+            toast({ title: `Found ${emptyDocs.length} empty documents.` });
+        }
+
+    } catch (error: any) {
+        console.error('Error finding empty documents:', error);
+        toast({
+            title: 'Error',
+            description: error.message,
+            variant: 'destructive',
+        });
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
 
   const handleDelete = async () => {
     if (!firestore || selectedDocs.size === 0) return;
@@ -155,7 +190,9 @@ export default function AdminDatabasePage() {
         description: `${selectedDocs.size} documents deleted.`,
       });
       // Refresh the list after deletion
-      handleSearch();
+      setDocuments(prev => prev.filter(doc => !selectedDocs.has(doc.id)));
+      setSelectedDocs(new Set());
+
     } catch (error: any) {
       toast({
         title: 'Deletion Error',
@@ -237,10 +274,16 @@ export default function AdminDatabasePage() {
                 />
               </div>
             </div>
-            <Button onClick={handleSearch} disabled={isLoading}>
-              {isLoading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-              Search
-            </Button>
+            <div className="flex gap-2">
+                <Button onClick={handleSearch} disabled={isLoading}>
+                    {isLoading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                    Search
+                </Button>
+                 <Button onClick={handleFindEmpty} disabled={isLoading} variant="secondary">
+                    {isLoading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Eraser className="mr-2 h-4 w-4" />}
+                    Find Empty Docs
+                </Button>
+            </div>
           </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
