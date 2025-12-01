@@ -32,6 +32,7 @@ import {useUser} from '@/firebase/auth/use-user';
 import {useParentGuard} from '@/hooks/use-parent-guard';
 import {useToast} from '@/hooks/use-toast';
 import {PrintOrderDialog} from '@/components/storybook/print-order-dialog';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 type StatusBadge = {label: string; variant: 'default' | 'secondary' | 'outline'};
 
@@ -378,9 +379,10 @@ export default function StorybookViewerPage() {
   };
 
   return (
+    <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
     <div className="container mx-auto px-4 py-10 space-y-6">
-      <div className="grid gap-6 lg:grid-cols-[1.7fr,1fr]">
-        <Card className="mx-auto w-full">
+      <div className="grid gap-6 lg:grid-cols-1">
+        <Card className="mx-auto w-full max-w-4xl">
           <CardHeader className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -419,12 +421,14 @@ export default function StorybookViewerPage() {
                 Force Regenerate All
               </Button>
             </div>
-            <div className={clsx('rounded-md border border-dashed p-4 text-sm', isLocked ? 'bg-blue-50 text-blue-900' : imageStatus === 'ready' ? 'bg-emerald-50 text-emerald-900' : 'bg-amber-50 text-amber-900')}>
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                <p>{statusMessage}</p>
-              </div>
-            </div>
+            <Alert variant={isLocked ? 'default' : allImagesReady ? 'default' : 'destructive'} className={clsx(
+                isLocked ? 'bg-blue-50 border-blue-200 text-blue-900 [&>svg]:text-blue-600' : 
+                allImagesReady ? 'bg-emerald-50 border-emerald-200 text-emerald-900 [&>svg]:text-emerald-600' : 
+                'bg-amber-50 border-amber-200 text-amber-900 [&>svg]:text-amber-600'
+            )}>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{statusMessage}</AlertDescription>
+            </Alert>
           </CardHeader>
           <CardContent>{renderViewer()}</CardContent>
           <CardFooter className="flex flex-col gap-3">
@@ -452,172 +456,6 @@ export default function StorybookViewerPage() {
           </CardFooter>
         </Card>
 
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                {isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />} Finalization
-              </CardTitle>
-              <CardDescription>Freeze the book before sharing or printing.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-sm text-muted-foreground space-y-1">
-                <p>Version: <span className="font-medium text-foreground">{finalization?.version ?? 0}</span></p>
-                <p>Locked by: <span className="font-medium text-foreground">{finalization?.lockedByDisplayName ?? finalization?.lockedByEmail ?? '—'}</span></p>
-                {finalization?.lockedAt && <p>Locked at: <span className="font-medium text-foreground">{formatTimestamp(finalization.lockedAt)}</span></p>}
-              </div>
-              <div className="flex flex-col gap-2">
-                <Button onClick={handleFinalize} disabled={!allImagesReady || isLocked || finalizing}>
-                  {finalizing && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
-                  Finalize Book
-                </Button>
-                <Button variant="outline" onClick={handleUnlock} disabled={!isLocked || unlocking}>
-                  {unlocking && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
-                  Unlock Book
-                </Button>
-                {!allImagesReady && !isLocked && (
-                  <p className="text-xs text-muted-foreground">Generate and approve all artwork before finalizing.</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Printer className="h-4 w-4" />
-                Printable Assets
-              </CardTitle>
-              <CardDescription>Create or download the PDF spread.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {finalization?.printablePdfUrl ? (
-                <div className="flex flex-col gap-2">
-                  <Button asChild variant="secondary">
-                    <a href={finalization.printablePdfUrl} target="_blank" rel="noreferrer">
-                      Download Printable PDF
-                    </a>
-                  </Button>
-                  {finalization.printableMetadata && (
-                    <p className="text-xs text-muted-foreground">
-                      {finalization.printableMetadata.pageCount} pages · {finalization.printableMetadata.trimSize} · {finalization.printableMetadata.dpi} dpi
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No printable asset yet. Generate once the book is finalized.</p>
-              )}
-              <Button
-                variant="outline"
-                onClick={handleGeneratePrintable}
-                disabled={!isLocked || printableLoading}
-                title={!isLocked ? 'Finalize the book to generate a printable PDF.' : undefined}
-              >
-                {printableLoading && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
-                {printableReady ? 'Regenerate PDF' : 'Generate Printable PDF'}
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Share2 className="h-4 w-4" />
-                Share Link
-              </CardTitle>
-              <CardDescription>Share a read-only version with friends and family.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {finalization?.shareLink ? (
-                <>
-                  <div className="flex items-center gap-2">
-                    <Input value={absoluteShareUrl ?? finalization.shareLink} readOnly />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => {
-                        if (!absoluteShareUrl && !finalization.shareLink) return;
-                        navigator.clipboard
-                          .writeText(absoluteShareUrl ?? finalization.shareLink ?? '')
-                          .then(() => toast({title: 'Link copied'}));
-                      }}
-                    >
-                      <LinkIcon className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  {finalization.shareRequiresPasscode ? (
-                    <p className="text-xs text-muted-foreground">
-                      Passcode required. Hint: ending with <span className="font-semibold">{finalization.sharePasscodeHint ?? '??'}</span>
-                      {shareSecret && (
-                        <>
-                          {' · '}
-                          <span className="text-foreground">Code: {shareSecret}</span>
-                        </>
-                      )}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">Anyone with the link can view.</p>
-                  )}
-                  {shareExpiresAt && <p className="text-xs text-muted-foreground">Expires: {shareExpiresAt}</p>}
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" onClick={handleShareGenerate} disabled={shareLoading}>
-                      {shareLoading && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
-                      Regenerate Link
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={handleShareRevoke} disabled={shareLoading}>
-                      Revoke
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                    <div>
-                      <p className="text-sm font-medium">Protect with passcode</p>
-                      <p className="text-xs text-muted-foreground">Only guests who have the code can view.</p>
-                    </div>
-                    <Switch checked={shareProtectWithCode} onCheckedChange={setShareProtectWithCode} />
-                  </div>
-                  {shareProtectWithCode && (
-                    <Input
-                      placeholder="Optional custom passcode"
-                      value={customSharePasscode}
-                      onChange={(event) => setCustomSharePasscode(event.target.value)}
-                    />
-                  )}
-                  <Button onClick={handleShareGenerate} disabled={shareLoading || !isLocked}>
-                    {shareLoading && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
-                    Generate Share Link
-                  </Button>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <PackageCheck className="h-4 w-4" />
-                Print Orders
-              </CardTitle>
-              <CardDescription>Ship keepsake copies straight from the app.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Printable status: <span className="font-medium text-foreground">{printableReady ? 'Ready' : 'Not ready'}</span>
-              </p>
-              {finalization?.lastOrderId && (
-                <p className="text-xs text-muted-foreground">Last order ID: {finalization.lastOrderId}</p>
-              )}
-              <Button onClick={openOrderDialog} disabled={!printableReady}>
-                Request Printed Copies
-              </Button>
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/parent/orders">View all orders</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
       </div>
 
       <PrintOrderDialog
@@ -629,6 +467,7 @@ export default function StorybookViewerPage() {
           toast({title: 'Order submitted', description: 'Check Parent → Orders for status.'});
         }}
       />
+    </div>
     </div>
   );
 }
