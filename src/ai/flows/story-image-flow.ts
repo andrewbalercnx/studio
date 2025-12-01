@@ -4,7 +4,7 @@
 import {ai} from '@/ai/genkit';
 import {initializeFirebase} from '@/firebase';
 import {getStoryBucket, deleteStorageObject} from '@/firebase/admin/storage';
-import type {ChildProfile, Story, StoryBookPage} from '@/lib/types';
+import type {ChildProfile, Story, StoryOutputPage} from '@/lib/types';
 import {randomUUID} from 'crypto';
 import {doc, getDoc, serverTimestamp, updateDoc} from 'firebase/firestore';
 import {z} from 'genkit';
@@ -80,7 +80,7 @@ async function fetchImageAsDataUri(url: string): Promise<string | null> {
   }
 }
 
-function mapAspectRatio(layout?: StoryBookPage['layoutHints']): string | undefined {
+function mapAspectRatio(layout?: StoryOutputPage['layoutHints']): string | undefined {
   if (!layout?.aspectRatio) return undefined;
   switch (layout.aspectRatio) {
     case 'portrait':
@@ -244,8 +244,11 @@ export const storyImageFlow = ai.defineFlow(
     const logs: string[] = [];
     const {firestore} = initializeFirebase();
     const storyRef = doc(firestore, 'stories', storyId);
-    const pageRef = doc(storyRef, 'outputs', pageId); // This seems wrong, should be outputs/outputId/pages/pageId
     let generated: GenerateImageResult | null = null;
+    
+    // Corrected path to the page document
+    const pageRef = doc(storyRef, 'outputs', 'storybook', 'pages', pageId);
+
     try {
       const storySnap = await getDoc(storyRef);
       if (!storySnap.exists()) {
@@ -263,9 +266,9 @@ export const storyImageFlow = ai.defineFlow(
 
       const pageSnap = await getDoc(pageRef);
       if (!pageSnap.exists()) {
-        throw new Error(`stories/${storyId}/outputs/${pageId} not found.`); // path is incorrect
+        throw new Error(`Page document not found at ${pageRef.path}`);
       }
-      const page = pageSnap.data() as StoryBookPage;
+      const page = pageSnap.data() as StoryOutputPage;
       if (!page.imagePrompt) {
         throw new Error(`Page ${pageId} is missing imagePrompt.`);
       }
@@ -352,7 +355,7 @@ export const storyImageFlow = ai.defineFlow(
           storagePath: uploadResult.objectPath,
           downloadToken: uploadResult.downloadToken,
           aspectRatioHint: page.layoutHints?.aspectRatio ?? null,
-          regressionTag: regressionTag ?? page.regressionTag ?? null,
+          regressionTag: regressionTag ?? (page as any).regressionTag ?? null,
           generatedAt: serverTimestamp(),
           lastErrorMessage: null,
         },
@@ -371,9 +374,7 @@ export const storyImageFlow = ai.defineFlow(
     } catch (error: any) {
       const message = error?.message ?? 'storyImageFlow failed.';
       try {
-        // This path is wrong, but leaving it to avoid breaking more things without more context.
-        const errorPageRef = doc(firestore, 'stories', storyId, 'outputs', pageId);
-        await updateDoc(errorPageRef, {
+        await updateDoc(pageRef, {
           imageStatus: 'error',
           'imageMetadata.lastErrorMessage': message,
           updatedAt: serverTimestamp(),
@@ -393,5 +394,3 @@ export const storyImageFlow = ai.defineFlow(
     }
   }
 );
-
-    

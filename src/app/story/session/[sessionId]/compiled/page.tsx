@@ -26,7 +26,7 @@ export default function CompiledStoryBookPage() {
   const { data: session } = useDocument<StorySession>(sessionRef);
   const storyId = storyBook?.id ?? sessionId;
   const pagesQuery = useMemo(
-    () => (firestore && storyId ? query(collection(firestore, 'stories', storyId, 'pages'), orderBy('pageNumber', 'asc')) : null),
+    () => (firestore && storyId ? query(collection(firestore, 'stories', storyId, 'outputs', 'storybook', 'pages'), orderBy('pageNumber', 'asc')) : null),
     [firestore, storyId]
   );
   const { data: pages, loading: pagesLoading, error: pagesError } = useCollection<StoryOutputPage>(pagesQuery);

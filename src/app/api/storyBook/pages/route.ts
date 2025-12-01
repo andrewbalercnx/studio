@@ -43,8 +43,12 @@ export async function POST(request: Request) {
         { status: 409 }
       );
     }
+    
+    // Create the output document if it doesn't exist.
+    const outputRef = doc(firestore, 'stories', storyId, 'outputs', 'storybook');
+    await setDoc(outputRef, { storyId, storyOutputTypeId: 'storybook', updatedAt: serverTimestamp() }, { merge: true });
 
-    await updateDoc(storyRef, {
+    await updateDoc(outputRef, {
       'pageGeneration.status': 'running',
       'pageGeneration.lastRunAt': serverTimestamp(),
       'pageGeneration.lastErrorMessage': null,
@@ -53,7 +57,7 @@ export async function POST(request: Request) {
 
     const flowResult = await storyPageFlow({ storyId });
     if (!flowResult.ok || !flowResult.pages || flowResult.pages.length === 0) {
-      await updateDoc(storyRef, {
+      await updateDoc(outputRef, {
         'pageGeneration.status': 'error',
         'pageGeneration.lastCompletedAt': serverTimestamp(),
         'pageGeneration.lastErrorMessage':
@@ -70,7 +74,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const pagesCollection = collection(firestore, 'stories', storyId, 'pages');
+    const pagesCollection = collection(firestore, 'stories', storyId, 'outputs', 'storybook', 'pages');
     const existingPages = await getDocs(query(pagesCollection, orderBy('pageNumber', 'asc')));
 
     const batch = writeBatch(firestore);
@@ -82,6 +86,7 @@ export async function POST(request: Request) {
       const pageRef = doc(pagesCollection, pageId);
       batch.set(pageRef, {
         ...page,
+        id: pageId, // ensure id is set
         ...regressionMeta,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -90,7 +95,7 @@ export async function POST(request: Request) {
 
     await batch.commit();
 
-    await updateDoc(storyRef, {
+    await updateDoc(outputRef, {
       'pageGeneration.status': 'ready',
       'pageGeneration.lastCompletedAt': serverTimestamp(),
       'pageGeneration.lastErrorMessage': null,
@@ -128,5 +133,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
-    

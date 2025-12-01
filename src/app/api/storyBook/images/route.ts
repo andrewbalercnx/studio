@@ -1,7 +1,7 @@
 
 import {NextResponse} from 'next/server';
 import {storyImageFlow} from '@/ai/flows/story-image-flow';
-import type {StoryBookPage} from '@/lib/types';
+import type {StoryOutputPage} from '@/lib/types';
 import {deleteStorageObject} from '@/firebase/admin/storage';
 import {initFirebaseAdminApp} from '@/firebase/admin/app';
 import {getFirestore, FieldValue, Firestore} from 'firebase-admin/firestore';
@@ -15,7 +15,7 @@ type ImageJobRequest = {
   pageId?: string;
 };
 
-type PageWithId = StoryBookPage & {id: string};
+type PageWithId = StoryOutputPage & {id: string};
 
 async function getAdminFirestore() {
   const app = await initFirebaseAdminApp();
@@ -23,18 +23,18 @@ async function getAdminFirestore() {
 }
 
 async function loadPages(firestore: Firestore, storyId: string, pageId?: string): Promise<PageWithId[]> {
-  const pagesRef = firestore.collection('stories').doc(storyId).collection('pages');
+  const pagesRef = firestore.collection('stories').doc(storyId).collection('outputs').doc('storybook').collection('pages');
   if (pageId) {
     const pageSnap = await pagesRef.doc(pageId).get();
     if (!pageSnap.exists) {
-      throw new Error(`stories/${storyId}/pages/${pageId} not found.`);
+      throw new Error(`Page not found at stories/${storyId}/outputs/storybook/pages/${pageId}`);
     }
-    return [{...(pageSnap.data() as StoryBookPage), id: pageSnap.id}];
+    return [{...(pageSnap.data() as StoryOutputPage), id: pageSnap.id}];
   }
 
   const snapshot = await pagesRef.orderBy('pageNumber', 'asc').get();
   return snapshot.docs.map((docSnap) => ({
-    ...(docSnap.data() as StoryBookPage),
+    ...(docSnap.data() as StoryOutputPage),
     id: docSnap.id,
   }));
 }
@@ -46,7 +46,7 @@ async function resetPageState(
   regressionMeta: Record<string, unknown>,
   forceRegenerate: boolean
 ) {
-  const pageRef = firestore.collection('stories').doc(storyId).collection('pages').doc(page.id);
+  const pageRef = firestore.collection('stories').doc(storyId).collection('outputs').doc('storybook').collection('pages').doc(page.id);
   if (forceRegenerate && page.imageMetadata?.storagePath) {
     await deleteStorageObject(page.imageMetadata.storagePath).catch(() => undefined);
   }
@@ -131,9 +131,7 @@ export async function POST(request: Request) {
       if (!page.imagePrompt || page.imagePrompt.trim().length === 0) {
         allLogs.push(`[skip] ${page.id} has no imagePrompt.`);
         await firestore
-          .collection('stories')
-          .doc(storyId)
-          .collection('pages')
+          .collection('stories').doc(storyId).collection('outputs').doc('storybook').collection('pages')
           .doc(page.id)
           .update({
             imageStatus: 'error',
@@ -222,5 +220,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
-    

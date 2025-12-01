@@ -490,7 +490,7 @@ export default function StorybookViewerPage() {
               </CardTitle>
               <CardDescription>Create or download the PDF spread.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3">
               {finalization?.printablePdfUrl ? (
                 <div className="flex flex-col gap-2">
                   <Button asChild variant="secondary">
