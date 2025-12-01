@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -8,28 +9,31 @@ import { AuthError } from '@/lib/auth-error';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 
 type FinalizeRequest = {
-  bookId: string;
+  storyId: string;
+  outputId: string;
   action?: 'finalize' | 'unlock';
   regressionTag?: string;
 };
 
-type StoryBookDoc = FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData>;
+type StoryOutputDoc = FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData>;
 
-async function getBook(
+async function getDocs(
   firestore: Firestore,
-  bookId: string
-): Promise<StoryBookDoc> {
-  const doc = await firestore.collection('storyBooks').doc(bookId).get();
-  return doc;
+  storyId: string,
+  outputId: string
+): Promise<{ storySnap: StoryOutputDoc; outputSnap: StoryOutputDoc }> {
+  const storySnap = await firestore.collection('stories').doc(storyId).get();
+  const outputSnap = await storySnap.ref.collection('outputs').doc(outputId).get();
+  return { storySnap, outputSnap };
 }
 
 async function loadPages(
   firestore: Firestore,
-  bookId: string
+  storyId: string,
+  outputId: string
 ) {
   const pagesSnap = await firestore
-    .collection('storyBooks')
-    .doc(bookId)
+    .collection('stories').doc(storyId).collection('outputs').doc(outputId)
     .collection('pages')
     .orderBy('pageNumber', 'asc')
     .get();
@@ -56,15 +60,15 @@ async function logSessionEvent(firestore: Firestore, sessionId: string, event: s
 
 async function revokeActiveShareToken(
   firestore: Firestore,
-  bookId: string,
+  storyId: string,
+  outputId: string,
   shareId?: string | null,
   uid?: string
 ) {
   if (!shareId) return;
   try {
     await firestore
-      .collection('storyBooks')
-      .doc(bookId)
+      .collection('stories').doc(storyId).collection('outputs').doc(outputId)
       .collection('shareTokens')
       .doc(shareId)
       .set(
@@ -88,9 +92,9 @@ export async function POST(request: Request) {
   try {
     await initFirebaseAdminApp();
     const body = (await request.json()) as FinalizeRequest;
-    const { bookId, action = 'finalize', regressionTag } = body;
-    if (!bookId || typeof bookId !== 'string') {
-      return respondError(400, 'Missing bookId');
+    const { storyId, outputId, action = 'finalize', regressionTag } = body;
+    if (!storyId || !outputId) {
+      return respondError(400, 'Missing storyId or outputId');
     }
     if (!['finalize', 'unlock'].includes(action)) {
       return respondError(400, `Unsupported action "${action}"`);
@@ -98,55 +102,57 @@ export async function POST(request: Request) {
 
     const user = await requireParentOrAdminUser(request);
     const firestore = getFirestore();
-    const bookSnap = await getBook(firestore, bookId);
-    if (!bookSnap.exists) {
-      return respondError(404, `storyBooks/${bookId} not found`);
+    const { storySnap, outputSnap } = await getDocs(firestore, storyId, outputId);
+    if (!storySnap.exists) {
+      return respondError(404, `stories/${storyId} not found`);
     }
-    const bookData = (bookSnap.data() as Record<string, any>) || {};
-    const parentUid = bookData.parentUid;
+    if (!outputSnap.exists) {
+        return respondError(404, `stories/${storyId}/outputs/${outputId} not found`);
+    }
+    const storyData = (storySnap.data() as Record<string, any>) || {};
+    const outputData = (outputSnap.data() as Record<string, any>) || {};
+    const parentUid = storyData.parentUid;
     const isPrivileged = user.claims.isAdmin || user.claims.isWriter;
     if (!isPrivileged && parentUid && parentUid !== user.uid) {
-      return respondError(403, 'You do not own this storybook.');
+      return respondError(403, 'You do not own this story.');
     }
 
+    const finalization = outputData.finalization ?? {};
+    const regressionMeta = regressionTag ? { regressionTest: true, regressionTag } : {};
+
     if (action === 'unlock') {
-      await revokeActiveShareToken(firestore, bookId, bookData?.storybookFinalization?.shareId, user.uid);
-      await bookSnap.ref.update({
-        isLocked: false,
-        'storybookFinalization.status': 'draft',
-        'storybookFinalization.unlockedAt': FieldValue.serverTimestamp(),
-        'storybookFinalization.shareId': null,
-        'storybookFinalization.shareLink': null,
-        'storybookFinalization.shareExpiresAt': null,
-        'storybookFinalization.shareRequiresPasscode': false,
-        'storybookFinalization.sharePasscodeHint': null,
-        'storybookFinalization.lastOrderId': null,
-        'storybookFinalization.lockedAt': null,
-        'storybookFinalization.lockedBy': null,
-        'storybookFinalization.lockedByEmail': null,
-        'storybookFinalization.lockedByDisplayName': null,
-        'storybookFinalization.printableStatus': 'idle',
-        'storybookFinalization.printablePdfUrl': null,
-        'storybookFinalization.printableGeneratedAt': null,
-        ...(regressionTag
-          ? {
-              regressionTest: true,
-              regressionTag,
-              'storybookFinalization.regressionTag': regressionTag,
-            }
-          : {}),
-      });
-      if (bookData.storySessionId) {
-        await logSessionEvent(firestore, bookData.storySessionId, 'storybook.unlocked', {
-          bookId,
-          version: bookData?.storybookFinalization?.version ?? 0,
+      await revokeActiveShareToken(firestore, storyId, outputId, finalization?.shareId, user.uid);
+      const unlockUpdate = {
+        'finalization.status': 'draft',
+        'finalization.unlockedAt': FieldValue.serverTimestamp(),
+        'finalization.shareId': FieldValue.delete(),
+        'finalization.shareLink': FieldValue.delete(),
+        'finalization.shareExpiresAt': FieldValue.delete(),
+        'finalization.shareRequiresPasscode': FieldValue.delete(),
+        'finalization.sharePasscodeHint': FieldValue.delete(),
+        'finalization.lastOrderId': FieldValue.delete(),
+        'finalization.lockedAt': FieldValue.delete(),
+        'finalization.lockedBy': FieldValue.delete(),
+        'finalization.lockedByEmail': FieldValue.delete(),
+        'finalization.lockedByDisplayName': FieldValue.delete(),
+        'finalization.printableStatus': 'idle',
+        'finalization.printablePdfUrl': FieldValue.delete(),
+        'finalization.printableGeneratedAt': FieldValue.delete(),
+        ...regressionMeta,
+      };
+      await outputSnap.ref.update(unlockUpdate);
+      if (storyData.storySessionId) {
+        await logSessionEvent(firestore, storyData.storySessionId, 'storybook.unlocked', {
+          storyId,
+          outputId,
+          version: finalization?.version ?? 0,
         });
       }
-      return NextResponse.json({ ok: true, action: 'unlock', bookId });
+      return NextResponse.json({ ok: true, action: 'unlock', storyId, outputId });
     }
 
     // finalize
-    const pages = await loadPages(firestore, bookId);
+    const pages = await loadPages(firestore, storyId, outputId);
     if (pages.length === 0) {
       return respondError(400, 'No pages available to finalize.');
     }
@@ -154,43 +160,11 @@ export async function POST(request: Request) {
     if (pendingPage) {
       return respondError(409, 'All pages must have ready artwork before finalizing.');
     }
-    const version = Number(bookData?.storybookFinalization?.version ?? 0) + 1;
-    let childName = bookData?.childDisplayName ?? bookData?.metadata?.childName ?? null;
-    if (!childName && bookData?.childId) {
-      try {
-        const childSnap = await firestore.collection('children').doc(bookData.childId).get();
-        if (childSnap.exists) {
-          childName = childSnap.data()?.displayName ?? null;
-        }
-      } catch (childError) {
-        console.warn('[storybook/finalize] Failed to load child profile', childError);
-      }
-    }
-    const finalizedPages = pages.map((page: any) => ({
-      pageNumber: page.pageNumber,
-      kind: page.kind,
-      title: page.title ?? null,
-      bodyText: page.bodyText ?? null,
-      imageUrl: page.imageUrl ?? null,
-      imagePrompt: page.imagePrompt ?? null,
-      layoutHints: page.layoutHints ?? null,
-    }));
+    const version = Number(finalization?.version ?? 0) + 1;
+    
     const finalizationUpdate: Record<string, unknown> = {
-      isLocked: true,
-      finalizedSnapshotAt: FieldValue.serverTimestamp(),
-      finalizedPages,
-      finalizedMetadata: {
-        bookTitle: bookData?.metadata?.title ?? bookData?.storyTitle ?? 'Storybook',
-        childName,
-        pageCount: finalizedPages.length,
-        capturedAt: FieldValue.serverTimestamp(),
-        version,
-        storySessionId: bookData?.storySessionId ?? null,
-        lockedByUid: user.uid,
-        lockedByDisplayName: user.claims.name ?? null,
-      },
-      storybookFinalization: {
-        ...(bookData.storybookFinalization ?? {}),
+      finalization: {
+        ...finalization,
         version,
         status: 'finalized',
         lockedAt: FieldValue.serverTimestamp(),
@@ -209,29 +183,26 @@ export async function POST(request: Request) {
         shareRequiresPasscode: false,
         sharePasscodeHint: null,
         lastOrderId: null,
-        regressionTag: regressionTag ?? bookData?.storybookFinalization?.regressionTag ?? null,
+        ...regressionMeta,
       },
-      ...(regressionTag
-        ? {
-            regressionTest: true,
-            regressionTag,
-          }
-        : {}),
+      ...regressionMeta,
     };
-    await bookSnap.ref.update(finalizationUpdate);
-    if (bookData.storySessionId) {
-      await logSessionEvent(firestore, bookData.storySessionId, 'storybook.finalized', {
-        bookId,
+    await outputSnap.ref.update(finalizationUpdate);
+    if (storyData.storySessionId) {
+      await logSessionEvent(firestore, storyData.storySessionId, 'storybook.finalized', {
+        storyId,
+        outputId,
         version,
-        pageCount: finalizedPages.length,
+        pageCount: pages.length,
       });
     }
     return NextResponse.json({
       ok: true,
       action: 'finalize',
-      bookId,
+      storyId,
+      outputId,
       version,
-      finalizedPageCount: finalizedPages.length,
+      finalizedPageCount: pages.length,
     });
   } catch (error: any) {
     if (error instanceof AuthError) {

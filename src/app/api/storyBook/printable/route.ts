@@ -12,7 +12,8 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 type PrintableRequest = {
-  bookId: string;
+  storyId: string;
+  outputId: string;
   forceRegenerate?: boolean;
   regressionTag?: string;
 };
@@ -27,9 +28,10 @@ function respondError(status: number, message: string) {
   return NextResponse.json({ ok: false, errorMessage: message }, { status });
 }
 
-async function loadStoryBook(firestore: Firestore, bookId: string) {
-  const snap = await firestore.collection('storyBooks').doc(bookId).get();
-  return snap;
+async function loadDocs(firestore: Firestore, storyId: string, outputId: string) {
+  const storySnap = await firestore.collection('stories').doc(storyId).get();
+  const outputSnap = await storySnap.ref.collection('outputs').doc(outputId).get();
+  return { storySnap, outputSnap };
 }
 
 async function fetchImageBytes(url: string): Promise<ArrayBuffer | null> {
@@ -139,13 +141,14 @@ async function renderPrintablePdf(pages: Array<Record<string, any>>) {
   return await pdfDoc.save();
 }
 
-async function uploadPdf(buffer: Uint8Array, bookId: string, version: number, regressionTag?: string) {
+async function uploadPdf(buffer: Uint8Array, storyId: string, outputId: string, version: number, regressionTag?: string) {
   const bucket = await getStoryBucket();
   const versionLabel = `v${String(version).padStart(3, '0')}`;
-  const objectPath = `storybook_printables/${bookId}/${versionLabel}/storybook-${versionLabel}.pdf`;
+  const objectPath = `storybook_printables/${storyId}/${outputId}/storybook-${versionLabel}.pdf`;
   const downloadToken = randomUUID();
   const metadata: Record<string, string> = {
-    bookId,
+    storyId,
+    outputId,
     version: String(version),
     firebaseStorageDownloadTokens: downloadToken,
   };
@@ -169,78 +172,90 @@ export async function POST(request: Request) {
   try {
     await initFirebaseAdminApp();
     const body = (await request.json()) as PrintableRequest;
-    const { bookId, regressionTag } = body;
-    if (!bookId) {
-      return respondError(400, 'Missing bookId');
+    const { storyId, outputId, regressionTag } = body;
+    if (!storyId || !outputId) {
+      return respondError(400, 'Missing storyId or outputId');
     }
     const user = await requireParentOrAdminUser(request);
     const firestore = getFirestore();
-    const bookSnap = await loadStoryBook(firestore, bookId);
-    if (!bookSnap.exists) {
-      return respondError(404, 'Storybook not found');
+    const { storySnap, outputSnap } = await loadDocs(firestore, storyId, outputId);
+    if (!storySnap.exists) {
+      return respondError(404, 'Story not found');
     }
-    const bookData = bookSnap.data() as Record<string, any>;
-    const parentUid = bookData?.parentUid;
+     if (!outputSnap.exists) {
+      return respondError(404, 'Story Output not found');
+    }
+    const storyData = storySnap.data() as Record<string, any>;
+    const outputData = outputSnap.data() as Record<string, any>;
+    const parentUid = storyData?.parentUid;
     const isPrivileged = user.claims.isAdmin || user.claims.isWriter;
     if (!isPrivileged && parentUid && parentUid !== user.uid) {
-      return respondError(403, 'You do not own this storybook.');
+      return respondError(403, 'You do not own this story.');
     }
-    if (!bookData?.isLocked || !Array.isArray(bookData?.finalizedPages)) {
-      return respondError(409, 'Finalize the storybook before generating a printable PDF.');
+    
+    const finalization = outputData?.finalization;
+    if (finalization?.status !== 'finalized') {
+       return respondError(409, 'The story output must be finalized before generating a printable PDF.');
     }
+    
+    const pagesSnap = await outputSnap.ref.collection('pages').orderBy('pageNumber', 'asc').get();
+    if (pagesSnap.empty) {
+        return respondError(409, 'No pages found for this story output.');
+    }
+    const pages = pagesSnap.docs.map(doc => doc.data());
 
-    await bookSnap.ref.update({
-      'storybookFinalization.printableStatus': 'generating',
-      'storybookFinalization.printableErrorMessage': null,
+    await outputSnap.ref.update({
+      'finalization.printableStatus': 'generating',
+      'finalization.printableErrorMessage': null,
     });
 
     const printableMetadata = {
       dpi: PRINT_DPI,
       trimSize: TRIM_SIZE,
-      pageCount: bookData.finalizedPages.length,
-      spreadCount: Math.ceil(bookData.finalizedPages.length / 2),
+      pageCount: pages.length,
+      spreadCount: Math.ceil(pages.length / 2),
     };
     let printableUrl: string | null = null;
 
     try {
-      const pdfBytes = await renderPrintablePdf(bookData.finalizedPages);
-      const upload = await uploadPdf(pdfBytes, bookId, bookData?.storybookFinalization?.version ?? 1, regressionTag);
+      const pdfBytes = await renderPrintablePdf(pages);
+      const upload = await uploadPdf(pdfBytes, storyId, outputId, finalization?.version ?? 1, regressionTag);
       printableUrl = upload.url;
-      await bookSnap.ref.update({
-        'storybookFinalization.printablePdfUrl': upload.url,
-        'storybookFinalization.printableGeneratedAt': FieldValue.serverTimestamp(),
-        'storybookFinalization.printableStoragePath': upload.objectPath,
-        'storybookFinalization.printableMetadata': printableMetadata,
-        'storybookFinalization.printableStatus': 'ready',
-        'storybookFinalization.status': 'printable_ready',
-        ...(regressionTag
-          ? {
-              regressionTest: true,
-              regressionTag,
-            }
-          : {}),
-      });
+      const updateData: Record<string, any> = {
+        'finalization.printablePdfUrl': upload.url,
+        'finalization.printableGeneratedAt': FieldValue.serverTimestamp(),
+        'finalization.printableStoragePath': upload.objectPath,
+        'finalization.printableMetadata': printableMetadata,
+        'finalization.printableStatus': 'ready',
+        'finalization.status': 'printable_ready',
+      };
+      if (regressionTag) {
+        updateData['regressionTag'] = regressionTag;
+        updateData['regressionTest'] = true;
+      }
+      await outputSnap.ref.update(updateData);
     } catch (generationError: any) {
-      await bookSnap.ref.update({
-        'storybookFinalization.printableStatus': 'error',
-        'storybookFinalization.printableErrorMessage': generationError?.message ?? 'Failed to generate printable PDF.',
+      await outputSnap.ref.update({
+        'finalization.printableStatus': 'error',
+        'finalization.printableErrorMessage': generationError?.message ?? 'Failed to generate printable PDF.',
       });
       throw generationError;
     }
 
-    if (bookData.storySessionId) {
+    if (storyData.storySessionId) {
       try {
         await firestore
           .collection('storySessions')
-          .doc(bookData.storySessionId)
+          .doc(storyData.storySessionId)
           .collection('events')
           .add({
             event: 'storybook.printable_generated',
             status: 'completed',
             source: 'server',
             attributes: {
-              bookId,
-              version: bookData?.storybookFinalization?.version ?? 1,
+              storyId,
+              outputId,
+              version: finalization?.version ?? 1,
             },
             createdAt: FieldValue.serverTimestamp(),
           });
@@ -251,7 +266,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      bookId,
+      storyId,
+      outputId,
       printablePdfUrl: printableUrl,
       metadata: printableMetadata,
     });

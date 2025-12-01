@@ -8,7 +8,8 @@ import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
 
 type CreateOrderRequest = {
-  bookId: string;
+  storyId: string;
+  outputId: string;
   quantity: number;
   shippingAddress: {
     name: string;
@@ -41,9 +42,9 @@ export async function POST(request: Request) {
   try {
     await initFirebaseAdminApp();
     const body = (await request.json()) as CreateOrderRequest;
-    const { bookId, quantity, shippingAddress, contactEmail, regressionTag } = body;
-    if (!bookId) {
-      return respondError(400, 'Missing bookId');
+    const { storyId, outputId, quantity, shippingAddress, contactEmail, regressionTag } = body;
+    if (!storyId || !outputId) {
+      return respondError(400, 'Missing storyId or outputId');
     }
     if (!quantity || quantity < 1) {
       return respondError(400, 'Quantity must be at least 1');
@@ -58,23 +59,27 @@ export async function POST(request: Request) {
 
     const user = await requireParentOrAdminUser(request);
     const firestore = getFirestore();
-    const bookRef = firestore.collection('storyBooks').doc(bookId);
-    const bookSnap = await bookRef.get();
-    if (!bookSnap.exists) {
-      return respondError(404, 'Storybook not found');
+    const storyRef = firestore.collection('stories').doc(storyId);
+    const storySnap = await storyRef.get();
+    if (!storySnap.exists) {
+      return respondError(404, 'Story not found');
     }
-    const bookData = bookSnap.data() as Record<string, any>;
-    const parentUid = bookData?.parentUid;
+    const storyData = storySnap.data() as Record<string, any>;
+    const parentUid = storyData?.parentUid;
     const isPrivileged = user.claims.isAdmin || user.claims.isWriter;
     if (!isPrivileged && parentUid && parentUid !== user.uid) {
-      return respondError(403, 'You do not own this storybook.');
+      return respondError(403, 'You do not own this story.');
     }
-    const finalization = bookData?.storybookFinalization ?? null;
-    if (!finalization || !bookData?.isLocked) {
-      return respondError(409, 'Finalize the book before placing an order.');
+
+    const outputRef = storyRef.collection('outputs').doc(outputId);
+    const outputSnap = await outputRef.get();
+    if (!outputSnap.exists) {
+      return respondError(404, 'Story output not found');
     }
-    if (!finalization.printablePdfUrl) {
-      return respondError(409, 'Generate a printable PDF before ordering.');
+    const outputData = outputSnap.data() as Record<string, any>;
+    const finalization = outputData?.finalization ?? null;
+    if (!finalization || finalization.status !== 'printable_ready') {
+      return respondError(409, 'The story output must be finalized and have a printable PDF before ordering.');
     }
 
     const orderRef = firestore.collection('printOrders').doc();
@@ -82,9 +87,10 @@ export async function POST(request: Request) {
     const regressionTestFlag = !!resolvedRegressionTag;
     await orderRef.set({
       parentUid: parentUid ?? user.uid,
-      bookId,
+      storyId,
+      outputId,
       version: finalization.version ?? 1,
-      storySessionId: bookData?.storySessionId ?? null,
+      storySessionId: storyData?.storySessionId ?? null,
       quantity,
       shippingAddress: {
         ...shippingAddress,
@@ -101,22 +107,24 @@ export async function POST(request: Request) {
       regressionTest: regressionTestFlag || undefined,
     });
 
-    await bookRef.update({
-      'storybookFinalization.status': 'ordered',
-      'storybookFinalization.lastOrderId': orderRef.id,
+    await outputRef.update({
+      'finalization.status': 'ordered',
+      'finalization.lastOrderId': orderRef.id,
+      ...(regressionTag ? { regressionTest: true, regressionTag } : {}),
     });
 
-    if (bookData.storySessionId) {
+    if (storyData.storySessionId) {
       await firestore
         .collection('storySessions')
-        .doc(bookData.storySessionId)
+        .doc(storyData.storySessionId)
         .collection('events')
         .add({
           event: 'print_order.created',
           status: 'completed',
           source: 'server',
           attributes: {
-            bookId,
+            storyId,
+            outputId,
             orderId: orderRef.id,
             quantity,
           },

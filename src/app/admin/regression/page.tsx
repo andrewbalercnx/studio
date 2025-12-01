@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useAuth } from '@/firebase';
 import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, increment, orderBy, deleteDoc, writeBatch } from 'firebase/firestore';
 import type { Firestore, DocumentReference } from 'firebase/firestore';
-import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile, StoryBookPage } from '@/lib/types';
+import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile, StoryOutputPage as StoryBookPage } from '@/lib/types';
 import { IdTokenResult } from 'firebase/auth';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
@@ -103,9 +103,9 @@ type ScenarioStoryCompileResult = {
     sessionId: string | null;
     storyLength: number | null;
     storyPreview: string | null;
-    hasStoryBook?: boolean;
-    bookId?: string | null;
-    storyBookStatus?: string | null;
+    hasStory: boolean;
+    storyId: string | null;
+    storyStatus?: string | null;
     pagesCount?: number | null;
     firstPageKind?: string | null;
     lastPageKind?: string | null;
@@ -138,7 +138,7 @@ type ScenarioStorybookE2EResult = {
     storyTypeId: string;
     beatCount: number;
     endingsGenerated: number;
-    bookId?: string;
+    storyId?: string;
     pagesReady?: number;
     artReady?: boolean;
     finalized?: boolean;
@@ -162,7 +162,7 @@ type RegressionArtifactTracker = {
     children: Set<string>;
     sessions: Set<string>;
     characters: Set<string>;
-    storyBooks: Set<string>;
+    stories: Set<string>;
     promptConfigs: Set<string>;
     printOrders: Set<string>;
 };
@@ -171,7 +171,7 @@ const createArtifactTracker = (): RegressionArtifactTracker => ({
     children: new Set(),
     sessions: new Set(),
     characters: new Set(),
-    storyBooks: new Set(),
+    stories: new Set(),
     promptConfigs: new Set(),
     printOrders: new Set(),
 });
@@ -249,10 +249,14 @@ const cleanupRegressionArtifacts = async (firestore: Firestore, tracker: Regress
         });
     }
 
-    for (const bookId of tracker.storyBooks) {
-        await deleteWithLogging(`storyBooks/${bookId}`, async () => {
-            await deleteSubcollectionDocs(firestore, ['storyBooks', bookId, 'pages']);
-            await deleteDoc(doc(firestore, 'storyBooks', bookId));
+    for (const storyId of tracker.stories) {
+        await deleteWithLogging(`stories/${storyId}`, async () => {
+            const outputsSnap = await getDocs(collection(firestore, 'stories', storyId, 'outputs'));
+            for (const outputDoc of outputsSnap.docs) {
+                await deleteSubcollectionDocs(firestore, ['stories', storyId, 'outputs', outputDoc.id, 'pages']);
+                await deleteDoc(outputDoc.ref);
+            }
+            await deleteDoc(doc(firestore, 'stories', storyId));
         });
     }
     
@@ -865,9 +869,9 @@ export default function AdminRegressionPage() {
             sessionId: sessionRef.id,
             storyLength: null,
             storyPreview: null,
-            hasStoryBook: false,
-            bookId: null,
-            storyBookStatus: null,
+            hasStory: false,
+            storyId: null,
+            storyStatus: null,
             pagesCount: null,
             firstPageKind: null,
             lastPageKind: null,
@@ -885,37 +889,41 @@ export default function AdminRegressionPage() {
 
         storyCompileScenarioSummary.storyLength = result.storyText.length;
         storyCompileScenarioSummary.storyPreview = result.storyText.slice(0, 120);
-        const storyBookRef = doc(firestore, 'storyBooks', sessionRef.id);
-        const storyBookSnap = await getDoc(storyBookRef);
-        if (!storyBookSnap.exists()) {
-            throw new Error('storyBooks document missing after compile flow.');
+        const storyRef = doc(firestore, 'stories', sessionRef.id);
+        const storySnap = await getDoc(storyRef);
+        if (!storySnap.exists()) {
+            throw new Error('stories document missing after compile flow.');
         }
-        await tagExistingDoc(storyBookRef, 'SCENARIO_STORY_COMPILE');
-        trackArtifact(artifacts, 'storyBooks', storyBookRef.id);
-        storyCompileScenarioSummary.hasStoryBook = true;
-        storyCompileScenarioSummary.bookId = storyBookRef.id;
-        storyCompileScenarioSummary.storyBookStatus = storyBookSnap.data()?.status ?? null;
-        const bookStoryText: string | undefined = storyBookSnap.data()?.storyText;
-        if (!bookStoryText || bookStoryText.length < 50) {
-            throw new Error('storyBooks document has invalid storyText.');
+        await tagExistingDoc(storyRef, 'SCENARIO_STORY_COMPILE');
+        trackArtifact(artifacts, 'stories', storyRef.id);
+        storyCompileScenarioSummary.hasStory = true;
+        storyCompileScenarioSummary.storyId = storyRef.id;
+        const storyStoryText: string | undefined = storySnap.data()?.storyText;
+        if (!storyStoryText || storyStoryText.length < 50) {
+            throw new Error('stories document has invalid storyText.');
         }
 
         const pagesResponse = await fetch('/api/storyBook/pages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookId: storyBookRef.id, regressionTag: `${REGRESSION_SUITE_TAG}:SCENARIO_STORY_COMPILE` }),
+            body: JSON.stringify({ storyId: storyRef.id, regressionTag: `${REGRESSION_SUITE_TAG}:SCENARIO_STORY_COMPILE` }),
         });
         const pagesResult = await pagesResponse.json();
         if (!pagesResponse.ok || !pagesResult?.ok) {
             throw new Error(pagesResult?.errorMessage || 'Storybook page generation API failed.');
         }
 
-        const pagesCollectionRef = tracedCollection(firestore, 'SCENARIO_STORY_COMPILE:pagesCollection', 'storyBooks', storyBookRef.id, 'pages');
+        const outputsSnap = await getDocs(query(collection(firestore, 'stories', storyRef.id, 'outputs'), limit(1)));
+        if (outputsSnap.empty) {
+            throw new Error('No story outputs created.');
+        }
+        const outputId = outputsSnap.docs[0].id;
+        const pagesCollectionRef = tracedCollection(firestore, 'SCENARIO_STORY_COMPILE:pagesCollection', 'stories', storyRef.id, 'outputs', outputId, 'pages');
         const pagesSnapshot = await getDocs(query(pagesCollectionRef, orderBy('pageNumber', 'asc')));
         const pageDocs = pagesSnapshot.docs.map(docSnap => docSnap.data());
 
         if (pagesSnapshot.size === 0) {
-            throw new Error('No storyBook pages were created.');
+            throw new Error('No story output pages were created.');
         }
         if (Array.isArray(pagesResult.pages) && pagesResult.pages.length !== pagesSnapshot.size) {
             throw new Error(`Page count mismatch: API returned ${pagesResult.pages.length} but Firestore has ${pagesSnapshot.size}.`);
@@ -953,7 +961,8 @@ export default function AdminRegressionPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                bookId: storyBookRef.id,
+                storyId: storyRef.id,
+                outputId: outputId,
                 regressionTag: `${REGRESSION_SUITE_TAG}:SCENARIO_STORY_COMPILE`,
                 forceRegenerate: true,
             }),
@@ -971,7 +980,7 @@ export default function AdminRegressionPage() {
             const logPreview = Array.isArray(imagesResult?.logs) ? imagesResult.logs.slice(0, 5).join(' | ') : 'No logs';
             throw new Error(`One or more storyBook pages failed to generate art. Logs: ${logPreview}`);
         }
-        storyCompileScenarioSummary.imageStatus = imagesResult.status ?? 'ready';
+        storyCompileScenarioSummary.storyStatus = imagesResult.status ?? 'ready';
 
         updateTestResult('SCENARIO_STORY_COMPILE', { status: 'PASS', message: `Compiled story length ${result.storyText.length} chars. Sample: "${result.storyText.slice(0, 80)}..."` });
 
@@ -1086,23 +1095,28 @@ export default function AdminRegressionPage() {
         if (!compileRes.ok || !compilePayload?.ok) {
             throw new Error(compilePayload?.errorMessage || 'Story compile failed for E2E scenario.');
         }
-        const bookRef = doc(firestore, 'storyBooks', sessionRef.id);
-        const bookSnap = await getDoc(bookRef);
-        if (!bookSnap.exists()) {
-            throw new Error('storyBook document missing after compile in E2E scenario.');
+        const storyRef = doc(firestore, 'stories', sessionRef.id);
+        const storySnap = await getDoc(storyRef);
+        if (!storySnap.exists()) {
+            throw new Error('story document missing after compile in E2E scenario.');
         }
-        await tagExistingDoc(bookRef, scenarioId);
-        trackArtifact(artifacts, 'storyBooks', bookRef.id);
+        await tagExistingDoc(storyRef, scenarioId);
+        trackArtifact(artifacts, 'stories', storyRef.id);
         const pagesResponse = await fetch('/api/storyBook/pages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookId: bookRef.id, regressionTag: regressionScenarioTag }),
+            body: JSON.stringify({ storyId: storyRef.id, regressionTag: regressionScenarioTag }),
         });
         const pagesPayload = await pagesResponse.json();
         if (!pagesResponse.ok || !pagesPayload?.ok) {
             throw new Error(pagesPayload?.errorMessage || 'Page generation API failed for E2E scenario.');
         }
-        const pagesCollectionRef = tracedCollection(firestore, 'SCENARIO_STORYBOOK_E2E:pagesCollection', 'storyBooks', bookRef.id, 'pages');
+        const outputsSnap = await getDocs(query(collection(firestore, 'stories', storyRef.id, 'outputs'), limit(1)));
+        if(outputsSnap.empty) {
+            throw new Error('No story outputs created in E2E scenario.');
+        }
+        const outputId = outputsSnap.docs[0].id;
+        const pagesCollectionRef = tracedCollection(firestore, 'SCENARIO_STORYBOOK_E2E:pagesCollection', 'stories', storyRef.id, 'outputs', outputId, 'pages');
         const pagesSnapshot = await getDocs(query(pagesCollectionRef, orderBy('pageNumber', 'asc')));
         if (pagesSnapshot.empty) {
             throw new Error('No storybook pages created in E2E scenario.');
@@ -1111,7 +1125,8 @@ export default function AdminRegressionPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                bookId: bookRef.id,
+                storyId: storyRef.id,
+                outputId: outputId,
                 regressionTag: regressionScenarioTag,
                 forceRegenerate: true,
             }),
@@ -1125,7 +1140,7 @@ export default function AdminRegressionPage() {
             const page = docSnap.data() as StoryBookPage;
             return page.imageStatus === 'ready' && typeof page.imageUrl === 'string' && page.imageUrl.length > 0;
         });
-        storybookE2EScenarioSummary.bookId = bookRef.id;
+        storybookE2EScenarioSummary.storyId = storyRef.id;
         storybookE2EScenarioSummary.pagesReady = refreshedPages.size;
         storybookE2EScenarioSummary.artReady = allImagesReady;
         if (!allImagesReady) {
@@ -1142,7 +1157,7 @@ export default function AdminRegressionPage() {
         const finalizeResponse = await fetch('/api/storyBook/finalize', {
             method: 'POST',
             headers: authedHeaders,
-            body: JSON.stringify({ bookId: bookRef.id, action: 'finalize', regressionTag: regressionScenarioTag }),
+            body: JSON.stringify({ storyId: storyRef.id, outputId: outputId, action: 'finalize', regressionTag: regressionScenarioTag }),
         });
         const finalizePayload = await finalizeResponse.json();
         if (!finalizeResponse.ok || !finalizePayload?.ok) {
@@ -1152,7 +1167,7 @@ export default function AdminRegressionPage() {
         const printableResponse = await fetch('/api/storyBook/printable', {
             method: 'POST',
             headers: authedHeaders,
-            body: JSON.stringify({ bookId: bookRef.id, regressionTag: regressionScenarioTag }),
+            body: JSON.stringify({ storyId: storyRef.id, outputId: outputId, regressionTag: regressionScenarioTag }),
         });
         const printablePayload = await printableResponse.json();
         if (!printableResponse.ok || !printablePayload?.ok) {
@@ -1160,7 +1175,8 @@ export default function AdminRegressionPage() {
         }
         storybookE2EScenarioSummary.printableReady = true;
         const orderRes = await createRegressionPrintOrder({
-            bookId: bookRef.id,
+            storyId: storyRef.id,
+            outputId: outputId,
             quantity: 1,
             contactEmail: 'regression@example.com',
             shippingAddress: {
@@ -1725,7 +1741,7 @@ export default function AdminRegressionPage() {
     }
     setIsCleaning(true);
     try {
-        const collectionsToClean = ['children', 'storySessions', 'characters', 'storyBooks', 'promptConfigs', 'printOrders'];
+        const collectionsToClean = ['children', 'storySessions', 'characters', 'stories', 'promptConfigs', 'printOrders'];
         const batch = writeBatch(firestore);
         let deletedCount = 0;
 
