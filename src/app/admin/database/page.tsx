@@ -14,6 +14,7 @@ import {
   startAt,
   endAt,
   doc,
+  documentId,
 } from 'firebase/firestore';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
@@ -93,24 +94,32 @@ export default function AdminDatabasePage() {
     try {
       const collRef = collection(firestore, selectedCollection);
       let q;
+      
+      // Always order by something to get consistent results, and add documentId() to include docs
+      // missing the primary sort field.
+      const primaryOrderByField = filterField || 'createdAt';
+      const orderDirection = 'desc';
+
       if (filterField && (filterValue || isValueInputDisabled)) {
         if (filterOperator === 'startsWith') {
           q = query(
             collRef,
             orderBy(filterField),
+            orderBy(documentId()),
             startAt(filterValue),
             endAt(filterValue + '\uf8ff'),
             limit(50)
           );
         } else if (filterOperator === 'exists') {
-            q = query(collRef, where(filterField, '!=', null), limit(50));
+            q = query(collRef, where(filterField, '!=', null), orderBy(filterField), limit(50));
         } else if (filterOperator === 'does_not_exist') {
             q = query(collRef, where(filterField, '==', null), limit(50));
-        } else {
+        } else { // '=='
           q = query(collRef, where(filterField, '==', filterValue), limit(50));
         }
       } else {
-        q = query(collRef, limit(50));
+        // Default query with no filters: order by creation time and then ID.
+        q = query(collRef, orderBy('createdAt', 'desc'), orderBy(documentId()), limit(50));
       }
 
       const querySnapshot = await getDocs(q);
