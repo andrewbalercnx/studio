@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Home, Users, CreditCard, Settings } from 'lucide-react';
+import { ParentGuard } from '@/components/parent/parent-guard';
 
 const NAV_LINKS = [
   { href: '/parent', label: 'Overview', icon: Home },
@@ -18,11 +19,7 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const showSidebar = pathname !== '/parent';
 
-  if (!showSidebar) {
-    return <>{children}</>;
-  }
-
-  return (
+  const layoutContent = (
     <div className="container mx-auto flex flex-col gap-6 px-4 py-8 lg:flex-row">
       <aside className="lg:w-64 space-y-4">
         <div className="rounded-xl border bg-card p-4">
@@ -62,4 +59,10 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
       </section>
     </div>
   );
+
+  if (!showSidebar) {
+    return <ParentGuard>{children}</ParentGuard>;
+  }
+
+  return <ParentGuard>{layoutContent}</ParentGuard>;
 }

@@ -14,7 +14,6 @@ import { LoaderCircle } from 'lucide-react';
 import { useEffect } from 'react';
 import type { UserProfile } from '@/lib/types';
 import { getAuth } from 'firebase/auth';
-import { ParentGuard } from '@/components/parent/parent-guard';
 
 export default function ParentSettingsPage() {
   const { user, loading: userLoading } = useUser();
@@ -79,7 +78,6 @@ export default function ParentSettingsPage() {
   }
 
   return (
-    <ParentGuard>
       <div className="container mx-auto p-4 sm:p-6 md:p-8">
         <Card className="max-w-2xl mx-auto">
           <CardHeader>
@@ -122,6 +120,5 @@ export default function ParentSettingsPage() {
           </CardContent>
         </Card>
       </div>
-    </ParentGuard>
   );
 }

@@ -19,7 +19,6 @@ import { Label } from '@/components/ui/label';
 import { useUser } from '@/firebase/auth/use-user';
 import { useUploadFile } from '@/firebase/storage/use-upload-file';
 import Image from 'next/image';
-import { ParentGuard } from '@/components/parent/parent-guard';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useRouter } from 'next/navigation';
@@ -275,7 +274,7 @@ function AvatarGenerator({ child, onAvatarUpdate }: { child: ChildProfile, onAva
                         <Image src={generatedAvatar} alt="Generated avatar" width={160} height={160} className="rounded-full border-4 border-primary shadow-md object-cover" />
                     ) : (
                         <div className="h-40 w-40 flex items-center justify-center bg-muted rounded-full text-muted-foreground">
-                            <UserIcon className="h-10 w-10" />
+                            <User className="h-10 w-10" />
                         </div>
                     )}
                 </div>
@@ -559,7 +558,7 @@ export default function ManageChildrenPage() {
     };
 
     return (
-        <ParentGuard>
+        <>
             <div className="container mx-auto p-4 sm:p-6 md:p-8">
                 <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                     <DialogContent>
@@ -613,6 +612,6 @@ export default function ManageChildrenPage() {
                     </CardContent>
                 </Card>
             </div>
-        </ParentGuard>
+        </>
     );
 }
