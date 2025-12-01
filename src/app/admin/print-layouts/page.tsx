@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState, useEffect, useCallback } from 'react';
@@ -23,14 +22,14 @@ import { z } from 'zod';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const positiveNumber = z.preprocess(
-  (val) => (val === '' ? undefined : parseFloat(String(val))),
-  z.number({ required_error: "Value is required." }).positive("Must be a positive number.").optional()
+  (val) => Number(val),
+  z.number({ invalid_type_error: "Must be a number" }).positive({ message: "Must be > 0" })
 );
 
 const boxSchema = z.object({
   leaf: z.coerce.number().min(1, "Leaf must be 1 or 2.").max(2, "Leaf must be 1 or 2."),
-  x: z.preprocess((val) => parseFloat(String(val)), z.number()),
-  y: z.preprocess((val) => parseFloat(String(val)), z.number()),
+  x: z.coerce.number(),
+  y: z.coerce.number(),
   width: positiveNumber,
   height: positiveNumber,
 });
