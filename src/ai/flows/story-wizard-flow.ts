@@ -6,6 +6,7 @@ import { initializeFirebase } from '@/firebase';
 import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { z } from 'genkit';
 import type { ChildProfile, Character, StoryBook, StoryWizardAnswer, StoryWizardChoice, StoryWizardInput, StoryWizardOutput } from '@/lib/types';
+import { logAIFlow } from '@/lib/ai-flow-logger';
 
 
 // Helper to get child's age in years
@@ -70,9 +71,10 @@ const storyWizardFlowInternal = ai.defineFlow(
     outputSchema: StoryWizardOutputSchema,
   },
   async ({ childId, sessionId, answers }) => {
-    try {
-      const { firestore } = initializeFirebase();
+    const flowName = 'storyWizardFlow';
+    const { firestore } = initializeFirebase();
 
+    try {
       // 1. Fetch child and character data
       const childRef = doc(firestore, 'children', childId);
       const childSnap = await getDoc(childRef);
@@ -134,11 +136,18 @@ INSTRUCTIONS:
    }
         `;
 
-        const llmResponse = await ai.generate({
-          prompt: storyGenPrompt,
-          model: 'googleai/gemini-2.5-flash',
-          config: { temperature: 0.7 },
-        });
+        let llmResponse;
+        try {
+          llmResponse = await ai.generate({
+            prompt: storyGenPrompt,
+            model: 'googleai/gemini-2.5-flash',
+            config: { temperature: 0.7 },
+          });
+          await logAIFlow({ flowName: `${flowName}:generateStory`, sessionId, prompt: storyGenPrompt, response: llmResponse });
+        } catch (e: any) {
+          await logAIFlow({ flowName: `${flowName}:generateStory`, sessionId, prompt: storyGenPrompt, error: e });
+          throw e;
+        }
 
         const rawText = llmResponse.text;
         try {
@@ -201,12 +210,19 @@ INSTRUCTIONS:
    }
         `;
 
-        const llmResponse = await ai.generate({
-          prompt: questionGenPrompt,
-          model: 'googleai/gemini-2.5-flash',
-          config: { temperature: 0.8 },
-        });
-        
+        let llmResponse;
+        try {
+          llmResponse = await ai.generate({
+            prompt: questionGenPrompt,
+            model: 'googleai/gemini-2.5-flash',
+            config: { temperature: 0.8 },
+          });
+          await logAIFlow({ flowName: `${flowName}:askQuestion`, sessionId, prompt: questionGenPrompt, response: llmResponse });
+        } catch (e: any) {
+          await logAIFlow({ flowName: `${flowName}:askQuestion`, sessionId, prompt: questionGenPrompt, error: e });
+          throw e;
+        }
+
         const rawText = llmResponse.text;
         try {
           const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
@@ -231,5 +247,3 @@ INSTRUCTIONS:
 export async function storyWizardFlow(input: StoryWizardInput): Promise<StoryWizardOutput> {
     return await storyWizardFlowInternal(input);
 }
-
-    
