@@ -1,9 +1,8 @@
-
 'use client';
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, PlusCircle, Copy, BookOpen } from 'lucide-react';
+import { LoaderCircle, PlusCircle, Copy, BookOpen, Edit } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { collection, onSnapshot, query, orderBy, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
 import { useEffect, useState, useCallback } from 'react';
@@ -12,6 +11,8 @@ import { useToast } from '@/hooks/use-toast';
 import type { HelpWizard } from '@/lib/types';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import SampleWizardData from '@/data/help-wizards.json';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { HelpWizardForm } from '@/components/admin/HelpWizardForm';
 
 export default function AdminHelpWizardsPage() {
   const { isAuthenticated, isAdmin, loading: authLoading } = useAdminStatus();
@@ -21,6 +22,8 @@ export default function AdminHelpWizardsPage() {
   const [wizards, setWizards] = useState<HelpWizard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingWizard, setEditingWizard] = useState<HelpWizard | null>(null);
 
   const handleSeedWizards = useCallback(async () => {
     if (!firestore) return;
@@ -55,8 +58,6 @@ export default function AdminHelpWizardsPage() {
       (snapshot) => {
         if (snapshot.empty) {
           handleSeedWizards();
-          // The listener will fire again once seeding is complete.
-          // We keep loading true until then.
         } else {
           setWizards(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as HelpWizard)));
           setLoading(false);
@@ -72,6 +73,11 @@ export default function AdminHelpWizardsPage() {
 
     return () => unsubscribe();
   }, [firestore, isAdmin, handleSeedWizards]);
+
+  const handleOpenForm = (wizard: HelpWizard | null = null) => {
+    setEditingWizard(wizard);
+    setIsFormOpen(true);
+  };
 
   const renderContent = () => {
     if (authLoading || loading) return <div className="flex items-center gap-2"><LoaderCircle className="h-5 w-5 animate-spin" /><span>Loading wizards...</span></div>;
@@ -91,9 +97,14 @@ export default function AdminHelpWizardsPage() {
         {wizards.map((wizard) => (
           <AccordionItem key={wizard.id} value={wizard.id}>
             <AccordionTrigger>
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-primary" />
-                <span>{wizard.title}</span>
+              <div className="flex items-center justify-between w-full pr-4">
+                <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-primary" />
+                    <span>{wizard.title}</span>
+                </div>
+                 <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleOpenForm(wizard);}}>
+                    <Edit className="h-4 w-4 mr-2" /> Edit
+                </Button>
               </div>
             </AccordionTrigger>
             <AccordionContent>
@@ -114,12 +125,29 @@ export default function AdminHelpWizardsPage() {
 
   return (
     <div className="container mx-auto p-4 sm:p-6 md:p-8">
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingWizard ? 'Edit Help Wizard' : 'New Help Wizard'}</DialogTitle>
+            <DialogDescription>
+              {editingWizard ? `Editing "${editingWizard.title}"` : 'Create a new guided tour for users.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <HelpWizardForm
+              wizard={editingWizard}
+              onSave={() => setIsFormOpen(false)}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+      
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">Help Wizards</h1>
           <p className="text-muted-foreground">Manage the guided tours for users.</p>
         </div>
-        <Button onClick={() => {}} disabled>
+        <Button onClick={() => handleOpenForm()}>
           <PlusCircle className="mr-2" /> Add New
         </Button>
       </div>
