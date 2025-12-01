@@ -1,5 +1,4 @@
 
-
 {
   "entities": {
     "UserProfile": {
@@ -1018,6 +1017,36 @@
         "createdAt"
       ]
     },
+    "HelpWizard": {
+      "title": "Help Wizard",
+      "description": "Defines a guided tour for a user.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "live"]
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string" },
+              "description": { "type": "string" },
+              "route": { "type": "string" }
+            },
+            "required": ["title", "description", "route"]
+          }
+        }
+      },
+      "required": ["id", "title", "status", "pages"]
+    },
     "PrintOrder": {
       "title": "Print Order",
       "description": "An order placed by a parent for printed copies of a story output.",
@@ -1144,6 +1173,12 @@
       },
       "description": "Stores logs of Genkit AI flow executions for debugging."
     },
+    "/helpWizards/{wizardId}": {
+      "schema": {
+        "$ref": "#/entities/HelpWizard"
+      },
+      "description": "Stores the configuration for guided tours."
+    },
     "/printOrders/{orderId}": {
       "schema": {
         "$ref": "#/entities/PrintOrder"
@@ -1152,5 +1187,3 @@
     }
   }
 }
-
-    
