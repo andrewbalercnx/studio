@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useAuth } from '@/firebase';
 import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, increment, orderBy, deleteDoc, writeBatch } from 'firebase/firestore';
 import type { Firestore, DocumentReference } from 'firebase/firestore';
-import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile, StoryOutputPage as StoryBookPage } from '@/lib/types';
+import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile, StoryOutputPage as StoryBookPage, StoryOutput } from '@/lib/types';
 import { IdTokenResult } from 'firebase/auth';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
@@ -906,7 +906,7 @@ export default function AdminRegressionPage() {
         const pagesResponse = await fetch('/api/storyBook/pages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ storyId: storyRef.id, regressionTag: `${REGRESSION_SUITE_TAG}:SCENARIO_STORY_COMPILE` }),
+            body: JSON.stringify({ bookId: storyRef.id, regressionTag: `${REGRESSION_SUITE_TAG}:SCENARIO_STORY_COMPILE` }),
         });
         const pagesResult = await pagesResponse.json();
         if (!pagesResponse.ok || !pagesResult?.ok) {
@@ -961,8 +961,7 @@ export default function AdminRegressionPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                storyId: storyRef.id,
-                outputId: outputId,
+                bookId: storyRef.id,
                 regressionTag: `${REGRESSION_SUITE_TAG}:SCENARIO_STORY_COMPILE`,
                 forceRegenerate: true,
             }),
@@ -1105,7 +1104,7 @@ export default function AdminRegressionPage() {
         const pagesResponse = await fetch('/api/storyBook/pages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ storyId: storyRef.id, regressionTag: regressionScenarioTag }),
+            body: JSON.stringify({ bookId: storyRef.id, regressionTag: regressionScenarioTag }),
         });
         const pagesPayload = await pagesResponse.json();
         if (!pagesResponse.ok || !pagesPayload?.ok) {
@@ -1125,8 +1124,7 @@ export default function AdminRegressionPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                storyId: storyRef.id,
-                outputId: outputId,
+                bookId: storyRef.id,
                 regressionTag: regressionScenarioTag,
                 forceRegenerate: true,
             }),
@@ -1510,7 +1508,7 @@ export default function AdminRegressionPage() {
         }, 'SCENARIO_BEAT_AUTO');
 
         // Use a legacy ID to test resolution
-        const legacyPromptConfigId = 'story_beat_low_v1';
+        const legacyPromptConfigId = 'story_beat_level_low_v1';
 
         const sessionRef = await createRegressionSession({
             childId: childRef.id,
