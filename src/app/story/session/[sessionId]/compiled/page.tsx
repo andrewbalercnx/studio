@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-import { resolveEntitiesInText, replacePlaceholdersInText } from '@/lib/resolve-placeholders';
+import { resolvePlaceholders } from '@/lib/resolve-placeholders';
 
 export default function CompiledStoryBookPage() {
   const params = useParams<{ sessionId: string }>();
@@ -35,20 +35,21 @@ export default function CompiledStoryBookPage() {
 
   useEffect(() => {
     async function processStoryText() {
-      if (!storyBook?.storyText) {
+      const text = storyBook?.storyText;
+      if (!text) {
         setResolvedStoryText(null);
         return;
       }
-      if (storyBook.storyText.indexOf('$$') === -1) {
-        setResolvedStoryText(storyBook.storyText);
+      if (text.indexOf('$$') === -1) {
+        setResolvedStoryText(text);
         return;
       }
       try {
-        const entityMap = await resolveEntitiesInText(storyBook.storyText);
-        setResolvedStoryText(replacePlaceholdersInText(storyBook.storyText, entityMap));
+        const resolvedMap = await resolvePlaceholders(text);
+        setResolvedStoryText(resolvedMap[text] || text);
       } catch (e) {
         console.error("Failed to resolve placeholders in story text", e);
-        setResolvedStoryText(storyBook.storyText);
+        setResolvedStoryText(text); // Fallback to original text on error
       }
     }
     processStoryText();
@@ -111,7 +112,7 @@ export default function CompiledStoryBookPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storyId,
-          ...(payload ?? {}),
+          ...payload,
         }),
       });
       const body = await response.json();
