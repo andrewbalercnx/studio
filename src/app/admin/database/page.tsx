@@ -59,7 +59,7 @@ type DocumentData = {
   [key: string]: any;
 };
 
-type FilterOperator = '==' | 'startsWith' | 'exists' | 'does_not_exist';
+type FilterOperator = '==' | 'exists' | 'does_not_exist';
 
 export default function AdminDatabasePage() {
   const { isAdmin, loading: adminLoading } = useAdminStatus();
@@ -95,30 +95,18 @@ export default function AdminDatabasePage() {
       const collRef = collection(firestore, selectedCollection);
       let q;
       
-      // Always order by something to get consistent results, and add documentId() to include docs
-      // missing the primary sort field.
-      const primaryOrderByField = filterField || 'createdAt';
-      const orderDirection = 'desc';
+      const hasFilter = filterField && (filterValue || isValueInputDisabled);
 
-      if (filterField && (filterValue || isValueInputDisabled)) {
-        if (filterOperator === 'startsWith') {
-          q = query(
-            collRef,
-            orderBy(filterField),
-            orderBy(documentId()),
-            startAt(filterValue),
-            endAt(filterValue + '\uf8ff'),
-            limit(50)
-          );
-        } else if (filterOperator === 'exists') {
-            q = query(collRef, where(filterField, '!=', null), orderBy(filterField), limit(50));
-        } else if (filterOperator === 'does_not_exist') {
-            q = query(collRef, where(filterField, '==', null), limit(50));
-        } else { // '=='
-          q = query(collRef, where(filterField, '==', filterValue), limit(50));
-        }
+      if (hasFilter) {
+          if (filterOperator === 'exists') {
+              q = query(collRef, where(filterField, '!=', null), orderBy(filterField), limit(50));
+          } else if (filterOperator === 'does_not_exist') {
+              q = query(collRef, where(filterField, '==', null), orderBy(documentId()), limit(50));
+          } else { // '=='
+              q = query(collRef, where(filterField, '==', filterValue), limit(50));
+          }
       } else {
-        // Default query with no filters: order by creation time and then ID.
+        // Default query: order by creation time desc, and then by document ID to ensure all docs appear
         q = query(collRef, orderBy('createdAt', 'desc'), orderBy(documentId()), limit(50));
       }
 
@@ -223,7 +211,6 @@ export default function AdminDatabasePage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="==">Equals</SelectItem>
-                    <SelectItem value="startsWith">Starts With</SelectItem>
                     <SelectItem value="exists">Exists</SelectItem>
                     <SelectItem value="does_not_exist">Does Not Exist</SelectItem>
                   </SelectContent>
