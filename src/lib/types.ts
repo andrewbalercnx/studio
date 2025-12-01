@@ -124,6 +124,7 @@ export type PrintableAssetMetadata = {
   trimSize: string;
   pageCount: number;
   spreadCount: number;
+  printLayoutId?: string;
 };
 
 export type StoryBookFinalization = {
@@ -366,7 +367,7 @@ export type StoryType = {
 
 export type Character = {
     id: string;
-    ownerParentUid: string; // The parent who 'owns' or created this character
+    ownerParentUid: string;
     displayName: string;
     description?: string;
     relatedTo?: string;
@@ -457,5 +458,30 @@ export type AIFlowLog = {
   errorMessage?: string;
   createdAt: any;
 };
+
+export type PrintLayout = {
+  id: string;
+  name: string;
+  leafWidth: number; // in inches
+  leafHeight: number; // in inches
+  leavesPerSpread: 1 | 2;
+  createdAt: any;
+  updatedAt: any;
+  textBoxes: Array<{
+    leaf: 1 | 2;
+    x: number; // in inches
+    y: number; // in inches
+    width: number; // in inches
+    height: number; // in inches
+  }>;
+  imageBoxes: Array<{
+    leaf: 1 | 2;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>;
+};
+
 
 export type Story = StoryBook;

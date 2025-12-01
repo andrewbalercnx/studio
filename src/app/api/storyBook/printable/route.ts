@@ -9,32 +9,31 @@ import { randomUUID } from 'crypto';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, PDFFont } from 'pdf-lib';
+import type { PrintLayout, StoryOutputPage } from '@/lib/types';
 
 type PrintableRequest = {
   storyId: string;
   outputId: string;
+  printLayoutId: string;
   forceRegenerate?: boolean;
   regressionTag?: string;
 };
 
-const PRINT_DPI = 300;
-const TRIM_SIZE = '8.5in x 11in';
-const PAGE_WIDTH = 8.5 * 72;
-const PAGE_HEIGHT = 11 * 72;
-const PAGE_MARGIN = 36;
+const INCH_TO_POINTS = 72;
 
 function respondError(status: number, message: string) {
   return NextResponse.json({ ok: false, errorMessage: message }, { status });
 }
 
-async function loadDocs(firestore: Firestore, storyId: string, outputId: string) {
+async function loadDocs(firestore: Firestore, storyId: string, outputId: string, printLayoutId: string) {
   const storySnap = await firestore.collection('stories').doc(storyId).get();
   const outputSnap = await storySnap.ref.collection('outputs').doc(outputId).get();
-  return { storySnap, outputSnap };
+  const printLayoutSnap = await firestore.collection('printLayouts').doc(printLayoutId).get();
+  return { storySnap, outputSnap, printLayoutSnap };
 }
 
-async function fetchImageBytes(url: string): Promise<ArrayBuffer | null> {
+async function fetchImageBytes(url: string): Promise<{ buffer: ArrayBuffer; mimeType: string } | null> {
   try {
     const response = await fetch(url);
     if (!response.ok) {
@@ -42,54 +41,50 @@ async function fetchImageBytes(url: string): Promise<ArrayBuffer | null> {
       return null;
     }
     const buffer = await response.arrayBuffer();
-    return buffer;
+    const mimeType = response.headers.get('content-type') || 'image/jpeg';
+    return { buffer, mimeType };
   } catch (error) {
     console.warn('[printable] Image fetch error', url, error);
     return null;
   }
 }
 
-async function renderPrintablePdf(pages: Array<Record<string, any>>) {
+async function renderPrintablePdf(pages: StoryOutputPage[], layout: PrintLayout) {
   const pdfDoc = await PDFDocument.create();
   const bodyFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-  const titleFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
-
+  
   for (const page of pages) {
-    const pdfPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    let cursorY = PAGE_HEIGHT - PAGE_MARGIN;
-    const title = page?.title ?? page?.kind?.replace(/_/g, ' ');
-    if (title) {
-      pdfPage.drawText(String(title), {
-        x: PAGE_MARGIN,
-        y: cursorY - 24,
-        size: 20,
-        font: titleFont,
-        color: rgb(0.1, 0.1, 0.1),
-      });
-      cursorY -= 48;
-    }
+    const pdfPage = pdfDoc.addPage([
+      layout.leafWidth * INCH_TO_POINTS,
+      layout.leafHeight * INCH_TO_POINTS
+    ]);
+    const { width: pageWidth, height: pageHeight } = pdfPage.getSize();
 
-    if (page?.imageUrl) {
-      const bytes = await fetchImageBytes(page.imageUrl);
-      if (bytes) {
+    if (page.imageUrl && layout.imageBoxes.length > 0) {
+      const imageData = await fetchImageBytes(page.imageUrl);
+      if (imageData) {
         try {
+          const imageBox = layout.imageBoxes[0]; // Assuming one image box for now
           let image;
-          const buffer = new Uint8Array(bytes);
-          try {
-            image = await pdfDoc.embedPng(buffer);
-          } catch {
-            image = await pdfDoc.embedJpg(buffer);
+          if (imageData.mimeType === 'image/png') {
+            image = await pdfDoc.embedPng(imageData.buffer);
+          } else {
+            image = await pdfDoc.embedJpg(imageData.buffer);
           }
+
           if (image) {
-            const maxWidth = PAGE_WIDTH - PAGE_MARGIN * 2;
-            const maxHeight = PAGE_HEIGHT / 2;
-            const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
-            const drawWidth = image.width * scale;
-            const drawHeight = image.height * scale;
-            const x = (PAGE_WIDTH - drawWidth) / 2;
-            const y = cursorY - drawHeight - 12;
-            pdfPage.drawImage(image, { x, y, width: drawWidth, height: drawHeight });
-            cursorY = y - 24;
+            const box = {
+              x: imageBox.x * INCH_TO_POINTS,
+              y: imageBox.y * INCH_TO_POINTS,
+              width: imageBox.width * INCH_TO_POINTS,
+              height: imageBox.height * INCH_TO_POINTS,
+            };
+            pdfPage.drawImage(image, {
+              x: box.x,
+              y: pageHeight - box.y - box.height, // Y is from bottom in PDF-lib
+              width: box.width,
+              height: box.height,
+            });
           }
         } catch (error) {
           console.warn('[printable] Failed to embed image', error);
@@ -97,45 +92,25 @@ async function renderPrintablePdf(pages: Array<Record<string, any>>) {
       }
     }
 
-    const bodyText: string = page?.bodyText ?? '';
-    if (bodyText) {
-      const words = bodyText.split(/\s+/);
-      const lines: string[] = [];
-      let currentLine = '';
-      const maxWidth = PAGE_WIDTH - PAGE_MARGIN * 2;
-      for (const word of words) {
-        const tentative = currentLine ? `${currentLine} ${word}` : word;
-        const width = bodyFont.widthOfTextAtSize(tentative, 14);
-        if (width > maxWidth && currentLine) {
-          lines.push(currentLine);
-          currentLine = word;
-        } else {
-          currentLine = tentative;
-        }
-      }
-      if (currentLine) lines.push(currentLine);
-      for (const line of lines) {
-        if (cursorY < PAGE_MARGIN + 40) {
-          cursorY = PAGE_HEIGHT - PAGE_MARGIN;
-        }
-        pdfPage.drawText(line, {
-          x: PAGE_MARGIN,
-          y: cursorY - 18,
-          size: 14,
-          font: bodyFont,
-          color: rgb(0.15, 0.15, 0.15),
+    if (page.displayText && layout.textBoxes.length > 0) {
+        const textBox = layout.textBoxes[0]; // Assuming one text box for now
+        const box = {
+            x: textBox.x * INCH_TO_POINTS,
+            y: textBox.y * INCH_TO_POINTS,
+            width: textBox.width * INCH_TO_POINTS,
+            height: textBox.height * INCH_TO_POINTS,
+        };
+        
+        pdfPage.drawText(page.displayText, {
+            x: box.x,
+            y: pageHeight - box.y - 14, // Simple alignment, needs improvement
+            font: bodyFont,
+            size: 12,
+            color: rgb(0, 0, 0),
+            maxWidth: box.width,
+            lineHeight: 14,
         });
-        cursorY -= 20;
-      }
     }
-
-    pdfPage.drawText(`Kind: ${page?.kind ?? 'page'} · Page #${page?.pageNumber ?? '?'}`, {
-      x: PAGE_MARGIN,
-      y: 18,
-      size: 10,
-      font: bodyFont,
-      color: rgb(0.4, 0.4, 0.4),
-    });
   }
 
   return await pdfDoc.save();
@@ -172,21 +147,21 @@ export async function POST(request: Request) {
   try {
     await initFirebaseAdminApp();
     const body = (await request.json()) as PrintableRequest;
-    const { storyId, outputId, regressionTag } = body;
-    if (!storyId || !outputId) {
-      return respondError(400, 'Missing storyId or outputId');
+    const { storyId, outputId, printLayoutId, regressionTag } = body;
+    if (!storyId || !outputId || !printLayoutId) {
+      return respondError(400, 'Missing storyId, outputId, or printLayoutId');
     }
     const user = await requireParentOrAdminUser(request);
     const firestore = getFirestore();
-    const { storySnap, outputSnap } = await loadDocs(firestore, storyId, outputId);
-    if (!storySnap.exists) {
-      return respondError(404, 'Story not found');
-    }
-     if (!outputSnap.exists) {
-      return respondError(404, 'Story Output not found');
-    }
+    const { storySnap, outputSnap, printLayoutSnap } = await loadDocs(firestore, storyId, outputId, printLayoutId);
+    if (!storySnap.exists()) return respondError(404, 'Story not found');
+    if (!outputSnap.exists()) return respondError(404, 'Story Output not found');
+    if (!printLayoutSnap.exists()) return respondError(404, 'Print Layout not found');
+    
     const storyData = storySnap.data() as Record<string, any>;
     const outputData = outputSnap.data() as Record<string, any>;
+    const printLayout = printLayoutSnap.data() as PrintLayout;
+    
     const parentUid = storyData?.parentUid;
     const isPrivileged = user.claims.isAdmin || user.claims.isWriter;
     if (!isPrivileged && parentUid && parentUid !== user.uid) {
@@ -202,23 +177,24 @@ export async function POST(request: Request) {
     if (pagesSnap.empty) {
         return respondError(409, 'No pages found for this story output.');
     }
-    const pages = pagesSnap.docs.map(doc => doc.data());
+    const pages = pagesSnap.docs.map(doc => doc.data() as StoryOutputPage);
 
     await outputSnap.ref.update({
       'finalization.printableStatus': 'generating',
       'finalization.printableErrorMessage': null,
     });
 
-    const printableMetadata = {
-      dpi: PRINT_DPI,
-      trimSize: TRIM_SIZE,
+    const printableMetadata: PrintableAssetMetadata = {
+      dpi: 300,
+      trimSize: `${printLayout.leafWidth}in x ${printLayout.leafHeight}in`,
       pageCount: pages.length,
-      spreadCount: Math.ceil(pages.length / 2),
+      spreadCount: Math.ceil(pages.length / printLayout.leavesPerSpread),
+      printLayoutId: printLayout.id,
     };
     let printableUrl: string | null = null;
 
     try {
-      const pdfBytes = await renderPrintablePdf(pages);
+      const pdfBytes = await renderPrintablePdf(pages, printLayout);
       const upload = await uploadPdf(pdfBytes, storyId, outputId, finalization?.version ?? 1, regressionTag);
       printableUrl = upload.url;
       const updateData: Record<string, any> = {

@@ -15,6 +15,7 @@ import {
   documentId,
   Query,
   DocumentData,
+  QueryConstraint,
 } from 'firebase/firestore';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,7 @@ const COLLECTIONS = Object.keys(backendConfig.firestore)
   .filter((value, index, self) => self.indexOf(value) === index) // Get unique names
   .sort();
 
+const DOCUMENT_ID_ALIASES = ['id', 'docId', 'documentId', '__name__'];
 
 type DocumentDataWithId = {
   id: string;
@@ -95,16 +97,39 @@ export default function AdminDatabasePage() {
     try {
       const collRef = collection(firestore, selectedCollection);
       let q: Query<DocumentData, DocumentData>;
-      
-      const hasFilter = filterField && (filterValue || isValueInputDisabled);
 
-      if (hasFilter) {
-          q = query(collRef, where(filterField, '==', filterValue), orderBy(documentId()), limit(200));
+      const trimmedField = filterField.trim();
+      const trimmedValue = filterValue.trim();
+      const isDocumentIdField = DOCUMENT_ID_ALIASES.includes(trimmedField);
+      const fieldReference = trimmedField
+        ? (isDocumentIdField ? documentId() : trimmedField)
+        : null;
+      const hasFilter =
+        Boolean(trimmedField) &&
+        (filterOperator === 'exists' || Boolean(trimmedValue));
+
+      const constraints: QueryConstraint[] = [];
+
+      if (hasFilter && fieldReference) {
+        if (filterOperator === 'exists') {
+          constraints.push(where(fieldReference, '!=', null));
+          constraints.push(orderBy(fieldReference));
+          if (!isDocumentIdField) {
+            constraints.push(orderBy(documentId()));
+          }
+        } else {
+          constraints.push(where(fieldReference, '==', trimmedValue));
+          constraints.push(orderBy(documentId()));
+        }
       } else {
-          // The most basic query: get all documents, sorted by their ID.
-          // This guarantees all documents are returned, including those with no fields.
-          q = query(collRef, orderBy(documentId()), limit(200));
+        // The most basic query: get all documents, sorted by their ID.
+        // This guarantees all documents are returned, including those with no fields.
+        constraints.push(orderBy(documentId()));
       }
+
+      constraints.push(limit(200));
+
+      q = query(collRef, ...constraints);
 
       const querySnapshot = await getDocs(q);
       const fetchedDocs = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));

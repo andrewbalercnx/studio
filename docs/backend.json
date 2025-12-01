@@ -1086,6 +1086,49 @@
         }
       },
       "required": ["id", "parentUid", "storyId", "outputId", "quantity", "shippingAddress", "contactEmail", "paymentStatus", "fulfillmentStatus"]
+    },
+    "PrintLayout": {
+      "title": "Print Layout",
+      "description": "Defines the physical layout for a printed storybook.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "leafWidth": { "type": "number", "description": "Width of a single leaf in inches." },
+        "leafHeight": { "type": "number", "description": "Height of a single leaf in inches." },
+        "leavesPerSpread": { "type": "number", "enum": [1, 2], "description": "1 for single page, 2 for a spread." },
+        "textBoxes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "leaf": { "type": "number", "enum": [1, 2] },
+              "x": { "type": "number", "description": "X-offset from top-left, in inches." },
+              "y": { "type": "number", "description": "Y-offset from top-left, in inches." },
+              "width": { "type": "number", "description": "Width of the box, in inches." },
+              "height": { "type": "number", "description": "Height of the box, in inches." }
+            },
+            "required": ["leaf", "x", "y", "width", "height"]
+          }
+        },
+        "imageBoxes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "leaf": { "type": "number", "enum": [1, 2] },
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "width": { "type": "number" },
+              "height": { "type": "number" }
+            },
+            "required": ["leaf", "x", "y", "width", "height"]
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "leafWidth", "leafHeight", "leavesPerSpread"]
     }
   },
   "auth": {
@@ -1184,6 +1227,12 @@
         "$ref": "#/entities/PrintOrder"
       },
       "description": "Stores print order requests from parents."
+    },
+    "/printLayouts/{layoutId}": {
+      "schema": {
+        "$ref": "#/entities/PrintLayout"
+      },
+      "description": "Stores definitions for printable book layouts."
     }
   }
 }

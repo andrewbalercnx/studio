@@ -83,6 +83,9 @@ export default function AdminDashboardPage() {
             <Link href="/admin/storyOutputs">Story Outputs</Link>
           </Button>
           <Button asChild>
+            <Link href="/admin/print-layouts">Print Layouts</Link>
+          </Button>
+          <Button asChild>
             <Link href="/admin/characters">Characters</Link>
           </Button>
           <Button asChild>
