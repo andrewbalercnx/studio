@@ -101,6 +101,8 @@ export default function AdminDatabasePage() {
       if (hasFilter) {
           q = query(collRef, where(filterField, '==', filterValue), limit(50));
       } else {
+          // Default sort: Use createdAt if it exists, otherwise it might not show all docs.
+          // The "Find Empty" button is the correct way to find docs without fields.
           q = query(collRef, orderBy('createdAt', 'desc'), limit(50));
       }
 
@@ -146,8 +148,8 @@ export default function AdminDatabasePage() {
         
         // Client-side filter for empty documents
         const emptyDocs = querySnapshot.docs
-            .map((doc) => ({ id: doc.id, ...doc.data() }))
-            .filter(doc => Object.keys(doc).length === 1 && doc.id); // Only has 'id' field
+            .filter(doc => Object.keys(doc.data()).length === 0) // Correctly check if the data object from Firestore is empty
+            .map((doc) => ({ id: doc.id, ...doc.data() }));
         
         setDocuments(emptyDocs);
 
