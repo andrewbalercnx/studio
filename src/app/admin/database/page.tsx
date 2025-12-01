@@ -46,7 +46,7 @@ import {
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { LoaderCircle, Trash2, Search, AlertTriangle, FileJson } from 'lucide-react';
+import { LoaderCircle, Trash2, Search, FileJson } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import backendConfig from '@/../docs/backend.json';
 
@@ -61,7 +61,7 @@ type DocumentDataWithId = {
   [key: string]: any;
 };
 
-type FilterOperator = '==' | 'exists' | 'does_not_exist';
+type FilterOperator = '==' | 'exists';
 
 export default function AdminDatabasePage() {
   const { isAdmin, loading: adminLoading } = useAdminStatus();
@@ -78,7 +78,7 @@ export default function AdminDatabasePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const isValueInputDisabled = filterOperator === 'exists' || filterOperator === 'does_not_exist';
+  const isValueInputDisabled = filterOperator === 'exists';
 
   const handleSearch = async () => {
     if (!firestore || !selectedCollection) {
@@ -93,6 +93,7 @@ export default function AdminDatabasePage() {
     setDocuments([]);
     setSelectedDocs(new Set());
     setViewingDoc(null);
+
     try {
       const collRef = collection(firestore, selectedCollection);
       let q: Query<DocumentData, DocumentData>;
@@ -100,20 +101,31 @@ export default function AdminDatabasePage() {
       const hasFilter = filterField && (filterValue || isValueInputDisabled);
 
       if (hasFilter) {
-          if (filterOperator === 'exists') {
-              q = query(collRef, where(filterField, '!=', null), orderBy(filterField), orderBy(documentId()), limit(50));
-          } else if (filterOperator === 'does_not_exist') {
-              q = query(collRef, where(filterField, '==', null), orderBy(documentId()), limit(50));
-          } else { // '=='
-              q = query(collRef, where(filterField, '==', filterValue), orderBy(documentId()), limit(50));
-          }
+        if (filterOperator === 'exists') {
+          // This query is tricky as it often requires an index on the field.
+          // For now, we sort only by ID to avoid index errors.
+          q = query(collRef, where(filterField, '!=', null), orderBy(documentId()), limit(50));
+        } else { // '=='
+          q = query(collRef, where(filterField, '==', filterValue), orderBy(documentId()), limit(50));
+        }
       } else {
-        q = query(collRef, orderBy('createdAt', 'desc'), orderBy(documentId()), limit(50));
+        // Default query: sort by creation date if available, otherwise just by ID.
+        // This is a safe query that doesn't require composite indexes.
+        try {
+          // Try ordering by createdAt, which is common but might not exist on all collections.
+          q = query(collRef, orderBy('createdAt', 'desc'), limit(50));
+          await getDocs(q); // Test the query to see if the index exists.
+        } catch (e) {
+          // If sorting by 'createdAt' fails (e.g., no index or field doesn't exist),
+          // fall back to a simple query ordered only by document ID.
+          q = query(collRef, orderBy(documentId()), limit(50));
+        }
       }
 
       const querySnapshot = await getDocs(q);
       const fetchedDocs = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setDocuments(fetchedDocs);
+
       if (fetchedDocs.length === 0) {
         toast({ title: 'No documents found matching your query.' });
       }
@@ -128,6 +140,7 @@ export default function AdminDatabasePage() {
       setIsLoading(false);
     }
   };
+
 
   const handleDelete = async () => {
     if (!firestore || selectedDocs.size === 0) return;
@@ -213,7 +226,6 @@ export default function AdminDatabasePage() {
                   <SelectContent>
                     <SelectItem value="==">Equals</SelectItem>
                     <SelectItem value="exists">Exists</SelectItem>
-                    <SelectItem value="does_not_exist">Does Not Exist</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -226,7 +238,6 @@ export default function AdminDatabasePage() {
                   onChange={(e) => setFilterValue(e.target.value)}
                   disabled={isValueInputDisabled}
                 />
-                 {filterOperator === 'does_not_exist' && <p className="text-xs text-muted-foreground mt-1">Note: This checks for fields explicitly set to `null`.</p>}
               </div>
             </div>
             <Button onClick={handleSearch} disabled={isLoading}>
