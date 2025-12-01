@@ -309,7 +309,7 @@
     },
     "Story": {
       "title": "Story",
-      "description": "Durable compiled output for a completed story session.",
+      "description": "Durable compiled output for a completed story session. This was formerly StoryBook.",
       "type": "object",
       "properties": {
         "storySessionId": {
@@ -336,6 +336,24 @@
               "description": "Paragraph count detected in storyText."
             }
           }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["text_ready", "images_pending"],
+          "description": "The generation status of the storybook asset."
+        },
+        "pageGeneration": {
+          "$ref": "#/entities/StoryOutputPageGenerationStatus"
+        },
+        "imageGeneration": {
+          "$ref": "#/entities/StoryOutputImageGenerationStatus"
+        },
+        "storybookFinalization": {
+          "$ref": "#/entities/StoryBookFinalization"
+        },
+        "isLocked": {
+          "type": "boolean",
+          "description": "True if the storybook is locked for printing or sharing."
         },
         "createdAt": {
           "type": "string",
@@ -372,56 +390,58 @@
           "type": "string"
         },
         "pageGeneration": {
-          "type": "object",
-          "description": "Tracks the most recent page generation attempt.",
-          "properties": {
-            "status": {
-              "type": "string",
-              "enum": [
-                "idle",
-                "running",
-                "ready",
-                "error"
-              ]
-            },
-            "lastRunAt": {
-              "type": "string",
-              "format": "date-time"
-            },
-            "lastCompletedAt": {
-              "type": "string",
-              "format": "date-time"
-            },
-            "lastErrorMessage": {
-              "type": "string"
-            },
-            "pagesCount": {
-              "type": "number"
-            }
-          }
+          "$ref": "#/entities/StoryOutputPageGenerationStatus"
         },
         "imageGeneration": {
-           "type": "object",
-           "description": "Tracks the most recent image generation attempt.",
-           "properties": {
-            "status": {
-              "type": "string",
-              "enum": ["idle", "running", "ready", "error"]
-            },
-            "lastRunAt": { "type": "string", "format": "date-time" },
-            "lastCompletedAt": { "type": "string", "format": "date-time" },
-            "lastErrorMessage": { "type": "string" },
-            "pagesReady": { "type": "number" },
-            "pagesTotal": { "type": "number" }
-           }
+           "$ref": "#/entities/StoryOutputImageGenerationStatus"
         },
         "finalization": {
-            "type": "object"
+            "$ref": "#/entities/StoryBookFinalization"
         },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "storyId", "storyOutputTypeId", "createdAt", "updatedAt"]
+    },
+    "StoryOutputPageGenerationStatus": {
+      "title": "Story Output Page Generation Status",
+      "description": "Tracks the status of page generation for a story output.",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["idle", "running", "ready", "error"] },
+        "lastRunAt": { "type": "string", "format": "date-time" },
+        "lastCompletedAt": { "type": "string", "format": "date-time" },
+        "lastErrorMessage": { "type": "string" },
+        "pagesCount": { "type": "number" }
+      }
+    },
+    "StoryOutputImageGenerationStatus": {
+      "title": "Story Output Image Generation Status",
+      "description": "Tracks the status of image generation for a story output.",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["idle", "running", "ready", "error"] },
+        "lastRunAt": { "type": "string", "format": "date-time" },
+        "lastCompletedAt": { "type": "string", "format": "date-time" },
+        "lastErrorMessage": { "type": "string" },
+        "pagesReady": { "type": "number" },
+        "pagesTotal": { "type": "number" }
+      }
+    },
+    "StoryBookFinalization": {
+      "title": "Storybook Finalization",
+      "description": "Tracks the finalization, sharing, and printing status of a storybook.",
+      "type": "object",
+      "properties": {
+        "version": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "finalized", "printable_ready", "ordered"] },
+        "lockedAt": { "type": "string", "format": "date-time" },
+        "lockedBy": { "type": "string" },
+        "printablePdfUrl": { "type": "string", "format": "uri" },
+        "shareId": { "type": "string" },
+        "shareLink": { "type": "string", "format": "uri" },
+        "lastOrderId": { "type": "string" }
+      }
     },
     "StoryOutputPage": {
       "title": "Story Output Page",
@@ -1236,5 +1256,3 @@
     }
   }
 }
-
-    
