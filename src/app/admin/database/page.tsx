@@ -99,9 +99,11 @@ export default function AdminDatabasePage() {
       const hasFilter = filterField && (filterValue || isValueInputDisabled);
 
       if (hasFilter) {
-          q = query(collRef, where(filterField, '==', filterValue), orderBy(documentId()), limit(50));
+          q = query(collRef, where(filterField, '==', filterValue), orderBy(documentId()), limit(200));
       } else {
-          q = query(collRef, orderBy(documentId()), limit(50));
+          // The most basic query: get all documents, sorted by their ID.
+          // This guarantees all documents are returned, including those with no fields.
+          q = query(collRef, orderBy(documentId()), limit(200));
       }
 
       const querySnapshot = await getDocs(q);
@@ -122,49 +124,6 @@ export default function AdminDatabasePage() {
       setIsLoading(false);
     }
   };
-
-  const handleFindEmpty = async () => {
-    if (!firestore || !selectedCollection) {
-      toast({
-        title: 'Missing Information',
-        description: 'Please select a collection to search.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    setIsLoading(true);
-    setDocuments([]);
-    setSelectedDocs(new Set());
-    setViewingDoc(null);
-
-    try {
-        const collRef = collection(firestore, selectedCollection);
-        const q = query(collRef, orderBy(documentId()), limit(200));
-        const querySnapshot = await getDocs(q);
-        
-        const emptyDocs = querySnapshot.docs.filter(doc => Object.keys(doc.data()).length === 0)
-          .map((doc) => ({ id: doc.id, ...doc.data() }));
-        
-        setDocuments(emptyDocs);
-
-        if (emptyDocs.length === 0) {
-            toast({ title: 'No empty documents found in the first 200 checked.' });
-        } else {
-            toast({ title: `Found ${emptyDocs.length} empty documents.` });
-        }
-
-    } catch (error: any) {
-        console.error('Error finding documents:', error);
-        toast({
-            title: 'Error',
-            description: error.message,
-            variant: 'destructive',
-        });
-    } finally {
-        setIsLoading(false);
-    }
-  };
-
 
   const handleDelete = async () => {
     if (!firestore || selectedDocs.size === 0) return;
@@ -270,10 +229,6 @@ export default function AdminDatabasePage() {
                 <Button onClick={handleSearch} disabled={isLoading}>
                     {isLoading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                     Search
-                </Button>
-                 <Button onClick={handleFindEmpty} disabled={isLoading} variant="secondary">
-                    {isLoading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Eraser className="mr-2 h-4 w-4" />}
-                    Find Empty Docs
                 </Button>
             </div>
           </div>
