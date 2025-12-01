@@ -8,7 +8,7 @@ import { z } from 'genkit';
 import type { StoryBook, StorySession, ChildProfile, Character, StoryBookPage as StoryBookPageType } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { logSessionEvent } from '@/lib/session-events';
-import { resolveEntities, replacePlaceholders } from '@/lib/resolve-placeholders';
+import { resolveEntities, replacePlaceholders, getEntitiesInText } from '@/lib/resolve-placeholders';
 
 
 type EntityMap = Map<string, { displayName: string; document: Character | ChildProfile }>;
@@ -35,15 +35,6 @@ const FlowPageSchema = z.object({
 });
 
 type FlowPage = z.infer<typeof FlowPageSchema>;
-
-function getEntitiesInText(text: string, entityMap: EntityMap): Character[] {
-    if (!text) return [];
-    const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
-    const uniqueIds = [...new Set(ids)];
-    return uniqueIds
-        .map(id => entityMap.get(id)?.document)
-        .filter((doc): doc is Character => !!doc && 'displayName' in doc && 'role' in doc);
-}
 
 function splitSentences(storyText: string): string[] {
   if (!storyText || typeof storyText !== 'string') return [];

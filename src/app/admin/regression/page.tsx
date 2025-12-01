@@ -1,17 +1,18 @@
 
+
 'use client';
 
 import { useState, useMemo } from 'react';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Copy, LoaderCircle } from 'lucide-react';
+import { Copy, LoaderCircle, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useAuth } from '@/firebase';
-import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, increment, orderBy, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, increment, orderBy, deleteDoc, writeBatch } from 'firebase/firestore';
 import type { Firestore, DocumentReference } from 'firebase/firestore';
 import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile, StoryBookPage } from '@/lib/types';
 import { IdTokenResult } from 'firebase/auth';
@@ -163,6 +164,7 @@ type RegressionArtifactTracker = {
     characters: Set<string>;
     storyBooks: Set<string>;
     promptConfigs: Set<string>;
+    printOrders: Set<string>;
 };
 
 const createArtifactTracker = (): RegressionArtifactTracker => ({
@@ -171,6 +173,7 @@ const createArtifactTracker = (): RegressionArtifactTracker => ({
     characters: new Set(),
     storyBooks: new Set(),
     promptConfigs: new Set(),
+    printOrders: new Set(),
 });
 
 const addRegressionMeta = <T extends Record<string, any>>(data: T, scenarioId: string) => ({
@@ -252,6 +255,12 @@ const cleanupRegressionArtifacts = async (firestore: Firestore, tracker: Regress
             await deleteDoc(doc(firestore, 'storyBooks', bookId));
         });
     }
+    
+    for (const orderId of tracker.printOrders) {
+        await deleteWithLogging(`printOrders/${orderId}`, async () => {
+            await deleteDoc(doc(firestore, 'printOrders', orderId));
+        });
+    }
 
     for (const configId of tracker.promptConfigs) {
         await deleteWithLogging(`promptConfigs/${configId}`, async () => {
@@ -311,6 +320,7 @@ export default function AdminRegressionPage() {
   const [beatSessionId, setBeatSessionId] = useState('');
   const [warmupSessionId, setWarmupSessionId] = useState('');
   const [isRunning, setIsRunning] = useState(false);
+  const [isCleaning, setIsCleaning] = useState(false);
   const [tests, setTests] = useState<TestResult[]>(initialTests);
   const [authSummary, setAuthSummary] = useState<AuthSummary | null>(null);
 
@@ -696,6 +706,12 @@ export default function AdminRegressionPage() {
         trackArtifact(artifacts, 'sessions', sessionRef.id);
         return sessionRef;
     };
+    
+    const createRegressionPrintOrder = async (data: Record<string, any>, scenarioId: string) => {
+        const orderRef = await addDoc(collection(firestore, 'printOrders'), addRegressionMeta(data, scenarioId));
+        trackArtifact(artifacts, 'printOrders', orderRef.id);
+        return orderRef;
+    }
 
     const createRegressionCharacter = async (data: Record<string, any>, scenarioId: string) => {
         const characterRef = await addDoc(collection(firestore, 'characters'), addRegressionMeta(data, scenarioId));
@@ -809,7 +825,7 @@ export default function AdminRegressionPage() {
         if (sessionSnap.data()?.currentPhase !== 'ending') throw new Error(`Phase after ending was ${sessionSnap.data()?.currentPhase}, expected 'ending'`);
 
         // 5. Compile
-        const compileRes = await fetch('/api/storyCompile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }) });
+        const compileRes = await fetch('/api/storyCompile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id, storyOutputTypeId: 'picture_book_standard_v1' }) });
         if (!compileRes.ok) { const body = await compileRes.json(); throw new Error(`Compile API failed: ${body.errorMessage}`); }
         sessionSnap = await getDoc(sessionRef);
         phaseStateScenarioSummary.phaseAfterCompile = sessionSnap.data()?.currentPhase;
@@ -840,7 +856,7 @@ export default function AdminRegressionPage() {
         await addDoc(collection(firestore, 'storySessions', sessionRef.id, 'messages'), { sender: 'assistant', text: 'The story is now complete!', createdAt: serverTimestamp() });
 
         const response = await fetch('/api/storyCompile', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id, storyOutputTypeId: 'picture_book_standard_v1' }),
         });
         const result = await response.json();
         
@@ -856,8 +872,7 @@ export default function AdminRegressionPage() {
             firstPageKind: null,
             lastPageKind: null,
             interiorPlacementsAlternate: null,
-            imageReadyCount: null,
-            imageStatus: null,
+            imageLogs: null,
             error: result.errorMessage
         };
 
@@ -956,8 +971,6 @@ export default function AdminRegressionPage() {
             const logPreview = Array.isArray(imagesResult?.logs) ? imagesResult.logs.slice(0, 5).join(' | ') : 'No logs';
             throw new Error(`One or more storyBook pages failed to generate art. Logs: ${logPreview}`);
         }
-
-        storyCompileScenarioSummary.imageReadyCount = imagePages.length;
         storyCompileScenarioSummary.imageStatus = imagesResult.status ?? 'ready';
 
         updateTestResult('SCENARIO_STORY_COMPILE', { status: 'PASS', message: `Compiled story length ${result.storyText.length} chars. Sample: "${result.storyText.slice(0, 80)}..."` });
@@ -1067,7 +1080,7 @@ export default function AdminRegressionPage() {
         const compileRes = await fetch('/api/storyCompile', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId: sessionRef.id }),
+            body: JSON.stringify({ sessionId: sessionRef.id, storyOutputTypeId: 'picture_book_standard_v1' }),
         });
         const compilePayload = await compileRes.json();
         if (!compileRes.ok || !compilePayload?.ok) {
@@ -1146,31 +1159,17 @@ export default function AdminRegressionPage() {
             throw new Error(printablePayload?.errorMessage || 'Printable API failed for E2E scenario.');
         }
         storybookE2EScenarioSummary.printableReady = true;
-        const orderResponse = await fetch('/api/printOrders', {
-            method: 'POST',
-            headers: authedHeaders,
-            body: JSON.stringify({
-                bookId: bookRef.id,
-                quantity: 1,
-                contactEmail: 'regression@example.com',
-                shippingAddress: {
-                    name: 'Regression Tester',
-                    line1: '123 QA Lane',
-                    line2: 'Suite 5',
-                    city: 'Testville',
-                    state: 'CA',
-                    postalCode: '94000',
-                    country: 'USA',
-                },
-                regressionTag: regressionScenarioTag,
-            }),
-        });
-        const orderPayload = await orderResponse.json();
-        if (!orderResponse.ok || !orderPayload?.ok) {
-            throw new Error(orderPayload?.errorMessage || 'Print order API failed for E2E scenario.');
-        }
-        storybookE2EScenarioSummary.orderId = orderPayload.orderId ?? null;
-        const payResponse = await fetch(`/api/printOrders/${orderPayload.orderId}/pay`, {
+        const orderRes = await createRegressionPrintOrder({
+            bookId: bookRef.id,
+            quantity: 1,
+            contactEmail: 'regression@example.com',
+            shippingAddress: {
+                name: 'Regression Tester', line1: '123 QA Lane', city: 'Testville', state: 'CA', postalCode: '94000', country: 'USA',
+            }
+        }, scenarioId);
+        storybookE2EScenarioSummary.orderId = orderRes.id;
+        
+        const payResponse = await fetch(`/api/printOrders/${orderRes.id}/pay`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${authToken}`,
@@ -1719,6 +1718,34 @@ export default function AdminRegressionPage() {
     }
   };
   
+  const cleanupAllRegressionData = async () => {
+    if (!firestore) {
+        toast({ title: 'Firestore client not ready.', variant: 'destructive' });
+        return;
+    }
+    setIsCleaning(true);
+    try {
+        const collectionsToClean = ['children', 'storySessions', 'characters', 'storyBooks', 'promptConfigs', 'printOrders'];
+        const batch = writeBatch(firestore);
+        let deletedCount = 0;
+
+        for (const coll of collectionsToClean) {
+            const q = query(collection(firestore, coll), where('regressionTest', '==', true));
+            const snapshot = await getDocs(q);
+            snapshot.forEach(doc => {
+                batch.delete(doc.ref);
+                deletedCount++;
+            });
+        }
+        await batch.commit();
+        toast({ title: 'Cleanup Complete', description: `Deleted ${deletedCount} regression test documents.` });
+    } catch (error: any) {
+        toast({ title: 'Cleanup Failed', description: error.message, variant: 'destructive' });
+    } finally {
+        setIsCleaning(false);
+    }
+  };
+  
    const getStatusVariant = (status: TestStatus) => {
     switch (status) {
       case 'PASS': return 'default';
@@ -1766,9 +1793,12 @@ export default function AdminRegressionPage() {
                     <Progress value={progressPercent} className="h-2" />
                 </div>
             </CardContent>
-             <CardFooter>
-                <Button onClick={runAllTests} disabled={isRunning}>
+             <CardFooter className="gap-2">
+                <Button onClick={runAllTests} disabled={isRunning || isCleaning}>
                     {isRunning ? <><LoaderCircle className="mr-2 h-4 w-4 animate-spin"/>Running...</> : 'Run all regression tests'}
+                </Button>
+                 <Button variant="destructive" onClick={cleanupAllRegressionData} disabled={isRunning || isCleaning}>
+                    {isCleaning ? <><LoaderCircle className="mr-2 h-4 w-4 animate-spin"/>Cleaning...</> : <><Trash2 className="mr-2 h-4 w-4"/>Cleanup Leftover Data</>}
                 </Button>
             </CardFooter>
         </Card>

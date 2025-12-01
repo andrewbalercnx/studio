@@ -1,6 +1,3 @@
-
-'use server';
-
 import { initializeFirebase } from '@/firebase';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import type { Character, ChildProfile } from '@/lib/types';
@@ -40,7 +37,7 @@ async function fetchEntities(ids: string[]): Promise<EntityMap> {
   return entityMap;
 }
 
-function replacePlaceholders(text: string, entityMap: EntityMap): string {
+export function replacePlaceholders(text: string, entityMap: EntityMap): string {
     if (!text) return '';
     return text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
         return entityMap.get(id)?.displayName || match;
@@ -72,6 +69,15 @@ export async function resolvePlaceholders(text: string | string[]): Promise<Reco
   });
 
   return resolved;
+}
+
+export function getEntitiesInText(text: string, entityMap: EntityMap): Character[] {
+  if (!text) return [];
+  const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
+  const uniqueIds = [...new Set(ids)];
+  return uniqueIds
+    .map(id => entityMap.get(id)?.document)
+    .filter((doc): doc is Character => !!doc && 'displayName' in doc && 'role' in doc);
 }
 
     
