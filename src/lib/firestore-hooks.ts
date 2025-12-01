@@ -41,7 +41,8 @@ export function useCollection<T>(query: Query | null): UseCollectionReturn<T> {
         setError(null);
       },
       (err: Error) => {
-        console.error('[useCollection] snapshot error on path:', path, {
+        console.error('[useCollection] snapshot error:', {
+          path: path,
           code: (err as any)?.code,
           message: err?.message,
         });
