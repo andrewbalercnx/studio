@@ -88,7 +88,11 @@ export async function resolvePlaceholders(text: string | string[]): Promise<Reco
   const uniqueIds = [...new Set(ids)];
   
   if (uniqueIds.length === 0) {
-    return {};
+    // If no placeholders, just return the original text mapped to itself
+    if (Array.isArray(text)) {
+      return text.reduce((acc, t) => ({...acc, [t]: t}), {});
+    }
+    return {[text]: text};
   }
   
   const entityMap = await fetchEntities(uniqueIds);

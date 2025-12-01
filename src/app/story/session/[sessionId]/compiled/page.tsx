@@ -45,8 +45,10 @@ export default function CompiledStoryBookPage() {
         return;
       }
       try {
-        const resolvedMap = await resolvePlaceholders(text);
-        setResolvedStoryText(resolvedMap[text] || text);
+        // resolvePlaceholders now returns an object, we need the first value
+        const resolvedObject = await resolvePlaceholders(text);
+        const resolvedText = resolvedObject[text] || text;
+        setResolvedStoryText(resolvedText);
       } catch (e) {
         console.error("Failed to resolve placeholders in story text", e);
         setResolvedStoryText(text); // Fallback to original text on error
@@ -65,7 +67,6 @@ export default function CompiledStoryBookPage() {
   const pageStatus = storyBook?.pageGeneration?.status ?? 'idle';
   const lastCompletedAt = (storyBook?.pageGeneration?.lastCompletedAt as any)?.toDate?.();
   const lastRunAt = (storyBook?.pageGeneration?.lastRunAt as any)?.toDate?.();
-  const pageButtonLabel = pages && pages.length > 0 ? 'Regenerate Pages' : 'Generate Pages';
   const imageStatus = storyBook?.imageGeneration?.status ?? 'idle';
   const artReady = pages?.filter((page) => page.imageStatus === 'ready').length ?? storyBook?.imageGeneration?.pagesReady ?? 0;
   const artTotal =
@@ -187,38 +188,6 @@ export default function CompiledStoryBookPage() {
                 )}
               </div>
               <div className="space-y-4 border-t pt-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-xl font-semibold">Storybook Pages</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {pages && pages.length > 0
-                        ? `Latest generation contains ${pages.length} pages.`
-                        : 'Turn the compiled story into previewable pages.'}
-                    </p>
-                    <div className="mt-2 text-xs text-muted-foreground space-y-1">
-                      <p>Status: <span className="font-semibold uppercase">{pageStatus}</span></p>
-                      {lastRunAt && <p>Last started: {lastRunAt.toLocaleString()}</p>}
-                      {lastCompletedAt && <p>Last finished: {lastCompletedAt.toLocaleString()}</p>}
-                      {storyBook.pageGeneration?.pagesCount && (
-                        <p>Saved pages: {storyBook.pageGeneration.pagesCount}</p>
-                      )}
-                    </div>
-                  </div>
-                  <Button
-                    onClick={handleGeneratePages}
-                    disabled={isGeneratingPages || !storyBook}
-                    variant="outline"
-                    className="min-w-[220px]"
-                  >
-                    {isGeneratingPages && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
-                    {pageButtonLabel}
-                  </Button>
-                </div>
-                {(pageGenerationError || pagesError) && (
-                  <p className="text-sm text-destructive">
-                    {pageGenerationError || pagesError?.message}
-                  </p>
-                )}
                 <div className="rounded-md border border-dashed bg-muted/30 p-4 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
