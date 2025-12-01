@@ -99,13 +99,9 @@ export default function AdminDatabasePage() {
       const hasFilter = filterField && (filterValue || isValueInputDisabled);
 
       if (hasFilter) {
-        if (filterOperator === 'exists') {
-          q = query(collRef, where(filterField, '!=', null), orderBy(documentId()), limit(50));
-        } else {
-          q = query(collRef, where(filterField, '==', filterValue), orderBy(documentId()), limit(50));
-        }
+          q = query(collRef, where(filterField, '==', filterValue), limit(50));
       } else {
-        q = query(collRef, orderBy('createdAt', 'desc'), orderBy(documentId()), limit(50));
+          q = query(collRef, orderBy('createdAt', 'desc'), limit(50));
       }
 
       const querySnapshot = await getDocs(q);
@@ -151,7 +147,7 @@ export default function AdminDatabasePage() {
         // Client-side filter for empty documents
         const emptyDocs = querySnapshot.docs
             .map((doc) => ({ id: doc.id, ...doc.data() }))
-            .filter(doc => Object.keys(doc).length === 1); // Only has 'id' field
+            .filter(doc => Object.keys(doc).length === 1 && doc.id); // Only has 'id' field
         
         setDocuments(emptyDocs);
 
