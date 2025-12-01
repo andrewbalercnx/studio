@@ -17,21 +17,219 @@ import { LoaderCircle, Plus, Edit, Trash2 } from 'lucide-react';
 import type { PrintLayout } from '@/lib/types';
 import SampleLayoutData from '@/data/print-layouts.json';
 import { writeBatch } from 'firebase/firestore';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-type PrintLayoutForm = {
-  id?: string;
-  name: string;
-  leafWidth: string;
-  leafHeight: string;
-  leavesPerSpread: '1' | '2';
-};
+const boxSchema = z.object({
+  leaf: z.coerce.number().min(1).max(2),
+  x: z.coerce.number(),
+  y: z.coerce.number(),
+  width: z.coerce.number(),
+  height: z.coerce.number(),
+});
 
-const defaultForm: PrintLayoutForm = {
+const printLayoutFormSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'Name is required'),
+  leafWidth: z.coerce.number(),
+  leafHeight: z.coerce.number(),
+  leavesPerSpread: z.enum(['1', '2']),
+  textBoxes: z.array(boxSchema).min(1, 'At least one text box is required'),
+  imageBoxes: z.array(boxSchema).min(1, 'At least one image box is required'),
+});
+
+type PrintLayoutFormValues = z.infer<typeof printLayoutFormSchema>;
+
+const defaultFormValues: PrintLayoutFormValues = {
   name: '',
-  leafWidth: '8.5',
-  leafHeight: '11',
+  leafWidth: 8.5,
+  leafHeight: 11,
   leavesPerSpread: '1',
+  textBoxes: [{ leaf: 1, x: 1, y: 7, width: 6.5, height: 3 }],
+  imageBoxes: [{ leaf: 1, x: 1, y: 1, width: 6.5, height: 5.5 }],
 };
+
+function PrintLayoutForm({
+  editingLayout,
+  onSave,
+}: {
+  editingLayout?: PrintLayout | null;
+  onSave: () => void;
+}) {
+  const firestore = useFirestore();
+  const { toast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<PrintLayoutFormValues>({
+    resolver: zodResolver(printLayoutFormSchema),
+    defaultValues: editingLayout
+      ? {
+          id: editingLayout.id,
+          name: editingLayout.name,
+          leafWidth: editingLayout.leafWidth,
+          leafHeight: editingLayout.leafHeight,
+          leavesPerSpread: String(editingLayout.leavesPerSpread) as '1' | '2',
+          textBoxes: editingLayout.textBoxes || [],
+          imageBoxes: editingLayout.imageBoxes || [],
+        }
+      : defaultFormValues,
+  });
+
+  const {
+    fields: textBoxFields,
+    append: appendTextBox,
+    remove: removeTextBox,
+  } = useFieldArray({
+    control,
+    name: 'textBoxes',
+  });
+  const {
+    fields: imageBoxFields,
+    append: appendImageBox,
+    remove: removeImageBox,
+  } = useFieldArray({
+    control,
+    name: 'imageBoxes',
+  });
+
+  const onSubmit = async (data: PrintLayoutFormValues) => {
+    if (!firestore) return;
+
+    setIsSaving(true);
+    const payload = {
+      ...data,
+      leavesPerSpread: Number(data.leavesPerSpread) as 1 | 2,
+      updatedAt: serverTimestamp(),
+    };
+
+    try {
+      const docRef = data.id ? doc(firestore, 'printLayouts', data.id) : doc(collection(firestore, 'printLayouts'));
+      await setDoc(
+        docRef,
+        { ...payload, createdAt: payload.updatedAt },
+        { merge: true }
+      );
+      toast({ title: 'Print layout saved' });
+      onSave();
+    } catch (error: any) {
+      toast({ title: 'Error saving layout', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  const renderBoxFields = (
+    fields: any[],
+    removeFn: (index: number) => void,
+    prefix: 'textBoxes' | 'imageBoxes'
+  ) => (
+    <div className="space-y-3">
+      {fields.map((field, index) => (
+        <div key={field.id} className="grid grid-cols-6 gap-2 items-center rounded-md border p-2">
+          <div className="col-span-6 text-xs font-semibold uppercase text-muted-foreground">Box {index + 1}</div>
+          <div className="space-y-1">
+            <Label className="text-xs">Leaf</Label>
+            <Input type="number" {...register(`${prefix}.${index}.leaf`)} defaultValue={field.leaf} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">X</Label>
+            <Input type="number" step="0.1" {...register(`${prefix}.${index}.x`)} defaultValue={field.x} />
+          </div>
+           <div className="space-y-1">
+            <Label className="text-xs">Y</Label>
+            <Input type="number" step="0.1" {...register(`${prefix}.${index}.y`)} defaultValue={field.y} />
+          </div>
+           <div className="space-y-1">
+            <Label className="text-xs">W</Label>
+            <Input type="number" step="0.1" {...register(`${prefix}.${index}.width`)} defaultValue={field.width} />
+          </div>
+           <div className="space-y-1">
+            <Label className="text-xs">H</Label>
+            <Input type="number" step="0.1" {...register(`${prefix}.${index}.height`)} defaultValue={field.height} />
+          </div>
+           <Button variant="ghost" size="icon" onClick={() => removeFn(index)} className="self-end">
+             <Trash2 className="h-4 w-4 text-destructive" />
+           </Button>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="layout-name">Name</Label>
+          <Input id="layout-name" {...register('name')} placeholder="e.g. 8.5x11 Portrait" />
+          {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+        </div>
+        <div className="grid gap-2">
+          <Label>Leaves per Spread</Label>
+          <Controller
+            name="leavesPerSpread"
+            control={control}
+            render={({ field }) => (
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 (Single Page)</SelectItem>
+                  <SelectItem value="2">2 (Facing Pages)</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="leaf-width">Leaf Width (in)</Label>
+          <Input id="leaf-width" type="number" step="0.01" {...register('leafWidth')} />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="leaf-height">Leaf Height (in)</Label>
+          <Input id="leaf-height" type="number" step="0.01" {...register('leafHeight')} />
+        </div>
+      </div>
+      
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <Label>Text Boxes</Label>
+          <Button type="button" size="sm" variant="outline" onClick={() => appendTextBox({ leaf: 1, x: 1, y: 1, width: 6, height: 2 })}>
+            <Plus className="mr-2 h-4 w-4" /> Add
+          </Button>
+        </div>
+        {renderBoxFields(textBoxFields, removeTextBox, 'textBoxes')}
+        {errors.textBoxes && <p className="text-xs text-destructive mt-1">{errors.textBoxes.message || errors.textBoxes.root?.message}</p>}
+      </div>
+
+       <div>
+        <div className="flex items-center justify-between mb-2">
+          <Label>Image Boxes</Label>
+          <Button type="button" size="sm" variant="outline" onClick={() => appendImageBox({ leaf: 1, x: 1, y: 1, width: 6, height: 4 })}>
+            <Plus className="mr-2 h-4 w-4" /> Add
+          </Button>
+        </div>
+        {renderBoxFields(imageBoxFields, removeImageBox, 'imageBoxes')}
+        {errors.imageBoxes && <p className="text-xs text-destructive mt-1">{errors.imageBoxes.message || errors.imageBoxes.root?.message}</p>}
+      </div>
+
+      <DialogFooter>
+        <Button type="submit" disabled={isSaving}>
+          {isSaving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Save Layout
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
 
 function PrintLayoutsPanel() {
   const firestore = useFirestore();
@@ -39,8 +237,7 @@ function PrintLayoutsPanel() {
   const { data: layouts, loading, error } = useCollection<PrintLayout>(layoutsQuery);
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [form, setForm] = useState<PrintLayoutForm>(defaultForm);
+  const [editingLayout, setEditingLayout] = useState<PrintLayout | null>(null);
 
   const handleSeedLayouts = useCallback(async () => {
     if (!firestore) return;
@@ -62,60 +259,23 @@ function PrintLayoutsPanel() {
   }, [firestore, toast]);
   
   useEffect(() => {
-    // If loading is finished, there's no error, and the collection is empty, seed it.
     if (!loading && !error && layouts?.length === 0) {
       handleSeedLayouts();
     }
   }, [loading, error, layouts, handleSeedLayouts]);
 
   const openCreate = () => {
-    setForm(defaultForm);
+    setEditingLayout(null);
     setDialogOpen(true);
   };
 
   const openEdit = (item: PrintLayout) => {
-    setForm({
-      id: item.id,
-      name: item.name,
-      leafWidth: String(item.leafWidth),
-      leafHeight: String(item.leafHeight),
-      leavesPerSpread: String(item.leavesPerSpread) as '1' | '2',
-    });
+    setEditingLayout(item);
     setDialogOpen(true);
   };
-
-  const handleSave = async () => {
-    if (!firestore) return;
-    if (!form.name) {
-      toast({ title: 'Name is required.', variant: 'destructive' });
-      return;
-    }
-    setIsSaving(true);
-    
-    // Basic hardcoded boxes for now
-    const textBoxes = [{ leaf: 1, x: 1, y: 7, width: 6.5, height: 3 }];
-    const imageBoxes = [{ leaf: 1, x: 1, y: 1, width: 6.5, height: 5.5 }];
-
-    const payload = {
-      name: form.name,
-      leafWidth: parseFloat(form.leafWidth) || 8.5,
-      leafHeight: parseFloat(form.leafHeight) || 11,
-      leavesPerSpread: parseInt(form.leavesPerSpread, 10) as 1 | 2,
-      textBoxes,
-      imageBoxes,
-      updatedAt: serverTimestamp(),
-    };
-    try {
-      const docRef = form.id ? doc(firestore, 'printLayouts', form.id) : doc(collection(firestore, 'printLayouts'));
-      await setDoc(docRef, { ...payload, createdAt: payload.updatedAt }, { merge: true });
-      
-      toast({ title: 'Print layout saved' });
-      setDialogOpen(false);
-    } catch (error: any) {
-      toast({ title: 'Error saving layout', description: error.message, variant: 'destructive' });
-    } finally {
-      setIsSaving(false);
-    }
+  
+  const handleSave = () => {
+    setDialogOpen(false);
   };
 
   return (
@@ -163,32 +323,11 @@ function PrintLayoutsPanel() {
       </CardContent>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{form.id ? 'Edit Print Layout' : 'New Print Layout'}</DialogTitle>
+            <DialogTitle>{editingLayout ? 'Edit Print Layout' : 'New Print Layout'}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="layout-name">Name</Label>
-              <Input id="layout-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. 8.5x11 Portrait" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                    <Label htmlFor="leaf-width">Leaf Width (in)</Label>
-                    <Input id="leaf-width" type="number" value={form.leafWidth} onChange={(e) => setForm({ ...form, leafWidth: e.target.value })} />
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="leaf-height">Leaf Height (in)</Label>
-                    <Input id="leaf-height" type="number" value={form.leafHeight} onChange={(e) => setForm({ ...form, leafHeight: e.target.value })} />
-                </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Save Layout
-            </Button>
-          </DialogFooter>
+          <PrintLayoutForm editingLayout={editingLayout} onSave={handleSave} />
         </DialogContent>
       </Dialog>
     </Card>
