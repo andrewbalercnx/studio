@@ -11,6 +11,7 @@ import { collection, doc, onSnapshot, writeBatch, serverTimestamp, query, orderB
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Character } from '@/lib/types';
+import { logAIFlow } from '@/lib/ai-flow-logger';
 
 const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt' | 'ownerChildId'>[] = [
     {
@@ -170,8 +171,10 @@ export default function AdminCharactersPage() {
   }
 
   const getTraitsSummary = (character: Character) => {
-      if (!character.traits || character.traits.length === 0) return '-';
-      return character.traits.join(', ');
+    if (!character.traits || !Array.isArray(character.traits) || character.traits.length === 0) {
+      return '-';
+    }
+    return character.traits.join(', ');
   }
 
 
