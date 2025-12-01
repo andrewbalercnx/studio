@@ -442,4 +442,17 @@ export type HelpWizard = {
   updatedAt: any;
 };
 
-    
+export type AIFlowLog = {
+  id: string;
+  flowName: string;
+  status: 'success' | 'error';
+  sessionId?: string;
+  prompt: string;
+  response?: {
+    text: string;
+    finishReason: string;
+    model: string;
+  };
+  errorMessage?: string;
+  createdAt: any;
+};

@@ -1,5 +1,4 @@
 
-
 {
   "entities": {
     "UserProfile": {
@@ -425,6 +424,10 @@
         "bodyText": {
           "type": "string",
           "description": "Primary text for the page, typically 1–2 short sentences."
+        },
+        "displayText": {
+          "type": "string",
+          "description": "Human-readable version of bodyText with placeholders resolved."
         },
         "imagePrompt": {
           "type": "string",
@@ -934,6 +937,60 @@
         "ageRange",
         "category"
       ]
+    },
+    "AIFlowLog": {
+      "title": "AI Flow Log",
+      "description": "Records an execution of a Genkit AI flow for debugging and analysis.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "flowName": {
+          "type": "string",
+          "description": "The name of the Genkit flow that was executed."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["success", "error"]
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Optional: The story session this flow was associated with."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "The full prompt sent to the language model."
+        },
+        "response": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "The text content of the response."
+            },
+            "finishReason": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            }
+          }
+        },
+        "errorMessage": {
+          "type": "string",
+          "description": "The error message if the flow failed."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "flowName",
+        "status",
+        "createdAt"
+      ]
     }
   },
   "auth": {
@@ -1002,6 +1059,12 @@
         "$ref": "#/entities/StoryBookPage"
       },
       "description": "Sub-collection containing the ordered pages of a compiled story book."
+    },
+    "/aiFlowLogs/{logId}": {
+      "schema": {
+        "$ref": "#/entities/AIFlowLog"
+      },
+      "description": "Stores logs of Genkit AI flow executions for debugging."
     }
   }
 }

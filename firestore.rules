@@ -172,10 +172,13 @@ service cloud.firestore {
     }
 
     match /helpWizards/{wizardId} {
-      // Publicly readable content, allow unauthenticated access
       allow read: if true;
-      // Write access restricted to server or admin
       allow write: if isServer() || isAdmin();
+    }
+
+    match /aiFlowLogs/{logId} {
+        allow read: if isAdmin() || isUserAdmin(request.auth.uid);
+        allow write: if isServer();
     }
   }
 }
