@@ -28,7 +28,6 @@ export function useCollection<T>(query: Query | null): UseCollectionReturn<T> {
     
     setLoading(true);
     const path = (query as any)?._query?.path?.canonicalString?.() ?? 'unknown';
-    console.debug('[useCollection] subscribe', path);
 
     const unsubscribe = onSnapshot(
       query,
@@ -42,14 +41,12 @@ export function useCollection<T>(query: Query | null): UseCollectionReturn<T> {
         setError(null);
       },
       (err: Error) => {
-        console.error('[useCollection] snapshot error', {
+        console.error('[useCollection] snapshot error on path:', path, {
           code: (err as any)?.code,
           message: err?.message,
-          path,
-          query: (query as any)?._query ?? null,
         });
         const permissionError = new FirestorePermissionError({
-          path: (query as any)._query.path.segments.join('/'),
+          path: path,
           operation: 'list',
         });
         errorEmitter.emit('permission-error', permissionError);
@@ -60,7 +57,6 @@ export function useCollection<T>(query: Query | null): UseCollectionReturn<T> {
     );
 
     return () => {
-      console.debug('[useCollection] unsubscribe', path);
       unsubscribe();
     };
   }, [query]);
@@ -88,7 +84,6 @@ export function useDocument<T>(docRef: DocumentReference | null): UseDocumentRet
     
     setLoading(true);
     const path = docRef?.path ?? 'unknown';
-    console.debug('[useDocument] subscribe', path);
 
     const unsubscribe = onSnapshot(
       docRef,
@@ -117,7 +112,6 @@ export function useDocument<T>(docRef: DocumentReference | null): UseDocumentRet
     );
 
     return () => {
-      console.debug('[useDocument] unsubscribe', path);
       unsubscribe();
     };
   }, [docRef]);
