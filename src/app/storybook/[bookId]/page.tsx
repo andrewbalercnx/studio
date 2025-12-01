@@ -8,7 +8,7 @@ import clsx from 'clsx';
 import {useFirestore} from '@/firebase';
 import {doc, collection, query, orderBy} from 'firebase/firestore';
 import {useDocument, useCollection} from '@/lib/firestore-hooks';
-import type {StoryBook, StoryBookPage} from '@/lib/types';
+import type {Story, StoryOutputPage} from '@/lib/types';
 import {Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter} from '@/components/ui/card';
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
@@ -48,7 +48,7 @@ function formatTimestamp(value?: any): string | null {
   return date.toLocaleString();
 }
 
-function deriveFinalizationBadge(book?: StoryBook | null, readyPages = 0, totalPages = 0): StatusBadge {
+function deriveFinalizationBadge(book?: Story | null, readyPages = 0, totalPages = 0): StatusBadge {
   const status = book?.storybookFinalization?.status;
   if (status === 'ordered') return {label: 'Ordered', variant: 'default'};
   if (status === 'printable_ready') return {label: 'Printable Ready', variant: 'secondary'};
@@ -77,17 +77,17 @@ export default function StorybookViewerPage() {
   const {toast} = useToast();
   const {isParentGuardValidated, showPinModal} = useParentGuard();
 
-  const bookRef = useMemo(() => (firestore && bookId ? doc(firestore, 'storyBooks', bookId) : null), [firestore, bookId]);
+  const bookRef = useMemo(() => (firestore && bookId ? doc(firestore, 'stories', bookId) : null), [firestore, bookId]);
   const pagesQuery = useMemo(
     () =>
       firestore && bookId
-        ? query(collection(firestore, 'storyBooks', bookId, 'pages'), orderBy('pageNumber', 'asc'))
+        ? query(collection(firestore, 'stories', bookId, 'outputs', 'storybook', 'pages'), orderBy('pageNumber', 'asc'))
         : null,
     [firestore, bookId]
   );
 
-  const {data: storyBook, loading: bookLoading} = useDocument<StoryBook>(bookRef);
-  const {data: pages, loading: pagesLoading} = useCollection<StoryBookPage>(pagesQuery);
+  const {data: storyBook, loading: bookLoading} = useDocument<Story>(bookRef);
+  const {data: pages, loading: pagesLoading} = useCollection<StoryOutputPage>(pagesQuery);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -163,7 +163,7 @@ export default function StorybookViewerPage() {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          bookId,
+          storyId: bookId,
           ...payload,
         }),
       });
@@ -189,7 +189,7 @@ export default function StorybookViewerPage() {
     if (!bookId || !requireGuard()) return;
     setFinalizing(true);
     try {
-      await authorizedFetch('/api/storyBook/finalize', {bookId, action: 'finalize'});
+      await authorizedFetch('/api/storyBook/finalize', {storyId: bookId, outputId: 'storybook', action: 'finalize'});
       toast({title: 'Book finalized', description: 'Storypages locked for printing.'});
     } catch (error: any) {
       toast({title: 'Finalize failed', description: error?.message ?? 'Unable to finalize book.', variant: 'destructive'});
@@ -202,7 +202,7 @@ export default function StorybookViewerPage() {
     if (!bookId || !requireGuard()) return;
     setUnlocking(true);
     try {
-      await authorizedFetch('/api/storyBook/finalize', {bookId, action: 'unlock'});
+      await authorizedFetch('/api/storyBook/finalize', {storyId: bookId, outputId: 'storybook', action: 'unlock'});
       toast({title: 'Book unlocked', description: 'You can make edits again.'});
     } catch (error: any) {
       toast({title: 'Unlock failed', description: error?.message ?? 'Unable to unlock book.', variant: 'destructive'});
@@ -215,7 +215,7 @@ export default function StorybookViewerPage() {
     if (!bookId || !requireGuard()) return;
     setPrintableLoading(true);
     try {
-      const result = await authorizedFetch('/api/storyBook/printable', {bookId});
+      const result = await authorizedFetch('/api/storyBook/printable', {storyId: bookId, outputId: 'storybook', printLayoutId: 'a4-portrait-spread-v1'});
       if (!result) return;
       toast({title: 'Printable ready', description: 'PDF regenerated successfully.'});
     } catch (error: any) {
@@ -632,5 +632,3 @@ export default function StorybookViewerPage() {
     </div>
   );
 }
-
-    

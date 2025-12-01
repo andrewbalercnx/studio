@@ -6,7 +6,7 @@ import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
 import { collection, query, orderBy, where } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
-import type { StorySession, StoryBook } from '@/lib/types';
+import type { StorySession, Story } from '@/lib/types';
 import { LoaderCircle, BookOpen, Copy, Lock } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -20,16 +20,16 @@ import { useRouter } from 'next/navigation';
 
 type FinalizationBadge = { label: string; variant: 'default' | 'secondary' | 'outline' };
 
-function deriveFinalizationBadge(storyBook?: StoryBook | null): FinalizationBadge {
-  const status = storyBook?.storybookFinalization?.status;
+function deriveFinalizationBadge(story?: Story | null): FinalizationBadge {
+  const status = story?.storybookFinalization?.status;
   if (status === 'ordered') return { label: 'Ordered', variant: 'default' };
   if (status === 'printable_ready') return { label: 'Printable Ready', variant: 'secondary' };
-  if (status === 'finalized' || storyBook?.isLocked) return { label: 'Finalized', variant: 'default' };
-  if (storyBook?.imageGeneration?.status === 'ready') return { label: 'Ready to Finalize', variant: 'outline' };
+  if (status === 'finalized' || story?.isLocked) return { label: 'Finalized', variant: 'default' };
+  if (story?.imageGeneration?.status === 'ready') return { label: 'Ready to Finalize', variant: 'outline' };
   return { label: 'Draft', variant: 'outline' };
 }
 
-function StoryCard({ story, storyBook, bookLoading }: { story: StorySession; storyBook?: StoryBook | null; bookLoading: boolean }) {
+function StoryCard({ story, storyBook, bookLoading }: { story: StorySession; storyBook?: Story | null; bookLoading: boolean }) {
   const createdAt = story.createdAt?.toDate ? story.createdAt.toDate() : new Date();
   const hasStoryBook = !!storyBook;
   const pageGenerationStatus = storyBook?.pageGeneration?.status;
@@ -38,7 +38,7 @@ function StoryCard({ story, storyBook, bookLoading }: { story: StorySession; sto
   const imageReadyCount = storyBook?.imageGeneration?.pagesReady ?? null;
   const imageTotalCount = storyBook?.imageGeneration?.pagesTotal ?? null;
   const canOpenViewer = hasStoryBook && storyBook?.pageGeneration?.status === 'ready';
-  const viewerHref = storyBook?.id ? `/storybook/${storyBook.id}` : `/storybook/${story.storySessionId ?? story.id}`;
+  const viewerHref = storyBook?.id ? `/storybook/${storyBook.id}` : `/storybook/${story.id}`;
   const finalBadge = deriveFinalizationBadge(storyBook);
   const openStorybookButton = (
     <Button asChild className="w-full" disabled={!canOpenViewer}>
@@ -139,13 +139,13 @@ export default function MyStoriesPage() {
   const storyBooksQuery = useMemo(() => {
     if (!firestore || !activeChildId) return null;
     return query(
-      collection(firestore, 'storyBooks'),
+      collection(firestore, 'stories'),
       where('childId', '==', activeChildId)
     );
   }, [firestore, activeChildId]);
-  const { data: storyBooks, loading: storyBooksLoading } = useCollection<StoryBook>(storyBooksQuery);
+  const { data: storyBooks, loading: storyBooksLoading } = useCollection<Story>(storyBooksQuery);
   const storyBooksBySessionId = useMemo(() => {
-    const map: Record<string, StoryBook> = {};
+    const map: Record<string, Story> = {};
     if (storyBooks) {
       for (const book of storyBooks) {
         if (book?.storySessionId) {

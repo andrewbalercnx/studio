@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -48,7 +49,7 @@ function hashSecret(secret: string, salt: string) {
 async function revokeExistingShare(firestore: FirebaseFirestore.Firestore, bookId: string, shareId?: string | null) {
   if (!shareId) return;
   await firestore
-    .collection('storyBooks')
+    .collection('stories')
     .doc(bookId)
     .collection('shareTokens')
     .doc(shareId)
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
 
     const user = await requireParentOrAdminUser(request);
     const firestore = getFirestore();
-    const bookRef = firestore.collection('storyBooks').doc(bookId);
+    const bookRef = firestore.collection('stories').doc(bookId);
     const bookSnap = await bookRef.get();
     if (!bookSnap.exists) {
       return respondError(404, 'Storybook not found');
@@ -181,7 +182,7 @@ export async function GET(request: Request) {
 
     const firestore = getFirestore();
     const booksSnap = await firestore
-      .collection('storyBooks')
+      .collection('stories')
       .where('storybookFinalization.shareId', '==', shareId)
       .limit(1)
       .get();

@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -38,10 +39,10 @@ export async function POST(request: Request, context: { params: Promise<{ orderI
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    if (orderData.bookId) {
+    if (orderData.storyId) {
       await firestore
-        .collection('storyBooks')
-        .doc(orderData.bookId)
+        .collection('stories')
+        .doc(orderData.storyId)
         .update({
           'storybookFinalization.status': 'ordered',
           'storybookFinalization.lastOrderId': orderId,
@@ -49,7 +50,7 @@ export async function POST(request: Request, context: { params: Promise<{ orderI
         .catch(() => undefined);
     }
 
-    if (orderData.bookId && orderData.storySessionId) {
+    if (orderData.storyId && orderData.storySessionId) {
       await firestore
         .collection('storySessions')
         .doc(orderData.storySessionId)
@@ -60,7 +61,7 @@ export async function POST(request: Request, context: { params: Promise<{ orderI
           source: 'server',
           attributes: {
             orderId,
-            bookId: orderData.bookId,
+            bookId: orderData.storyId,
           },
           createdAt: FieldValue.serverTimestamp(),
         })
