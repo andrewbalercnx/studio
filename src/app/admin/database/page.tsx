@@ -101,23 +101,20 @@ export default function AdminDatabasePage() {
       const hasFilter = filterField && (filterValue || isValueInputDisabled);
 
       if (hasFilter) {
+        // When filtering, only order by document ID to avoid composite index errors.
         if (filterOperator === 'exists') {
-          // This query is tricky as it often requires an index on the field.
-          // For now, we sort only by ID to avoid index errors.
           q = query(collRef, where(filterField, '!=', null), orderBy(documentId()), limit(50));
         } else { // '=='
           q = query(collRef, where(filterField, '==', filterValue), orderBy(documentId()), limit(50));
         }
       } else {
-        // Default query: sort by creation date if available, otherwise just by ID.
-        // This is a safe query that doesn't require composite indexes.
+        // Default query: try ordering by createdAt, fall back to just documentId.
+        // This ensures all documents are shown, even those without a createdAt field.
         try {
-          // Try ordering by createdAt, which is common but might not exist on all collections.
-          q = query(collRef, orderBy('createdAt', 'desc'), limit(50));
-          await getDocs(q); // Test the query to see if the index exists.
+          const testQuery = query(collRef, orderBy('createdAt', 'desc'), limit(1));
+          await getDocs(testQuery);
+          q = query(collRef, orderBy('createdAt', 'desc'), orderBy(documentId()), limit(50));
         } catch (e) {
-          // If sorting by 'createdAt' fails (e.g., no index or field doesn't exist),
-          // fall back to a simple query ordered only by document ID.
           q = query(collRef, orderBy(documentId()), limit(50));
         }
       }
