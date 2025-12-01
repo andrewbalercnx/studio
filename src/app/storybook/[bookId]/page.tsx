@@ -6,9 +6,9 @@ import {useParams} from 'next/navigation';
 import Link from 'next/link';
 import clsx from 'clsx';
 import {useFirestore} from '@/firebase';
-import {doc, collection, query, orderBy} from 'firebase/firestore';
+import {doc, collection, query, orderBy, where} from 'firebase/firestore';
 import {useDocument, useCollection} from '@/lib/firestore-hooks';
-import type {Story, StoryOutputPage} from '@/lib/types';
+import type {Story, StoryOutputPage, StoryOutputType} from '@/lib/types';
 import {Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter} from '@/components/ui/card';
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
@@ -27,12 +27,15 @@ import {
   Printer,
   Link as LinkIcon,
   PackageCheck,
+  BookOpen,
 } from 'lucide-react';
 import {useUser} from '@/firebase/auth/use-user';
 import {useParentGuard} from '@/hooks/use-parent-guard';
 import {useToast} from '@/hooks/use-toast';
 import {PrintOrderDialog} from '@/components/storybook/print-order-dialog';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 type StatusBadge = {label: string; variant: 'default' | 'secondary' | 'outline'};
 
@@ -86,9 +89,11 @@ export default function StorybookViewerPage() {
         : null,
     [firestore, bookId]
   );
+  const storyOutputTypesQuery = useMemo(() => firestore ? query(collection(firestore, 'storyOutputTypes'), where('status', '==', 'live')) : null, [firestore]);
 
   const {data: storyBook, loading: bookLoading} = useDocument<Story>(bookRef);
   const {data: pages, loading: pagesLoading} = useCollection<StoryOutputPage>(pagesQuery);
+  const { data: storyOutputTypes, loading: outputTypesLoading } = useCollection<StoryOutputType>(storyOutputTypesQuery);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -103,6 +108,7 @@ export default function StorybookViewerPage() {
   const [customSharePasscode, setCustomSharePasscode] = useState('');
   const [absoluteShareUrl, setAbsoluteShareUrl] = useState<string | null>(null);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+  const [selectedOutputTypeId, setSelectedOutputTypeId] = useState<string>('');
 
   const finalization = storyBook?.storybookFinalization ?? null;
 
@@ -111,6 +117,12 @@ export default function StorybookViewerPage() {
       setActiveIndex(pages.length - 1);
     }
   }, [pages, activeIndex]);
+  
+  useEffect(() => {
+    if (storyOutputTypes && storyOutputTypes.length > 0 && !selectedOutputTypeId) {
+      setSelectedOutputTypeId(storyOutputTypes[0].id);
+    }
+  }, [storyOutputTypes, selectedOutputTypeId]);
 
   useEffect(() => {
     setShareSecret(null);
@@ -179,6 +191,33 @@ export default function StorybookViewerPage() {
       setIsGenerating(false);
     }
   };
+  
+  const handleGeneratePages = async () => {
+    if (!bookId) return;
+    if (!selectedOutputTypeId) {
+        toast({ title: 'Please select an output type', variant: 'destructive' });
+        return;
+    }
+    setIsGenerating(true);
+    setJobError(null);
+    try {
+        const response = await fetch('/api/storyBook/pages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storyId: bookId, storyOutputTypeId: selectedOutputTypeId }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+            throw new Error(result.errorMessage || 'Failed to generate pages.');
+        }
+        toast({ title: 'Page generation started', description: 'Your storybook pages are being created.' });
+    } catch (error: any) {
+        setJobError(error.message || 'An unexpected error occurred.');
+    } finally {
+        setIsGenerating(false);
+    }
+  };
+
 
   const handleGenerateAll = (forceRegenerate = false) => triggerImageJob({forceRegenerate});
   const handleRegeneratePage = (pageId: string | undefined) => {
@@ -290,7 +329,36 @@ export default function StorybookViewerPage() {
     }
 
     if (!pages || pages.length === 0) {
-      return <p className="text-muted-foreground text-center py-10">No pages available yet. Generate pages from the session view first.</p>;
+      return (
+        <Card className="border-dashed">
+            <CardHeader>
+                <CardTitle>Create Your Storybook Pages</CardTitle>
+                <CardDescription>
+                    Choose a format and let the AI generate the pages for your book.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="output-type">Book Format</Label>
+                    <Select value={selectedOutputTypeId} onValueChange={setSelectedOutputTypeId} disabled={outputTypesLoading}>
+                        <SelectTrigger id="output-type">
+                            <SelectValue placeholder={outputTypesLoading ? 'Loading formats...' : 'Select a format'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {storyOutputTypes?.map(type => (
+                                <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <Button onClick={handleGeneratePages} disabled={isGenerating || !selectedOutputTypeId}>
+                    {isGenerating ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <BookOpen className="mr-2 h-4 w-4" />}
+                    Generate Pages
+                </Button>
+                {jobError && <p className="text-sm text-destructive">{jobError}</p>}
+            </CardContent>
+        </Card>
+      );
     }
 
     return (
