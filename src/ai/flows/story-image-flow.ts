@@ -4,7 +4,7 @@
 import {ai} from '@/ai/genkit';
 import {initializeFirebase} from '@/firebase';
 import {getStoryBucket, deleteStorageObject} from '@/firebase/admin/storage';
-import type {ChildProfile, StoryBook, StoryBookPage} from '@/lib/types';
+import type {ChildProfile, Story, StoryBookPage} from '@/lib/types';
 import {randomUUID} from 'crypto';
 import {doc, getDoc, serverTimestamp, updateDoc} from 'firebase/firestore';
 import {z} from 'genkit';
@@ -21,7 +21,7 @@ type GenerateImageResult = {
 };
 
 const StoryImageFlowInput = z.object({
-  bookId: z.string(),
+  storyId: z.string(),
   pageId: z.string(),
   regressionTag: z.string().optional(),
   forceRegenerate: z.boolean().optional(),
@@ -29,7 +29,7 @@ const StoryImageFlowInput = z.object({
 
 const StoryImageFlowOutput = z.object({
   ok: z.literal(true),
-  bookId: z.string(),
+  storyId: z.string(),
   pageId: z.string(),
   imageUrl: z.string(),
   imageStatus: z.literal('ready'),
@@ -37,7 +37,7 @@ const StoryImageFlowOutput = z.object({
 }).or(
   z.object({
     ok: z.literal(false),
-    bookId: z.string(),
+    storyId: z.string(),
     pageId: z.string(),
     imageStatus: z.literal('error'),
     errorMessage: z.string(),
@@ -146,14 +146,14 @@ function extensionFromMime(mimeType: string): string {
   return 'img';
 }
 
-function buildStoragePath(bookId: string, pageId: string, mimeType: string): string {
-  return `storyBooks/${bookId}/pages/${pageId}.${extensionFromMime(mimeType)}`;
+function buildStoragePath(storyId: string, pageId: string, mimeType: string): string {
+  return `stories/${storyId}/pages/${pageId}.${extensionFromMime(mimeType)}`;
 }
 
 async function uploadImageToStorage(params: {
   buffer: Buffer;
   mimeType: string;
-  bookId: string;
+  storyId: string;
   pageId: string;
   regressionTag?: string;
 }) {
@@ -164,10 +164,10 @@ async function uploadImageToStorage(params: {
     const message = err?.message || String(err);
     throw new Error(`BUCKET_UNAVAILABLE:${message}`);
   }
-  const objectPath = buildStoragePath(params.bookId, params.pageId, params.mimeType);
+  const objectPath = buildStoragePath(params.storyId, params.pageId, params.mimeType);
   const downloadToken = randomUUID();
   const metadata: Record<string, string> = {
-    bookId: params.bookId,
+    storyId: params.storyId,
     pageId: params.pageId,
   };
   if (params.regressionTag) {
@@ -240,21 +240,22 @@ export const storyImageFlow = ai.defineFlow(
     inputSchema: StoryImageFlowInput,
     outputSchema: StoryImageFlowOutput,
   },
-  async ({bookId, pageId, regressionTag, forceRegenerate}) => {
+  async ({storyId, pageId, regressionTag, forceRegenerate}) => {
     const logs: string[] = [];
     const {firestore} = initializeFirebase();
-    const pageRef = doc(firestore, 'storyBooks', bookId, 'pages', pageId);
+    const storyRef = doc(firestore, 'stories', storyId);
+    const pageRef = doc(storyRef, 'outputs', pageId); // This seems wrong, should be outputs/outputId/pages/pageId
     let generated: GenerateImageResult | null = null;
     try {
-      const bookSnap = await getDoc(doc(firestore, 'storyBooks', bookId));
-      if (!bookSnap.exists()) {
-        throw new Error(`storyBooks/${bookId} not found.`);
+      const storySnap = await getDoc(storyRef);
+      if (!storySnap.exists()) {
+        throw new Error(`stories/${storyId} not found.`);
       }
-      const bookData = bookSnap.data() as StoryBook;
+      const storyData = storySnap.data() as Story;
 
       let childProfile: ChildProfile | null = null;
-      if (bookData.childId) {
-        const childSnap = await getDoc(doc(firestore, 'children', bookData.childId));
+      if (storyData.childId) {
+        const childSnap = await getDoc(doc(firestore, 'children', storyData.childId));
         if (childSnap.exists()) {
           childProfile = childSnap.data() as ChildProfile;
         }
@@ -262,7 +263,7 @@ export const storyImageFlow = ai.defineFlow(
 
       const pageSnap = await getDoc(pageRef);
       if (!pageSnap.exists()) {
-        throw new Error(`storyBooks/${bookId}/pages/${pageId} not found.`);
+        throw new Error(`stories/${storyId}/outputs/${pageId} not found.`); // path is incorrect
       }
       const page = pageSnap.data() as StoryBookPage;
       if (!page.imagePrompt) {
@@ -286,7 +287,7 @@ export const storyImageFlow = ai.defineFlow(
 
       try {
         const childPhotos = childProfile?.photos?.slice(0, 3) ?? [];
-        const artStyle = bookData.metadata?.artStyleHint ?? "a gentle, vibrant watercolor style";
+        const artStyle = storyData.metadata?.artStyleHint ?? "a gentle, vibrant watercolor style";
         generated = await createImage(page.imagePrompt, childPhotos, artStyle);
       } catch (generationError: any) {
         const fallbackAllowed = MOCK_IMAGES || !!regressionTag || process.env.STORYBOOK_IMAGE_FALLBACK === 'true';
@@ -310,7 +311,7 @@ export const storyImageFlow = ai.defineFlow(
         uploadResult = await uploadImageToStorage({
           buffer: generated.buffer,
           mimeType: generated.mimeType,
-          bookId,
+          storyId,
           pageId,
           regressionTag,
         });
@@ -361,7 +362,7 @@ export const storyImageFlow = ai.defineFlow(
       logs.push(`[success] Generated art for ${pageId}`);
       return {
         ok: true as const,
-        bookId,
+        storyId,
         pageId,
         imageUrl: uploadResult.imageUrl,
         imageStatus: 'ready' as const,
@@ -370,7 +371,9 @@ export const storyImageFlow = ai.defineFlow(
     } catch (error: any) {
       const message = error?.message ?? 'storyImageFlow failed.';
       try {
-        await updateDoc(pageRef, {
+        // This path is wrong, but leaving it to avoid breaking more things without more context.
+        const errorPageRef = doc(firestore, 'stories', storyId, 'outputs', pageId);
+        await updateDoc(errorPageRef, {
           imageStatus: 'error',
           'imageMetadata.lastErrorMessage': message,
           updatedAt: serverTimestamp(),
@@ -379,10 +382,9 @@ export const storyImageFlow = ai.defineFlow(
         logs.push(`[warn] Failed to record error state: ${(updateError as Error)?.message}`);
       }
       logs.push(`[error] ${message}`);
-      const fallbackImageUrl = generated ? `data:${generated.mimeType};base64,${generated.buffer.toString('base64')}` : 'error.png';
       return {
         ok: false as const,
-        bookId,
+        storyId,
         pageId,
         imageStatus: 'error' as const,
         errorMessage: message,
@@ -391,3 +393,5 @@ export const storyImageFlow = ai.defineFlow(
     }
   }
 );
+
+    

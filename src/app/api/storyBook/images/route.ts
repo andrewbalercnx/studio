@@ -1,3 +1,4 @@
+
 import {NextResponse} from 'next/server';
 import {storyImageFlow} from '@/ai/flows/story-image-flow';
 import type {StoryBookPage} from '@/lib/types';
@@ -8,7 +9,7 @@ import {initializeFirebase} from '@/firebase';
 import {logSessionEvent} from '@/lib/session-events';
 
 type ImageJobRequest = {
-  bookId: string;
+  storyId: string;
   forceRegenerate?: boolean;
   regressionTag?: string;
   pageId?: string;
@@ -21,12 +22,12 @@ async function getAdminFirestore() {
   return getFirestore(app);
 }
 
-async function loadPages(firestore: Firestore, bookId: string, pageId?: string): Promise<PageWithId[]> {
-  const pagesRef = firestore.collection('storyBooks').doc(bookId).collection('pages');
+async function loadPages(firestore: Firestore, storyId: string, pageId?: string): Promise<PageWithId[]> {
+  const pagesRef = firestore.collection('stories').doc(storyId).collection('pages');
   if (pageId) {
     const pageSnap = await pagesRef.doc(pageId).get();
     if (!pageSnap.exists) {
-      throw new Error(`storyBooks/${bookId}/pages/${pageId} not found.`);
+      throw new Error(`stories/${storyId}/pages/${pageId} not found.`);
     }
     return [{...(pageSnap.data() as StoryBookPage), id: pageSnap.id}];
   }
@@ -40,12 +41,12 @@ async function loadPages(firestore: Firestore, bookId: string, pageId?: string):
 
 async function resetPageState(
   firestore: Firestore,
-  bookId: string,
+  storyId: string,
   page: PageWithId,
   regressionMeta: Record<string, unknown>,
   forceRegenerate: boolean
 ) {
-  const pageRef = firestore.collection('storyBooks').doc(bookId).collection('pages').doc(page.id);
+  const pageRef = firestore.collection('stories').doc(storyId).collection('pages').doc(page.id);
   if (forceRegenerate && page.imageMetadata?.storagePath) {
     await deleteStorageObject(page.imageMetadata.storagePath).catch(() => undefined);
   }
@@ -78,50 +79,50 @@ function summarizeCounts(pages: PageWithId[]) {
 
 export async function POST(request: Request) {
   const allLogs: string[] = [];
-  let bookIdFromRequest: string | undefined;
+  let storyIdFromRequest: string | undefined;
 
   try {
     const body = (await request.json()) as ImageJobRequest;
-    const {bookId, forceRegenerate = false, regressionTag, pageId} = body;
-    bookIdFromRequest = bookId;
+    const {storyId, forceRegenerate = false, regressionTag, pageId} = body;
+    storyIdFromRequest = storyId;
 
-    if (!bookId || typeof bookId !== 'string') {
-      return NextResponse.json({ok: false, errorMessage: 'Missing bookId'}, {status: 400});
+    if (!storyId || typeof storyId !== 'string') {
+      return NextResponse.json({ok: false, errorMessage: 'Missing storyId'}, {status: 400});
     }
 
     const firestore = await getAdminFirestore();
-    const bookRef = firestore.collection('storyBooks').doc(bookId);
-    const bookSnap = await bookRef.get();
-    if (!bookSnap.exists) {
+    const storyRef = firestore.collection('stories').doc(storyId);
+    const storySnap = await storyRef.get();
+    if (!storySnap.exists()) {
       return NextResponse.json(
-        {ok: false, errorMessage: `storyBooks/${bookId} not found.`},
+        {ok: false, errorMessage: `stories/${storyId} not found.`},
         {status: 404}
       );
     }
-    const bookData = (bookSnap.data() as Record<string, any>) ?? {};
-    if (bookData?.isLocked) {
+    const storyData = (storySnap.data() as Record<string, any>) ?? {};
+    if (storyData?.isLocked) {
       return NextResponse.json(
         {ok: false, errorMessage: 'Storybook is locked. Unlock it before regenerating artwork.'},
         {status: 409}
       );
     }
-    const sessionIdForProgress = bookData?.storySessionId ?? null;
+    const sessionIdForProgress = storyData?.storySessionId ?? null;
 
     const regressionMeta = regressionTag
       ? {regressionTest: true, regressionTag}
       : {};
 
-    await bookRef.update({
+    await storyRef.update({
       'imageGeneration.status': 'running',
       'imageGeneration.lastRunAt': FieldValue.serverTimestamp(),
       'imageGeneration.lastErrorMessage': null,
       ...regressionMeta,
     });
 
-    const pages = await loadPages(firestore, bookId, pageId);
+    const pages = await loadPages(firestore, storyId, pageId);
     if (pages.length === 0) {
       return NextResponse.json(
-        {ok: false, errorMessage: 'No pages available for this storyBook.'},
+        {ok: false, errorMessage: 'No pages available for this story.'},
         {status: 400}
       );
     }
@@ -130,8 +131,8 @@ export async function POST(request: Request) {
       if (!page.imagePrompt || page.imagePrompt.trim().length === 0) {
         allLogs.push(`[skip] ${page.id} has no imagePrompt.`);
         await firestore
-          .collection('storyBooks')
-          .doc(bookId)
+          .collection('stories')
+          .doc(storyId)
           .collection('pages')
           .doc(page.id)
           .update({
@@ -147,9 +148,9 @@ export async function POST(request: Request) {
         continue;
       }
 
-      await resetPageState(firestore, bookId, page, regressionMeta, forceRegenerate);
+      await resetPageState(firestore, storyId, page, regressionMeta, forceRegenerate);
       const flowResult = await storyImageFlow({
-        bookId,
+        storyId,
         pageId: page.id,
         regressionTag,
         forceRegenerate,
@@ -166,11 +167,11 @@ export async function POST(request: Request) {
       }
     }
 
-    const refreshedPages = await loadPages(firestore, bookId);
+    const refreshedPages = await loadPages(firestore, storyId);
     const counts = summarizeCounts(refreshedPages);
     const finalStatus = counts.ready === counts.total ? 'ready' : 'error';
 
-    await bookRef.update({
+    await storyRef.update({
       'imageGeneration.status': finalStatus,
       'imageGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
       'imageGeneration.lastErrorMessage':
@@ -188,7 +189,7 @@ export async function POST(request: Request) {
         status: finalStatus === 'ready' ? 'completed' : 'error',
         source: 'server',
         attributes: {
-          bookId,
+          storyId,
           ready: counts.ready,
           total: counts.total,
         },
@@ -202,7 +203,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      bookId,
+      storyId,
       status: finalStatus,
       ready: counts.ready,
       total: counts.total,
@@ -215,9 +216,11 @@ export async function POST(request: Request) {
         ok: false,
         errorMessage: error?.message ?? 'Unexpected /api/storyBook/images error.',
         logs: allLogs,
-        bookId: bookIdFromRequest,
+        storyId: storyIdFromRequest,
       },
       {status: 500}
     );
   }
 }
+
+    

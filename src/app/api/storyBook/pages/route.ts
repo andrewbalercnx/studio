@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import { storyPageFlow } from '@/ai/flows/story-page-flow';
 import { initializeFirebase } from '@/firebase';
@@ -15,10 +16,10 @@ import {
 
 export async function POST(request: Request) {
   try {
-    const { bookId, regressionTag } = await request.json();
+    const { storyId, regressionTag } = await request.json();
 
-    if (!bookId || typeof bookId !== 'string') {
-      return NextResponse.json({ ok: false, errorMessage: 'Missing bookId' }, { status: 400 });
+    if (!storyId || typeof storyId !== 'string') {
+      return NextResponse.json({ ok: false, errorMessage: 'Missing storyId' }, { status: 400 });
     }
 
     const regressionMeta = regressionTag
@@ -26,33 +27,33 @@ export async function POST(request: Request) {
       : {};
 
     const { firestore } = initializeFirebase();
-    const bookRef = doc(firestore, 'storyBooks', bookId);
-    const bookSnap = await getDoc(bookRef);
-    if (!bookSnap.exists()) {
+    const storyRef = doc(firestore, 'stories', storyId);
+    const storySnap = await getDoc(storyRef);
+    if (!storySnap.exists()) {
       return NextResponse.json(
-        { ok: false, errorMessage: `storyBooks/${bookId} not found.` },
+        { ok: false, errorMessage: `stories/${storyId} not found.` },
         { status: 404 }
       );
     }
 
-    const bookData = bookSnap.data() as Record<string, any>;
-    if (bookData?.isLocked) {
+    const storyData = storySnap.data() as Record<string, any>;
+    if (storyData?.isLocked) {
       return NextResponse.json(
-        { ok: false, errorMessage: 'Storybook is locked. Unlock it before regenerating pages.' },
+        { ok: false, errorMessage: 'Story is locked. Unlock it before regenerating pages.' },
         { status: 409 }
       );
     }
 
-    await updateDoc(bookRef, {
+    await updateDoc(storyRef, {
       'pageGeneration.status': 'running',
       'pageGeneration.lastRunAt': serverTimestamp(),
       'pageGeneration.lastErrorMessage': null,
       ...regressionMeta,
     });
 
-    const flowResult = await storyPageFlow({ bookId });
+    const flowResult = await storyPageFlow({ storyId });
     if (!flowResult.ok || !flowResult.pages || flowResult.pages.length === 0) {
-      await updateDoc(bookRef, {
+      await updateDoc(storyRef, {
         'pageGeneration.status': 'error',
         'pageGeneration.lastCompletedAt': serverTimestamp(),
         'pageGeneration.lastErrorMessage':
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const pagesCollection = collection(firestore, 'storyBooks', bookId, 'pages');
+    const pagesCollection = collection(firestore, 'stories', storyId, 'pages');
     const existingPages = await getDocs(query(pagesCollection, orderBy('pageNumber', 'asc')));
 
     const batch = writeBatch(firestore);
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
 
     await batch.commit();
 
-    await updateDoc(bookRef, {
+    await updateDoc(storyRef, {
       'pageGeneration.status': 'ready',
       'pageGeneration.lastCompletedAt': serverTimestamp(),
       'pageGeneration.lastErrorMessage': null,
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
       ...regressionMeta,
     });
 
-    const sessionIdForProgress = bookData?.storySessionId;
+    const sessionIdForProgress = storyData?.storySessionId;
     if (sessionIdForProgress) {
       const sessionRef = doc(firestore, 'storySessions', sessionIdForProgress);
       await updateDoc(sessionRef, {
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: true,
-        bookId,
+        storyId,
         pages: sortedPages,
         diagnostics: flowResult.diagnostics ?? null,
         stats: flowResult.stats ?? null,
@@ -127,3 +128,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+    

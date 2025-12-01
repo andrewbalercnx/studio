@@ -5,7 +5,7 @@ import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
 import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { z } from 'genkit';
-import type { ChildProfile, Character, StoryBook, StoryWizardAnswer, StoryWizardChoice, StoryWizardInput, StoryWizardOutput } from '@/lib/types';
+import type { ChildProfile, Character, Story, StoryWizardAnswer, StoryWizardChoice, StoryWizardInput, StoryWizardOutput } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 
 
@@ -53,7 +53,7 @@ const StoryWizardOutputSchema = z.discriminatedUnion('state', [
     title: z.string().describe('A suitable title for the generated story.'),
     vibe: z.string().describe('The overall vibe or genre of the story.'),
     storyText: z.string().describe('The complete, generated story text.'),
-    bookId: z.string().describe('The ID of the created StoryBook document.'),
+    storyId: z.string().describe('The ID of the created Story document.'),
     ok: z.literal(true),
   }),
   z.object({
@@ -158,9 +158,9 @@ INSTRUCTIONS:
             throw new Error('Missing required fields in story generation output.');
           }
 
-          // Create the StoryBook document
-          const bookRef = doc(firestore, 'storyBooks', sessionId);
-          const bookPayload: StoryBook = {
+          // Create the Story document
+          const storyRef = doc(firestore, 'stories', sessionId);
+          const storyPayload: Story = {
             storySessionId: sessionId,
             childId,
             parentUid: child.ownerParentUid,
@@ -175,9 +175,9 @@ INSTRUCTIONS:
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           };
-          await setDoc(bookRef, bookPayload, { merge: true });
+          await setDoc(storyRef, storyPayload, { merge: true });
 
-          return { state: 'finished', ok: true, ...parsed, bookId: bookRef.id };
+          return { state: 'finished', ok: true, ...parsed, storyId: storyRef.id };
         } catch (e) {
           console.error("Failed to parse story generation JSON:", rawText, e);
           return { state: 'error', ok: false, error: 'The wizard had trouble writing the final story. Please try again.' };
@@ -247,3 +247,5 @@ INSTRUCTIONS:
 export async function storyWizardFlow(input: StoryWizardInput): Promise<StoryWizardOutput> {
     return await storyWizardFlowInternal(input);
 }
+
+    
