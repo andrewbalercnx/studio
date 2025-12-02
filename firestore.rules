@@ -100,7 +100,8 @@ service cloud.firestore {
     }
 
     match /characters/{characterId} {
-      allow read, write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || request.auth != null;
+      allow read: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || request.auth != null || characterId.startsWith('help-');
+      allow write: if isServer() || isAdmin() || isUserAdmin(request.auth.uid) || request.auth != null;
     }
 
     match /promptConfigs/{configId} {

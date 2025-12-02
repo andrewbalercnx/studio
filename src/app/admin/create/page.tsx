@@ -95,6 +95,19 @@ export default function AdminCreateDataPage() {
         createdAt: now,
         updatedAt: now,
       });
+      
+      // Help Character
+      const helpCharacterRef = doc(firestore, 'characters', 'help-character');
+      batch.set(helpCharacterRef, {
+          id: 'help-character',
+          ownerParentUid: 'help-system-owner',
+          displayName: 'Guide Bot',
+          role: 'friend',
+          sessionId: 'help-session',
+          traits: ['friendly', 'knowledgeable'],
+          createdAt: now,
+          updatedAt: now,
+      });
 
       toast({ title: 'Success', description: 'Help system sample documents created.' });
       await batch.commit();
