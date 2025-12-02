@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useAuth } from '@/firebase';
-import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, increment, orderBy, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where, limit, addDoc, serverTimestamp, updateDoc, increment, orderBy, deleteDoc, writeBatch, setDoc } from 'firebase/firestore';
 import type { Firestore, DocumentReference } from 'firebase/firestore';
 import type { ChatMessage, StorySession, Character, PromptConfig, Choice, StoryType, ChildProfile, StoryOutputPage as StoryBookPage, StoryOutput, PrintLayout } from '@/lib/types';
 import { IdTokenResult } from 'firebase/auth';
@@ -728,11 +728,23 @@ export default function AdminRegressionPage() {
     };
 
     const createRegressionSession = async (data: Record<string, any>, scenarioId: string) => {
+        const childId = data.childId;
+        if (!childId) {
+            throw new Error(`[createRegressionSession] childId is required`);
+        }
         const payload = {
             ...data,
             parentUid: data.parentUid ?? `${REGRESSION_SUITE_TAG}-parent`,
         };
-        const sessionRef = await addDoc(collection(firestore, 'storySessions'), addRegressionMeta(payload, scenarioId));
+        const taggedPayload = addRegressionMeta(payload, scenarioId);
+
+        const batch = writeBatch(firestore);
+        const sessionRef = doc(collection(firestore, 'storySessions'));
+        batch.set(sessionRef, taggedPayload);
+        batch.set(doc(firestore, 'children', childId, 'sessions', sessionRef.id), taggedPayload);
+        
+        await batch.commit();
+
         trackArtifact(artifacts, 'sessions', sessionRef.id);
         return sessionRef;
     };
@@ -932,7 +944,7 @@ export default function AdminRegressionPage() {
         const pagesResponse = await fetch('/api/storyBook/pages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookId: storyRef.id, regressionTag: `${REGRESSION_SUITE_TAG}:SCENARIO_STORY_COMPILE` }),
+            body: JSON.stringify({ storyId: storyRef.id, regressionTag: `${REGRESSION_SUITE_TAG}:SCENARIO_STORY_COMPILE` }),
         });
         const pagesResult = await pagesResponse.json();
         if (!pagesResponse.ok || !pagesResult?.ok) {
@@ -987,7 +999,7 @@ export default function AdminRegressionPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                bookId: storyRef.id,
+                storyId: storyRef.id,
                 regressionTag: `${REGRESSION_SUITE_TAG}:SCENARIO_STORY_COMPILE`,
                 forceRegenerate: true,
             }),
@@ -1130,7 +1142,7 @@ export default function AdminRegressionPage() {
         const pagesResponse = await fetch('/api/storyBook/pages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookId: storyRef.id, regressionTag: regressionScenarioTag }),
+            body: JSON.stringify({ storyId: storyRef.id, regressionTag: regressionScenarioTag }),
         });
         const pagesPayload = await pagesResponse.json();
         if (!pagesResponse.ok || !pagesPayload?.ok) {
@@ -1150,7 +1162,7 @@ export default function AdminRegressionPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                bookId: storyRef.id,
+                storyId: storyRef.id,
                 regressionTag: regressionScenarioTag,
                 forceRegenerate: true,
             }),
@@ -1385,26 +1397,26 @@ export default function AdminRegressionPage() {
     // Test: SCENARIO_CHARACTER_TRAITS
     try {
         const childRef = await createRegressionChild({ displayName: 'Traits Test Child', createdAt: serverTimestamp() }, 'SCENARIO_CHARACTER_TRAITS');
-        const sessionId = (await createRegressionSession({
+        const sessionRef = await createRegressionSession({
             childId: childRef.id, storyTypeId: 'animal_adventure_v1', storyPhaseId: 'story_beat_phase_v1',
             arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
             parentUid: 'regression-character-traits-parent'
-        }, 'SCENARIO_CHARACTER_TRAITS')).id;
+        }, 'SCENARIO_CHARACTER_TRAITS');
         const charRef = await createRegressionCharacter({
-            ownerChildId: childRef.id, sessionId: sessionId, name: 'Test Bunny',
+            ownerChildId: childRef.id, sessionId: sessionRef.id, name: 'Test Bunny',
             role: 'pet', traits: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp()
         }, 'SCENARIO_CHARACTER_TRAITS');
-        await addDoc(collection(firestore, 'storySessions', sessionId, 'messages'), {
+        await addDoc(collection(firestore, 'storySessions', sessionRef.id, 'messages'), {
             sender: 'assistant', text: 'Once upon a time...', createdAt: serverTimestamp()
         });
 
         const response = await fetch('/api/characterTraits', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId, characterId: charRef.id })
+            body: JSON.stringify({ sessionId: sessionRef.id, characterId: charRef.id })
         });
         
         const body = await response.json().catch(() => ({ ok: false, errorMessage: "Could not parse JSON response" }));
-        characterTraitsScenarioSummary = { childId: childRef.id, sessionId, characterId: charRef.id, ...body };
+        characterTraitsScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, characterId: charRef.id, ...body };
 
         if (!response.ok || !body?.ok) {
             throw new Error(`API returned status ${response.status}${body?.errorMessage ? ': ' + body.errorMessage : ''}`);
@@ -1905,5 +1917,3 @@ export default function AdminRegressionPage() {
     </div>
   );
 }
-
-    
