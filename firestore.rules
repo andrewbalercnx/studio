@@ -66,8 +66,19 @@ service cloud.firestore {
     }
 
     // Writer-managed content
-    match /{collection}/{docId}
-        where collection in ['promptConfigs', 'storyPhases', 'storyTypes', 'storyOutputTypes'] {
+    match /promptConfigs/{docId} {
+      allow read: if isServer() || isAuth();
+      allow write: if isServer() || isAdmin() || isWriter();
+    }
+    match /storyPhases/{docId} {
+      allow read: if isServer() || isAuth();
+      allow write: if isServer() || isAdmin() || isWriter();
+    }
+    match /storyTypes/{docId} {
+      allow read: if isServer() || isAuth();
+      allow write: if isServer() || isAdmin() || isWriter();
+    }
+    match /storyOutputTypes/{docId} {
       allow read: if isServer() || isAuth();
       allow write: if isServer() || isAdmin() || isWriter();
     }
