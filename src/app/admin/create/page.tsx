@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoaderCircle } from 'lucide-react';
 import { useFirestore } from '@/firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase/auth/use-user';
 
@@ -64,6 +64,45 @@ export default function AdminCreateDataPage() {
     }
   }
 
+  const handleCreateHelpSamples = async () => {
+    if (!firestore) return;
+    try {
+      const batch = writeBatch(firestore);
+      const now = serverTimestamp();
+
+      // Help Child
+      const helpChildRef = doc(firestore, 'children', 'help-child');
+      batch.set(helpChildRef, {
+        id: 'help-child',
+        ownerParentUid: 'help-system-owner',
+        displayName: 'Helpful Guide',
+        createdAt: now,
+        updatedAt: now,
+        avatarUrl: 'https://picsum.photos/seed/help-child/200/200'
+      });
+
+      // Help Session
+      const helpSessionRef = doc(firestore, 'storySessions', 'help-session');
+      batch.set(helpSessionRef, {
+        id: 'help-session',
+        childId: 'help-child',
+        parentUid: 'help-system-owner',
+        status: 'completed',
+        currentPhase: 'final',
+        currentStepIndex: 0,
+        storyTypeId: "animal_adventure_v1",
+        storyTitle: "A Helpful Adventure",
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      toast({ title: 'Success', description: 'Help system sample documents created.' });
+      await batch.commit();
+    } catch (e: any) {
+      toast({ title: 'Error', description: `Failed to create help samples: ${e.message}`, variant: 'destructive' });
+    }
+  }
+
   const renderContent = () => {
     if (authLoading) {
       return <LoaderCircle className="mx-auto h-8 w-8 animate-spin" />;
@@ -78,6 +117,7 @@ export default function AdminCreateDataPage() {
       <div className="flex flex-wrap gap-4">
         <Button onClick={handleCreateChild}>Create Sample Child</Button>
         <Button onClick={handleCreateSession}>Create Sample Session</Button>
+        <Button onClick={handleCreateHelpSamples} variant="secondary">Seed Help System Samples</Button>
       </div>
     );
   };
