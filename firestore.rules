@@ -21,24 +21,13 @@ service cloud.firestore {
       return isAuth() && request.auth.token.isWriter == true;
     }
 
-    function isOwner(doc) {
-      return isAuth() && doc.data.ownerParentUid == request.auth.uid;
-    }
-
-    function isCreating(doc) {
-      return resource == null && request.resource.data.ownerParentUid == request.auth.uid;
+    function isOwner() {
+      return isAuth() && request.resource.data.ownerParentUid == request.auth.uid;
     }
 
     // A user can read a session/story if they are the parent owner.
-    // This handles both direct parentUid and legacy childId linking.
-    function canParentRead(doc) {
-      return isAuth() && (
-        doc.data.parentUid == request.auth.uid ||
-        (
-          doc.data.childId is string &&
-          get(/databases/$(database)/documents/children/$(doc.data.childId)).data.ownerParentUid == request.auth.uid
-        )
-      );
+    function canParentRead() {
+      return isAuth() && resource.data.parentUid == request.auth.uid;
     }
     
     // --- Collection Rules ---
@@ -48,22 +37,22 @@ service cloud.firestore {
     }
 
     match /children/{childId} {
-      allow read: if isServer() || isAdmin() || childId.startsWith('help-') || isOwner(resource);
-      allow write: if isServer() || isAdmin() || isCreating(resource) || isOwner(resource);
+      allow read: if isServer() || isAdmin() || childId.startsWith('help-') || isOwner();
+      allow write: if isServer() || isAdmin() || isOwner();
 
       match /sessions/{sessionId} {
-        allow read: if childId.startsWith('help-') || (isAuth() && get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid);
-        allow write: if isAuth() && get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid;
+        allow read: if isServer() || isAdmin() || childId.startsWith('help-') || canParentRead();
+        allow write: if isServer() || isAdmin() || canParentRead();
 
         match /messages/{messageId} {
-          allow read: if childId.startsWith('help-') || (isAuth() && get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid);
-          allow write: if isAuth() && get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid;
+          allow read: if isServer() || isAdmin() || childId.startsWith('help-') || canParentRead();
+          allow write: if isServer() || isAdmin() || canParentRead();
         }
       }
     }
     
     match /storySessions/{sessionId} {
-      allow read: if isServer() || isAdmin() || sessionId.startsWith('help-') || canParentRead(resource);
+      allow read: if isServer() || isAdmin() || sessionId.startsWith('help-') || canParentRead();
       allow write: if isServer() || isAdmin() || request.resource.data.parentUid == request.auth.uid;
     }
     
@@ -73,7 +62,7 @@ service cloud.firestore {
 
     match /characters/{characterId} {
       allow read: if isServer() || isAdmin() || characterId.startsWith('help-') || isAuth();
-      allow write: if isServer() || isAdmin() || (isAuth() && (isCreating(request.resource) || isOwner(resource)));
+      allow write: if isServer() || isAdmin() || isOwner();
     }
 
     // Writer-managed content
@@ -84,7 +73,7 @@ service cloud.firestore {
     }
 
     match /stories/{storyId} {
-      allow read: if isServer() || isAdmin() || isWriter() || storyId.startsWith('help-') || canParentRead(resource);
+      allow read: if isServer() || isAdmin() || isWriter() || storyId.startsWith('help-') || canParentRead();
       allow write: if isServer() || isAdmin() || (isAuth() && request.resource.data.parentUid == request.auth.uid);
       allow list: if isAuth();
 
