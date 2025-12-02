@@ -21,14 +21,6 @@ service cloud.firestore {
       return isAuth() && request.auth.token.isWriter == true;
     }
 
-    function requestingUserIsAdmin() {
-      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles.isAdmin == true;
-    }
-
-    function requestingUserIsWriter() {
-      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles.isWriter == true;
-    }
-
     function isOwner(doc) {
       return isAuth() && doc.data.ownerParentUid == request.auth.uid;
     }
@@ -52,12 +44,12 @@ service cloud.firestore {
     // --- Collection Rules ---
 
     match /users/{userId} {
-      allow read, write: if isServer() || isAdmin() || requestingUserIsAdmin() || request.auth.uid == userId;
+      allow read, write: if isServer() || isAdmin() || request.auth.uid == userId;
     }
 
     match /children/{childId} {
-      allow read: if isServer() || isAdmin() || requestingUserIsAdmin() || childId.startsWith('help-') || isOwner(resource);
-      allow write: if isServer() || isAdmin() || requestingUserIsAdmin() || isCreating(resource) || isOwner(resource);
+      allow read: if isServer() || isAdmin() || childId.startsWith('help-') || isOwner(resource);
+      allow write: if isServer() || isAdmin() || isCreating(resource) || isOwner(resource);
 
       match /sessions/{sessionId} {
         allow read: if childId.startsWith('help-') || (isAuth() && get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid);
@@ -71,53 +63,53 @@ service cloud.firestore {
     }
     
     match /storySessions/{sessionId} {
-      allow read: if isServer() || isAdmin() || requestingUserIsAdmin() || sessionId.startsWith('help-') || canParentRead(resource);
-      allow write: if isServer() || isAdmin() || requestingUserIsAdmin() || request.resource.data.parentUid == request.auth.uid;
+      allow read: if isServer() || isAdmin() || sessionId.startsWith('help-') || canParentRead(resource);
+      allow write: if isServer() || isAdmin() || request.resource.data.parentUid == request.auth.uid;
     }
     
     match /storySessions/{sessionId}/{subcollection}/{docId} {
-        allow read, write: if isServer() || isAdmin() || requestingUserIsAdmin() || (isAuth() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
+        allow read, write: if isServer() || isAdmin() || (isAuth() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
     }
 
     match /characters/{characterId} {
-      allow read: if isServer() || isAdmin() || requestingUserIsAdmin() || characterId.startsWith('help-') || isAuth();
-      allow write: if isServer() || isAdmin() || requestingUserIsAdmin() || (isAuth() && (isCreating(request.resource) || isOwner(resource)));
+      allow read: if isServer() || isAdmin() || characterId.startsWith('help-') || isAuth();
+      allow write: if isServer() || isAdmin() || (isAuth() && (isCreating(request.resource) || isOwner(resource)));
     }
 
     // Writer-managed content
     match /{collection}/{docId} where collection in ['promptConfigs', 'storyPhases', 'storyTypes', 'storyOutputTypes'] {
       allow read: if isServer() || isAuth();
-      allow write: if isServer() || isAdmin() || requestingUserIsAdmin() || isWriter() || requestingUserIsWriter();
+      allow write: if isServer() || isAdmin() || isWriter();
     }
 
     match /stories/{storyId} {
-      allow read: if isServer() || isAdmin() || requestingUserIsAdmin() || isWriter() || requestingUserIsWriter() || storyId.startsWith('help-') || canParentRead(resource);
-      allow write: if isServer() || isAdmin() || requestingUserIsAdmin() || (isAuth() && request.resource.data.parentUid == request.auth.uid);
+      allow read: if isServer() || isAdmin() || isWriter() || storyId.startsWith('help-') || canParentRead(resource);
+      allow write: if isServer() || isAdmin() || (isAuth() && request.resource.data.parentUid == request.auth.uid);
       allow list: if isAuth();
 
       match /outputs/{outputId} {
-        allow read: if isServer() || isAdmin() || requestingUserIsAdmin() || isWriter() || requestingUserIsWriter() || canParentRead(get(/databases/$(database)/documents/stories/$(storyId)));
-        allow write: if isServer() || isAdmin() || requestingUserIsAdmin() || canParentRead(get(/databases/$(database)/documents/stories/$(storyId)));
+        allow read: if isServer() || isAdmin() || isWriter() || canParentRead(get(/databases/$(database)/documents/stories/$(storyId)));
+        allow write: if isServer() || isAdmin() || canParentRead(get(/databases/$(database)/documents/stories/$(storyId)));
           
         match /pages/{pageId} {
-          allow read: if isServer() || isAdmin() || requestingUserIsAdmin() || isWriter() || requestingUserIsWriter() || canParentRead(get(/databases/$(database)/documents/stories/$(storyId)));
-          allow write: if isServer() || isAdmin() || requestingUserIsAdmin() || canParentRead(get(/databases/$(database)/documents/stories/$(storyId)));
+          allow read: if isServer() || isAdmin() || isWriter() || canParentRead(get(/databases/$(database)/documents/stories/$(storyId)));
+          allow write: if isServer() || isAdmin() || canParentRead(get(/databases/$(database)/documents/stories/$(storyId)));
         }
       }
 
       match /shareTokens/{shareId} {
-        allow read, write: if isServer() || isAdmin() || requestingUserIsAdmin();
+        allow read, write: if isServer() || isAdmin();
       }
     }
 
     match /printOrders/{orderId} {
-      allow read: if isServer() || isAdmin() || requestingUserIsAdmin() || isWriter() || requestingUserIsWriter() || (isAuth() && resource.data.parentUid == request.auth.uid);
-      allow write: if isServer() || isAdmin() || requestingUserIsAdmin() || isWriter() || requestingUserIsWriter();
+      allow read: if isServer() || isAdmin() || isWriter() || (isAuth() && resource.data.parentUid == request.auth.uid);
+      allow write: if isServer() || isAdmin() || isWriter();
     }
 
     match /printLayouts/{layoutId} {
       allow read: if true;
-      allow write: if isServer() || isAdmin() || requestingUserIsAdmin();
+      allow write: if isServer() || isAdmin();
     }
 
     match /helpWizards/{wizardId} {
@@ -126,7 +118,7 @@ service cloud.firestore {
     }
 
     match /aiFlowLogs/{logId} {
-        allow read: if isServer() || isAdmin() || requestingUserIsAdmin();
+        allow read: if isServer() || isAdmin();
         allow write: if isServer();
     }
   }
