@@ -36,12 +36,12 @@ service cloud.firestore {
                    (request.auth.uid == resource.data.ownerParentUid); // Update
 
       match /sessions/{sessionId} {
-        allow read, write: if request.auth != null &&
-          get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid;
+        allow read: if childId.startsWith('help-') || (request.auth != null && get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid);
+        allow write: if request.auth != null && get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid;
 
         match /messages/{messageId} {
-          allow read, write: if request.auth != null &&
-            get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid;
+          allow read: if childId.startsWith('help-') || (request.auth != null && get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid);
+          allow write: if request.auth != null && get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid;
         }
       }
     }
