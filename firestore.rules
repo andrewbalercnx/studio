@@ -1,4 +1,4 @@
-// Rules version: v4 - Fix subcollection list rules for help docs and parent owners.
+// Rules version: v5 - Correct child list query rule to use resource check instead of indexed where clause.
 rules_version = '2';
 
 service cloud.firestore {
@@ -57,14 +57,6 @@ service cloud.firestore {
         (resource == null && parentUid(request.resource) == request.auth.uid)
       );
     }
-
-    function isParentChildListQuery() {
-      return isAuth() &&
-        request.query != null &&
-        request.query.where[0][0] == 'ownerParentUid' &&
-        request.query.where[0][1] == '==' &&
-        request.query.where[0][2] == request.auth.uid;
-    }
     
     // --- Collection Rules ---
 
@@ -74,7 +66,7 @@ service cloud.firestore {
 
     match /children/{childId} {
       allow get: if isServer() || isAdmin() || isHelpId(childId) || isOwner();
-      allow list: if isServer() || isAdmin() || isParentChildListQuery();
+      allow list: if isServer() || isAdmin() || (isAuth() && request.query.resource.data.ownerParentUid == request.auth.uid);
       allow write: if isServer() || isAdmin() || (!isHelpId(childId) && isOwner());
 
       match /sessions/{sessionId} {
