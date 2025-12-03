@@ -1,4 +1,4 @@
-// Rules version: v3 – added explicit list rules for /children with owner filter checks.
+// Rules version: v4 - Fix subcollection list rules for help docs and parent owners.
 rules_version = '2';
 
 service cloud.firestore {
