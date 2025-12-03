@@ -3,7 +3,7 @@
 import { getServerFirestore } from '@/lib/server-firestore';
 import type { Character, ChildProfile } from '@/lib/types';
 
-type EntityMap = Map<string, { displayName: string; document: Character | ChildProfile }>;
+export type EntityMap = Map<string, { displayName: string; document: Character | ChildProfile }>;
 
 function buildCharacterDescription(character: Character): string {
   const traits = character.traits?.length ? `, is ${character.traits.join(', ')}` : '';
@@ -63,4 +63,25 @@ export async function replacePlaceholdersWithDescriptions(text: string): Promise
 
     return entity.displayName;
   });
+}
+
+export async function resolveEntitiesInText(text: string): Promise<EntityMap> {
+  const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
+  return fetchEntities(ids);
+}
+
+export async function replacePlaceholdersInText(text: string, entityMap: EntityMap): Promise<string> {
+  if (!text) return '';
+  return text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
+    return entityMap.get(id)?.displayName || match;
+  });
+}
+
+export async function getEntitiesInText(text: string, entityMap: EntityMap): Promise<Character[]> {
+  if (!text) return [];
+  const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
+  const uniqueIds = [...new Set(ids)];
+  return uniqueIds
+    .map((id) => entityMap.get(id)?.document)
+    .filter((doc): doc is Character => !!doc && 'displayName' in doc && 'role' in doc);
 }

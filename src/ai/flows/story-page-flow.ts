@@ -3,13 +3,17 @@
 'use server';
 
 import { ai } from '@/ai/genkit';
-import { initializeFirebase } from '@/firebase';
-import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { Story, StorySession, ChildProfile, Character, StoryBookPage as StoryBookPageType } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { logSessionEvent } from '@/lib/session-events';
-import { resolveEntitiesInText, replacePlaceholdersInText as replacePlaceholders, getEntitiesInText } from '@/lib/resolve-placeholders';
+import { logServerSessionEvent } from '@/lib/session-events.server';
+import {
+  resolveEntitiesInText,
+  replacePlaceholdersInText as replacePlaceholders,
+  getEntitiesInText,
+} from '@/lib/resolve-placeholders.server';
 
 
 type EntityMap = Map<string, { displayName: string; document: Character | ChildProfile }>;
@@ -150,23 +154,23 @@ export const storyPageFlow = ai.defineFlow(
     let diagnostics: StoryPageFlowDiagnostics = { stage: 'init', details: { storyId } };
 
     try {
-      const { firestore } = initializeFirebase();
+      const firestore = await getServerFirestore();
       diagnostics = { stage: 'loading', details: { storyId } };
 
-      const storyRef = doc(firestore, 'stories', storyId);
-      const storySnap = await getDoc(storyRef);
-      if (!storySnap.exists()) {
+      const storyRef = firestore.collection('stories').doc(storyId);
+      const storySnap = await storyRef.get();
+      if (!storySnap.exists) {
         throw new Error(`stories/${storyId} not found.`);
       }
       const story = storySnap.data() as Story;
 
       const [sessionSnap, childSnap] = await Promise.all([
-        story.storySessionId ? getDoc(doc(firestore, 'storySessions', story.storySessionId)) : Promise.resolve(null),
-        story.childId ? getDoc(doc(firestore, 'children', story.childId)) : Promise.resolve(null),
+        story.storySessionId ? firestore.collection('storySessions').doc(story.storySessionId).get() : Promise.resolve(null),
+        story.childId ? firestore.collection('children').doc(story.childId).get() : Promise.resolve(null),
       ]);
 
-      const session = sessionSnap?.exists() ? (sessionSnap.data() as StorySession) : null;
-      const child = childSnap?.exists() ? (childSnap.data() as ChildProfile) : null;
+      const session = sessionSnap?.exists ? (sessionSnap.data() as StorySession) : null;
+      const child = childSnap?.exists ? (childSnap.data() as ChildProfile) : null;
 
       if (!story.storyText || story.storyText.trim().length === 0) {
         throw new Error(`stories/${storyId} is missing storyText.`);
