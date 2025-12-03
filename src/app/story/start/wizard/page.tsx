@@ -37,61 +37,92 @@ export default function StartWizardStoryPage() {
     const startWizardProcess = async () => {
       const childId = activeChildId;
       try {
-        const childRef = doc(firestore, 'children', childId);
-        const childDoc = await getDoc(childRef);
-        if (!childDoc.exists()) {
-          throw new Error('Selected child profile was not found.');
+        // Step 1: Verify Child Profile
+        let childProfile: ChildProfile;
+        try {
+            const childRef = doc(firestore, 'children', childId);
+            const childDoc = await getDoc(childRef);
+            if (!childDoc.exists()) {
+              throw new Error('Selected child profile was not found.');
+            }
+            childProfile = childDoc.data() as ChildProfile;
+
+            if (childProfile.ownerParentUid && childProfile.ownerParentUid !== user.uid) {
+              throw new Error('You do not have permission to use this child profile.');
+            }
+            if (!childProfile.ownerParentUid) {
+              await updateDoc(childRef, { ownerParentUid: user.uid });
+            }
+        } catch (e: any) {
+            throw new Error(`Failed to verify child profile: ${e.message}`);
         }
 
-        const childProfile = childDoc.data() as ChildProfile;
-        if (childProfile.ownerParentUid && childProfile.ownerParentUid !== user.uid) {
-          throw new Error('You do not have permission to use this child profile.');
+
+        // Step 2: Create Story Session
+        let storySessionId: string;
+        let mainCharacterId: string;
+        try {
+            const storySessionRef = doc(collection(firestore, 'storySessions'));
+            storySessionId = storySessionRef.id;
+
+            const newSessionData = {
+              childId: childId,
+              parentUid: user.uid,
+              status: "in_progress" as const,
+              currentPhase: "wizard" as const,
+              currentStepIndex: 0,
+              storyTitle: "",
+              storyVibe: "",
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              id: storySessionId,
+            };
+
+            const batch = writeBatch(firestore);
+            batch.set(storySessionRef, newSessionData);
+            
+            const childSessionRef = doc(firestore, 'children', childId, 'sessions', storySessionId);
+            batch.set(childSessionRef, newSessionData);
+            
+            await batch.commit();
+
+        } catch (e: any) {
+            throw new Error(`Failed to create story session: ${e.message}`);
         }
-        if (!childProfile.ownerParentUid) {
-          await updateDoc(childRef, { ownerParentUid: user.uid });
-        }
-
-        const storySessionRef = doc(collection(firestore, 'storySessions'));
-        const storySessionId = storySessionRef.id;
-
-        const newSessionData = {
-          childId: childId,
-          parentUid: user.uid,
-          status: "in_progress",
-          currentPhase: "wizard", // New phase for this flow
-          currentStepIndex: 0,
-          storyTitle: "",
-          storyVibe: "",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          id: storySessionId,
-        };
-
-        const batch = writeBatch(firestore);
-        batch.set(storySessionRef, newSessionData);
         
-        // Also create the session in the child's subcollection
-        const childSessionRef = doc(firestore, 'children', childId, 'sessions', storySessionId);
-        batch.set(childSessionRef, newSessionData);
+        // Step 3: Create Character
+        try {
+            const charactersRef = collection(firestore, 'characters');
+            const newCharacterData = {
+              ownerChildId: childId,
+              ownerParentUid: user.uid,
+              sessionId: storySessionId,
+              displayName: childProfile.displayName || 'You',
+              role: 'family' as const,
+              relatedTo: childId,
+              realPersonRef: { kind: 'self' as const, label: 'You' },
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            };
+            const newCharacterRef = await addDoc(charactersRef, newCharacterData);
+            mainCharacterId = newCharacterRef.id;
 
-        const charactersRef = collection(firestore, 'characters');
-        const newCharacterData = {
-          ownerChildId: childId,
-          ownerParentUid: user.uid,
-          sessionId: storySessionId,
-          displayName: childProfile.displayName || 'You',
-          role: 'family' as const,
-          relatedTo: childId,
-          realPersonRef: { kind: 'self' as const, label: 'You' },
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        };
-        const newCharacterRef = doc(collection(firestore, 'characters'));
-        batch.set(newCharacterRef, newCharacterData);
-        batch.update(storySessionRef, { mainCharacterId: newCharacterRef.id });
-        batch.update(childSessionRef, { mainCharacterId: newCharacterRef.id });
+        } catch (e: any) {
+            throw new Error(`Failed to create character: ${e.message}`);
+        }
 
-        await batch.commit();
+        // Step 4: Link Character to Session
+        try {
+            const sessionRef = doc(firestore, 'storySessions', storySessionId);
+            const childSessionRef = doc(firestore, 'children', childId, 'sessions', storySessionId);
+            const batch = writeBatch(firestore);
+            batch.update(sessionRef, { mainCharacterId: mainCharacterId });
+            batch.update(childSessionRef, { mainCharacterId: mainCharacterId });
+            await batch.commit();
+
+        } catch (e: any) {
+            throw new Error(`Failed to link character to session: ${e.message}`);
+        }
 
         router.push(`/story/wizard/${storySessionId}`);
 
@@ -122,7 +153,7 @@ export default function StartWizardStoryPage() {
             </>
           ) : error ? (
             <div className="space-y-4">
-              <p className="text-destructive">{error}</p>
+              <p className="text-destructive font-mono text-sm bg-destructive/10 p-3 rounded-md">{error}</p>
               <Button asChild variant="secondary">
                 <Link href="/parent">Back to Parent Dashboard</Link>
               </Button>
