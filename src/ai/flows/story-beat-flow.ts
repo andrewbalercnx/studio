@@ -153,7 +153,7 @@ Your goal is to present up to 3 choices. One of those choices should be to intro
 - For each option, you MUST decide if it introduces a new character.
 - Set 'introducesCharacter' to true if the option brings in a new person, animal, or talking object who could appear again.
   - Examples: "a new friend", "a talking squirrel", "a kind robot".
-  - If true, you MUST also provide a 'newCharacterLabel' (e.g., "a talking squirrel") and a 'newCharacterKind' ('toy', 'pet', 'friend', or 'family').
+  - If true, you MUST also provide a 'newCharacterLabel' (e.g., "a talking squirrel") and a 'newCharacterKind' ('toy', 'pet', 'friend', 'family').
 - Set 'introducesCharacter' to false if the option is just an action or observation.
   - Examples: "he sings a song", "the sun shines brighter", "he finds a shiny rock".
 
@@ -330,3 +330,5 @@ Important: Return only a single JSON object. Do not include any extra text, expl
         }
     }
 );
+
+    

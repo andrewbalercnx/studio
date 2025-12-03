@@ -32,6 +32,8 @@ export default function CompiledStoryBookPage() {
   const { data: pages, loading: pagesLoading, error: pagesError } = useCollection<StoryOutputPage>(pagesQuery);
 
   const [resolvedStoryText, setResolvedStoryText] = useState<string | null>(null);
+  const [isResolving, setIsResolving] = useState(false);
+
 
   useEffect(() => {
     async function processStoryText() {
@@ -40,18 +42,21 @@ export default function CompiledStoryBookPage() {
         setResolvedStoryText(null);
         return;
       }
+      // No placeholders, just set the text
       if (text.indexOf('$$') === -1) {
         setResolvedStoryText(text);
         return;
       }
+
+      setIsResolving(true);
       try {
-        // resolvePlaceholders now returns an object, we need the first value
         const resolvedObject = await resolvePlaceholders(text);
-        const resolvedText = resolvedObject[text] || text;
-        setResolvedStoryText(resolvedText);
+        setResolvedStoryText(resolvedObject[text] || text);
       } catch (e) {
         console.error("Failed to resolve placeholders in story text", e);
         setResolvedStoryText(text); // Fallback to original text on error
+      } finally {
+        setIsResolving(false);
       }
     }
     processStoryText();
@@ -177,7 +182,12 @@ export default function CompiledStoryBookPage() {
                 )}
               </div>
               <div className="space-y-4 leading-relaxed text-lg">
-                {resolvedStoryText ? (
+                {isResolving ? (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                        <span>Resolving character names...</span>
+                    </div>
+                ) : resolvedStoryText ? (
                   resolvedStoryText.split('\n').map((paragraph, index) => (
                     <p key={index}>{paragraph}</p>
                   ))
@@ -325,3 +335,5 @@ export default function CompiledStoryBookPage() {
     </div>
   );
 }
+
+    

@@ -74,6 +74,12 @@ const storyWizardFlowInternal = ai.defineFlow(
     const flowName = 'storyWizardFlow';
     const { firestore } = initializeFirebase();
 
+    const buildCharacterDescription = (character: Character) => {
+        const traits = character.traits?.length ? ` who is ${character.traits.join(', ')}` : '';
+        return `${character.displayName} (a ${character.role}${traits})`;
+    };
+
+
     try {
       // 1. Fetch child and character data
       const childRef = doc(firestore, 'children', childId);
@@ -99,11 +105,11 @@ const storyWizardFlowInternal = ai.defineFlow(
 
       const characterContext = `
 Available Characters:
-- Main Character: ${mainCharacter.displayName} (ID: $$${mainCharacter.id}$$)
+- Main Character: ${buildCharacterDescription(mainCharacter)}
 - Other Characters:
 ${characters
   .filter(c => c.id !== mainCharacter.id)
-  .map(c => `  - ${c.displayName} (${c.role}, ID: $$${c.id}$$)`)
+  .map(c => `  - ${buildCharacterDescription(c)}`)
   .join('\n')}
       `.trim();
       
@@ -125,7 +131,7 @@ ${answers.map(a => `- When asked "${a.question}", the child chose "${a.answer}"`
 
 INSTRUCTIONS:
 1. Write a complete, gentle, and engaging story of about 5-7 paragraphs.
-2. The story MUST use the character placeholders (e.g., $$character-id$$) instead of their names.
+2. The story MUST use the character placeholders (e.g., $$character-id$$) instead of their names. The main character is $$${mainCharacter.id}$$.
 3. The story should be simple and easy for a young child to understand.
 4. Conclude the story with a happy and reassuring ending.
 5. You MUST output a valid JSON object with the following structure, and nothing else:
