@@ -6,8 +6,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { StorySession, Character, ChatMessage } from '@/lib/types';
 
@@ -30,22 +29,20 @@ export const characterTraitsFlow = ai.defineFlow(
         };
 
         try {
-            const { firestore } = initializeFirebase();
+            const firestore = await getServerFirestore();
 
             // 1. Load session
             debug.stage = 'loading_session';
-            const sessionRef = doc(firestore, 'storySessions', sessionId);
-            const sessionDoc = await getDoc(sessionRef);
-            if (!sessionDoc.exists()) {
+            const sessionDoc = await firestore.collection('storySessions').doc(sessionId).get();
+            if (!sessionDoc.exists) {
                 throw new Error(`Session with id ${sessionId} not found.`);
             }
             debug.sessionExists = true;
             
             // 2. Load character
             debug.stage = 'loading_character';
-            const characterRef = doc(firestore, 'characters', characterId);
-            const characterDoc = await getDoc(characterRef);
-            if (!characterDoc.exists()) {
+            const characterDoc = await firestore.collection('characters').doc(characterId).get();
+            if (!characterDoc.exists) {
                 throw new Error(`Character with id ${characterId} not found.`);
             }
             const character = characterDoc.data() as Character;
@@ -56,9 +53,13 @@ export const characterTraitsFlow = ai.defineFlow(
 
             // 3. Load last 10 messages for context
             debug.stage = 'loading_messages';
-            const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
-            const messagesQuery = query(messagesRef, orderBy('createdAt', 'desc'), limit(10));
-            const messagesSnapshot = await getDocs(messagesQuery);
+            const messagesSnapshot = await firestore
+                .collection('storySessions')
+                .doc(sessionId)
+                .collection('messages')
+                .orderBy('createdAt', 'desc')
+                .limit(10)
+                .get();
             const storySoFar = messagesSnapshot.docs
                 .reverse() // chronological order
                 .map(d => {

@@ -6,13 +6,13 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, query, orderBy, where, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, StoryType, Character, ChildProfile, StoryOutputType, Story } from '@/lib/types';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
-import { logSessionEvent } from '@/lib/session-events';
-import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders';
+import { logServerSessionEvent } from '@/lib/session-events.server';
+import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
 
 type StoryCompileDebugInfo = {
     stage: 'init' | 'loading_session' | 'loading_dependencies' | 'building_prompt' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate' | 'unknown';
@@ -38,17 +38,17 @@ export const storyCompileFlow = ai.defineFlow(
         let debug: StoryCompileDebugInfo = { stage: 'init', details: { sessionId, storyOutputTypeId } };
 
         try {
-            const { firestore } = initializeFirebase();
+            const firestore = await getServerFirestore();
 
             // 1. Load session
             debug.stage = 'loading_session';
-            const sessionRef = doc(firestore, 'storySessions', sessionId);
-            const sessionDoc = await getDoc(sessionRef);
-            if (!sessionDoc.exists()) {
+            const sessionRef = firestore.collection('storySessions').doc(sessionId);
+            const sessionDoc = await sessionRef.get();
+            if (!sessionDoc.exists) {
                 throw new Error(`Session with id ${sessionId} not found.`);
             }
             const session = sessionDoc.data() as StorySession;
-            const { childId, storyTypeId, parentUid } = session;
+            const { childId, storyTypeId, parentUid, mainCharacterId } = session;
             if (!childId || !storyTypeId || !parentUid) {
                 throw new Error(`Session is missing childId, storyTypeId, or parentUid.`);
             }
@@ -58,29 +58,43 @@ export const storyCompileFlow = ai.defineFlow(
 
             // 2. Load dependencies
             debug.stage = 'loading_dependencies';
-            const childRef = doc(firestore, 'children', childId);
-            const storyTypeRef = doc(firestore, 'storyTypes', storyTypeId);
-            const storyOutputTypeRef = doc(firestore, 'storyOutputTypes', storyOutputTypeId);
-            const charactersQuery = query(collection(firestore, 'characters'), where('sessionId', '==', sessionId));
-            const messagesQuery = query(collection(firestore, 'storySessions', sessionId, 'messages'), orderBy('createdAt', 'asc'));
+            const childRef = firestore.collection('children').doc(childId);
+            const storyTypeRef = firestore.collection('storyTypes').doc(storyTypeId);
+            const storyOutputTypeRef = firestore.collection('storyOutputTypes').doc(storyOutputTypeId);
+            const charactersPromise = firestore.collection('characters').where('sessionId', '==', sessionId).get();
+            const messagesPromise = firestore
+                .collection('storySessions')
+                .doc(sessionId)
+                .collection('messages')
+                .orderBy('createdAt', 'asc')
+                .get();
 
             const [childDoc, storyTypeDoc, storyOutputTypeDoc, charactersSnapshot, messagesSnapshot] = await Promise.all([
-                getDoc(childRef),
-                getDoc(storyTypeRef),
-                getDoc(storyOutputTypeRef),
-                getDocs(charactersQuery),
-                getDocs(messagesQuery),
+                childRef.get(),
+                storyTypeRef.get(),
+                storyOutputTypeRef.get(),
+                charactersPromise,
+                messagesPromise,
             ]);
             
-            if (!storyTypeDoc.exists()) throw new Error(`StoryType with id ${storyTypeId} not found.`);
-            if (!storyOutputTypeDoc.exists()) throw new Error(`StoryOutputType with id ${storyOutputTypeId} not found.`);
+            if (!storyTypeDoc.exists) throw new Error(`StoryType with id ${storyTypeId} not found.`);
+            if (!storyOutputTypeDoc.exists) throw new Error(`StoryOutputType with id ${storyOutputTypeId} not found.`);
             
-            const childProfile = childDoc.exists() ? childDoc.data() as ChildProfile : null;
+            const childProfile = childDoc.exists ? (childDoc.data() as ChildProfile) : null;
             const storyType = storyTypeDoc.data() as StoryType;
             const storyOutputType = storyOutputTypeDoc.data() as StoryOutputType;
-            const characters = charactersSnapshot.docs.map(d => d.data() as Character);
+            const characters = charactersSnapshot.docs.map(d => {
+                const data = d.data() as Character;
+                const { id: _ignored, ...rest } = data as Character & { id?: string };
+                return { ...rest, id: d.id } as Character;
+            });
             const messages = messagesSnapshot.docs.map(d => d.data() as ChatMessage);
             const childPreferenceSummary = summarizeChildPreferences(childProfile);
+
+            const mainCharacterName =
+                (mainCharacterId ? characters.find(c => c.id === mainCharacterId)?.displayName : null) ??
+                childProfile?.displayName ??
+                'The hero';
 
             debug.details.childName = childProfile?.displayName;
             debug.details.storyTypeName = storyType.name;
@@ -112,7 +126,7 @@ ${storyOutputType.aiHints?.allowRhyme ? '- The output MUST rhyme.' : ''}
 
 **Story Context:**
 - **Story Type:** ${storyType.name} (${storyType.shortDescription})
-- **Main Character:** ${characters.find(c => c.role === 'child')?.displayName || 'The hero'}
+- **Main Character:** ${mainCharacterName}
 - **Child Preferences:** 
 ${childPreferenceSummary}
 - **Other Characters:**
@@ -186,21 +200,21 @@ Now, generate the JSON object containing the compiled story.
             const { storyText, metadata } = validationResult.data;
 
             // --- Phase State Correction ---
-            await updateDoc(sessionRef, {
+            await sessionRef.update({
                 currentPhase: 'final',
                 status: 'completed',
                 finalStoryText: storyText,
-                updatedAt: serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
                 storyOutputTypeId: storyOutputTypeId, // Save the selected output type
             });
             debug.details.phaseCorrected = `Set currentPhase to 'final' and status to 'completed'`;
 
             // --- Story upsert ---
-            const storyRef = doc(firestore, 'stories', sessionId);
-            const existingStorySnap = await getDoc(storyRef);
-            const now = serverTimestamp();
-            const createdAtValue = existingStorySnap.exists()
-                ? (existingStorySnap.data()?.createdAt ?? serverTimestamp())
+            const storyRef = firestore.collection('stories').doc(sessionId);
+            const existingStorySnap = await storyRef.get();
+            const now = FieldValue.serverTimestamp();
+            const createdAtValue = existingStorySnap.exists
+                ? (existingStorySnap.data()?.createdAt ?? FieldValue.serverTimestamp())
                 : now;
 
             const storyPayload: Story = {
@@ -218,10 +232,10 @@ Now, generate the JSON object containing the compiled story.
                 updatedAt: now,
             };
 
-            await setDoc(storyRef, storyPayload, { merge: true });
+            await storyRef.set(storyPayload, { merge: true });
             debug.details.storyDocId = storyRef.id;
 
-            await logSessionEvent({
+            await logServerSessionEvent({
                 firestore,
                 sessionId,
                 event: 'compile.completed',

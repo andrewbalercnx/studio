@@ -1,36 +1,40 @@
 'use server';
-import { initializeFirebase } from '@/firebase';
-import { doc, getDoc, collection } from 'firebase/firestore';
+import { getServerFirestore } from '@/lib/server-firestore';
 import type { PromptConfig } from './types';
 
+type SessionPromptConfigFields = {
+    promptConfigId?: string;
+    promptConfigLevelBand?: string;
+};
 
 export async function resolvePromptConfigForSession(sessionId: string, phase: 'warmup' | 'storyBeat') {
-    const { firestore } = initializeFirebase();
-    const sessionRef = doc(firestore, "storySessions", sessionId);
-    const sessionSnap = await getDoc(sessionRef);
+    const firestore = await getServerFirestore();
+    const sessionRef = firestore.collection('storySessions').doc(sessionId);
+    const sessionSnap = await sessionRef.get();
 
-    if (!sessionSnap.exists()) {
+    if (!sessionSnap.exists) {
         throw new Error(`Story session ${sessionId} not found.`);
     }
 
-    const session = sessionSnap.data();
-    const { promptConfigId, promptConfigLevelBand } = session;
+    const session = sessionSnap.data() as SessionPromptConfigFields | undefined;
+    const promptConfigId = session?.promptConfigId ?? null;
+    const promptConfigLevelBand = session?.promptConfigLevelBand ?? null;
 
     const debug: any = {
         sessionId,
         phase,
-        rawPromptConfigId: promptConfigId ?? null,
-        levelBand: promptConfigLevelBand ?? null,
+        rawPromptConfigId: promptConfigId,
+        levelBand: promptConfigLevelBand,
         triedIds: [] as string[],
     };
 
-    const configsRef = collection(firestore, "promptConfigs");
+    const configsRef = firestore.collection('promptConfigs');
 
     // 1. Try to load by the specific ID if it exists
     if (promptConfigId) {
         debug.triedIds.push(promptConfigId);
-        const directSnap = await getDoc(doc(configsRef, promptConfigId));
-        if (directSnap.exists()) {
+        const directSnap = await configsRef.doc(promptConfigId).get();
+        if (directSnap.exists) {
             return { promptConfig: directSnap.data() as PromptConfig, id: promptConfigId, debug };
         }
     }
@@ -40,8 +44,8 @@ export async function resolvePromptConfigForSession(sessionId: string, phase: 'w
         const canonicalId = `story_beat_level_${promptConfigLevelBand}_v1`;
         if (!debug.triedIds.includes(canonicalId)) {
             debug.triedIds.push(canonicalId);
-            const derivedSnap = await getDoc(doc(configsRef, canonicalId));
-            if (derivedSnap.exists()) {
+            const derivedSnap = await configsRef.doc(canonicalId).get();
+            if (derivedSnap.exists) {
                 return { promptConfig: derivedSnap.data() as PromptConfig, id: canonicalId, debug };
             }
         }
@@ -52,8 +56,8 @@ export async function resolvePromptConfigForSession(sessionId: string, phase: 'w
         const canonicalId = `warmup_level_${promptConfigLevelBand}_v1`;
         if (!debug.triedIds.includes(canonicalId)) {
             debug.triedIds.push(canonicalId);
-            const derivedSnap = await getDoc(doc(configsRef, canonicalId));
-            if (derivedSnap.exists()) {
+            const derivedSnap = await configsRef.doc(canonicalId).get();
+            if (derivedSnap.exists) {
                 return { promptConfig: derivedSnap.data() as PromptConfig, id: canonicalId, debug };
             }
         }
@@ -63,8 +67,8 @@ export async function resolvePromptConfigForSession(sessionId: string, phase: 'w
     const ultimateFallbackId = `${phase === 'storyBeat' ? 'story_beat' : 'warmup'}_level_low_v1`;
      if (!debug.triedIds.includes(ultimateFallbackId)) {
         debug.triedIds.push(ultimateFallbackId);
-        const fallbackSnap = await getDoc(doc(configsRef, ultimateFallbackId));
-        if (fallbackSnap.exists()) {
+        const fallbackSnap = await configsRef.doc(ultimateFallbackId).get();
+        if (fallbackSnap.exists) {
             return { promptConfig: fallbackSnap.data() as PromptConfig, id: ultimateFallbackId, debug };
         }
     }

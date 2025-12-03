@@ -5,14 +5,13 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
+import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, StoryType, Character, ChildProfile } from '@/lib/types';
 import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
-import { logSessionEvent } from '@/lib/session-events';
+import { logServerSessionEvent } from '@/lib/session-events.server';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
-import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders';
+import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
 
 type StoryBeatDebugInfo = {
     stage: 'loading_session' | 'loading_storyType' | 'loading_promptConfig' | 'ai_generate' | 'json_parse' | 'json_validate' | 'unknown';
@@ -58,13 +57,12 @@ export const storyBeatFlow = ai.defineFlow(
         let debug: StoryBeatDebugInfo = { stage: 'unknown', details: {} };
 
         try {
-            const { firestore } = initializeFirebase();
+            const firestore = await getServerFirestore();
 
             // 1. Load session
             debug.stage = 'loading_session';
-            const sessionRef = doc(firestore, 'storySessions', sessionId);
-            const sessionDoc = await getDoc(sessionRef);
-            if (!sessionDoc.exists()) {
+            const sessionDoc = await firestore.collection('storySessions').doc(sessionId).get();
+            if (!sessionDoc.exists) {
                 return { ok: false, sessionId, errorMessage: `Session with id ${sessionId} not found.` };
             }
             const session = sessionDoc.data() as StorySession;
@@ -80,17 +78,15 @@ export const storyBeatFlow = ai.defineFlow(
 
             // 2. Load StoryType
             debug.stage = 'loading_storyType';
-            const storyTypeRef = doc(firestore, 'storyTypes', storyTypeId);
-            const storyTypeDoc = await getDoc(storyTypeRef);
-            if (!storyTypeDoc.exists()) {
+            const storyTypeDoc = await firestore.collection('storyTypes').doc(storyTypeId).get();
+            if (!storyTypeDoc.exists) {
                 return { ok: false, sessionId, errorMessage: `StoryType with id ${storyTypeId} not found.` };
             }
             const storyType = storyTypeDoc.data() as StoryType;
             let childProfile: ChildProfile | null = null;
             if (session.childId) {
-                const childRef = doc(firestore, 'children', session.childId);
-                const childDoc = await getDoc(childRef);
-                if (childDoc.exists()) {
+                const childDoc = await firestore.collection('children').doc(session.childId).get();
+                if (childDoc.exists) {
                     childProfile = childDoc.data() as ChildProfile;
                 }
             }
@@ -111,21 +107,27 @@ export const storyBeatFlow = ai.defineFlow(
             debug.details.arcStepLabel = arcStep;
 
             // Load all characters for this parent
-            const charactersQuery = query(
-                collection(firestore, 'characters'),
-                where('ownerParentUid', '==', parentUid),
-                limit(10) // Limit to 10 existing characters to avoid overwhelming the prompt
-            );
-            const charactersSnapshot = await getDocs(charactersQuery);
-            const existingCharacters = charactersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Character));
+            const charactersSnapshot = await firestore
+                .collection('characters')
+                .where('ownerParentUid', '==', parentUid)
+                .limit(10)
+                .get();
+            const existingCharacters = charactersSnapshot.docs.map(doc => {
+                const character = doc.data() as Character;
+                const { id: _ignored, ...rest } = character as Character & { id?: string };
+                return { ...rest, id: doc.id } as Character;
+            });
             const existingCharacterSummary = existingCharacters.map(c => `- ${c.displayName} (ID: ${c.id}, Role: ${c.role})`).join('\n');
             debug.details.existingCharacterCount = existingCharacters.length;
             debug.details.existingCharacterSummary = existingCharacterSummary;
 
             // 4. Build Story So Far
-            const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
-            const messagesQuery = query(messagesRef, orderBy('createdAt', 'asc'));
-            const messagesSnapshot = await getDocs(messagesQuery);
+            const messagesSnapshot = await firestore
+                .collection('storySessions')
+                .doc(sessionId)
+                .collection('messages')
+                .orderBy('createdAt', 'asc')
+                .get();
             const rawStorySoFar = messagesSnapshot.docs.map(doc => {
                 const data = doc.data() as ChatMessage;
                 return `${data.sender === 'assistant' ? 'Story Guide' : 'Child'}: ${data.text}`;
@@ -283,7 +285,7 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             }
 
 
-            await logSessionEvent({
+            await logServerSessionEvent({
                 firestore,
                 sessionId,
                 event: 'storyBeat.generated',

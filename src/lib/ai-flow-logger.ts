@@ -1,8 +1,8 @@
 
 'use server';
 
-import { initializeFirebase } from '@/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import { getServerFirestore } from '@/lib/server-firestore';
 
 type LogAIFlowParams = {
   flowName: string;
@@ -20,12 +20,12 @@ export async function logAIFlow({
   error,
 }: LogAIFlowParams) {
   try {
-    const { firestore } = initializeFirebase();
+    const firestore = await getServerFirestore();
     const logData: any = {
       flowName,
       sessionId: sessionId || null,
       prompt,
-      createdAt: serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     };
 
     if (error) {
@@ -40,7 +40,7 @@ export async function logAIFlow({
       };
     }
     
-    await addDoc(collection(firestore, 'aiFlowLogs'), logData);
+    await firestore.collection('aiFlowLogs').add(logData);
 
   } catch (logError: any) {
     console.warn('[ai-flow-logger] Failed to write AI flow log', {

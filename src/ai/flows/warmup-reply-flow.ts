@@ -5,8 +5,7 @@
  * @fileOverview A Genkit flow to generate a reply during the "warmup" phase.
  */
 import { ai } from '@/ai/genkit';
-import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage } from '@/lib/types';
 import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
@@ -52,12 +51,11 @@ export const warmupReplyFlow = ai.defineFlow(
         let llmResponse: any = null; // To hold the response for debugging
 
         try {
-            const { firestore } = initializeFirebase();
+            const firestore = await getServerFirestore();
             
             // 1. Load session to get level band, etc.
-            const sessionRef = doc(firestore, 'storySessions', sessionId);
-            const sessionDoc = await getDoc(sessionRef);
-            if (!sessionDoc.exists()) {
+            const sessionDoc = await firestore.collection('storySessions').doc(sessionId).get();
+            if (!sessionDoc.exists) {
                 return { ok: false, errorMessage: `Failed to load story session with id ${sessionId}: document does not exist.` };
             }
             const session = sessionDoc.data() as StorySession;
@@ -67,9 +65,13 @@ export const warmupReplyFlow = ai.defineFlow(
 
 
             // 3. Load messages from Firestore
-            const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
-            const messagesQuery = query(messagesRef, orderBy('createdAt', 'desc'), limit(2));
-            const messagesSnapshot = await getDocs(messagesQuery);
+            const messagesSnapshot = await firestore
+                .collection('storySessions')
+                .doc(sessionId)
+                .collection('messages')
+                .orderBy('createdAt', 'desc')
+                .limit(2)
+                .get();
             
             // Build conversation summary string for the prompt, limiting to the last two messages and 200 chars.
             const conversationSummary = messagesSnapshot.docs

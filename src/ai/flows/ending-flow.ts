@@ -6,12 +6,12 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { initializeFirebase } from '@/firebase';
-import { getDoc, doc, collection, getDocs, query, orderBy, where, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, StoryType, Character, ChildProfile } from '@/lib/types';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
-import { logSessionEvent } from '@/lib/session-events';
+import { logServerSessionEvent } from '@/lib/session-events.server';
 
 type EndingFlowDebugInfo = {
     stage: 'loading_session' | 'loading_storyType' | 'loading_messages_and_characters' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate' | 'unknown';
@@ -37,13 +37,13 @@ export const endingFlow = ai.defineFlow(
         let debug: EndingFlowDebugInfo = { stage: 'unknown', details: {} };
 
         try {
-            const { firestore } = initializeFirebase();
+            const firestore = await getServerFirestore();
 
             // 1. Load session
             debug.stage = 'loading_session';
-            const sessionRef = doc(firestore, 'storySessions', sessionId);
-            const sessionDoc = await getDoc(sessionRef);
-            if (!sessionDoc.exists()) {
+            const sessionRef = firestore.collection('storySessions').doc(sessionId);
+            const sessionDoc = await sessionRef.get();
+            if (!sessionDoc.exists) {
                 return { ok: false, sessionId, errorMessage: `Session with id ${sessionId} not found.` };
             }
             const session = sessionDoc.data() as StorySession;
@@ -56,7 +56,7 @@ export const endingFlow = ai.defineFlow(
             
             // --- Phase State Correction ---
             if (session.currentPhase !== 'ending') {
-                await updateDoc(sessionRef, {
+                await sessionRef.update({
                     currentPhase: 'ending',
                     storyPhaseId: 'ending_phase_v1'
                 });
@@ -66,17 +66,15 @@ export const endingFlow = ai.defineFlow(
 
             // 2. Load StoryType
             debug.stage = 'loading_storyType';
-            const storyTypeRef = doc(firestore, 'storyTypes', storyTypeId);
-            const storyTypeDoc = await getDoc(storyTypeRef);
-            if (!storyTypeDoc.exists()) {
+            const storyTypeDoc = await firestore.collection('storyTypes').doc(storyTypeId).get();
+            if (!storyTypeDoc.exists) {
                 return { ok: false, sessionId, errorMessage: `StoryType with id ${storyTypeId} not found.` };
             }
             const storyType = storyTypeDoc.data() as StoryType;
             let childProfile: ChildProfile | null = null;
             if (session.childId) {
-                const childRef = doc(firestore, 'children', session.childId);
-                const childDoc = await getDoc(childRef);
-                if (childDoc.exists()) {
+                const childDoc = await firestore.collection('children').doc(session.childId).get();
+                if (childDoc.exists) {
                     childProfile = childDoc.data() as ChildProfile;
                 }
             }
@@ -90,15 +88,18 @@ export const endingFlow = ai.defineFlow(
 
             // 3. Load Characters and Messages
             debug.stage = 'loading_messages_and_characters';
-            const charactersQuery = query(collection(firestore, 'characters'), where('sessionId', '==', sessionId));
-            const charactersSnapshot = await getDocs(charactersQuery);
+            const charactersSnapshot = await firestore.collection('characters').where('sessionId', '==', sessionId).get();
             const characterRoster = charactersSnapshot.docs.map(d => {
                 const char = d.data() as Character;
-                return `- ${char.name} (role: ${char.role}, traits: ${char.traits?.join(', ') || 'none'})`;
+                return `- ${char.displayName} (role: ${char.role}, traits: ${char.traits?.join(', ') || 'none'})`;
             }).join('\n');
 
-            const messagesQuery = query(collection(firestore, 'storySessions', sessionId, 'messages'), orderBy('createdAt', 'asc'));
-            const messagesSnapshot = await getDocs(messagesQuery);
+            const messagesSnapshot = await firestore
+                .collection('storySessions')
+                .doc(sessionId)
+                .collection('messages')
+                .orderBy('createdAt', 'asc')
+                .get();
             const storySoFar = messagesSnapshot.docs.map(d => {
                 const msg = d.data() as ChatMessage;
                 return `${msg.sender === 'assistant' ? 'Story Guide' : 'Child'}: ${msg.text}`;
@@ -196,11 +197,11 @@ Based on all the above, return ONLY the JSON object containing three endings.`;
                  throw new Error(`Model JSON does not match expected ending shape. Errors: ${validationResult.error.message}`);
             }
 
-            await updateDoc(sessionRef, {
-                'progress.endingGeneratedAt': serverTimestamp(),
+            await sessionRef.update({
+                'progress.endingGeneratedAt': FieldValue.serverTimestamp(),
             });
 
-            await logSessionEvent({
+            await logServerSessionEvent({
                 firestore,
                 sessionId,
                 event: 'ending.generated',

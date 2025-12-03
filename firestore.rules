@@ -1,3 +1,4 @@
+// Rules version: v3 – added explicit list rules for /children with owner filter checks.
 rules_version = '2';
 
 service cloud.firestore {
@@ -5,12 +6,12 @@ service cloud.firestore {
     
     // --- Reusable Helper Functions ---
 
-    function isServer() {
-      return request.auth == null;
-    }
-
     function isAuth() {
       return request.auth != null;
+    }
+
+    function isServer() {
+      return isAuth() && request.auth.token.isServer == true;
     }
 
     function isAdmin() {
@@ -21,13 +22,48 @@ service cloud.firestore {
       return isAuth() && request.auth.token.isWriter == true;
     }
 
-    function isOwner() {
-      return isAuth() && request.resource.data.ownerParentUid == request.auth.uid;
+    function isHelpId(id) {
+      return id.startsWith('help-');
     }
 
-    // A user can read a session/story if they are the parent owner.
-    function canParentRead() {
-      return isAuth() && resource.data.parentUid == request.auth.uid;
+    function ownerUid(doc) {
+      return doc != null ? doc.data.ownerParentUid : null;
+    }
+
+    function parentUid(doc) {
+      return doc != null ? doc.data.parentUid : null;
+    }
+
+    function isOwner() {
+      return isAuth() && (
+        (resource != null && ownerUid(resource) == request.auth.uid &&
+          (request.resource == null || ownerUid(request.resource) == ownerUid(resource))) ||
+        (resource == null && ownerUid(request.resource) == request.auth.uid)
+      );
+    }
+
+    function canParentReadCurrent() {
+      return isAuth() && parentUid(resource) == request.auth.uid;
+    }
+
+    function canParentReadDoc(doc) {
+      return isAuth() && parentUid(doc) == request.auth.uid;
+    }
+
+    function canParentModifyCurrent() {
+      return isAuth() && (
+        (resource != null && parentUid(resource) == request.auth.uid &&
+          (request.resource == null || parentUid(request.resource) == parentUid(resource))) ||
+        (resource == null && parentUid(request.resource) == request.auth.uid)
+      );
+    }
+
+    function isParentChildListQuery() {
+      return isAuth() &&
+        request.query != null &&
+        request.query.where[0][0] == 'ownerParentUid' &&
+        request.query.where[0][1] == '==' &&
+        request.query.where[0][2] == request.auth.uid;
     }
     
     // --- Collection Rules ---
@@ -37,31 +73,45 @@ service cloud.firestore {
     }
 
     match /children/{childId} {
-      allow read: if isServer() || isAdmin() || childId.startsWith('help-') || isOwner();
-      allow write: if isServer() || isAdmin() || isOwner();
+      allow get: if isServer() || isAdmin() || isHelpId(childId) || isOwner();
+      allow list: if isServer() || isAdmin() || isParentChildListQuery();
+      allow write: if isServer() || isAdmin() || (!isHelpId(childId) && isOwner());
 
       match /sessions/{sessionId} {
-        allow read: if isServer() || isAdmin() || childId.startsWith('help-') || canParentRead();
-        allow write: if isServer() || isAdmin() || canParentRead();
+        allow get: if isServer() || isAdmin() || isHelpId(childId) || canParentReadCurrent();
+        allow list: if isServer() || isAdmin() || isHelpId(childId) || 
+          (isAuth() && exists(/databases/$(database)/documents/children/$(childId)) && get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid);
+        allow write: if isServer() || isAdmin() || (!isHelpId(childId) && canParentModifyCurrent());
 
         match /messages/{messageId} {
-          allow read: if isServer() || isAdmin() || childId.startsWith('help-') || canParentRead();
-          allow write: if isServer() || isAdmin() || canParentRead();
+          allow get: if isServer() || isAdmin() || isHelpId(childId) || canParentReadCurrent();
+          allow list: if isServer() || isAdmin() || isHelpId(childId) || 
+            (isAuth() && exists(/databases/$(database)/documents/children/$(childId)) && get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid);
+          allow write: if isServer() || isAdmin() || (!isHelpId(childId) && canParentModifyCurrent());
         }
       }
     }
     
     match /storySessions/{sessionId} {
-      allow read: if isServer() || isAdmin() || sessionId.startsWith('help-') || canParentRead();
-      allow write: if isServer() || isAdmin() || request.resource.data.parentUid == request.auth.uid;
+      allow read: if isServer() || isAdmin() || isHelpId(sessionId) || canParentReadCurrent();
+      allow write: if isServer() || isAdmin() || (!isHelpId(sessionId) && canParentModifyCurrent());
     }
     
     match /storySessions/{sessionId}/{subcollection}/{docId} {
-        allow read, write: if isServer() || isAdmin() || (isAuth() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
+      allow read, write: if
+        isServer() ||
+        isAdmin() ||
+        isHelpId(sessionId) ||
+        (
+          !isHelpId(sessionId) &&
+          isAuth() &&
+          exists(/databases/$(database)/documents/storySessions/$(sessionId)) &&
+          canParentReadDoc(get(/databases/$(database)/documents/storySessions/$(sessionId)))
+        );
     }
 
     match /characters/{characterId} {
-      allow read: if isServer() || isAdmin() || characterId.startsWith('help-') || isAuth();
+      allow read: if isServer() || isAdmin() || isHelpId(characterId) || isOwner();
       allow write: if isServer() || isAdmin() || isOwner();
     }
 
@@ -84,17 +134,50 @@ service cloud.firestore {
     }
 
     match /stories/{storyId} {
-      allow read: if isServer() || isAdmin() || isWriter() || storyId.startsWith('help-') || canParentRead();
-      allow write: if isServer() || isAdmin() || (isAuth() && request.resource.data.parentUid == request.auth.uid);
-      allow list: if isAuth();
+      allow read: if isServer() || isAdmin() || isWriter() || isHelpId(storyId) || canParentReadCurrent();
+      allow write: if isServer() || isAdmin() || (!isHelpId(storyId) && canParentModifyCurrent());
 
       match /outputs/{outputId} {
-        allow read: if isServer() || isAdmin() || isWriter() || canParentRead(get(/databases/$(database)/documents/stories/$(storyId)));
-        allow write: if isServer() || isAdmin() || canParentRead(get(/databases/$(database)/documents/stories/$(storyId)));
+        allow read: if
+          isServer() ||
+          isAdmin() ||
+          isWriter() ||
+          isHelpId(storyId) ||
+          (
+            isAuth() &&
+            exists(/databases/$(database)/documents/stories/$(storyId)) &&
+            canParentReadDoc(get(/databases/$(database)/documents/stories/$(storyId)))
+          );
+        allow write: if
+          isServer() ||
+          isAdmin() ||
+          (
+            !isHelpId(storyId) &&
+            isAuth() &&
+            exists(/databases/$(database)/documents/stories/$(storyId)) &&
+            canParentReadDoc(get(/databases/$(database)/documents/stories/$(storyId)))
+          );
           
         match /pages/{pageId} {
-          allow read: if isServer() || isAdmin() || isWriter() || canParentRead(get(/databases/$(database)/documents/stories/$(storyId)));
-          allow write: if isServer() || isAdmin() || canParentRead(get(/databases/$(database)/documents/stories/$(storyId)));
+          allow read: if
+            isServer() ||
+            isAdmin() ||
+            isWriter() ||
+            isHelpId(storyId) ||
+            (
+              isAuth() &&
+              exists(/databases/$(database)/documents/stories/$(storyId)) &&
+              canParentReadDoc(get(/databases/$(database)/documents/stories/$(storyId)))
+            );
+          allow write: if
+            isServer() ||
+            isAdmin() ||
+            (
+              !isHelpId(storyId) &&
+              isAuth() &&
+              exists(/databases/$(database)/documents/stories/$(storyId)) &&
+              canParentReadDoc(get(/databases/$(database)/documents/stories/$(storyId)))
+            );
         }
       }
 
@@ -109,12 +192,12 @@ service cloud.firestore {
     }
 
     match /printLayouts/{layoutId} {
-      allow read: if true;
+      allow read: if isAuth();
       allow write: if isServer() || isAdmin();
     }
 
     match /helpWizards/{wizardId} {
-      allow read: if true;
+      allow read: if isAuth();
       allow write: if isServer() || isAdmin();
     }
 
