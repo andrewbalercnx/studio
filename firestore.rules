@@ -1,4 +1,4 @@
-// Rules version: v25 - Fix character create permissions.
+// Rules version: v28 - Fix page generation permissions.
 rules_version = '2';
 
 service cloud.firestore {
@@ -91,22 +91,12 @@ service cloud.firestore {
       allow write: if isServer() || isAdmin() || (!isHelpId(childId) && isOwner());
 
       match /sessions/{sessionId} {
-        allow read: if
-          isServer() ||
-          isAdmin() ||
-          isHelpId(childId) ||
-          childOwnedByRequester(childId);
-        allow write: if
-          isServer() ||
-          isAdmin() ||
-          (!isHelpId(childId) && childOwnedByRequester(childId));
+        allow read: if isServer() || isAdmin() || isHelpId(childId) || childOwnedByRequester(childId);
+        allow create: if isServer() || isAdmin() || (!isHelpId(childId) && childOwnedByRequester(childId));
+        allow update, delete: if isServer() || isAdmin() || (!isHelpId(childId) && childOwnedByRequester(childId));
 
         match /messages/{messageId} {
-          allow read: if
-            isServer() ||
-            isAdmin() ||
-            isHelpId(childId) ||
-            childOwnedByRequester(childId);
+          allow read: if isServer() || isAdmin() || isHelpId(childId) || childOwnedByRequester(childId);
           allow write: if isServer() || isAdmin() || (!isHelpId(childId) && childOwnedByRequester(childId));
         }
       }
@@ -160,7 +150,7 @@ service cloud.firestore {
         isWriter() ||
         isHelpId(storyId) ||
         storyOwnedByRequester(storyId);
-      allow write: if isServer() || isAdmin() || isWriter() || (!isHelpId(storyId) && canParentModifyCurrent());
+      allow write: if isServer() || isAdmin() || isWriter() || (!isHelpId(storyId) && storyOwnedByRequester(storyId));
 
       match /outputs/{outputId} {
         allow read, write: if
@@ -170,7 +160,7 @@ service cloud.firestore {
           (
             isAuth() &&
             exists(/databases/$(database)/documents/stories/$(storyId)) &&
-            canParentReadDoc(get(/databases/$(database)/documents/stories/$(storyId)))
+            get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid
           );
           
         match /pages/{pageId} {
@@ -181,7 +171,7 @@ service cloud.firestore {
             (
               isAuth() &&
               exists(/databases/$(database)/documents/stories/$(storyId)) &&
-              canParentReadDoc(get(/databases/$(database)/documents/stories/$(storyId)))
+              get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid
             );
         }
       }
