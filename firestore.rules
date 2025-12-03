@@ -1,4 +1,4 @@
-// Rules version: v7 - Correct list query for children
+// Rules version: v8 - Correct list query using request.query.where.ownerParentUid
 rules_version = '2';
 
 service cloud.firestore {
