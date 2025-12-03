@@ -1,4 +1,4 @@
-// Rules version: v7 - Fix children list query permission error.
+// Rules version: v7 - Correct list query for children
 rules_version = '2';
 
 service cloud.firestore {

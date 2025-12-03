@@ -59,8 +59,7 @@ export default function HomePage() {
     } else if (claims?.isWriter) {
         router.push('/writer');
     } else if (roleMode === 'parent') {
-        // Temporarily redirect parents to the new diagnostic page
-        router.push('/parent/diagnostics');
+        router.push('/parent');
     }
   }, [user, userLoading, idTokenResult, router, roleMode]);
 
