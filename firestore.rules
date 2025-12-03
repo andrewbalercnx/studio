@@ -1,4 +1,4 @@
-// Rules version: v5 - Correct child list query rule to use resource check instead of indexed where clause.
+// Rules version: v6 - Revert child listing permissions to per-document owner checks (no custom list clause).
 rules_version = '2';
 
 service cloud.firestore {
@@ -65,14 +65,11 @@ service cloud.firestore {
     }
 
     match /children/{childId} {
-      allow get: if isServer() || isAdmin() || isHelpId(childId) || isOwner();
-      allow list: if isServer() || isAdmin() || (isAuth() && request.query.resource.data.ownerParentUid == request.auth.uid);
+      allow read: if isServer() || isAdmin() || isHelpId(childId) || isOwner();
       allow write: if isServer() || isAdmin() || (!isHelpId(childId) && isOwner());
 
       match /sessions/{sessionId} {
-        allow get: if isServer() || isAdmin() || isHelpId(childId) || canParentReadCurrent();
-        allow list: if isServer() || isAdmin() || isHelpId(childId) || 
-          (isAuth() && exists(/databases/$(database)/documents/children/$(childId)) && get(/databases/$(database)/documents/children/$(childId)).data.ownerParentUid == request.auth.uid);
+        allow read: if isServer() || isAdmin() || isHelpId(childId) || canParentReadCurrent();
         allow write: if isServer() || isAdmin() || (!isHelpId(childId) && canParentModifyCurrent());
 
         match /messages/{messageId} {
