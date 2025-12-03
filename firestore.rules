@@ -66,7 +66,7 @@ service cloud.firestore {
 
     match /children/{childId} {
       allow get: if isServer() || isAdmin() || isHelpId(childId) || isOwner();
-      allow list: if isServer() || isAdmin() || (isAuth() && request.query.where.size() > 0 && request.query.where[0].fieldPath == 'ownerParentUid' && request.query.where[0].op == '==' && request.query.where[0].value == request.auth.uid);
+      allow list: if isServer() || isAdmin() || (isAuth() && request.query.where[0].fieldPath == 'ownerParentUid' && request.query.where[0].op == '==' && request.query.where[0].value == request.auth.uid);
       allow write: if isServer() || isAdmin() || (!isHelpId(childId) && isOwner());
 
       match /sessions/{sessionId} {
