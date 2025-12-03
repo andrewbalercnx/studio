@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useEffect } from 'react';
@@ -59,7 +58,7 @@ export default function HomePage() {
     } else if (claims?.isWriter) {
         router.push('/writer');
     } else if (roleMode === 'parent') {
-        router.push('/parent/diagnostics');
+        router.push('/parent');
     }
   }, [user, userLoading, idTokenResult, router, roleMode]);
 
