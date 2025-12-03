@@ -8,7 +8,7 @@ import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { Story, StorySession, ChildProfile, Character, StoryBookPage as StoryBookPageType } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { logServerSessionEvent } from '@/lib/session-events.server';
+import { logServerSessionEvent as logSessionEvent } from '@/lib/session-events.server';
 import {
   resolveEntitiesInText,
   replacePlaceholdersInText as replacePlaceholders,
