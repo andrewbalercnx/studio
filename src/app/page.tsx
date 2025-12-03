@@ -59,7 +59,7 @@ export default function HomePage() {
     } else if (claims?.isWriter) {
         router.push('/writer');
     } else if (roleMode === 'parent') {
-        router.push('/parent');
+        router.push('/parent/diagnostics');
     }
   }, [user, userLoading, idTokenResult, router, roleMode]);
 
