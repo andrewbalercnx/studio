@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -106,6 +105,9 @@ export default function AdminDashboardPage() {
           <Button asChild>
             <Link href="/admin/regression">Regression Tests</Link>
           </Button>
+           <Button asChild variant="destructive">
+            <Link href="/firestore-test">Firestore Rules Tests</Link>
+          </Button>
         </div>
       </div>
     );
@@ -141,5 +143,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
-    
