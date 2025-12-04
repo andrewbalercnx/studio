@@ -1,9 +1,34 @@
-// Rules version: v0 - All open for testing baseline
+// Rules version: v3 - Secure /users collection
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+    
+    function isServer() {
+      return request.auth == null;
     }
+
+    function isAdmin() {
+      return request.auth != null && request.auth.token.isAdmin == true;
+    }
+
+    // A user can only read/write their own profile, or an admin can.
+    match /users/{userId} {
+      allow read, write: if isServer() || isAdmin() || request.auth.uid == userId;
+    }
+
+    // Other collections are still open for now. We will lock them down next.
+    // This rule needs to be specific to avoid overriding the one above.
+    match /children/{document=**} { allow read, write: if true; }
+    match /storySessions/{document=**} { allow read, write: if true; }
+    match /characters/{document=**} { allow read, write: if true; }
+    match /promptConfigs/{document=**} { allow read, write: if true; }
+    match /storyPhases/{document=**} { allow read, write: if true; }
+    match /storyTypes/{document=**} { allow read, write: if true; }
+    match /storyOutputTypes/{document=**} { allow read, write: if true; }
+    match /stories/{document=**} { allow read, write: if true; }
+    match /aiFlowLogs/{document=**} { allow read, write: if true; }
+    match /helpWizards/{document=**} { allow read, write: if true; }
+    match /printOrders/{document=**} { allow read, write: if true; }
+    match /printLayouts/{document=**} { allow read, write: if true; }
   }
 }
