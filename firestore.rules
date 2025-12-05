@@ -1,6 +1,6 @@
 
 
-// Rules version: v6 - Fix parent test harness permission denied on setup
+// Rules version: v7 - Secure all remaining collections
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -11,6 +11,10 @@ service cloud.firestore {
 
     function isAdmin() {
       return request.auth != null && request.auth.token.isAdmin == true;
+    }
+    
+    function isWriter() {
+      return request.auth != null && (request.auth.token.isWriter == true || request.auth.token.isAdmin == true);
     }
 
     // A user can only read/write their own profile, or an admin can.
@@ -30,22 +34,76 @@ service cloud.firestore {
       
       // Allow a parent to ONLY list their own children.
       allow list: if isServer() || isAdmin() || (request.auth != null && request.query.where[0][2] == request.auth.uid);
+
+      // Secure the sessions sub-collection under each child
+      match /sessions/{sessionId} {
+        allow read, write: if isServer() || isAdmin() || request.auth.uid == resource.data.parentUid;
+      }
     }
 
-    // Other collections are still open for now. We will lock them down next.
-    match /storySessions/{document=**} { allow read, write: if true; }
-    match /characters/{document=**} { allow read, write: if true; }
-    match /promptConfigs/{document=**} { allow read, write: if true; }
-    match /storyPhases/{document=**} { allow read, write: if true; }
-    match /storyTypes/{document=**} { allow read, write: if true; }
-    match /storyOutputTypes/{document=**} { allow read, write: if true; }
-    match /stories/{document=**} { allow read, write: if true; }
-    match /aiFlowLogs/{document=**} { allow read, write: if true; }
+    // Secure story sessions to the owner parent or admin
+    match /storySessions/{sessionId} {
+      allow read, write: if isServer() || isAdmin() || request.auth.uid == resource.data.parentUid;
+
+      // Messages sub-collection
+      match /messages/{messageId} {
+         allow read, write: if isServer() || isAdmin() || request.auth.uid == get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid;
+      }
+    }
+
+    // Secure characters to the owner parent or admin
+    match /characters/{characterId} {
+      allow read, write: if isServer() || isAdmin() || request.auth.uid == resource.data.ownerParentUid;
+    }
+
+    // Secure compiled stories to the owner parent or admin
+    match /stories/{storyId} {
+      allow read, write: if isServer() || isAdmin() || request.auth.uid == resource.data.parentUid;
+      
+      // Secure story outputs (pages, etc.)
+      match /{allPaths=**} {
+        allow read, write: if isServer() || isAdmin() || request.auth.uid == get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid;
+      }
+    }
+    
+    // Secure print orders to the owner parent or admin
+    match /printOrders/{orderId} {
+        allow read, write: if isServer() || isAdmin() || request.auth.uid == resource.data.parentUid;
+    }
+    
+    // --- Writer & Admin Only Collections ---
+    function isCreativeAsset() {
+      return request.auth != null; // All authenticated users can read
+    }
+
+    match /promptConfigs/{document=**} { 
+      allow read: if isCreativeAsset();
+      allow write: if isServer() || isWriter();
+    }
+    match /storyPhases/{document=**} { 
+      allow read: if isCreativeAsset();
+      allow write: if isServer() || isWriter();
+    }
+    match /storyTypes/{document=**} { 
+      allow read: if isCreativeAsset();
+      allow write: if isServer() || isWriter();
+    }
+    match /storyOutputTypes/{document=**} { 
+      allow read: if isCreativeAsset();
+      allow write: if isServer() || isWriter();
+    }
+    match /printLayouts/{document=**} {
+      allow read: if isCreativeAsset();
+      allow write: if isServer() || isWriter();
+    }
+
+    // --- System & Log Collections ---
+    match /aiFlowLogs/{document=**} { 
+      allow read, write: if isServer() || isAdmin();
+    }
     match /helpWizards/{document=**} { 
       allow read: if request.auth != null;
       allow write: if isServer() || isAdmin(); 
     }
-    match /printOrders/{document=**} { allow read, write: if true; }
-    match /printLayouts/{document=**} { allow read, write: if true; }
   }
 }
