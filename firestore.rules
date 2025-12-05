@@ -1,4 +1,4 @@
-// Rules version: v8 - Secure all remaining collections
+// Rules version: v9 - Secure all remaining collections
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
