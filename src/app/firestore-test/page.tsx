@@ -183,11 +183,6 @@ export default function FirestoreTestPage() {
         // A "help" doc that should be public
         const helpChildRef = doc(firestore, 'children', 'help-child');
         batch.set(helpChildRef, { rulesTest: true, ownerParentUid: 'help-owner' });
-        
-        if (currentUser) {
-          const currentUserRef = doc(firestore, 'users', testIds.parentUid);
-          batch.set(currentUserRef, { rulesTest: true, email: currentUser.email || 'parent@test.com' }, { merge: true });
-        }
 
         await batch.commit();
         
@@ -267,7 +262,8 @@ export default function FirestoreTestPage() {
     if (!firestore) return;
     setIsCleaning(true);
     const batch = writeBatch(firestore);
-    const collections = ['users', 'children', 'storySessions', 'characters', 'stories'];
+    // CRITICAL FIX: Removed 'users' from this array to prevent deleting live user data.
+    const collections = ['children', 'storySessions', 'characters', 'stories'];
     let count = 0;
     
     for (const coll of collections) {
