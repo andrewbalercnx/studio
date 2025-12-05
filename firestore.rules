@@ -1,4 +1,4 @@
-// Rules version: v3 - Secure /users collection
+// Rules version: v3 - Secure /children collection
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -15,10 +15,14 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if isServer() || isAdmin() || request.auth.uid == userId;
     }
+    
+    // Parents can only read/write their own children. Admins can do anything.
+    match /children/{childId} {
+      allow read, write: if isServer() || isAdmin() || request.auth.uid == resource.data.ownerParentUid;
+    }
 
     // Other collections are still open for now. We will lock them down next.
     // This rule needs to be specific to avoid overriding the one above.
-    match /children/{document=**} { allow read, write: if true; }
     match /storySessions/{document=**} { allow read, write: if true; }
     match /characters/{document=**} { allow read, write: if true; }
     match /promptConfigs/{document=**} { allow read, write: if true; }
