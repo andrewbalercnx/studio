@@ -1,4 +1,5 @@
-// Rules version: v5 - Fix test harness setup
+
+// Rules version: v6 - Fix parent test harness permission denied on setup
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -17,11 +18,14 @@ service cloud.firestore {
     }
     
     match /children/{childId} {
-      // Allow writes to the special 'help-child' doc for testing purposes.
-      allow write: if isServer() || isAdmin() || (childId == 'help-child' && request.auth != null);
+      // Allow parent to read their own child's doc, or admin. Also allow anyone to read 'help-child'
+      allow read: if isServer() || isAdmin() || childId == 'help-child' || request.auth.uid == resource.data.ownerParentUid;
+
+      // Allow parent to create a doc where they are the owner. Allow anyone to create 'help-child'.
+      allow create: if isServer() || isAdmin() || (childId == 'help-child' && request.auth != null) || request.auth.uid == request.resource.data.ownerParentUid;
       
-      // Allow a parent to read/write their own child's doc.
-      allow read, write: if isServer() || isAdmin() || request.auth.uid == resource.data.ownerParentUid;
+      // Allow parent to update/delete their own child's doc.
+      allow update, delete: if isServer() || isAdmin() || request.auth.uid == resource.data.ownerParentUid;
       
       // Allow a parent to ONLY list their own children.
       allow list: if isServer() || isAdmin() || (request.auth != null && request.query.where[0][2] == request.auth.uid);
