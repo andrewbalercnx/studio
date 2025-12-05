@@ -89,6 +89,43 @@ export default function FirestoreTestPage() {
     };
   }, [idTokenResult]);
 
+  const executeTest = async (testCase: TestCase, ids: Record<string, string>): Promise<{ permitted: boolean; error: string | null }> => {
+    if (!firestore) throw new Error("Firestore not initialized");
+  
+    let path = typeof testCase.path === 'function' ? testCase.path(ids) : testCase.path;
+    let data = typeof testCase.data === 'function' ? testCase.data(ids) : testCase.data;
+    if (data) {
+        data = {...data, rulesTest: true};
+    }
+    
+    try {
+        switch (testCase.operation) {
+            case 'get':
+                await getDoc(doc(firestore, path));
+                break;
+            case 'list':
+                const constraints = testCase.queryConstraints ? testCase.queryConstraints(ids) : [];
+                await getDocs(query(collection(firestore, path), ...constraints));
+                break;
+            case 'create':
+                await addDoc(collection(firestore, path), data);
+                break;
+            case 'update':
+                await updateDoc(doc(firestore, path), data);
+                break;
+            case 'delete':
+                await deleteDoc(doc(firestore, path));
+                break;
+        }
+        return { permitted: true, error: null };
+    } catch (error: any) {
+        if (error.code === 'permission-denied' || error.code === 'PERMISSION_DENIED') {
+            return { permitted: false, error: 'permission-denied' };
+        }
+        return { permitted: false, error: error.message || 'An unexpected error occurred.' };
+    }
+  };
+
   const runTests = async () => {
     if (!firestore) return;
     setIsRunning(true);
@@ -116,6 +153,14 @@ export default function FirestoreTestPage() {
     
     const helpChildRef = doc(firestore, 'children', 'help-child');
     batch.set(helpChildRef, { rulesTest: true, ownerParentUid: 'help-owner' });
+
+    // Seed a user doc for the "other" parent to test reads against
+    const otherUserRef = doc(firestore, 'users', testIds.otherParentUid);
+    batch.set(otherUserRef, { rulesTest: true, email: 'other@test.com' });
+    // Seed the current user's doc for self-write tests
+    const currentUserRef = doc(firestore, 'users', testIds.parentUid);
+    batch.set(currentUserRef, { rulesTest: true, email: user?.email || 'parent@test.com' }, { merge: true });
+
     await batch.commit();
 
     const allTestResults: TestResult[] = [];
@@ -126,8 +171,6 @@ export default function FirestoreTestPage() {
         setResults(prev => [...prev, result]);
         
         try {
-            // NOTE: This is a simplified role switcher for demonstration.
-            // A real implementation would need to sign in/out users with different claims.
             if (testCase.role !== 'parent' && testCase.role !== 'unauthenticated') {
                 result.status = 'pending';
                 result.error = `Skipping: Manual login required for role '${testCase.role}'`;
@@ -142,7 +185,7 @@ export default function FirestoreTestPage() {
             
             const { permitted, error: operationError } = await executeTest(testCase, testIds);
 
-            if ((testCase.expected === 'allow' && permitted) || (testCase.expected === 'deny' && !permitted)) {
+            if ((testCase.expected === 'allow' && permitted) || (testCase.expected === 'deny' && !permitted && operationError === 'permission-denied')) {
                 result.status = 'pass';
             } else {
                 result.status = 'fail';
@@ -161,44 +204,6 @@ export default function FirestoreTestPage() {
     setIsRunning(false);
   };
   
-  const executeTest = async (testCase: TestCase, ids: Record<string, string>): Promise<{ permitted: boolean; error: string | null }> => {
-    if (!firestore) throw new Error("Firestore not initialized");
-
-    let path = typeof testCase.path === 'function' ? testCase.path(ids) : testCase.path;
-    let data = typeof testCase.data === 'function' ? testCase.data(ids) : testCase.data;
-    if (data) {
-        data = {...data, rulesTest: true};
-    }
-    
-    try {
-        switch (testCase.operation) {
-            case 'get':
-                await getDoc(doc(firestore, path));
-                break;
-            case 'list':
-                const constraints = testCase.queryConstraints ? testCase.queryConstraints(ids) : [];
-                await getDocs(query(collection(firestore, path), ...constraints));
-                break;
-            case 'create':
-                await addDoc(collection(firestore, path), data);
-                break;
-            case 'update':
-                await updateDoc(doc(firestore, path), data);
-                break;
-            case 'delete':
-                await deleteDoc(doc(firestore, path));
-                break;
-        }
-        return { permitted: true, error: null }; // Operation succeeded
-    } catch (error: any) {
-        if (error.code === 'permission-denied') {
-            return { permitted: false, error: 'permission-denied' }; // Operation was correctly blocked
-        }
-        // For other errors, consider it a failure in the test setup or rule logic
-        return { permitted: false, error: error.message || 'An unexpected error occurred.' };
-    }
-  };
-
   const cleanupData = async () => {
     if (!firestore) return;
     setIsCleaning(true);
@@ -330,3 +335,5 @@ export default function FirestoreTestPage() {
     </div>
   );
 }
+
+    
