@@ -90,7 +90,9 @@ export default function FirestoreTestPage() {
   }, [idTokenResult]);
 
   const executeTest = async (testCase: TestCase, ids: Record<string, string>): Promise<{ permitted: boolean; error: string | null }> => {
-    if (!firestore) throw new Error("Firestore not initialized");
+    if (!firestore) {
+      return { permitted: false, error: "Firestore not initialized" };
+    }
   
     let path = typeof testCase.path === 'function' ? testCase.path(ids) : testCase.path;
     let data = typeof testCase.data === 'function' ? testCase.data(ids) : testCase.data;
@@ -122,6 +124,7 @@ export default function FirestoreTestPage() {
         if (error.code === 'permission-denied' || error.code === 'PERMISSION_DENIED') {
             return { permitted: false, error: 'permission-denied' };
         }
+        // For any other error, return the actual error message
         return { permitted: false, error: error.message || 'An unexpected error occurred.' };
     }
   };
@@ -158,8 +161,10 @@ export default function FirestoreTestPage() {
     const otherUserRef = doc(firestore, 'users', testIds.otherParentUid);
     batch.set(otherUserRef, { rulesTest: true, email: 'other@test.com' });
     // Seed the current user's doc for self-write tests
-    const currentUserRef = doc(firestore, 'users', testIds.parentUid);
-    batch.set(currentUserRef, { rulesTest: true, email: user?.email || 'parent@test.com' }, { merge: true });
+    if(user) {
+      const currentUserRef = doc(firestore, 'users', testIds.parentUid);
+      batch.set(currentUserRef, { rulesTest: true, email: user.email || 'parent@test.com' }, { merge: true });
+    }
 
     await batch.commit();
 
@@ -167,7 +172,7 @@ export default function FirestoreTestPage() {
 
     for (let i = 0; i < testCases.length; i++) {
         const testCase = testCases[i];
-        const result: TestResult = { case: testCase, status: 'running' };
+        const result: TestResult = { case: testCase, status: 'running', error: undefined };
         setResults(prev => [...prev, result]);
         
         try {
@@ -335,5 +340,3 @@ export default function FirestoreTestPage() {
     </div>
   );
 }
-
-    
