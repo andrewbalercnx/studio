@@ -91,35 +91,39 @@ export default function FirestoreTestPage() {
 
   const executeTest = async (testCase: TestCase, ids: Record<string, string>): Promise<{ permitted: boolean; error: string | null }> => {
     if (!firestore) {
-      return { permitted: false, error: "Firestore not initialized" };
+      return { permitted: false, error: 'Firestore not initialized' };
     }
-  
-    let path = typeof testCase.path === 'function' ? testCase.path(ids) : testCase.path;
-    let data = typeof testCase.data === 'function' ? testCase.data(ids) : testCase.data;
-    if (data) {
-        data = {...data, rulesTest: true};
-    }
-    
-    switch (testCase.operation) {
+
+    try {
+      let path = typeof testCase.path === 'function' ? testCase.path(ids) : testCase.path;
+      let data = typeof testCase.data === 'function' ? testCase.data(ids) : testCase.data;
+      if (data) {
+        data = { ...data, rulesTest: true };
+      }
+
+      switch (testCase.operation) {
         case 'get':
-            await getDoc(doc(firestore, path));
-            break;
+          await getDoc(doc(firestore, path));
+          break;
         case 'list':
-            const constraints = testCase.queryConstraints ? testCase.queryConstraints(ids) : [];
-            await getDocs(query(collection(firestore, path), ...constraints));
-            break;
+          const constraints = testCase.queryConstraints ? testCase.queryConstraints(ids) : [];
+          await getDocs(query(collection(firestore, path), ...constraints));
+          break;
         case 'create':
-            await addDoc(collection(firestore, path), data);
-            break;
+          await addDoc(collection(firestore, path), data);
+          break;
         case 'update':
-            await updateDoc(doc(firestore, path), data);
-            break;
+          await updateDoc(doc(firestore, path), data);
+          break;
         case 'delete':
-            await deleteDoc(doc(firestore, path));
-            break;
+          await deleteDoc(doc(firestore, path));
+          break;
+      }
+      return { permitted: true, error: null };
+    } catch (e: any) {
+      // Catch ANY error and return it. The caller will decide if it's a pass or fail.
+      return { permitted: false, error: e.message || 'An unknown error occurred' };
     }
-    // If we reach here, the operation was permitted
-    return { permitted: true, error: null };
   };
 
   const runTests = async () => {
@@ -168,7 +172,8 @@ export default function FirestoreTestPage() {
         const result: TestResult = { case: testCase, status: 'running', error: undefined };
         allTestResults.push(result);
         setResults([...allTestResults]);
-        
+        setProgress(((i + 1) / testCases.length) * 100);
+
         try {
             if (testCase.role !== 'parent' && testCase.role !== 'unauthenticated') {
                 result.status = 'pending';
@@ -180,36 +185,23 @@ export default function FirestoreTestPage() {
             if (testCase.role === 'unauthenticated' && auth?.currentUser) {
                 await signOut(auth);
             }
-            
-            let permitted = false;
-            let operationError: string | null = null;
-            try {
-              await executeTest(testCase, testIds);
-              permitted = true;
-            } catch (e: any) {
-              if (e.code === 'permission-denied' || e.code === 'PERMISSION_DENIED') {
-                  permitted = false;
-                  operationError = 'permission-denied';
-              } else {
-                  // This is an unexpected error, throw it up to the outer catch
-                  throw e;
-              }
-            }
-            
-            if ((testCase.expected === 'allow' && permitted) || (testCase.expected === 'deny' && !permitted && operationError === 'permission-denied')) {
+
+            const { permitted, error } = await executeTest(testCase, testIds);
+            const expectedToPass = testCase.expected === 'allow';
+
+            if (expectedToPass && permitted) {
+                result.status = 'pass';
+            } else if (!expectedToPass && !permitted) {
                 result.status = 'pass';
             } else {
                 result.status = 'fail';
-                result.error = operationError || `Expected '${testCase.expected}' but operation was ${permitted ? 'allowed' : 'denied'}.`;
+                result.error = error || `Expected '${testCase.expected}' but operation was ${permitted ? 'allowed' : 'denied'}.`;
             }
         } catch (e: any) {
-            // This is the higher-level catch you requested.
             result.status = 'fail';
             result.error = `[RUNNER_ERROR] ${e.message}`;
         }
-
         setResults([...allTestResults]);
-        setProgress(((i + 1) / testCases.length) * 100);
     }
 
     setIsRunning(false);
@@ -346,3 +338,5 @@ export default function FirestoreTestPage() {
     </div>
   );
 }
+
+    
