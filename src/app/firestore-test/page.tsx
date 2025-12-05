@@ -122,7 +122,8 @@ export default function FirestoreTestPage() {
       return { permitted: true, error: null };
     } catch (e: any) {
       // Catch ANY error and return it. The caller will decide if it's a pass or fail.
-      return { permitted: false, error: e.message || 'An unknown error occurred' };
+      const errorMessage = e.code ? `[${e.code}] ${e.message}` : e.message;
+      return { permitted: false, error: errorMessage || 'An unknown error occurred' };
     }
   };
 
@@ -192,6 +193,8 @@ export default function FirestoreTestPage() {
             if (expectedToPass && permitted) {
                 result.status = 'pass';
             } else if (!expectedToPass && !permitted) {
+                // If we expected to be denied and we got an error, it's a pass.
+                // We don't need to show the error message in this success case.
                 result.status = 'pass';
             } else {
                 result.status = 'fail';
@@ -199,7 +202,7 @@ export default function FirestoreTestPage() {
             }
         } catch (e: any) {
             result.status = 'fail';
-            result.error = `[RUNNER_ERROR] ${e.message}`;
+            result.error = `[RUNNER_CRASH] ${e.message}`;
         }
         setResults([...allTestResults]);
     }
@@ -311,7 +314,7 @@ export default function FirestoreTestPage() {
                   <TableCell className="font-mono text-xs">{result.case.operation}</TableCell>
                   <TableCell><Badge variant={result.case.expected === 'allow' ? 'secondary' : 'destructive'}>{result.case.expected}</Badge></TableCell>
                   <TableCell><Badge variant={getStatusVariant(result.status)}>{result.status}</Badge></TableCell>
-                  <TableCell className="text-xs text-destructive">{result.error}</TableCell>
+                  <TableCell className="text-xs text-destructive font-mono">{result.error}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -338,5 +341,3 @@ export default function FirestoreTestPage() {
     </div>
   );
 }
-
-    
