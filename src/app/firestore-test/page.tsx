@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useMemo, useCallback } from 'react';
@@ -120,7 +121,7 @@ export default function FirestoreTestPage() {
     };
   }, [idTokenResult]);
 
-  const executeTest = async (testCase: TestCase, ids: Record<string, string>, currentUser: User | null): Promise<{ permitted: boolean; error: string | null }> => {
+  const executeTest = useCallback(async (testCase: TestCase, ids: Record<string, string>, currentUser: User | null): Promise<{ permitted: boolean; error: string | null }> => {
     if (!firestore) {
       return { permitted: false, error: 'Firestore not initialized' };
     }
@@ -156,7 +157,7 @@ export default function FirestoreTestPage() {
       // Any error is considered a failure for the operation
       return { permitted: false, error: formatFirebaseError(e) };
     }
-  };
+  }, [firestore]);
 
 
   const runTests = async () => {
@@ -166,6 +167,7 @@ export default function FirestoreTestPage() {
     setProgress(0);
     const allTestResults: TestResult[] = [];
     const setupSteps: SetupDiagnosticStep[] = [];
+    setSetupDiagnostics(setupSteps);
 
     let tempAuth = auth;
     let currentUser: User | null = tempAuth?.currentUser ?? null;
@@ -182,36 +184,32 @@ export default function FirestoreTestPage() {
         setupSteps.push(step);
         setSetupDiagnostics([...setupSteps]);
         try {
-          await setDoc(docRef, data);
+          await setDoc(docRef, { ...data, rulesTest: true });
           step.status = 'pass';
         } catch (e) {
           step.status = 'fail';
           step.error = formatFirebaseError(e);
-          throw e; // Stop the setup process
-        } finally {
           setSetupDiagnostics([...setupSteps]);
+          throw e; // Stop the setup process
         }
+        setSetupDiagnostics([...setupSteps]);
       };
 
       // 1. Own child
       const childRef = doc(collection(firestore, 'children'));
       testIds.childId = childRef.id;
-      await setupDoc('Create own child', childRef, { rulesTest: true, ownerParentUid: testIds.parentUid, displayName: 'Owned Child' });
+      await setupDoc('Create own child', childRef, { ownerParentUid: testIds.parentUid, displayName: 'Owned Child' });
 
       // 2. Sibling
       const siblingRef = doc(collection(firestore, 'children'));
       testIds.siblingId = siblingRef.id;
-      await setupDoc('Create sibling child', siblingRef, { rulesTest: true, ownerParentUid: testIds.parentUid, displayName: 'Sibling' });
-
-      // 3. Help Child
-      const helpChildRef = doc(firestore, 'children', 'help-child');
-      await setupDoc('Create help-child', helpChildRef, { rulesTest: true, ownerParentUid: 'help-owner' });
-
-      // 4. Other Child (only if admin)
+      await setupDoc('Create sibling child', siblingRef, { ownerParentUid: testIds.parentUid, displayName: 'Sibling' });
+      
+      // 3. Other Child (if admin) - for parents, this will just be a simulated ID.
       if (roles.isAdmin) {
         const otherChildRef = doc(collection(firestore, 'children'));
         testIds.otherChildId = otherChildRef.id;
-        await setupDoc('Create other child', otherChildRef, { rulesTest: true, ownerParentUid: testIds.otherParentUid, displayName: 'Other Child' });
+        await setupDoc('Create other child', otherChildRef, { ownerParentUid: testIds.otherParentUid, displayName: 'Other Child' });
       } else {
         testIds.otherChildId = 'simulated-other-child-id-for-parent';
       }
