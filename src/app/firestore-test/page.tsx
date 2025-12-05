@@ -100,33 +100,26 @@ export default function FirestoreTestPage() {
         data = {...data, rulesTest: true};
     }
     
-    try {
-        switch (testCase.operation) {
-            case 'get':
-                await getDoc(doc(firestore, path));
-                break;
-            case 'list':
-                const constraints = testCase.queryConstraints ? testCase.queryConstraints(ids) : [];
-                await getDocs(query(collection(firestore, path), ...constraints));
-                break;
-            case 'create':
-                await addDoc(collection(firestore, path), data);
-                break;
-            case 'update':
-                await updateDoc(doc(firestore, path), data);
-                break;
-            case 'delete':
-                await deleteDoc(doc(firestore, path));
-                break;
-        }
-        return { permitted: true, error: null };
-    } catch (error: any) {
-        if (error.code === 'permission-denied' || error.code === 'PERMISSION_DENIED') {
-            return { permitted: false, error: 'permission-denied' };
-        }
-        // For any other error, return the actual error message
-        return { permitted: false, error: error.message || 'An unexpected error occurred.' };
+    switch (testCase.operation) {
+        case 'get':
+            await getDoc(doc(firestore, path));
+            break;
+        case 'list':
+            const constraints = testCase.queryConstraints ? testCase.queryConstraints(ids) : [];
+            await getDocs(query(collection(firestore, path), ...constraints));
+            break;
+        case 'create':
+            await addDoc(collection(firestore, path), data);
+            break;
+        case 'update':
+            await updateDoc(doc(firestore, path), data);
+            break;
+        case 'delete':
+            await deleteDoc(doc(firestore, path));
+            break;
     }
+    // If we reach here, the operation was permitted
+    return { permitted: true, error: null };
   };
 
   const runTests = async () => {
@@ -173,13 +166,13 @@ export default function FirestoreTestPage() {
     for (let i = 0; i < testCases.length; i++) {
         const testCase = testCases[i];
         const result: TestResult = { case: testCase, status: 'running', error: undefined };
-        setResults(prev => [...prev, result]);
+        allTestResults.push(result);
+        setResults([...allTestResults]);
         
         try {
             if (testCase.role !== 'parent' && testCase.role !== 'unauthenticated') {
                 result.status = 'pending';
                 result.error = `Skipping: Manual login required for role '${testCase.role}'`;
-                allTestResults[i] = result;
                 setResults([...allTestResults]);
                 continue;
             }
@@ -188,8 +181,21 @@ export default function FirestoreTestPage() {
                 await signOut(auth);
             }
             
-            const { permitted, error: operationError } = await executeTest(testCase, testIds);
-
+            let permitted = false;
+            let operationError: string | null = null;
+            try {
+              await executeTest(testCase, testIds);
+              permitted = true;
+            } catch (e: any) {
+              if (e.code === 'permission-denied' || e.code === 'PERMISSION_DENIED') {
+                  permitted = false;
+                  operationError = 'permission-denied';
+              } else {
+                  // This is an unexpected error, throw it up to the outer catch
+                  throw e;
+              }
+            }
+            
             if ((testCase.expected === 'allow' && permitted) || (testCase.expected === 'deny' && !permitted && operationError === 'permission-denied')) {
                 result.status = 'pass';
             } else {
@@ -197,11 +203,11 @@ export default function FirestoreTestPage() {
                 result.error = operationError || `Expected '${testCase.expected}' but operation was ${permitted ? 'allowed' : 'denied'}.`;
             }
         } catch (e: any) {
+            // This is the higher-level catch you requested.
             result.status = 'fail';
-            result.error = e.message;
+            result.error = `[RUNNER_ERROR] ${e.message}`;
         }
 
-        allTestResults[i] = result;
         setResults([...allTestResults]);
         setProgress(((i + 1) / testCases.length) * 100);
     }
