@@ -47,6 +47,24 @@ type TestResult = {
   error?: string;
 };
 
+const formatFirebaseError = (error: unknown): string => {
+  if (!error) return 'An unknown error occurred';
+
+  if (typeof error === 'string') return error;
+
+  if (typeof error === 'object') {
+    const firebaseError = error as { code?: string; message?: string };
+    if (firebaseError.code && firebaseError.message) {
+      return `[${firebaseError.code}] ${firebaseError.message}`;
+    }
+    if (firebaseError.message) {
+      return firebaseError.message;
+    }
+  }
+
+  return 'An unknown error occurred';
+};
+
 // --- Test Definitions ---
 const testCases: TestCase[] = [
   // User Profile
@@ -120,10 +138,8 @@ export default function FirestoreTestPage() {
           break;
       }
       return { permitted: true, error: null };
-    } catch (e: any) {
-      // Catch ANY error and return it. The caller will decide if it's a pass or fail.
-      const errorMessage = e.code ? `[${e.code}] ${e.message}` : e.message;
-      return { permitted: false, error: errorMessage || 'An unknown error occurred' };
+    } catch (e: unknown) {
+      return { permitted: false, error: formatFirebaseError(e) };
     }
   };
 
@@ -132,82 +148,93 @@ export default function FirestoreTestPage() {
     setIsRunning(true);
     setResults([]);
     setProgress(0);
-
-    const testIds: Record<string, string> = {
-        parentUid: user?.uid ?? 'test-parent',
-        otherParentUid: 'other-parent-uid',
-    };
-
-    // Setup initial data
-    const batch = writeBatch(firestore);
-    const childRef = doc(collection(firestore, 'children'));
-    testIds.childId = childRef.id;
-    batch.set(childRef, { rulesTest: true, ownerParentUid: testIds.parentUid, displayName: 'Owned Child' });
-    
-    const otherChildRef = doc(collection(firestore, 'children'));
-    testIds.otherChildId = otherChildRef.id;
-    batch.set(otherChildRef, { rulesTest: true, ownerParentUid: testIds.otherParentUid, displayName: 'Other Child' });
-    
-    const siblingRef = doc(collection(firestore, 'children'));
-    testIds.siblingId = siblingRef.id;
-    batch.set(siblingRef, { rulesTest: true, ownerParentUid: testIds.parentUid, displayName: 'Sibling' });
-    
-    const helpChildRef = doc(firestore, 'children', 'help-child');
-    batch.set(helpChildRef, { rulesTest: true, ownerParentUid: 'help-owner' });
-
-    // Seed a user doc for the "other" parent to test reads against
-    const otherUserRef = doc(firestore, 'users', testIds.otherParentUid);
-    batch.set(otherUserRef, { rulesTest: true, email: 'other@test.com' });
-    // Seed the current user's doc for self-write tests
-    if(user) {
-      const currentUserRef = doc(firestore, 'users', testIds.parentUid);
-      batch.set(currentUserRef, { rulesTest: true, email: user.email || 'parent@test.com' }, { merge: true });
-    }
-
-    await batch.commit();
-
     const allTestResults: TestResult[] = [];
 
-    for (let i = 0; i < testCases.length; i++) {
-        const testCase = testCases[i];
-        const result: TestResult = { case: testCase, status: 'running', error: undefined };
-        allTestResults.push(result);
-        setResults([...allTestResults]);
-        setProgress(((i + 1) / testCases.length) * 100);
+    try {
+        const testIds: Record<string, string> = {
+            parentUid: user?.uid ?? 'test-parent',
+            otherParentUid: 'other-parent-uid',
+        };
 
-        try {
-            if (testCase.role !== 'parent' && testCase.role !== 'unauthenticated') {
-                result.status = 'pending';
-                result.error = `Skipping: Manual login required for role '${testCase.role}'`;
-                setResults([...allTestResults]);
-                continue;
-            }
-            
-            if (testCase.role === 'unauthenticated' && auth?.currentUser) {
-                await signOut(auth);
-            }
-
-            const { permitted, error } = await executeTest(testCase, testIds);
-            const expectedToPass = testCase.expected === 'allow';
-
-            if (expectedToPass && permitted) {
-                result.status = 'pass';
-            } else if (!expectedToPass && !permitted) {
-                // If we expected to be denied and we got an error, it's a pass.
-                // We don't need to show the error message in this success case.
-                result.status = 'pass';
-            } else {
-                result.status = 'fail';
-                result.error = error || `Expected '${testCase.expected}' but operation was ${permitted ? 'allowed' : 'denied'}.`;
-            }
-        } catch (e: any) {
-            result.status = 'fail';
-            result.error = `[RUNNER_CRASH] ${e.message}`;
+        // Setup initial data
+        const batch = writeBatch(firestore);
+        const childRef = doc(collection(firestore, 'children'));
+        testIds.childId = childRef.id;
+        batch.set(childRef, { rulesTest: true, ownerParentUid: testIds.parentUid, displayName: 'Owned Child' });
+        
+        const otherChildRef = doc(collection(firestore, 'children'));
+        testIds.otherChildId = otherChildRef.id;
+        batch.set(otherChildRef, { rulesTest: true, ownerParentUid: testIds.otherParentUid, displayName: 'Other Child' });
+        
+        const siblingRef = doc(collection(firestore, 'children'));
+        testIds.siblingId = siblingRef.id;
+        batch.set(siblingRef, { rulesTest: true, ownerParentUid: testIds.parentUid, displayName: 'Sibling' });
+        
+        const helpChildRef = doc(firestore, 'children', 'help-child');
+        batch.set(helpChildRef, { rulesTest: true, ownerParentUid: 'help-owner' });
+        
+        // Seed the current user's doc for self-write tests
+        if(user) {
+          const currentUserRef = doc(firestore, 'users', testIds.parentUid);
+          batch.set(currentUserRef, { rulesTest: true, email: user.email || 'parent@test.com' }, { merge: true });
         }
-        setResults([...allTestResults]);
-    }
 
-    setIsRunning(false);
+        await batch.commit();
+
+        for (let i = 0; i < testCases.length; i++) {
+            const testCase = testCases[i];
+            const result: TestResult = { case: testCase, status: 'running', error: undefined };
+            allTestResults.push(result);
+            setResults([...allTestResults]);
+            setProgress(((i + 1) / testCases.length) * 100);
+
+            try {
+                if (testCase.role !== 'parent' && testCase.role !== 'unauthenticated') {
+                    result.status = 'pending';
+                    result.error = `Skipping: Manual login required for role '${testCase.role}'`;
+                    setResults([...allTestResults]);
+                    continue;
+                }
+                
+                if (testCase.role === 'unauthenticated' && auth?.currentUser) {
+                    await signOut(auth);
+                }
+
+                const { permitted, error } = await executeTest(testCase, testIds);
+                const expectedToPass = testCase.expected === 'allow';
+
+                if (expectedToPass && permitted) {
+                    result.status = 'pass';
+                } else if (!expectedToPass && !permitted) {
+                    result.status = 'pass';
+                } else {
+                    result.status = 'fail';
+                    result.error = error || `Expected '${testCase.expected}' but operation was ${permitted ? 'allowed' : 'denied'}.`;
+                }
+            } catch (e: unknown) {
+                result.status = 'fail';
+                result.error = `[RUNNER_CRASH] ${formatFirebaseError(e)}`;
+            }
+            setResults([...allTestResults]);
+        }
+    } catch (error) {
+        allTestResults.push({
+            case: {
+                id: 'runner-error',
+                description: 'Test runner failed before completing. Check permissions or setup.',
+                role: 'parent',
+                operation: 'get',
+                path: 'test-runner',
+                expected: 'allow',
+            },
+            status: 'fail',
+            error: formatFirebaseError(error),
+        });
+        setResults(allTestResults);
+        toast({ title: 'Test run failed', description: formatFirebaseError(error), variant: 'destructive' });
+    } finally {
+        setIsRunning(false);
+    }
   };
   
   const cleanupData = async () => {
@@ -341,3 +368,5 @@ export default function FirestoreTestPage() {
     </div>
   );
 }
+
+    
