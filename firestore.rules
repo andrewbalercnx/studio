@@ -1,5 +1,4 @@
 
-
 // Rules version: v7 - Secure all remaining collections
 rules_version = '2';
 service cloud.firestore {
