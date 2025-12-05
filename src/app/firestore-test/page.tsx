@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useAuth, useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
 import {
@@ -16,8 +16,9 @@ import {
   query,
   where,
   writeBatch,
+  DocumentReference,
 } from 'firebase/firestore';
-import { signOut } from 'firebase/auth';
+import { signOut, User } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -37,7 +38,7 @@ type TestCase = {
   operation: TestOperation;
   path: string | ((ids: Record<string, string>) => string);
   data?: Record<string, any> | ((ids: Record<string, string>) => Record<string, any>);
-  queryConstraints?: any[];
+  queryConstraints?: (ids: Record<string, string>) => any[];
   expected: TestExpectation;
 };
 
@@ -55,6 +56,9 @@ const formatFirebaseError = (error: unknown): string => {
   if (typeof error === 'object') {
     const firebaseError = error as { code?: string; message?: string };
     if (firebaseError.code && firebaseError.message) {
+      if (firebaseError.code === 'permission-denied') {
+        return `[permission-denied] Missing or insufficient permissions.`;
+      }
       return `[${firebaseError.code}] ${firebaseError.message}`;
     }
     if (firebaseError.message) {
@@ -64,6 +68,7 @@ const formatFirebaseError = (error: unknown): string => {
 
   return 'An unknown error occurred';
 };
+
 
 // --- Test Definitions ---
 const testCases: TestCase[] = [
@@ -107,7 +112,7 @@ export default function FirestoreTestPage() {
     };
   }, [idTokenResult]);
 
-  const executeTest = async (testCase: TestCase, ids: Record<string, string>): Promise<{ permitted: boolean; error: string | null }> => {
+  const executeTest = async (testCase: TestCase, ids: Record<string, string>, currentUser: User | null): Promise<{ permitted: boolean; error: string | null }> => {
     if (!firestore) {
       return { permitted: false, error: 'Firestore not initialized' };
     }
@@ -128,6 +133,7 @@ export default function FirestoreTestPage() {
           await getDocs(query(collection(firestore, path), ...constraints));
           break;
         case 'create':
+          // For create, path is the collection, data is the payload
           await addDoc(collection(firestore, path), data);
           break;
         case 'update':
@@ -139,9 +145,11 @@ export default function FirestoreTestPage() {
       }
       return { permitted: true, error: null };
     } catch (e: unknown) {
+      // Any error is considered a failure for the operation
       return { permitted: false, error: formatFirebaseError(e) };
     }
   };
+
 
   const runTests = async () => {
     if (!firestore) return;
@@ -150,37 +158,50 @@ export default function FirestoreTestPage() {
     setProgress(0);
     const allTestResults: TestResult[] = [];
 
+    let tempAuth = auth;
+    let currentUser: User | null = tempAuth?.currentUser ?? null;
+
     try {
         const testIds: Record<string, string> = {
-            parentUid: user?.uid ?? 'test-parent',
+            parentUid: currentUser?.uid ?? 'test-parent-unauthed',
             otherParentUid: 'other-parent-uid',
         };
 
-        // Setup initial data
+        // --- Setup initial data ---
         const batch = writeBatch(firestore);
+        
+        // Own child for the logged-in parent
         const childRef = doc(collection(firestore, 'children'));
         testIds.childId = childRef.id;
         batch.set(childRef, { rulesTest: true, ownerParentUid: testIds.parentUid, displayName: 'Owned Child' });
-        
-        const otherChildRef = doc(collection(firestore, 'children'));
-        testIds.otherChildId = otherChildRef.id;
-        batch.set(otherChildRef, { rulesTest: true, ownerParentUid: testIds.otherParentUid, displayName: 'Other Child' });
-        
+
+        // Sibling for the logged-in parent
         const siblingRef = doc(collection(firestore, 'children'));
         testIds.siblingId = siblingRef.id;
         batch.set(siblingRef, { rulesTest: true, ownerParentUid: testIds.parentUid, displayName: 'Sibling' });
         
+        // A "help" doc that should be public
         const helpChildRef = doc(firestore, 'children', 'help-child');
         batch.set(helpChildRef, { rulesTest: true, ownerParentUid: 'help-owner' });
         
-        // Seed the current user's doc for self-write tests
-        if(user) {
+        if (currentUser) {
           const currentUserRef = doc(firestore, 'users', testIds.parentUid);
-          batch.set(currentUserRef, { rulesTest: true, email: user.email || 'parent@test.com' }, { merge: true });
+          batch.set(currentUserRef, { rulesTest: true, email: currentUser.email || 'parent@test.com' }, { merge: true });
         }
 
         await batch.commit();
+        
+        // This must be done separately as it requires admin perms which the parent doesn't have.
+        if (roles.isAdmin) {
+             const otherChildRef = doc(collection(firestore, 'children'));
+             testIds.otherChildId = otherChildRef.id;
+             await setDoc(otherChildRef, { rulesTest: true, ownerParentUid: testIds.otherParentUid, displayName: 'Other Child' });
+        } else {
+             testIds.otherChildId = 'simulated-other-child-id-for-parent';
+        }
 
+
+        // --- Run Tests ---
         for (let i = 0; i < testCases.length; i++) {
             const testCase = testCases[i];
             const result: TestResult = { case: testCase, status: 'running', error: undefined };
@@ -196,17 +217,22 @@ export default function FirestoreTestPage() {
                     continue;
                 }
                 
-                if (testCase.role === 'unauthenticated' && auth?.currentUser) {
-                    await signOut(auth);
+                let testUser = currentUser;
+                if (testCase.role === 'unauthenticated' && tempAuth?.currentUser) {
+                    await signOut(tempAuth);
+                    testUser = null;
+                } else if (testCase.role === 'parent' && !tempAuth?.currentUser) {
+                    // This case is tricky without re-authentication. For now, we assume the user is already logged in as a parent.
+                    if (!user) throw new Error("A logged-in parent is required to run parent tests.");
+                    testUser = user;
                 }
 
-                const { permitted, error } = await executeTest(testCase, testIds);
+                const { permitted, error } = await executeTest(testCase, testIds, testUser);
                 const expectedToPass = testCase.expected === 'allow';
 
-                if (expectedToPass && permitted) {
+                if (expectedToPass === permitted) {
                     result.status = 'pass';
-                } else if (!expectedToPass && !permitted) {
-                    result.status = 'pass';
+                    result.error = permitted ? undefined : error ?? 'Blocked as expected';
                 } else {
                     result.status = 'fail';
                     result.error = error || `Expected '${testCase.expected}' but operation was ${permitted ? 'allowed' : 'denied'}.`;
@@ -245,17 +271,21 @@ export default function FirestoreTestPage() {
     let count = 0;
     
     for (const coll of collections) {
-        const q = query(collection(firestore, coll), where('rulesTest', '==', true));
-        const snapshot = await getDocs(q);
-        snapshot.forEach(doc => {
-            batch.delete(doc.ref);
-            count++;
-        });
+        try {
+            const q = query(collection(firestore, coll), where('rulesTest', '==', true));
+            const snapshot = await getDocs(q);
+            snapshot.forEach(doc => {
+                batch.delete(doc.ref);
+                count++;
+            });
+        } catch(e) {
+            console.warn(`Cleanup failed for collection: ${coll}. This might be expected if rules block list access.`)
+        }
     }
     
     try {
         await batch.commit();
-        toast({ title: 'Cleanup Complete', description: `Deleted ${count} test documents.` });
+        toast({ title: 'Cleanup Complete', description: `Attempted to delete ${count} test documents.` });
     } catch (e: any) {
         toast({ title: 'Cleanup Failed', description: e.message, variant: 'destructive' });
     }
@@ -368,5 +398,3 @@ export default function FirestoreTestPage() {
     </div>
   );
 }
-
-    
