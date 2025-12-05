@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -139,13 +140,13 @@ export default function FirestoreTestPage() {
                 await signOut(auth);
             }
             
-            const isPermitted = await executeTest(testCase, testIds);
+            const { permitted, error: operationError } = await executeTest(testCase, testIds);
 
-            if ((testCase.expected === 'allow' && isPermitted) || (testCase.expected === 'deny' && !isPermitted)) {
+            if ((testCase.expected === 'allow' && permitted) || (testCase.expected === 'deny' && !permitted)) {
                 result.status = 'pass';
             } else {
                 result.status = 'fail';
-                result.error = `Expected '${testCase.expected}' but operation was ${isPermitted ? 'allowed' : 'denied'}.`;
+                result.error = operationError || `Expected '${testCase.expected}' but operation was ${permitted ? 'allowed' : 'denied'}.`;
             }
         } catch (e: any) {
             result.status = 'fail';
@@ -160,7 +161,7 @@ export default function FirestoreTestPage() {
     setIsRunning(false);
   };
   
-  const executeTest = async (testCase: TestCase, ids: Record<string, string>): Promise<boolean> => {
+  const executeTest = async (testCase: TestCase, ids: Record<string, string>): Promise<{ permitted: boolean; error: string | null }> => {
     if (!firestore) throw new Error("Firestore not initialized");
 
     let path = typeof testCase.path === 'function' ? testCase.path(ids) : testCase.path;
@@ -188,12 +189,13 @@ export default function FirestoreTestPage() {
                 await deleteDoc(doc(firestore, path));
                 break;
         }
-        return true; // Operation succeeded
+        return { permitted: true, error: null }; // Operation succeeded
     } catch (error: any) {
         if (error.code === 'permission-denied') {
-            return false; // Operation was correctly blocked
+            return { permitted: false, error: 'permission-denied' }; // Operation was correctly blocked
         }
-        throw error; // Re-throw other errors
+        // For other errors, consider it a failure in the test setup or rule logic
+        return { permitted: false, error: error.message || 'An unexpected error occurred.' };
     }
   };
 
