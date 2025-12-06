@@ -7,6 +7,7 @@ import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp
 import { z } from 'genkit';
 import type { ChildProfile, Character, Story, StoryWizardAnswer, StoryWizardChoice, StoryWizardInput, StoryWizardOutput } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { replacePlaceholdersInText } from '@/lib/resolve-placeholders.server';
 
 
 // Helper to get child's age in years
@@ -105,11 +106,11 @@ const storyWizardFlowInternal = ai.defineFlow(
 
       const characterContext = `
 Available Characters:
-- Main Character: ${buildCharacterDescription(mainCharacter)}
+- Main Character: ${buildCharacterDescription(mainCharacter)} (ID: $$${mainCharacter.id}$$)
 - Other Characters:
 ${characters
   .filter(c => c.id !== mainCharacter.id)
-  .map(c => `  - ${buildCharacterDescription(c)}`)
+  .map(c => `  - ${buildCharacterDescription(c)} (ID: $$${c.id}$$)`)
   .join('\n')}
       `.trim();
       
@@ -164,13 +165,16 @@ INSTRUCTIONS:
             throw new Error('Missing required fields in story generation output.');
           }
 
+          const entityMap = new Map(characters.map(c => [c.id, { displayName: c.displayName, document: c }]));
+          const resolvedStoryText = await replacePlaceholdersInText(parsed.storyText, entityMap);
+
           // Create the Story document
           const storyRef = doc(firestore, 'stories', sessionId);
           const storyPayload: Story = {
             storySessionId: sessionId,
             childId,
             parentUid: child.ownerParentUid,
-            storyText: parsed.storyText,
+            storyText: resolvedStoryText, // Use the resolved text
             status: 'text_ready',
             metadata: {
               title: parsed.title,
@@ -183,7 +187,7 @@ INSTRUCTIONS:
           };
           await setDoc(storyRef, storyPayload, { merge: true });
 
-          return { state: 'finished', ok: true, ...parsed, storyId: storyRef.id };
+          return { state: 'finished', ok: true, ...parsed, storyText: resolvedStoryText, storyId: storyRef.id };
         } catch (e) {
           console.error("Failed to parse story generation JSON:", rawText, e);
           return { state: 'error', ok: false, error: 'The wizard had trouble writing the final story. Please try again.' };
@@ -253,5 +257,3 @@ INSTRUCTIONS:
 export async function storyWizardFlow(input: StoryWizardInput): Promise<StoryWizardOutput> {
     return await storyWizardFlowInternal(input);
 }
-
-    
