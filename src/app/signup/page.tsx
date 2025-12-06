@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAuth, useFirestore } from '@/firebase';
-import { doc, setDoc, serverTimestamp, addDoc, collection }from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, writeBatch } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -49,14 +49,18 @@ export default function SignUpPage() {
       return;
     }
 
-
     setIsLoading(true);
     try {
+      // 1. Create the Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
-      // Create a user document in Firestore first, without the PIN
-      await setDoc(doc(firestore, 'users', user.uid), {
+
+      // 2. Prepare user profile and first child in a batch write
+      const batch = writeBatch(firestore);
+
+      // User profile doc
+      const userDocRef = doc(firestore, 'users', user.uid);
+      batch.set(userDocRef, {
         id: user.uid,
         email: user.email,
         roles: {
@@ -66,8 +70,25 @@ export default function SignUpPage() {
         },
         createdAt: serverTimestamp(),
       });
+
+      // Default child doc
+      const childName = "My First Child";
+      const childId = `${slugify(childName)}-${Date.now().toString().slice(-6)}`;
+      const childDocRef = doc(firestore, 'children', childId);
+      batch.set(childDocRef, {
+        id: childId,
+        displayName: childName,
+        ownerParentUid: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        avatarUrl: `https://picsum.photos/seed/${childId}/200/200`,
+        photos: [],
+      });
       
-      // Now, call the API to securely set the PIN hash
+      // 3. Commit the batch
+      await batch.commit();
+      
+      // 4. Call the API to securely set the PIN hash
       const idToken = await user.getIdToken();
       const pinResponse = await fetch('/api/parent/set-pin', {
           method: 'POST',
@@ -80,22 +101,13 @@ export default function SignUpPage() {
 
       if (!pinResponse.ok) {
           const errorResult = await pinResponse.json();
-          throw new Error(errorResult.message || 'Failed to set PIN after signup.');
+          // This is a soft failure; the user is created but PIN isn't. They can set it later.
+          toast({
+            title: 'Warning: Could not set PIN',
+            description: errorResult.message || 'Please try setting your PIN from the settings page.',
+            variant: 'destructive',
+          });
       }
-      
-      // Create a default child for the new parent
-      const childName = "My First Child";
-      const childId = `${slugify(childName)}-${Date.now().toString().slice(-6)}`;
-      const childData = {
-        id: childId,
-        displayName: childName,
-        ownerParentUid: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        avatarUrl: `https://picsum.photos/seed/${childId}/200/200`,
-        photos: [],
-      };
-      await setDoc(doc(firestore, 'children', childId), childData);
 
       toast({ title: 'Account created successfully!' });
       router.push('/');

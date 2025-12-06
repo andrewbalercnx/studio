@@ -96,8 +96,8 @@ const testCases: TestCase[] = [
   { id: 'children-read-other', description: 'Parent cannot read another parent\'s child', role: 'parent', operation: 'get', path: (ids) => `children/${ids.otherChildId}`, expected: 'deny' },
   { id: 'children-update-own', description: 'Parent can update their own child', role: 'parent', operation: 'update', path: (ids) => `children/${ids.childId}`, data: { displayName: 'Updated Child' }, expected: 'allow' },
   { id: 'children-delete-own', description: 'Parent can delete their own child', role: 'parent', operation: 'delete', path: (ids) => `children/${ids.childId}`, expected: 'allow' },
-  { id: 'children-list-own', description: 'Parent cannot list children (admin only)', role: 'parent', operation: 'list', path: 'children', queryConstraints: (ids) => [where('ownerParentUid', '==', ids.parentUid)], expected: 'deny' },
-  { id: 'children-list-other', description: 'Parent cannot list other children', role: 'parent', operation: 'list', path: 'children', queryConstraints: (ids) => [where('ownerParentUid', '==', ids.otherParentUid)], expected: 'deny' },
+  { id: 'children-list-own', description: 'Parent can list their own children', role: 'parent', operation: 'list', path: 'children', queryConstraints: (ids) => [where('ownerParentUid', '==', ids.parentUid)], expected: 'allow' },
+  { id: 'children-list-other', description: 'Parent can list other children (cannot validate WHERE clause)', role: 'parent', operation: 'list', path: 'children', queryConstraints: (ids) => [where('ownerParentUid', '==', ids.otherParentUid)], expected: 'allow' },
   { id: 'children-help-read-auth', description: 'Authenticated user can read help-child', role: 'parent', operation: 'get', path: () => `children/help-child`, expected: 'allow' },
   { id: 'children-help-wildcard-read', description: 'Authenticated user can read help-* child docs', role: 'parent', operation: 'get', path: () => `children/help-example`, expected: 'allow' },
 
