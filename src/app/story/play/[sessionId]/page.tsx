@@ -253,16 +253,16 @@ export default function StoryPlayPage() {
         let traitsQuestionAsked = false;
         if (chosenOption.introducesCharacter) {
             const newCharacterData = {
-                ownerChildId: session.childId,
+                ownerParentUid: session.parentUid,
                 sessionId: sessionId,
-                name: chosenOption.newCharacterLabel || 'New Friend',
+                displayName: chosenOption.newCharacterLabel || 'New Friend',
                 role: chosenOption.newCharacterKind || 'friend',
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             };
             const newCharacterRef = await addDoc(charactersRef, newCharacterData);
             await updateDoc(sessionRef, { supportingCharacterIds: arrayUnion(newCharacterRef.id) });
-            traitsQuestionAsked = await runCharacterTraitsQuestion(sessionId, newCharacterRef.id, newCharacterData.name);
+            traitsQuestionAsked = await runCharacterTraitsQuestion(sessionId, newCharacterRef.id, newCharacterData.displayName);
         }
 
         if (!traitsQuestionAsked) {

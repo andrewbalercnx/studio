@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Character } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 
-const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt' | 'ownerChildId'>[] = [
+const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt' | 'ownerParentUid'>[] = [
     {
         sessionId: "sample-session-1",
         role: "family",
@@ -104,7 +104,7 @@ export default function AdminCharactersPage() {
         sampleCharacters.forEach((charData, index) => {
             const docId = sampleCharacterIds[index];
             const docRef = doc(firestore, "characters", docId);
-            batch.set(docRef, { ...charData, ownerChildId: 'sample-child-1', createdAt: now, updatedAt: now });
+            batch.set(docRef, { ...charData, ownerParentUid: 'sample-parent-1', createdAt: now, updatedAt: now });
         });
         
         await batch.commit();
@@ -223,7 +223,7 @@ export default function AdminCharactersPage() {
           <TableHeader>
               <TableRow>
                   <TableHead>ID</TableHead>
-                  <TableHead>Owner Child ID</TableHead>
+                  <TableHead>Owner Parent UID</TableHead>
                   <TableHead>Session ID</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Name</TableHead>
@@ -235,7 +235,7 @@ export default function AdminCharactersPage() {
               {characters.map((char) => (
                   <TableRow key={char.id}>
                       <TableCell className="font-mono text-xs">{char.id}</TableCell>
-                      <TableCell className="font-mono text-xs">{char.ownerChildId}</TableCell>
+                      <TableCell className="font-mono text-xs">{char.ownerParentUid}</TableCell>
                       <TableCell className="font-mono text-xs">{char.sessionId || '-'}</TableCell>
                       <TableCell>{char.role}</TableCell>
                       <TableCell>{char.displayName}</TableCell>
