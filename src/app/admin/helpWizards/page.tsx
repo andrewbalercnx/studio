@@ -100,17 +100,17 @@ export default function AdminHelpWizardsPage() {
       <Accordion type="single" collapsible className="w-full">
         {wizards.map((wizard) => (
           <AccordionItem key={wizard.id} value={wizard.id}>
-            <AccordionTrigger>
-              <div className="flex items-center justify-between w-full pr-4">
+            <div className="flex items-center w-full">
+              <AccordionTrigger className="flex-grow pr-4">
                 <div className="flex items-center gap-2">
                     <BookOpen className="h-4 w-4 text-primary" />
                     <span>{wizard.title}</span>
                 </div>
-                 <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleOpenForm(wizard);}}>
-                    <Edit className="h-4 w-4 mr-2" /> Edit
-                </Button>
-              </div>
-            </AccordionTrigger>
+              </AccordionTrigger>
+              <Button variant="ghost" size="sm" className="shrink-0" onClick={(e) => { e.stopPropagation(); handleOpenForm(wizard);}}>
+                  <Edit className="h-4 w-4 mr-2" /> Edit
+              </Button>
+            </div>
             <AccordionContent>
               <ol className="list-decimal list-inside space-y-2 text-sm">
                 {wizard.pages.map((page, index) => (
