@@ -6,8 +6,8 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { initializeFirebase } from '@/firebase';
-import { getDoc, doc } from 'firebase/firestore';
+import { initFirebaseAdminApp } from '@/firebase/admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'genkit';
 import type { ChildProfile } from '@/lib/types';
 import { Gaxios, GaxiosError } from 'gaxios';
@@ -110,11 +110,12 @@ export const avatarFlow = ai.defineFlow(
     outputSchema: AvatarFlowOutputSchema,
   },
   async ({ childId, feedback }) => {
-    const { firestore } = initializeFirebase();
-    const childRef = doc(firestore, 'children', childId);
-    const childSnap = await getDoc(childRef);
+    await initFirebaseAdminApp();
+    const firestore = getFirestore();
+    const childRef = firestore.collection('children').doc(childId);
+    const childSnap = await childRef.get();
 
-    if (!childSnap.exists()) {
+    if (!childSnap.exists) {
       throw new Error(`Child with id ${childId} not found.`);
     }
 

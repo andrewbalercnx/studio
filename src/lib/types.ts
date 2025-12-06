@@ -327,6 +327,7 @@ export type ChildPreferences = {
 export type ChildProfile = {
     id: string;
 	displayName: string;
+    description?: string;
     ownerParentUid: string;
     dateOfBirth?: any;
     photos?: string[];
@@ -388,6 +389,7 @@ export type Character = {
         styleHint?: string;
     };
     avatarUrl?: string;
+    photos?: string[];
     createdAt: Timestamp;
     updatedAt: Timestamp;
     // New optional fields for tracking source

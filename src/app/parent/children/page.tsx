@@ -116,6 +116,7 @@ function ChildForm({ parentUid, onSave, child }: { parentUid: string, onSave: ()
     const { toast } = useToast();
     const isEditing = !!child;
     const [name, setName] = useState(child?.displayName ?? '');
+    const [description, setDescription] = useState(child?.description ?? '');
     const [dob, setDob] = useState(formatDateInput(child?.dateOfBirth));
     const [isSaving, setIsSaving] = useState(false);
     const [favoriteColors, setFavoriteColors] = useState<string[]>(child?.preferences?.favoriteColors ?? []);
@@ -143,6 +144,7 @@ function ChildForm({ parentUid, onSave, child }: { parentUid: string, onSave: ()
         const preferencesPayload = buildPreferencesPayload();
         const writePayload: Record<string, any> = {
             displayName: name,
+            description: description,
             ownerParentUid: parentUid,
             updatedAt: serverTimestamp(),
         };
@@ -194,6 +196,10 @@ function ChildForm({ parentUid, onSave, child }: { parentUid: string, onSave: ()
             <div className="space-y-2">
                 <Label htmlFor="name">Child's Name</Label>
                 <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g., Loves dinosaurs and building forts." />
             </div>
             <div className="space-y-2">
                 <Label htmlFor="dob">Date of Birth</Label>
@@ -528,6 +534,7 @@ export default function ManageChildrenPage() {
                                 </div>
                             </CardHeader>
                             <CardContent>
+                                {child.description && <p className="text-sm text-muted-foreground mb-3">{child.description}</p>}
                                 {preferenceSections.length > 0 ? (
                                     <div className="flex flex-wrap gap-2">
                                         {preferenceSections.map((section) => (
@@ -537,7 +544,7 @@ export default function ManageChildrenPage() {
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-sm text-muted-foreground">No preferences saved yet.</p>
+                                    <p className="text-sm text-muted-foreground italic">No preferences saved yet.</p>
                                 )}
                             </CardContent>
                             <CardFooter className="flex justify-end gap-2">
