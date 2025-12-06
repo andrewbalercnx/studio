@@ -117,7 +117,7 @@ export const storyBeatFlow = ai.defineFlow(
                 const { id: _ignored, ...rest } = character as Character & { id?: string };
                 return { ...rest, id: doc.id } as Character;
             });
-            const existingCharacterSummary = existingCharacters.map(c => `- ${c.displayName} (ID: ${c.id}, Role: ${c.role})`).join('\n');
+            const existingCharacterSummary = existingCharacters.map(c => `- ${c.displayName} (ID: ${c.id}, Role: ${c.role}, Traits: ${c.traits?.join(', ') || 'none'})`).join('\n');
             debug.details.existingCharacterCount = existingCharacters.length;
             debug.details.existingCharacterSummary = existingCharacterSummary;
 

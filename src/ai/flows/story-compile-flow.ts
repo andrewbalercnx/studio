@@ -104,7 +104,7 @@ export const storyCompileFlow = ai.defineFlow(
 
             // 3. Build story skeleton for the prompt
             debug.stage = 'building_prompt';
-            const characterRoster = characters.map(c => `- ${c.displayName} (${c.role}, traits: ${c.traits?.join(', ') || 'none'})`).join('\n');
+            const characterRoster = characters.map(c => `- ${c.displayName} (${c.role}, traits: ${c.traits?.join(', ') || 'none'}) (ID: $$${c.id}$$)`).join('\n');
             const rawStorySoFar = messages
                 .filter(m => m.kind !== 'beat_options' && m.kind !== 'character_traits_question') // Exclude non-narrative prompts
                 .map(m => {
@@ -273,3 +273,5 @@ Now, generate the JSON object containing the compiled story.
         }
     }
 );
+
+    
