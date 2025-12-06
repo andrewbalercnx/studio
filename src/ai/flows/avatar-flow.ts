@@ -26,6 +26,11 @@ const AvatarFlowOutputSchema = z.object({
 });
 
 async function fetchImageAsDataUri(url: string): Promise<string | null> {
+  if (!url || typeof url !== 'string') {
+    console.error(`[avatar-flow] Invalid URL provided: ${url}`);
+    return null;
+  }
+
   try {
     const gaxios = new Gaxios();
     // Use URL to correctly handle query parameters
@@ -50,7 +55,7 @@ async function fetchImageAsDataUri(url: string): Promise<string | null> {
     return `data:${mimeType};base64,${buffer.toString('base64')}`;
   } catch (error) {
     if (error instanceof GaxiosError) {
-      console.error(`[avatar-flow] Gaxios error fetching ${url}: ${error.message}`);
+      console.error(`[avatar-flow] Gaxios error fetching ${url}: ${error.message}. Status: ${error.response?.status}. Data: ${error.response?.data}`);
     } else if (error instanceof TypeError && error.message.includes('Invalid URL')) {
       console.error(`[avatar-flow] Invalid URL provided: ${url}`);
     } else {
@@ -131,7 +136,7 @@ export const avatarFlow = ai.defineFlow(
     ).filter((part): part is { media: { url: string } } => part !== null);
 
     if (imageParts.length === 0) {
-      throw new Error('Could not load any of the provided photos.');
+      throw new Error('Could not load any of the provided photos. This might be due to a network or permission issue when fetching from Cloud Storage.');
     }
     
     const promptParts = [
