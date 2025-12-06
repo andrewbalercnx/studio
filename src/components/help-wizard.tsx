@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useAppContext } from '@/hooks/use-app-context';
 import { useDocument } from '@/lib/firestore-hooks';
 import { useFirestore } from '@/firebase';
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { LoaderCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import Markdown from 'react-markdown';
 
 export function HelpWizard() {
   const { activeWizard, advanceWizard, closeWizard } = useAppContext();
@@ -25,10 +26,19 @@ export function HelpWizard() {
   const { data: wizard, loading: wizardLoading, error: wizardError } = useDocument<HelpWizard>(wizardRef);
 
   const [returnUrl, setReturnUrl] = useState<string | null>(null);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const offsetRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     if (activeWizard && !returnUrl) {
       setReturnUrl(window.location.pathname);
+      // Center the dialog on first open
+      setPosition({
+        x: window.innerWidth / 2 - 224, // Assumes 448px width
+        y: window.innerHeight / 2 - 150, // Approximate height
+      });
     }
     if (!activeWizard) {
       setReturnUrl(null);
@@ -66,14 +76,65 @@ export function HelpWizard() {
     // For now, we just close it.
     handleClose();
   };
+  
+  const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dialogRef.current) return;
+    setIsDragging(true);
+    const rect = dialogRef.current.getBoundingClientRect();
+    offsetRef.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+    document.body.style.userSelect = 'none';
+  };
+
+  const onMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return;
+    setPosition({
+      x: e.clientX - offsetRef.current.x,
+      y: e.clientY - offsetRef.current.y,
+    });
+  };
+
+  const onMouseUp = () => {
+    setIsDragging(false);
+    document.body.style.userSelect = '';
+  };
+  
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    } else {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    }
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [isDragging]);
+
 
   if (!activeWizard) {
     return null;
   }
 
   return (
-    <Dialog open={true} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-      <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+    <Dialog open={true} onOpenChange={(isOpen) => !isOpen && handleClose()} modal={false}>
+       <DialogContent
+        ref={dialogRef}
+        className="sm:max-w-md cursor-grab"
+        onMouseDown={onMouseDown}
+        style={{
+          position: 'fixed',
+          top: `${position.y}px`,
+          left: `${position.x}px`,
+          transform: 'none', // Override shadcn centering
+        }}
+        onInteractOutside={(e) => e.preventDefault()}
+        hideOverlay={true}
+      >
         <DialogHeader>
           <DialogTitle>{currentPage?.title ?? wizard?.title ?? 'Loading Help...'}</DialogTitle>
           {wizardLoading && (
@@ -82,7 +143,13 @@ export function HelpWizard() {
             </div>
           )}
           {wizardError && <DialogDescription className="text-destructive">Could not load help content.</DialogDescription>}
-          {currentPage && <DialogDescription>{currentPage.description}</DialogDescription>}
+          {currentPage && 
+            <DialogDescription asChild>
+                <div className="prose prose-sm text-muted-foreground">
+                    <Markdown>{currentPage.description}</Markdown>
+                </div>
+            </DialogDescription>
+          }
         </DialogHeader>
         <DialogFooter className="sm:justify-between">
           <Button variant="ghost" onClick={handleClose}>

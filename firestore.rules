@@ -1,107 +1,223 @@
-// Rules version: v9 - Secure all remaining collections
+// Rules version: v11 - Fixed read/list permission separation vulnerability
+// IMPORTANT: Firebase Admin SDK bypasses these rules entirely.
+// These rules only apply to client-side (browser/mobile) requests.
+//
+// CHANGES IN v11:
+// - Separated 'allow read' into 'allow get' and 'allow list' for all collections
+// - Fixed security vulnerability where any authenticated user could list other users' data
+// - Only admins can now perform list operations on user-owned collections
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    function isServer() {
-      return request.auth == null;
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
     function isAdmin() {
       return request.auth != null && request.auth.token.isAdmin == true;
     }
-    
+
     function isWriter() {
       return request.auth != null && (request.auth.token.isWriter == true || request.auth.token.isAdmin == true);
     }
 
+    function isHelpDocument(docId) {
+      return docId.matches('help-.*');
+    }
+
+    function owns(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // ========== USER PROFILES ==========
     // A user can only read/write their own profile, or an admin can.
     match /users/{userId} {
-      allow read, write: if isServer() || isAdmin() || request.auth.uid == userId;
+      allow get: if isAdmin() || owns(userId);
+      allow list: if isAdmin();  // Only admins can list all users
+      allow write: if isAdmin() || owns(userId);
     }
-    
+
+    // ========== CHILDREN ==========
     match /children/{childId} {
-      // Allow parent to read their own child's doc, or admin. Also allow anyone to read 'help-child'
-      allow read: if isServer() || isAdmin() || childId == 'help-child' || request.auth.uid == resource.data.ownerParentUid;
+      // Get: Admin, owner parent, or authenticated user for help-* docs
+      allow get: if isAdmin()
+                 || (isHelpDocument(childId) && isAuthenticated())
+                 || (isAuthenticated() && resource.data.ownerParentUid == request.auth.uid);
 
-      // Allow parent to create a doc where they are the owner. Allow anyone to create 'help-child'.
-      allow create: if isServer() || isAdmin() || (childId == 'help-child' && request.auth != null) || request.auth.uid == request.resource.data.ownerParentUid;
-      
-      // Allow parent to update/delete their own child's doc.
-      allow update, delete: if isServer() || isAdmin() || request.auth.uid == resource.data.ownerParentUid;
-      
-      // Allow a parent to ONLY list their own children.
-      allow list: if isServer() || isAdmin() || (request.auth != null && request.query.where[0][2] == request.auth.uid);
+      // Create: Admin, owner parent setting themselves as owner, or authenticated user for help-* docs
+      allow create: if isAdmin()
+                    || (isHelpDocument(childId) && isAuthenticated())
+                    || (isAuthenticated() && request.resource.data.ownerParentUid == request.auth.uid);
 
-      // Secure the sessions sub-collection under each child
+      // Update/Delete: Admin or owner parent (not for help-* docs from non-admins)
+      allow update, delete: if isAdmin()
+                            || (isAuthenticated() && !isHelpDocument(childId) && resource.data.ownerParentUid == request.auth.uid);
+
+      // List: Admin only (parents should use get operations with known child IDs)
+      // NOTE: We cannot validate the WHERE clause content in security rules,
+      // so allowing list with any WHERE clause would be a security vulnerability.
+      allow list: if isAdmin();
+
+      // Legacy sessions sub-collection
       match /sessions/{sessionId} {
-        allow read, write: if isServer() || isAdmin() || request.auth.uid == resource.data.parentUid;
+        allow get: if isAdmin()
+                   || (isHelpDocument(childId) && isAuthenticated())
+                   || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
+
+        allow list: if isAdmin();  // Only admins can list sessions
+
+        allow write: if isAdmin()
+                      || (isAuthenticated() && !isHelpDocument(childId) && resource.data.parentUid == request.auth.uid);
+
+        allow create: if isAdmin()
+                      || (isHelpDocument(childId) && isAuthenticated())
+                      || (isAuthenticated() && !isHelpDocument(childId) && request.resource.data.parentUid == request.auth.uid);
       }
     }
 
-    // Secure story sessions to the owner parent or admin
+    // ========== STORY SESSIONS ==========
     match /storySessions/{sessionId} {
-      allow read, write: if isServer() || isAdmin() || request.auth.uid == resource.data.parentUid;
+      allow get: if isAdmin()
+                 || (isHelpDocument(sessionId) && isAuthenticated())
+                 || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
+
+      allow list: if isAdmin();  // Only admins can list story sessions
+
+      allow create: if isAdmin()
+                    || (isHelpDocument(sessionId) && isAuthenticated())
+                    || (isAuthenticated() && request.resource.data.parentUid == request.auth.uid);
+
+      allow update, delete: if isAdmin()
+                            || (isAuthenticated() && !isHelpDocument(sessionId) && resource.data.parentUid == request.auth.uid);
 
       // Messages sub-collection
       match /messages/{messageId} {
-         allow read, write: if isServer() || isAdmin() || request.auth.uid == get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid;
+        allow get: if isAdmin()
+                   || (isHelpDocument(sessionId) && isAuthenticated())
+                   || (isAuthenticated() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
+
+        allow list: if isAdmin();  // Only admins can list messages
+
+        allow create: if isAdmin()
+                      || (isHelpDocument(sessionId) && isAuthenticated())
+                      || (isAuthenticated() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
+
+        allow update, delete: if isAdmin()
+                              || (isAuthenticated() && !isHelpDocument(sessionId) && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
+      }
+
+      // Events sub-collection
+      match /events/{eventId} {
+        allow get: if isAdmin()
+                   || (isHelpDocument(sessionId) && isAuthenticated())
+                   || (isAuthenticated() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
+
+        allow list: if isAdmin();  // Only admins can list events
+
+        allow create: if isAdmin()
+                      || (isHelpDocument(sessionId) && isAuthenticated())
+                      || (isAuthenticated() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
+
+        allow update, delete: if isAdmin()
+                              || (isAuthenticated() && !isHelpDocument(sessionId) && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
       }
     }
 
-    // Secure characters to the owner parent or admin
+    // ========== CHARACTERS ==========
     match /characters/{characterId} {
-      allow read, write: if isServer() || isAdmin() || request.auth.uid == resource.data.ownerParentUid;
+      allow get: if isAdmin()
+                 || (isHelpDocument(characterId) && isAuthenticated())
+                 || (isAuthenticated() && resource.data.ownerParentUid == request.auth.uid);
+
+      allow list: if isAdmin();  // Only admins can list characters
+
+      allow create: if isAdmin()
+                    || (isHelpDocument(characterId) && isAuthenticated())
+                    || (isAuthenticated() && request.resource.data.ownerParentUid == request.auth.uid);
+
+      allow update, delete: if isAdmin()
+                            || (isAuthenticated() && !isHelpDocument(characterId) && resource.data.ownerParentUid == request.auth.uid);
     }
 
-    // Secure compiled stories to the owner parent or admin
+    // ========== STORIES ==========
     match /stories/{storyId} {
-      allow read, write: if isServer() || isAdmin() || request.auth.uid == resource.data.parentUid;
-      
-      // Secure story outputs (pages, etc.)
+      allow get: if isAdmin()
+                 || (isHelpDocument(storyId) && isAuthenticated())
+                 || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
+
+      allow list: if isAdmin();  // Only admins can list stories
+
+      allow create: if isAdmin()
+                    || (isHelpDocument(storyId) && isAuthenticated())
+                    || (isAuthenticated() && request.resource.data.parentUid == request.auth.uid);
+
+      allow update, delete: if isAdmin()
+                            || (isAuthenticated() && !isHelpDocument(storyId) && resource.data.parentUid == request.auth.uid);
+
+      // Story outputs, pages, shareTokens - use wildcard to cover all subcollections
       match /{allPaths=**} {
-        allow read, write: if isServer() || isAdmin() || request.auth.uid == get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid;
+        allow get: if isAdmin()
+                   || (isHelpDocument(storyId) && isAuthenticated())
+                   || (isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid);
+
+        allow list: if isAdmin();  // Only admins can list story subcollections
+
+        allow write: if isAdmin()
+                      || (isAuthenticated() && !isHelpDocument(storyId) && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid);
       }
     }
-    
-    // Secure print orders to the owner parent or admin
+
+    // ========== PRINT ORDERS ==========
     match /printOrders/{orderId} {
-        allow read, write: if isServer() || isAdmin() || request.auth.uid == resource.data.parentUid;
-    }
-    
-    // --- Writer & Admin Only Collections ---
-    function isCreativeAsset() {
-      return request.auth != null; // All authenticated users can read
+      allow get: if isAdmin() || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
+      allow list: if isAdmin();  // Only admins can list print orders
+      allow create: if isAdmin() || (isAuthenticated() && request.resource.data.parentUid == request.auth.uid);
+      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
     }
 
-    match /promptConfigs/{document=**} { 
-      allow read: if isCreativeAsset();
-      allow write: if isServer() || isWriter();
+    // ========== CONFIGURATION COLLECTIONS ==========
+    // All authenticated users can read, only writers/admins can write
+    match /promptConfigs/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isWriter() || isAdmin();
     }
-    match /storyPhases/{document=**} { 
-      allow read: if isCreativeAsset();
-      allow write: if isServer() || isWriter();
+
+    match /storyPhases/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isWriter() || isAdmin();
     }
-    match /storyTypes/{document=**} { 
-      allow read: if isCreativeAsset();
-      allow write: if isServer() || isWriter();
+
+    match /storyTypes/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isWriter() || isAdmin();
     }
-    match /storyOutputTypes/{document=**} { 
-      allow read: if isCreativeAsset();
-      allow write: if isServer() || isWriter();
+
+    match /storyOutputTypes/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isWriter() || isAdmin();
     }
+
     match /printLayouts/{document=**} {
-      allow read: if isCreativeAsset();
-      allow write: if isServer() || isWriter();
+      allow read: if isAuthenticated();
+      allow write: if isWriter() || isAdmin();
     }
 
-    // --- System & Log Collections ---
-    match /aiFlowLogs/{document=**} { 
-      allow read, write: if isServer() || isAdmin();
+    // ========== SYSTEM & LOG COLLECTIONS ==========
+    match /aiFlowLogs/{document=**} {
+      allow read, write: if isAdmin();
     }
-    match /helpWizards/{document=**} { 
-      allow read: if request.auth != null;
-      allow write: if isServer() || isAdmin(); 
+
+    match /helpWizards/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // ========== DENY ALL OTHER COLLECTIONS ==========
+    // Explicitly deny access to any collection not matched above
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

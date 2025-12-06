@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -16,12 +17,13 @@ const DialogClose = DialogPrimitive.Close
 
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> & { hide?: boolean }
+>(({ className, hide, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
       "fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      hide && "bg-transparent",
       className
     )}
     {...props}
@@ -31,10 +33,10 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideOverlay?: boolean }
+>(({ className, children, hideOverlay, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay hide={hideOverlay} />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(

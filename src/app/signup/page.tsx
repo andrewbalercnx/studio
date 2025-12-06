@@ -62,7 +62,7 @@ export default function SignUpPage() {
         roles: {
             isAdmin: false,
             isWriter: false,
-            parent: true,
+            isParent: true,
         },
         createdAt: serverTimestamp(),
       });

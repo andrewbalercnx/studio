@@ -3,7 +3,7 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, Shield, ShieldOff, BrainCircuit, Pencil } from 'lucide-react';
+import { LoaderCircle, Shield, ShieldOff, BrainCircuit, Pencil, User as UserIcon } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useFirestore } from '@/firebase';
 import { collection, doc, onSnapshot, updateDoc, deleteField } from 'firebase/firestore';
@@ -41,7 +41,7 @@ export default function AdminUsersPage() {
   }, [firestore, isAdmin, toast]);
 
 
-  const toggleRole = async (user: UserProfile, role: 'isAdmin' | 'isWriter') => {
+  const toggleRole = async (user: UserProfile, role: 'isAdmin' | 'isWriter' | 'isParent') => {
     if (!firestore) return;
     const userRef = doc(firestore, 'users', user.id);
     const newRoleState = !user.roles?.[role];
@@ -109,6 +109,10 @@ export default function AdminUsersPage() {
                              <Button variant="outline" size="sm" onClick={() => toggleRole(user, 'isWriter')}>
                                 {user.roles?.isWriter ? <Pencil /> : <Pencil />}
                                 {user.roles?.isWriter ? 'Revoke Writer' : 'Make Writer'}
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => toggleRole(user, 'isParent')}>
+                                <UserIcon />
+                                {user.roles?.isParent ? 'Revoke Parent' : 'Make Parent'}
                             </Button>
                             <Button variant="outline" size="sm" onClick={() => toggleRole(user, 'isAdmin')}>
                                 {user.roles?.isAdmin ? <ShieldOff /> : <Shield />}
