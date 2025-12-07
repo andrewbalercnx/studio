@@ -12,6 +12,7 @@ import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
 import { logServerSessionEvent } from '@/lib/session-events.server';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
 import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
+import { logAIFlow } from '@/lib/ai-flow-logger';
 
 type StoryBeatDebugInfo = {
     stage: 'loading_session' | 'loading_storyType' | 'loading_promptConfig' | 'ai_generate' | 'json_parse' | 'json_validate' | 'unknown';
@@ -25,7 +26,7 @@ const StoryBeatOutputSchema = z.object({
     id: z.string().describe("A single uppercase letter, e.g., 'A', 'B', 'C'."),
     text: z.string().describe("A short, child-friendly choice for what happens next."),
     introducesCharacter: z.boolean().optional().describe("Set to true if this option clearly brings a new character into the story."),
-    newCharacterLabel: z.string().optional().nullable().describe("If introducesCharacter is true, a short noun phrase for the character (e.g., 'a friendly mailman')."),
+    newCharacterLabel: z.string().optional().nullable().describe("If introducesCharacter is true, a descriptive noun phrase including traits (e.g., 'a friendly mailman', 'a brave little squirrel', 'a wise old turtle')."),
     newCharacterKind: z.enum(['toy', 'pet', 'friend', 'family']).optional().nullable().describe("If introducesCharacter is true, the kind of character."),
     existingCharacterId: z.string().optional().nullable().describe("If this choice is about an existing character, provide their ID here."),
     avatarUrl: z.string().optional().nullable().describe("If this choice is about an existing character, provide their avatar URL here."),
@@ -106,6 +107,15 @@ export const storyBeatFlow = ai.defineFlow(
             debug.details.arcStepIndexBounded = safeArcStepIndex;
             debug.details.arcStepLabel = arcStep;
 
+            // Load the main character (child)
+            let mainCharacter: Character | null = null;
+            if (mainCharacterId) {
+                const mainCharDoc = await firestore.collection('characters').doc(mainCharacterId).get();
+                if (mainCharDoc.exists) {
+                    mainCharacter = { ...mainCharDoc.data(), id: mainCharDoc.id } as Character;
+                }
+            }
+
             // Load all characters for this parent
             const charactersSnapshot = await firestore
                 .collection('characters')
@@ -117,9 +127,16 @@ export const storyBeatFlow = ai.defineFlow(
                 const { id: _ignored, ...rest } = character as Character & { id?: string };
                 return { ...rest, id: doc.id } as Character;
             });
-            const existingCharacterSummary = existingCharacters.map(c => `- ${c.displayName} (ID: ${c.id}, Role: ${c.role}, Traits: ${c.traits?.join(', ') || 'none'})`).join('\n');
+
+            // Build character summary with main character clearly marked
+            const existingCharacterSummary = existingCharacters.map(c => {
+                const isMain = mainCharacter && c.id === mainCharacter.id;
+                const label = isMain ? '**MAIN CHARACTER (CHILD)**' : 'Supporting Character';
+                return `- ${label}: ${c.displayName} (ID: ${c.id}, Role: ${c.role}, Traits: ${c.traits?.join(', ') || 'none'})`;
+            }).join('\n');
             debug.details.existingCharacterCount = existingCharacters.length;
             debug.details.existingCharacterSummary = existingCharacterSummary;
+            debug.details.mainCharacterName = mainCharacter?.displayName || 'unknown';
 
             // 4. Build Story So Far
             const messagesSnapshot = await firestore
@@ -149,13 +166,17 @@ MODE INSTRUCTIONS:
 ${promptConfig.modeInstructions}
 
 Your goal is to present up to 3 choices. One of those choices should be to introduce an existing character if appropriate for the story.
-- If you create an option to use an existing character, you MUST populate 'existingCharacterId' with their ID from the roster.
-- For each option, you MUST decide if it introduces a new character.
-- Set 'introducesCharacter' to true if the option brings in a new person, animal, or talking object who could appear again.
-  - Examples: "a new friend", "a talking squirrel", "a kind robot".
-  - If true, you MUST also provide a 'newCharacterLabel' (e.g., "a talking squirrel") and a 'newCharacterKind' ('toy', 'pet', 'friend', 'family').
-- Set 'introducesCharacter' to false if the option is just an action or observation.
-  - Examples: "he sings a song", "the sun shines brighter", "he finds a shiny rock".
+
+CRITICAL RULES FOR CHARACTERS:
+1. DO NOT create new characters for people/animals already in the Existing Character Roster below
+2. The MAIN CHARACTER (marked as **MAIN CHARACTER (CHILD)**) represents the child - NEVER create a new character for them
+3. When you want to use an existing character, you MUST populate 'existingCharacterId' with their ID from the roster
+4. Only set 'introducesCharacter' to true for characters that are NOT already in the roster
+5. If 'introducesCharacter' is true, you MUST provide BOTH:
+   - 'newCharacterLabel': a short, descriptive noun phrase (e.g., "a friendly mailman", "a wise old turtle")
+   - 'newCharacterKind': one of 'toy', 'pet', 'friend', or 'family'
+6. Set 'introducesCharacter' to false for simple actions or observations
+   - Examples: "he sings a song", "the sun shines brighter", "he finds a shiny rock"
 
 CONTEXT:
 Story Type: ${storyType.name} (${storyTypeId})
@@ -163,7 +184,7 @@ Current Arc Step: ${arcStep}
 Child Preferences and inspirations:
 ${childPreferenceSummary}
 
-Existing Character Roster (use these if possible):
+Existing Character Roster (DO NOT duplicate these - use their IDs instead):
 ${existingCharacterSummary || "No existing characters available."}
 
 STORY SO FAR:
@@ -180,15 +201,22 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             const defaultMax = 1000; // Fallback if not specified in config
             const rawResolved = typeof configMax === 'number' && configMax > 0 ? configMax : defaultMax;
             const maxOutputTokens = Math.max(rawResolved, 10000); // Enforce a high minimum
-            
-            const llmResponse = await ai.generate({
-                model: 'googleai/gemini-2.5-flash',
-                prompt: finalPrompt,
-                config: {
-                    temperature: promptConfig.model?.temperature ?? 0.7,
-                    maxOutputTokens: maxOutputTokens,
-                }
-            });
+
+            let llmResponse;
+            try {
+                llmResponse = await ai.generate({
+                    model: 'googleai/gemini-2.5-flash',
+                    prompt: finalPrompt,
+                    config: {
+                        temperature: promptConfig.model?.temperature ?? 0.7,
+                        maxOutputTokens: maxOutputTokens,
+                    }
+                });
+                await logAIFlow({ flowName: 'storyBeatFlow', sessionId, prompt: finalPrompt, response: llmResponse });
+            } catch (e: any) {
+                await logAIFlow({ flowName: 'storyBeatFlow', sessionId, prompt: finalPrompt, error: e });
+                throw e;
+            }
             
             // 8. Extract raw text robustly
             let rawText: string | null = null;

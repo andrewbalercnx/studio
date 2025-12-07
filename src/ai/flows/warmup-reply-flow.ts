@@ -9,6 +9,7 @@ import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage } from '@/lib/types';
 import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
+import { logAIFlow } from '@/lib/ai-flow-logger';
 
 
 // Define a type for the debug object
@@ -114,16 +115,22 @@ export const warmupReplyFlow = ai.defineFlow(
             const resolvedMaxOutputTokens = Math.max(rawResolved, 10000);
 
             // 6. Call Gemini with the single prompt string
-            llmResponse = await ai.generate({
-                model: 'googleai/gemini-2.5-flash',
-                prompt: finalPrompt,
-                config: {
-                    ...(promptConfig.model?.temperature != null
-                        ? { temperature: promptConfig.model.temperature }
-                        : {}),
-                    maxOutputTokens: resolvedMaxOutputTokens
-                },
-            });
+            try {
+                llmResponse = await ai.generate({
+                    model: 'googleai/gemini-2.5-flash',
+                    prompt: finalPrompt,
+                    config: {
+                        ...(promptConfig.model?.temperature != null
+                            ? { temperature: promptConfig.model.temperature }
+                            : {}),
+                        maxOutputTokens: resolvedMaxOutputTokens
+                    },
+                });
+                await logAIFlow({ flowName: 'warmupReplyFlow', sessionId, prompt: finalPrompt, response: llmResponse });
+            } catch (e: any) {
+                await logAIFlow({ flowName: 'warmupReplyFlow', sessionId, prompt: finalPrompt, error: e });
+                throw e;
+            }
             
             let assistantText: string | null = null;
             const raw = (llmResponse as any).raw;

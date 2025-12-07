@@ -12,6 +12,7 @@ import { z } from 'genkit';
 import type { StorySession, ChatMessage, StoryType, Character, ChildProfile } from '@/lib/types';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
 import { logServerSessionEvent } from '@/lib/session-events.server';
+import { logAIFlow } from '@/lib/ai-flow-logger';
 
 type EndingFlowDebugInfo = {
     stage: 'loading_session' | 'loading_storyType' | 'loading_messages_and_characters' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate' | 'unknown';
@@ -156,12 +157,19 @@ Based on all the above, return ONLY the JSON object containing three endings.`;
                 maxOutputTokens: 2000,
             };
             debug.details.modelConfig = modelConfig;
-            
-            const llmResponse = await ai.generate({
-                model: 'googleai/gemini-2.5-flash',
-                prompt: finalPrompt,
-                config: modelConfig,
-            });
+
+            let llmResponse;
+            try {
+                llmResponse = await ai.generate({
+                    model: 'googleai/gemini-2.5-flash',
+                    prompt: finalPrompt,
+                    config: modelConfig,
+                });
+                await logAIFlow({ flowName: 'endingFlow', sessionId, prompt: finalPrompt, response: llmResponse });
+            } catch (e: any) {
+                await logAIFlow({ flowName: 'endingFlow', sessionId, prompt: finalPrompt, error: e });
+                throw e;
+            }
             
             debug.stage = 'ai_generate_result';
             const rawText = llmResponse.text;

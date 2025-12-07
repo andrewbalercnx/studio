@@ -252,11 +252,30 @@ export default function StoryPlayPage() {
 
         let traitsQuestionAsked = false;
         if (chosenOption.introducesCharacter) {
+            // Extract traits from the character label (e.g., "a friendly mailman" -> displayName: "mailman", traits: ["friendly"])
+            const label = chosenOption.newCharacterLabel || 'New Friend';
+            const traitsPattern = /^a\s+(.*?)\s+(\w+)$/i; // Matches "a [adjectives] [noun]"
+            const match = label.match(traitsPattern);
+
+            let displayName = label;
+            let initialTraits: string[] = [];
+
+            if (match) {
+                const adjectivePart = match[1]; // e.g., "friendly old"
+                const nounPart = match[2]; // e.g., "mailman"
+                displayName = nounPart;
+                // Split adjectives by spaces and filter out common articles
+                initialTraits = adjectivePart.split(/\s+/).filter(word =>
+                    word.length > 0 && !['a', 'an', 'the'].includes(word.toLowerCase())
+                );
+            }
+
             const newCharacterData = {
                 ownerParentUid: session.parentUid,
                 sessionId: sessionId,
-                displayName: chosenOption.newCharacterLabel || 'New Friend',
+                displayName: displayName,
                 role: chosenOption.newCharacterKind || 'friend',
+                traits: initialTraits.length > 0 ? initialTraits : undefined,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             };

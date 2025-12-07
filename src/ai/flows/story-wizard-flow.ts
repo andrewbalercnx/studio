@@ -2,8 +2,8 @@
 'use server';
 
 import { ai } from '@/ai/genkit';
-import { initializeFirebase } from '@/firebase';
-import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
+import { initFirebaseAdminApp } from '@/firebase/admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { z } from 'genkit';
 import type { ChildProfile, Character, Story, StoryWizardAnswer, StoryWizardChoice, StoryWizardInput, StoryWizardOutput } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
@@ -73,7 +73,8 @@ const storyWizardFlowInternal = ai.defineFlow(
   },
   async ({ childId, sessionId, answers }) => {
     const flowName = 'storyWizardFlow';
-    const { firestore } = initializeFirebase();
+    await initFirebaseAdminApp();
+    const firestore = getFirestore();
 
     const buildCharacterDescription = (character: Character) => {
         const traits = character.traits?.length ? ` who is ${character.traits.join(', ')}` : '';
@@ -83,20 +84,18 @@ const storyWizardFlowInternal = ai.defineFlow(
 
     try {
       // 1. Fetch child and character data
-      const childRef = doc(firestore, 'children', childId);
-      const childSnap = await getDoc(childRef);
-      if (!childSnap.exists()) {
+      const childRef = firestore.collection('children').doc(childId);
+      const childSnap = await childRef.get();
+      if (!childSnap.exists) {
         return { state: 'error', error: 'Child profile not found.', ok: false };
       }
       const child = childSnap.data() as ChildProfile;
       const childAge = getChildAgeYears(child);
       const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
 
-      const charactersQuery = query(
-        collection(firestore, 'characters'),
-        where('ownerParentUid', '==', child.ownerParentUid)
-      );
-      const charactersSnap = await getDocs(charactersQuery);
+      const charactersQuery = firestore.collection('characters')
+        .where('ownerParentUid', '==', child.ownerParentUid);
+      const charactersSnap = await charactersQuery.get();
       const characters = charactersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Character));
       const mainCharacter = characters.find(c => c.relatedTo === childId && c.role === 'family');
 
@@ -169,7 +168,7 @@ INSTRUCTIONS:
           const resolvedStoryText = await replacePlaceholdersInText(parsed.storyText, entityMap);
 
           // Create the Story document
-          const storyRef = doc(firestore, 'stories', sessionId);
+          const storyRef = firestore.collection('stories').doc(sessionId);
           const storyPayload: Story = {
             storySessionId: sessionId,
             childId,
@@ -182,10 +181,10 @@ INSTRUCTIONS:
             },
             pageGeneration: { status: 'idle' },
             imageGeneration: { status: 'idle' },
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
           };
-          await setDoc(storyRef, storyPayload, { merge: true });
+          await storyRef.set(storyPayload, { merge: true });
 
           return { state: 'finished', ok: true, ...parsed, storyText: resolvedStoryText, storyId: storyRef.id };
         } catch (e) {

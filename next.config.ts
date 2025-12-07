@@ -2,8 +2,6 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  // Restarting the server again as requested.
- 
   typescript: {
     ignoreBuildErrors: true,
   },

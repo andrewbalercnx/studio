@@ -13,6 +13,7 @@ import type { ChildProfile } from '@/lib/types';
 import { Gaxios, GaxiosError } from 'gaxios';
 import { getStoryBucket } from '@/firebase/admin/storage';
 import { randomUUID } from 'crypto';
+import { logAIFlow } from '@/lib/ai-flow-logger';
 
 const AvatarFlowInputSchema = z.object({
   childId: z.string(),
@@ -149,13 +150,22 @@ export const avatarFlow = ai.defineFlow(
       },
     ];
 
-    const llmResponse = await ai.generate({
-      model: 'googleai/gemini-2.5-flash-image-preview',
-      prompt: promptParts,
-      config: {
-        responseModalities: ['TEXT', 'IMAGE'],
-      },
-    });
+    const promptText = `Avatar generation with ${imageParts.length} photo(s)${feedback ? ` and feedback: ${feedback}` : ''}`;
+
+    let llmResponse;
+    try {
+      llmResponse = await ai.generate({
+        model: 'googleai/gemini-2.5-flash-image-preview',
+        prompt: promptParts,
+        config: {
+          responseModalities: ['TEXT', 'IMAGE'],
+        },
+      });
+      await logAIFlow({ flowName: 'avatarFlow', sessionId: null, prompt: promptText, response: llmResponse });
+    } catch (e: any) {
+      await logAIFlow({ flowName: 'avatarFlow', sessionId: null, prompt: promptText, error: e });
+      throw e;
+    }
 
     const dataUrl = llmResponse.media?.url;
     if (!dataUrl) {

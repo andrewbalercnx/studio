@@ -9,6 +9,7 @@ import { ai } from '@/ai/genkit';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { StorySession, Character, ChatMessage } from '@/lib/types';
+import { logAIFlow } from '@/lib/ai-flow-logger';
 
 // Zod schema for the expected JSON output from the model
 const CharacterTraitsOutputSchema = z.object({
@@ -111,12 +112,19 @@ Now, generate the question and suggested traits as a single JSON object.
             debug.modelName = 'googleai/gemini-2.5-flash';
             debug.temperature = temperature;
             debug.maxOutputTokens = maxOutputTokens;
-            
-            const llmResponse = await ai.generate({
-                model: 'googleai/gemini-2.5-flash',
-                prompt: finalPrompt,
-                config: { temperature, maxOutputTokens }
-            });
+
+            let llmResponse;
+            try {
+                llmResponse = await ai.generate({
+                    model: 'googleai/gemini-2.5-flash',
+                    prompt: finalPrompt,
+                    config: { temperature, maxOutputTokens }
+                });
+                await logAIFlow({ flowName: 'characterTraitsFlow', sessionId, prompt: finalPrompt, response: llmResponse });
+            } catch (e: any) {
+                await logAIFlow({ flowName: 'characterTraitsFlow', sessionId, prompt: finalPrompt, error: e });
+                throw e;
+            }
 
             debug.stage = 'ai_generate_result';
             debug.responseKeys = Object.keys(llmResponse ?? {});

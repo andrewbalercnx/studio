@@ -169,8 +169,8 @@ export const storyPageFlow = ai.defineFlow(
         story.childId ? firestore.collection('children').doc(story.childId).get() : Promise.resolve(null),
       ]);
 
-      const session = sessionSnap?.exists ? (sessionSnap.data() as StorySession) : null;
-      const child = childSnap?.exists ? (childSnap.data() as ChildProfile) : null;
+      const session = (sessionSnap && sessionSnap.exists) ? (sessionSnap.data() as StorySession) : null;
+      const child = (childSnap && childSnap.exists) ? (childSnap.data() as ChildProfile) : null;
 
       if (!story.storyText || story.storyText.trim().length === 0) {
         throw new Error(`stories/${storyId} is missing storyText.`);

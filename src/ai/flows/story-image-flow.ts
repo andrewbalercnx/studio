@@ -2,14 +2,15 @@
 'use server';
 
 import {ai} from '@/ai/genkit';
-import {initializeFirebase} from '@/firebase';
+import {initFirebaseAdminApp} from '@/firebase/admin/app';
+import {getFirestore, FieldValue} from 'firebase-admin/firestore';
 import {getStoryBucket, deleteStorageObject} from '@/firebase/admin/storage';
 import type {ChildProfile, Story, StoryOutputPage} from '@/lib/types';
 import {randomUUID} from 'crypto';
-import {doc, getDoc, serverTimestamp, updateDoc} from 'firebase/firestore';
 import {z} from 'genkit';
 import imageSize from 'image-size';
 import { Gaxios, GaxiosError } from 'gaxios';
+import { logAIFlow } from '@/lib/ai-flow-logger';
 
 const DEFAULT_IMAGE_MODEL = process.env.STORYBOOK_IMAGE_MODEL ?? 'googleai/gemini-2.5-flash-image-preview';
 const MOCK_IMAGES = process.env.MOCK_STORYBOOK_IMAGES === 'true';
@@ -213,13 +214,22 @@ async function createImage(prompt: string, childPhotos: string[], artStyle: stri
     { text: `Art style: ${artStyle}. Scene: ${prompt}` },
   ];
 
-  const generation = await ai.generate({
-    model: DEFAULT_IMAGE_MODEL,
-    prompt: promptParts,
-    config: {
-      responseModalities: ['TEXT', 'IMAGE'],
-    },
-  });
+  const promptText = `Art style: ${artStyle}. Scene: ${prompt} [with ${imageParts.length} reference photo(s)]`;
+
+  let generation;
+  try {
+    generation = await ai.generate({
+      model: DEFAULT_IMAGE_MODEL,
+      prompt: promptParts,
+      config: {
+        responseModalities: ['TEXT', 'IMAGE'],
+      },
+    });
+    await logAIFlow({ flowName: 'storyImageFlow:createImage', sessionId: null, prompt: promptText, response: generation });
+  } catch (e: any) {
+    await logAIFlow({ flowName: 'storyImageFlow:createImage', sessionId: null, prompt: promptText, error: e });
+    throw e;
+  }
 
   const media = generation.media;
   if (!media?.url) {
@@ -242,30 +252,31 @@ export const storyImageFlow = ai.defineFlow(
   },
   async ({storyId, pageId, regressionTag, forceRegenerate}) => {
     const logs: string[] = [];
-    const {firestore} = initializeFirebase();
-    const storyRef = doc(firestore, 'stories', storyId);
+    await initFirebaseAdminApp();
+    const firestore = getFirestore();
+    const storyRef = firestore.collection('stories').doc(storyId);
     let generated: GenerateImageResult | null = null;
-    
+
     // Corrected path to the page document
-    const pageRef = doc(storyRef, 'outputs', 'storybook', 'pages', pageId);
+    const pageRef = storyRef.collection('outputs').doc('storybook').collection('pages').doc(pageId);
 
     try {
-      const storySnap = await getDoc(storyRef);
-      if (!storySnap.exists()) {
+      const storySnap = await storyRef.get();
+      if (!storySnap.exists) {
         throw new Error(`stories/${storyId} not found.`);
       }
       const storyData = storySnap.data() as Story;
 
       let childProfile: ChildProfile | null = null;
       if (storyData.childId) {
-        const childSnap = await getDoc(doc(firestore, 'children', storyData.childId));
-        if (childSnap.exists()) {
+        const childSnap = await firestore.collection('children').doc(storyData.childId).get();
+        if (childSnap.exists) {
           childProfile = childSnap.data() as ChildProfile;
         }
       }
 
-      const pageSnap = await getDoc(pageRef);
-      if (!pageSnap.exists()) {
+      const pageSnap = await pageRef.get();
+      if (!pageSnap.exists) {
         throw new Error(`Page document not found at ${pageRef.path}`);
       }
       const page = pageSnap.data() as StoryOutputPage;
@@ -282,10 +293,10 @@ export const storyImageFlow = ai.defineFlow(
         }
       }
 
-      await updateDoc(pageRef, {
+      await pageRef.update({
         imageStatus: 'generating',
         'imageMetadata.lastErrorMessage': null,
-        updatedAt: serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
 
       try {
@@ -343,7 +354,7 @@ export const storyImageFlow = ai.defineFlow(
         logs.push(`[warn] Unable to parse image dimensions: ${dimensionError?.message ?? dimensionError}`);
       }
 
-      await updateDoc(pageRef, {
+      await pageRef.update({
         imageUrl: uploadResult.imageUrl,
         imageStatus: 'ready',
         imageMetadata: {
@@ -356,10 +367,10 @@ export const storyImageFlow = ai.defineFlow(
           downloadToken: uploadResult.downloadToken,
           aspectRatioHint: page.layoutHints?.aspectRatio ?? null,
           regressionTag: regressionTag ?? (page as any).regressionTag ?? null,
-          generatedAt: serverTimestamp(),
+          generatedAt: FieldValue.serverTimestamp(),
           lastErrorMessage: null,
         },
-        updatedAt: serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
 
       logs.push(`[success] Generated art for ${pageId}`);
@@ -374,10 +385,10 @@ export const storyImageFlow = ai.defineFlow(
     } catch (error: any) {
       const message = error?.message ?? 'storyImageFlow failed.';
       try {
-        await updateDoc(pageRef, {
+        await pageRef.update({
           imageStatus: 'error',
           'imageMetadata.lastErrorMessage': message,
-          updatedAt: serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         });
       } catch (updateError) {
         logs.push(`[warn] Failed to record error state: ${(updateError as Error)?.message}`);
