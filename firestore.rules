@@ -1,10 +1,28 @@
-// Rules version: v12 - Restored list operations for application functionality
+// Rules version: v16 - Soft delete protection: deleted items only visible to admins
 // IMPORTANT: Firebase Admin SDK bypasses these rules entirely.
 // These rules only apply to client-side (browser/mobile) requests.
 //
-// CHANGES IN v12:
-// - Restored 'allow list' for authenticated users on user-owned collections
-// - SECURITY TRADE-OFF: Firestore cannot validate WHERE clause values in queries
+// CHANGES IN v16:
+// - Added notDeleted() helper to check if document is soft-deleted
+// - Updated children, characters, stories, storyBooks rules to hide soft-deleted docs from non-admins
+// - Admins can still see and restore deleted documents
+// - Non-admins cannot read documents that have deletedAt set (enforced at rules level)
+//
+// CHANGES IN v15:
+// - Added systemConfig collection for diagnostics settings (read: authenticated, write: admin)
+//
+// CHANGES IN v14:
+// - Added support for printStoryBooks collection (read/write: owner or admin)
+//
+// CHANGES IN v13:
+// - Added support for printProducts collection (read: authenticated, write: admin)
+// - Added support for storyBooks collection (supports both parentUid and ownerUserId)
+// - Updated printOrders to support both legacy parentUid and new ownerUserId fields
+// - Print orders can be owned via parentUid (legacy) or ownerUserId (Mixam integration)
+//
+// SECURITY TRADE-OFF:
+// - 'allow list' enabled for authenticated users on user-owned collections
+// - Firestore cannot validate WHERE clause values in queries
 // - Client code MUST filter queries by ownership (e.g., where('ownerParentUid', '==', uid))
 // - Malicious clients could potentially query other users' data if they omit filters
 // - This is necessary for normal application functionality (listing own children, stories, etc.)
@@ -33,6 +51,12 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
+    // Check if document is NOT soft-deleted (deletedAt field is null or doesn't exist)
+    // Used to hide deleted documents from non-admin users
+    function notDeleted() {
+      return !('deletedAt' in resource.data) || resource.data.deletedAt == null;
+    }
+
     // ========== USER PROFILES ==========
     // A user can only read/write their own profile, or an admin can.
     match /users/{userId} {
@@ -43,10 +67,10 @@ service cloud.firestore {
 
     // ========== CHILDREN ==========
     match /children/{childId} {
-      // Get: Admin, owner parent, or authenticated user for help-* docs
+      // Get: Admin (can see deleted), owner parent (only non-deleted), or authenticated user for help-* docs
       allow get: if isAdmin()
                  || (isHelpDocument(childId) && isAuthenticated())
-                 || (isAuthenticated() && resource.data.ownerParentUid == request.auth.uid);
+                 || (isAuthenticated() && resource.data.ownerParentUid == request.auth.uid && notDeleted());
 
       // Create: Admin, owner parent setting themselves as owner, or authenticated user for help-* docs
       allow create: if isAdmin()
@@ -57,11 +81,11 @@ service cloud.firestore {
       allow update, delete: if isAdmin()
                             || (isAuthenticated() && !isHelpDocument(childId) && resource.data.ownerParentUid == request.auth.uid);
 
-      // List: Authenticated users can list
+      // List: Authenticated users can list (non-deleted items only for non-admins)
       // NOTE: Firestore Security Rules cannot validate WHERE clause values.
       // Client code MUST include where('ownerParentUid', '==', request.auth.uid) to query only owned children.
-      // This rule trusts that client code queries responsibly; malicious clients could query other users' data.
-      allow list: if isAuthenticated();
+      // Deleted items (deletedAt != null) are hidden from non-admins at rules level.
+      allow list: if isAdmin() || (isAuthenticated() && notDeleted());
 
       // Legacy sessions sub-collection
       match /sessions/{sessionId} {
@@ -130,11 +154,13 @@ service cloud.firestore {
 
     // ========== CHARACTERS ==========
     match /characters/{characterId} {
+      // Get: Admin (can see deleted), owner parent (only non-deleted), or authenticated user for help-* docs
       allow get: if isAdmin()
                  || (isHelpDocument(characterId) && isAuthenticated())
-                 || (isAuthenticated() && resource.data.ownerParentUid == request.auth.uid);
+                 || (isAuthenticated() && resource.data.ownerParentUid == request.auth.uid && notDeleted());
 
-      allow list: if isAuthenticated();  // Client code must filter by ownerParentUid
+      // List: Non-deleted items only for non-admins
+      allow list: if isAdmin() || (isAuthenticated() && notDeleted());
 
       allow create: if isAdmin()
                     || (isHelpDocument(characterId) && isAuthenticated())
@@ -146,11 +172,13 @@ service cloud.firestore {
 
     // ========== STORIES ==========
     match /stories/{storyId} {
+      // Get: Admin (can see deleted), owner parent (only non-deleted), or authenticated user for help-* docs
       allow get: if isAdmin()
                  || (isHelpDocument(storyId) && isAuthenticated())
-                 || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
+                 || (isAuthenticated() && resource.data.parentUid == request.auth.uid && notDeleted());
 
-      allow list: if isAuthenticated();  // Client code must filter by parentUid
+      // List: Non-deleted items only for non-admins
+      allow list: if isAdmin() || (isAuthenticated() && notDeleted());
 
       allow create: if isAdmin()
                     || (isHelpDocument(storyId) && isAuthenticated())
@@ -159,25 +187,76 @@ service cloud.firestore {
       allow update, delete: if isAdmin()
                             || (isAuthenticated() && !isHelpDocument(storyId) && resource.data.parentUid == request.auth.uid);
 
-      // Story outputs, pages, shareTokens - use wildcard to cover all subcollections
+      // Story outputs, pages, shareTokens, storybooks - use wildcard to cover all subcollections
+      // Note: Subcollection documents inherit soft-delete protection via notDeleted()
       match /{allPaths=**} {
+        // Get: Admin (can see deleted), owner or help docs (only non-deleted)
         allow get: if isAdmin()
                    || (isHelpDocument(storyId) && isAuthenticated())
-                   || (isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid);
+                   || (isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid && notDeleted());
 
-        allow list: if isAuthenticated();  // Client code must ensure proper story access
+        // List: Non-deleted items only for non-admins
+        allow list: if isAdmin() || (isAuthenticated() && notDeleted());
 
         allow write: if isAdmin()
                       || (isAuthenticated() && !isHelpDocument(storyId) && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid);
       }
     }
 
+    // ========== STORY BOOKS ==========
+    match /storyBooks/{bookId} {
+      // Get: Admin (can see deleted), owner (only non-deleted), or authenticated user for help-* docs
+      allow get: if isAdmin()
+                 || (isHelpDocument(bookId) && isAuthenticated())
+                 || (isAuthenticated() && resource == null)  // Allow checking if book doesn't exist
+                 || (isAuthenticated() && resource.data.ownerUserId == request.auth.uid && notDeleted())
+                 || (isAuthenticated() && resource.data.parentUid == request.auth.uid && notDeleted());
+
+      // List: Non-deleted items only for non-admins
+      allow list: if isAdmin() || (isAuthenticated() && notDeleted());
+
+      allow create: if isAdmin()
+                    || (isHelpDocument(bookId) && isAuthenticated())
+                    || (isAuthenticated() && request.resource.data.ownerUserId == request.auth.uid)
+                    || (isAuthenticated() && request.resource.data.parentUid == request.auth.uid);
+
+      allow update, delete: if isAdmin()
+                            || (isAuthenticated() && !isHelpDocument(bookId) && resource.data.ownerUserId == request.auth.uid)
+                            || (isAuthenticated() && !isHelpDocument(bookId) && resource.data.parentUid == request.auth.uid);
+    }
+
+    // ========== PRINT STORY BOOKS ==========
+    match /printStoryBooks/{printStoryBookId} {
+      allow get: if isAdmin()
+                 || (isAuthenticated() && resource.data.ownerUserId == request.auth.uid);
+
+      allow list: if isAuthenticated();  // Client code must filter by ownerUserId
+
+      allow create: if isAdmin()
+                    || (isAuthenticated() && request.resource.data.ownerUserId == request.auth.uid);
+
+      allow update, delete: if isAdmin()
+                            || (isAuthenticated() && resource.data.ownerUserId == request.auth.uid);
+    }
+
     // ========== PRINT ORDERS ==========
     match /printOrders/{orderId} {
-      allow get: if isAdmin() || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
-      allow list: if isAuthenticated();  // Client code must filter by parentUid
-      allow create: if isAdmin() || (isAuthenticated() && request.resource.data.parentUid == request.auth.uid);
-      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
+      allow get: if isAdmin()
+                 || (isAuthenticated() && resource.data.parentUid == request.auth.uid)
+                 || (isAuthenticated() && resource.data.ownerUserId == request.auth.uid);
+      allow list: if isAuthenticated();  // Client code must filter by parentUid or ownerUserId
+      allow create: if isAdmin()
+                    || (isAuthenticated() && request.resource.data.parentUid == request.auth.uid)
+                    || (isAuthenticated() && request.resource.data.ownerUserId == request.auth.uid);
+      allow update, delete: if isAdmin()
+                            || (isAuthenticated() && resource.data.parentUid == request.auth.uid)
+                            || (isAuthenticated() && resource.data.ownerUserId == request.auth.uid);
+    }
+
+    // ========== PRINT PRODUCTS ==========
+    match /printProducts/{productId} {
+      allow read: if isAuthenticated();  // All authenticated users can view products
+      allow write: if isAdmin();  // Only admins can create/update products
     }
 
     // ========== CONFIGURATION COLLECTIONS ==========
@@ -207,12 +286,25 @@ service cloud.firestore {
       allow write: if isWriter() || isAdmin();
     }
 
+    match /imageStyles/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
     // ========== SYSTEM & LOG COLLECTIONS ==========
     match /aiFlowLogs/{document=**} {
       allow read, write: if isAdmin();
     }
 
     match /helpWizards/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // ========== SYSTEM CONFIGURATION ==========
+    // Authenticated users can read config (e.g., diagnostics settings)
+    // Only admins can modify settings
+    match /systemConfig/{document=**} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }

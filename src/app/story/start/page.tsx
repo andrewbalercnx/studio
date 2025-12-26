@@ -2,7 +2,7 @@
 
 import { useAppContext } from '@/hooks/use-app-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, MessageCircle, Wand2 } from 'lucide-react';
+import { LoaderCircle, MessageCircle, Wand2, Sparkles, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
@@ -45,7 +45,7 @@ export default function StartStoryChoicePage() {
           Choose a way to begin your adventure, {activeChildProfile.displayName}.
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
         <Link href="/story/start/chat">
           <div className="flex cursor-pointer flex-col items-center gap-4 rounded-full border-4 border-transparent p-8 text-center transition-all hover:border-primary/50 hover:bg-primary/10">
             <div className="flex h-32 w-32 items-center justify-center rounded-full bg-accent text-accent-foreground">
@@ -62,6 +62,24 @@ export default function StartStoryChoicePage() {
             </div>
             <h2 className="text-2xl font-semibold">Magic Story Wizard</h2>
             <p className="max-w-xs text-muted-foreground">Answer a few questions and let the AI create a full story for you!</p>
+          </div>
+        </Link>
+        <Link href="/story/start/gemini3">
+          <div className="flex cursor-pointer flex-col items-center gap-4 rounded-full border-4 border-transparent p-8 text-center transition-all hover:border-primary/50 hover:bg-primary/10">
+            <div className="flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white">
+              <Sparkles className="h-16 w-16" />
+            </div>
+            <h2 className="text-2xl font-semibold">Gemini 3 Free</h2>
+            <p className="max-w-xs text-muted-foreground">Let Gemini lead the way with creative questions to craft your unique adventure!</p>
+          </div>
+        </Link>
+        <Link href="/story/start/gemini4">
+          <div className="flex cursor-pointer flex-col items-center gap-4 rounded-full border-4 border-transparent p-8 text-center transition-all hover:border-primary/50 hover:bg-primary/10">
+            <div className="flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-white">
+              <BookOpen className="h-16 w-16" />
+            </div>
+            <h2 className="text-2xl font-semibold">Guided Story</h2>
+            <p className="max-w-xs text-muted-foreground">Answer age-appropriate questions with 3 choices + "tell me more" to build your story!</p>
           </div>
         </Link>
       </div>

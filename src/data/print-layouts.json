@@ -1,30 +1,166 @@
-
 {
   "printLayouts": [
+    {
+      "id": "mixam-8x10-hardcover",
+      "name": "Mixam 8x10 Hardcover",
+      "leafWidth": 8,
+      "leafHeight": 10,
+      "leavesPerSpread": 2,
+      "font": "Helvetica",
+      "fontSize": 24,
+      "coverLayout": {
+        "imageBox": { "leaf": 1, "x": 0, "y": 0, "width": 8, "height": 10 },
+        "textBox": {
+          "leaf": 1,
+          "x": 0.5,
+          "y": 6.5,
+          "width": 7,
+          "height": 3,
+          "backgroundColor": "#F5F5DC",
+          "borderRadius": 0.2
+        }
+      },
+      "backCoverLayout": {
+        "imageBox": { "leaf": 1, "x": 0.8, "y": 1, "width": 6.4, "height": 6 },
+        "textBox": {
+          "leaf": 1,
+          "x": 0.5,
+          "y": 7.5,
+          "width": 7,
+          "height": 2,
+          "backgroundColor": "#4A7C59",
+          "borderRadius": 0.2
+        }
+      },
+      "insideLayout": {
+        "textBox": {
+          "leaf": 1,
+          "x": 0.8,
+          "y": 1,
+          "width": 6.4,
+          "height": 8,
+          "backgroundColor": "#FFFEF0",
+          "borderRadius": 0.15
+        },
+        "imageBox": { "leaf": 2, "x": 0, "y": 0, "width": 8, "height": 10 }
+      },
+      "titlePageLayout": {
+        "textBox": {
+          "leaf": 1,
+          "x": 1,
+          "y": 2,
+          "width": 6,
+          "height": 6
+        }
+      }
+    },
     {
       "id": "a4-portrait-spread-v1",
       "name": "A4 Portrait Spread",
       "leafWidth": 8.27,
       "leafHeight": 11.69,
       "leavesPerSpread": 2,
-      "textBoxes": [
-        {
+      "font": "Helvetica",
+      "fontSize": 28,
+      "coverLayout": {
+        "imageBox": { "leaf": 1, "x": 0, "y": 0, "width": 8.27, "height": 11.69 },
+        "textBox": {
+          "leaf": 1,
+          "x": 0.5,
+          "y": 7.8,
+          "width": 7.27,
+          "height": 3.4,
+          "backgroundColor": "#F5F5DC",
+          "borderRadius": 0.25
+        }
+      },
+      "backCoverLayout": {
+        "imageBox": { "leaf": 1, "x": 0.827, "y": 1.17, "width": 6.616, "height": 6.5 },
+        "textBox": {
+          "leaf": 1,
+          "x": 0.5,
+          "y": 8.5,
+          "width": 7.27,
+          "height": 2.5,
+          "backgroundColor": "#4A7C59",
+          "borderRadius": 0.25
+        }
+      },
+      "insideLayout": {
+        "textBox": {
           "leaf": 1,
           "x": 0.827,
           "y": 1.169,
           "width": 6.616,
-          "height": 9.352
+          "height": 9.352,
+          "backgroundColor": "#FFFEF0",
+          "borderRadius": 0.2
+        },
+        "imageBox": { "leaf": 2, "x": 0, "y": 0, "width": 8.27, "height": 11.69 }
+      },
+      "titlePageLayout": {
+        "textBox": {
+          "leaf": 1,
+          "x": 1,
+          "y": 2.5,
+          "width": 6.27,
+          "height": 6.69
         }
-      ],
-      "imageBoxes": [
-        {
-          "leaf": 2,
-          "x": 0,
-          "y": 0,
-          "width": 8.27,
-          "height": 11.69
+      }
+    },
+    {
+      "id": "a4-portrait-single-v1",
+      "name": "A4 Portrait Single",
+      "leafWidth": 8.27,
+      "leafHeight": 11.69,
+      "leavesPerSpread": 1,
+      "font": "Helvetica",
+      "fontSize": 24,
+      "coverLayout": {
+        "imageBox": { "leaf": 1, "x": 0, "y": 0, "width": 8.27, "height": 11.69 },
+        "textBox": {
+          "leaf": 1,
+          "x": 0.5,
+          "y": 7.8,
+          "width": 7.27,
+          "height": 3.4,
+          "backgroundColor": "#F5F5DC",
+          "borderRadius": 0.25
         }
-      ]
+      },
+      "backCoverLayout": {
+        "imageBox": { "leaf": 1, "x": 0.827, "y": 1.17, "width": 6.616, "height": 6.5 },
+        "textBox": {
+          "leaf": 1,
+          "x": 0.5,
+          "y": 8.5,
+          "width": 7.27,
+          "height": 2.5,
+          "backgroundColor": "#4A7C59",
+          "borderRadius": 0.25
+        }
+      },
+      "insideLayout": {
+        "imageBox": { "leaf": 1, "x": 0, "y": 0, "width": 8.27, "height": 9.69 },
+        "textBox": {
+          "leaf": 1,
+          "x": 1,
+          "y": 6.69,
+          "width": 6.27,
+          "height": 3,
+          "backgroundColor": "#FFFEF0",
+          "borderRadius": 0.15
+        }
+      },
+      "titlePageLayout": {
+        "textBox": {
+          "leaf": 1,
+          "x": 1,
+          "y": 2.5,
+          "width": 6.27,
+          "height": 6.69
+        }
+      }
     }
   ]
 }

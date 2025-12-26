@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
 import {
@@ -14,10 +14,12 @@ import {
   where,
   writeBatch,
   updateDoc,
-  deleteDoc,
+  deleteField,
 } from 'firebase/firestore';
-import type { Character } from '@/lib/types';
-import { LoaderCircle, Plus, User, Pencil, X, Trash2, Smile, Image as ImageIcon } from 'lucide-react';
+import type { Character, ChildProfile } from '@/lib/types';
+import { LoaderCircle, Plus, User, Pencil, Smile, Image as ImageIcon } from 'lucide-react';
+import { DeleteButton, UndoBanner, useDeleteWithUndo } from '@/components/shared/DeleteWithUndo';
+import { useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -30,6 +32,8 @@ import { useUploadFile } from '@/firebase/storage/use-upload-file';
 import NextImage from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { EntityEditor } from '@/components/shared/EntityEditor';
+import { VoiceSelector } from '@/components/parent/VoiceSelector';
 
 function slugify(text: string) {
   return text
@@ -38,85 +42,17 @@ function slugify(text: string) {
     .replace(/^-|-$/g, '');
 }
 
-function CharacterForm({ parentUid, onSave, character }: { parentUid: string; onSave: () => void; character?: Character | null }) {
-  const firestore = useFirestore();
-  const { toast } = useToast();
-  const isEditing = !!character;
-  const [name, setName] = useState(character?.displayName ?? '');
-  const [description, setDescription] = useState(character?.description ?? '');
-  const [role, setRole] = useState<Character['role']>(character?.role ?? 'friend');
-  const [traits, setTraits] = useState(character?.traits?.join(', ') ?? '');
-  const [isSaving, setIsSaving] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!firestore || !name) {
-      toast({ title: 'Please fill out all fields.', variant: 'destructive' });
-      return;
-    }
-    setIsSaving(true);
-    const charId = character?.id ?? `${slugify(name)}-${Date.now().toString().slice(-6)}`;
-    const docRef = doc(firestore, 'characters', charId);
-
-    const payload: Partial<Character> = {
-      displayName: name,
-      description: description,
-      ownerParentUid: parentUid,
-      role: role,
-      traits: traits.split(',').map(t => t.trim()).filter(Boolean),
-      updatedAt: serverTimestamp() as any,
-    };
-
-    if (!isEditing) {
-      payload.createdAt = serverTimestamp() as any;
-      payload.avatarUrl = `https://picsum.photos/seed/${charId}/200/200`;
-      payload.photos = [];
-    }
-
-    try {
-      await setDoc(docRef, payload, { merge: true });
-      toast({
-        title: isEditing ? 'Character updated!' : 'Character created!',
-        description: `${name} has been saved.`,
-      });
-      onSave();
-    } catch (e: any) {
-      toast({ title: 'Error saving character', description: e.message, variant: 'destructive' });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
+// Wrapper to use EntityEditor for characters
+function CharacterForm({ parentUid, onSave, character, children }: { parentUid: string; onSave: () => void; character?: Character | null; children: ChildProfile[] }) {
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="name">Character's Name</Label>
-        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="role">Role</Label>
-        <Select value={role} onValueChange={(value) => setRole(value as Character['role'])}>
-            <SelectTrigger><SelectValue/></SelectTrigger>
-            <SelectContent>
-                <SelectItem value="friend">Friend</SelectItem>
-                <SelectItem value="family">Family</SelectItem>
-                <SelectItem value="pet">Pet</SelectItem>
-                <SelectItem value="toy">Toy</SelectItem>
-            </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="description">Description</Label>
-        <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g., A brave little bear who loves honey." />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="traits">Traits (comma-separated)</Label>
-        <Input id="traits" value={traits} onChange={(e) => setTraits(e.target.value)} placeholder="e.g., brave, funny, curious" />
-      </div>
-      <Button onClick={handleSubmit} disabled={isSaving}>
-        {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : null}
-        {isEditing ? 'Update Character' : 'Save Character'}
-      </Button>
-    </div>
+    <EntityEditor
+      entityType="character"
+      entity={character}
+      parentUid={parentUid}
+      children={children}
+      onSave={onSave}
+      onCancel={onSave}
+    />
   );
 }
 
@@ -126,13 +62,20 @@ export default function ManageCharactersPage() {
   const { toast } = useToast();
 
   const [characters, setCharacters] = useState<Character[]>([]);
+  const [children, setChildren] = useState<ChildProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
+  const { deletedItem, markAsDeleted, clearDeletedItem } = useDeleteWithUndo();
 
   const charactersQuery = useMemo(() => {
     if (!user || !firestore) return null;
     return query(collection(firestore, 'characters'), where('ownerParentUid', '==', user.uid));
+  }, [user, firestore]);
+
+  const childrenQuery = useMemo(() => {
+    if (!user || !firestore) return null;
+    return query(collection(firestore, 'children'), where('ownerParentUid', '==', user.uid));
   }, [user, firestore]);
 
   useEffect(() => {
@@ -154,22 +97,58 @@ export default function ManageCharactersPage() {
       }
     );
     return () => unsubscribe();
-  }, [charactersQuery, toast]);
+  }, [charactersQuery]);
+
+  useEffect(() => {
+    if (!childrenQuery) return;
+    const unsubscribe = onSnapshot(
+      childrenQuery,
+      (snapshot) => {
+        const childrenList = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as ChildProfile));
+        setChildren(childrenList);
+      },
+      (error) => {
+        toast({ title: 'Error loading children', description: error.message, variant: 'destructive' });
+      }
+    );
+    return () => unsubscribe();
+  }, [childrenQuery]);
 
   const openForm = (character: Character | null = null) => {
     setEditingCharacter(character);
     setIsFormOpen(true);
   };
 
-  const handleDelete = async (characterId: string) => {
-    if (!firestore || !window.confirm('Are you sure you want to delete this character?')) return;
-    try {
-      await deleteDoc(doc(firestore, 'characters', characterId));
-      toast({ title: 'Character deleted' });
-    } catch (e: any) {
-      toast({ title: 'Error deleting character', description: e.message, variant: 'destructive' });
-    }
-  };
+  const handleDeleteCharacter = useCallback(async (characterId: string) => {
+    if (!firestore || !user) return;
+    const character = characters.find(c => c.id === characterId);
+    if (!character) return;
+
+    const charRef = doc(firestore, 'characters', characterId);
+    await updateDoc(charRef, {
+      deletedAt: serverTimestamp(),
+      deletedBy: user.uid,
+      updatedAt: serverTimestamp(),
+    });
+    markAsDeleted({ id: characterId, name: character.displayName, type: 'character' });
+    toast({ title: 'Character deleted', description: `${character.displayName} has been removed.` });
+  }, [firestore, user, characters, markAsDeleted, toast]);
+
+  const handleUndoDelete = useCallback(async (characterId: string) => {
+    if (!firestore) return;
+    const charRef = doc(firestore, 'characters', characterId);
+    await updateDoc(charRef, {
+      deletedAt: deleteField(),
+      deletedBy: deleteField(),
+      updatedAt: serverTimestamp(),
+    });
+    toast({ title: 'Undo successful', description: 'The character has been restored.' });
+  }, [firestore, toast]);
+
+  // Filter out deleted characters
+  const visibleCharacters = useMemo(() => {
+    return characters.filter(char => !char.deletedAt);
+  }, [characters]);
 
   const renderContent = () => {
     if (userLoading || loading) {
@@ -183,7 +162,7 @@ export default function ManageCharactersPage() {
     if (!user) {
       return <p className="text-center text-muted-foreground py-8">You must be signed in to manage characters.</p>;
     }
-    if (characters.length === 0) {
+    if (visibleCharacters.length === 0) {
       return (
         <div className="text-center py-8 border-2 border-dashed rounded-lg">
           <p className="text-muted-foreground mb-4">No characters found.</p>
@@ -194,7 +173,7 @@ export default function ManageCharactersPage() {
 
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {characters.map((char) => (
+        {visibleCharacters.map((char) => (
           <Card key={char.id}>
             <CardHeader className="flex flex-row items-center gap-4">
               <Avatar className="h-16 w-16">
@@ -203,26 +182,50 @@ export default function ManageCharactersPage() {
               </Avatar>
               <div>
                 <CardTitle>{char.displayName}</CardTitle>
-                <CardDescription className="capitalize">{char.role}</CardDescription>
+                <CardDescription>
+                  {char.type}{char.type === 'Family' && char.relationship ? ` (${char.relationship})` : ''} {char.childId ? '· Child-specific' : '· Family-wide'}
+                </CardDescription>
               </div>
             </CardHeader>
             <CardContent>
               {char.description && <p className="text-sm text-muted-foreground mb-3">{char.description}</p>}
-              <div className="flex flex-wrap gap-1">
-                {char.traits?.map((trait) => (
-                  <Badge key={trait} variant="secondary">{trait}</Badge>
-                ))}
-              </div>
+              {(char.likes?.length > 0 || char.dislikes?.length > 0) ? (
+                <div className="space-y-2">
+                  {char.likes?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold mb-1">Likes:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {char.likes.map((like) => (
+                          <Badge key={like} variant="secondary" className="text-xs">{like}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {char.dislikes?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold mb-1">Dislikes:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {char.dislikes.map((dislike) => (
+                          <Badge key={dislike} variant="destructive" className="text-xs opacity-70">{dislike}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => openForm(char)}>
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit
               </Button>
-              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(char.id)}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </Button>
+              <DeleteButton
+                item={{ id: char.id, name: char.displayName }}
+                itemType="character"
+                onDelete={handleDeleteCharacter}
+                buttonVariant="ghost"
+                className="text-destructive"
+              />
             </CardFooter>
           </Card>
         ))}
@@ -238,7 +241,7 @@ export default function ManageCharactersPage() {
             <DialogHeader>
               <DialogTitle>{editingCharacter ? 'Edit Character' : 'Create New Character'}</DialogTitle>
             </DialogHeader>
-            {user && <CharacterForm parentUid={user.uid} onSave={() => setIsFormOpen(false)} character={editingCharacter} />}
+            {user && <CharacterForm parentUid={user.uid} onSave={() => setIsFormOpen(false)} character={editingCharacter} children={children} />}
           </DialogContent>
         </Dialog>
 
@@ -248,13 +251,19 @@ export default function ManageCharactersPage() {
             <Plus className="mr-2" /> Add New Character
           </Button>
         </div>
-        
+
         <Card>
           <CardContent className="pt-6">
             {renderContent()}
           </CardContent>
         </Card>
       </div>
+
+      <UndoBanner
+        deletedItem={deletedItem}
+        onUndo={handleUndoDelete}
+        onDismiss={clearDeletedItem}
+      />
     </>
   );
 }

@@ -89,6 +89,7 @@ const outputTypeSchema = z.object({
   'layoutHints.pageCount': z.coerce.number().optional(),
   'layoutHints.needsImages': z.boolean().optional(),
   'aiHints.style': z.string().optional(),
+  paginationPrompt: z.string().optional(),
 });
 
 
@@ -111,6 +112,7 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
             'layoutHints.pageCount': editingType?.layoutHints?.pageCount,
             'layoutHints.needsImages': editingType?.layoutHints?.needsImages ?? true,
             'aiHints.style': editingType?.aiHints?.style || '',
+            paginationPrompt: editingType?.paginationPrompt || '',
         }
     });
 
@@ -132,6 +134,7 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
             aiHints: {
                 style: data['aiHints.style'],
             },
+            paginationPrompt: data.paginationPrompt || '',
             updatedAt: serverTimestamp(),
         };
 
@@ -217,6 +220,19 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
                      <div className="space-y-1">
                         <Label>AI Style Notes</Label>
                         <Input {...register('aiHints.style')} placeholder="e.g. gentle, simple picture-book prose" />
+                    </div>
+                    <div className="space-y-1">
+                        <Label>Pagination Prompt (Optional)</Label>
+                        <Textarea
+                            {...register('paginationPrompt')}
+                            placeholder="Custom AI prompt for paginating the story into pages. Leave empty to use the default pagination logic."
+                            rows={6}
+                            className="font-mono text-xs"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            This prompt controls how the AI divides the story into pages.
+                            Include rules for text per page, page breaks, and actor tracking.
+                        </p>
                     </div>
                 </CardContent>
             </Card>

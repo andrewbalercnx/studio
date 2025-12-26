@@ -5,13 +5,14 @@ import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, Users, CreditCard, Settings, Smile } from 'lucide-react';
+import { Home, Users, CreditCard, Settings, Smile, BookOpen } from 'lucide-react';
 import { ParentGuard } from '@/components/parent/parent-guard';
 
 const NAV_LINKS = [
   { href: '/parent', label: 'Overview', icon: Home },
   { href: '/parent/children', label: 'Manage Children', icon: Users },
   { href: '/parent/characters', label: 'Manage Characters', icon: Smile },
+  { href: '/parent/storybooks', label: 'Storybooks', icon: BookOpen },
   { href: '/parent/orders', label: 'Orders', icon: CreditCard },
   { href: '/parent/settings', label: 'Settings', icon: Settings },
 ];

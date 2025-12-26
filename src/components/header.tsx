@@ -65,27 +65,12 @@ export default function Header() {
           </>
         );
       case 'child':
-        return (
-          <>
-            {activeChildId && (
-              <Button asChild variant="ghost"><Link href={`/child/${activeChildId}`}>My Stories</Link></Button>
-            )}
-            <Button asChild variant="ghost"><Link href="/story/start">New Story</Link></Button>
-          </>
-        );
+        // Simplified child mode - no nav links, only Switch to Parent button shown separately
+        return null;
       case 'parent':
       default:
-        return (
-          <>
-            <Button asChild variant="ghost"><Link href="/stories">My Stories</Link></Button>
-            <Button asChild variant="ghost"><Link href="/parent/children">Manage Children</Link></Button>
-            <Button asChild variant="ghost"><Link href="/parent/orders">Orders</Link></Button>
-            <Button variant="ghost" onClick={() => startWizard('parent-onboarding')}>
-              <HelpCircle className="mr-2 h-4 w-4" />
-              Help
-            </Button>
-          </>
-        );
+        // Simplified parent mode on home page - no nav links shown
+        return null;
     }
   };
 
@@ -109,13 +94,20 @@ export default function Header() {
           <Link href="/" className="flex items-center space-x-2">
             <Logo />
           </Link>
-          {roleMode === 'child' && (
-            <Button variant="outline" size="sm" onClick={handleSwitchToParent} className="ml-4">
-              Switch to Parent
-            </Button>
-          )}
         </div>
         <nav className="flex items-center gap-4">
+          {/* Show "Return to Parent" for child mode */}
+          {roleMode === 'child' && (
+            <Button asChild variant="ghost">
+              <Link href="/parent/children">Return to Parent</Link>
+            </Button>
+          )}
+          {/* Show "Switch to Parent" for parent mode */}
+          {roleMode === 'parent' && (
+            <Button asChild variant="ghost">
+              <Link href="/parent">Switch to Parent</Link>
+            </Button>
+          )}
           {renderNavLinks()}
           {user ? (
              <DropdownMenu>

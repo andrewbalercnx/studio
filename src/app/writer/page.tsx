@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useFirestore } from '@/firebase';
 import { collection, doc, addDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
-import type { StoryType, StoryPhase, PromptConfig, StoryOutputType } from '@/lib/types';
+import type { StoryPhase, PromptConfig, StoryOutputType } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -17,18 +17,32 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { LoaderCircle, Plus, Edit } from 'lucide-react';
+import { LoaderCircle, Plus, Edit, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
 
-type StoryTypeForm = {
-  id?: string;
-  name: string;
-  shortDescription: string;
-  defaultPhaseId: string;
-  endingPhaseId: string;
-  status: 'draft' | 'live' | 'archived';
-  arcSteps: string;
-  levelBands: string[];
-};
+// StoryTypesPanel - Now redirects to /admin/storyTypes which has the full editor with promptConfig
+function StoryTypesPanel() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Story Types</CardTitle>
+        <CardDescription>Arc templates, prompt configuration, and metadata for the story catalog.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="text-center py-8 border-2 border-dashed rounded-lg">
+          <p className="text-muted-foreground mb-4">
+            Story Types are now managed in the Admin section with the full Prompt Config editor.
+          </p>
+          <Button asChild>
+            <Link href="/admin/storyTypes">
+              <ExternalLink className="mr-2 h-4 w-4" /> Open Story Types Editor
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 type StoryPhaseForm = {
   id?: string;
@@ -66,8 +80,6 @@ type StoryOutputForm = {
   pageCount: string;
 };
 
-const LEVEL_BANDS = ['low', 'mid', 'high'];
-
 export default function StoryEditorWorkspace() {
   return (
     <div className="container mx-auto px-4 py-6 sm:py-10">
@@ -102,270 +114,6 @@ export default function StoryEditorWorkspace() {
         </TabsContent>
       </Tabs>
     </div>
-  );
-}
-
-function StoryTypesPanel() {
-  const firestore = useFirestore();
-  const storyTypesQuery = useMemo(() => (firestore ? collection(firestore, 'storyTypes') : null), [firestore]);
-  const { data: storyTypes, loading } = useCollection<StoryType>(storyTypesQuery);
-  const storyPhasesQuery = useMemo(() => (firestore ? collection(firestore, 'storyPhases') : null), [firestore]);
-  const { data: phases, loading: phasesLoading } = useCollection<StoryPhase>(storyPhasesQuery);
-  const { toast } = useToast();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const defaultForm: StoryTypeForm = {
-    name: '',
-    shortDescription: '',
-    defaultPhaseId: '',
-    endingPhaseId: '',
-    status: 'draft',
-    arcSteps: '',
-    levelBands: [],
-  };
-  const [form, setForm] = useState<StoryTypeForm>(defaultForm);
-
-  const defaultPhaseSelections = useMemo(() => {
-    const storyBeatPhase = phases?.find((phase) => phase.phaseType === 'storyBeat');
-    const endingPhase = phases?.find((phase) => phase.phaseType === 'ending');
-    const fallbackPhase = phases?.[0];
-
-    return {
-      defaultPhaseId: storyBeatPhase?.id || fallbackPhase?.id || '',
-      endingPhaseId: endingPhase?.id || fallbackPhase?.id || '',
-    };
-  }, [phases]);
-
-  const openCreate = () => {
-    setForm({
-      ...defaultForm,
-      defaultPhaseId: defaultPhaseSelections.defaultPhaseId,
-      endingPhaseId: defaultPhaseSelections.endingPhaseId,
-    });
-    setDialogOpen(true);
-  };
-
-  const openEdit = (item: StoryType) => {
-    setForm({
-      id: item.id,
-      name: item.name,
-      shortDescription: item.shortDescription || '',
-      defaultPhaseId: item.defaultPhaseId || '',
-      endingPhaseId: item.endingPhaseId || '',
-      status: item.status || 'draft',
-      arcSteps: item.arcTemplate?.steps?.join('\n') || '',
-      levelBands: item.levelBands || [],
-    });
-    setDialogOpen(true);
-  };
-
-  const toggleLevelBand = (band: string) => {
-    setForm((prev) => ({
-      ...prev,
-      levelBands: prev.levelBands.includes(band)
-        ? prev.levelBands.filter((value) => value !== band)
-        : [...prev.levelBands, band],
-    }));
-  };
-
-  const handleSave = async () => {
-    if (!firestore) return;
-    if (!form.name || !form.defaultPhaseId || !form.endingPhaseId) {
-      toast({ title: 'Missing fields', description: 'Name, default phase, and ending phase are required.', variant: 'destructive' });
-      return;
-    }
-    if (form.levelBands.length === 0) {
-      toast({ title: 'Select at least one level band', variant: 'destructive' });
-      return;
-    }
-    setIsSaving(true);
-    const payload = {
-      name: form.name,
-      shortDescription: form.shortDescription,
-      status: form.status,
-      defaultPhaseId: form.defaultPhaseId,
-      endingPhaseId: form.endingPhaseId,
-      levelBands: form.levelBands,
-      arcTemplate: {
-        steps: form.arcSteps
-          .split('\n')
-          .map((step) => step.trim())
-          .filter(Boolean),
-      },
-      updatedAt: serverTimestamp(),
-    };
-    try {
-      if (form.id) {
-        await setDoc(doc(firestore, 'storyTypes', form.id), payload, { merge: true });
-      } else {
-        await addDoc(collection(firestore, 'storyTypes'), {
-          ...payload,
-          createdAt: serverTimestamp(),
-        });
-      }
-      toast({ title: 'Story type saved' });
-      setDialogOpen(false);
-    } catch (error: any) {
-      toast({ title: 'Error saving story type', description: error.message, variant: 'destructive' });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>Story Types</CardTitle>
-          <CardDescription>Arc templates and metadata for the story catalog.</CardDescription>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" /> New Story Type
-        </Button>
-      </CardHeader>
-      <CardContent>
-        {loading && <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />}
-        {!loading && storyTypes && storyTypes.length === 0 && (
-          <p className="text-sm text-muted-foreground">No story types yet. Create one to get started.</p>
-        )}
-        {!phasesLoading && (!phases || phases.length === 0) && (
-          <p className="text-sm text-muted-foreground">
-            You need at least one story phase before creating story types. Use the Story Phases tab first.
-          </p>
-        )}
-        {!loading && storyTypes && storyTypes.length > 0 && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Default Phase</TableHead>
-                <TableHead>Ending Phase</TableHead>
-                <TableHead>Level Bands</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {storyTypes.map((type) => (
-                <TableRow key={type.id}>
-                  <TableCell className="font-medium">{type.name}</TableCell>
-                  <TableCell className="capitalize">{type.status}</TableCell>
-                  <TableCell>{type.defaultPhaseId}</TableCell>
-                  <TableCell>{type.endingPhaseId}</TableCell>
-                  <TableCell>{type.levelBands?.join(', ')}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(type)}>
-                      <Edit className="mr-1 h-4 w-4" /> Edit
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{form.id ? 'Edit Story Type' : 'New Story Type'}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="story-type-name">Name</Label>
-              <Input id="story-type-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Animal Adventure" />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="story-type-desc">Short Description</Label>
-              <Textarea id="story-type-desc" value={form.shortDescription} onChange={(e) => setForm({ ...form, shortDescription: e.target.value })} rows={2} />
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label>Status</Label>
-                <Select value={form.status} onValueChange={(value) => setForm({ ...form, status: value as StoryTypeForm['status'] })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="live">Live</SelectItem>
-                    <SelectItem value="archived">Archived</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label>Default Phase</Label>
-                <Select
-                  value={form.defaultPhaseId}
-                  onValueChange={(value) => setForm({ ...form, defaultPhaseId: value })}
-                  disabled={phasesLoading || !phases?.length}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={phasesLoading ? 'Loading phases...' : 'Select a phase'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {phases?.map((phase) => (
-                      <SelectItem key={phase.id} value={phase.id}>
-                        {phase.name} ({phase.phaseType})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label>Ending Phase</Label>
-                <Select
-                  value={form.endingPhaseId}
-                  onValueChange={(value) => setForm({ ...form, endingPhaseId: value })}
-                  disabled={phasesLoading || !phases?.length}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={phasesLoading ? 'Loading phases...' : 'Select a phase'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {phases?.map((phase) => (
-                      <SelectItem key={phase.id} value={phase.id}>
-                        {phase.name} ({phase.phaseType})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label>Level Bands</Label>
-              <p className="text-xs text-muted-foreground">Select all reading bands this story type supports.</p>
-              <div className="flex flex-wrap gap-2">
-                {LEVEL_BANDS.map((band) => {
-                  const active = form.levelBands.includes(band);
-                  return (
-                    <Button
-                      key={band}
-                      type="button"
-                      variant={active ? 'default' : 'outline'}
-                      onClick={() => toggleLevelBand(band)}
-                      className="capitalize"
-                    >
-                      {band}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label>Arc Steps (one per line)</Label>
-              <Textarea value={form.arcSteps} onChange={(e) => setForm({ ...form, arcSteps: e.target.value })} rows={4} placeholder={'Introduction\nRising Action\nClimax\nResolution'} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Save Story Type
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </Card>
   );
 }
 

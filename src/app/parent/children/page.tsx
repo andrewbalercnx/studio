@@ -3,10 +3,11 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Copy, LoaderCircle, Plus, User, Pencil, X, Sparkles, Image as ImageIcon } from 'lucide-react';
+import { Copy, LoaderCircle, Plus, User, Pencil, X, Sparkles, Image as ImageIcon, Volume2, Trash2 } from 'lucide-react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useFirestore } from '@/firebase';
-import { collection, doc, onSnapshot, setDoc, serverTimestamp, query, where, writeBatch, updateDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc, serverTimestamp, query, where, writeBatch, updateDoc, deleteField } from 'firebase/firestore';
+import { DeleteButton, UndoBanner, useDeleteWithUndo, type DeletedItem } from '@/components/shared/DeleteWithUndo';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { ChildProfile } from '@/lib/types';
@@ -23,6 +24,8 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
+import { EntityEditor } from '@/components/shared/EntityEditor';
+import { VoiceSelector } from '@/components/parent/VoiceSelector';
 
 function slugify(text: string) {
     return text
@@ -111,119 +114,35 @@ function PreferenceInput({ label, placeholder, values, onChange }: PreferenceInp
     );
 }
 
+// Wrapper to use EntityEditor for children
 function ChildForm({ parentUid, onSave, child }: { parentUid: string, onSave: () => void, child?: ChildProfile | null }) {
-    const firestore = useFirestore();
-    const { toast } = useToast();
-    const isEditing = !!child;
-    const [name, setName] = useState(child?.displayName ?? '');
-    const [description, setDescription] = useState(child?.description ?? '');
-    const [dob, setDob] = useState(formatDateInput(child?.dateOfBirth));
-    const [isSaving, setIsSaving] = useState(false);
-    const [favoriteColors, setFavoriteColors] = useState<string[]>(child?.preferences?.favoriteColors ?? []);
-    const [favoriteFoods, setFavoriteFoods] = useState<string[]>(child?.preferences?.favoriteFoods ?? []);
-    const [favoriteGames, setFavoriteGames] = useState<string[]>(child?.preferences?.favoriteGames ?? []);
-    const [favoriteSubjects, setFavoriteSubjects] = useState<string[]>(child?.preferences?.favoriteSubjects ?? []);
-
-    const buildPreferencesPayload = () => {
-        const payload: Record<string, string[]> = {};
-        if (favoriteColors.length) payload.favoriteColors = favoriteColors;
-        if (favoriteFoods.length) payload.favoriteFoods = favoriteFoods;
-        if (favoriteGames.length) payload.favoriteGames = favoriteGames;
-        if (favoriteSubjects.length) payload.favoriteSubjects = favoriteSubjects;
-        return Object.keys(payload).length > 0 ? payload : {};
-    };
-
-    const handleSubmit = async () => {
-        if (!firestore || !name || (!dob && !isEditing)) {
-            toast({ title: 'Please fill out all fields.', variant: 'destructive' });
-            return;
-        }
-        setIsSaving(true);
-        const childId = child?.id ?? `${slugify(name)}-${Date.now().toString().slice(-6)}`;
-        const docRef = doc(firestore, 'children', childId);
-        const preferencesPayload = buildPreferencesPayload();
-        const writePayload: Record<string, any> = {
-            displayName: name,
-            description: description,
-            ownerParentUid: parentUid,
-            updatedAt: serverTimestamp(),
-        };
-
-        if (!isEditing) {
-            const initialAvatarSeed = name || 'avatar';
-            writePayload.avatarUrl = `https://picsum.photos/seed/${initialAvatarSeed}/200/200`;
-            writePayload.photos = [];
-            writePayload.createdAt = serverTimestamp();
-        }
-
-        if (dob) {
-            writePayload.dateOfBirth = new Date(dob);
-        }
-
-        if (Object.keys(preferencesPayload).length > 0) {
-            writePayload.preferences = preferencesPayload;
-        } else if (isEditing) {
-            writePayload.preferences = {};
-        }
-
-        const writePromise = isEditing
-            ? updateDoc(docRef, writePayload)
-            : setDoc(docRef, writePayload);
-
-        writePromise
-            .then(() => {
-                toast({
-                    title: isEditing ? 'Child profile updated!' : 'Child profile created!',
-                    description: isEditing ? `${name}'s preferences were saved.` : `${name} has been added.`,
-                });
-                onSave();
-            })
-            .catch((serverError: any) => {
-                const permissionError = new FirestorePermissionError({
-                    path: docRef.path,
-                    operation: isEditing ? 'update' : 'create',
-                    requestResourceData: writePayload,
-                });
-                errorEmitter.emit('permission-error', permissionError);
-            })
-            .finally(() => {
-                setIsSaving(false);
-            });
-    };
-
     return (
-        <div className="space-y-4">
-            <div className="space-y-2">
-                <Label htmlFor="name">Child's Name</Label>
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g., Loves dinosaurs and building forts." />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="dob">Date of Birth</Label>
-                <Input id="dob" type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
-            </div>
-            <PreferenceInput label="Favorite Colors" placeholder="Add a color" values={favoriteColors} onChange={setFavoriteColors} />
-            <PreferenceInput label="Favorite Foods" placeholder="Add a food" values={favoriteFoods} onChange={setFavoriteFoods} />
-            <PreferenceInput label="Favorite Games" placeholder="Add a game or activity" values={favoriteGames} onChange={setFavoriteGames} />
-            <PreferenceInput label="Favorite School Subjects" placeholder="Add a subject (art, science...)" values={favoriteSubjects} onChange={setFavoriteSubjects} />
-            <Button onClick={handleSubmit} disabled={isSaving}>
-                {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : null}
-                {isEditing ? 'Update Child' : 'Save Child'}
-            </Button>
-        </div>
-    )
+        <EntityEditor
+            entityType="child"
+            entity={child}
+            parentUid={parentUid}
+            onSave={onSave}
+            onCancel={onSave}
+        />
+    );
 }
 
 function AvatarGenerator({ child, onAvatarUpdate }: { child: ChildProfile, onAvatarUpdate: (url: string) => void }) {
     const { user } = useUser();
     const [isLoading, setIsLoading] = useState(false);
+    const [isAnimationLoading, setIsAnimationLoading] = useState(false);
     const [generatedAvatar, setGeneratedAvatar] = useState<string | null>(null);
+    const [generatedAnimation, setGeneratedAnimation] = useState<string | null>(null);
     const [feedback, setFeedback] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [animationError, setAnimationError] = useState<string | null>(null);
     const { toast } = useToast();
+
+    // The avatar to display: newly generated > existing avatar > null
+    const displayAvatar = generatedAvatar || child.avatarUrl;
+    // The animation to display: newly generated > existing animation > null
+    const displayAnimation = generatedAnimation || child.avatarAnimationUrl;
+    const animationStatus = child.avatarAnimationGeneration?.status;
 
     const handleGenerate = async () => {
         if (!user) {
@@ -264,6 +183,72 @@ function AvatarGenerator({ child, onAvatarUpdate }: { child: ChildProfile, onAva
         }
     };
 
+    const handleGenerateAnimation = async () => {
+        if (!user) {
+            toast({ title: 'Authentication Error', description: 'Please sign in again.', variant: 'destructive' });
+            return;
+        }
+
+        if (!displayAvatar) {
+            toast({ title: 'No Avatar', description: 'Please generate an avatar first before creating an animation.', variant: 'destructive' });
+            return;
+        }
+
+        setIsAnimationLoading(true);
+        setAnimationError(null);
+        try {
+            const idToken = await user.getIdToken();
+            const res = await fetch('/api/generateAvatar/animation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`,
+                },
+                body: JSON.stringify({ childId: child.id, forceRegenerate: true }),
+            });
+            const result = await res.json();
+            console.log('[AvatarGenerator] Animation generation result:', result);
+            // Log debug info prominently for Veo troubleshooting
+            if (result.debugInfo) {
+                console.log('[AvatarGenerator] === VEO DEBUG INFO ===');
+                console.log('[AvatarGenerator] Veo Attempted:', result.debugInfo.veoAttempted);
+                console.log('[AvatarGenerator] Fallback Used:', result.debugInfo.fallbackUsed);
+                if (result.debugInfo.veoError) {
+                    console.log('[AvatarGenerator] Veo Error:', result.debugInfo.veoError);
+                }
+                if (result.debugInfo.veoErrorCode) {
+                    console.log('[AvatarGenerator] Veo Error Code:', result.debugInfo.veoErrorCode);
+                }
+                if (result.debugInfo.veoResponse) {
+                    console.log('[AvatarGenerator] Veo Response:', result.debugInfo.veoResponse);
+                }
+                console.log('[AvatarGenerator] === END VEO DEBUG INFO ===');
+            }
+            if (!res.ok || !result.ok) {
+                throw new Error(result.errorMessage || 'Failed to generate animation.');
+            }
+            console.log('[AvatarGenerator] Setting generatedAnimation to:', result.animationUrl);
+            console.log('[AvatarGenerator] Current child.avatarAnimationUrl:', child.avatarAnimationUrl);
+            setGeneratedAnimation(result.animationUrl);
+
+            // Check if it's a video or static image
+            const decodedUrl = decodeURIComponent(result.animationUrl || '');
+            const isVideo = decodedUrl.includes('.mp4') || decodedUrl.includes('.webm');
+            console.log('[AvatarGenerator] New animation is video:', isVideo, 'URL preview:', decodedUrl.substring(0, 150));
+
+            toast({
+                title: 'Animation Generated!',
+                description: isVideo ? 'Video animation created!' : 'Dance pose image created (Veo video unavailable).'
+            });
+        } catch (err: any) {
+            console.error('[AvatarGenerator] Animation generation error:', err);
+            setAnimationError(err.message);
+            toast({ title: 'Animation Generation Failed', description: err.message, variant: 'destructive' });
+        } finally {
+            setIsAnimationLoading(false);
+        }
+    };
+
     return (
         <Card className="bg-muted/50">
             <CardHeader>
@@ -271,29 +256,138 @@ function AvatarGenerator({ child, onAvatarUpdate }: { child: ChildProfile, onAva
                 <CardDescription>Create a cartoon avatar from your child's photos.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="flex justify-center">
-                    {isLoading ? (
-                        <div className="h-40 w-40 flex items-center justify-center bg-muted rounded-full">
-                            <LoaderCircle className="h-10 w-10 animate-spin text-primary" />
+                {/* Avatar and Animation side by side */}
+                <div className="grid grid-cols-2 gap-6">
+                    {/* Static Avatar */}
+                    <div className="space-y-3">
+                        <Label className="text-center block font-medium">Static Avatar</Label>
+                        <div className="flex justify-center">
+                            {isLoading ? (
+                                <div className="h-32 w-32 flex items-center justify-center bg-muted rounded-full">
+                                    <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
+                                </div>
+                            ) : displayAvatar ? (
+                                <div className="relative">
+                                    <Image src={displayAvatar} alt="Avatar" width={128} height={128} className="rounded-full border-4 border-primary shadow-md object-cover" />
+                                    {generatedAvatar && (
+                                        <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-500 text-xs">New!</Badge>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="h-32 w-32 flex items-center justify-center bg-muted rounded-full text-muted-foreground">
+                                    <User className="h-8 w-8" />
+                                </div>
+                            )}
                         </div>
-                    ) : generatedAvatar ? (
-                        <Image src={generatedAvatar} alt="Generated avatar" width={160} height={160} className="rounded-full border-4 border-primary shadow-md object-cover" />
-                    ) : (
-                        <div className="h-40 w-40 flex items-center justify-center bg-muted rounded-full text-muted-foreground">
-                            <User className="h-10 w-10" />
+                        {error && <p className="text-xs text-destructive text-center">{error}</p>}
+                    </div>
+
+                    {/* Dancing Animation */}
+                    <div className="space-y-3">
+                        <Label className="text-center block font-medium">Dancing Animation</Label>
+                        <div className="flex justify-center">
+                            {isAnimationLoading ? (
+                                <div className="h-32 w-32 flex items-center justify-center bg-muted rounded-full">
+                                    <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
+                                </div>
+                            ) : displayAnimation ? (
+                                <div className="relative">
+                                    {/* Check if it's a video - decode URL first since Firebase encodes the path */}
+                                    {(() => {
+                                        const decodedUrl = decodeURIComponent(displayAnimation);
+                                        const isVideo = decodedUrl.includes('.mp4') || decodedUrl.includes('.webm');
+                                        const isGif = decodedUrl.includes('.gif');
+                                        const isStaticImage = decodedUrl.includes('.png') || decodedUrl.includes('.jpg') || decodedUrl.includes('.jpeg');
+                                        console.log('[AvatarGenerator] Animation display:', { isVideo, isGif, isStaticImage, decodedUrl: decodedUrl.substring(0, 100) });
+                                        if (isVideo) {
+                                            return (
+                                                <video
+                                                    src={displayAnimation}
+                                                    autoPlay
+                                                    loop
+                                                    muted
+                                                    playsInline
+                                                    className="h-32 w-32 rounded-full border-4 border-primary shadow-md object-cover"
+                                                />
+                                            );
+                                        }
+                                        if (isGif) {
+                                            // GIF animates natively
+                                            return (
+                                                <img
+                                                    src={displayAnimation}
+                                                    alt="Dancing Avatar"
+                                                    className="h-32 w-32 rounded-full border-4 border-primary shadow-md object-cover"
+                                                />
+                                            );
+                                        }
+                                        // Static image (PNG/JPG) with CSS bounce animation
+                                        return (
+                                            <img
+                                                src={displayAnimation}
+                                                alt="Dancing Avatar"
+                                                className="h-32 w-32 rounded-full border-4 border-primary shadow-md object-cover"
+                                                style={{ animation: 'avatarDance 0.8s ease-in-out infinite' }}
+                                            />
+                                        );
+                                    })()}
+                                    {generatedAnimation && (
+                                        <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-500 text-xs">New!</Badge>
+                                    )}
+                                    {animationStatus === 'generating' && (
+                                        <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-yellow-500 text-xs">Generating...</Badge>
+                                    )}
+                                </div>
+                            ) : displayAvatar ? (
+                                <div className="h-32 w-32 flex items-center justify-center bg-muted/50 rounded-full text-muted-foreground border-2 border-dashed">
+                                    <span className="text-xs text-center px-2">Click below to generate</span>
+                                </div>
+                            ) : (
+                                <div className="h-32 w-32 flex items-center justify-center bg-muted rounded-full text-muted-foreground">
+                                    <span className="text-xs text-center px-2">Avatar needed first</span>
+                                </div>
+                            )}
                         </div>
-                    )}
+                        {animationError && <p className="text-xs text-destructive text-center">{animationError}</p>}
+                        {animationStatus === 'error' && child.avatarAnimationGeneration?.lastErrorMessage && (
+                            <p className="text-xs text-destructive text-center">{child.avatarAnimationGeneration.lastErrorMessage}</p>
+                        )}
+                    </div>
                 </div>
-                {error && <p className="text-sm text-destructive text-center">{error}</p>}
+
+                {/* CSS for dance animation */}
+                <style dangerouslySetInnerHTML={{ __html: `
+                    @keyframes avatarDance {
+                        0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+                        25% { transform: translateY(-6px) rotate(-3deg) scale(1.02); }
+                        50% { transform: translateY(0) rotate(0deg) scale(1); }
+                        75% { transform: translateY(-6px) rotate(3deg) scale(1.02); }
+                    }
+                `}} />
+
                 <div className="space-y-2">
                     <Label htmlFor="feedback">Feedback (optional)</Label>
                     <Textarea id="feedback" value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="e.g., make the hair blonder, add glasses..." />
                 </div>
+
+                {/* Avatar Generation Buttons */}
                 <div className="flex gap-2">
                     <Button onClick={handleGenerate} disabled={isLoading} className="flex-1">
-                        {isLoading ? 'Generating...' : (generatedAvatar ? 'Regenerate' : 'Generate Avatar')}
+                        {isLoading ? 'Generating...' : (displayAvatar ? 'Regenerate Avatar' : 'Generate Avatar')}
                     </Button>
-                    {generatedAvatar && <Button onClick={handleAccept} className="flex-1">Accept</Button>}
+                    {generatedAvatar && <Button onClick={handleAccept} className="flex-1">Accept & Save</Button>}
+                </div>
+
+                {/* Animation Generation Button */}
+                <div className="flex gap-2">
+                    <Button
+                        onClick={handleGenerateAnimation}
+                        disabled={isAnimationLoading || !displayAvatar}
+                        variant="outline"
+                        className="flex-1"
+                    >
+                        {isAnimationLoading ? 'Generating Animation...' : (displayAnimation ? 'Regenerate Animation' : 'Generate Dancing Animation')}
+                    </Button>
                 </div>
             </CardContent>
         </Card>
@@ -427,6 +521,8 @@ export default function ManageChildrenPage() {
     const [selectedChild, setSelectedChild] = useState<ChildProfile | null>(null);
     const [editingChild, setEditingChild] = useState<ChildProfile | null>(null);
     const [isEditOpen, setIsEditOpen] = useState(false);
+    const [isVoiceOpen, setIsVoiceOpen] = useState(false);
+    const [voiceChild, setVoiceChild] = useState<ChildProfile | null>(null);
 
     const childrenQuery = useMemo(() => {
         if (!user || !firestore) return null;
@@ -467,6 +563,57 @@ export default function ManageChildrenPage() {
         setIsEditOpen(true);
     }
 
+    const handleManageVoice = (child: ChildProfile) => {
+        setVoiceChild(child);
+        setIsVoiceOpen(true);
+    }
+
+    const handleVoiceSelect = async (childId: string, voiceId: string) => {
+        if (!firestore) return;
+        const childRef = doc(firestore, 'children', childId);
+        await updateDoc(childRef, {
+            preferredVoiceId: voiceId,
+            updatedAt: serverTimestamp(),
+        });
+    }
+
+    // Delete with undo functionality
+    const { deletedItem, markAsDeleted, clearDeletedItem } = useDeleteWithUndo();
+
+    const handleDeleteChild = useCallback(async (childId: string) => {
+        if (!firestore || !user) return;
+        const child = children.find(c => c.id === childId);
+        if (!child) return;
+
+        const childRef = doc(firestore, 'children', childId);
+        await updateDoc(childRef, {
+            deletedAt: serverTimestamp(),
+            deletedBy: user.uid,
+            updatedAt: serverTimestamp(),
+        });
+
+        markAsDeleted({ id: childId, name: child.displayName, type: 'child' });
+        toast({ title: 'Child profile deleted', description: `${child.displayName} has been removed.` });
+    }, [firestore, user, children, markAsDeleted, toast]);
+
+    const handleUndoDelete = useCallback(async (childId: string) => {
+        if (!firestore) return;
+
+        const childRef = doc(firestore, 'children', childId);
+        await updateDoc(childRef, {
+            deletedAt: deleteField(),
+            deletedBy: deleteField(),
+            updatedAt: serverTimestamp(),
+        });
+
+        toast({ title: 'Undo successful', description: 'The child profile has been restored.' });
+    }, [firestore, toast]);
+
+    // Filter out deleted children for display
+    const visibleChildren = useMemo(() => {
+        return children.filter(child => !child.deletedAt);
+    }, [children]);
+
     const diagnostics = {
         page: 'parent-children',
         auth: { isAuthenticated: !!user, isAdmin, loading: userLoading || adminLoading, error: null, },
@@ -503,7 +650,7 @@ export default function ManageChildrenPage() {
         if (error) {
             return <p className="text-destructive text-center py-8">{error}</p>;
         }
-        if (children.length === 0) {
+        if (visibleChildren.length === 0) {
             return (
                 <div className="text-center py-8 border-2 border-dashed rounded-lg">
                     <p className="text-muted-foreground mb-4">No children found.</p>
@@ -514,13 +661,7 @@ export default function ManageChildrenPage() {
 
         return (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {children.map((child) => {
-                    const preferenceSections = [
-                        { label: 'Colors', values: child.preferences?.favoriteColors },
-                        { label: 'Foods', values: child.preferences?.favoriteFoods },
-                        { label: 'Games', values: child.preferences?.favoriteGames },
-                        { label: 'Subjects', values: child.preferences?.favoriteSubjects },
-                    ].filter((section) => Array.isArray(section.values) && section.values.length > 0);
+                {visibleChildren.map((child) => {
                     return (
                         <Card key={child.id}>
                             <CardHeader className="flex flex-row items-center gap-4">
@@ -535,27 +676,51 @@ export default function ManageChildrenPage() {
                             </CardHeader>
                             <CardContent>
                                 {child.description && <p className="text-sm text-muted-foreground mb-3">{child.description}</p>}
-                                {preferenceSections.length > 0 ? (
-                                    <div className="flex flex-wrap gap-2">
-                                        {preferenceSections.map((section) => (
-                                            <Badge key={`${child.id}-${section.label}`} variant="outline">
-                                                {section.label}: {section.values!.join(', ')}
-                                            </Badge>
-                                        ))}
+                                {(child.likes?.length > 0 || child.dislikes?.length > 0) ? (
+                                    <div className="space-y-2">
+                                        {child.likes?.length > 0 && (
+                                            <div>
+                                                <p className="text-xs font-semibold mb-1">Likes:</p>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {child.likes.map((like) => (
+                                                        <Badge key={like} variant="secondary" className="text-xs">{like}</Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {child.dislikes?.length > 0 && (
+                                            <div>
+                                                <p className="text-xs font-semibold mb-1">Dislikes:</p>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {child.dislikes.map((dislike) => (
+                                                        <Badge key={dislike} variant="destructive" className="text-xs opacity-70">{dislike}</Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 ) : (
-                                    <p className="text-sm text-muted-foreground italic">No preferences saved yet.</p>
+                                    <p className="text-sm text-muted-foreground italic">No likes/dislikes saved yet.</p>
                                 )}
                             </CardContent>
-                            <CardFooter className="flex justify-end gap-2">
+                            <CardFooter className="flex flex-wrap justify-end gap-2">
                                 <Button variant="outline" size="sm" onClick={() => handleEditChild(child)}>
                                     <Pencil className="mr-2 h-4 w-4" />
                                     Edit
                                 </Button>
                                 <Button variant="outline" size="sm" onClick={() => handleManagePhotos(child)}>
                                     <ImageIcon className="mr-2 h-4 w-4" />
-                                    Manage Photos
+                                    Photos
                                 </Button>
+                                <Button variant="outline" size="sm" onClick={() => handleManageVoice(child)}>
+                                    <Volume2 className="mr-2 h-4 w-4" />
+                                    Voice
+                                </Button>
+                                <DeleteButton
+                                    item={{ id: child.id, name: child.displayName }}
+                                    itemType="child"
+                                    onDelete={handleDeleteChild}
+                                />
                             </CardFooter>
                         </Card>
                     );
@@ -566,6 +731,11 @@ export default function ManageChildrenPage() {
 
     return (
         <>
+            <UndoBanner
+                deletedItem={deletedItem}
+                onUndo={handleUndoDelete}
+                onDismiss={clearDeletedItem}
+            />
             <div className="container mx-auto p-4 sm:p-6 md:p-8">
                 <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                     <DialogContent>
@@ -592,6 +762,20 @@ export default function ManageChildrenPage() {
                         </DialogHeader>
                         {user && editingChild && (
                             <ChildForm parentUid={user.uid} onSave={() => setIsEditOpen(false)} child={editingChild} />
+                        )}
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={isVoiceOpen} onOpenChange={setIsVoiceOpen}>
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle>Story Voice for {voiceChild?.displayName}</DialogTitle>
+                        </DialogHeader>
+                        {voiceChild && (
+                            <VoiceSelector
+                                child={voiceChild}
+                                onVoiceSelect={(voiceId) => handleVoiceSelect(voiceChild.id, voiceId)}
+                            />
                         )}
                     </DialogContent>
                 </Dialog>

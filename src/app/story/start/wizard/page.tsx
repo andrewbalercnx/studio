@@ -60,7 +60,6 @@ export default function StartWizardStoryPage() {
 
         // Step 2: Create Story Session
         let storySessionId: string;
-        let mainCharacterId: string;
         try {
             const storySessionRef = doc(collection(firestore, 'storySessions'));
             storySessionId = storySessionRef.id;
@@ -80,48 +79,14 @@ export default function StartWizardStoryPage() {
 
             const batch = writeBatch(firestore);
             batch.set(storySessionRef, newSessionData);
-            
+
             const childSessionRef = doc(firestore, 'children', childId, 'sessions', storySessionId);
             batch.set(childSessionRef, newSessionData);
-            
+
             await batch.commit();
 
         } catch (e: any) {
             throw new Error(`Failed to create story session: ${e.message}`);
-        }
-        
-        // Step 3: Create Character
-        try {
-            const charactersRef = collection(firestore, 'characters');
-            const newCharacterData = {
-              ownerChildId: childId,
-              ownerParentUid: user.uid,
-              sessionId: storySessionId,
-              displayName: childProfile.displayName || 'You',
-              role: 'family' as const,
-              relatedTo: childId,
-              realPersonRef: { kind: 'self' as const, label: 'You' },
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            };
-            const newCharacterRef = await addDoc(charactersRef, newCharacterData);
-            mainCharacterId = newCharacterRef.id;
-
-        } catch (e: any) {
-            throw new Error(`Failed to create character: ${e.message}`);
-        }
-
-        // Step 4: Link Character to Session
-        try {
-            const sessionRef = doc(firestore, 'storySessions', storySessionId);
-            const childSessionRef = doc(firestore, 'children', childId, 'sessions', storySessionId);
-            const batch = writeBatch(firestore);
-            batch.update(sessionRef, { mainCharacterId: mainCharacterId });
-            batch.update(childSessionRef, { mainCharacterId: mainCharacterId });
-            await batch.commit();
-
-        } catch (e: any) {
-            throw new Error(`Failed to link character to session: ${e.message}`);
         }
 
         router.push(`/story/wizard/${storySessionId}`);

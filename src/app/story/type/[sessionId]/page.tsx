@@ -7,7 +7,7 @@ import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
 import { doc, collection, query, where, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useDocument, useCollection } from '@/lib/firestore-hooks';
-import type { StorySession, StoryType } from '@/lib/types';
+import type { StorySession, StoryType, ChildProfile } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { LoaderCircle, CheckCircle, Copy } from 'lucide-react';
@@ -15,6 +15,54 @@ import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 
+function getChildAgeYears(child?: ChildProfile | null): number | null {
+    const dob = child?.dateOfBirth?.toDate?.() ?? (child?.dateOfBirth ? new Date(child.dateOfBirth) : null);
+    if (!dob) return null;
+    const diff = Date.now() - dob.getTime();
+    if (diff <= 0) return null;
+    return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
+}
+
+function matchesChildAge(storyType: StoryType, age: number | null): boolean {
+    if (age === null) return true;
+
+    // Use new ageFrom/ageTo fields if available
+    if (storyType.ageFrom !== undefined || storyType.ageTo !== undefined) {
+        const minAge = storyType.ageFrom ?? 0;
+        const maxAge = storyType.ageTo ?? 100;
+        return age >= minAge && age <= maxAge;
+    }
+
+    // Fallback to legacy ageRange string parsing
+    const ageRange = storyType.ageRange || '';
+    const rangeMatch = ageRange.match(/(\d+)\s*-\s*(\d+)/);
+    if (rangeMatch) {
+        const min = parseInt(rangeMatch[1], 10);
+        const max = parseInt(rangeMatch[2], 10);
+        return age >= min && age <= max;
+    }
+    const plusMatch = ageRange.match(/(\d+)\s*\+/);
+    if (plusMatch) {
+        const min = parseInt(plusMatch[1], 10);
+        return age >= min;
+    }
+    return true;
+}
+
+function formatAgeRange(storyType: StoryType): string {
+    const { ageFrom, ageTo, ageRange } = storyType;
+    if (ageFrom !== undefined || ageTo !== undefined) {
+        if (ageFrom != null && ageTo != null) {
+            return `${ageFrom}-${ageTo}`;
+        } else if (ageFrom != null) {
+            return `${ageFrom}+`;
+        } else if (ageTo != null) {
+            return `up to ${ageTo}`;
+        }
+        return 'All ages';
+    }
+    return ageRange || 'All ages';
+}
 
 function shuffleArray<T>(array: T[]): T[] {
   const newArray = [...array];
@@ -39,20 +87,31 @@ export default function StoryTypeSelectionPage() {
 
     const sessionRef = useMemo(() => firestore ? doc(firestore, 'storySessions', sessionId) : null, [firestore, sessionId]);
     const { data: session, loading: sessionLoading, error: sessionError } = useDocument<StorySession>(sessionRef);
-    
+
+    // Get child profile to filter story types by age
+    const childRef = useMemo(() => firestore && session?.childId ? doc(firestore, 'children', session.childId) : null, [firestore, session?.childId]);
+    const { data: childProfile } = useDocument<ChildProfile>(childRef);
+    const childAge = useMemo(() => getChildAgeYears(childProfile), [childProfile]);
+
     const storyTypesQuery = useMemo(() => firestore ? query(collection(firestore, 'storyTypes'), where('status', '==', 'live')) : null, [firestore]);
     const { data: storyTypes, loading: typesLoading, error: typesError } = useCollection<StoryType>(storyTypesQuery);
-    
+
+    // Filter story types by child's age
+    const ageFilteredTypes = useMemo(() => {
+        if (!storyTypes) return [];
+        return storyTypes.filter(type => matchesChildAge(type, childAge));
+    }, [storyTypes, childAge]);
+
     useEffect(() => {
-        if (storyTypes && storyTypes.length > 0 && shuffledTypes.length === 0) {
-            setShuffledTypes(shuffleArray(storyTypes));
+        if (ageFilteredTypes && ageFilteredTypes.length > 0 && shuffledTypes.length === 0) {
+            setShuffledTypes(shuffleArray(ageFilteredTypes));
         }
-    }, [storyTypes, shuffledTypes.length]);
+    }, [ageFilteredTypes, shuffledTypes.length]);
 
     const handleMoreStories = () => {
-        if (!storyTypes) return;
+        if (!ageFilteredTypes) return;
         const newOffset = visibleOffset + pageSize;
-        if (newOffset >= storyTypes.length) {
+        if (newOffset >= ageFilteredTypes.length) {
             setVisibleOffset(0);
         } else {
             setVisibleOffset(newOffset);
@@ -64,7 +123,7 @@ export default function StoryTypeSelectionPage() {
         try {
             await updateDoc(sessionRef, {
                 storyTypeId: storyType.id,
-                storyPhaseId: storyType.defaultPhaseId,
+                storyPhaseId: storyType.defaultPhaseId || 'story_beat_phase_v1',
                 arcStepIndex: 0,
                 storyTitle: session?.storyTitle || storyType.name, // Set title if not already set
                 updatedAt: serverTimestamp(),
@@ -161,7 +220,7 @@ export default function StoryTypeSelectionPage() {
                         <Card key={st.id} className="flex flex-col">
                              <CardHeader>
                                 <CardTitle>{st.name}</CardTitle>
-                                {st.ageRange && <CardDescription>Age: {st.ageRange}</CardDescription>}
+                                <CardDescription>Age: {formatAgeRange(st)}</CardDescription>
                              </CardHeader>
                             <CardContent className="flex-grow">
                                 <p className="text-sm text-muted-foreground mb-4">{st.shortDescription}</p>

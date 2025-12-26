@@ -147,11 +147,27 @@ const testCases: TestCase[] = [
   { id: 'story-pages-read-own', description: 'Parent can read their story pages', role: 'parent', operation: 'get', path: (ids) => `stories/${ids.storyId}/outputs/output-1/pages/1`, expected: 'allow' },
   { id: 'story-pages-help-read', description: 'Authenticated user can read help-story pages', role: 'parent', operation: 'get', path: () => `stories/help-story/outputs/demo-output/pages/1`, expected: 'allow' },
 
-  // ========== PRINT ORDERS TESTS ==========
+  // ========== STORY BOOKS TESTS ==========
+  { id: 'storybooks-create', description: 'Parent can create a story book', role: 'parent', operation: 'create', path: () => `storyBooks`, data: (ids) => ({ ownerUserId: ids.parentUid, title: 'Test Book' }), expected: 'allow' },
+  { id: 'storybooks-read-own', description: 'Parent can read their own story book', role: 'parent', operation: 'get', path: (ids) => `storyBooks/${ids.storyBookId}`, expected: 'allow' },
+  { id: 'storybooks-list-own', description: 'Parent can list their own story books', role: 'parent', operation: 'list', path: 'storyBooks', queryConstraints: (ids) => [where('ownerUserId', '==', ids.parentUid)], expected: 'allow' },
+
+  // ========== PRINT ORDERS TESTS (Legacy parentUid) ==========
   { id: 'printorders-create', description: 'Parent can create a print order', role: 'parent', operation: 'create', path: () => `printOrders`, data: (ids) => ({ parentUid: ids.parentUid, storyId: ids.storyId, quantity: 1, paymentStatus: 'unpaid', fulfillmentStatus: 'pending' }), expected: 'allow' },
   { id: 'printorders-read-own', description: 'Parent can read their own print order', role: 'parent', operation: 'get', path: (ids) => `printOrders/${ids.printOrderId}`, expected: 'allow' },
   { id: 'printorders-read-other', description: 'Parent cannot read other parent\'s print order', role: 'parent', operation: 'get', path: (ids) => `printOrders/${ids.otherPrintOrderId}`, expected: 'deny' },
   { id: 'printorders-update-own', description: 'Parent can update their own print order', role: 'parent', operation: 'update', path: (ids) => `printOrders/${ids.printOrderId}`, data: { quantity: 2 }, expected: 'allow' },
+
+  // ========== PRINT ORDERS TESTS (Mixam ownerUserId) ==========
+  { id: 'printorders-mixam-create', description: 'Parent can create a Mixam print order', role: 'parent', operation: 'create', path: () => `printOrders`, data: (ids) => ({ ownerUserId: ids.parentUid, storyId: ids.storyId, quantity: 1, fulfillmentStatus: 'pending_approval' }), expected: 'allow' },
+  { id: 'printorders-mixam-read-own', description: 'Parent can read their own Mixam print order', role: 'parent', operation: 'get', path: (ids) => `printOrders/${ids.mixamPrintOrderId}`, expected: 'allow' },
+  { id: 'printorders-mixam-list-own', description: 'Parent can list their own Mixam print orders', role: 'parent', operation: 'list', path: 'printOrders', queryConstraints: (ids) => [where('ownerUserId', '==', ids.parentUid)], expected: 'allow' },
+
+  // ========== PRINT PRODUCTS TESTS ==========
+  { id: 'printproducts-read', description: 'Parent can read print products', role: 'parent', operation: 'get', path: () => `printProducts/product-1`, expected: 'allow' },
+  { id: 'printproducts-list', description: 'Parent can list print products', role: 'parent', operation: 'list', path: 'printProducts', expected: 'allow' },
+  { id: 'printproducts-write-parent', description: 'Parent cannot write print products', role: 'parent', operation: 'update', path: () => `printProducts/product-1`, data: { name: 'Hacked' }, expected: 'deny' },
+  { id: 'printproducts-write-admin', description: 'Admin can write print products', role: 'admin', operation: 'update', path: () => `printProducts/product-1`, data: { name: 'Updated' }, expected: 'allow' },
 
   // ========== CONFIGURATION COLLECTIONS TESTS ==========
   { id: 'promptconfigs-read-parent', description: 'Parent can read prompt configs', role: 'parent', operation: 'get', path: () => `promptConfigs/config-1`, expected: 'allow' },
@@ -360,7 +376,7 @@ export default function FirestoreTestPage() {
         testIds.otherStoryId = 'simulated-other-story-id';
       }
 
-      // 12. Print order
+      // 12. Print order (legacy)
       const printOrderRef = doc(collection(firestore, 'printOrders'));
       testIds.printOrderId = printOrderRef.id;
       await setupDoc('Create print order', printOrderRef, { parentUid: testIds.parentUid, storyId: testIds.storyId, quantity: 1, paymentStatus: 'unpaid', fulfillmentStatus: 'pending' });
@@ -373,6 +389,20 @@ export default function FirestoreTestPage() {
       } else {
         testIds.otherPrintOrderId = 'simulated-other-print-order-id';
       }
+
+      // 14. Story book
+      const storyBookRef = doc(collection(firestore, 'storyBooks'));
+      testIds.storyBookId = storyBookRef.id;
+      await setupDoc('Create story book', storyBookRef, { ownerUserId: testIds.parentUid, title: 'Test Book' });
+
+      // 15. Mixam print order (with ownerUserId)
+      const mixamPrintOrderRef = doc(collection(firestore, 'printOrders'));
+      testIds.mixamPrintOrderId = mixamPrintOrderRef.id;
+      await setupDoc('Create Mixam print order', mixamPrintOrderRef, { ownerUserId: testIds.parentUid, storyId: testIds.storyId, quantity: 1, fulfillmentStatus: 'pending_approval' });
+
+      // 16. Print product
+      const printProductRef = doc(firestore, 'printProducts', 'product-1');
+      await setupDoc('Create print product', printProductRef, { name: 'Test Hardcover', active: true, pricing: { tiers: [] } });
 
       // --- Run Tests ---
       // Track initial user to restore auth state between tests
@@ -458,7 +488,7 @@ export default function FirestoreTestPage() {
     setIsCleaning(true);
     const batch = writeBatch(firestore);
     // CRITICAL: Removed 'users' from this array to prevent deleting live user data.
-    const collections = ['children', 'storySessions', 'characters', 'stories', 'printOrders'];
+    const collections = ['children', 'storySessions', 'characters', 'stories', 'storyBooks', 'printOrders', 'printProducts'];
     let count = 0;
 
     for (const coll of collections) {

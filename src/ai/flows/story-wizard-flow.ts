@@ -5,9 +5,12 @@ import { ai } from '@/ai/genkit';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { z } from 'genkit';
+import type { MessageData } from 'genkit';
 import type { ChildProfile, Character, Story, StoryWizardAnswer, StoryWizardChoice, StoryWizardInput, StoryWizardOutput } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { replacePlaceholdersInText } from '@/lib/resolve-placeholders.server';
+import { buildStoryContext } from '@/lib/story-context-builder';
+import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
 
 
 // Helper to get child's age in years
@@ -39,6 +42,19 @@ const StoryWizardInputSchema = z.object({
   childId: z.string(),
   sessionId: z.string(),
   answers: z.array(StoryWizardAnswerSchema).optional().default([]),
+});
+
+// Internal schema for final story generation output
+const WizardStoryGenOutputSchema = z.object({
+  title: z.string().describe('A suitable title for the story'),
+  vibe: z.string().describe('A one-word vibe for the story (e.g., funny, magical, adventure)'),
+  storyText: z.string().describe('The full story text, using $$document-id$$ for characters'),
+});
+
+// Internal schema for question generation output
+const WizardQuestionGenOutputSchema = z.object({
+  question: z.string().describe('The next simple question for the child'),
+  choices: z.array(StoryWizardChoiceSchema).min(2).max(4).describe('2-4 short, imaginative choices'),
 });
 
 const StoryWizardOutputSchema = z.discriminatedUnion('state', [
@@ -77,61 +93,59 @@ const storyWizardFlowInternal = ai.defineFlow(
     const firestore = getFirestore();
 
     const buildCharacterDescription = (character: Character) => {
-        const traits = character.traits?.length ? ` who is ${character.traits.join(', ')}` : '';
-        return `${character.displayName} (a ${character.role}${traits})`;
+        const likes = character.likes?.length ? `, likes ${character.likes.join(', ')}` : '';
+        return `${character.displayName} (a ${character.type}${likes})`;
     };
 
 
     try {
-      // 1. Fetch child and character data
+      // 1. Fetch child profile
       const childRef = firestore.collection('children').doc(childId);
       const childSnap = await childRef.get();
       if (!childSnap.exists) {
-        return { state: 'error', error: 'Child profile not found.', ok: false };
+        return { state: 'error' as const, error: 'Child profile not found.', ok: false as const };
       }
       const child = childSnap.data() as ChildProfile;
-      const childAge = getChildAgeYears(child);
+
+      // 2. Fetch session to get mainCharacterId
+      const sessionRef = firestore.collection('storySessions').doc(sessionId);
+      const sessionSnap = await sessionRef.get();
+      const session = sessionSnap.exists ? sessionSnap.data() : null;
+
+      // 3. Load unified story context (child, siblings, characters)
+      const { data: contextData, formatted: contextFormatted } = await buildStoryContext(
+        child.ownerParentUid,
+        childId,
+        session?.mainCharacterId
+      );
+
+      const childAge = contextData.childAge;
       const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
-
-      const charactersQuery = firestore.collection('characters')
-        .where('ownerParentUid', '==', child.ownerParentUid);
-      const charactersSnap = await charactersQuery.get();
-      const characters = charactersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Character));
-      const mainCharacter = characters.find(c => c.relatedTo === childId && c.role === 'family');
-
-      if (!mainCharacter) {
-        return { state: 'error', error: 'Main character for the child not found.', ok: false };
-      }
-
-      const characterContext = `
-Available Characters:
-- Main Character: ${buildCharacterDescription(mainCharacter)} (ID: $$${mainCharacter.id}$$)
-- Other Characters:
-${characters
-  .filter(c => c.id !== mainCharacter.id)
-  .map(c => `  - ${buildCharacterDescription(c)} (ID: $$${c.id}$$)`)
-  .join('\n')}
-      `.trim();
       
       const MAX_QUESTIONS = 4;
 
+      // Fetch global prompt prefix once for this flow
+      const globalPrefix = await getGlobalPrefix();
+
       if (answers.length >= MAX_QUESTIONS) {
         // 3. All questions answered, generate the final story
-        const storyGenPrompt = `
-You are a master storyteller for young children. Your task is to write a complete, short story based on a child's choices.
+        // Build messages array from the wizard Q&A history
+        const wizardMessages: MessageData[] = answers.flatMap(a => [
+          { role: 'model' as const, content: [{ text: a.question }] },
+          { role: 'user' as const, content: [{ text: a.answer }] },
+        ]);
+
+        const baseStoryGenSystemPrompt = `You are a master storyteller for young children. Your task is to write a complete, short story based on a child's choices from the conversation above.
 
 CHILD'S PROFILE:
 ${ageDescription}
 
-CHARACTERS:
-${characterContext}
-
-CHILD'S CHOICES:
-${answers.map(a => `- When asked "${a.question}", the child chose "${a.answer}"`).join('\n')}
+CONTEXT:
+${contextFormatted.fullContext}
 
 INSTRUCTIONS:
 1. Write a complete, gentle, and engaging story of about 5-7 paragraphs.
-2. The story MUST use the character placeholders (e.g., $$character-id$$) instead of their names. The main character is $$${mainCharacter.id}$$.
+2. The story MUST use the character placeholders (e.g., $$character-id$$) instead of their names. The main character (the child) is $$${childId}$$.
 3. The story should be simple and easy for a young child to understand.
 4. Conclude the story with a happy and reassuring ending.
 5. You MUST output a valid JSON object with the following structure, and nothing else:
@@ -139,32 +153,45 @@ INSTRUCTIONS:
      "title": "A suitable title for the story",
      "vibe": "A one-word vibe for the story (e.g., funny, magical, adventure)",
      "storyText": "The full story text, using $$document-id$$ for characters."
-   }
-        `;
+   }`;
+        const storyGenSystemPrompt = globalPrefix ? `${globalPrefix}\n\n${baseStoryGenSystemPrompt}` : baseStoryGenSystemPrompt;
 
         let llmResponse;
+        const startTime = Date.now();
+        const modelName = 'googleai/gemini-2.5-pro';
         try {
+          // Using output parameter for structured schema validation
           llmResponse = await ai.generate({
-            prompt: storyGenPrompt,
-            model: 'googleai/gemini-2.5-flash',
+            model: modelName,
+            system: storyGenSystemPrompt,
+            messages: wizardMessages,
+            output: { schema: WizardStoryGenOutputSchema },
             config: { temperature: 0.7 },
           });
-          await logAIFlow({ flowName: `${flowName}:generateStory`, sessionId, prompt: storyGenPrompt, response: llmResponse });
+          await logAIFlow({ flowName: `${flowName}:generateStory`, sessionId, parentId: child.ownerParentUid, prompt: storyGenSystemPrompt, response: llmResponse, startTime, modelName });
         } catch (e: any) {
-          await logAIFlow({ flowName: `${flowName}:generateStory`, sessionId, prompt: storyGenPrompt, error: e });
+          await logAIFlow({ flowName: `${flowName}:generateStory`, sessionId, parentId: child.ownerParentUid, prompt: storyGenSystemPrompt, error: e, startTime, modelName });
           throw e;
         }
 
-        const rawText = llmResponse.text;
         try {
-          const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
-          const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
-          const parsed = JSON.parse(jsonToParse);
-          if (!parsed.title || !parsed.storyText || !parsed.vibe) {
-            throw new Error('Missing required fields in story generation output.');
+          // Extract structured output using Genkit's output parameter
+          let parsed = llmResponse.output;
+
+          if (!parsed) {
+            // Fallback: try manual parsing if output is null
+            const rawText = llmResponse.text;
+            const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
+            const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
+            const manualParsed = JSON.parse(jsonToParse);
+            const validation = WizardStoryGenOutputSchema.safeParse(manualParsed);
+            if (!validation.success) {
+              throw new Error('Missing required fields in story generation output.');
+            }
+            parsed = validation.data;
           }
 
-          const entityMap = new Map(characters.map(c => [c.id, { displayName: c.displayName, document: c }]));
+          const entityMap = new Map(contextData.characters.map(c => [c.id, { displayName: c.displayName, document: c }]));
           const resolvedStoryText = await replacePlaceholdersInText(parsed.storyText, entityMap);
 
           // Create the Story document
@@ -186,27 +213,29 @@ INSTRUCTIONS:
           };
           await storyRef.set(storyPayload, { merge: true });
 
-          return { state: 'finished', ok: true, ...parsed, storyText: resolvedStoryText, storyId: storyRef.id };
+          return { state: 'finished' as const, ok: true as const, title: parsed.title, vibe: parsed.vibe, storyText: resolvedStoryText, storyId: storyRef.id };
         } catch (e) {
-          console.error("Failed to parse story generation JSON:", rawText, e);
-          return { state: 'error', ok: false, error: 'The wizard had trouble writing the final story. Please try again.' };
+          console.error("Failed to parse story generation JSON:", llmResponse.text, e);
+          return { state: 'error' as const, ok: false as const, error: 'The wizard had trouble writing the final story. Please try again.' };
         }
       } else {
         // 2. Not enough answers, ask the next question
-        const questionGenPrompt = `
-You are a friendly Story Wizard who helps a young child create a story by asking simple multiple-choice questions.
+        // Build messages array from previous Q&A if any
+        const previousMessages: MessageData[] = answers.flatMap(a => [
+          { role: 'model' as const, content: [{ text: a.question }] },
+          { role: 'user' as const, content: [{ text: a.answer }] },
+        ]);
+
+        const baseQuestionGenSystemPrompt = `You are a friendly Story Wizard who helps a young child create a story by asking simple multiple-choice questions.
 
 CHILD'S PROFILE:
 ${ageDescription}
 
-CHARACTERS:
-${characterContext}
-
-QUESTIONS ALREADY ASKED:
-${answers.length > 0 ? answers.map(a => `- "${a.question}" -> "${a.answer}"`).join('\n') : 'None yet.'}
+CONTEXT:
+${contextFormatted.fullContext}
 
 INSTRUCTIONS:
-1. Based on the previous answers, devise the *next* simple, fun question to ask the child. Questions should guide the story's theme, setting, or a simple plot point.
+1. Based on the conversation above (if any), devise the *next* simple, fun question to ask the child. Questions should guide the story's theme, setting, or a simple plot point.
 2. Create 2 to 4 short, imaginative choices for the child to pick from.
 3. Keep questions and choices very simple (a few words).
 4. You MUST output a valid JSON object with the following structure, and nothing else:
@@ -216,43 +245,60 @@ INSTRUCTIONS:
        { "text": "Choice one" },
        { "text": "Choice two" }
      ]
-   }
-        `;
+   }`;
+        const questionGenSystemPrompt = globalPrefix ? `${globalPrefix}\n\n${baseQuestionGenSystemPrompt}` : baseQuestionGenSystemPrompt;
 
         let llmResponse;
+        const startTime2 = Date.now();
+        const modelName2 = 'googleai/gemini-2.5-pro';
         try {
+          // Using output parameter for structured schema validation
           llmResponse = await ai.generate({
-            prompt: questionGenPrompt,
-            model: 'googleai/gemini-2.5-flash',
+            model: modelName2,
+            system: questionGenSystemPrompt,
+            messages: previousMessages,
+            output: { schema: WizardQuestionGenOutputSchema },
             config: { temperature: 0.8 },
           });
-          await logAIFlow({ flowName: `${flowName}:askQuestion`, sessionId, prompt: questionGenPrompt, response: llmResponse });
+          await logAIFlow({ flowName: `${flowName}:askQuestion`, sessionId, parentId: child.ownerParentUid, prompt: questionGenSystemPrompt, response: llmResponse, startTime: startTime2, modelName: modelName2 });
         } catch (e: any) {
-          await logAIFlow({ flowName: `${flowName}:askQuestion`, sessionId, prompt: questionGenPrompt, error: e });
+          await logAIFlow({ flowName: `${flowName}:askQuestion`, sessionId, parentId: child.ownerParentUid, prompt: questionGenSystemPrompt, error: e, startTime: startTime2, modelName: modelName2 });
           throw e;
         }
 
-        const rawText = llmResponse.text;
         try {
-          const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
-          const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
-          const parsed = JSON.parse(jsonToParse);
-          if (!parsed.question || !Array.isArray(parsed.choices)) {
-            throw new Error('Missing required fields in question generation output.');
+          // Extract structured output using Genkit's output parameter
+          let parsed = llmResponse.output;
+
+          if (!parsed) {
+            // Fallback: try manual parsing if output is null
+            const rawText = llmResponse.text;
+            const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
+            const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
+            const manualParsed = JSON.parse(jsonToParse);
+            const validation = WizardQuestionGenOutputSchema.safeParse(manualParsed);
+            if (!validation.success) {
+              throw new Error('Missing required fields in question generation output.');
+            }
+            parsed = validation.data;
           }
-          return { state: 'asking', ok: true, answers, ...parsed };
+
+          return { state: 'asking' as const, ok: true as const, answers, question: parsed.question, choices: parsed.choices };
         } catch (e) {
-          console.error("Failed to parse question generation JSON:", rawText, e);
-          return { state: 'error', ok: false, error: 'The wizard got stuck thinking of a question. Please try again.' };
+          console.error("Failed to parse question generation JSON:", llmResponse.text, e);
+          return { state: 'error' as const, ok: false as const, error: 'The wizard got stuck thinking of a question. Please try again.' };
         }
       }
     } catch (e: any) {
       console.error('Error in storyWizardFlow:', e);
-      return { state: 'error', ok: false, error: e.message || 'An unexpected error occurred.' };
+      return { state: 'error' as const, ok: false as const, error: e.message || 'An unexpected error occurred.' };
     }
   }
 );
 
 export async function storyWizardFlow(input: StoryWizardInput): Promise<StoryWizardOutput> {
-    return await storyWizardFlowInternal(input);
+    return await storyWizardFlowInternal({
+        ...input,
+        answers: input.answers ?? [],
+    });
 }

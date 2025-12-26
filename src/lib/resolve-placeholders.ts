@@ -18,15 +18,16 @@ async function fetchEntities(ids: string[]): Promise<EntityMap> {
   const uniqueIds = [...new Set(ids)];
   console.debug('[resolveEntities] Fetching entities for IDs:', uniqueIds);
 
+  // First, try to find by document ID
   try {
     const characterDocs = await getDocs(query(collection(firestore, 'characters'), where('__name__', 'in', uniqueIds)));
     characterDocs.forEach(doc => {
       const char = doc.data() as Character;
       entityMap.set(doc.id, { displayName: char.displayName, document: char });
     });
-    console.debug(`[resolveEntities] Found ${characterDocs.size} characters.`);
+    console.debug(`[resolveEntities] Found ${characterDocs.size} characters by ID.`);
   } catch (e) {
-    console.warn('[resolveEntities] Error fetching characters:', e);
+    console.warn('[resolveEntities] Error fetching characters by ID:', e);
   }
 
   const remainingIds = uniqueIds.filter(id => !entityMap.has(id));
@@ -38,9 +39,43 @@ async function fetchEntities(ids: string[]): Promise<EntityMap> {
         const child = doc.data() as ChildProfile;
         entityMap.set(doc.id, { displayName: child.displayName, document: child });
       });
-      console.debug(`[resolveEntities] Found ${childrenDocs.size} children.`);
+      console.debug(`[resolveEntities] Found ${childrenDocs.size} children by ID.`);
     } catch (e) {
-      console.warn('[resolveEntities] Error fetching children:', e);
+      console.warn('[resolveEntities] Error fetching children by ID:', e);
+    }
+  }
+
+  // Fallback: For IDs that still weren't found, try to find by displayName
+  // This handles legacy data where the AI used displayName instead of document ID
+  const stillRemainingIds = uniqueIds.filter(id => !entityMap.has(id));
+  if (stillRemainingIds.length > 0) {
+    console.debug('[resolveEntities] Trying to find by displayName:', stillRemainingIds);
+    try {
+      // Try characters by displayName
+      const charsByName = await getDocs(query(collection(firestore, 'characters'), where('displayName', 'in', stillRemainingIds)));
+      charsByName.forEach(doc => {
+        const char = doc.data() as Character;
+        // Map the displayName (which was used as the placeholder) to the entity
+        entityMap.set(char.displayName, { displayName: char.displayName, document: char });
+      });
+      console.debug(`[resolveEntities] Found ${charsByName.size} characters by displayName.`);
+    } catch (e) {
+      console.warn('[resolveEntities] Error fetching characters by displayName:', e);
+    }
+
+    const finalRemaining = stillRemainingIds.filter(id => !entityMap.has(id));
+    if (finalRemaining.length > 0) {
+      try {
+        // Try children by displayName
+        const childrenByName = await getDocs(query(collection(firestore, 'children'), where('displayName', 'in', finalRemaining)));
+        childrenByName.forEach(doc => {
+          const child = doc.data() as ChildProfile;
+          entityMap.set(child.displayName, { displayName: child.displayName, document: child });
+        });
+        console.debug(`[resolveEntities] Found ${childrenByName.size} children by displayName.`);
+      } catch (e) {
+        console.warn('[resolveEntities] Error fetching children by displayName:', e);
+      }
     }
   }
 

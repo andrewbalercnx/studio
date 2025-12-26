@@ -231,7 +231,7 @@ export default function CompiledStoryBookPage() {
                           Force Regenerate
                         </Button>
                         <Button variant="ghost" className="flex-1" asChild>
-                          <Link href={`/storybook/${storyId}`}>Open Viewer</Link>
+                          <Link href={`/story/${storyId}`}>View Story</Link>
                         </Button>
                       </div>
                     </div>

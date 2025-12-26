@@ -12,11 +12,23 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 import { useAppContext } from '@/hooks/use-app-context';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useRouter } from 'next/navigation';
+
+/**
+ * Format a date in a friendly format like "12th December 2025"
+ */
+function formatFriendlyDate(date: Date): string {
+  const day = date.getDate();
+  const suffix = (day === 1 || day === 21 || day === 31) ? 'st'
+    : (day === 2 || day === 22) ? 'nd'
+    : (day === 3 || day === 23) ? 'rd'
+    : 'th';
+  return `${day}${suffix} ${format(date, 'MMMM yyyy')}`;
+}
 
 type FinalizationBadge = { label: string; variant: 'default' | 'secondary' | 'outline' };
 
@@ -38,12 +50,12 @@ function StoryCard({ story, storyBook, bookLoading }: { story: StorySession; sto
   const imageReadyCount = storyBook?.imageGeneration?.pagesReady ?? null;
   const imageTotalCount = storyBook?.imageGeneration?.pagesTotal ?? null;
   const canOpenViewer = hasStoryBook && storyBook?.pageGeneration?.status === 'ready';
-  const viewerHref = storyBook?.id ? `/storybook/${storyBook.id}` : `/storybook/${story.id}`;
+  const viewerHref = storyBook?.id ? `/story/${storyBook.id}` : `/story/${story.id}`;
   const finalBadge = deriveFinalizationBadge(storyBook);
   const openStorybookButton = (
     <Button asChild className="w-full" disabled={!canOpenViewer}>
       <Link href={viewerHref}>
-        {canOpenViewer ? 'Open Storybook' : bookLoading ? 'Loading storybook…' : 'Open Storybook'}
+        {canOpenViewer ? 'View Story' : bookLoading ? 'Loading story…' : 'View Story'}
       </Link>
     </Button>
   );
@@ -69,7 +81,7 @@ function StoryCard({ story, storyBook, bookLoading }: { story: StorySession; sto
       <CardHeader>
         <CardTitle>{story.storyTitle || 'Untitled Story'}</CardTitle>
         <CardDescription>
-          Created {formatDistanceToNow(createdAt, { addSuffix: true })}
+          Created {formatFriendlyDate(createdAt)}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-grow">

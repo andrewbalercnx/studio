@@ -64,6 +64,8 @@ export async function startWarmupStory(input: StartWarmupStoryInput): Promise<St
                 displayName: childDisplayName || 'Unnamed Child',
                 ownerParentUid: 'legacy-parent',
                 createdAt,
+                likes: [],
+                dislikes: [],
                 estimatedLevel: 2,
                 favouriteGenres: ["funny", "magical"],
                 favouriteCharacterTypes: ["self", "pet"],

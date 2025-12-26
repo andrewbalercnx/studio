@@ -10,7 +10,18 @@ import { ai } from '@/ai/genkit';
 import { initializeFirebase } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { z } from 'genkit';
-import type { StoryType, Character } from '@/lib/types';
+import type { StoryType, Character, ArcStep } from '@/lib/types';
+
+/**
+ * Normalizes arc steps to handle both legacy string format and new ArcStep object format.
+ */
+function normalizeArcSteps(steps: (string | ArcStep)[]): ArcStep[] {
+  return steps.map(step =>
+    typeof step === 'string'
+      ? { id: step, label: step.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }
+      : step
+  );
+}
 
 // Zod schema for the flow input
 const StoryArcInputSchema = z.object({
@@ -54,40 +65,53 @@ export const storyArcEngineFlow = ai.defineFlow(
       throw new Error(`StoryType with id "${storyTypeId}" not found.`);
     }
     const storyType = storyTypeDoc.data() as StoryType;
-    const arcTemplate = storyType.arcTemplate?.steps;
+    const rawArcTemplate = storyType.arcTemplate?.steps;
 
-    if (!arcTemplate || arcTemplate.length === 0) {
+    if (!rawArcTemplate || rawArcTemplate.length === 0) {
         throw new Error(`StoryType "${storyTypeId}" has no arc template steps defined.`);
     }
+
+    // Normalize for backward compatibility with legacy string format
+    const arcTemplate = normalizeArcSteps(rawArcTemplate);
 
     // 2. Logic: Map arcStepIndex to the arc sequence
     if (arcStepIndex >= arcTemplate.length) {
         throw new Error(`arcStepIndex ${arcStepIndex} is out of bounds for story type "${storyTypeId}" which has ${arcTemplate.length} steps.`);
     }
 
-    const nextArcStepIndex = arcStepIndex; 
-    const nextArcStep = arcTemplate[nextArcStepIndex];
+    const nextArcStepIndex = arcStepIndex;
+    const nextArcStepObj = arcTemplate[nextArcStepIndex];
+    const nextArcStep = nextArcStepObj.id;
 
     // 3. Logic: Detect arc completion
-    const arcComplete = nextArcStepIndex >= arcTemplate.length -1;
+    const arcComplete = nextArcStepIndex >= arcTemplate.length - 1;
     
-    // 4. Logic: Generate plot guidance using a targeted prompt
-    const plotGuidancePrompt = ai.definePrompt({
-        name: 'plotGuidancePrompt',
-        input: { schema: PlotGuidancePromptInputSchema },
-        prompt: `You are a master storyteller who understands plot structures.
-        Given a story beat label and a basic plot type, provide one to two short sentences of guidance for a creative AI on how to write this step.
+    // 4. Logic: Generate plot guidance
+    // If the arc step has built-in guidance, use it; otherwise generate with AI
+    let plotGuidance: string;
 
-        CONTEXT:
-        Basic Plot Type: {{{basicPlot}}}
-        Current Story Beat: {{{nextArcStep}}}
+    if (nextArcStepObj.guidance) {
+        // Use the author-provided guidance
+        plotGuidance = nextArcStepObj.guidance;
+    } else {
+        // Fall back to AI-generated guidance
+        const plotGuidancePrompt = ai.definePrompt({
+            name: 'plotGuidancePrompt',
+            input: { schema: PlotGuidancePromptInputSchema },
+            prompt: `You are a master storyteller who understands plot structures.
+            Given a story beat label and a basic plot type, provide one to two short sentences of guidance for a creative AI on how to write this step.
 
-        Guidance:
-        `,
-    });
-    
-    const guidanceResponse = await plotGuidancePrompt({ nextArcStep, basicPlot });
-    const plotGuidance = guidanceResponse.text.trim();
+            CONTEXT:
+            Basic Plot Type: {{{basicPlot}}}
+            Current Story Beat: {{{nextArcStep}}}
+
+            Guidance:
+            `,
+        });
+
+        const guidanceResponse = await plotGuidancePrompt({ nextArcStep, basicPlot });
+        plotGuidance = guidanceResponse.text.trim();
+    }
 
     // 5. Return the structured output
     return {

@@ -4,16 +4,28 @@
 import {useMemo, useState} from 'react';
 import {useUser} from '@/firebase/auth/use-user';
 import {useFirestore} from '@/firebase';
-import {collection, orderBy, query, where} from 'firebase/firestore';
+import {collection, query, where} from 'firebase/firestore';
 import {useCollection} from '@/lib/firestore-hooks';
 import type {PrintOrder} from '@/lib/types';
 import {Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle} from '@/components/ui/card';
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
-import {LoaderCircle, PackageCheck, Mail, MapPin, DollarSign} from 'lucide-react';
+import {LoaderCircle, PackageCheck, Mail, MapPin, DollarSign, XCircle} from 'lucide-react';
 import Link from 'next/link';
-import {formatDistanceToNow} from 'date-fns';
+import {format} from 'date-fns';
 import {useToast} from '@/hooks/use-toast';
+
+/**
+ * Format a date in a friendly format like "12th December 2025"
+ */
+function formatFriendlyDate(date: Date): string {
+  const day = date.getDate();
+  const suffix = (day === 1 || day === 21 || day === 31) ? 'st'
+    : (day === 2 || day === 22) ? 'nd'
+    : (day === 3 || day === 23) ? 'rd'
+    : 'th';
+  return `${day}${suffix} ${format(date, 'MMMM yyyy')}`;
+}
 
 export default function ParentOrdersPage() {
   const {user, loading: userLoading} = useUser();
@@ -21,16 +33,28 @@ export default function ParentOrdersPage() {
   const {toast} = useToast();
   const [markingOrderId, setMarkingOrderId] = useState<string | null>(null);
 
+  // Query for orders using parentUid
+  // Note: We don't use orderBy here to avoid needing composite indexes.
+  // Sorting is done in JavaScript after fetching.
   const ordersQuery = useMemo(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, 'printOrders'),
-      where('parentUid', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('parentUid', '==', user.uid)
     );
   }, [firestore, user]);
 
-  const {data: orders, loading: ordersLoading} = useCollection<PrintOrder>(ordersQuery);
+  const {data: rawOrders, loading: ordersLoading} = useCollection<PrintOrder>(ordersQuery);
+
+  // Sort orders by createdAt descending
+  const orders = useMemo(() => {
+    if (!rawOrders) return null;
+    return [...rawOrders].sort((a, b) => {
+      const aTime = a.createdAt?.toMillis?.() || 0;
+      const bTime = b.createdAt?.toMillis?.() || 0;
+      return bTime - aTime;
+    });
+  }, [rawOrders]);
 
   const handleMarkPaid = async (orderId: string) => {
     if (!user) return;
@@ -107,7 +131,7 @@ export default function ParentOrdersPage() {
                     <Badge variant={isPaid ? 'default' : 'secondary'}>{order.paymentStatus}</Badge>
                   </div>
                   <CardDescription>
-                    {createdAt ? `Created ${formatDistanceToNow(createdAt, {addSuffix: true})}` : 'Pending timestamp'}
+                    {createdAt ? `Created ${formatFriendlyDate(createdAt)}` : 'Pending timestamp'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm">
@@ -118,9 +142,32 @@ export default function ParentOrdersPage() {
                     <Badge variant="outline">Qty {order.quantity}</Badge>
                     <Badge variant="outline">Version v{order.version}</Badge>
                   </div>
+
+                  {/* Show rejection reason if order was rejected */}
+                  {(order.approvalStatus === 'rejected' || (order.fulfillmentStatus === 'cancelled' && order.rejectedReason)) && (
+                    <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-md">
+                      <div className="flex items-start gap-2">
+                        <XCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-semibold">Order Rejected</p>
+                          {order.rejectedReason && (
+                            <p className="text-sm mt-1">{order.rejectedReason}</p>
+                          )}
+                          {order.rejectedAt && (
+                            <p className="text-xs text-red-600 mt-1">
+                              Rejected {formatFriendlyDate(
+                                order.rejectedAt.toDate ? order.rejectedAt.toDate() : new Date(order.rejectedAt)
+                              )}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <p>
                     Story Output:{' '}
-                    <Link href={`/storybook/${order.storyId}`} className="font-medium text-primary underline">
+                    <Link href={`/story/${order.storyId}`} className="font-medium text-primary underline">
                       {order.outputId}
                     </Link>
                   </p>
@@ -128,21 +175,23 @@ export default function ParentOrdersPage() {
                     <Mail className="h-4 w-4" />
                     {order.contactEmail}
                   </p>
-                  <div className="flex items-start gap-2 text-muted-foreground">
-                    <MapPin className="mt-1 h-4 w-4" />
-                    <div>
-                      <p>{order.shippingAddress.name}</p>
-                      <p>{order.shippingAddress.line1}</p>
-                      {order.shippingAddress.line2 && <p>{order.shippingAddress.line2}</p>}
-                      <p>
-                        {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.postalCode}
-                      </p>
-                      <p>{order.shippingAddress.country}</p>
+                  {order.shippingAddress && (
+                    <div className="flex items-start gap-2 text-muted-foreground">
+                      <MapPin className="mt-1 h-4 w-4" />
+                      <div>
+                        <p>{order.shippingAddress.name}</p>
+                        <p>{order.shippingAddress.line1}</p>
+                        {order.shippingAddress.line2 && <p>{order.shippingAddress.line2}</p>}
+                        <p>
+                          {order.shippingAddress.city}{order.shippingAddress.state ? `, ${order.shippingAddress.state}` : ''} {order.shippingAddress.postalCode}
+                        </p>
+                        <p>{order.shippingAddress.country}</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   {updatedAt && (
                     <p className="text-xs text-muted-foreground">
-                      Updated {formatDistanceToNow(updatedAt, {addSuffix: true})}
+                      Updated {formatFriendlyDate(updatedAt)}
                     </p>
                   )}
                 </CardContent>

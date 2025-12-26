@@ -6,7 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles, Star, Copy, Image as ImageIcon } from 'lucide-react';
+import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles, Star, Image as ImageIcon } from 'lucide-react';
+import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
 import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion, DocumentReference, getDoc, deleteField, increment, where } from 'firebase/firestore';
@@ -20,6 +21,7 @@ import { logSessionEvent } from '@/lib/session-events';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { resolveEntitiesInText, replacePlaceholdersInText } from '@/lib/resolve-placeholders';
 
 
 type WarmupGenkitDiagnostics = {
@@ -68,6 +70,14 @@ type EndingGenkitDiagnostics = {
     lastEndingPreview: string | null;
 };
 
+type CompileDiagnostics = {
+    lastCompileOk: boolean | null;
+    lastCompileErrorMessage: string | null;
+    extractedActorIds: string[] | null;
+    finalActorIds: string[] | null;
+    storyId: string | null;
+};
+
 function buildImagePrompt(text: string, child?: ChildProfile | null, storyTitle?: string | null) {
   const summary = text.length > 160 ? `${text.slice(0, 157)}…` : text;
   
@@ -107,8 +117,18 @@ function getChildAgeYears(child?: ChildProfile | null): number | null {
     return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
 }
 
-function matchesAgeRange(ageRange: string, age: number | null): boolean {
+function matchesChildAge(storyType: StoryType, age: number | null): boolean {
     if (age === null) return true;
+
+    // Use new ageFrom/ageTo fields if available
+    if (storyType.ageFrom !== undefined || storyType.ageTo !== undefined) {
+        const minAge = storyType.ageFrom ?? 0;
+        const maxAge = storyType.ageTo ?? 100;
+        return age >= minAge && age <= maxAge;
+    }
+
+    // Fallback to legacy ageRange string parsing
+    const ageRange = storyType.ageRange || '';
     const rangeMatch = ageRange.match(/(\d+)\s*-\s*(\d+)/);
     if (rangeMatch) {
         const min = parseInt(rangeMatch[1], 10);
@@ -161,6 +181,8 @@ export default function StorySessionPage() {
 
     const [selectedOutputTypeId, setSelectedOutputTypeId] = useState<string>('');
 
+    // State to store resolved placeholder text
+    const [resolvedTexts, setResolvedTexts] = useState<Map<string, string>>(new Map());
 
     const [beatDiagnostics, setBeatDiagnostics] = useState<BeatGenkitDiagnostics>({
         lastBeatOk: null,
@@ -196,11 +218,29 @@ export default function StorySessionPage() {
         lastEndingArcStep: null,
         lastEndingPreview: null,
     });
-    
+    const [compileDiagnostics, setCompileDiagnostics] = useState<CompileDiagnostics>({
+        lastCompileOk: null,
+        lastCompileErrorMessage: null,
+        extractedActorIds: null,
+        finalActorIds: null,
+        storyId: null,
+    });
+
     // Firestore Hooks
     const sessionRef = useMemo(() => firestore ? doc(firestore, 'storySessions', sessionId) : null, [firestore, sessionId]);
     const { data: session, loading: sessionLoading, error: sessionError } = useDocument<StorySession>(sessionRef);
-    const storyBookRef = useMemo(() => firestore ? doc(firestore, 'storyBooks', sessionId) : null, [firestore, sessionId]);
+    // Only load storyBook if the session indicates one exists (story is compiled)
+    // Note: gemini3 and gemini4 modes also create a Story document after compilation
+    const storyBookRef = useMemo(() => {
+        if (!firestore || !session || !user) return null;
+        // Only attempt to load storyBook if session status indicates it's compiled
+        // AND the user has permission (is parent owner or admin)
+        const isOwner = session.parentUid === user.uid;
+        if ((session.status === 'completed' || session.currentPhase === 'completed') && (isOwner || isAdmin)) {
+            return doc(firestore, 'stories', sessionId);
+        }
+        return null;
+    }, [firestore, sessionId, session?.status, session?.currentPhase, session?.parentUid, user?.uid, isAdmin]);
     const { data: storyBook, loading: storyBookLoading, error: storyBookError } = useDocument<StoryBook>(storyBookRef);
     const messagesQuery = useMemo(() => firestore ? query(collection(firestore, 'storySessions', sessionId, 'messages'), orderBy('createdAt')) : null, [firestore, sessionId]);
     const { data: messages, loading: messagesLoading, error: messagesError } = useCollection<Message>(messagesQuery);
@@ -223,7 +263,7 @@ export default function StorySessionPage() {
                 return {
                     type,
                     score: tagMatches,
-                    matchesAge: matchesAgeRange(type.ageRange || '', childAge),
+                    matchesAge: matchesChildAge(type, childAge),
                 };
             })
             .filter(({ matchesAge }) => matchesAge)
@@ -250,7 +290,49 @@ export default function StorySessionPage() {
             console.warn('[story-session] Failed to log event', event, err);
         }
     }, [firestore, sessionId]);
-    
+
+    // Effect to resolve placeholders in messages
+    useEffect(() => {
+        if (!messages || messages.length === 0) return;
+
+        const resolveAllPlaceholders = async () => {
+            // Collect all unique text strings that need resolution
+            const textsToResolve = new Set<string>();
+
+            messages.forEach(msg => {
+                if (msg.text) textsToResolve.add(msg.text);
+                if (msg.options) {
+                    msg.options.forEach(opt => {
+                        if (opt.text) textsToResolve.add(opt.text);
+                    });
+                }
+            });
+
+            // Get all entity IDs from all texts
+            const allText = Array.from(textsToResolve).join(' ');
+            const entityMap = await resolveEntitiesInText(allText);
+
+            // Resolve each text
+            const newResolvedTexts = new Map<string, string>();
+            for (const text of textsToResolve) {
+                const resolved = await replacePlaceholdersInText(text, entityMap);
+                newResolvedTexts.set(text, resolved);
+            }
+
+            setResolvedTexts(newResolvedTexts);
+        };
+
+        resolveAllPlaceholders().catch(err => {
+            console.error('[story-session] Failed to resolve placeholders:', err);
+        });
+    }, [messages]);
+
+    // Helper function to get resolved text with fallback to original
+    const getResolvedText = useCallback((text: string | undefined): string => {
+        if (!text) return '';
+        return resolvedTexts.get(text) || text;
+    }, [resolvedTexts]);
+
     // Derived state from session
     const currentStoryTypeId = session?.storyTypeId ?? null;
     const currentStoryPhaseId = session?.storyPhaseId ?? null;
@@ -274,6 +356,23 @@ export default function StorySessionPage() {
             } : null,
         }))
     }, [pendingCharacterTraits]);
+
+    // WORKFLOW AUTOMATION: Auto-redirect to generating page when output type is selected
+    useEffect(() => {
+        const shouldShowGenerating =
+            session?.storyOutputTypeId &&
+            session?.status === 'completed' &&
+            storyBook &&
+            (storyBook.pageGeneration?.status === 'idle' ||
+             storyBook.pageGeneration?.status === 'running' ||
+             (storyBook.pageGeneration?.status === 'ready' && !storyBook.selectedImageStyleId) ||
+             (storyBook.selectedImageStyleId && storyBook.imageGeneration?.status === 'running'));
+
+        if (shouldShowGenerating) {
+            console.log('[Session] Redirecting to generating page for progress tracking');
+            router.push(`/story/session/${sessionId}/generating`);
+        }
+    }, [session?.storyOutputTypeId, session?.status, storyBook?.pageGeneration?.status, storyBook?.selectedImageStyleId, storyBook?.imageGeneration?.status, sessionId, router, storyBook]);
 
     const latestOptionsMessage = useMemo(() => {
         if (!messages) return null;
@@ -403,8 +502,8 @@ export default function StorySessionPage() {
             await updateDoc(sessionRef, {
                 storyTypeId: storyType.id,
                 storyTypeName: storyType.name,
-                storyPhaseId: storyType.defaultPhaseId,
-                endingPhaseId: storyType.endingPhaseId,
+                storyPhaseId: storyType.defaultPhaseId || 'story_beat_phase_v1',
+                endingPhaseId: storyType.endingPhaseId || 'ending_phase_v1',
                 arcStepIndex: 0,
                 currentPhase: 'story',
                 storyTitle: session?.storyTitle || displayName,
@@ -560,7 +659,65 @@ export default function StorySessionPage() {
             return false;
         }
     };
-    
+
+    /**
+     * Creates a story character using the unified API endpoint.
+     * Returns the character ID and display name if successful.
+     */
+    const createStoryCharacter = async (chosenOption: Choice): Promise<{ characterId: string; displayName: string } | null> => {
+        if (!session) return null;
+
+        const label = chosenOption.newCharacterLabel || 'New Friend';
+        const storyTypeContext = activeStoryType?.name || 'adventure';
+        const recentStory = messages?.slice(0, 3).map(m => m.text).join(' ') || '';
+        const storyContext = `A ${storyTypeContext} story about ${childProfile?.displayName || 'a child'}. Recent events: ${recentStory.slice(0, 200)}`;
+
+        try {
+            const response = await fetch('/api/characters/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId,
+                    parentUid: session.parentUid,
+                    childId: session.childId,
+                    characterLabel: label,
+                    characterName: chosenOption.newCharacterName,
+                    characterType: chosenOption.newCharacterType || 'Friend',
+                    storyContext,
+                    childAge: childProfile?.dateOfBirth ? getChildAgeYears(childProfile) : null,
+                    generateAvatar: true,
+                }),
+            });
+
+            const result = await response.json();
+            if (!response.ok || !result.ok) {
+                console.error('[createStoryCharacter] Failed:', result.errorMessage);
+                return null;
+            }
+
+            // Trigger async avatar generation (don't wait for it)
+            if (user && result.characterId) {
+                const idToken = await user.getIdToken();
+                fetch('/api/generateCharacterAvatar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`,
+                    },
+                    body: JSON.stringify({ characterId: result.characterId }),
+                }).catch(err => console.error('Avatar generation failed:', err));
+            }
+
+            return {
+                characterId: result.characterId,
+                displayName: result.character?.displayName || label,
+            };
+        } catch (e: any) {
+            console.error('[createStoryCharacter] Error:', e);
+            return null;
+        }
+    };
+
     const generateEndingChoices = useCallback(async () => {
         if (!firestore || !sessionRef || hasEndingOptions) return;
         setIsEndingRunning(true);
@@ -629,11 +786,11 @@ export default function StorySessionPage() {
     
     const handleChooseOption = async (optionsMessage: Message, chosenOption: Choice) => {
         if (!user || !sessionId || !firestore || !sessionRef || !session || isBeatRunning || !session.storyTypeId) return;
-    
-        const charactersRef = collection(firestore, 'characters');
+
         const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
-        
+
         let newCharacterId: string | undefined = undefined;
+        let newCharacterDisplayName: string | undefined = undefined;
         let traitsQuestionAsked = false;
 
         // Write child's choice message first
@@ -645,28 +802,15 @@ export default function StorySessionPage() {
             createdAt: serverTimestamp(),
         });
 
-        // 1. If the option introduces a character, create it first
+        // 1. If the option introduces a character, create it first using the unified API
         if (chosenOption.introducesCharacter) {
-            const newCharacterData = {
-                ownerChildId: session.childId,
-                sessionId: sessionId,
-                name: chosenOption.newCharacterLabel || 'New Friend',
-                role: chosenOption.newCharacterKind || 'friend',
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-                introducedFromOptionId: chosenOption.id,
-                introducedFromMessageId: optionsMessage.id,
-            };
-            const newCharacterRef = await addDoc(charactersRef, newCharacterData);
-            newCharacterId = newCharacterRef.id;
-
-            // Link character to the session
-             await updateDoc(sessionRef, {
-                supportingCharacterIds: arrayUnion(newCharacterId)
-            });
-
-            // Ask a traits question
-            traitsQuestionAsked = await runCharacterTraitsQuestion(sessionId, newCharacterId, newCharacterData.name);
+            const characterResult = await createStoryCharacter(chosenOption);
+            if (characterResult) {
+                newCharacterId = characterResult.characterId;
+                newCharacterDisplayName = characterResult.displayName;
+                // Ask a traits question
+                traitsQuestionAsked = await runCharacterTraitsQuestion(sessionId, newCharacterId, newCharacterDisplayName);
+            }
         }
 
         // 2. Update beat interaction diagnostics
@@ -766,18 +910,39 @@ export default function StorySessionPage() {
                 body: JSON.stringify({ sessionId, storyOutputTypeId: selectedOutputTypeId }),
             });
             const result = await response.json();
+
+            // Update compile diagnostics regardless of success/failure
+            setCompileDiagnostics({
+                lastCompileOk: response.ok && result?.ok,
+                lastCompileErrorMessage: result?.errorMessage || null,
+                extractedActorIds: result?.extractedActorIds || null,
+                finalActorIds: result?.actors || null,
+                storyId: result?.storyId || null,
+            });
+
             if (!response.ok || !result?.ok) {
                 throw new Error(result?.errorMessage || 'Failed to compile story.');
             }
             setHasTriggeredCompile(true);
-            toast({ title: 'Compiling story…', description: 'We are stitching all of your choices together.' });
+            toast({ title: 'Story created!', description: 'Taking you to your stories...' });
+
+            // Redirect child back to their stories list
+            if (session?.childId) {
+                router.push(`/child/${session.childId}/stories`);
+            }
         } catch (e: any) {
             setCompileError(e.message || 'Compile failed.');
             toast({ title: 'Compile failed', description: e.message, variant: 'destructive' });
+            // Update diagnostics on error as well
+            setCompileDiagnostics(prev => ({
+                ...prev,
+                lastCompileOk: false,
+                lastCompileErrorMessage: e.message || 'Compile failed.',
+            }));
         } finally {
             setIsCompiling(false);
         }
-    }, [sessionRef, firestore, isCompiling, session?.status, storyBook, sessionId, logClientStage, toast, selectedOutputTypeId]);
+    }, [sessionRef, firestore, isCompiling, session?.status, session?.childId, storyBook, sessionId, logClientStage, toast, selectedOutputTypeId, router]);
 
     const handleGeneratePages = async () => {
         if (!storyBook) {
@@ -788,11 +953,13 @@ export default function StorySessionPage() {
         setIsGeneratingPages(true);
         setPagesError(null);
         try {
-            await logClientStage('pages.started', { bookId: storyBook.id });
+            // Use sessionId as storyId since stories are stored with sessionId as their doc ID
+            const storyId = storyBook.id || sessionId;
+            await logClientStage('pages.started', { storyId });
             const response = await fetch('/api/storyBook/pages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bookId: storyBook.id }),
+                body: JSON.stringify({ storyId }),
             });
             const result = await response.json();
             if (!response.ok || !result?.ok) {
@@ -877,6 +1044,7 @@ export default function StorySessionPage() {
             currentStoryTypeId: currentStoryTypeId,
             currentStoryPhaseId: currentStoryPhaseId,
             currentArcStepIndex: currentArcStepIndex,
+            sessionActors: session?.actors || [],
         },
         storyBook: {
             hasStoryBook: !!storyBook,
@@ -890,30 +1058,26 @@ export default function StorySessionPage() {
         genkitEnding: endingDiagnostics,
         beatInteraction: beatInteractionDiagnostics,
         characterTraits: characterTraitsDiagnostics,
+        compile: compileDiagnostics,
         error: sessionError?.message || messagesError?.message || null,
     };
 
-    const handleCopyDiagnostics = () => {
-        const textToCopy = `Page: story-session\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
-        navigator.clipboard.writeText(textToCopy);
-        toast({ title: 'Copied to clipboard!' });
-    };
-
     const handleGenerateArt = async (force = false) => {
-        const bookId = storyBook?.id ?? sessionId;
-        if (!bookId) {
+        // Use sessionId as storyId since stories are stored with sessionId as their doc ID
+        const storyId = storyBook?.id || sessionId;
+        if (!storyId) {
             setImageJobError('Storybook not available for this session yet.');
             return;
         }
         setIsImageJobRunning(true);
         setImageJobError(null);
         try {
-            await logClientStage('art.started', { bookId, force });
+            await logClientStage('art.started', { storyId, force });
             const response = await fetch('/api/storyBook/images', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    bookId,
+                    storyId,
                     forceRegenerate: force,
                 }),
             });
@@ -933,8 +1097,11 @@ export default function StorySessionPage() {
 
     const renderCreateBookPanel = () => {
         if (!session) return null;
-        const compileReady = session.status === 'completed' || !!storyBook;
-        const showPanel = session.selectedEndingId || compileReady;
+        const isGeminiMode = session.storyMode === 'gemini3' || session.storyMode === 'gemini4';
+        const geminiFinalStory = session.gemini4FinalStory || session.gemini3FinalStory;
+        const compileReady = !!storyBook; // Only ready when Story document exists
+        // For gemini modes, show panel when story is complete; for other modes, require selectedEndingId
+        const showPanel = (isGeminiMode && geminiFinalStory) || session.selectedEndingId || compileReady;
         if (!showPanel) return null;
         const compileStatus: 'pending' | 'running' | 'ready' = compileReady ? 'ready' : isCompiling ? 'running' : 'pending';
         const pagesStatus: 'pending' | 'running' | 'ready' = storyBook?.pageGeneration?.status === 'ready'
@@ -1037,6 +1204,22 @@ export default function StorySessionPage() {
                             </Button>
                         </div>
                     </div>
+
+                    {/* Show prominent next step when all steps are complete */}
+                    {artStatus === 'ready' && (
+                        <div className="mt-6 pt-6 border-t">
+                            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950 rounded-lg p-6 text-center">
+                                <CheckCircle className="mx-auto h-12 w-12 text-emerald-500 mb-3" />
+                                <h3 className="text-xl font-bold mb-2">Your Storybook is Ready!</h3>
+                                <p className="text-muted-foreground mb-4">All pages have been illustrated. View your finished storybook now.</p>
+                                <Button size="lg" asChild>
+                                    <Link href={`/story/${storyBook?.id || sessionId}`}>
+                                        View My Story
+                                    </Link>
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         );
@@ -1121,7 +1304,7 @@ export default function StorySessionPage() {
         const imageStatus = storyBook?.imageGeneration?.status ?? 'idle';
         const imageReadyCount = storyBook?.imageGeneration?.pagesReady ?? 0;
         const imageTotal = storyBook?.imageGeneration?.pagesTotal ?? storyBook?.pageGeneration?.pagesCount ?? 0;
-        const viewerHref = storyBook?.id ? `/storybook/${storyBook.id}` : `/storybook/${sessionId}`;
+        const viewerHref = storyBook?.id ? `/story/${storyBook.id}` : `/story/${sessionId}`;
         
         const showStoryTypePicker = !session.storyTypeId && curatedStoryTypes.length > 0;
 
@@ -1198,7 +1381,7 @@ export default function StorySessionPage() {
                                         </div>
                                         <div className="flex flex-wrap gap-2">
                                             <Button
-                                                size="xs"
+                                                size="sm"
                                                 variant="outline"
                                                 onClick={() => handleGenerateArt(false)}
                                                 disabled={isImageJobRunning || imageStatus === 'running'}
@@ -1210,7 +1393,7 @@ export default function StorySessionPage() {
                                                 )}
                                                 Generate Art
                                             </Button>
-                                            <Button size="xs" variant="ghost" asChild>
+                                            <Button size="sm" variant="ghost" asChild>
                                                 <Link href={viewerHref}>Open Storybook</Link>
                                             </Button>
                                         </div>
@@ -1230,7 +1413,7 @@ export default function StorySessionPage() {
                        <div key={msg.id} className={`flex flex-col ${msg.sender === 'child' ? 'items-end' : 'items-start'}`}>
                             {msg.kind === 'beat_options' && msg.options ? (
                                 <div className="p-2 rounded-lg bg-muted w-full">
-                                    <p className="text-sm text-muted-foreground mb-2">{msg.text}</p>
+                                    <p className="text-sm text-muted-foreground mb-2">{getResolvedText(msg.text)}</p>
                                     <div className="flex flex-col gap-2">
                                         {msg.options.map(opt => (
                                             <Button
@@ -1241,7 +1424,7 @@ export default function StorySessionPage() {
                                                 className="justify-start h-auto"
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    <span>{opt.text}</span>
+                                                    <span>{getResolvedText(opt.text)}</span>
                                                     {opt.introducesCharacter && (
                                                         <Badge variant="secondary" className="gap-1">
                                                             <Sparkles className="h-3 w-3" />
@@ -1275,7 +1458,7 @@ export default function StorySessionPage() {
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <Star className="h-3.5 w-3.5 text-amber-500" />
-                                                    <span>{opt.text}</span>
+                                                    <span>{getResolvedText(opt.text)}</span>
                                                 </div>
                                             </Button>
                                         ))}
@@ -1287,7 +1470,7 @@ export default function StorySessionPage() {
                                     {msg.sender === 'assistant' ? 'Story Guide' : 'You'}
                                 </span>
                                 <p className={`whitespace-pre-wrap p-2 rounded-md ${msg.sender === 'child' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                                    {msg.text}
+                                    {getResolvedText(msg.text)}
                                 </p>
                                </>
                             )}
@@ -1378,31 +1561,69 @@ export default function StorySessionPage() {
         );
     };
 
+    const isStoryCompleted = session?.status === 'completed';
+    const isGeminiMode = session?.storyMode === 'gemini3' || session?.storyMode === 'gemini4';
+    const geminiFinalStory = session?.gemini4FinalStory || session?.gemini3FinalStory;
+
+    const renderGeminiCompletedStory = () => {
+        if (!geminiFinalStory) return null;
+
+        // Get the resolved version from messages if available
+        const finalMessage = messages?.find(m => m.kind === 'gemini4_final_story' || m.kind === 'gemini3_final_story');
+        const displayText = finalMessage?.textResolved || geminiFinalStory;
+
+        return (
+            <Card className="w-full max-w-2xl">
+                <CardHeader>
+                    <CardTitle>{session?.storyTitle || 'Your Story'}</CardTitle>
+                    <CardDescription>
+                        Created with {session?.storyMode === 'gemini4' ? 'Guided Story' : 'Gemini 3'}
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950 rounded-lg p-6">
+                        <p className="text-lg whitespace-pre-wrap leading-relaxed">{displayText}</p>
+                    </div>
+                </CardContent>
+                <CardFooter className="flex gap-2">
+                    <Button variant="outline" onClick={() => router.push(`/story/play/${sessionId}`)}>
+                        View Journey
+                    </Button>
+                </CardFooter>
+            </Card>
+        );
+    };
+
     return (
         <div className="container mx-auto p-4 sm:p-6 md:p-8 flex flex-col items-center gap-8">
-            <div className="w-full max-w-2xl">
-              {renderChatContent()}
-            </div>
+            {/* Show completed Gemini story */}
+            {isStoryCompleted && isGeminiMode && geminiFinalStory && (
+                <div className="w-full max-w-2xl">
+                    {renderGeminiCompletedStory()}
+                </div>
+            )}
+
+            {/* Only show chat if story is not completed */}
+            {!isStoryCompleted && (
+                <div className="w-full max-w-2xl">
+                  {renderChatContent()}
+                </div>
+            )}
+
             <div className="w-full max-w-2xl">
                 {renderCreateBookPanel()}
             </div>
+
+            {/* Admin controls always visible for admins */}
             <div className="w-full max-w-2xl">
                 {renderAdminControls()}
             </div>
-            
-            <Card className="w-full max-w-4xl">
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Diagnostics</CardTitle>
-                    <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}>
-                        <Copy className="h-4 w-4" />
-                    </Button>
-                </CardHeader>
-                <CardContent>
-                    <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
-                        <code>{JSON.stringify(diagnostics, null, 2)}</code>
-                    </pre>
-                </CardContent>
-            </Card>
+
+            <DiagnosticsPanel
+                pageName="story-session"
+                data={diagnostics}
+                className="w-full max-w-4xl"
+            />
         </div>
     );
 }

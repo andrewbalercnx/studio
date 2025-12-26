@@ -10,13 +10,11 @@ import Link from 'next/link';
 import { useFirestore } from '@/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, addDoc, collection, query, where, getDocs, limit, updateDoc } from 'firebase/firestore';
 import type { PromptConfig, ChildProfile } from '@/lib/types';
-import { useToast } from '@/hooks/use-toast';
 import { useAppContext } from '@/hooks/use-app-context';
 
 export default function StartChatStoryPage() {
   const { user, loading: userLoading } = useUser();
   const firestore = useFirestore();
-  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { activeChildId } = useAppContext();
@@ -52,11 +50,8 @@ export default function StartChatStoryPage() {
           await updateDoc(childRef, { ownerParentUid: user.uid });
         }
 
-        const childEstimatedLevel = childProfile.estimatedLevel || 2;
-        let chosenLevelBand: 'low' | 'medium' | 'high';
-        if (childEstimatedLevel <= 2) chosenLevelBand = "low";
-        else if (childEstimatedLevel === 3) chosenLevelBand = "medium";
-        else chosenLevelBand = "high";
+        // Default to low level band for now (can be enhanced later based on child age)
+        const chosenLevelBand: 'low' | 'medium' | 'high' = 'low';
 
         const promptConfigsRef = collection(firestore, 'promptConfigs');
         const q = query(
@@ -88,42 +83,14 @@ export default function StartChatStoryPage() {
           childId: childId,
           parentUid: user.uid,
           status: "in_progress",
-          currentPhase: "warmup",
-          currentStepIndex: 0,
+          currentPhase: "story",
           storyTitle: "",
           storyVibe: "",
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-          promptConfigId: promptConfig.id,
-          promptConfigLevelBand: chosenLevelBand,
           id: storySessionId,
         };
         await setDoc(storySessionRef, newSessionData);
-
-        const charactersRef = collection(firestore, 'characters');
-        const newCharacterData = {
-          ownerChildId: childId,
-          ownerParentUid: user.uid,
-          sessionId: storySessionId,
-          displayName: childProfile.displayName || 'You',
-          role: 'family' as const,
-          relatedTo: childId,
-          realPersonRef: { kind: 'self' as const, label: 'You' },
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        };
-        const newCharacterRef = await addDoc(charactersRef, newCharacterData);
-        const mainCharacterId = newCharacterRef.id;
-
-        await updateDoc(storySessionRef, { mainCharacterId: mainCharacterId });
-
-        const initialAssistantMessage = "Hi! I am your Story Guide. What would you like me to call you?";
-        const messagePayload = {
-          sender: 'assistant' as const,
-          text: initialAssistantMessage,
-          createdAt: serverTimestamp()
-        };
-        await addDoc(collection(firestore, 'storySessions', storySessionId, 'messages'), messagePayload);
 
         router.push(`/story/play/${storySessionId}`);
 

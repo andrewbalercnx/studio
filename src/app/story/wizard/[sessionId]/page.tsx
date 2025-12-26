@@ -9,12 +9,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
-import { doc, collection, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import type { StorySession, StoryWizardChoice } from '@/lib/types';
-import { useDocument } from '@/lib/firestore-hooks';
+import { doc, collection, addDoc, serverTimestamp, updateDoc, query, where } from 'firebase/firestore';
+import type { StorySession, StoryWizardChoice, ChildProfile, StoryOutputType } from '@/lib/types';
+import { useDocument, useCollection } from '@/lib/firestore-hooks';
 import { useToast } from '@/hooks/use-toast';
-import { storyWizardFlow, StoryWizardInput, StoryWizardOutput } from '@/ai/flows/story-wizard-flow';
-import { ThinkingIndicator } from '@/components/child-thinking-indicator';
+import { storyWizardFlow } from '@/ai/flows/story-wizard-flow';
+import type { StoryWizardInput, StoryWizardOutput } from '@/lib/types';
+import { ChildAvatarAnimation } from '@/components/child/child-avatar-animation';
 
 export default function StoryWizardPage() {
   const params = useParams<{ sessionId: string }>();
@@ -26,6 +27,14 @@ export default function StoryWizardPage() {
 
   const sessionRef = useMemo(() => (firestore ? doc(firestore, 'storySessions', sessionId) : null), [firestore, sessionId]);
   const { data: session, loading: sessionLoading } = useDocument<StorySession>(sessionRef);
+
+  // Fetch child profile for dancing avatar
+  const childRef = useMemo(() => (session?.childId && firestore) ? doc(firestore, 'children', session.childId) : null, [firestore, session?.childId]);
+  const { data: childProfile } = useDocument<ChildProfile>(childRef);
+
+  // Fetch story output types for auto-compile
+  const storyOutputTypesQuery = useMemo(() => firestore ? query(collection(firestore, 'storyOutputTypes'), where('status', '==', 'live')) : null, [firestore]);
+  const { data: storyOutputTypes } = useCollection<StoryOutputType>(storyOutputTypesQuery);
 
   const [wizardState, setWizardState] = useState<StoryWizardOutput | null>(null);
   const [isProcessing, setIsProcessing] = useState(true);
@@ -50,12 +59,34 @@ export default function StoryWizardPage() {
             updatedAt: serverTimestamp(),
           });
         }
-        toast({
-          title: 'Story Complete!',
-          description: 'Your magical story has been created.',
-        });
-        // Redirect to the child's dashboard to see the new story
-        router.push(`/child/${session?.childId}`);
+
+        // Auto-compile the story
+        const storyOutputTypeId = storyOutputTypes?.[0]?.id;
+        if (storyOutputTypeId) {
+          toast({
+            title: 'Story Complete!',
+            description: 'Saving your story...',
+          });
+          try {
+            const response = await fetch('/api/storyCompile', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sessionId, storyOutputTypeId }),
+            });
+            const compileResult = await response.json();
+            if (compileResult.ok) {
+              toast({
+                title: 'Story saved!',
+                description: 'Your story is ready to view.',
+              });
+            }
+          } catch (compileError) {
+            console.error('[wizard] Compile error:', compileError);
+          }
+        }
+
+        // Redirect to child's stories list
+        router.push(`/child/${session?.childId}/stories`);
       }
     } catch (e: any) {
       setError(e.message || 'An unexpected error occurred in the story wizard.');
@@ -63,7 +94,7 @@ export default function StoryWizardPage() {
     } finally {
       setIsProcessing(false);
     }
-  }, [sessionId, sessionRef, session, toast, router]);
+  }, [sessionId, sessionRef, session, storyOutputTypes, toast, router]);
 
   // Initial call to the wizard flow
   useEffect(() => {
@@ -94,8 +125,16 @@ export default function StoryWizardPage() {
   if (userLoading || sessionLoading || (isProcessing && !wizardState)) {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center gap-4">
-        <ThinkingIndicator />
-        <p className="text-muted-foreground">The Magic Wizard is preparing your adventure...</p>
+        {childProfile?.avatarAnimationUrl || childProfile?.avatarUrl ? (
+          <ChildAvatarAnimation
+            avatarAnimationUrl={childProfile.avatarAnimationUrl}
+            avatarUrl={childProfile.avatarUrl}
+            size="lg"
+          />
+        ) : (
+          <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
+        )}
+        <p className="text-muted-foreground animate-pulse">The Magic Wizard is preparing your adventure...</p>
       </div>
     );
   }
@@ -122,8 +161,16 @@ export default function StoryWizardPage() {
     <div className="flex h-screen w-screen flex-col items-center justify-center gap-8 p-4">
       {isProcessing ? (
         <div className="flex flex-col items-center gap-4">
-          <ThinkingIndicator />
-          <p className="text-muted-foreground">The wizard is creating the next part...</p>
+          {childProfile?.avatarAnimationUrl || childProfile?.avatarUrl ? (
+            <ChildAvatarAnimation
+              avatarAnimationUrl={childProfile.avatarAnimationUrl}
+              avatarUrl={childProfile.avatarUrl}
+              size="lg"
+            />
+          ) : (
+            <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
+          )}
+          <p className="text-muted-foreground animate-pulse">The wizard is creating the next part...</p>
         </div>
       ) : wizardState?.state === 'asking' && wizardState.question ? (
         <Card className="w-full max-w-2xl text-center">
@@ -145,8 +192,16 @@ export default function StoryWizardPage() {
         </Card>
       ) : (
         <div className="flex flex-col items-center gap-4">
-          <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
-          <p className="text-muted-foreground">Finalizing your story...</p>
+          {childProfile?.avatarAnimationUrl || childProfile?.avatarUrl ? (
+            <ChildAvatarAnimation
+              avatarAnimationUrl={childProfile.avatarAnimationUrl}
+              avatarUrl={childProfile.avatarUrl}
+              size="lg"
+            />
+          ) : (
+            <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
+          )}
+          <p className="text-muted-foreground animate-pulse">Saving your story...</p>
         </div>
       )}
     </div>

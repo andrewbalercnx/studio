@@ -1,5 +1,3 @@
-'use server';
-
 import {NextResponse} from 'next/server';
 import {randomUUID} from 'node:crypto';
 import {getFirestore} from 'firebase-admin/firestore';
@@ -107,6 +105,7 @@ export async function POST(request: Request) {
       contentType: mimeType,
       resumable: false,
       metadata: {
+        cacheControl: 'public,max-age=3600',
         metadata: {
           ownerParentUid,
           childId,
@@ -114,7 +113,6 @@ export async function POST(request: Request) {
           firebaseStorageDownloadTokens: downloadToken,
         },
       },
-      cacheControl: 'public,max-age=3600',
     });
 
     const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(

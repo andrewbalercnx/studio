@@ -2,51 +2,50 @@
 'use server';
 /**
  * @fileOverview A Genkit flow to generate the next story beat.
+ *
+ * This flow uses the new structured prompt system:
+ * - Schema: @/lib/schemas/story-beat-output
+ * - Prompt Builder: @/lib/prompt-builders/story-beat-prompt-builder
+ *
+ * For story types with promptConfig, uses the new system.
+ * For legacy story types, falls back to PromptConfig from Firestore.
  */
 
 import { ai } from '@/ai/genkit';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
-import type { StorySession, ChatMessage, StoryType, Character, ChildProfile } from '@/lib/types';
+import type { MessageData } from 'genkit';
+import type { StorySession, ChatMessage, StoryType, Character, ChildProfile, ArcStep } from '@/lib/types';
 import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
 import { logServerSessionEvent } from '@/lib/session-events.server';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
-import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
+import { replacePlaceholdersWithDescriptions, resolveEntitiesInText, replacePlaceholdersInText, extractEntityMetadataFromText } from '@/lib/resolve-placeholders.server';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { initializeRunTrace, logAICallToTrace } from '@/lib/ai-run-trace';
+import { buildStoryContext } from '@/lib/story-context-builder';
+import { buildStorySystemMessage } from '@/lib/build-story-system-message';
+import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
+// New structured prompt system
+import { StoryBeatOutputSchema, generateStoryBeatOutputDescription } from '@/lib/schemas/story-beat-output';
+import { buildStoryBeatPrompt, type StoryBeatPromptContext } from '@/lib/prompt-builders/story-beat-prompt-builder';
+
+/**
+ * Normalizes arc steps to handle both legacy string format and new ArcStep object format.
+ * Provides backward compatibility for existing storyTypes in Firestore.
+ */
+function normalizeArcSteps(steps: (string | ArcStep)[]): ArcStep[] {
+  return steps.map(step =>
+    typeof step === 'string'
+      ? { id: step, label: step.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }
+      : step
+  );
+}
 
 type StoryBeatDebugInfo = {
-    stage: 'loading_session' | 'loading_storyType' | 'loading_promptConfig' | 'ai_generate' | 'json_parse' | 'json_validate' | 'unknown';
+    stage: 'loading_session' | 'loading_storyType' | 'loading_promptConfig' | 'building_prompt' | 'ai_generate' | 'json_parse' | 'json_validate' | 'unknown';
     details: Record<string, any>;
+    usedNewPromptSystem?: boolean;
 };
-
-// Zod schema for the expected JSON output from the model
-const StoryBeatOutputSchema = z.object({
-  storyContinuation: z.string().describe("The next paragraph of the story, continuing from the story so far."),
-  options: z.array(z.object({
-    id: z.string().describe("A single uppercase letter, e.g., 'A', 'B', 'C'."),
-    text: z.string().describe("A short, child-friendly choice for what happens next."),
-    introducesCharacter: z.boolean().optional().describe("Set to true if this option clearly brings a new character into the story."),
-    newCharacterLabel: z.string().optional().nullable().describe("If introducesCharacter is true, a descriptive noun phrase including traits (e.g., 'a friendly mailman', 'a brave little squirrel', 'a wise old turtle')."),
-    newCharacterKind: z.enum(['toy', 'pet', 'friend', 'family']).optional().nullable().describe("If introducesCharacter is true, the kind of character."),
-    existingCharacterId: z.string().optional().nullable().describe("If this choice is about an existing character, provide their ID here."),
-    avatarUrl: z.string().optional().nullable().describe("If this choice is about an existing character, provide their avatar URL here."),
-  })).min(3).max(3).describe("An array of exactly 3 choices for the child.")
-});
-
-const StoryBeatOutputSchemaDescription = JSON.stringify({
-  storyContinuation: 'string',
-  options: [
-    {
-      id: 'string',
-      text: 'string',
-      introducesCharacter: 'boolean (optional)',
-      newCharacterLabel: 'string | null (required when introducesCharacter is true)',
-      newCharacterKind: "'toy' | 'pet' | 'friend' | 'family' (required when introducesCharacter is true)",
-      existingCharacterId: 'string | null (optional)',
-      avatarUrl: 'string | null (optional)',
-    },
-  ],
-}, null, 2);
 
 export const storyBeatFlow = ai.defineFlow(
     {
@@ -84,230 +83,386 @@ export const storyBeatFlow = ai.defineFlow(
                 return { ok: false, sessionId, errorMessage: `StoryType with id ${storyTypeId} not found.` };
             }
             const storyType = storyTypeDoc.data() as StoryType;
-            let childProfile: ChildProfile | null = null;
-            if (session.childId) {
-                const childDoc = await firestore.collection('children').doc(session.childId).get();
-                if (childDoc.exists) {
-                    childProfile = childDoc.data() as ChildProfile;
-                }
-            }
+
+            // Load unified story context (child, siblings, characters)
+            // Pass supportingCharacterIds so we can highlight newly introduced story characters
+            const { data: contextData, formatted: contextFormatted } = await buildStoryContext(
+                parentUid,
+                session.childId,
+                session.mainCharacterId,
+                session.supportingCharacterIds
+            );
+            const childProfile = contextData.mainChild;
+            const childAge = contextData.childAge;
             const childPreferenceSummary = summarizeChildPreferences(childProfile);
             debug.details.childPreferenceSummary = childPreferenceSummary.slice(0, 400);
-            
-            // BOUND the arc step index
-            const arcSteps = storyType.arcTemplate?.steps ?? [];
+            debug.details.childAge = childAge;
+            debug.details.siblingsCount = contextData.siblings.length;
+            debug.details.charactersCount = contextData.characters.length + (contextData.mainCharacter ? 1 : 0);
+
+            // Initialize run trace for this session (if not already initialized)
+            await initializeRunTrace({
+                sessionId,
+                parentUid,
+                childId: session.childId,
+                storyTypeId,
+                storyTypeName: storyType.name,
+            });
+
+            // Build list of existing characters (including mainCharacter if it exists for backward compatibility)
+            const existingCharacters = contextData.mainCharacter
+                ? [contextData.mainCharacter, ...contextData.characters]
+                : contextData.characters;
+
+            // BOUND the arc step index and normalize steps for backward compatibility
+            const rawArcSteps = storyType.arcTemplate?.steps ?? [];
+            const arcSteps = normalizeArcSteps(rawArcSteps);
             const rawArcStepIndex = session.arcStepIndex ?? 0;
             let safeArcStepIndex = 0;
             if (arcSteps.length > 0) {
                 const maxIndex = arcSteps.length - 1;
                 safeArcStepIndex = Math.max(0, Math.min(rawArcStepIndex, maxIndex));
             }
-            const arcStep = arcSteps.length > 0 ? arcSteps[safeArcStepIndex] : "introduce_character";
+            const defaultArcStep: ArcStep = { id: "introduce_character", label: "Introduce Character" };
+            const arcStepObj = arcSteps.length > 0 ? arcSteps[safeArcStepIndex] : defaultArcStep;
             debug.details.arcStepIndexRaw = rawArcStepIndex;
             debug.details.arcStepIndexBounded = safeArcStepIndex;
-            debug.details.arcStepLabel = arcStep;
+            debug.details.arcStepId = arcStepObj.id;
+            debug.details.arcStepLabel = arcStepObj.label;
+            debug.details.arcStepGuidance = arcStepObj.guidance || '(none)';
 
-            // Load the main character (child)
-            let mainCharacter: Character | null = null;
-            if (mainCharacterId) {
-                const mainCharDoc = await firestore.collection('characters').doc(mainCharacterId).get();
-                if (mainCharDoc.exists) {
-                    mainCharacter = { ...mainCharDoc.data(), id: mainCharDoc.id } as Character;
-                }
-            }
+            // Calculate story temperature based on arc progress
+            const arcProgress = arcSteps.length > 0 ? safeArcStepIndex / Math.max(arcSteps.length - 1, 1) : 0;
 
-            // Load all characters for this parent
-            const charactersSnapshot = await firestore
-                .collection('characters')
-                .where('ownerParentUid', '==', parentUid)
-                .limit(10)
+            // Count messages to track story length
+            const messageCountSnapshot = await firestore
+                .collection('storySessions')
+                .doc(sessionId)
+                .collection('messages')
+                .count()
                 .get();
-            const existingCharacters = charactersSnapshot.docs.map(doc => {
-                const character = doc.data() as Character;
-                const { id: _ignored, ...rest } = character as Character & { id?: string };
-                return { ...rest, id: doc.id } as Character;
-            });
+            const messageCount = messageCountSnapshot.data().count || 0;
+            const lengthFactor = Math.min(messageCount / 20, 1.0); // Normalize to 20 beats
 
-            // Build character summary with main character clearly marked
-            const existingCharacterSummary = existingCharacters.map(c => {
-                const isMain = mainCharacter && c.id === mainCharacter.id;
-                const label = isMain ? '**MAIN CHARACTER (CHILD)**' : 'Supporting Character';
-                return `- ${label}: ${c.displayName} (ID: ${c.id}, Role: ${c.role}, Traits: ${c.traits?.join(', ') || 'none'})`;
-            }).join('\n');
-            debug.details.existingCharacterCount = existingCharacters.length;
-            debug.details.existingCharacterSummary = existingCharacterSummary;
-            debug.details.mainCharacterName = mainCharacter?.displayName || 'unknown';
+            // Combined temperature (70% arc progress, 30% length)
+            const combinedTemperature = (arcProgress * 0.7) + (lengthFactor * 0.3);
+            debug.details.temperature = {
+                arcProgress,
+                messageCount,
+                lengthFactor,
+                combined: combinedTemperature,
+            };
 
-            // 4. Build Story So Far
+
+            // 4. Build Messages Array for conversation history
             const messagesSnapshot = await firestore
                 .collection('storySessions')
                 .doc(sessionId)
                 .collection('messages')
                 .orderBy('createdAt', 'asc')
                 .get();
-            const rawStorySoFar = messagesSnapshot.docs.map(doc => {
+
+            // Build structured messages array for ai.generate() using Genkit MessageData format
+            const conversationMessages: MessageData[] = [];
+            for (const doc of messagesSnapshot.docs) {
                 const data = doc.data() as ChatMessage;
-                return `${data.sender === 'assistant' ? 'Story Guide' : 'Child'}: ${data.text}`;
-            }).join('\n');
-            const storySoFar = await replacePlaceholdersWithDescriptions(rawStorySoFar);
+                const resolvedText = await replacePlaceholdersWithDescriptions(data.text);
+                conversationMessages.push({
+                    role: data.sender === 'assistant' ? 'model' : 'user',
+                    content: [{ text: resolvedText }],
+                });
+            }
+
+            // Also build storySoFar string for legacy system (which doesn't use messages array)
+            const storySoFar = conversationMessages
+                .map(m => {
+                    // Extract text from the content parts array
+                    const textContent = m.content.map(part =>
+                        typeof part === 'object' && 'text' in part ? part.text : ''
+                    ).join('');
+                    return `${m.role === 'model' ? 'Story Guide' : 'Child'}: ${textContent}`;
+                })
+                .join('\n');
 
 
-            // 5. Choose PromptConfig using shared helper
-            debug.stage = 'loading_promptConfig';
-            const { promptConfig, id: resolvedPromptConfigId, debug: resolverDebug } = await resolvePromptConfigForSession(sessionId, 'storyBeat');
-            debug.details.resolverDebug = resolverDebug;
+            // 5. Build prompt - use new system if storyType has promptConfig, otherwise fallback to legacy
+            debug.stage = 'building_prompt';
+            let finalPrompt: string;
+            let resolvedPromptConfigId: string | null = null;
+            let modelTemperature = 0.7;
+            let maxOutputTokens = 10000;
 
+            // Fetch global prompt prefix
+            const globalPrefix = await getGlobalPrefix();
 
-            // 6. Build Final Prompt
-            const finalPrompt = `
+            if (storyType.promptConfig) {
+                // NEW SYSTEM: Use structured prompt builder with messages array
+                debug.usedNewPromptSystem = true;
+
+                const promptContext: StoryBeatPromptContext = {
+                    storyType,
+                    formattedContext: contextFormatted,
+                    childAge,
+                    arcStep: arcStepObj,
+                    arcProgress: combinedTemperature,
+                    childPreferenceSummary,
+                    levelBand: session.promptConfigLevelBand,
+                    useMessagesArray: true, // Story history will be passed via messages parameter
+                    useSchemaOutput: true,  // Schema is passed to model separately, no need for text-based output requirements
+                    globalPrefix,
+                };
+
+                finalPrompt = buildStoryBeatPrompt(promptContext);
+
+                // Use model settings from storyType.promptConfig
+                modelTemperature = storyType.promptConfig.model?.temperature ?? 0.7;
+                maxOutputTokens = storyType.promptConfig.model?.maxOutputTokens ?? 10000;
+
+                debug.details.promptSystem = 'new';
+                debug.details.storyTypeHasPromptConfig = true;
+            } else {
+                // LEGACY SYSTEM: Fallback to PromptConfig from Firestore
+                debug.usedNewPromptSystem = false;
+                debug.stage = 'loading_promptConfig';
+
+                const { promptConfig, id: legacyPromptConfigId, debug: resolverDebug } = await resolvePromptConfigForSession(sessionId, 'storyBeat');
+                resolvedPromptConfigId = legacyPromptConfigId;
+                debug.details.resolverDebug = resolverDebug;
+
+                // Build legacy prompt
+                const temperatureGuidance = combinedTemperature > 0.7
+                    ? `\n\nIMPORTANT STORY PROGRESSION: The story is ${Math.round(combinedTemperature * 100)}% complete and should be wrapping up. Start guiding toward a satisfying conclusion. Consider including options that lead to resolution and closure. The story should feel like it's reaching its natural end.`
+                    : combinedTemperature > 0.5
+                    ? `\n\nSTORY PROGRESSION: The story is ${Math.round(combinedTemperature * 100)}% through its arc. Begin setting up for the climax and resolution. Introduce elements that will help bring the story to a close in the next few beats.`
+                    : combinedTemperature > 0.3
+                    ? `\n\nSTORY PROGRESSION: The story is ${Math.round(combinedTemperature * 100)}% complete. Continue developing the plot while keeping the story moving forward toward its eventual conclusion.`
+                    : '';
+
+                const systemMessage = buildStorySystemMessage(contextFormatted, childAge, 'story_beat', globalPrefix);
+
+                finalPrompt = `
+${systemMessage}
+
+=== ADDITIONAL STORY GUIDANCE ===
 ${promptConfig.systemPrompt}
 
-MODE INSTRUCTIONS:
 ${promptConfig.modeInstructions}
 
-Your goal is to present up to 3 choices. One of those choices should be to introduce an existing character if appropriate for the story.
+=== CURRENT SESSION ===
+Story Type: ${storyType.name}
+Arc Step: ${arcStepObj.id} (${arcStepObj.label})
+${arcStepObj.guidance ? `Step Guidance: ${arcStepObj.guidance}` : ''}
+${temperatureGuidance}
 
-CRITICAL RULES FOR CHARACTERS:
-1. DO NOT create new characters for people/animals already in the Existing Character Roster below
-2. The MAIN CHARACTER (marked as **MAIN CHARACTER (CHILD)**) represents the child - NEVER create a new character for them
-3. When you want to use an existing character, you MUST populate 'existingCharacterId' with their ID from the roster
-4. Only set 'introducesCharacter' to true for characters that are NOT already in the roster
-5. If 'introducesCharacter' is true, you MUST provide BOTH:
-   - 'newCharacterLabel': a short, descriptive noun phrase (e.g., "a friendly mailman", "a wise old turtle")
-   - 'newCharacterKind': one of 'toy', 'pet', 'friend', or 'family'
-6. Set 'introducesCharacter' to false for simple actions or observations
-   - Examples: "he sings a song", "the sun shines brighter", "he finds a shiny rock"
+Child's inspirations: ${childPreferenceSummary}
 
-CONTEXT:
-Story Type: ${storyType.name} (${storyTypeId})
-Current Arc Step: ${arcStep}
-Child Preferences and inspirations:
-${childPreferenceSummary}
-
-Existing Character Roster (DO NOT duplicate these - use their IDs instead):
-${existingCharacterSummary || "No existing characters available."}
-
-STORY SO FAR:
+=== STORY SO FAR ===
 ${storySoFar}
 
-Based on all the above, continue the story. Generate the next paragraph and three choices for the child. The next paragraph must use placeholders like '$$characterId$$' instead of names where appropriate. Output your response as a single, valid JSON object that matches this structure:
-${StoryBeatOutputSchemaDescription}
-Important: Return only a single JSON object. Do not include any extra text, explanation, or formatting. Do not wrap the JSON in markdown or code fences. The output must start with { and end with }.
+=== OUTPUT FORMAT ===
+Return a single valid JSON object (no markdown, no explanation):
+${generateStoryBeatOutputDescription()}
 `;
 
-            // 7. Call Genkit AI
+                // Use model settings from legacy promptConfig
+                const configMax = promptConfig.model?.maxOutputTokens;
+                const defaultMax = 1000;
+                const rawResolved = typeof configMax === 'number' && configMax > 0 ? configMax : defaultMax;
+                maxOutputTokens = Math.max(rawResolved, 10000);
+                modelTemperature = promptConfig.model?.temperature ?? 0.7;
+
+                debug.details.promptSystem = 'legacy';
+                debug.details.storyTypeHasPromptConfig = false;
+            }
+
+            // 6. Call Genkit AI
             debug.stage = 'ai_generate';
-            const configMax = promptConfig.model?.maxOutputTokens;
-            const defaultMax = 1000; // Fallback if not specified in config
-            const rawResolved = typeof configMax === 'number' && configMax > 0 ? configMax : defaultMax;
-            const maxOutputTokens = Math.max(rawResolved, 10000); // Enforce a high minimum
+
+            // Determine model name from storyType or use default
+            const modelName = storyType.promptConfig?.model?.name || 'googleai/gemini-2.5-pro';
 
             let llmResponse;
+            const startTime = Date.now();
+
+            // Prepare user messages for trace logging
+            const userMessagesForTrace = conversationMessages.map(m => ({
+                role: m.role === 'model' ? 'model' as const : 'user' as const,
+                content: m.content.map(part =>
+                    typeof part === 'object' && 'text' in part ? part.text : ''
+                ).join(''),
+            }));
+
             try {
-                llmResponse = await ai.generate({
-                    model: 'googleai/gemini-2.5-flash',
-                    prompt: finalPrompt,
-                    config: {
-                        temperature: promptConfig.model?.temperature ?? 0.7,
-                        maxOutputTokens: maxOutputTokens,
-                    }
+                if (debug.usedNewPromptSystem && conversationMessages.length > 0) {
+                    // NEW SYSTEM: Use messages array for conversation history
+                    // The system prompt contains role, context, and output requirements
+                    // The messages array contains the actual conversation history
+                    // Using output parameter for structured schema validation
+                    llmResponse = await ai.generate({
+                        model: modelName,
+                        system: finalPrompt,
+                        messages: conversationMessages,
+                        output: { schema: StoryBeatOutputSchema },
+                        config: {
+                            temperature: modelTemperature,
+                            maxOutputTokens: maxOutputTokens,
+                        }
+                    });
+                } else {
+                    // LEGACY SYSTEM: Use prompt with embedded STORY SO FAR
+                    // Using output parameter for structured schema validation
+                    llmResponse = await ai.generate({
+                        model: modelName,
+                        prompt: finalPrompt,
+                        output: { schema: StoryBeatOutputSchema },
+                        config: {
+                            temperature: modelTemperature,
+                            maxOutputTokens: maxOutputTokens,
+                        }
+                    });
+                }
+
+                // Log to both the individual AI flow log and the run trace
+                await logAIFlow({ flowName: 'storyBeatFlow', sessionId, parentId: parentUid, prompt: finalPrompt, response: llmResponse, startTime, modelName });
+                await logAICallToTrace({
+                    sessionId,
+                    flowName: 'storyBeatFlow',
+                    modelName,
+                    temperature: modelTemperature,
+                    maxOutputTokens,
+                    systemPrompt: finalPrompt,
+                    userMessages: debug.usedNewPromptSystem ? userMessagesForTrace : undefined,
+                    response: llmResponse,
+                    startTime,
                 });
-                await logAIFlow({ flowName: 'storyBeatFlow', sessionId, prompt: finalPrompt, response: llmResponse });
             } catch (e: any) {
-                await logAIFlow({ flowName: 'storyBeatFlow', sessionId, prompt: finalPrompt, error: e });
+                await logAIFlow({ flowName: 'storyBeatFlow', sessionId, parentId: parentUid, prompt: finalPrompt, error: e, startTime, modelName });
+                await logAICallToTrace({
+                    sessionId,
+                    flowName: 'storyBeatFlow',
+                    modelName,
+                    temperature: modelTemperature,
+                    maxOutputTokens,
+                    systemPrompt: finalPrompt,
+                    userMessages: debug.usedNewPromptSystem ? userMessagesForTrace : undefined,
+                    error: e,
+                    startTime,
+                });
                 throw e;
             }
             
-            // 8. Extract raw text robustly
-            let rawText: string | null = null;
-            if (llmResponse.text) {
-                rawText = llmResponse.text;
-            } else {
-                 const raw = (llmResponse as any).raw ?? (llmResponse as any).custom;
-                const firstCandidate = raw && Array.isArray(raw.candidates) && raw.candidates.length > 0 ? raw.candidates[0] : null;
-                if (firstCandidate) {
-                    const content = firstCandidate?.content;
-                    const parts = content && Array.isArray(content.parts) ? content.parts : [];
-                    const firstPart = parts.length > 0 ? parts[0] : null;
-                    const textValue = firstPart && typeof firstPart.text === 'string' ? firstPart.text : null;
-                    if (textValue && textValue.trim().length > 0) {
-                        rawText = textValue.trim();
-                    }
-                }
-            }
+            // 8. Extract structured output using Genkit's output parameter
+            // The output parameter handles JSON parsing and schema validation automatically
+            const structuredOutput = llmResponse.output;
 
-            if (!rawText || rawText.trim() === '') {
-                let llmResponseStringified = '[[Could not stringify llmResponse]]';
-                try {
-                    llmResponseStringified = JSON.stringify(llmResponse, null, 2);
-                } catch (e) {
-                    // Ignore stringify errors, use the placeholder
+            if (!structuredOutput) {
+                // Fallback: try manual parsing if output is null
+                const rawText = llmResponse.text;
+                if (rawText) {
+                    debug.stage = 'json_parse';
+                    try {
+                        let jsonToParse = rawText.trim();
+                        const jsonMarkdownMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
+                        if (jsonMarkdownMatch) {
+                            jsonToParse = jsonMarkdownMatch[1].trim();
+                        } else {
+                            const jsonObjectMatch = rawText.match(/\{[\s\S]*"storyContinuation"[\s\S]*\}/);
+                            if (jsonObjectMatch) {
+                                jsonToParse = jsonObjectMatch[0].trim();
+                            }
+                        }
+                        const parsed = JSON.parse(jsonToParse);
+                        const validationResult = StoryBeatOutputSchema.safeParse(parsed);
+                        if (validationResult.success) {
+                            // Use the manually parsed result
+                            const manualOutput = validationResult.data;
+                            // Continue with post-processing below
+                            for (const option of manualOutput.options) {
+                                if (option.existingCharacterId) {
+                                    const char = existingCharacters.find(c => c.id === option.existingCharacterId);
+                                    if (char) {
+                                        option.avatarUrl = char.avatarUrl || undefined;
+                                    }
+                                }
+                            }
+
+                            await logServerSessionEvent({
+                                firestore,
+                                sessionId,
+                                event: 'storyBeat.generated',
+                                status: 'completed',
+                                source: 'server',
+                                attributes: {
+                                    arcStep: arcStepObj.id,
+                                    arcStepLabel: arcStepObj.label,
+                                    promptConfigId: resolvedPromptConfigId,
+                                    storyTypeId,
+                                    usedFallbackParsing: true,
+                                },
+                            });
+
+                            const allText = [manualOutput.storyContinuation, ...manualOutput.options.map(o => o.text)].join(' ');
+                            const entityMap = await resolveEntitiesInText(allText);
+                            const resolvedStoryContinuation = await replacePlaceholdersInText(manualOutput.storyContinuation, entityMap);
+                            const resolvedOptions = await Promise.all(
+                                manualOutput.options.map(async (option) => ({
+                                    ...option,
+                                    text: await replacePlaceholdersInText(option.text, entityMap),
+                                    entities: await extractEntityMetadataFromText(option.text, entityMap),
+                                }))
+                            );
+
+                            return {
+                                ok: true,
+                                sessionId,
+                                promptConfigId: resolvedPromptConfigId,
+                                arcStep: arcStepObj.id,
+                                arcStepLabel: arcStepObj.label,
+                                storyTypeId,
+                                storyTypeName: storyType.name,
+                                storyContinuation: manualOutput.storyContinuation,
+                                storyContinuationResolved: resolvedStoryContinuation,
+                                options: manualOutput.options,
+                                optionsResolved: resolvedOptions,
+                                debug: {
+                                    storySoFarLength: storySoFar.length,
+                                    messagesCount: conversationMessages.length,
+                                    usedMessagesArray: debug.usedNewPromptSystem && conversationMessages.length > 0,
+                                    arcStepIndex: safeArcStepIndex,
+                                    modelName,
+                                    maxOutputTokens,
+                                    temperature: modelTemperature,
+                                    usedNewPromptSystem: debug.usedNewPromptSystem,
+                                    promptSystem: debug.details.promptSystem,
+                                    usedFallbackParsing: true,
+                                }
+                            };
+                        }
+                    } catch (parseErr) {
+                        // Fall through to error below
+                    }
                 }
 
                 return {
                     ok: false,
                     sessionId,
-                    errorMessage: "Model returned empty text for storyBeat.",
+                    errorMessage: "Model failed to generate valid structured output for storyBeat.",
                     debug: {
-                        stage: 'ai_generate',
+                        stage: 'output_extraction',
                         details: {
-                            textPresent: !!rawText,
-                            rawTextPreview: rawText ? rawText.slice(0, 500) : null,
-                            llmResponseStringified: llmResponseStringified,
+                            outputWasNull: true,
+                            rawTextPreview: llmResponse.text?.slice(0, 500) || null,
                         }
                     }
                 };
             }
-            
-            // 9. Manually parse and validate
-            debug.stage = 'json_parse';
-            let parsed: z.infer<typeof StoryBeatOutputSchema>;
-            try {
-                // Sometimes the model wraps the JSON in ```json ... ```, so we need to extract it.
-                const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
-                const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
-                parsed = JSON.parse(jsonToParse);
-            } catch (err) {
-                return {
-                    ok: false,
-                    sessionId,
-                    errorMessage: "Model output is not valid JSON for storyBeat.",
-                    debug: {
-                        stage: 'json_parse',
-                        details: {
-                            parseError: String(err),
-                            rawTextPreview: rawText.slice(0, 500)
-                        }
-                    }
-                };
-            }
-
-            debug.stage = 'json_validate';
-            const validationResult = StoryBeatOutputSchema.safeParse(parsed);
-
-            if (!validationResult.success) {
-                 return {
-                    ok: false,
-                    sessionId,
-                    errorMessage: `Model JSON does not match expected storyBeat shape. Errors: ${validationResult.error.message}`,
-                    debug: {
-                        stage: 'json_validate',
-                        details: {
-                            validationErrors: validationResult.error.issues,
-                            rawTextPreview: rawText.slice(0, 500)
-                        }
-                    }
-                };
-            }
-
-            const structuredOutput = validationResult.data;
 
             // Post-process to add avatar URLs
             for (const option of structuredOutput.options) {
                 if (option.existingCharacterId) {
                     const char = existingCharacters.find(c => c.id === option.existingCharacterId);
                     if (char) {
-                        option.avatarUrl = char.avatarUrl || null;
+                        option.avatarUrl = char.avatarUrl || undefined;
                     }
                 }
             }
@@ -320,29 +475,53 @@ Important: Return only a single JSON object. Do not include any extra text, expl
                 status: 'completed',
                 source: 'server',
                 attributes: {
-                    arcStep,
+                    arcStep: arcStepObj.id,
+                    arcStepLabel: arcStepObj.label,
                     promptConfigId: resolvedPromptConfigId,
                     storyTypeId,
                 },
             });
 
+            // Resolve placeholders in text for display
+            // Collect all text that needs resolution to build a complete entityMap
+            const allText = [
+                structuredOutput.storyContinuation,
+                ...structuredOutput.options.map(o => o.text)
+            ].join(' ');
+            const entityMap = await resolveEntitiesInText(allText);
+            const resolvedStoryContinuation = await replacePlaceholdersInText(structuredOutput.storyContinuation, entityMap);
+            const resolvedOptions = await Promise.all(
+                structuredOutput.options.map(async (option) => ({
+                    ...option,
+                    text: await replacePlaceholdersInText(option.text, entityMap),
+                    entities: await extractEntityMetadataFromText(option.text, entityMap),
+                }))
+            );
+
             return {
                 ok: true,
                 sessionId,
                 promptConfigId: resolvedPromptConfigId,
-                arcStep,
+                arcStep: arcStepObj.id,
+                arcStepLabel: arcStepObj.label,
                 storyTypeId,
                 storyTypeName: storyType.name,
-                storyContinuation: structuredOutput.storyContinuation,
-                options: structuredOutput.options,
+                storyContinuation: structuredOutput.storyContinuation, // Original with placeholders
+                storyContinuationResolved: resolvedStoryContinuation, // Resolved for display
+                options: structuredOutput.options, // Original with placeholders
+                optionsResolved: resolvedOptions, // Resolved for display
                 debug: {
                     storySoFarLength: storySoFar.length,
+                    messagesCount: conversationMessages.length,
+                    usedMessagesArray: debug.usedNewPromptSystem && conversationMessages.length > 0,
                     arcStepIndex: safeArcStepIndex,
-                    modelName: 'googleai/gemini-2.5-flash',
-                    maxOutputTokens: maxOutputTokens,
-                    temperature: promptConfig.model?.temperature,
+                    modelName,
+                    maxOutputTokens,
+                    temperature: modelTemperature,
+                    usedNewPromptSystem: debug.usedNewPromptSystem,
+                    promptSystem: debug.details.promptSystem,
                     promptPreview: finalPrompt.substring(0, 500) + '...',
-                    resolverDebug: resolverDebug,
+                    fullPrompt: finalPrompt, // Include full prompt for diagnostics
                 }
             };
 

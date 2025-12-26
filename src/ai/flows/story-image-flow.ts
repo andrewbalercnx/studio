@@ -5,12 +5,17 @@ import {ai} from '@/ai/genkit';
 import {initFirebaseAdminApp} from '@/firebase/admin/app';
 import {getFirestore, FieldValue} from 'firebase-admin/firestore';
 import {getStoryBucket, deleteStorageObject} from '@/firebase/admin/storage';
-import type {ChildProfile, Story, StoryOutputPage} from '@/lib/types';
+import type {ChildProfile, Story, StoryOutputPage, Character} from '@/lib/types';
 import {randomUUID} from 'crypto';
 import {z} from 'genkit';
 import imageSize from 'image-size';
 import { Gaxios, GaxiosError } from 'gaxios';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+// New actor utilities - available for future use alongside existing fetchEntityReferenceData
+import {
+  getActorsDetailsWithImageData,
+  type ActorDetailsWithImageData,
+} from '@/lib/story-context-builder';
 
 const DEFAULT_IMAGE_MODEL = process.env.STORYBOOK_IMAGE_MODEL ?? 'googleai/gemini-2.5-flash-image-preview';
 const MOCK_IMAGES = process.env.MOCK_STORYBOOK_IMAGES === 'true';
@@ -26,6 +31,16 @@ const StoryImageFlowInput = z.object({
   pageId: z.string(),
   regressionTag: z.string().optional(),
   forceRegenerate: z.boolean().optional(),
+  // New fields for StoryBookOutput model
+  storybookId: z.string().optional(),        // If set, uses stories/{storyId}/storybooks/{storybookId}/pages path
+  // Use z.any() to bypass genkit's JSON schema validation bug with null values
+  // The flow logic handles null by treating it as undefined (falsy check)
+  targetWidthPx: z.any().optional(),
+  targetHeightPx: z.any().optional(),
+  imageStylePrompt: z.string().optional(),   // Art style prompt (from StoryBookOutput)
+  // Aspect ratio for the generated image (e.g., "3:4", "4:3", "1:1", "4:5")
+  // Gemini 2.5 Flash Image supports: 21:9, 16:9, 4:3, 3:2, 1:1, 9:16, 3:4, 2:3, 5:4, 4:5
+  aspectRatio: z.string().optional(),
 });
 
 const StoryImageFlowOutput = z.object({
@@ -95,9 +110,9 @@ function mapAspectRatio(layout?: StoryOutputPage['layoutHints']): string | undef
   }
 }
 
-function buildMockSvg(prompt: string): GenerateImageResult {
-  const width = 1024;
-  const height = 1024;
+function buildMockSvg(prompt: string, targetWidthPx?: number, targetHeightPx?: number): GenerateImageResult {
+  const width = targetWidthPx || 1024;
+  const height = targetHeightPx || 1024;
   const truncatedPrompt = prompt.length > 160 ? `${prompt.slice(0, 157)}…` : prompt;
   const svg = `
   <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
@@ -126,17 +141,125 @@ function buildMockSvg(prompt: string): GenerateImageResult {
   };
 }
 
-function parseDataUrl(dataUrl: string): {mimeType: string; buffer: Buffer} {
-  const match = /^data:(.+);base64,(.*)$/i.exec(dataUrl);
-  if (!match) {
-    throw new Error('Model returned an invalid media payload.');
+async function parseMediaUrl(mediaUrl: string): Promise<{mimeType: string; buffer: Buffer}> {
+  if (!mediaUrl || typeof mediaUrl !== 'string') {
+    throw new Error(
+      `Model returned invalid media payload: expected string, got ${typeof mediaUrl}. ` +
+      `Value: ${JSON.stringify(mediaUrl)?.substring(0, 100)}`
+    );
   }
-  const mimeType = match[1];
-  const base64 = match[2];
-  return {
-    mimeType,
-    buffer: Buffer.from(base64, 'base64'),
-  };
+
+  // Try parsing as a data URL first (standard format: data:image/png;base64,...)
+  const match = /^data:(.+);base64,(.*)$/i.exec(mediaUrl);
+  if (match) {
+    const mimeType = match[1];
+    const base64 = match[2];
+
+    if (!base64 || base64.length === 0) {
+      throw new Error(
+        `Model returned data URL with empty base64 content. ` +
+        `MIME type: ${mimeType}. URL prefix: ${mediaUrl.substring(0, 50)}`
+      );
+    }
+
+    return {
+      mimeType,
+      buffer: Buffer.from(base64, 'base64'),
+    };
+  }
+
+  // Check if it's a regular URL (https:// or http://)
+  if (mediaUrl.startsWith('https://') || mediaUrl.startsWith('http://')) {
+    console.log('[story-image-flow] Model returned regular URL, fetching image:', mediaUrl.substring(0, 100));
+    try {
+      const gaxios = new Gaxios();
+      const response = await gaxios.request({
+        url: mediaUrl,
+        responseType: 'arraybuffer',
+        timeout: 30000,
+      });
+
+      const buffer = Buffer.from(response.data as ArrayBuffer);
+      const contentType = response.headers?.['content-type'] as string || 'image/png';
+      // Extract just the mime type without charset or other parameters
+      const mimeType = contentType.split(';')[0].trim();
+
+      console.log('[story-image-flow] Fetched image from URL:', {
+        size: buffer.length,
+        mimeType,
+      });
+
+      return { mimeType, buffer };
+    } catch (fetchError: any) {
+      throw new Error(
+        `Model returned a URL but failed to fetch image: ${fetchError.message}. ` +
+        `URL: ${mediaUrl.substring(0, 100)}`
+      );
+    }
+  }
+
+  // Handle case where model returns raw base64 without data URL prefix
+  // Check if the string looks like base64 (starts with valid base64 chars, is long enough)
+  const base64Pattern = /^[A-Za-z0-9+/=]+$/;
+  const trimmedUrl = mediaUrl.trim();
+  if (trimmedUrl.length > 100 && base64Pattern.test(trimmedUrl.substring(0, 100))) {
+    console.log('[story-image-flow] Model returned raw base64, attempting to decode as PNG');
+    try {
+      const buffer = Buffer.from(trimmedUrl, 'base64');
+      // Check for PNG magic bytes (89 50 4E 47)
+      if (buffer.length > 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+        console.log('[story-image-flow] Detected PNG from raw base64, size:', buffer.length);
+        return { mimeType: 'image/png', buffer };
+      }
+      // Check for JPEG magic bytes (FF D8 FF)
+      if (buffer.length > 3 && buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+        console.log('[story-image-flow] Detected JPEG from raw base64, size:', buffer.length);
+        return { mimeType: 'image/jpeg', buffer };
+      }
+      // Check for WebP magic bytes (RIFF....WEBP)
+      if (buffer.length > 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
+        console.log('[story-image-flow] Detected WebP from raw base64, size:', buffer.length);
+        return { mimeType: 'image/webp', buffer };
+      }
+      // Default to PNG if we can't detect the type but it decoded successfully
+      if (buffer.length > 1000) {
+        console.log('[story-image-flow] Unknown image type from raw base64, assuming PNG, size:', buffer.length);
+        return { mimeType: 'image/png', buffer };
+      }
+    } catch (decodeError) {
+      console.log('[story-image-flow] Failed to decode as raw base64:', decodeError);
+    }
+  }
+
+  // Handle malformed data URLs where the base64 marker might be slightly different
+  // e.g., "data:image/png,base64,..." or "data:image/png; base64,..."
+  const malformedMatch = /^data:([^,;]+)[,;]\s*base64[,;]\s*(.+)$/i.exec(mediaUrl);
+  if (malformedMatch) {
+    console.log('[story-image-flow] Detected malformed data URL, attempting to parse');
+    const mimeType = malformedMatch[1].trim();
+    const base64 = malformedMatch[2].trim();
+    if (base64.length > 0) {
+      return {
+        mimeType: mimeType || 'image/png',
+        buffer: Buffer.from(base64, 'base64'),
+      };
+    }
+  }
+
+  // Not a data URL and not a regular URL - provide diagnostic info
+  const preview = mediaUrl.length > 200 ? mediaUrl.substring(0, 200) + '...' : mediaUrl;
+  const startsWithData = mediaUrl.startsWith('data:');
+  const hasBase64 = mediaUrl.includes(';base64,') || mediaUrl.includes(',base64,');
+  const looksLikeBase64 = base64Pattern.test(trimmedUrl.substring(0, Math.min(100, trimmedUrl.length)));
+
+  throw new Error(
+    `Model returned an invalid media payload (the string did not match expected data URL format). ` +
+    `Expected format: data:<mimeType>;base64,<data> or https://... URL. ` +
+    `Starts with 'data:': ${startsWithData}. Contains base64 marker: ${hasBase64}. ` +
+    `Looks like raw base64: ${looksLikeBase64}. ` +
+    `Total length: ${mediaUrl.length} chars. ` +
+    `First 200 chars: ${preview}`
+  );
 }
 
 function extensionFromMime(mimeType: string): string {
@@ -147,8 +270,353 @@ function extensionFromMime(mimeType: string): string {
   return 'img';
 }
 
-function buildStoragePath(storyId: string, pageId: string, mimeType: string): string {
-  return `stories/${storyId}/pages/${pageId}.${extensionFromMime(mimeType)}`;
+function buildStoragePath(storyId: string, pageId: string, mimeType: string, storybookId?: string): string {
+  // If storybookId is provided, include it in the path to allow multiple storybooks per story
+  // New path: stories/{storyId}/storybooks/{storybookId}/pages/{pageId}.ext
+  // Legacy path: stories/{storyId}/pages/{pageId}.ext
+  const path = storybookId
+    ? `stories/${storyId}/storybooks/${storybookId}/pages/${pageId}.${extensionFromMime(mimeType)}`
+    : `stories/${storyId}/pages/${pageId}.${extensionFromMime(mimeType)}`;
+  console.log(`[storyImageFlow] buildStoragePath: storybookId=${storybookId || 'undefined'}, path=${path}`);
+  return path;
+}
+
+/**
+ * Entity reference data including photos and character details for image generation
+ */
+type EntityReferenceData = {
+  photos: string[];
+  characters: Character[];
+  childProfile?: ChildProfile;
+  // Map of entity ID to full actor data (for structured prompts)
+  actorMap: Map<string, Character | ChildProfile>;
+};
+
+/**
+ * Structured actor data for image prompts
+ */
+type ActorData = {
+  id: string;
+  type: 'child' | 'sibling' | 'character';
+  displayName: string;
+  characterType?: string; // For characters: Pet, Friend, etc.
+  description?: string;
+  pronouns?: string;
+  likes?: string[];
+  dislikes?: string[];
+  images: string[]; // Avatar + photos
+};
+
+/**
+ * Build structured actor data from an entity
+ */
+function buildActorData(entity: Character | ChildProfile, entityId: string, isMainChild: boolean = false): ActorData {
+  const images: string[] = [];
+  if (entity.avatarUrl) images.push(entity.avatarUrl);
+  if (entity.photos?.length) images.push(...entity.photos);
+
+  // Check if it's a Character (has 'type' field) or ChildProfile
+  const isCharacter = 'type' in entity && typeof (entity as Character).type === 'string';
+
+  return {
+    id: entityId,
+    type: isCharacter ? 'character' : (isMainChild ? 'child' : 'sibling'),
+    displayName: entity.displayName,
+    characterType: isCharacter ? (entity as Character).type : undefined,
+    description: entity.description,
+    pronouns: entity.pronouns,
+    likes: entity.likes,
+    dislikes: entity.dislikes,
+    images,
+  };
+}
+
+/**
+ * Build structured JSON for all actors in a scene
+ * mainChild is always included if mainChildProfile is provided, even if not in actorIds
+ * Other actors (siblings, characters) are included based on actorIds
+ */
+function buildActorsJson(
+  actorIds: string[],
+  actorMap: Map<string, Character | ChildProfile>,
+  mainChildId?: string,
+  mainChildProfile?: ChildProfile
+): string {
+  const actors: ActorData[] = [];
+  const includedIds = new Set<string>();
+
+  // Always add main child first if provided
+  if (mainChildId && mainChildProfile) {
+    actors.push(buildActorData(mainChildProfile, mainChildId, true));
+    includedIds.add(mainChildId);
+  }
+
+  // Add other actors from the page's entityIds
+  for (const actorId of actorIds) {
+    // Skip if already added (e.g., main child)
+    if (includedIds.has(actorId)) continue;
+
+    const entity = actorMap.get(actorId);
+    if (entity) {
+      actors.push(buildActorData(entity, actorId, false));
+      includedIds.add(actorId);
+    }
+  }
+
+  if (actors.length === 0) {
+    return '';
+  }
+
+  // Group by type for clarity
+  const children = actors.filter(a => a.type === 'child');
+  const siblings = actors.filter(a => a.type === 'sibling');
+  const characters = actors.filter(a => a.type === 'character');
+
+  const result: any = {};
+
+  if (children.length > 0) {
+    result.mainChild = children[0]; // There should only be one main child
+  }
+
+  if (siblings.length > 0) {
+    result.siblings = siblings;
+  }
+
+  if (characters.length > 0) {
+    result.characters = characters;
+  }
+
+  return JSON.stringify(result, null, 2);
+}
+
+/**
+ * Build a detailed actor block for image prompts
+ * Includes description, pronouns, likes, dislikes, and reference image URLs
+ */
+function buildActorBlock(
+  actor: Character | ChildProfile,
+  actorId: string
+): string {
+  const lines: string[] = [];
+  lines.push(`$$${actorId}$$:`);
+
+  if (actor.description) {
+    lines.push(`- Description: ${actor.description}`);
+  }
+
+  lines.push(`- Pronouns: ${actor.pronouns ?? 'they/them'}`);
+
+  if (actor.likes?.length) {
+    lines.push(`- Likes: ${actor.likes.join(', ')}`);
+  }
+
+  if (actor.dislikes?.length) {
+    lines.push(`- Dislikes: ${actor.dislikes.join(', ')}`);
+  }
+
+  // Reference images (avatar and photos)
+  const imageUrls: string[] = [];
+  if (actor.avatarUrl) imageUrls.push(actor.avatarUrl);
+  if (actor.photos?.length) imageUrls.push(...actor.photos);
+
+  if (imageUrls.length) {
+    lines.push(`- Reference images: ${imageUrls.join(', ')}`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Build character description for image prompts (legacy format for backwards compatibility)
+ */
+function buildCharacterDetails(characters: Character[]): string {
+  return characters.map(c => {
+    const traits = c.traits ? ` who is ${c.traits.join(', ')}` : '';
+    const visualNotes = c.visualNotes ? Object.values(c.visualNotes).filter(Boolean).join(', ') : '';
+    const description = c.description ? ` (${c.description})` : '';
+    return `${c.displayName} (${c.role || c.type}${traits})${visualNotes ? `, wearing ${visualNotes}` : ''}${description}`;
+  }).join('; ');
+}
+
+/**
+ * Fetches reference photos/avatars AND full character details for entities based on their IDs.
+ * Returns photos for visual reference and character objects for prompt enhancement.
+ * Also builds an actorMap for structured prompt generation.
+ */
+async function fetchEntityReferenceData(
+  firestore: FirebaseFirestore.Firestore,
+  entityIds: string[]
+): Promise<EntityReferenceData> {
+  if (!entityIds || entityIds.length === 0) {
+    return { photos: [], characters: [], actorMap: new Map() };
+  }
+
+  const photos: string[] = [];
+  const characters: Character[] = [];
+  const actorMap = new Map<string, Character | ChildProfile>();
+  let childProfile: ChildProfile | undefined;
+  const uniqueIds = [...new Set(entityIds)];
+
+  // Fetch in chunks of 10 (Firestore 'in' query limit)
+  const chunkSize = 10;
+  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    const chunk = uniqueIds.slice(i, i + chunkSize);
+
+    // Check characters collection first (by document ID)
+    const characterSnapshot = await firestore
+      .collection('characters')
+      .where('__name__', 'in', chunk)
+      .get();
+
+    characterSnapshot.forEach((docSnap) => {
+      const character = { id: docSnap.id, ...docSnap.data() } as Character;
+      characters.push(character);
+      actorMap.set(docSnap.id, character);
+      // Use avatar URL if available
+      if (character.avatarUrl) {
+        photos.push(character.avatarUrl);
+      }
+    });
+
+    // Find remaining IDs that weren't characters
+    const foundCharacterIds = new Set(characterSnapshot.docs.map(d => d.id));
+    const remainingChunk = chunk.filter(id => !foundCharacterIds.has(id));
+
+    if (remainingChunk.length > 0) {
+      // Check children collection (by document ID)
+      const childSnapshot = await firestore
+        .collection('children')
+        .where('__name__', 'in', remainingChunk)
+        .get();
+
+      childSnapshot.forEach((docSnap) => {
+        const child = { id: docSnap.id, ...docSnap.data() } as ChildProfile;
+        childProfile = child;
+        actorMap.set(docSnap.id, child);
+        // Use child photos if available (take first 2)
+        if (child.photos && child.photos.length > 0) {
+          photos.push(...child.photos.slice(0, 2));
+        } else if (child.avatarUrl) {
+          photos.push(child.avatarUrl);
+        }
+      });
+    }
+  }
+
+  // Fallback: For IDs not found by document ID, try to find by displayName
+  // This handles legacy data where the AI used displayName instead of document ID
+  const unfoundIds = uniqueIds.filter(id => !actorMap.has(id));
+  if (unfoundIds.length > 0) {
+    for (let i = 0; i < unfoundIds.length; i += chunkSize) {
+      const chunk = unfoundIds.slice(i, i + chunkSize);
+
+      // Try characters by displayName
+      const charsByName = await firestore
+        .collection('characters')
+        .where('displayName', 'in', chunk)
+        .get();
+
+      charsByName.forEach((docSnap) => {
+        const character = { id: docSnap.id, ...docSnap.data() } as Character;
+        characters.push(character);
+        // Map by displayName (which was used as the placeholder)
+        actorMap.set(character.displayName, character);
+        if (character.avatarUrl) {
+          photos.push(character.avatarUrl);
+        }
+      });
+
+      // Try children by displayName
+      const stillUnfound = chunk.filter(id => !actorMap.has(id));
+      if (stillUnfound.length > 0) {
+        const childrenByName = await firestore
+          .collection('children')
+          .where('displayName', 'in', stillUnfound)
+          .get();
+
+        childrenByName.forEach((docSnap) => {
+          const child = { id: docSnap.id, ...docSnap.data() } as ChildProfile;
+          actorMap.set(child.displayName, child);
+          if (child.photos && child.photos.length > 0) {
+            photos.push(...child.photos.slice(0, 2));
+          } else if (child.avatarUrl) {
+            photos.push(child.avatarUrl);
+          }
+        });
+      }
+    }
+  }
+
+  return { photos, characters, childProfile, actorMap };
+}
+
+/**
+ * Legacy function for backwards compatibility - returns only photos
+ */
+async function fetchEntityReferencePhotos(
+  firestore: FirebaseFirestore.Firestore,
+  entityIds: string[]
+): Promise<string[]> {
+  const data = await fetchEntityReferenceData(firestore, entityIds);
+  return data.photos;
+}
+
+/**
+ * Fetches ONLY avatar URLs for entities (not real photos).
+ * Used for back cover generation which should only use avatars.
+ */
+async function fetchEntityAvatarsOnly(
+  firestore: FirebaseFirestore.Firestore,
+  entityIds: string[]
+): Promise<string[]> {
+  if (!entityIds || entityIds.length === 0) {
+    return [];
+  }
+
+  const avatars: string[] = [];
+  const uniqueIds = [...new Set(entityIds)];
+
+  // Fetch in chunks of 10 (Firestore 'in' query limit)
+  const chunkSize = 10;
+  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    const chunk = uniqueIds.slice(i, i + chunkSize);
+
+    // Check characters collection first
+    const characterSnapshot = await firestore
+      .collection('characters')
+      .where('__name__', 'in', chunk)
+      .get();
+
+    characterSnapshot.forEach((docSnap) => {
+      const character = docSnap.data() as Character;
+      // Only use avatar URL (not photos)
+      if (character.avatarUrl) {
+        avatars.push(character.avatarUrl);
+      }
+    });
+
+    // Find remaining IDs that weren't characters
+    const foundCharacterIds = new Set(characterSnapshot.docs.map(d => d.id));
+    const remainingChunk = chunk.filter(id => !foundCharacterIds.has(id));
+
+    if (remainingChunk.length > 0) {
+      // Check children collection
+      const childSnapshot = await firestore
+        .collection('children')
+        .where('__name__', 'in', remainingChunk)
+        .get();
+
+      childSnapshot.forEach((docSnap) => {
+        const child = docSnap.data() as ChildProfile;
+        // Only use avatar URL (not real photos)
+        if (child.avatarUrl) {
+          avatars.push(child.avatarUrl);
+        }
+      });
+    }
+  }
+
+  return avatars;
 }
 
 async function uploadImageToStorage(params: {
@@ -156,6 +624,7 @@ async function uploadImageToStorage(params: {
   mimeType: string;
   storyId: string;
   pageId: string;
+  storybookId?: string;
   regressionTag?: string;
 }) {
   let bucket;
@@ -165,7 +634,7 @@ async function uploadImageToStorage(params: {
     const message = err?.message || String(err);
     throw new Error(`BUCKET_UNAVAILABLE:${message}`);
   }
-  const objectPath = buildStoragePath(params.storyId, params.pageId, params.mimeType);
+  const objectPath = buildStoragePath(params.storyId, params.pageId, params.mimeType, params.storybookId);
   const downloadToken = randomUUID();
   const metadata: Record<string, string> = {
     storyId: params.storyId,
@@ -182,12 +651,12 @@ async function uploadImageToStorage(params: {
       contentType: params.mimeType,
       resumable: false,
       metadata: {
+        cacheControl: 'public,max-age=3600',
         metadata: {
           ...metadata,
           firebaseStorageDownloadTokens: downloadToken,
         },
       },
-      cacheControl: 'public,max-age=3600',
     });
 
   const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(
@@ -197,46 +666,221 @@ async function uploadImageToStorage(params: {
   return {imageUrl, objectPath, downloadToken};
 }
 
-async function createImage(prompt: string, childPhotos: string[], artStyle: string): Promise<GenerateImageResult> {
+/**
+ * Parameters for image creation with structured actor data
+ */
+type CreateImageParams = {
+  sceneText: string;           // The scene text with $$Id$$ placeholders
+  artStyle: string;            // Art style prompt
+  actorsJson: string;          // Structured JSON of all actors in the scene
+  childAge?: string;           // Age of the main child (e.g., "3 years old")
+  mainChildId?: string;        // ID of the main child
+  referencePhotos: string[];   // URLs of reference photos
+  targetWidthPx?: number;
+  targetHeightPx?: number;
+  aspectRatio?: string;
+};
+
+async function createImage(params: CreateImageParams): Promise<GenerateImageResult> {
+  const {
+    sceneText,
+    artStyle,
+    actorsJson,
+    childAge,
+    mainChildId,
+    referencePhotos,
+    targetWidthPx,
+    targetHeightPx,
+    aspectRatio,
+  } = params;
+
   if (MOCK_IMAGES) {
-    return buildMockSvg(prompt);
+    return buildMockSvg(sceneText, targetWidthPx, targetHeightPx);
   }
-  
+
   const imageParts = (await Promise.all(
-    childPhotos.map(async (url) => {
+    referencePhotos.map(async (url) => {
       const dataUri = await fetchImageAsDataUri(url);
       return dataUri ? { media: { url: dataUri } } : null;
     })
   )).filter((part): part is { media: { url: string } } => part !== null);
 
-  const promptParts: any[] = [
+  // Build dimension hint for the prompt if target dimensions are provided
+  let dimensionHint = '';
+  if (targetWidthPx && targetHeightPx) {
+    const aspectRatioHint = targetWidthPx > targetHeightPx ? 'landscape' : targetWidthPx < targetHeightPx ? 'portrait' : 'square';
+    dimensionHint = `\n\nOutput should be ${aspectRatioHint} orientation, approximately ${targetWidthPx}x${targetHeightPx} pixels.`;
+  }
+
+  // Build the structured prompt in the new format
+  let structuredPrompt = '';
+
+  // 1. Target audience
+  if (mainChildId && childAge) {
+    structuredPrompt += `Create an image for a child's storybook. The main child ($$${mainChildId}$$) is ${childAge}.\n\n`;
+  } else {
+    structuredPrompt += `Create an image for a child's storybook.\n\n`;
+  }
+
+  // 2. Art style
+  structuredPrompt += `Art Style: ${artStyle}\n\n`;
+
+  // 3. Scene description with $$Id$$ placeholders intact
+  structuredPrompt += `Scene: ${sceneText}\n\n`;
+
+  // 4. Structured actor data
+  if (actorsJson && actorsJson.length > 0) {
+    structuredPrompt += `Characters in this scene (use the images provided for visual reference):\n${actorsJson}\n`;
+  }
+
+  // 5. Dimension hints
+  structuredPrompt += dimensionHint;
+
+  // Build prompt variants for retry logic - progressively simplify on failure
+  const fullPromptText = structuredPrompt.trim();
+  const simplifiedPromptText = `Art Style: ${artStyle}\n\nScene: ${sceneText}${dimensionHint}`.trim();  // No actor details
+  const minimalPromptText = `Art Style: ${artStyle}\n\nScene: ${sceneText}`.trim();  // Bare minimum
+
+  const fullPromptParts: any[] = [
     ...imageParts,
-    { text: `Art style: ${artStyle}. Scene: ${prompt}` },
+    { text: fullPromptText },
   ];
 
-  const promptText = `Art style: ${artStyle}. Scene: ${prompt} [with ${imageParts.length} reference photo(s)]`;
+  const simplifiedPromptParts: any[] = [
+    // Retry without reference photos which might cause issues
+    { text: simplifiedPromptText },
+  ];
+
+  const minimalPromptParts: any[] = [
+    { text: minimalPromptText },
+  ];
+
+  console.log('[story-image-flow] Generating image with model:', DEFAULT_IMAGE_MODEL);
+  console.log('[story-image-flow] Prompt parts count:', fullPromptParts.length, 'Image parts:', imageParts.length);
+  if (actorsJson) {
+    console.log('[story-image-flow] Actors JSON length:', actorsJson.length);
+  }
+  if (targetWidthPx && targetHeightPx) {
+    console.log('[story-image-flow] Target dimensions:', targetWidthPx, 'x', targetHeightPx);
+  }
+  if (aspectRatio) {
+    console.log('[story-image-flow] Aspect ratio:', aspectRatio);
+  }
+
+  // Build the config with aspectRatio if provided
+  // Gemini 2.5 Flash Image supports: 21:9, 16:9, 4:3, 3:2, 1:1, 9:16, 3:4, 2:3, 5:4, 4:5
+  const generateConfig: any = {
+    responseModalities: ['TEXT', 'IMAGE'],
+  };
+  if (aspectRatio) {
+    generateConfig.imageConfig = { aspectRatio };
+  }
 
   let generation;
-  try {
-    generation = await ai.generate({
-      model: DEFAULT_IMAGE_MODEL,
-      prompt: promptParts,
-      config: {
-        responseModalities: ['TEXT', 'IMAGE'],
-      },
-    });
-    await logAIFlow({ flowName: 'storyImageFlow:createImage', sessionId: null, prompt: promptText, response: generation });
-  } catch (e: any) {
-    await logAIFlow({ flowName: 'storyImageFlow:createImage', sessionId: null, prompt: promptText, error: e });
-    throw e;
+  const MAX_RETRIES = 2;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    // Use progressively simpler prompts on each retry
+    let currentPromptParts: any[];
+    let currentPromptText: string;
+
+    if (attempt === 0) {
+      currentPromptParts = fullPromptParts;
+      currentPromptText = `${fullPromptText} [with ${imageParts.length} reference photo(s), aspect=${aspectRatio || 'auto'}]`;
+    } else if (attempt === 1) {
+      currentPromptParts = simplifiedPromptParts;
+      currentPromptText = `${simplifiedPromptText} [simplified - no reference photos, aspect=${aspectRatio || 'auto'}]`;
+      console.log(`[story-image-flow] Retry ${attempt}: Using simplified prompt without reference photos`);
+    } else {
+      currentPromptParts = minimalPromptParts;
+      currentPromptText = `${minimalPromptText} [minimal prompt, aspect=${aspectRatio || 'auto'}]`;
+      console.log(`[story-image-flow] Retry ${attempt}: Using minimal prompt`);
+    }
+
+    const startTime = Date.now();
+    try {
+      if (attempt > 0) {
+        // Wait a bit before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+
+      generation = await ai.generate({
+        model: DEFAULT_IMAGE_MODEL,
+        prompt: currentPromptParts,
+        config: generateConfig,
+      });
+      console.log('[story-image-flow] Generation completed. Keys:', Object.keys(generation));
+      await logAIFlow({ flowName: 'storyImageFlow:createImage', sessionId: null, prompt: currentPromptText, response: generation, startTime, modelName: DEFAULT_IMAGE_MODEL });
+      lastError = null;
+      break; // Success, exit retry loop
+    } catch (e: any) {
+      lastError = e;
+      const errorMessage = e?.message || String(e);
+      console.error(`[story-image-flow] Generation failed (attempt ${attempt + 1}):`, errorMessage);
+      await logAIFlow({ flowName: 'storyImageFlow:createImage', sessionId: null, prompt: currentPromptText, error: e, startTime, modelName: DEFAULT_IMAGE_MODEL });
+
+      // Check if this is a retryable error
+      const isPatternError = errorMessage.includes('did not match the expected pattern');
+      const isTransientError = errorMessage.includes('RESOURCE_EXHAUSTED') ||
+                               errorMessage.includes('UNAVAILABLE') ||
+                               errorMessage.includes('DEADLINE_EXCEEDED') ||
+                               errorMessage.includes('temporarily');
+
+      if (!isPatternError && !isTransientError) {
+        // Non-retryable error, throw immediately
+        throw e;
+      }
+
+      if (attempt === MAX_RETRIES) {
+        // Final attempt failed
+        if (isPatternError) {
+          // Truncate prompt for error message (keep it readable but include key info)
+          const promptPreview = currentPromptText.length > 300
+            ? currentPromptText.substring(0, 300) + '...'
+            : currentPromptText;
+          throw new Error(
+            `Image generation failed after ${MAX_RETRIES + 1} attempts. ` +
+            `The AI model rejected the prompt (pattern validation error). ` +
+            `This may be due to content filtering. Try regenerating with a different prompt. ` +
+            `Prompt: "${promptPreview}" ` +
+            `Original error: ${errorMessage}`
+          );
+        }
+        throw e;
+      }
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  if (!generation) {
+    throw new Error('Image generation failed: no response received after retries.');
   }
 
   const media = generation.media;
   if (!media?.url) {
+    // Log what we got from the generation
+    console.error('[story-image-flow] No media.url in generation:', {
+      hasMedia: !!media,
+      mediaKeys: media ? Object.keys(media) : [],
+      generationKeys: Object.keys(generation),
+      text: generation.text?.substring(0, 100),
+    });
     throw new Error('Image model returned no media payload.');
   }
 
-  const {mimeType, buffer} = parseDataUrl(media.url);
+  console.log('[story-image-flow] Parsing media URL:', {
+    type: typeof media.url,
+    length: media.url?.length,
+    startsWithData: typeof media.url === 'string' && media.url.startsWith('data:'),
+    hasBase64Marker: typeof media.url === 'string' && media.url.includes(';base64,'),
+    first50Chars: typeof media.url === 'string' ? media.url.substring(0, 50) : 'N/A',
+  });
+
+  const {mimeType, buffer} = await parseMediaUrl(media.url);
   return {
     buffer,
     mimeType,
@@ -250,15 +894,22 @@ export const storyImageFlow = ai.defineFlow(
     inputSchema: StoryImageFlowInput,
     outputSchema: StoryImageFlowOutput,
   },
-  async ({storyId, pageId, regressionTag, forceRegenerate}) => {
+  async ({storyId, pageId, regressionTag, forceRegenerate, storybookId, targetWidthPx, targetHeightPx, imageStylePrompt, aspectRatio}) => {
+    console.log(`[storyImageFlow] Called with storyId=${storyId}, pageId=${pageId}, storybookId=${storybookId || 'undefined'}, aspectRatio=${aspectRatio || 'auto'}`);
     const logs: string[] = [];
     await initFirebaseAdminApp();
     const firestore = getFirestore();
     const storyRef = firestore.collection('stories').doc(storyId);
     let generated: GenerateImageResult | null = null;
 
-    // Corrected path to the page document
-    const pageRef = storyRef.collection('outputs').doc('storybook').collection('pages').doc(pageId);
+    // Determine the page path based on whether we're using new or legacy model
+    // New model: stories/{storyId}/storybooks/{storybookId}/pages/{pageId}
+    // Legacy model: stories/{storyId}/outputs/storybook/pages/{pageId}
+    const pageRef = storybookId
+      ? storyRef.collection('storybooks').doc(storybookId).collection('pages').doc(pageId)
+      : storyRef.collection('outputs').doc('storybook').collection('pages').doc(pageId);
+
+    logs.push(`[path] Using ${storybookId ? 'new' : 'legacy'} model path: ${pageRef.path}`);
 
     try {
       const storySnap = await storyRef.get();
@@ -300,13 +951,94 @@ export const storyImageFlow = ai.defineFlow(
       });
 
       try {
-        const childPhotos = childProfile?.photos?.slice(0, 3) ?? [];
-        const artStyle = storyData.metadata?.artStyleHint ?? "a gentle, vibrant watercolor style";
-        generated = await createImage(page.imagePrompt, childPhotos, artStyle);
+        // Collect reference photos AND character details from entities mentioned on this page
+        const entityData = await fetchEntityReferenceData(firestore, page.entityIds ?? []);
+        logs.push(`[entities] Found ${page.entityIds?.length ?? 0} entity IDs, ${entityData.photos.length} reference photos, ${entityData.actorMap.size} actors resolved`);
+
+        // Calculate child's age for the prompt
+        let childAge: string | undefined;
+        if (childProfile?.dateOfBirth) {
+          const dob = typeof (childProfile.dateOfBirth as any).toDate === 'function'
+            ? (childProfile.dateOfBirth as any).toDate()
+            : new Date(childProfile.dateOfBirth as any);
+          const ageMs = Date.now() - dob.getTime();
+          const ageYears = Math.floor(ageMs / (1000 * 60 * 60 * 24 * 365.25));
+          childAge = `${ageYears} years old`;
+        }
+
+        // Build structured actors JSON for the prompt
+        // Always include main child (with full profile), plus all actors from page.entityIds
+        const actorsJson = buildActorsJson(
+          page.entityIds ?? [],
+          entityData.actorMap,
+          storyData.childId,
+          childProfile ?? undefined
+        );
+        if (actorsJson) {
+          logs.push(`[actors] Structured JSON built: mainChild=${!!childProfile}, pageActors=${entityData.actorMap.size}`);
+        }
+
+        // For back cover, use ONLY avatars (not real photos)
+        // For other pages, combine child photos with entity reference photos
+        let referencePhotos: string[];
+        if (page.kind === 'cover_back') {
+          // Back cover: use only avatars from actors
+          const avatarsOnly = await fetchEntityAvatarsOnly(firestore, page.entityIds ?? []);
+          referencePhotos = avatarsOnly.slice(0, 5);
+          logs.push(`[back-cover] Using ${referencePhotos.length} avatar(s) only (no real photos)`);
+        } else {
+          // Other pages: combine child photos with entity reference photos (child photos take priority)
+          const childPhotos = childProfile?.photos?.slice(0, 3) ?? [];
+          const allReferencePhotos = [...childPhotos, ...entityData.photos];
+          // Limit to reasonable number of reference images
+          referencePhotos = allReferencePhotos.slice(0, 5);
+        }
+
+        // Priority for art style:
+        // 1. Explicitly passed imageStylePrompt (new model)
+        // 2. Legacy selectedImageStylePrompt on story document
+        // 3. artStyleHint in metadata
+        // 4. Default watercolor style
+        const artStyle = imageStylePrompt
+          ?? (storyData as any).selectedImageStylePrompt
+          ?? storyData.metadata?.artStyleHint
+          ?? "a gentle, vibrant watercolor style";
+
+        // Log target dimensions and aspect ratio if provided
+        if (targetWidthPx && targetHeightPx) {
+          logs.push(`[dimensions] Target: ${targetWidthPx}x${targetHeightPx}px`);
+        }
+        if (aspectRatio) {
+          logs.push(`[aspectRatio] ${aspectRatio}`);
+        }
+
+        // Use bodyText (with $$Id$$ placeholders) as the scene text, falling back to imagePrompt
+        const sceneText = page.bodyText || page.imagePrompt;
+
+        generated = await createImage({
+          sceneText,
+          artStyle,
+          actorsJson,
+          childAge,
+          mainChildId: storyData.childId,
+          referencePhotos,
+          targetWidthPx,
+          targetHeightPx,
+          aspectRatio,
+        });
       } catch (generationError: any) {
         const fallbackAllowed = MOCK_IMAGES || !!regressionTag || process.env.STORYBOOK_IMAGE_FALLBACK === 'true';
         const errMessage = generationError?.message ?? String(generationError);
+        console.error('[story-image-flow] Image generation error for page', pageId, ':', errMessage);
         logs.push(`[warn] Image model failed for ${pageId}: ${errMessage}`);
+
+        // Update the page with the error details immediately so user can see it
+        await pageRef.update({
+          imageStatus: 'error',
+          'imageMetadata.lastErrorMessage': errMessage,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
         if (!fallbackAllowed) {
           throw generationError;
         }
@@ -327,6 +1059,7 @@ export const storyImageFlow = ai.defineFlow(
           mimeType: generated.mimeType,
           storyId,
           pageId,
+          storybookId,
           regressionTag,
         });
       } catch (uploadError: any) {
@@ -372,6 +1105,16 @@ export const storyImageFlow = ai.defineFlow(
         },
         updatedAt: FieldValue.serverTimestamp(),
       });
+
+      // Atomically increment the storybook's pagesReady counter for real-time progress updates
+      // This allows parallel image generation while still showing incremental progress
+      if (storybookId) {
+        const storybookRef = storyRef.collection('storybooks').doc(storybookId);
+        await storybookRef.update({
+          'imageGeneration.pagesReady': FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
 
       logs.push(`[success] Generated art for ${pageId}`);
       return {

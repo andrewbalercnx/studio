@@ -17,12 +17,15 @@ const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt' | 'owne
     {
         sessionId: "sample-session-1",
         role: "family",
+        type: "Family",
         displayName: "Sample Hero",
         realPersonRef: {
             kind: "self",
             label: "You"
         },
         traits: ["brave", "curious", "playful"],
+        likes: ["brave", "curious", "playful"],
+        dislikes: [],
         visualNotes: {
             hair: "short hair",
             clothing: "bright jumper",
@@ -32,22 +35,28 @@ const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt' | 'owne
     {
         sessionId: "sample-session-1",
         role: "family",
+        type: "Family",
         displayName: "Sample Grown-Up",
         realPersonRef: {
             kind: "family",
             label: "Grown-up helper"
         },
         traits: ["kind", "big"],
+        likes: ["kind", "big"],
+        dislikes: [],
     },
     {
         sessionId: "sample-session-1",
         role: "friend",
+        type: "Friend",
         displayName: "Sample Friend",
         realPersonRef: {
             kind: "friend",
             label: "Friend from school"
         },
         traits: ["bouncy", "silly"],
+        likes: ["bouncy", "silly"],
+        dislikes: [],
     }
 ];
 
@@ -170,11 +179,11 @@ export default function AdminCharactersPage() {
     }
   }
 
-  const getTraitsSummary = (character: Character) => {
-    if (!character.traits || !Array.isArray(character.traits) || character.traits.length === 0) {
+  const getLikesSummary = (character: Character) => {
+    if (!character.likes || !Array.isArray(character.likes) || character.likes.length === 0) {
       return '-';
     }
-    return character.traits.join(', ');
+    return character.likes.join(', ');
   }
 
 
@@ -224,10 +233,10 @@ export default function AdminCharactersPage() {
               <TableRow>
                   <TableHead>ID</TableHead>
                   <TableHead>Owner Parent UID</TableHead>
-                  <TableHead>Session ID</TableHead>
-                  <TableHead>Role</TableHead>
+                  <TableHead>Child ID / Scope</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Name</TableHead>
-                  <TableHead>Traits Summary</TableHead>
+                  <TableHead>Likes Summary</TableHead>
                   <TableHead>Actions</TableHead>
               </TableRow>
           </TableHeader>
@@ -236,10 +245,10 @@ export default function AdminCharactersPage() {
                   <TableRow key={char.id}>
                       <TableCell className="font-mono text-xs">{char.id}</TableCell>
                       <TableCell className="font-mono text-xs">{char.ownerParentUid}</TableCell>
-                      <TableCell className="font-mono text-xs">{char.sessionId || '-'}</TableCell>
-                      <TableCell>{char.role}</TableCell>
+                      <TableCell className="font-mono text-xs">{char.childId || 'Family-wide'}</TableCell>
+                      <TableCell>{char.type}</TableCell>
                       <TableCell>{char.displayName}</TableCell>
-                      <TableCell className="text-xs">{getTraitsSummary(char)}</TableCell>
+                      <TableCell className="text-xs">{getLikesSummary(char)}</TableCell>
                       <TableCell>
                           <Button 
                             variant="outline" 

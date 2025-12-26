@@ -622,11 +622,15 @@ export default function AdminRegressionPage() {
               if (!child.displayName) {
                   throw new Error('First child document is missing displayName.');
               }
-               if (!('avatarUrl' in child) || !('photos' in child)) {
-                    throw new Error('Child doc missing avatarUrl or photos fields.');
-                }
+              // Check for new required fields (likes and dislikes arrays)
+              if (!Array.isArray(child.likes)) {
+                  throw new Error('Child doc missing likes array field.');
+              }
+              if (!Array.isArray(child.dislikes)) {
+                  throw new Error('Child doc missing dislikes array field.');
+              }
 
-              updateTestResult('DATA_CHILDREN_EXTENDED', { status: 'PASS', message: 'First child has ownerParentUid, displayName, and photo fields.' });
+              updateTestResult('DATA_CHILDREN_EXTENDED', { status: 'PASS', message: 'First child has ownerParentUid, displayName, likes, and dislikes fields.' });
           }
       } catch (e: any) {
           updateTestResult('DATA_CHILDREN_EXTENDED', { status: 'FAIL', message: e.message });
@@ -787,6 +791,8 @@ export default function AdminRegressionPage() {
         const childRef = await createRegressionChild({
             displayName: 'Story List Test Child',
             ownerParentUid: parentUid,
+            likes: [],
+            dislikes: [],
             createdAt: serverTimestamp()
         }, 'SCENARIO_CHILD_STORY_LIST');
         const sessionRef = await createRegressionSession({
@@ -829,7 +835,7 @@ export default function AdminRegressionPage() {
     // Test: SCENARIO_PHASE_STATE_MACHINE
     try {
         phaseStateScenarioSummary = { sessionId: null };
-        const childRef = await createRegressionChild({ displayName: 'Phase Test Child', createdAt: serverTimestamp() }, 'SCENARIO_PHASE_STATE_MACHINE');
+        const childRef = await createRegressionChild({ displayName: 'Phase Test Child', likes: [], dislikes: [], createdAt: serverTimestamp() }, 'SCENARIO_PHASE_STATE_MACHINE');
 
         // 1. Warmup
         const warmupPromptSnap = await getDocs(query(collection(firestore, 'promptConfigs'), where('phase', '==', 'warmup'), where('status', '==', 'live'), limit(1)));
@@ -890,7 +896,7 @@ export default function AdminRegressionPage() {
         if (!storyTypeSnap.exists()) throw new Error(`Required story type '${storyTypeId}' not found.`);
         const storyType = storyTypeSnap.data() as StoryType;
         
-        const childRef = await createRegressionChild({ displayName: 'Compile Test Child', createdAt: serverTimestamp() }, 'SCENARIO_STORY_COMPILE');
+        const childRef = await createRegressionChild({ displayName: 'Compile Test Child', likes: [], dislikes: [], createdAt: serverTimestamp() }, 'SCENARIO_STORY_COMPILE');
         const sessionRef = await createRegressionSession({
             childId: childRef.id, storyTypeId, storyPhaseId: storyType.endingPhaseId,
             arcStepIndex: 5, status: 'in_progress', currentPhase: 'ending', parentUid: 'regression-compile-parent'
@@ -976,18 +982,29 @@ export default function AdminRegressionPage() {
             throw new Error(`Last storybook page kind was ${lastPageKind}, expected cover_back.`);
         }
 
-        const interiorPages = pageDocs.slice(1, -1);
-        const allInteriorText = interiorPages.every((page) => page?.kind === 'text');
-        if (!allInteriorText) {
-            throw new Error('One or more interior pages are not text kind.');
+        // Check second page is a title page
+        const secondPageKind = pageDocs[1]?.kind ?? null;
+        if (secondPageKind !== 'title_page') {
+            throw new Error(`Second storybook page kind was ${secondPageKind}, expected title_page.`);
         }
 
-        const placementsAlternate = interiorPages.every((page, idx) => {
+        // Interior pages (between title page and back cover) should be text or blank
+        const interiorPages = pageDocs.slice(2, -1);
+        const validInteriorKinds = ['text', 'image', 'blank'];
+        const allInteriorValid = interiorPages.every((page) => validInteriorKinds.includes(page?.kind));
+        if (!allInteriorValid) {
+            const invalidKinds = interiorPages.filter(p => !validInteriorKinds.includes(p?.kind)).map(p => p?.kind);
+            throw new Error(`One or more interior pages have invalid kind: ${invalidKinds.join(', ')}. Expected: ${validInteriorKinds.join(', ')}.`);
+        }
+
+        // Check text placement alternates on text pages only
+        const textPages = interiorPages.filter((page) => page?.kind === 'text');
+        const placementsAlternate = textPages.every((page, idx) => {
             const expectedPlacement = idx % 2 === 0 ? 'bottom' : 'top';
             return page?.layoutHints?.textPlacement === expectedPlacement;
         });
         if (!placementsAlternate) {
-            throw new Error('Interior page text placement failed to alternate top/bottom.');
+            throw new Error('Text page text placement failed to alternate top/bottom.');
         }
 
         storyCompileScenarioSummary.pagesCount = pagesSnapshot.size;
@@ -1036,12 +1053,8 @@ export default function AdminRegressionPage() {
             ownerParentUid: parentUid,
             createdAt: serverTimestamp(),
             photos: ['https://picsum.photos/seed/regression-story-kid/200/200'],
-            preferences: {
-                favoriteColors: ['blue', 'green'],
-                favoriteFoods: ['mac and cheese'],
-                favoriteGames: ['hide and seek'],
-                favoriteSubjects: ['art'],
-            },
+            likes: ['blue', 'green', 'mac and cheese', 'hide and seek', 'art'],
+            dislikes: [],
         }, scenarioId);
         const storyTypeId = 'animal_adventure_v1';
         const storyTypeSnap = await getDoc(doc(firestore, 'storyTypes', storyTypeId));
@@ -1247,7 +1260,7 @@ export default function AdminRegressionPage() {
         const steps = storyType.arcTemplate?.steps;
         if (!steps || steps.length === 0) throw new Error(`Story type '${storyTypeId}' has no arc steps.`);
         
-        const childRef = await createRegressionChild({ displayName: 'Ending Test Child', createdAt: serverTimestamp() }, 'SCENARIO_ENDING_FLOW');
+        const childRef = await createRegressionChild({ displayName: 'Ending Test Child', likes: [], dislikes: [], createdAt: serverTimestamp() }, 'SCENARIO_ENDING_FLOW');
         const sessionRef = await createRegressionSession({
             childId: childRef.id, storyTypeId, storyPhaseId: storyType.endingPhaseId,
             arcStepIndex: steps.length - 1, // Set to final step
@@ -1296,9 +1309,11 @@ export default function AdminRegressionPage() {
         
         const stepsCount = steps.length;
         const maxIndex = stepsCount - 1;
-        const lastStepId = steps[maxIndex];
+        // Handle both legacy string format and new ArcStep object format
+        const lastStep = steps[maxIndex];
+        const lastStepId = typeof lastStep === 'string' ? lastStep : lastStep.id;
 
-        const childRef = await createRegressionChild({ displayName: 'Arc Bounds Child', createdAt: serverTimestamp() }, 'SCENARIO_ARC_BOUNDS');
+        const childRef = await createRegressionChild({ displayName: 'Arc Bounds Child', likes: [], dislikes: [], createdAt: serverTimestamp() }, 'SCENARIO_ARC_BOUNDS');
         const sessionRef = await createRegressionSession({
             childId: childRef.id, storyTypeId, storyPhaseId: 'story_beat_phase_v1',
             arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress', currentPhase: 'story',
@@ -1359,7 +1374,7 @@ export default function AdminRegressionPage() {
         const storyType = typeSnap.docs[0].data();
         const storyTypeId = typeSnap.docs[0].id;
 
-        const childRef = await createRegressionChild({ displayName: 'Arc Test Child', createdAt: serverTimestamp() }, 'SCENARIO_ARC_STEP_ADVANCE');
+        const childRef = await createRegressionChild({ displayName: 'Arc Test Child', likes: [], dislikes: [], createdAt: serverTimestamp() }, 'SCENARIO_ARC_STEP_ADVANCE');
         
         const sessionRef = await createRegressionSession({
             childId: childRef.id, storyTypeId, storyPhaseId: storyType.defaultPhaseId,
@@ -1396,15 +1411,21 @@ export default function AdminRegressionPage() {
     
     // Test: SCENARIO_CHARACTER_TRAITS
     try {
-        const childRef = await createRegressionChild({ displayName: 'Traits Test Child', createdAt: serverTimestamp() }, 'SCENARIO_CHARACTER_TRAITS');
+        const childRef = await createRegressionChild({ displayName: 'Traits Test Child', likes: [], dislikes: [], createdAt: serverTimestamp() }, 'SCENARIO_CHARACTER_TRAITS');
         const sessionRef = await createRegressionSession({
             childId: childRef.id, storyTypeId: 'animal_adventure_v1', storyPhaseId: 'story_beat_phase_v1',
             arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress',
             parentUid: 'regression-character-traits-parent'
         }, 'SCENARIO_CHARACTER_TRAITS');
         const charRef = await createRegressionCharacter({
-            ownerChildId: childRef.id, sessionId: sessionRef.id, name: 'Test Bunny',
-            role: 'pet', traits: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+            ownerParentUid: 'regression-character-traits-parent',
+            childId: childRef.id,
+            displayName: 'Test Bunny',
+            type: 'Pet',
+            likes: [],
+            dislikes: [],
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
         }, 'SCENARIO_CHARACTER_TRAITS');
         await addDoc(collection(firestore, 'storySessions', sessionRef.id, 'messages'), {
             sender: 'assistant', text: 'Once upon a time...', createdAt: serverTimestamp()
@@ -1442,7 +1463,7 @@ export default function AdminRegressionPage() {
         const storyType = typeSnap.docs[0].data();
         const storyTypeId = typeSnap.docs[0].id;
 
-        const childRef = await createRegressionChild({ displayName: 'Char Test Child', createdAt: serverTimestamp() }, 'SCENARIO_CHARACTER_FROM_BEAT');
+        const childRef = await createRegressionChild({ displayName: 'Char Test Child', likes: [], dislikes: [], createdAt: serverTimestamp() }, 'SCENARIO_CHARACTER_FROM_BEAT');
         const sessionRef = await createRegressionSession({
             childId: childRef.id, storyTypeId, storyPhaseId: storyType.defaultPhaseId,
             arcStepIndex: 0, promptConfigLevelBand: 'low', status: 'in_progress', currentPhase: 'story',
@@ -1535,12 +1556,15 @@ export default function AdminRegressionPage() {
         const storyType = typeSnap.docs[0].data();
         const storyTypeId = typeSnap.docs[0].id;
 
-        const childRef = await createRegressionChild({ displayName: 'Regression Child', createdAt: serverTimestamp() }, 'SCENARIO_BEAT_AUTO');
+        const childRef = await createRegressionChild({ displayName: 'Regression Child', likes: [], dislikes: [], createdAt: serverTimestamp() }, 'SCENARIO_BEAT_AUTO');
 
         const mainCharRef = await createRegressionCharacter({
-            ownerChildId: childRef.id,
-            name: 'Reggie',
-            role: 'child',
+            ownerParentUid: 'regression-beat-parent',
+            childId: childRef.id,
+            displayName: 'Reggie',
+            type: 'Family',
+            likes: [],
+            dislikes: [],
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
         }, 'SCENARIO_BEAT_AUTO');
@@ -1593,7 +1617,7 @@ export default function AdminRegressionPage() {
         const warmupPromptConfigId = promptSnap.docs[0].id;
         const warmupPromptConfigLevelBand = promptSnap.docs[0].data().levelBand;
 
-        const childRef = await createRegressionChild({ displayName: 'Regression Warmup Child', createdAt: serverTimestamp() }, 'SCENARIO_WARMUP_AUTO');
+        const childRef = await createRegressionChild({ displayName: 'Regression Warmup Child', likes: [], dislikes: [], createdAt: serverTimestamp() }, 'SCENARIO_WARMUP_AUTO');
         
         const sessionRef = await createRegressionSession({
             childId: childRef.id,

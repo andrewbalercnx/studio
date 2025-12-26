@@ -43,16 +43,16 @@ export default function HomePage() {
   const { user, loading: userLoading, idTokenResult } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
-  const { roleMode } = useAppContext();
+  const { roleMode, activeChildProfileLoading } = useAppContext();
 
   useEffect(() => {
     if (userLoading) return;
-    
+
     if (!user) {
         router.push('/login');
         return;
     }
-    
+
     const claims = idTokenResult?.claims;
     if (claims?.isAdmin) {
         router.push('/admin');
@@ -61,7 +61,7 @@ export default function HomePage() {
     }
     // No redirect for parent role, they will stay on this page.
 
-  }, [user, userLoading, idTokenResult, router, roleMode]);
+  }, [user, userLoading, idTokenResult, router]);
 
 
   const childrenQuery = useMemo(() => {
@@ -109,7 +109,7 @@ export default function HomePage() {
   };
 
 
-  if (userLoading) {
+  if (userLoading || activeChildProfileLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center">
         <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
@@ -117,28 +117,19 @@ export default function HomePage() {
     );
   }
 
-  // Only show content if user is a parent
-  if (roleMode === 'parent') {
-    return (
-      <div className="container mx-auto p-4 sm:p-6 md:p-8">
-        <Card className="max-w-2xl mx-auto mt-10">
-          <CardHeader>
-            <CardTitle>Who is playing?</CardTitle>
-            <CardDescription>Select a child to start creating a story.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {renderContent()}
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Render a loading state for other roles while redirecting
+  // Show the child selection page for all authenticated users (parent mode)
+  // This is now the default landing page after login
   return (
-    <div className="h-screen w-screen flex items-center justify-center">
-      <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
-      <p className="ml-4 text-muted-foreground">Redirecting...</p>
+    <div className="container mx-auto p-4 sm:p-6 md:p-8">
+      <Card className="max-w-2xl mx-auto mt-10">
+        <CardHeader>
+          <CardTitle>Who is playing?</CardTitle>
+          <CardDescription>Select a child to start creating a story.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {renderContent()}
+        </CardContent>
+      </Card>
     </div>
   );
 }

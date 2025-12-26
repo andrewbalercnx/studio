@@ -29,10 +29,12 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
   const [activeWizard, setActiveWizard] = useState<{ id: string; step: number } | null>(null);
   const firestore = useFirestore();
 
+  // Only query for child profile when auth is fully ready (idTokenResult exists)
+  // This prevents Firestore permission errors on page refresh
   const childDocRef = useMemo(() => {
-    if (!firestore || !activeChildId) return null;
+    if (!firestore || !activeChildId || !user || userLoading || !idTokenResult) return null;
     return doc(firestore, 'children', activeChildId);
-  }, [firestore, activeChildId]);
+  }, [firestore, activeChildId, user, userLoading, idTokenResult]);
 
   const {
     data: activeChildProfileRaw,

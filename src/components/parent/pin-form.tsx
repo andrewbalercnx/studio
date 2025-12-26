@@ -182,6 +182,8 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
               <Input
                 id="new-pin"
                 type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 maxLength={4}
                 value={pin}
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
@@ -197,6 +199,8 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
               <Input
                 id="confirm-pin"
                 type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 maxLength={4}
                 value={confirmPin}
                 onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
@@ -232,6 +236,8 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
       <div className="py-4">
         <Input
           type="password"
+          inputMode="numeric"
+          pattern="[0-9]*"
           maxLength={4}
           value={pin}
           onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}

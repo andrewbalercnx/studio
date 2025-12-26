@@ -9,29 +9,35 @@ import { ai } from '@/ai/genkit';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
-import type { StorySession, ChatMessage, StoryType, Character, ChildProfile, StoryOutputType, Story } from '@/lib/types';
-import { summarizeChildPreferences } from '@/lib/child-preferences';
+import type { StorySession, StoryOutputType, Story } from '@/lib/types';
 import { logServerSessionEvent } from '@/lib/session-events.server';
 import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
+import { initializeRunTrace, logAICallToTrace, completeRunTrace } from '@/lib/ai-run-trace';
+import { storyTextCompileFlow } from './story-text-compile-flow';
+
+/**
+ * Extract all $$id$$ placeholders from text
+ */
+function extractActorIds(text: string): string[] {
+  const regex = /\$\$([a-zA-Z0-9_-]+)\$\$/g;
+  const ids = new Set<string>();
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    ids.add(match[1]);
+  }
+  return Array.from(ids);
+}
 
 type StoryCompileDebugInfo = {
-    stage: 'init' | 'loading_session' | 'loading_dependencies' | 'building_prompt' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate' | 'unknown';
+    stage: 'init' | 'loading_session' | 'loading_dependencies' | 'ai_generate' | 'ai_generate_result' | 'unknown';
     details: Record<string, any>;
 };
-
-const StoryCompileResultSchema = z.object({
-  storyText: z.string().min(50, "Story text must be at least 50 characters."),
-  metadata: z.object({
-    paragraphs: z.number().int().nonnegative(),
-    estimatedPages: z.number().int().nonnegative().optional(),
-  }).optional(),
-});
 
 
 export const storyCompileFlow = ai.defineFlow(
     {
         name: 'storyCompileFlow',
-        inputSchema: z.object({ sessionId: z.string(), storyOutputTypeId: z.string() }),
+        inputSchema: z.object({ sessionId: z.string(), storyOutputTypeId: z.string().optional() }),
         outputSchema: z.any(), // Using any to allow for custom error/success shapes
     },
     async ({ sessionId, storyOutputTypeId }) => {
@@ -48,7 +54,161 @@ export const storyCompileFlow = ai.defineFlow(
                 throw new Error(`Session with id ${sessionId} not found.`);
             }
             const session = sessionDoc.data() as StorySession;
-            const { childId, storyTypeId, parentUid, mainCharacterId } = session;
+            const { childId, storyTypeId, parentUid, mainCharacterId, storyMode, gemini4FinalStory, gemini3FinalStory } = session;
+
+            // For gemini4/gemini3 modes, the story is already complete - skip AI compilation
+            const isGeminiMode = storyMode === 'gemini4' || storyMode === 'gemini3';
+            const geminiFinalStory = gemini4FinalStory || gemini3FinalStory;
+
+            if (isGeminiMode && geminiFinalStory) {
+                debug.details.mode = 'gemini_direct';
+                debug.details.childId = childId;
+                debug.details.parentUid = parentUid;
+
+                // Load the output type for metadata (optional)
+                let storyOutputType: StoryOutputType | null = null;
+                if (storyOutputTypeId) {
+                    const storyOutputTypeRef = firestore.collection('storyOutputTypes').doc(storyOutputTypeId);
+                    const storyOutputTypeDoc = await storyOutputTypeRef.get();
+                    if (storyOutputTypeDoc.exists) {
+                        storyOutputType = storyOutputTypeDoc.data() as StoryOutputType;
+                    }
+                }
+
+                // Resolve placeholders in the story text
+                const resolvedStoryText = await replacePlaceholdersWithDescriptions(geminiFinalStory);
+                const paragraphCount = resolvedStoryText.split(/\n\n+/).filter(p => p.trim()).length;
+
+                // Extract actors from the original story text (before placeholder resolution)
+                // Start with actors tracked during the session, then add any from final story
+                const sessionActors = session.actors || [];
+                const storyActorIds = extractActorIds(geminiFinalStory);
+                const actorSet = new Set([childId, ...sessionActors, ...storyActorIds]);
+                const actors = [childId, ...Array.from(actorSet).filter(id => id !== childId)];
+
+                // Initialize run trace for Gemini mode
+                await initializeRunTrace({
+                    sessionId,
+                    parentUid,
+                    childId,
+                    storyTypeId: storyTypeId || undefined,
+                });
+
+                // Generate synopsis for the Gemini story
+                let synopsis = '';
+                const synopsisStartTime = Date.now();
+                const synopsisModelName = 'googleai/gemini-2.5-flash';
+                const synopsisPrompt = `Write a brief 1-2 sentence summary of this children's story suitable for a parent to read. Should capture the main adventure or theme.\n\nSTORY:\n${resolvedStoryText}\n\nSYNOPSIS:`;
+                try {
+                    const synopsisResponse = await ai.generate({
+                        model: synopsisModelName,
+                        prompt: synopsisPrompt,
+                        config: { temperature: 0.3, maxOutputTokens: 150 },
+                    });
+                    synopsis = synopsisResponse.text?.trim() || '';
+
+                    await logAICallToTrace({
+                        sessionId,
+                        flowName: 'storyCompileFlow:synopsis',
+                        modelName: synopsisModelName,
+                        temperature: 0.3,
+                        maxOutputTokens: 150,
+                        systemPrompt: synopsisPrompt,
+                        response: synopsisResponse,
+                        startTime: synopsisStartTime,
+                    });
+                } catch (err: any) {
+                    console.error('[storyCompileFlow] Failed to generate synopsis for Gemini story:', err);
+                    synopsis = 'A magical adventure story.';
+                    await logAICallToTrace({
+                        sessionId,
+                        flowName: 'storyCompileFlow:synopsis',
+                        modelName: synopsisModelName,
+                        temperature: 0.3,
+                        maxOutputTokens: 150,
+                        systemPrompt: synopsisPrompt,
+                        error: err,
+                        startTime: synopsisStartTime,
+                    });
+                }
+
+                // Mark run trace as completed for Gemini mode
+                await completeRunTrace(sessionId);
+
+                // Update session
+                const sessionUpdate: Record<string, any> = {
+                    currentPhase: 'final',
+                    status: 'completed',
+                    finalStoryText: resolvedStoryText,
+                    updatedAt: FieldValue.serverTimestamp(),
+                };
+                if (storyOutputTypeId) {
+                    sessionUpdate.storyOutputTypeId = storyOutputTypeId;
+                }
+                await sessionRef.update(sessionUpdate);
+
+                // Create Story document
+                const storyRef = firestore.collection('stories').doc(sessionId);
+                const existingStorySnap = await storyRef.get();
+                const now = FieldValue.serverTimestamp();
+                const createdAtValue = existingStorySnap.exists
+                    ? (existingStorySnap.data()?.createdAt ?? FieldValue.serverTimestamp())
+                    : now;
+
+                const storyPayload: Story = {
+                    storySessionId: sessionId,
+                    childId,
+                    parentUid,
+                    storyText: resolvedStoryText,
+                    synopsis, // Generated for Gemini mode
+                    metadata: {
+                        paragraphs: paragraphCount,
+                        ...(storyOutputTypeId && { storyOutputTypeId }),
+                        ...(storyOutputType?.name && { storyOutputTypeName: storyOutputType.name }),
+                        ...(storyOutputType?.aiHints?.style && { artStyleHint: storyOutputType.aiHints.style }),
+                    },
+                    actors,
+                    // Set initial generation statuses for background tasks
+                    titleGeneration: { status: 'pending' },
+                    synopsisGeneration: { status: 'ready' }, // Already generated
+                    actorAvatarGeneration: { status: 'pending' },
+                    createdAt: createdAtValue,
+                    updatedAt: now,
+                };
+
+                await storyRef.set(storyPayload, { merge: true });
+
+                await logServerSessionEvent({
+                    firestore,
+                    sessionId,
+                    event: 'compile.completed',
+                    status: 'completed',
+                    source: 'server',
+                    attributes: {
+                        storyMode,
+                        storyOutputTypeId,
+                        storyId: storyRef.id,
+                        storyLength: resolvedStoryText.length,
+                    },
+                });
+
+                return {
+                    ok: true,
+                    sessionId,
+                    storyText: resolvedStoryText,
+                    synopsis,
+                    metadata: { paragraphs: paragraphCount },
+                    storyId: storyRef.id,
+                    debug: process.env.NODE_ENV === 'development' ? {
+                        ...debug,
+                        storyLength: resolvedStoryText.length,
+                        synopsisLength: synopsis.length,
+                        paragraphs: paragraphCount,
+                    } : undefined,
+                };
+            }
+
+            // Standard wizard/chat flow requires storyTypeId
             if (!childId || !storyTypeId || !parentUid) {
                 throw new Error(`Session is missing childId, storyTypeId, or parentUid.`);
             }
@@ -56,157 +216,51 @@ export const storyCompileFlow = ai.defineFlow(
             debug.details.storyTypeId = storyTypeId;
             debug.details.parentUid = parentUid;
 
-            // 2. Load dependencies
+            // 2. Load output type for metadata (optional)
             debug.stage = 'loading_dependencies';
-            const childRef = firestore.collection('children').doc(childId);
-            const storyTypeRef = firestore.collection('storyTypes').doc(storyTypeId);
-            const storyOutputTypeRef = firestore.collection('storyOutputTypes').doc(storyOutputTypeId);
-            const charactersPromise = firestore.collection('characters').where('sessionId', '==', sessionId).get();
-            const messagesPromise = firestore
-                .collection('storySessions')
-                .doc(sessionId)
-                .collection('messages')
-                .orderBy('createdAt', 'asc')
-                .get();
-
-            const [childDoc, storyTypeDoc, storyOutputTypeDoc, charactersSnapshot, messagesSnapshot] = await Promise.all([
-                childRef.get(),
-                storyTypeRef.get(),
-                storyOutputTypeRef.get(),
-                charactersPromise,
-                messagesPromise,
-            ]);
-            
-            if (!storyTypeDoc.exists) throw new Error(`StoryType with id ${storyTypeId} not found.`);
-            if (!storyOutputTypeDoc.exists) throw new Error(`StoryOutputType with id ${storyOutputTypeId} not found.`);
-            
-            const childProfile = childDoc.exists ? (childDoc.data() as ChildProfile) : null;
-            const storyType = storyTypeDoc.data() as StoryType;
-            const storyOutputType = storyOutputTypeDoc.data() as StoryOutputType;
-            const characters = charactersSnapshot.docs.map(d => {
-                const data = d.data() as Character;
-                const { id: _ignored, ...rest } = data as Character & { id?: string };
-                return { ...rest, id: d.id } as Character;
-            });
-            const messages = messagesSnapshot.docs.map(d => d.data() as ChatMessage);
-            const childPreferenceSummary = summarizeChildPreferences(childProfile);
-
-            const mainCharacterName =
-                (mainCharacterId ? characters.find(c => c.id === mainCharacterId)?.displayName : null) ??
-                childProfile?.displayName ??
-                'The hero';
-
-            debug.details.childName = childProfile?.displayName;
-            debug.details.storyTypeName = storyType.name;
-            debug.details.storyOutputTypeName = storyOutputType.name;
-            debug.details.characterCount = characters.length;
-            debug.details.messageCount = messages.length;
-
-            // 3. Build story skeleton for the prompt
-            debug.stage = 'building_prompt';
-            const characterRoster = characters.map(c => `- ${c.displayName} (${c.role}, traits: ${c.traits?.join(', ') || 'none'}) (ID: $$${c.id}$$)`).join('\n');
-            const rawStorySoFar = messages
-                .filter(m => m.kind !== 'beat_options' && m.kind !== 'character_traits_question') // Exclude non-narrative prompts
-                .map(m => {
-                    const prefix = m.sender === 'child' ? `$$${childId}$$:` : 'Story Guide:';
-                    return `${prefix} ${m.text}`;
-                })
-                .join('\n');
-            const storySoFar = await replacePlaceholdersWithDescriptions(rawStorySoFar);
-            
-            const systemPrompt = `You are a master storyteller who specializes in compiling interactive chat sessions into a single, beautifully written story for a very young child (age 3-5). The story must be gentle, warm, and safe, with very short, simple sentences. It must be written in the third person. Do not include any meta-commentary, choices, or system prompts from the original chat. The final text should read like a classic, calm picture-book narrative.`;
-            
-            const finalPrompt = `
-${systemPrompt}
-
-**Output Style Requirements:**
-- **Target Format:** A ${storyOutputType.name} (${storyOutputType.shortDescription})
-- **AI Hints:** ${storyOutputType.aiHints?.style || 'Standard picture book prose.'}
-${storyOutputType.aiHints?.allowRhyme ? '- The output MUST rhyme.' : ''}
-
-**Story Context:**
-- **Story Type:** ${storyType.name} (${storyType.shortDescription})
-- **Main Character:** ${mainCharacterName}
-- **Child Preferences:** 
-${childPreferenceSummary}
-- **Other Characters:**
-${characterRoster}
-
-**Interactive Session Log:**
-${storySoFar}
-
-**Your Task:**
-Based on the session log and context, rewrite the entire interaction into a single, coherent story. The story should flow from beginning to end without any interruptions. Pay close attention to the **Output Style Requirements**. The final story text must use $$characterId$$ placeholders for all characters.
-
-**Output Format (Crucial):**
-You MUST return a single JSON object matching this exact shape. Do not include any markdown, code fences, or explanatory text.
-
-{
-  "storyText": "A complete, linear story text, rewritten from the session log. It should be at least 50 words long.",
-  "metadata": {
-    "paragraphs": <number of paragraphs in storyText>
-  }
-}
-
-Now, generate the JSON object containing the compiled story.
-`;
-            debug.details.promptLength = finalPrompt.length;
-            debug.details.promptPreview = finalPrompt.slice(0, 500) + '...';
-
-            // 4. Call Genkit AI
-            debug.stage = 'ai_generate';
-            const maxOutputTokens = 4000;
-            const temperature = 0.5;
-            debug.details.modelName = 'googleai/gemini-2.5-flash';
-            debug.details.temperature = temperature;
-            debug.details.maxOutputTokens = maxOutputTokens;
-
-            const llmResponse = await ai.generate({
-                model: 'googleai/gemini-2.5-flash',
-                prompt: finalPrompt,
-                config: { temperature, maxOutputTokens },
-            });
-            
-            debug.stage = 'ai_generate_result';
-            const rawText = llmResponse.text;
-            debug.details.finishReason = (llmResponse as any).finishReason ?? (llmResponse as any).raw?.candidates?.[0]?.finishReason;
-            debug.details.rawTextPreview = rawText ? rawText.slice(0, 200) : null;
-            if (!rawText || rawText.trim() === '') {
-                if (debug.details.finishReason === 'MAX_TOKENS' || debug.details.finishReason === 'length') {
-                    throw new Error("Model hit MAX_TOKENS during story compilation.");
+            let storyOutputType: StoryOutputType | null = null;
+            if (storyOutputTypeId) {
+                const storyOutputTypeRef = firestore.collection('storyOutputTypes').doc(storyOutputTypeId);
+                const storyOutputTypeDoc = await storyOutputTypeRef.get();
+                if (storyOutputTypeDoc.exists) {
+                    storyOutputType = storyOutputTypeDoc.data() as StoryOutputType;
                 }
-                throw new Error("Model returned empty text for story compilation.");
-            }
-            
-            // 5. Parse and validate
-            debug.stage = 'json_parse';
-            let parsed: z.infer<typeof StoryCompileResultSchema>;
-            try {
-                const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
-                const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
-                parsed = JSON.parse(jsonToParse);
-            } catch (err: any) {
-                debug.details.parseError = err.message;
-                throw new Error("Model output is not valid JSON for story compilation.");
             }
 
-            debug.stage = 'json_validate';
-            const validationResult = StoryCompileResultSchema.safeParse(parsed);
-            if (!validationResult.success) {
-                debug.details.validationErrors = validationResult.error.issues;
-                throw new Error(`Model JSON does not match expected story compilation shape. Errors: ${validationResult.error.message}`);
+            debug.details.storyOutputTypeName = storyOutputType?.name;
+
+            // 3. Call the story-text-compile-flow to compile messages into story text + synopsis
+            debug.stage = 'ai_generate';
+            const textCompileResult = await storyTextCompileFlow({ sessionId });
+
+            if (!textCompileResult.ok) {
+                throw new Error(textCompileResult.errorMessage || 'storyTextCompileFlow failed');
             }
-            
-            const { storyText, metadata } = validationResult.data;
+
+            const storyText = textCompileResult.storyText;
+            const synopsis = textCompileResult.synopsis || 'A magical adventure story.';
+            const finalActorIds = textCompileResult.actors || [childId];
+
+            debug.stage = 'ai_generate_result';
+            debug.details.storyTextLength = storyText?.length;
+            debug.details.synopsisLength = synopsis?.length;
+            debug.details.finalActorIds = finalActorIds;
+
+            // Calculate paragraph count
+            const paragraphCount = storyText.split(/\n\n+/).filter((p: string) => p.trim()).length;
+            const metadata = { paragraphs: paragraphCount };
 
             // --- Phase State Correction ---
-            await sessionRef.update({
+            const sessionUpdateStandard: Record<string, any> = {
                 currentPhase: 'final',
                 status: 'completed',
                 finalStoryText: storyText,
                 updatedAt: FieldValue.serverTimestamp(),
-                storyOutputTypeId: storyOutputTypeId, // Save the selected output type
-            });
+            };
+            if (storyOutputTypeId) {
+                sessionUpdateStandard.storyOutputTypeId = storyOutputTypeId;
+            }
+            await sessionRef.update(sessionUpdateStandard);
             debug.details.phaseCorrected = `Set currentPhase to 'final' and status to 'completed'`;
 
             // --- Story upsert ---
@@ -222,12 +276,18 @@ Now, generate the JSON object containing the compiled story.
                 childId,
                 parentUid,
                 storyText,
+                synopsis, // Generated alongside story text
                 metadata: {
                     ...(metadata || {}),
-                    storyOutputTypeId: storyOutputTypeId,
-                    storyOutputTypeName: storyOutputType.name,
-                    artStyleHint: storyOutputType.aiHints?.style,
+                    ...(storyOutputTypeId && { storyOutputTypeId }),
+                    ...(storyOutputType?.name && { storyOutputTypeName: storyOutputType.name }),
+                    ...(storyOutputType?.aiHints?.style && { artStyleHint: storyOutputType.aiHints.style }),
                 },
+                actors: finalActorIds,
+                // Set initial generation statuses for background tasks
+                titleGeneration: { status: 'pending' },
+                synopsisGeneration: { status: 'ready' }, // Already generated with compile
+                actorAvatarGeneration: { status: 'pending' },
                 createdAt: createdAtValue,
                 updatedAt: now,
             };
@@ -253,11 +313,15 @@ Now, generate the JSON object containing the compiled story.
                 ok: true,
                 sessionId,
                 storyText,
+                synopsis,
                 metadata,
                 storyId: storyRef.id,
+                // Always include actor info for debugging
+                actors: finalActorIds,
                 debug: process.env.NODE_ENV === 'development' ? {
                     ...debug,
                     storyLength: storyText.length,
+                    synopsisLength: synopsis.length,
                     paragraphs: metadata?.paragraphs,
                 } : undefined,
             };

@@ -1,0 +1,657 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
+import { useUser } from '@/firebase/auth/use-user';
+import type { PrintOrder, PrintOrderAddress } from '@/lib/types';
+
+export default function PrintOrderDetailPage() {
+  const router = useRouter();
+  const params = useParams();
+  const { user, loading: userLoading } = useUser();
+  const orderId = params.orderId as string;
+
+  const [order, setOrder] = useState<PrintOrder | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [actionResult, setActionResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  useEffect(() => {
+    if (!userLoading && user) {
+      loadOrder();
+    }
+  }, [orderId, user, userLoading]);
+
+  async function getAuthHeaders(): Promise<HeadersInit> {
+    if (!user) throw new Error('Not authenticated');
+    const idToken = await user.getIdToken();
+    return {
+      'Authorization': `Bearer ${idToken}`,
+      'Content-Type': 'application/json',
+    };
+  }
+
+  async function loadOrder() {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/admin/print-orders/${orderId}`, { headers });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || data.errorMessage || 'Failed to load order');
+      }
+
+      setOrder(data.order);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleApprove() {
+    try {
+      setActionLoading(true);
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/admin/print-orders/${orderId}/approve`, {
+        method: 'POST',
+        headers,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to approve order');
+      }
+
+      await loadOrder(); // Reload to see updated status
+      setActionResult({ type: 'success', message: 'Order approved successfully!' });
+    } catch (err: any) {
+      console.error('Approve error:', err);
+      setActionResult({ type: 'error', message: err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleReject() {
+    if (!rejectReason.trim()) {
+      setActionResult({ type: 'error', message: 'Please provide a reason for rejection' });
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/admin/print-orders/${orderId}/reject`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ reason: rejectReason }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to reject order');
+      }
+
+      await loadOrder();
+      setShowRejectDialog(false);
+      setRejectReason('');
+      setActionResult({ type: 'success', message: 'Order rejected' });
+    } catch (err: any) {
+      console.error('Reject error:', err);
+      setActionResult({ type: 'error', message: err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleSubmitToMixam() {
+    try {
+      setActionLoading(true);
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/admin/print-orders/${orderId}/submit`, {
+        method: 'POST',
+        headers,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to submit order');
+      }
+
+      await loadOrder();
+      setActionResult({ type: 'success', message: 'Order submitted to Mixam successfully!' });
+    } catch (err: any) {
+      console.error('Submit error:', err);
+      setActionResult({ type: 'error', message: err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleResetToApproved() {
+    try {
+      setActionLoading(true);
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/admin/print-orders/${orderId}/reset`, {
+        method: 'POST',
+        headers,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to reset order');
+      }
+
+      await loadOrder();
+      setActionResult({ type: 'success', message: 'Order reset to Approved status. You can now resubmit.' });
+    } catch (err: any) {
+      console.error('Reset error:', err);
+      setActionResult({ type: 'error', message: err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleRefreshMixamStatus() {
+    try {
+      setActionLoading(true);
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/admin/print-orders/${orderId}/refresh-status`, {
+        method: 'POST',
+        headers,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to refresh status');
+      }
+
+      await loadOrder();
+      if (data.statusChanged) {
+        setActionResult({ type: 'success', message: `Status updated: ${data.mixamStatus}` });
+      } else {
+        setActionResult({ type: 'success', message: `Status unchanged: ${data.mixamStatus}` });
+      }
+    } catch (err: any) {
+      console.error('Refresh status error:', err);
+      setActionResult({ type: 'error', message: err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  function formatDate(timestamp: any): string {
+    if (!timestamp) return 'N/A';
+
+    let date: Date;
+
+    // Handle Firestore Timestamp with toDate() method (client SDK)
+    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+      date = timestamp.toDate();
+    }
+    // Handle serialized Firestore Timestamp from Admin SDK ({ _seconds, _nanoseconds } or { seconds, nanoseconds })
+    else if (timestamp._seconds !== undefined || timestamp.seconds !== undefined) {
+      const seconds = timestamp._seconds ?? timestamp.seconds;
+      date = new Date(seconds * 1000);
+    }
+    // Handle ISO string or other date formats
+    else {
+      date = new Date(timestamp);
+    }
+
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      return 'Invalid Date';
+    }
+
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+  }
+
+  function formatCurrency(amount: number): string {
+    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(amount);
+  }
+
+  function renderAddress(address: PrintOrderAddress) {
+    return (
+      <div className="text-sm">
+        <p className="font-medium">{address.name}</p>
+        <p>{address.line1}</p>
+        {address.line2 && <p>{address.line2}</p>}
+        <p>{address.city}</p>
+        {address.state && <p>{address.state}</p>}
+        <p>{address.postalCode}</p>
+        <p>{address.country}</p>
+      </div>
+    );
+  }
+
+  if (loading || userLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">Loading order...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded">
+            Please sign in to view this order.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !order) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            {error || 'Order not found'}
+          </div>
+          <Link href="/admin/print-orders" className="text-blue-600 hover:underline mt-4 inline-block">
+            ← Back to Orders
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const canApprove = order.fulfillmentStatus === 'awaiting_approval' || order.fulfillmentStatus === 'ready_to_submit';
+  const canReject = order.fulfillmentStatus === 'awaiting_approval' || order.fulfillmentStatus === 'ready_to_submit';
+  const canSubmit = order.fulfillmentStatus === 'approved';
+  const canReset = order.fulfillmentStatus === 'validating';
+  const canRefreshStatus = !!order.mixamOrderId;
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Order #{order.id?.slice(-8).toUpperCase()}
+            </h1>
+            <p className="text-gray-600 mt-1">Created: {formatDate(order.createdAt)}</p>
+          </div>
+          <Link
+            href="/admin/print-orders"
+            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+          >
+            Back to Orders
+          </Link>
+        </div>
+
+        {/* Action Result Banner */}
+        {actionResult && (
+          <div className={`mb-6 p-4 rounded-lg ${actionResult.type === 'success' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+            <div className="flex items-center justify-between">
+              <p className={actionResult.type === 'success' ? 'text-green-800' : 'text-red-800'}>
+                {actionResult.type === 'success' ? '✓' : '✗'} {actionResult.message}
+              </p>
+              <button
+                onClick={() => setActionResult(null)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Status and Actions */}
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Status</p>
+              <p className="text-2xl font-semibold text-gray-900">
+                {order.fulfillmentStatus.replace(/_/g, ' ').toUpperCase()}
+              </p>
+            </div>
+            <div className="flex gap-3">
+              {canApprove && (
+                <button
+                  onClick={handleApprove}
+                  disabled={actionLoading}
+                  className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                >
+                  Approve Order
+                </button>
+              )}
+              {canReject && (
+                <button
+                  onClick={() => setShowRejectDialog(true)}
+                  disabled={actionLoading}
+                  className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+                >
+                  Reject Order
+                </button>
+              )}
+              {canSubmit && (
+                <button
+                  onClick={handleSubmitToMixam}
+                  disabled={actionLoading}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
+                >
+                  Submit to Mixam
+                </button>
+              )}
+              {canReset && (
+                <button
+                  onClick={handleResetToApproved}
+                  disabled={actionLoading}
+                  className="px-6 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50"
+                >
+                  Reset to Approved
+                </button>
+              )}
+              {canRefreshStatus && (
+                <button
+                  onClick={handleRefreshMixamStatus}
+                  disabled={actionLoading}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Refresh Mixam Status
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Mixam Details */}
+        {order.mixamOrderId && (
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Mixam Details</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm text-gray-600">Mixam Order ID</p>
+                <p className="font-mono text-sm">{order.mixamOrderId}</p>
+              </div>
+              {order.mixamJobNumber && (
+                <div>
+                  <p className="text-sm text-gray-600">Job Number</p>
+                  <p className="font-mono font-medium">{order.mixamJobNumber}</p>
+                </div>
+              )}
+              {order.mixamStatus && (
+                <div>
+                  <p className="text-sm text-gray-600">Mixam Status</p>
+                  <p className="font-medium">{order.mixamStatus.replace(/_/g, ' ').toUpperCase()}</p>
+                </div>
+              )}
+              {(order as any).mixamStatusCheckedAt && (
+                <div>
+                  <p className="text-sm text-gray-600">Last Checked</p>
+                  <p className="text-sm">{formatDate((order as any).mixamStatusCheckedAt)}</p>
+                </div>
+              )}
+            </div>
+            {((order as any).mixamTrackingUrl || (order as any).mixamEstimatedDelivery) && (
+              <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-2 gap-4">
+                {(order as any).mixamTrackingUrl && (
+                  <div>
+                    <p className="text-sm text-gray-600">Tracking URL</p>
+                    <a
+                      href={(order as any).mixamTrackingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline text-sm"
+                    >
+                      Track Shipment →
+                    </a>
+                  </div>
+                )}
+                {(order as any).mixamEstimatedDelivery && (
+                  <div>
+                    <p className="text-sm text-gray-600">Estimated Delivery</p>
+                    <p className="text-sm">{formatDate((order as any).mixamEstimatedDelivery)}</p>
+                  </div>
+                )}
+              </div>
+            )}
+            {(order as any).mixamResponse && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <details className="cursor-pointer">
+                  <summary className="text-sm text-gray-600 hover:text-gray-900">
+                    View Full Mixam Response
+                  </summary>
+                  <pre className="mt-2 p-3 bg-gray-50 rounded text-xs overflow-auto max-h-48">
+                    {JSON.stringify((order as any).mixamResponse, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Validation Results */}
+        {order.validationResult && (
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Validation Results</h2>
+            {order.validationResult.valid ? (
+              <div className="p-3 bg-green-50 border border-green-200 rounded">
+                <p className="text-green-800 font-medium">✓ All validations passed</p>
+              </div>
+            ) : (
+              <div className="p-3 bg-red-50 border border-red-200 rounded">
+                <p className="text-red-800 font-medium mb-2">✗ Validation errors:</p>
+                <ul className="list-disc list-inside text-red-700 space-y-1">
+                  {order.validationResult.errors.map((error, i) => (
+                    <li key={i}>{error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {order.validationResult.warnings.length > 0 && (
+              <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                <p className="text-yellow-800 font-medium mb-2">⚠ Warnings:</p>
+                <ul className="list-disc list-inside text-yellow-700 space-y-1">
+                  {order.validationResult.warnings.map((warning, i) => (
+                    <li key={i}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Order Details Grid */}
+        <div className="grid grid-cols-2 gap-6 mb-6">
+          {/* Product Details */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Product Details</h2>
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm text-gray-600">Product</p>
+                <p className="font-medium">{order.productSnapshot?.name || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Description</p>
+                <p className="text-sm">{order.productSnapshot?.description || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Quantity</p>
+                <p className="font-medium">{order.quantity}</p>
+              </div>
+              {order.customOptions && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Customizations</p>
+                  <div className="text-sm space-y-1">
+                    {order.customOptions.endPaperColor && (
+                      <p>End Paper: {order.customOptions.endPaperColor}</p>
+                    )}
+                    {order.customOptions.headTailBandColor && (
+                      <p>Band: {order.customOptions.headTailBandColor}</p>
+                    )}
+                    {order.customOptions.ribbonColor && (
+                      <p>Ribbon: {order.customOptions.ribbonColor}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Cost Breakdown */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Cost Breakdown</h2>
+            {order.estimatedCost ? (
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Unit Price</span>
+                  <span className="font-medium">{formatCurrency(order.estimatedCost.unitPrice)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Quantity</span>
+                  <span className="font-medium">×{order.quantity}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Subtotal</span>
+                  <span className="font-medium">{formatCurrency(order.estimatedCost.subtotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Shipping</span>
+                  <span className="font-medium">{formatCurrency(order.estimatedCost.shipping)}</span>
+                </div>
+                {order.estimatedCost.setupFee > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Setup Fee</span>
+                    <span className="font-medium">{formatCurrency(order.estimatedCost.setupFee)}</span>
+                  </div>
+                )}
+                <div className="pt-2 border-t border-gray-200">
+                  <div className="flex justify-between text-lg">
+                    <span className="font-semibold text-gray-900">Total</span>
+                    <span className="font-bold text-gray-900">{formatCurrency(order.estimatedCost.total)}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-gray-500">Cost information not available</p>
+            )}
+          </div>
+
+          {/* Shipping Address */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Shipping Address</h2>
+            {order.shippingAddress ? renderAddress(order.shippingAddress) : <p className="text-gray-500">No address provided</p>}
+          </div>
+
+          {/* Story Information */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Story Information</h2>
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm text-gray-600">Story ID</p>
+                <Link
+                  href={`/story/${order.storyId}`}
+                  className="font-mono text-sm text-blue-600 hover:underline"
+                >
+                  {order.storyId}
+                </Link>
+              </div>
+              {order.printableFiles?.coverPdfUrl && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Cover PDF</p>
+                  <a
+                    href={order.printableFiles.coverPdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline text-sm"
+                  >
+                    View Cover PDF →
+                  </a>
+                </div>
+              )}
+              {order.printableFiles?.interiorPdfUrl && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Interior PDF</p>
+                  <a
+                    href={order.printableFiles.interiorPdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline text-sm"
+                  >
+                    View Interior PDF →
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Status History */}
+        {order.statusHistory && order.statusHistory.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Status History</h2>
+            <div className="space-y-3">
+              {order.statusHistory.map((entry, i) => (
+                <div key={i} className="flex items-start gap-3 pb-3 border-b border-gray-100 last:border-0">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">
+                      {entry.status.replace(/_/g, ' ').toUpperCase()}
+                    </p>
+                    {entry.note && <p className="text-sm text-gray-600">{entry.note}</p>}
+                  </div>
+                  <div className="text-right text-sm text-gray-500">
+                    <p>{formatDate(entry.timestamp)}</p>
+                    <p className="text-xs">by {entry.source}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Reject Dialog */}
+        {showRejectDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">Reject Order</h3>
+              <p className="text-gray-600 mb-4">
+                Please provide a reason for rejecting this order:
+              </p>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                className="w-full border border-gray-300 rounded-md p-3 mb-4"
+                rows={4}
+                placeholder="Enter rejection reason..."
+              />
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setShowRejectDialog(false);
+                    setRejectReason('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReject}
+                  disabled={actionLoading || !rejectReason.trim()}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+                >
+                  Reject Order
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

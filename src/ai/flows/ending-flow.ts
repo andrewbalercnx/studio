@@ -3,29 +3,48 @@
 
 /**
  * @fileOverview A Genkit flow to generate three possible story endings.
+ *
+ * This flow uses the new structured prompt system:
+ * - Schema: @/lib/schemas/ending-output
+ * - Prompt Builder: @/lib/prompt-builders/ending-prompt-builder
+ *
+ * For story types with promptConfig, uses the new system.
+ * For legacy story types, falls back to hardcoded prompt.
  */
 
 import { ai } from '@/ai/genkit';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
-import type { StorySession, ChatMessage, StoryType, Character, ChildProfile } from '@/lib/types';
+import type { MessageData } from 'genkit';
+import type { StorySession, ChatMessage, StoryType, ArcStep } from '@/lib/types';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
 import { logServerSessionEvent } from '@/lib/session-events.server';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { resolveEntitiesInText, replacePlaceholdersInText } from '@/lib/resolve-placeholders.server';
+import { buildStoryContext } from '@/lib/story-context-builder';
+import { buildStorySystemMessage } from '@/lib/build-story-system-message';
+import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
+// New structured prompt system
+import { EndingOutputSchema } from '@/lib/schemas/ending-output';
+import { buildEndingPrompt, type EndingPromptContext } from '@/lib/prompt-builders/ending-prompt-builder';
+
+/**
+ * Normalizes arc steps to handle both legacy string format and new ArcStep object format.
+ */
+function normalizeArcSteps(steps: (string | ArcStep)[]): ArcStep[] {
+  return steps.map(step =>
+    typeof step === 'string'
+      ? { id: step, label: step.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }
+      : step
+  );
+}
 
 type EndingFlowDebugInfo = {
-    stage: 'loading_session' | 'loading_storyType' | 'loading_messages_and_characters' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate' | 'unknown';
+    stage: 'loading_session' | 'loading_storyType' | 'loading_messages_and_characters' | 'building_prompt' | 'ai_generate' | 'ai_generate_result' | 'json_parse' | 'json_validate' | 'unknown';
     details: Record<string, any>;
+    usedNewPromptSystem?: boolean;
 };
-
-// Zod schema for the expected JSON output from the model
-const EndingFlowOutputSchema = z.object({
-  endings: z.array(z.object({
-    id: z.string().describe("A single uppercase letter, e.g., 'A', 'B', 'C'."),
-    text: z.string().describe("Two to three very short sentences that provide a gentle, happy ending to the story."),
-  })).min(3).max(3).describe("An array of exactly 3 possible endings for the story.")
-});
 
 
 export const endingFlow = ai.defineFlow(
@@ -72,137 +91,175 @@ export const endingFlow = ai.defineFlow(
                 return { ok: false, sessionId, errorMessage: `StoryType with id ${storyTypeId} not found.` };
             }
             const storyType = storyTypeDoc.data() as StoryType;
-            let childProfile: ChildProfile | null = null;
-            if (session.childId) {
-                const childDoc = await firestore.collection('children').doc(session.childId).get();
-                if (childDoc.exists) {
-                    childProfile = childDoc.data() as ChildProfile;
-                }
-            }
+
+            // Load unified story context (child, siblings, characters)
+            const { data: contextData, formatted: contextFormatted } = await buildStoryContext(
+                session.parentUid || '',
+                session.childId,
+                session.mainCharacterId
+            );
+            const childProfile = contextData.mainChild;
+            const childAge = contextData.childAge;
             const childPreferenceSummary = summarizeChildPreferences(childProfile);
             debug.details.childPreferenceSummary = childPreferenceSummary.slice(0, 400);
-            const arcSteps = storyType.arcTemplate?.steps ?? [];
+            debug.details.childAge = childAge;
+            debug.details.siblingsCount = contextData.siblings.length;
+            debug.details.charactersCount = contextData.characters.length + (contextData.mainCharacter ? 1 : 0);
+
+            const rawArcSteps = storyType.arcTemplate?.steps ?? [];
+            const arcSteps = normalizeArcSteps(rawArcSteps);
             const maxIndex = arcSteps.length > 0 ? arcSteps.length - 1 : 0;
             const isAtFinalStep = arcStepIndex >= maxIndex;
+            const currentArcStepObj = arcSteps[Math.min(arcStepIndex, maxIndex)] || null;
             debug.details.isAtFinalStep = isAtFinalStep;
-            debug.details.lastStepId = arcSteps[maxIndex];
+            debug.details.lastStepId = arcSteps[maxIndex]?.id;
+            debug.details.currentArcStepId = currentArcStepObj?.id;
 
-            // 3. Load Characters and Messages
+            // 3. Load Messages and build messages array
             debug.stage = 'loading_messages_and_characters';
-            const charactersSnapshot = await firestore.collection('characters').where('sessionId', '==', sessionId).get();
-            const characterRoster = charactersSnapshot.docs.map(d => {
-                const char = d.data() as Character;
-                return `- ${char.displayName} (role: ${char.role}, traits: ${char.traits?.join(', ') || 'none'})`;
-            }).join('\n');
-
             const messagesSnapshot = await firestore
                 .collection('storySessions')
                 .doc(sessionId)
                 .collection('messages')
                 .orderBy('createdAt', 'asc')
                 .get();
-            const storySoFar = messagesSnapshot.docs.map(d => {
+
+            // Build structured messages array for ai.generate()
+            const conversationMessages: MessageData[] = messagesSnapshot.docs.map(d => {
                 const msg = d.data() as ChatMessage;
-                return `${msg.sender === 'assistant' ? 'Story Guide' : 'Child'}: ${msg.text}`;
-            }).join('\n');
-            debug.details.storySoFarLength = storySoFar.length;
-            debug.details.characterCount = charactersSnapshot.size;
+                return {
+                    role: msg.sender === 'assistant' ? 'model' : 'user',
+                    content: [{ text: msg.text }],
+                } as MessageData;
+            });
+            debug.details.messagesCount = conversationMessages.length;
 
+            // 4. Build System Prompt
+            debug.stage = 'building_prompt';
+            const globalPrefix = await getGlobalPrefix();
+            let systemPrompt: string;
+            let modelTemperature = 0.4;
+            let maxOutputTokens = 2000;
 
-            // 4. Build Final Prompt
-            const finalPrompt = `You are the Story Guide, a gentle storyteller for very young children (3-5). Your task is to propose three possible happy endings for a story.
-- Your tone must be warm, gentle, and safe.
-- Endings must be short (2-3 very simple sentences).
-- Do not use scary topics, complex words, lists, or emojis.
+            if (storyType.promptConfig) {
+                // NEW SYSTEM: Use structured prompt builder
+                debug.usedNewPromptSystem = true;
 
-CONTEXT:
+                const promptContext: EndingPromptContext = {
+                    storyType,
+                    formattedContext: contextFormatted,
+                    childAge,
+                    childPreferenceSummary,
+                    levelBand: session.promptConfigLevelBand,
+                    useMessagesArray: true, // Story history will be passed via messages parameter
+                    useSchemaOutput: true,  // Schema is passed to model separately
+                    globalPrefix,
+                };
+
+                systemPrompt = buildEndingPrompt(promptContext);
+
+                // Use model settings from storyType.promptConfig
+                modelTemperature = storyType.promptConfig.model?.temperature ?? 0.4;
+                maxOutputTokens = storyType.promptConfig.model?.maxOutputTokens ?? 2000;
+
+                debug.details.promptSystem = 'new';
+            } else {
+                // LEGACY SYSTEM: Fallback to hardcoded prompt
+                debug.usedNewPromptSystem = false;
+                const systemMessage = buildStorySystemMessage(contextFormatted, childAge, 'ending', globalPrefix);
+
+                systemPrompt = `${systemMessage}
+
+=== CURRENT SESSION ===
 Story Type: ${storyType.name}
-Child preferences:
-${childPreferenceSummary}
-Characters:
-${characterRoster || '- No characters found.'}
 
-STORY SO FAR:
-${storySoFar}
+Child's inspirations: ${childPreferenceSummary}
 
-OUTPUT FORMAT (important):
-You MUST return a single JSON object with this exact shape:
+=== YOUR TASK ===
+Based on the story conversation above, generate three possible endings for the story.
+
+=== OUTPUT FORMAT ===
+Return a single valid JSON object (no markdown, no explanation):
 {
   "endings": [
-    { "id": "A", "text": "ending one in 2 or 3 very short sentences" },
-    { "id": "B", "text": "ending two in 2 or 3 very short sentences" },
-    { "id": "C", "text": "ending three in 2 or 3 very short sentences" }
+    { "id": "A", "text": "ending one in 2-3 short sentences" },
+    { "id": "B", "text": "ending two in 2-3 short sentences" },
+    { "id": "C", "text": "ending three in 2-3 short sentences" }
   ]
-}
+}`;
+                debug.details.promptSystem = 'legacy';
+            }
 
-Rules:
-- The value of "endings" MUST be an array of exactly 3 objects.
-- Each object MUST have an "id" field with one of "A", "B", or "C".
-- Each object MUST have a "text" field that is a single string.
-- Do NOT return an array of strings. Each item MUST be an object with "id" and "text".
-- Do NOT include code fences.
-- Do NOT include markdown.
-- Do NOT include any explanation or extra fields.
-- The entire response MUST be valid JSON starting with { and ending with }.
+            debug.details.promptLength = systemPrompt.length;
+            debug.details.promptPreview = systemPrompt.slice(0, 500) + '...';
 
-Based on all the above, return ONLY the JSON object containing three endings.`;
-
-            debug.details.promptLength = finalPrompt.length;
-            debug.details.promptPreview = finalPrompt.slice(0, 500) + '...';
-
-            // 5. Call Genkit AI
+            // 5. Call Genkit AI with messages array
             debug.stage = 'ai_generate';
             const modelConfig = {
-                temperature: 0.4,
-                maxOutputTokens: 2000,
+                temperature: modelTemperature,
+                maxOutputTokens: maxOutputTokens,
             };
             debug.details.modelConfig = modelConfig;
+            debug.details.usedMessagesArray = conversationMessages.length > 0;
+
+            // Determine model name from storyType or use default
+            const modelName = storyType.promptConfig?.model?.name || 'googleai/gemini-2.5-pro';
 
             let llmResponse;
+            const startTime = Date.now();
             try {
+                // Use system prompt + messages array for better conversation context
+                // Using output parameter for structured schema validation
                 llmResponse = await ai.generate({
-                    model: 'googleai/gemini-2.5-flash',
-                    prompt: finalPrompt,
+                    model: modelName,
+                    system: systemPrompt,
+                    messages: conversationMessages,
+                    output: { schema: EndingOutputSchema },
                     config: modelConfig,
                 });
-                await logAIFlow({ flowName: 'endingFlow', sessionId, prompt: finalPrompt, response: llmResponse });
+                await logAIFlow({ flowName: 'endingFlow', sessionId, parentId: session.parentUid, prompt: systemPrompt, response: llmResponse, startTime, modelName });
             } catch (e: any) {
-                await logAIFlow({ flowName: 'endingFlow', sessionId, prompt: finalPrompt, error: e });
+                await logAIFlow({ flowName: 'endingFlow', sessionId, parentId: session.parentUid, prompt: systemPrompt, error: e, startTime, modelName });
                 throw e;
             }
-            
+
             debug.stage = 'ai_generate_result';
-            const rawText = llmResponse.text;
             debug.details.finishReason = (llmResponse as any).finishReason ?? (llmResponse as any).raw?.candidates?.[0]?.finishReason;
             debug.details.topLevelFinishReason = (llmResponse as any).finishReason ?? null;
             debug.details.firstCandidateFinishReason = (llmResponse as any).raw?.candidates?.[0]?.finishReason ?? null;
-            debug.details.rawTextPreview = rawText ? rawText.slice(0, 200) : null;
 
+            // 6. Extract structured output using Genkit's output parameter
+            let validationResult = llmResponse.output;
 
-            if (!rawText || rawText.trim() === '') {
-                if (debug.details.firstCandidateFinishReason === 'MAX_TOKENS' || debug.details.topLevelFinishReason === 'length') {
-                     throw new Error("Model hit MAX_TOKENS during ending generation; increase maxOutputTokens.");
+            if (!validationResult) {
+                // Fallback: try manual parsing if output is null
+                const rawText = llmResponse.text;
+                debug.details.rawTextPreview = rawText ? rawText.slice(0, 200) : null;
+
+                if (!rawText || rawText.trim() === '') {
+                    if (debug.details.firstCandidateFinishReason === 'MAX_TOKENS' || debug.details.topLevelFinishReason === 'length') {
+                        throw new Error("Model hit MAX_TOKENS during ending generation; increase maxOutputTokens.");
+                    }
+                    throw new Error("Model returned empty text for ending generation.");
                 }
-                throw new Error("Model returned empty text for ending generation.");
-            }
-            
-            // 6. Parse and validate
-            debug.stage = 'json_parse';
-            let parsed: z.infer<typeof EndingFlowOutputSchema>;
-            try {
-                const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
-                const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
-                parsed = JSON.parse(jsonToParse);
-            } catch (err: any) {
-                debug.details.parseError = err.message;
-                throw new Error("Model output is not valid JSON for endings.");
-            }
 
-            debug.stage = 'json_validate';
-            const validationResult = EndingFlowOutputSchema.safeParse(parsed);
-            if (!validationResult.success) {
-                debug.details.validationErrors = validationResult.error.issues;
-                 throw new Error(`Model JSON does not match expected ending shape. Errors: ${validationResult.error.message}`);
+                debug.stage = 'json_parse';
+                try {
+                    const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
+                    const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
+                    const parsed = JSON.parse(jsonToParse);
+                    const manualValidation = EndingOutputSchema.safeParse(parsed);
+                    if (manualValidation.success) {
+                        validationResult = manualValidation.data;
+                        debug.details.usedFallbackParsing = true;
+                    } else {
+                        debug.details.validationErrors = manualValidation.error.issues;
+                        throw new Error(`Model JSON does not match expected ending shape. Errors: ${manualValidation.error.message}`);
+                    }
+                } catch (err: any) {
+                    debug.details.parseError = err.message;
+                    throw new Error("Model output is not valid JSON for endings.");
+                }
             }
 
             await sessionRef.update({
@@ -217,16 +274,28 @@ Based on all the above, return ONLY the JSON object containing three endings.`;
                 source: 'server',
                 attributes: {
                     storyTypeId: storyType.id,
-                    arcStep: arcSteps[arcStepIndex] || null,
+                    arcStep: currentArcStepObj?.id || null,
+                    arcStepLabel: currentArcStepObj?.label || null,
                 },
             });
+
+            // Replace placeholders in ending texts
+            const allEndingTexts = validationResult.endings.map(e => e.text).join(' ');
+            const entityMap = await resolveEntitiesInText(allEndingTexts);
+            const endingsWithResolvedNames = await Promise.all(
+                validationResult.endings.map(async (ending) => ({
+                    id: ending.id,
+                    text: await replacePlaceholdersInText(ending.text, entityMap),
+                }))
+            );
 
             return {
                 ok: true,
                 sessionId,
                 storyTypeId: storyType.id,
-                arcStep: arcSteps[arcStepIndex] || null,
-                endings: validationResult.data.endings,
+                arcStep: currentArcStepObj?.id || null,
+                arcStepLabel: currentArcStepObj?.label || null,
+                endings: endingsWithResolvedNames,
                 debug: process.env.NODE_ENV === 'development' ? debug : undefined,
             };
 

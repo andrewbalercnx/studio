@@ -93,10 +93,21 @@ export default function AdminAILogsPage() {
             </AccordionTrigger>
             <AccordionContent>
               <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                     <p><strong className="text-muted-foreground">Session ID:</strong> {log.sessionId || 'N/A'}</p>
+                    <p><strong className="text-muted-foreground">Parent ID:</strong> {log.parentId || 'N/A'}</p>
                     <p><strong className="text-muted-foreground">Model:</strong> {log.response?.model || 'N/A'}</p>
+                    <p><strong className="text-muted-foreground">Latency:</strong> {log.latencyMs != null ? `${log.latencyMs}ms` : 'N/A'}</p>
                 </div>
+                {log.usage && (
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs bg-blue-50 dark:bg-blue-950 p-2 rounded-md">
+                    <p><strong className="text-muted-foreground">Input Tokens:</strong> {log.usage.inputTokens ?? 'N/A'}</p>
+                    <p><strong className="text-muted-foreground">Output Tokens:</strong> {log.usage.outputTokens ?? 'N/A'}</p>
+                    <p><strong className="text-muted-foreground">Total Tokens:</strong> {log.usage.totalTokens ?? 'N/A'}</p>
+                    <p><strong className="text-muted-foreground">Thoughts Tokens:</strong> {log.usage.thoughtsTokens ?? 'N/A'}</p>
+                    <p><strong className="text-muted-foreground">Cached Tokens:</strong> {log.usage.cachedContentTokens ?? 'N/A'}</p>
+                  </div>
+                )}
                 <div>
                   <h4 className="font-semibold text-sm mb-1">Prompt</h4>
                   <pre className="text-xs whitespace-pre-wrap font-mono bg-background p-2 rounded-md max-h-60 overflow-y-auto">{log.prompt}</pre>

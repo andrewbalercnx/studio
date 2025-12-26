@@ -69,3 +69,13 @@ export async function requireParentOrAdminUser(request: Request): Promise<Verifi
   }
   throw new AuthError('FORBIDDEN', 'Parent access required');
 }
+
+export async function requireAdminUser(request: Request): Promise<VerifiedUser> {
+  'use server';
+  const verified = await requireAuthenticatedUser(request);
+  const claims = verified.claims ?? {};
+  if (claims.isAdmin) {
+    return verified;
+  }
+  throw new AuthError('FORBIDDEN', 'Admin access required');
+}

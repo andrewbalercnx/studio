@@ -5,8 +5,14 @@ import {useState} from 'react';
 import {errorEmitter} from '../error-emitter';
 import {FirestorePermissionError} from '../errors';
 
-type UploadParams = {
+type UploadChildPhotoParams = {
   childId: string;
+  dataUrl: string;
+  fileName: string;
+};
+
+type UploadCharacterPhotoParams = {
+  characterId: string;
   dataUrl: string;
   fileName: string;
 };
@@ -16,7 +22,7 @@ export function useUploadFile() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const uploadFile = async ({childId, dataUrl, fileName}: UploadParams): Promise<string | null> => {
+  const uploadFile = async ({childId, dataUrl, fileName}: UploadChildPhotoParams): Promise<string | null> => {
     if (!user) {
       const err = new Error('You must be signed in to upload photos');
       setError(err);
@@ -65,5 +71,54 @@ export function useUploadFile() {
     }
   };
 
-  return {uploadFile, isUploading, error};
+  const uploadCharacterPhoto = async ({characterId, dataUrl, fileName}: UploadCharacterPhotoParams): Promise<string | null> => {
+    if (!user) {
+      const err = new Error('You must be signed in to upload photos');
+      setError(err);
+      throw err;
+    }
+
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/characters/photos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({characterId, dataUrl, fileName}),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.ok) {
+        const message = payload?.errorMessage ?? 'Failed to upload photo';
+        const uploadError = new Error(message);
+        setError(uploadError);
+        const permissionError = new FirestorePermissionError({
+          path: `characters/${characterId}/photos`,
+          operation: 'create',
+          requestResourceData: {fileName},
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        return null;
+      }
+      return payload.downloadUrl as string;
+    } catch (err: any) {
+      const normalizedError = err instanceof Error ? err : new Error(String(err));
+      setError(normalizedError);
+      const permissionError = new FirestorePermissionError({
+        path: `characters/${characterId}/photos`,
+        operation: 'create',
+        requestResourceData: {fileName},
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return {uploadFile, uploadCharacterPhoto, isUploading, error};
 }

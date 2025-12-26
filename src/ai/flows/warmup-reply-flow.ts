@@ -7,9 +7,11 @@
 import { ai } from '@/ai/genkit';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
+import type { MessageData } from 'genkit';
 import type { StorySession, ChatMessage } from '@/lib/types';
 import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
 
 
 // Define a type for the debug object
@@ -65,7 +67,7 @@ export const warmupReplyFlow = ai.defineFlow(
             const { promptConfig, id: resolvedPromptConfigId, debug: resolverDebug } = await resolvePromptConfigForSession(sessionId, 'warmup');
 
 
-            // 3. Load messages from Firestore
+            // 3. Load messages from Firestore and build messages array
             const messagesSnapshot = await firestore
                 .collection('storySessions')
                 .doc(sessionId)
@@ -73,52 +75,52 @@ export const warmupReplyFlow = ai.defineFlow(
                 .orderBy('createdAt', 'desc')
                 .limit(2)
                 .get();
-            
-            // Build conversation summary string for the prompt, limiting to the last two messages and 200 chars.
-            const conversationSummary = messagesSnapshot.docs
+
+            // Build structured messages array for ai.generate()
+            const conversationMessages: MessageData[] = messagesSnapshot.docs
                 .reverse() // Reverse to get chronological order
+                .filter(doc => {
+                    const data = doc.data();
+                    return data.text && typeof data.text === 'string';
+                })
                 .map(doc => {
                     const data = doc.data();
-                    if (!data.text || typeof data.text !== 'string') {
-                        return null;
-                    }
-                    const label = data.sender === 'child' ? 'Child:' : 'Story Guide:';
-                    return `${label} ${data.text}`;
-                })
-                .filter(Boolean)
-                .join('\n')
-                .slice(-200); // Truncate to the last 200 characters
+                    return {
+                        role: data.sender === 'child' ? 'user' : 'model',
+                        content: [{ text: data.text }],
+                    } as MessageData;
+                });
 
-            // 4. Build the single prompt string
-            const minimalSystemPrompt = `You are the Story Guide, a gentle and friendly helper for young children. Your goal is to learn about the child's world by asking simple, warm questions. Speak in very short, easy-to-understand sentences.`;
-            
-            const finalPrompt = [
-                minimalSystemPrompt,
-                "\n\nHere is the conversation so far:\n",
-                conversationSummary,
-                "\n\nNow, as the Story Guide, give the next short, friendly reply."
-            ].join('');
+            // 4. Build the system prompt (conversation history will be passed via messages array)
+            const globalPrefix = await getGlobalPrefix();
+            const baseSystemPrompt = `You are the Story Guide, a gentle and friendly helper for young children. Your goal is to learn about the child's world by asking simple, warm questions. Speak in very short, easy-to-understand sentences.
+
+Now, as the Story Guide, give the next short, friendly reply to continue the conversation.`;
+            const systemPrompt = globalPrefix ? `${globalPrefix}\n\n${baseSystemPrompt}` : baseSystemPrompt;
             
             // 5. Build the initial promptDebug object
             promptDebug = {
-                hasSystem: minimalSystemPrompt.length > 0,
-                systemLength: minimalSystemPrompt.length,
-                hasConversationSummary: conversationSummary.length > 0,
-                conversationLines: messagesSnapshot.docs.length,
-                promptLength: finalPrompt.length,
-                promptPreview: finalPrompt.slice(0, 200),
+                hasSystem: systemPrompt.length > 0,
+                systemLength: systemPrompt.length,
+                hasConversationSummary: conversationMessages.length > 0,
+                conversationLines: conversationMessages.length,
+                promptLength: systemPrompt.length,
+                promptPreview: systemPrompt.slice(0, 200),
             };
-            
+
             const configMax = promptConfig.model?.maxOutputTokens;
             const defaultMax = 1000;
             const rawResolved = typeof configMax === 'number' && configMax > 0 ? configMax : defaultMax;
             const resolvedMaxOutputTokens = Math.max(rawResolved, 10000);
 
-            // 6. Call Gemini with the single prompt string
+            // 6. Call Gemini with system prompt and messages array
+            const startTime = Date.now();
+            const modelName = 'googleai/gemini-2.5-pro';
             try {
                 llmResponse = await ai.generate({
-                    model: 'googleai/gemini-2.5-flash',
-                    prompt: finalPrompt,
+                    model: modelName,
+                    system: systemPrompt,
+                    messages: conversationMessages,
                     config: {
                         ...(promptConfig.model?.temperature != null
                             ? { temperature: promptConfig.model.temperature }
@@ -126,9 +128,9 @@ export const warmupReplyFlow = ai.defineFlow(
                         maxOutputTokens: resolvedMaxOutputTokens
                     },
                 });
-                await logAIFlow({ flowName: 'warmupReplyFlow', sessionId, prompt: finalPrompt, response: llmResponse });
+                await logAIFlow({ flowName: 'warmupReplyFlow', sessionId, parentId: session.parentUid, prompt: systemPrompt, response: llmResponse, startTime, modelName });
             } catch (e: any) {
-                await logAIFlow({ flowName: 'warmupReplyFlow', sessionId, prompt: finalPrompt, error: e });
+                await logAIFlow({ flowName: 'warmupReplyFlow', sessionId, parentId: session.parentUid, prompt: systemPrompt, error: e, startTime, modelName });
                 throw e;
             }
             
