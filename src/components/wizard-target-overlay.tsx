@@ -1,0 +1,140 @@
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { useWizardTargetDiagnosticsOptional } from '@/hooks/use-wizard-target-diagnostics';
+import { cn } from '@/lib/utils';
+
+interface TargetInfo {
+  id: string;
+  rect: DOMRect;
+  element: Element;
+}
+
+/**
+ * WizardTargetOverlay renders visual indicators for all elements with data-wiz-target attributes.
+ * When wizard target diagnostics mode is enabled, it shows:
+ * - A colored border around each targetable element
+ * - A tooltip badge showing the target ID
+ *
+ * This helps Help Wizard editors identify which selectors to use.
+ */
+export function WizardTargetOverlay() {
+  const diagnostics = useWizardTargetDiagnosticsOptional();
+  const [targets, setTargets] = useState<TargetInfo[]>([]);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Scan for all elements with data-wiz-target attribute
+  const scanTargets = useCallback(() => {
+    const elements = document.querySelectorAll('[data-wiz-target]');
+    const newTargets: TargetInfo[] = [];
+
+    elements.forEach((element) => {
+      const id = element.getAttribute('data-wiz-target');
+      if (id) {
+        const rect = element.getBoundingClientRect();
+        newTargets.push({ id, rect, element });
+      }
+    });
+
+    setTargets(newTargets);
+  }, []);
+
+  // Scan on mount and when diagnostics mode changes
+  useEffect(() => {
+    if (!diagnostics?.enabled) {
+      setTargets([]);
+      return;
+    }
+
+    // Initial scan
+    scanTargets();
+
+    // Set up a MutationObserver to detect DOM changes
+    const observer = new MutationObserver(() => {
+      scanTargets();
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-wiz-target'],
+    });
+
+    // Update positions on scroll/resize
+    const handleUpdate = () => scanTargets();
+    window.addEventListener('scroll', handleUpdate, true);
+    window.addEventListener('resize', handleUpdate);
+
+    // Periodic refresh for dynamic content
+    const intervalId = setInterval(scanTargets, 1000);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', handleUpdate, true);
+      window.removeEventListener('resize', handleUpdate);
+      clearInterval(intervalId);
+    };
+  }, [diagnostics?.enabled, scanTargets]);
+
+  // Handle copying target ID to clipboard
+  const handleCopyId = useCallback(async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(`[data-wiz-target="${id}"]`);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  }, []);
+
+  // Don't render if diagnostics mode is not enabled
+  if (!diagnostics?.enabled) {
+    return null;
+  }
+
+  return (
+    <>
+      {/* Diagnostic mode indicator banner */}
+      <div className="fixed top-14 left-0 right-0 z-[60] bg-amber-500 text-amber-950 text-center py-1 text-sm font-medium">
+        🎯 Wizard Target Diagnostics Mode — Click any target badge to copy its selector
+      </div>
+
+      {/* Render overlays for each target */}
+      {targets.map((target) => (
+        <div key={target.id}>
+          {/* Border highlight around the element */}
+          <div
+            className="pointer-events-none fixed z-[55] rounded border-2 border-dashed border-amber-500"
+            style={{
+              top: target.rect.top - 2,
+              left: target.rect.left - 2,
+              width: target.rect.width + 4,
+              height: target.rect.height + 4,
+            }}
+          />
+
+          {/* Target ID badge */}
+          <button
+            onClick={() => handleCopyId(target.id)}
+            className={cn(
+              "fixed z-[56] px-2 py-0.5 rounded text-xs font-mono font-medium shadow-lg",
+              "transition-all duration-150 cursor-pointer",
+              "hover:scale-105 active:scale-95",
+              copiedId === target.id
+                ? "bg-green-500 text-white"
+                : "bg-amber-500 text-amber-950 hover:bg-amber-400"
+            )}
+            style={{
+              top: Math.max(0, target.rect.top - 24),
+              left: target.rect.left,
+            }}
+            title={`Click to copy: [data-wiz-target="${target.id}"]`}
+          >
+            {copiedId === target.id ? '✓ Copied!' : target.id}
+          </button>
+        </div>
+      ))}
+    </>
+  );
+}

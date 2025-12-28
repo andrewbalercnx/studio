@@ -57,16 +57,21 @@ export function HelpWizard() {
     }
   }, [currentPage, router]);
 
-  // Handle element highlighting
+  // Handle element highlighting - supports both wizardTargetId and highlightSelector
   useEffect(() => {
-    if (!currentPage?.highlightSelector) {
+    // Determine the selector to use: prefer wizardTargetId, fall back to highlightSelector
+    const selector = currentPage?.wizardTargetId
+      ? `[data-wiz-target="${currentPage.wizardTargetId}"]`
+      : currentPage?.highlightSelector;
+
+    if (!selector) {
       setHighlightRect(null);
       return;
     }
 
     // Small delay to allow page navigation to complete
     const timeoutId = setTimeout(() => {
-      const element = document.querySelector(currentPage.highlightSelector!);
+      const element = document.querySelector(selector);
       if (element) {
         const rect = element.getBoundingClientRect();
         setHighlightRect(rect);
@@ -80,7 +85,7 @@ export function HelpWizard() {
 
     // Update highlight position on scroll/resize
     const updateHighlight = () => {
-      const element = document.querySelector(currentPage.highlightSelector!);
+      const element = document.querySelector(selector);
       if (element) {
         setHighlightRect(element.getBoundingClientRect());
       }
@@ -94,7 +99,7 @@ export function HelpWizard() {
       window.removeEventListener('scroll', updateHighlight, true);
       window.removeEventListener('resize', updateHighlight);
     };
-  }, [currentPage?.highlightSelector, currentPage?.route]);
+  }, [currentPage?.wizardTargetId, currentPage?.highlightSelector, currentPage?.route]);
 
   const handleClose = () => {
     if (returnUrl) {

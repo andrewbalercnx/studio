@@ -167,7 +167,7 @@ function StorybookCard({
     : `/storybook/${storybook.storybookId}/read`;
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex flex-col" data-wiz-target={`storybook-card-${storybook.storybookId}`}>
       {/* Thumbnail */}
       <div className="aspect-video relative bg-gradient-to-br from-primary/20 to-primary/5 rounded-t-lg overflow-hidden">
         {storybook.thumbnailUrl ? (
@@ -915,7 +915,7 @@ export default function ParentStorybooksPage() {
               : `${totalBooks} ${totalBooks === 1 ? 'book' : 'books'} across ${childrenWithStorybooks.length} ${childrenWithStorybooks.length === 1 ? 'child' : 'children'}`}
           </p>
         </div>
-        <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
+        <Button variant="outline" onClick={handleRefresh} disabled={isLoading} data-wiz-target="storybooks-refresh">
           <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           Refresh
         </Button>

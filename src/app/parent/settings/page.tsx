@@ -79,13 +79,13 @@ export default function ParentSettingsPage() {
 
   return (
       <div className="container mx-auto p-4 sm:p-6 md:p-8">
-        <Card className="max-w-2xl mx-auto">
+        <Card className="max-w-2xl mx-auto" data-wiz-target="settings-card">
           <CardHeader>
             <CardTitle>Parent Settings</CardTitle>
             <CardDescription>Manage your account settings and security.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-4 rounded-lg border p-4">
+            <div className="space-y-4 rounded-lg border p-4" data-wiz-target="settings-pin-section">
               <h3 className="font-semibold">{userProfile?.pinHash ? 'Change your PIN' : 'Set your Parent PIN'}</h3>
               <p className="text-sm text-muted-foreground">
                 This 4-digit PIN is used to access parent-only sections of the app.
@@ -112,7 +112,7 @@ export default function ParentSettingsPage() {
                   placeholder="****"
                 />
               </div>
-              <Button onClick={handleSetPin} disabled={isSaving}>
+              <Button onClick={handleSetPin} disabled={isSaving} data-wiz-target="settings-set-pin-button">
                 {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : null}
                 {userProfile?.pinHash ? 'Change PIN' : 'Set PIN'}
               </Button>

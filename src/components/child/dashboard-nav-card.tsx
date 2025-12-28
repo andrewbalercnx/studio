@@ -12,6 +12,7 @@ type DashboardNavCardProps = {
   href: string;
   badge?: number;
   variant?: 'default' | 'secondary';
+  'data-wiz-target'?: string;
 };
 
 export function DashboardNavCard({
@@ -21,6 +22,7 @@ export function DashboardNavCard({
   href,
   badge,
   variant = 'default',
+  'data-wiz-target': wizTarget,
 }: DashboardNavCardProps) {
   return (
     <Link href={href}>
@@ -32,6 +34,7 @@ export function DashboardNavCard({
             ? 'border-primary/30 hover:border-primary bg-primary/5'
             : 'border-gray-200 hover:border-gray-300'
         )}
+        data-wiz-target={wizTarget}
       >
         <CardHeader className="space-y-4">
           <div className="flex items-center justify-between">

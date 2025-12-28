@@ -661,7 +661,7 @@ export default function StorybookViewerPage() {
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
     <div className="container mx-auto px-4 py-10 space-y-6">
       <div className="grid gap-6 lg:grid-cols-1">
-        <Card className="mx-auto w-full max-w-4xl">
+        <Card className="mx-auto w-full max-w-4xl" data-wiz-target="storybook-viewer-card">
           <CardHeader className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -723,8 +723,8 @@ export default function StorybookViewerPage() {
                 Loading cast...
               </div>
             )}
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={() => handleGenerateAll(false)} disabled={disableGenerate} title={isLocked ? 'Unlock to regenerate art.' : undefined}>
+            <div className="flex flex-wrap gap-2" data-wiz-target="storybook-actions">
+              <Button onClick={() => handleGenerateAll(false)} disabled={disableGenerate} title={isLocked ? 'Unlock to regenerate art.' : undefined} data-wiz-target="storybook-generate-art">
                 {disableGenerate ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
                 {calculatedImageStatus === 'ready' ? 'Refresh Art' : 'Generate Storybook Art'}
               </Button>
@@ -782,13 +782,13 @@ export default function StorybookViewerPage() {
               )}
               {allImagesReady && (
                 <>
-                  <Button asChild variant="default">
+                  <Button asChild variant="default" data-wiz-target="storybook-read">
                     <Link href={isNewModel ? `/storybook/${bookId}/read?storyId=${storyId}` : `/storybook/${bookId}/read`}>
                       <BookOpen className="mr-2 h-4 w-4" />
                       Read Book
                     </Link>
                   </Button>
-                  <Button asChild variant="outline">
+                  <Button asChild variant="outline" data-wiz-target="storybook-print-layout">
                     <Link href={isNewModel ? `/storybook/${bookId}/print-layout?storyId=${storyId}` : `/storybook/${bookId}/print-layout`}>
                       <Printer className="mr-2 h-4 w-4" />
                       Create Print Layout

@@ -22,8 +22,9 @@ import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
 import { useAuth, useFirestore } from '@/firebase';
 import { Badge } from './ui/badge';
-import { Shield, Pen, User as UserIcon, HelpCircle, BookOpen } from 'lucide-react';
+import { Shield, Pen, User as UserIcon, HelpCircle, BookOpen, Target } from 'lucide-react';
 import { useParentGuard } from '@/hooks/use-parent-guard';
+import { useWizardTargetDiagnosticsOptional } from '@/hooks/use-wizard-target-diagnostics';
 import { useEffect, useState } from 'react';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import type { HelpWizard } from '@/lib/types';
@@ -41,6 +42,7 @@ export default function Header() {
   const { user, idTokenResult } = useUser();
   const { roleMode, switchToParentMode, activeChildId, startWizard } = useAppContext();
   const { showPinModal } = useParentGuard();
+  const wizardTargetDiagnostics = useWizardTargetDiagnosticsOptional();
   const roleClaims: RoleClaims | null = idTokenResult?.claims ? (idTokenResult.claims as RoleClaims) : null;
   const [liveWizards, setLiveWizards] = useState<HelpWizard[]>([]);
 
@@ -83,7 +85,7 @@ export default function Header() {
       case 'writer':
         return (
           <>
-            <Button asChild variant="ghost"><Link href="/admin">Dashboard</Link></Button>
+            <Button asChild variant="ghost" data-wiz-target="nav-admin-dashboard"><Link href="/admin">Dashboard</Link></Button>
           </>
         );
       case 'child':
@@ -113,20 +115,20 @@ export default function Header() {
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 max-w-screen-2xl items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/" className="flex items-center space-x-2">
+          <Link href="/" className="flex items-center space-x-2" data-wiz-target="header-logo">
             <Logo />
           </Link>
         </div>
         <nav className="flex items-center gap-4">
           {/* Show "Return to Parent" for child mode */}
           {roleMode === 'child' && (
-            <Button asChild variant="ghost">
+            <Button asChild variant="ghost" data-wiz-target="nav-return-to-parent">
               <Link href="/parent/children">Return to Parent</Link>
             </Button>
           )}
           {/* Show "Switch to Parent" for parent mode */}
           {roleMode === 'parent' && (
-            <Button asChild variant="ghost">
+            <Button asChild variant="ghost" data-wiz-target="nav-switch-to-parent">
               <Link href="/parent">Switch to Parent</Link>
             </Button>
           )}
@@ -134,7 +136,7 @@ export default function Header() {
           {user ? (
              <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full" data-wiz-target="header-user-menu">
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={user.photoURL || undefined} alt={user.displayName || user.email || 'user'} className="object-cover" />
                     <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
@@ -181,6 +183,12 @@ export default function Header() {
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
                   </>
+                )}
+                {roleClaims?.isAdmin && wizardTargetDiagnostics && (
+                  <DropdownMenuItem onClick={() => wizardTargetDiagnostics.toggle()}>
+                    <Target className="mr-2 h-4 w-4" />
+                    {wizardTargetDiagnostics.enabled ? 'Hide' : 'Show'} Wizard Targets
+                  </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>

@@ -1133,6 +1133,14 @@ export type HelpWizardPage = {
   description: string;
   route: string;
   highlightSelector?: string; // CSS selector for element to highlight (e.g., "#submit-btn", ".nav-menu")
+  wizardTargetId?: string; // Unique identifier for targeting via data-wiz-target attribute
+};
+
+// Wizard Target Diagnostics - for showing target identifiers in editor mode
+export type WizardTargetDiagnosticsConfig = {
+  enabled: boolean;
+  updatedAt?: any;
+  updatedBy?: string;
 };
 
 export type StoryWizardAnswer = {

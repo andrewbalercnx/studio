@@ -27,7 +27,11 @@ function ChildIcon({ profile }: { profile: ChildProfile }) {
 
   return (
     <div className="flex flex-col items-center gap-2 text-center w-32">
-      <button onClick={handleSelectChild} className="rounded-full hover:ring-4 hover:ring-primary/50 transition-all">
+      <button
+        onClick={handleSelectChild}
+        className="rounded-full hover:ring-4 hover:ring-primary/50 transition-all"
+        data-wiz-target={`parent-child-${profile.id}`}
+      >
         <Avatar className="h-24 w-24 border-4 border-white shadow-md">
           <AvatarImage src={profile.avatarUrl} alt={profile.displayName} className="object-cover" />
           <AvatarFallback className="text-3xl bg-secondary text-secondary-foreground">
@@ -74,7 +78,7 @@ export default function ParentOverviewPage() {
       return (
         <div className="text-center py-8">
           <p className="text-muted-foreground mb-4">No children profiles found.</p>
-          <Button asChild>
+          <Button asChild data-wiz-target="parent-create-profile-button">
             <Link href="/parent/children">Create a Profile</Link>
           </Button>
         </div>
@@ -97,7 +101,7 @@ export default function ParentOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card data-wiz-target="parent-child-select-card">
         <CardHeader>
           <CardTitle>Who is playing?</CardTitle>
           <CardDescription>Select a child to start creating a story.</CardDescription>

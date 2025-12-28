@@ -663,7 +663,7 @@ export default function ManageChildrenPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {visibleChildren.map((child) => {
                     return (
-                        <Card key={child.id}>
+                        <Card key={child.id} data-wiz-target={`child-card-${child.id}`}>
                             <CardHeader className="flex flex-row items-center gap-4">
                                 <Avatar className="h-16 w-16">
                                     <AvatarImage src={child.avatarUrl} alt={child.displayName} className="object-cover" />
@@ -704,15 +704,15 @@ export default function ManageChildrenPage() {
                                 )}
                             </CardContent>
                             <CardFooter className="flex flex-wrap justify-end gap-2">
-                                <Button variant="outline" size="sm" onClick={() => handleEditChild(child)}>
+                                <Button variant="outline" size="sm" onClick={() => handleEditChild(child)} data-wiz-target={`child-edit-${child.id}`}>
                                     <Pencil className="mr-2 h-4 w-4" />
                                     Edit
                                 </Button>
-                                <Button variant="outline" size="sm" onClick={() => handleManagePhotos(child)}>
+                                <Button variant="outline" size="sm" onClick={() => handleManagePhotos(child)} data-wiz-target={`child-photos-${child.id}`}>
                                     <ImageIcon className="mr-2 h-4 w-4" />
                                     Photos
                                 </Button>
-                                <Button variant="outline" size="sm" onClick={() => handleManageVoice(child)}>
+                                <Button variant="outline" size="sm" onClick={() => handleManageVoice(child)} data-wiz-target={`child-voice-${child.id}`}>
                                     <Volume2 className="mr-2 h-4 w-4" />
                                     Voice
                                 </Button>
@@ -782,7 +782,7 @@ export default function ManageChildrenPage() {
 
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold">Manage Children</h1>
-                    <Button onClick={() => setIsCreateOpen(true)}><Plus className="mr-2"/> Add New Child</Button>
+                    <Button onClick={() => setIsCreateOpen(true)} data-wiz-target="children-add-button"><Plus className="mr-2"/> Add New Child</Button>
                 </div>
                 
                 <Card>

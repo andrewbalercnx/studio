@@ -99,7 +99,7 @@ export default function AdminDashboardPage() {
       <div className="space-y-8">
         {/* System Maintenance - Admin Only */}
         {isAdmin && (
-          <Card>
+          <Card data-wiz-target="admin-system-maintenance">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Settings className="h-5 w-5" />
@@ -130,7 +130,7 @@ export default function AdminDashboardPage() {
         )}
 
         {/* Story Editor Section - Merged from /writer */}
-        <Card>
+        <Card data-wiz-target="admin-story-editor">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <PenTool className="h-5 w-5" />
@@ -165,7 +165,7 @@ export default function AdminDashboardPage() {
         </Card>
 
         {/* Data Management */}
-        <Card>
+        <Card data-wiz-target="admin-data-management">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Database className="h-5 w-5" />
@@ -237,7 +237,7 @@ export default function AdminDashboardPage() {
         </Card>
 
         {/* Testing & Development */}
-        <Card>
+        <Card data-wiz-target="admin-testing">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FlaskConical className="h-5 w-5" />
@@ -291,7 +291,7 @@ export default function AdminDashboardPage() {
         </Card>
 
         {/* System Configuration - Admin Only */}
-        <Card>
+        <Card data-wiz-target="admin-system-config">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
@@ -360,7 +360,7 @@ export default function AdminDashboardPage() {
         </Card>
 
         {/* Diagnostics & Logging Settings - Admin Only */}
-        <Card>
+        <Card data-wiz-target="admin-diagnostics">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Bug className="h-5 w-5" />

@@ -147,6 +147,7 @@ export default function ChildDashboardPage({ params }: { params: Promise<{ child
             description="Create a magical new adventure"
             icon={<Sparkles className="h-8 w-8" />}
             href="/story/start"
+            data-wiz-target="child-new-story"
           />
 
           <DashboardNavCard
@@ -155,6 +156,7 @@ export default function ChildDashboardPage({ params }: { params: Promise<{ child
             icon={<BookText className="h-8 w-8" />}
             href={`/child/${activeChildId}/stories`}
             badge={storiesCount}
+            data-wiz-target="child-my-stories"
           />
 
           <DashboardNavCard
@@ -163,6 +165,7 @@ export default function ChildDashboardPage({ params }: { params: Promise<{ child
             icon={<BookOpen className="h-8 w-8" />}
             href={`/child/${activeChildId}/books`}
             badge={completedBooksCount}
+            data-wiz-target="child-my-books"
           />
         </div>
 
