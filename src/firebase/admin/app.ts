@@ -16,11 +16,14 @@ function getStorageBucketOption(): Pick<AppOptions, 'storageBucket'> | Record<st
 export async function initFirebaseAdminApp() {
   if (getApps().length) {
     adminApp = getApp();
+    console.log('[firebase-admin] Already initialized, returning existing app');
     return adminApp;
   }
 
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    console.log('[firebase-admin] Initializing with FIREBASE_SERVICE_ACCOUNT_KEY env var');
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY) as ServiceAccount;
+    console.log('[firebase-admin] Service account project_id:', (serviceAccount as any).project_id);
     adminApp = initializeApp({
       credential: credential.cert(serviceAccount),
       ...getStorageBucketOption(),
@@ -30,6 +33,7 @@ export async function initFirebaseAdminApp() {
 
   const localPath = process.env.FIREBASE_SERVICE_ACCOUNT_FILE ?? join(process.cwd(), 'serviceAccount.json');
   if (existsSync(localPath)) {
+    console.log('[firebase-admin] Initializing with local service account file:', localPath);
     const contents = readFileSync(localPath, 'utf-8');
     const serviceAccount = JSON.parse(contents) as ServiceAccount;
     adminApp = initializeApp({
@@ -38,8 +42,9 @@ export async function initFirebaseAdminApp() {
     });
     return adminApp;
   }
-  
+
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    console.log('[firebase-admin] Initializing with GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
     adminApp = initializeApp({
       credential: credential.applicationDefault(),
       ...getStorageBucketOption(),
@@ -47,6 +52,7 @@ export async function initFirebaseAdminApp() {
     return adminApp;
   }
 
+  console.log('[firebase-admin] Initializing with default credentials (no explicit credential provided)');
   adminApp = initializeApp({
     ...getStorageBucketOption(),
   });

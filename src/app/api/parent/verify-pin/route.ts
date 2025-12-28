@@ -45,11 +45,18 @@ function extractQueryToken(request: Request): string | null {
 async function resolveUserId(token?: string | null) {
   if (!token) return { uid: null, error: 'MISSING_TOKEN' as UnauthorizedReason };
   try {
+    console.log('[verify-pin] Attempting to verify token, length:', token.length, 'prefix:', token.substring(0, 20) + '...');
     const decodedToken = await auth().verifyIdToken(token);
+    console.log('[verify-pin] Token verified successfully, uid:', decodedToken.uid);
     return { uid: decodedToken.uid, error: null };
-  } catch (error) {
-    console.warn('[verify-pin] Token decode failed', error);
-    return { uid: null, error: 'TOKEN_DECODE_FAILED' as UnauthorizedReason, rawError: (error as Error)?.message };
+  } catch (error: any) {
+    console.error('[verify-pin] Token decode failed:', {
+      code: error?.code,
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack?.substring(0, 500),
+    });
+    return { uid: null, error: 'TOKEN_DECODE_FAILED' as UnauthorizedReason, rawError: error?.message };
   }
 }
 
@@ -58,7 +65,9 @@ function derivePinHash(pin: string, salt: string) {
 }
 
 export async function POST(request: Request) {
-  await initFirebaseAdminApp();
+  console.log('[verify-pin] POST handler started');
+  const adminApp = await initFirebaseAdminApp();
+  console.log('[verify-pin] Firebase Admin initialized, app name:', adminApp?.name);
   try {
     let body: any = {};
     try {
