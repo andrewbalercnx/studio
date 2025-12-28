@@ -184,7 +184,7 @@ export default function Header() {
                     </DropdownMenuSub>
                   </>
                 )}
-                {roleClaims?.isAdmin && wizardTargetDiagnostics && (
+                {(roleClaims?.isAdmin || roleClaims?.isWriter) && wizardTargetDiagnostics && (
                   <DropdownMenuItem onClick={() => wizardTargetDiagnostics.toggle()}>
                     <Target className="mr-2 h-4 w-4" />
                     {wizardTargetDiagnostics.enabled ? 'Hide' : 'Show'} Wizard Targets
