@@ -59,7 +59,7 @@
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.54.2",
-    "react-markdown": "^9.0.1",
+    "react-markdown": "^9.1.0",
     "recharts": "^2.15.1",
     "safer-buffer": "^2.1.2",
     "source-map": "^0.6.1",

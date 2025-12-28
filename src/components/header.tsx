@@ -84,7 +84,6 @@ export default function Header() {
         return (
           <>
             <Button asChild variant="ghost"><Link href="/admin">Dashboard</Link></Button>
-            <Button asChild variant="ghost"><Link href="/admin/users">Users</Link></Button>
           </>
         );
       case 'child':

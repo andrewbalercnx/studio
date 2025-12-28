@@ -59,7 +59,7 @@ type StoryOutputForm = {
 };
 
 export default function AdminDashboardPage() {
-  const { isAuthenticated, isAdmin, email, loading, error } = useAdminStatus();
+  const { isAuthenticated, isAdmin, isWriter, email, loading, error } = useAdminStatus();
   const {
     config: diagnosticsConfig,
     loading: diagnosticsLoading,
@@ -92,11 +92,43 @@ export default function AdminDashboardPage() {
     if (!isAuthenticated) {
       return <p>You must be signed in to access this page.</p>;
     }
-    if (!isAdmin) {
+    if (!isAdmin && !isWriter) {
       return <p>You are signed in but do not have admin or writer rights.</p>;
     }
     return (
       <div className="space-y-8">
+        {/* System Maintenance - Admin Only */}
+        {isAdmin && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                System Maintenance
+                <span className="ml-2 inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">
+                  <ShieldCheck className="mr-1 h-3 w-3" /> Admin Only
+                </span>
+              </CardTitle>
+              <CardDescription>
+                User management and order administration
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/admin/users">
+                    <Users className="mr-2 h-4 w-4" /> Users
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/admin/print-orders">
+                    <Printer className="mr-2 h-4 w-4" /> Print Orders
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Story Editor Section - Merged from /writer */}
         <Card>
           <CardHeader>
@@ -129,13 +161,6 @@ export default function AdminDashboardPage() {
                 <StoryOutputsPanel />
               </TabsContent>
             </Tabs>
-            <div className="mt-4 pt-4 border-t">
-              <Button asChild variant="outline">
-                <Link href="/admin/storyDesigner">
-                  <ExternalLink className="mr-2 h-4 w-4" /> Story Designer (Beta)
-                </Link>
-              </Button>
-            </div>
           </CardContent>
         </Card>
 
@@ -154,12 +179,9 @@ export default function AdminDashboardPage() {
             <div className="grid gap-4">
               <div>
                 <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                  <Users className="h-4 w-4" /> Users & Profiles
+                  <Users className="h-4 w-4" /> Profiles
                 </h4>
                 <div className="flex flex-wrap gap-2">
-                  <Button asChild variant="outline" size="sm">
-                    <Link href="/admin/users">Users</Link>
-                  </Button>
                   <Button asChild variant="outline" size="sm">
                     <Link href="/admin/children">Children</Link>
                   </Button>
@@ -194,16 +216,6 @@ export default function AdminDashboardPage() {
                   </Button>
                   <Button asChild variant="outline" size="sm">
                     <Link href="/admin/print-products">Print Products</Link>
-                  </Button>
-                </div>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                  <Printer className="h-4 w-4" /> Orders
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild variant="outline" size="sm">
-                    <Link href="/admin/print-orders">Print Orders</Link>
                   </Button>
                 </div>
               </div>

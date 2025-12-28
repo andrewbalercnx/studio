@@ -1,13 +1,68 @@
 import type { ChildProfile, Character } from '@/lib/types';
 import { getServerFirestore } from '@/lib/server-firestore';
-import { selectCharactersSimple } from '@/ai/flows/character-selection-flow';
-import {
-  buildFullDescription,
-  buildChildDescription,
-  buildIntroductionDescription,
-  buildCharacterRoster,
-  getCharacterTypeLabel,
-} from '@/lib/character-description';
+
+/**
+ * Get a human-readable label for a character's type
+ */
+function getCharacterTypeLabel(character: Character): string {
+  if (character.type === 'Family' && character.relationship) {
+    return character.relationship;
+  }
+  return character.type;
+}
+
+/**
+ * Build an introduction description for a character (used for newly introduced characters)
+ */
+function buildIntroductionDescription(character: Character): string {
+  const typeLabel = getCharacterTypeLabel(character);
+  const pronouns = character.pronouns || 'they/them';
+  const description = character.description ? ` - ${character.description}` : '';
+  const likes = character.likes?.length ? ` Likes: ${character.likes.join(', ')}.` : '';
+
+  return `- $$${character.id}$$ (${character.displayName}): ${typeLabel}, uses ${pronouns} pronouns${description}.${likes}`;
+}
+
+/**
+ * Select the most appropriate characters for a story context.
+ * Prioritizes parent-generated characters and filters by child scope.
+ *
+ * @param characters - All available characters
+ * @param childId - The ID of the main child (for filtering child-specific characters)
+ * @param maxCount - Maximum number of characters to return
+ */
+function selectCharactersSimple(
+  characters: Character[],
+  childId: string,
+  maxCount: number
+): Character[] {
+  // Filter characters that are either family-wide or specific to this child
+  const applicable = characters.filter(char =>
+    !char.childId || char.childId === childId
+  );
+
+  // Sort by priority:
+  // 1. Parent-generated characters first
+  // 2. Higher usage count
+  // 3. More recently used
+  const sorted = applicable.sort((a, b) => {
+    // Parent-generated first
+    if (a.isParentGenerated && !b.isParentGenerated) return -1;
+    if (!a.isParentGenerated && b.isParentGenerated) return 1;
+
+    // Higher usage count
+    const usageA = a.usageCount || 0;
+    const usageB = b.usageCount || 0;
+    if (usageA !== usageB) return usageB - usageA;
+
+    // More recently used
+    const lastUsedA = a.lastUsedAt?.toMillis?.() || 0;
+    const lastUsedB = b.lastUsedAt?.toMillis?.() || 0;
+    return lastUsedB - lastUsedA;
+  });
+
+  return sorted.slice(0, maxCount);
+}
 
 export type StoryContextData = {
   mainChild: ChildProfile | null;
