@@ -56,10 +56,8 @@ export default function HomePage() {
     const claims = idTokenResult?.claims;
     if (claims?.isAdmin) {
         router.push('/admin');
-    } else if (claims?.isWriter) {
-        router.push('/writer');
     }
-    // No redirect for parent role, they will stay on this page.
+    // Writers and parents stay on this page (child selection)
 
   }, [user, userLoading, idTokenResult, router]);
 
