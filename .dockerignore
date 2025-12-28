@@ -37,7 +37,8 @@ docker-compose*.yml
 
 # Documentation
 README.md
-docs/
+docs/**/*.md
+# Keep docs/backend.json as it's imported by the app
 
 # Misc
 *.md
