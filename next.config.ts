@@ -7,6 +7,8 @@ const shouldIgnoreTypeErrors = process.env.NODE_ENV !== 'production' ||
   process.env.IGNORE_BUILD_ERRORS === 'true';
 
 const nextConfig: NextConfig = {
+  // Enable standalone output for Docker deployment
+  output: 'standalone',
   typescript: {
     // In production, type errors will fail the build unless IGNORE_BUILD_ERRORS is set
     ignoreBuildErrors: shouldIgnoreTypeErrors,
