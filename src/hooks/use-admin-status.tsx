@@ -15,12 +15,16 @@ interface AdminStatus {
 }
 
 export function useAdminStatus(): AdminStatus {
-  const { user, loading: authLoading } = useUser();
+  const { user, idTokenResult, loading: authLoading } = useUser();
   const firestore = useFirestore();
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [isWriter, setIsWriter] = useState<boolean>(false);
+  const [firestoreAdmin, setFirestoreAdmin] = useState<boolean>(false);
+  const [firestoreWriter, setFirestoreWriter] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Get claims from ID token (the authoritative source for role-based access)
+  const claimsAdmin = idTokenResult?.claims?.isAdmin === true;
+  const claimsWriter = idTokenResult?.claims?.isWriter === true;
 
   useEffect(() => {
     if (authLoading) {
@@ -29,25 +33,25 @@ export function useAdminStatus(): AdminStatus {
     }
 
     if (!user || !firestore) {
-      setIsAdmin(false);
-      setIsWriter(false);
+      setFirestoreAdmin(false);
+      setFirestoreWriter(false);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     const userDocRef = doc(firestore, 'users', user.uid);
-    
+
     const unsubscribe = onSnapshot(userDocRef,
       (doc) => {
         if (doc.exists()) {
           const data = doc.data();
-          setIsAdmin(data.isAdmin === true);
-          setIsWriter(data.isWriter === true);
+          setFirestoreAdmin(data.isAdmin === true);
+          setFirestoreWriter(data.isWriter === true);
         } else {
           // Document might not exist yet if sign-up is in progress
-          setIsAdmin(false);
-          setIsWriter(false);
+          setFirestoreAdmin(false);
+          setFirestoreWriter(false);
         }
         setError(null);
         setLoading(false);
@@ -55,14 +59,18 @@ export function useAdminStatus(): AdminStatus {
       (e) => {
         console.error("Error fetching user profile:", e);
         setError("Could not verify admin status.");
-        setIsAdmin(false);
-        setIsWriter(false);
+        setFirestoreAdmin(false);
+        setFirestoreWriter(false);
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
   }, [user, authLoading, firestore]);
+
+  // Combine claims and Firestore - either source grants the role
+  const isAdmin = claimsAdmin || firestoreAdmin;
+  const isWriter = claimsWriter || firestoreWriter;
 
   return {
     isAuthenticated: !!user,
