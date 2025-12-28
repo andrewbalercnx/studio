@@ -6,12 +6,47 @@ import { useAppContext } from '@/hooks/use-app-context';
 import { useDocument } from '@/lib/firestore-hooks';
 import { useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import type { HelpWizard } from '@/lib/types';
+import type { HelpWizard, HelpWizardPosition } from '@/lib/types';
+import { DEFAULT_WIZARD_POSITION } from '@/lib/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Markdown from 'react-markdown';
+
+// Calculate pixel position from HelpWizardPosition
+// Dialog is approximately 448px wide and 250px tall
+const DIALOG_WIDTH = 448;
+const DIALOG_HEIGHT = 250;
+const MARGIN = 24;
+
+function getPositionFromSetting(setting: HelpWizardPosition): { x: number; y: number } {
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 768;
+
+  let x: number;
+  let y: number;
+
+  // Horizontal position
+  if (setting.includes('left')) {
+    x = MARGIN;
+  } else if (setting.includes('right')) {
+    x = vw - DIALOG_WIDTH - MARGIN;
+  } else {
+    x = (vw - DIALOG_WIDTH) / 2;
+  }
+
+  // Vertical position
+  if (setting.includes('top')) {
+    y = MARGIN + 56; // Account for header height
+  } else if (setting.includes('bottom')) {
+    y = vh - DIALOG_HEIGHT - MARGIN;
+  } else {
+    y = (vh - DIALOG_HEIGHT) / 2;
+  }
+
+  return { x, y };
+}
 
 export function HelpWizard() {
   const { activeWizard, advanceWizard, closeWizard } = useAppContext();
@@ -32,24 +67,27 @@ export function HelpWizard() {
   const dialogRef = useRef<HTMLDivElement>(null);
   const offsetRef = useRef({ x: 0, y: 0 });
 
+  const currentPage = useMemo(() => {
+    if (!wizard || !activeWizard || !wizard.pages) return null;
+    return wizard.pages[activeWizard.step] ?? null;
+  }, [wizard, activeWizard]);
+
   useEffect(() => {
     if (activeWizard && !returnUrl) {
       setReturnUrl(window.location.pathname);
-      // Center the dialog on first open
-      setPosition({
-        x: window.innerWidth / 2 - 224, // Assumes 448px width
-        y: window.innerHeight / 2 - 150, // Approximate height
-      });
     }
     if (!activeWizard) {
       setReturnUrl(null);
     }
   }, [activeWizard, returnUrl]);
 
-  const currentPage = useMemo(() => {
-    if (!wizard || !activeWizard || !wizard.pages) return null;
-    return wizard.pages[activeWizard.step] ?? null;
-  }, [wizard, activeWizard]);
+  // Update dialog position when the current page changes or on initial load
+  useEffect(() => {
+    if (!currentPage) return;
+    const positionSetting = currentPage.position || DEFAULT_WIZARD_POSITION;
+    const newPosition = getPositionFromSetting(positionSetting);
+    setPosition(newPosition);
+  }, [currentPage]);
 
   useEffect(() => {
     if (currentPage?.route) {

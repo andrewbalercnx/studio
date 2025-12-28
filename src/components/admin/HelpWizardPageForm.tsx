@@ -1,13 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import type { HelpWizardPage } from '@/lib/types';
+import type { HelpWizardPage, HelpWizardPosition } from '@/lib/types';
+import { DEFAULT_WIZARD_POSITION } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { PositionSelector } from '@/components/ui/position-selector';
 
 const pageSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -26,6 +29,10 @@ interface HelpWizardPageFormProps {
 }
 
 export function HelpWizardPageForm({ page, onSave, onCancel }: HelpWizardPageFormProps) {
+  const [position, setPosition] = useState<HelpWizardPosition>(
+    page?.position || DEFAULT_WIZARD_POSITION
+  );
+
   const { register, handleSubmit, formState: { errors } } = useForm<HelpWizardPageFormValues>({
     resolver: zodResolver(pageSchema),
     defaultValues: {
@@ -38,7 +45,7 @@ export function HelpWizardPageForm({ page, onSave, onCancel }: HelpWizardPageFor
   });
 
   const onSubmit = (data: HelpWizardPageFormValues) => {
-    onSave(data);
+    onSave({ ...data, position });
   };
 
   return (
@@ -69,6 +76,15 @@ export function HelpWizardPageForm({ page, onSave, onCancel }: HelpWizardPageFor
         <Label htmlFor="page-highlight">Highlight Selector (legacy)</Label>
         <Input id="page-highlight" {...register('highlightSelector')} placeholder="#element-id or .class-name" />
         <p className="text-xs text-muted-foreground">CSS selector fallback if no Wizard Target ID is set (e.g., #submit-btn, .nav-menu)</p>
+      </div>
+      <div className="space-y-2">
+        <Label>Card Position</Label>
+        <div className="flex items-center gap-4">
+          <PositionSelector value={position} onChange={setPosition} />
+          <p className="text-xs text-muted-foreground flex-1">
+            Choose where the help card appears on screen. Default is bottom center.
+          </p>
+        </div>
       </div>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>

@@ -1128,12 +1128,21 @@ export type StoryOutputType = {
 
 export type AppRoleMode = 'admin' | 'writer' | 'parent' | 'child' | 'unknown';
 
+// Position for help wizard dialog card
+export type HelpWizardPosition =
+  | 'top-left' | 'top-center' | 'top-right'
+  | 'center-left' | 'center-center' | 'center-right'
+  | 'bottom-left' | 'bottom-center' | 'bottom-right';
+
+export const DEFAULT_WIZARD_POSITION: HelpWizardPosition = 'bottom-center';
+
 export type HelpWizardPage = {
   title: string;
   description: string;
   route: string;
   highlightSelector?: string; // CSS selector for element to highlight (e.g., "#submit-btn", ".nav-menu")
   wizardTargetId?: string; // Unique identifier for targeting via data-wiz-target attribute
+  position?: HelpWizardPosition; // Position of the help card on screen (default: bottom-center)
 };
 
 // Wizard Target Diagnostics - for showing target identifiers in editor mode
