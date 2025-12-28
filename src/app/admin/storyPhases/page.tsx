@@ -47,7 +47,7 @@ const samplePhases: StoryPhase[] = [
 ];
 
 export default function AdminStoryPhasesPage() {
-  const { isAuthenticated, isAdmin, email, loading: authLoading } = useAdminStatus();
+  const { isAuthenticated, isAdmin, isWriter, email, loading: authLoading } = useAdminStatus();
   const firestore = useFirestore();
   const { toast } = useToast();
 
@@ -56,16 +56,16 @@ export default function AdminStoryPhasesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!firestore || !isAdmin) {
+    if (!firestore || (!isAdmin && !isWriter)) {
       setLoading(false);
       return;
     }
-    
+
     setLoading(true);
     const phasesRef = collection(firestore, 'storyPhases');
     const q = query(phasesRef, orderBy('orderIndex', 'asc'), orderBy('name', 'asc'));
-    
-    const unsubscribe = onSnapshot(q, 
+
+    const unsubscribe = onSnapshot(q,
       (snapshot) => {
         const phaseList = snapshot.docs.map(d => d.data() as StoryPhase);
         setPhases(phaseList);
@@ -81,7 +81,7 @@ export default function AdminStoryPhasesPage() {
     );
 
     return () => unsubscribe();
-  }, [firestore, isAdmin]);
+  }, [firestore, isAdmin, isWriter]);
   
   const handleCreateSamplePhases = async () => {
     if (!firestore) return;
@@ -130,8 +130,8 @@ export default function AdminStoryPhasesPage() {
     if (!isAuthenticated) {
       return <p>You must be signed in to access admin pages.</p>;
     }
-    if (!isAdmin) {
-      return <p>You are signed in but do not have admin rights.</p>;
+    if (!isAdmin && !isWriter) {
+      return <p>You are signed in but do not have admin or writer rights.</p>;
     }
     if (error) {
         return <p className="text-destructive">{error}</p>;

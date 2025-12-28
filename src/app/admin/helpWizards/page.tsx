@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { HelpWizardForm } from '@/components/admin/HelpWizardForm';
 
 export default function AdminHelpWizardsPage() {
-  const { isAuthenticated, isAdmin, loading: authLoading } = useAdminStatus();
+  const { isAuthenticated, isAdmin, isWriter, loading: authLoading } = useAdminStatus();
   const firestore = useFirestore();
   const { toast } = useToast();
 
@@ -50,7 +50,7 @@ export default function AdminHelpWizardsPage() {
   }, [firestore, toast]);
 
   useEffect(() => {
-    if (!firestore || !isAdmin) {
+    if (!firestore || (!isAdmin && !isWriter)) {
       setLoading(false);
       return;
     }
@@ -77,7 +77,7 @@ export default function AdminHelpWizardsPage() {
     );
 
     return () => unsubscribe();
-  }, [firestore, isAdmin, handleSeedWizards]);
+  }, [firestore, isAdmin, isWriter, handleSeedWizards]);
 
   const handleOpenForm = (wizard: HelpWizard | null = null) => {
     setEditingWizard(wizard);
@@ -86,7 +86,7 @@ export default function AdminHelpWizardsPage() {
 
   const renderContent = () => {
     if (authLoading || loading) return <div className="flex items-center gap-2"><LoaderCircle className="h-5 w-5 animate-spin" /><span>Loading wizards...</span></div>;
-    if (!isAuthenticated || !isAdmin) return <p>Admin access required.</p>;
+    if (!isAuthenticated || (!isAdmin && !isWriter)) return <p>Admin or writer access required.</p>;
 
     if (wizards.length === 0) {
       return (

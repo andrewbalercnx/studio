@@ -20,7 +20,7 @@ type GroupedStoryTypes = {
 };
 
 export default function AdminStoryDesignerPage() {
-    const { isAuthenticated, isAdmin, loading: authLoading, error: authError } = useAdminStatus();
+    const { isAuthenticated, isAdmin, isWriter, loading: authLoading, error: authError } = useAdminStatus();
     const firestore = useFirestore();
     const { toast } = useToast();
 
@@ -31,7 +31,7 @@ export default function AdminStoryDesignerPage() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!firestore || !isAdmin) {
+        if (!firestore || (!isAdmin && !isWriter)) {
             setLoading(false);
             return;
         }
@@ -72,7 +72,7 @@ export default function AdminStoryDesignerPage() {
             active = false;
             unsubscribes.forEach(unsub => unsub());
         };
-    }, [firestore, isAdmin]);
+    }, [firestore, isAdmin, isWriter]);
     
     const groupedStoryTypes = useMemo(() => {
         return storyTypes.reduce((acc, type) => {
@@ -105,7 +105,7 @@ export default function AdminStoryDesignerPage() {
     const renderContent = () => {
         if (authLoading || loading) return <div className="flex items-center gap-2"><LoaderCircle className="h-5 w-5 animate-spin" /><span>Loading creative assets...</span></div>;
         if (!isAuthenticated) return <p>You must be signed in to access admin pages.</p>;
-        if (!isAdmin) return <p>You are signed in but do not have admin rights.</p>;
+        if (!isAdmin && !isWriter) return <p>You are signed in but do not have admin or writer rights.</p>;
         if (error) return <p className="text-destructive">{error}</p>;
 
         return (

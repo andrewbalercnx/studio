@@ -292,7 +292,7 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
 }
 
 export default function AdminStoryOutputsPage() {
-  const { isAuthenticated, isAdmin, loading: authLoading } = useAdminStatus();
+  const { isAuthenticated, isAdmin, isWriter, loading: authLoading } = useAdminStatus();
   const firestore = useFirestore();
   const { toast } = useToast();
 
@@ -320,16 +320,16 @@ export default function AdminStoryOutputsPage() {
   }, [firestore, toast]);
 
   useEffect(() => {
-    if (!firestore || !isAdmin) {
+    if (!firestore || (!isAdmin && !isWriter)) {
       setLoading(false);
       return;
     }
-    
+
     setLoading(true);
     const outputsRef = collection(firestore, 'storyOutputTypes');
     const q = query(outputsRef, orderBy('category'), orderBy('name'));
-    
-    const unsubscribe = onSnapshot(q, 
+
+    const unsubscribe = onSnapshot(q,
       (snapshot) => {
         if (snapshot.empty && !loading) {
             handleCreateSampleData();
@@ -346,7 +346,7 @@ export default function AdminStoryOutputsPage() {
     );
 
     return () => unsubscribe();
-  }, [firestore, isAdmin, handleCreateSampleData, loading]);
+  }, [firestore, isAdmin, isWriter, handleCreateSampleData, loading]);
   
   const handleAddNew = () => {
       setEditingType(null);
@@ -377,7 +377,7 @@ export default function AdminStoryOutputsPage() {
 
   const renderContent = () => {
     if (authLoading || loading) return <div className="flex items-center gap-2"><LoaderCircle className="h-5 w-5 animate-spin" /><span>Loading output types...</span></div>;
-    if (!isAuthenticated || !isAdmin) return <p>Admin access required.</p>;
+    if (!isAuthenticated || (!isAdmin && !isWriter)) return <p>Admin or writer access required.</p>;
     if (error) return <p className="text-destructive">{error}</p>;
 
     if (outputTypes.length === 0 && !loading) {

@@ -25,7 +25,7 @@ type StoryBeatApiResponse = {
 };
 
 export default function AdminStoryBeatTestPage() {
-    const { isAuthenticated, isAdmin, email, loading: authLoading, error: authError } = useAdminStatus();
+    const { isAuthenticated, isAdmin, isWriter, email, loading: authLoading, error: authError } = useAdminStatus();
     const { toast } = useToast();
     
     const [sessionIdInput, setSessionIdInput] = useState('sample-session-1');
@@ -121,7 +121,7 @@ export default function AdminStoryBeatTestPage() {
     const renderContent = () => {
         if (authLoading) return <LoaderCircle className="mx-auto h-8 w-8 animate-spin" />;
         if (!isAuthenticated) return <p>You must be signed in to access admin pages.</p>;
-        if (!isAdmin) return <p>You are signed in but do not have admin rights.</p>;
+        if (!isAdmin && !isWriter) return <p>You are signed in but do not have admin or writer rights.</p>;
 
         return (
             <>

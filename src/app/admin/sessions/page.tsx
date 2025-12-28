@@ -33,7 +33,7 @@ const sampleSession: Omit<StorySession, 'createdAt' | 'updatedAt' | 'messages'> 
 };
 
 export default function AdminSessionsPage() {
-  const { isAuthenticated, isAdmin, email, loading: authLoading } = useAdminStatus();
+  const { isAuthenticated, isAdmin, isWriter, email, loading: authLoading } = useAdminStatus();
   const firestore = useFirestore();
   const { toast } = useToast();
 
@@ -42,14 +42,14 @@ export default function AdminSessionsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!firestore || !isAdmin) {
+    if (!firestore || (!isAdmin && !isWriter)) {
       setLoading(false);
       return;
     }
-    
+
     setLoading(true);
     const sessionsRef = collection(firestore, 'storySessions');
-    const unsubscribe = onSnapshot(sessionsRef, 
+    const unsubscribe = onSnapshot(sessionsRef,
       (snapshot) => {
         const sessionList = snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as StorySession);
         setSessions(sessionList);
@@ -65,7 +65,7 @@ export default function AdminSessionsPage() {
     );
 
     return () => unsubscribe();
-  }, [firestore, isAdmin]);
+  }, [firestore, isAdmin, isWriter]);
   
   const handleCreateSampleSession = async () => {
     if (!firestore) return;
@@ -111,8 +111,8 @@ export default function AdminSessionsPage() {
     if (!isAuthenticated) {
       return <p>You must be signed in to access admin pages.</p>;
     }
-    if (!isAdmin) {
-      return <p>You are signed in but do not have admin rights.</p>;
+    if (!isAdmin && !isWriter) {
+      return <p>You are signed in but do not have admin or writer rights.</p>;
     }
     if (error) {
         return <p className="text-destructive">{error}</p>;

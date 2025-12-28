@@ -37,7 +37,7 @@ type SessionOption = {
 };
 
 export default function AdminStoryCompileTestPage() {
-    const { isAuthenticated, isAdmin, loading: authLoading, error: authError } = useAdminStatus();
+    const { isAuthenticated, isAdmin, isWriter, loading: authLoading, error: authError } = useAdminStatus();
     const { toast } = useToast();
     const firestore = useFirestore();
 
@@ -53,7 +53,7 @@ export default function AdminStoryCompileTestPage() {
 
     // Load sessions from Firestore
     useEffect(() => {
-        if (!firestore || !isAdmin) {
+        if (!firestore || (!isAdmin && !isWriter)) {
             setSessionsLoading(false);
             return;
         }
@@ -92,7 +92,7 @@ export default function AdminStoryCompileTestPage() {
         );
 
         return () => unsubscribe();
-    }, [firestore, isAdmin]);
+    }, [firestore, isAdmin, isWriter]);
 
     const handleRunTest = async () => {
         if (!sessionIdInput) {
@@ -195,7 +195,7 @@ export default function AdminStoryCompileTestPage() {
     const renderContent = () => {
         if (authLoading) return <LoaderCircle className="mx-auto h-8 w-8 animate-spin" />;
         if (!isAuthenticated) return <p>You must be signed in to access admin pages.</p>;
-        if (!isAdmin) return <p>You are signed in but do not have admin rights.</p>;
+        if (!isAdmin && !isWriter) return <p>You are signed in but do not have admin or writer rights.</p>;
 
         return (
             <>

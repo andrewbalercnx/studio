@@ -1338,7 +1338,7 @@ function CreateStoryTypeDialog({
 }
 
 export default function AdminStoryTypesPage() {
-  const { isAuthenticated, isAdmin, email, loading: authLoading } = useAdminStatus();
+  const { isAuthenticated, isAdmin, isWriter, email, loading: authLoading } = useAdminStatus();
   const firestore = useFirestore();
   const auth = useAuth();
   const { toast } = useToast();
@@ -1349,7 +1349,7 @@ export default function AdminStoryTypesPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (!firestore || !isAdmin) {
+    if (!firestore || (!isAdmin && !isWriter)) {
       setLoading(false);
       return;
     }
@@ -1374,7 +1374,7 @@ export default function AdminStoryTypesPage() {
     );
 
     return () => unsubscribe();
-  }, [firestore, isAdmin]);
+  }, [firestore, isAdmin, isWriter]);
 
   const handleCreateSampleTypes = async () => {
     if (!firestore) return;
@@ -1482,8 +1482,8 @@ export default function AdminStoryTypesPage() {
     if (!isAuthenticated) {
       return <p>You must be signed in to access admin pages.</p>;
     }
-    if (!isAdmin) {
-      return <p>You are signed in but do not have admin rights.</p>;
+    if (!isAdmin && !isWriter) {
+      return <p>You are signed in but do not have admin or writer rights.</p>;
     }
     if (error) {
         return <p className="text-destructive">{error}</p>;

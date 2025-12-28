@@ -604,14 +604,14 @@ function PrintLayoutsPanel() {
 }
 
 export default function AdminPrintLayoutsPage() {
-    const { isAdmin, loading: adminLoading } = useAdminStatus();
+    const { isAdmin, isWriter, loading: adminLoading } = useAdminStatus();
 
     if (adminLoading) {
         return <div className="flex justify-center items-center h-screen"><LoaderCircle className="h-8 w-8 animate-spin" /></div>;
     }
 
-    if (!isAdmin) {
-        return <p className="text-destructive text-center p-8">Admin access required.</p>;
+    if (!isAdmin && !isWriter) {
+        return <p className="text-destructive text-center p-8">Admin or writer access required.</p>;
     }
 
     return (
