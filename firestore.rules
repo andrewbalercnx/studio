@@ -305,7 +305,7 @@ service cloud.firestore {
 
     match /helpWizards/{document=**} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow write: if isWriter() || isAdmin();
     }
 
     // ========== SYSTEM CONFIGURATION ==========

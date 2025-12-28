@@ -119,7 +119,7 @@ export default function HomePage() {
   // This is now the default landing page after login
   return (
     <div className="container mx-auto p-4 sm:p-6 md:p-8">
-      <Card className="max-w-2xl mx-auto mt-10">
+      <Card className="max-w-2xl mx-auto mt-10" data-wiz-target="who-is-playing">
         <CardHeader>
           <CardTitle>Who is playing?</CardTitle>
           <CardDescription>Select a child to start creating a story.</CardDescription>
