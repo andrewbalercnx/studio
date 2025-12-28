@@ -143,12 +143,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, message: 'PIN verified.' });
   } catch (error: any) {
-    console.error('Error in /api/parent/verify-pin:', error);
+    console.error('Error in /api/parent/verify-pin [v2]:', error);
     const responsePayload = {
       ok: false,
       message: error?.message || 'An unexpected error occurred.',
       code: error?.code || 'UNKNOWN',
       stack: error?.stack,
+      version: 'v2',
     };
     const status = error?.code === 'auth/id-token-expired' || error?.code === 'auth/argument-error' ? 401 : 500;
     return NextResponse.json(responsePayload, { status });
