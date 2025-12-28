@@ -52,8 +52,10 @@ export async function initFirebaseAdminApp() {
     return adminApp;
   }
 
-  console.log('[firebase-admin] Initializing with default credentials (no explicit credential provided)');
+  console.log('[firebase-admin] Initializing with application default credentials');
   adminApp = initializeApp({
+    credential: credential.applicationDefault(),
+    projectId: firebaseConfig.projectId,
     ...getStorageBucketOption(),
   });
   return adminApp;
