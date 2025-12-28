@@ -40,6 +40,9 @@ README.md
 docs/**/*.md
 # Keep docs/backend.json as it's imported by the app
 
+# Service account (use Cloud Run's default credentials instead)
+serviceAccount.json
+
 # Misc
 *.md
 LICENSE
