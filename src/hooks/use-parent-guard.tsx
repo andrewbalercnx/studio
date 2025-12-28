@@ -81,14 +81,10 @@ export function ParentGuardProvider({ children }: { children: ReactNode }) {
 
     const msUntilLock = Math.max(lastValidatedAt + GUARD_TIMEOUT_MS - Date.now(), 0);
     lockTimeoutRef.current = window.setTimeout(() => {
-      console.log('[ParentGuard] Guard timeout elapsed, clearing validation. RoleMode:', roleMode);
       setLastValidatedAt(null);
       // Only show PIN modal if still in parent mode
       if (roleMode === 'parent') {
-        console.log('[ParentGuard] Showing PIN modal after timeout (parent mode)');
         setIsPinModalOpen(true);
-      } else {
-        console.log('[ParentGuard] Not showing PIN modal after timeout (roleMode:', roleMode, ')');
       }
     }, msUntilLock);
 
@@ -111,12 +107,9 @@ export function ParentGuardProvider({ children }: { children: ReactNode }) {
   const isParentGuardValidated = useMemo(() => {
     // Admins should always bypass the parent PIN guard.
     if (roleMode === 'admin') {
-      console.log('[ParentGuard] Bypassing guard for admin role');
       return true;
     }
-    const validated = !!lastValidatedAt;
-    console.log('[ParentGuard] Validation status:', { roleMode, lastValidatedAt, validated });
-    return validated;
+    return !!lastValidatedAt;
   }, [lastValidatedAt, roleMode]);
 
   const showPinModal = useCallback(() => setIsPinModalOpen(true), []);

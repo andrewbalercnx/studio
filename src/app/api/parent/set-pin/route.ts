@@ -6,9 +6,6 @@ import { headers } from 'next/headers';
 import { auth } from 'firebase-admin';
 import { randomBytes, scryptSync } from 'crypto';
 
-// Initialize Firebase Admin SDK
-initFirebaseAdminApp();
-
 type UnauthorizedReason =
   | 'MISSING_TOKEN'
   | 'TOKEN_DECODE_FAILED';
@@ -62,6 +59,7 @@ function derivePinHash(pin: string, salt: string): string {
 
 
 export async function POST(request: Request) {
+  await initFirebaseAdminApp();
   try {
     let body: any = {};
     try {

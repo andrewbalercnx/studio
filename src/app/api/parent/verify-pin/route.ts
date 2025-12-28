@@ -5,8 +5,6 @@ import { headers } from 'next/headers';
 import { auth } from 'firebase-admin';
 import { scryptSync, timingSafeEqual } from 'crypto';
 
-initFirebaseAdminApp();
-
 const KEY_LENGTH = 64;
 
 type UnauthorizedReason =
@@ -60,6 +58,7 @@ function derivePinHash(pin: string, salt: string) {
 }
 
 export async function POST(request: Request) {
+  await initFirebaseAdminApp();
   try {
     let body: any = {};
     try {
