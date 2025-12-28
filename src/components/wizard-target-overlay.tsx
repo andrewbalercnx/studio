@@ -95,10 +95,13 @@ export function WizardTargetOverlay() {
 
   return (
     <>
-      {/* Diagnostic mode indicator banner */}
-      <div className="fixed top-14 left-0 right-0 z-[60] bg-amber-500 text-amber-950 text-center py-1 text-sm font-medium">
-        🎯 Wizard Target Diagnostics Mode — Click any target badge to copy its selector
-      </div>
+      {/* Diagnostic mode indicator banner - click to disable */}
+      <button
+        onClick={() => diagnostics?.disable()}
+        className="fixed top-14 left-0 right-0 z-[60] bg-amber-500 text-amber-950 text-center py-1 text-sm font-medium hover:bg-amber-400 transition-colors cursor-pointer"
+      >
+        🎯 Wizard Target Diagnostics Mode — Click here to exit, or click any target badge to copy its selector
+      </button>
 
       {/* Render overlays for each target */}
       {targets.map((target) => (
