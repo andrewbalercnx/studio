@@ -16,7 +16,7 @@ function getStorageBucketOption(): Pick<AppOptions, 'storageBucket'> | Record<st
 export async function initFirebaseAdminApp() {
   if (getApps().length) {
     adminApp = getApp();
-    console.log('[firebase-admin] Already initialized, returning existing app');
+    console.log('[firebase-admin] Already initialized, returning existing app, options:', JSON.stringify(adminApp.options));
     return adminApp;
   }
 
