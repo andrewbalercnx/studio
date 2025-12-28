@@ -1,5 +1,13 @@
 import type { ChildProfile, Character } from '@/lib/types';
 import { getServerFirestore } from '@/lib/server-firestore';
+import { selectCharactersSimple } from '@/ai/flows/character-selection-flow';
+import {
+  buildFullDescription,
+  buildChildDescription,
+  buildIntroductionDescription,
+  buildCharacterRoster,
+  getCharacterTypeLabel,
+} from '@/lib/character-description';
 
 export type StoryContextData = {
   mainChild: ChildProfile | null;
@@ -71,8 +79,11 @@ function formatCharacter(character: Character, isMain: boolean = false): string 
   const dislikes = character.dislikes?.length ? `\n  Dislikes: ${character.dislikes.join(', ')}` : '';
   const childSpecific = character.childId ? ' [Child-specific]' : ' [Family-wide]';
 
+  // Use the relationship field for Family type characters
+  const typeLabel = getCharacterTypeLabel(character);
+
   // Use placeholder format: $$id$$ - in generated text, ONLY use $$${character.id}$$ (never the display name)
-  return `- ${label}: $$${character.id}$$ (display name: "${character.displayName}", type: ${character.type})${childSpecific}
+  return `- ${label}: $$${character.id}$$ (display name: "${character.displayName}", type: ${typeLabel})${childSpecific}
   Age: ${ageStr} (Born: ${dob})${pronouns}${description}${likes}${dislikes}`;
 }
 
@@ -118,15 +129,18 @@ export async function buildStoryContext(
     }
   }
 
-  // 4. Load all characters for this parent (supporting characters only)
+  // 4. Load all characters for this parent and select the most appropriate ones
   const charactersSnapshot = await firestore
     .collection('characters')
     .where('ownerParentUid', '==', parentUid)
-    .limit(20)
     .get();
-  const characters = charactersSnapshot.docs
+  const allCharacters = charactersSnapshot.docs
     .map(doc => ({ ...doc.data(), id: doc.id } as Character))
-    .filter(char => char.id !== mainCharacterId); // Exclude main character if it exists
+    .filter(char => char.id !== mainCharacterId && !char.deletedAt); // Exclude main character and deleted
+
+  // Select the most appropriate characters (max 6) using the selection algorithm
+  // This prioritizes parent-generated characters and filters by child scope
+  const characters = selectCharactersSimple(allCharacters, childId || '', 6);
 
   // 5. Format the context
   const childContext = mainChild
@@ -158,10 +172,7 @@ export async function buildStoryContext(
   const newlyIntroducedCharacters = characters.filter(char => supportingCharacterIdSet.has(char.id));
 
   const newlyIntroducedCharactersContext = newlyIntroducedCharacters.length > 0
-    ? newlyIntroducedCharacters.map(char => {
-        const pronouns = char.pronouns || 'they/them';
-        return `- $$${char.id}$$ ("${char.displayName}"): ${char.description || char.type} - uses ${pronouns} pronouns`;
-      }).join('\n')
+    ? newlyIntroducedCharacters.map(char => buildIntroductionDescription(char)).join('\n')
     : '';
 
   const fullContext = `
@@ -442,23 +453,39 @@ async function loadActorsFromIds(
 ): Promise<Array<{ actorInfo: ActorInfo; entity: ChildProfile | Character }>> {
   if (!actorList || actorList.length === 0) return [];
 
+  // Filter to only valid Firestore document IDs
+  const validIds = actorList.filter(id =>
+    id && typeof id === 'string' && id.trim().length > 0 && !id.includes('/')
+  );
+
+  if (validIds.length === 0) return [];
+
   // Load from both children and characters collections in parallel
+  // Wrap each get() in a try-catch to handle invalid IDs gracefully
+  const safeGet = async (collection: string, id: string) => {
+    try {
+      return await firestore.collection(collection).doc(id).get();
+    } catch {
+      return null; // Return null for invalid IDs
+    }
+  };
+
   const [childDocs, characterDocs] = await Promise.all([
-    Promise.all(actorList.map(id => firestore.collection('children').doc(id).get())),
-    Promise.all(actorList.map(id => firestore.collection('characters').doc(id).get())),
+    Promise.all(validIds.map(id => safeGet('children', id))),
+    Promise.all(validIds.map(id => safeGet('characters', id))),
   ]);
 
-  // Build maps
+  // Build maps (filter out null results from failed gets)
   const childMap = new Map<string, ChildProfile>();
   childDocs.forEach(doc => {
-    if (doc.exists) {
+    if (doc && doc.exists) {
       childMap.set(doc.id, { id: doc.id, ...doc.data() } as ChildProfile);
     }
   });
 
   const characterMap = new Map<string, Character>();
   characterDocs.forEach(doc => {
-    if (doc.exists) {
+    if (doc && doc.exists) {
       characterMap.set(doc.id, { id: doc.id, ...doc.data() } as Character);
     }
   });
@@ -478,7 +505,7 @@ async function loadActorsFromIds(
   }
 
   // Add remaining actors in order
-  for (const id of actorList) {
+  for (const id of validIds) {
     if (processedIds.has(id)) continue;
 
     const child = childMap.get(id);

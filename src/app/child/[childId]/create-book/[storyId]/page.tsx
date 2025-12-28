@@ -16,7 +16,6 @@ import {
 } from 'firebase/firestore';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import type { Story, StoryOutputType, ImageStyle, ChildProfile, PrintLayout, StoryBookOutput } from '@/lib/types';
-import { DEFAULT_PRINT_LAYOUT_ID } from '@/lib/types';
 import { useAppContext } from '@/hooks/use-app-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -183,28 +182,35 @@ export default function CreateBookPage({
     setIsCreating(true);
 
     try {
-      // Get print layout for dimension calculation
-      const printLayoutId = childProfile?.defaultPrintLayoutId || DEFAULT_PRINT_LAYOUT_ID;
-      console.log('[create-book] Print layout selection:', {
-        childProfileLoaded: !!childProfile,
-        childDefaultPrintLayoutId: childProfile?.defaultPrintLayoutId,
-        selectedPrintLayoutId: printLayoutId,
-        usingDefault: !childProfile?.defaultPrintLayoutId,
-      });
-      const layoutDoc = await getDoc(doc(firestore, 'printLayouts', printLayoutId));
-      const layout = layoutDoc.exists() ? (layoutDoc.data() as PrintLayout) : null;
+      // Get the selected output type to check for default print layout
+      const selectedOutputType = outputTypes?.find((t) => t.id === storyOutputTypeId);
 
-      // Default dimensions: 8x8 inches at 300 DPI = 2400x2400 pixels (standard children's book size)
+      // Use print layout from storyOutputType if specified, otherwise unconstrained
+      const printLayoutId = selectedOutputType?.defaultPrintLayoutId || undefined;
+
+      console.log('[create-book] Print layout selection:', {
+        storyOutputTypeId,
+        outputTypeDefaultPrintLayoutId: selectedOutputType?.defaultPrintLayoutId,
+        selectedPrintLayoutId: printLayoutId,
+        isUnconstrained: !printLayoutId,
+      });
+
+      // Default dimensions: 8x8 inches at 300 DPI = 2400x2400 pixels (unconstrained square)
       const DEFAULT_IMAGE_WIDTH_PX = 2400;
       const DEFAULT_IMAGE_HEIGHT_PX = 2400;
 
       let imageWidthPx: number = DEFAULT_IMAGE_WIDTH_PX;
       let imageHeightPx: number = DEFAULT_IMAGE_HEIGHT_PX;
 
-      if (layout) {
-        const dimensions = calculateImageDimensions(layout);
-        imageWidthPx = dimensions.widthPx;
-        imageHeightPx = dimensions.heightPx;
+      // Only calculate dimensions from layout if a print layout is specified
+      if (printLayoutId) {
+        const layoutDoc = await getDoc(doc(firestore, 'printLayouts', printLayoutId));
+        const layout = layoutDoc.exists() ? (layoutDoc.data() as PrintLayout) : null;
+        if (layout) {
+          const dimensions = calculateImageDimensions(layout);
+          imageWidthPx = dimensions.widthPx;
+          imageHeightPx = dimensions.heightPx;
+        }
       }
 
       // Create StoryBookOutput document
@@ -216,7 +222,7 @@ export default function CreateBookPage({
         storyOutputTypeId,
         imageStyleId,
         imageStylePrompt: selectedStyle.stylePrompt,
-        printLayoutId,
+        printLayoutId: printLayoutId || null,
         imageWidthPx,
         imageHeightPx,
         pageGeneration: { status: 'idle' },

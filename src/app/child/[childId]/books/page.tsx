@@ -7,7 +7,7 @@ import { collection, query, where, orderBy, getDocs, doc } from 'firebase/firest
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import type { Story, StoryBookOutput, ImageStyle, StoryOutputType } from '@/lib/types';
 import { useAppContext } from '@/hooks/use-app-context';
-import { LoaderCircle, BookOpen, ArrowLeft, Eye, Image as ImageIcon, Clock, CheckCircle2 } from 'lucide-react';
+import { LoaderCircle, BookOpen, ArrowLeft, Eye, Image as ImageIcon, Clock, CheckCircle2, Moon } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -291,6 +291,12 @@ export default function MyBooksPage({ params }: { params: Promise<{ childId: str
                       <Badge variant="outline" className="flex items-center gap-1 text-xs">
                         <Clock className="h-3 w-3" />
                         Art Coming
+                      </Badge>
+                    )}
+                    {book.imageGenerationStatus === 'rate_limited' && (
+                      <Badge variant="outline" className="flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border-amber-300">
+                        <Moon className="h-3 w-3" />
+                        Wizard Resting
                       </Badge>
                     )}
                   </CardDescription>

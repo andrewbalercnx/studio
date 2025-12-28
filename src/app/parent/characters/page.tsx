@@ -19,7 +19,6 @@ import {
 import type { Character, ChildProfile } from '@/lib/types';
 import { LoaderCircle, Plus, User, Pencil, Smile, Image as ImageIcon } from 'lucide-react';
 import { DeleteButton, UndoBanner, useDeleteWithUndo } from '@/components/shared/DeleteWithUndo';
-import { useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';

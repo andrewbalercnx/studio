@@ -6,8 +6,14 @@ import { randomUUID } from 'crypto';
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
 import type { PrintStoryBook, PrintStoryBookPage, PrintLayout, PrintLayoutPageType } from '@/lib/types';
 import { getLayoutForPageType } from '@/lib/print-layout-utils';
+import { createLogger, generateRequestId, ConcurrencyLimiter } from '@/lib/server-logger';
 
 const INCH_TO_POINTS = 72;
+
+// Limits for image fetching to prevent resource exhaustion
+const IMAGE_FETCH_TIMEOUT_MS = 30000; // 30 second timeout per image
+const IMAGE_FETCH_CONCURRENCY = 3; // Max 3 concurrent image fetches
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB max per image
 
 /**
  * Convert hex color string to RGB values (0-1 range for pdf-lib)
@@ -141,20 +147,62 @@ function getStandardFont(fontName?: string): typeof StandardFonts[keyof typeof S
   }
 }
 
-async function fetchImageBytes(url: string): Promise<{ buffer: ArrayBuffer; mimeType: string } | null> {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.warn('[generate-pdfs] Failed to fetch image', url, response.status);
+// Shared concurrency limiter for image fetches across all render operations
+let imageFetchLimiter: ConcurrencyLimiter | null = null;
+
+function getImageFetchLimiter(): ConcurrencyLimiter {
+  if (!imageFetchLimiter) {
+    imageFetchLimiter = new ConcurrencyLimiter(IMAGE_FETCH_CONCURRENCY);
+  }
+  return imageFetchLimiter;
+}
+
+async function fetchImageBytes(
+  url: string,
+  logger?: ReturnType<typeof createLogger>
+): Promise<{ buffer: ArrayBuffer; mimeType: string } | null> {
+  const limiter = getImageFetchLimiter();
+
+  return limiter.run(async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        logger?.warn('Failed to fetch image', { url: url.substring(0, 100), status: response.status });
+        return null;
+      }
+
+      // Check content-length header if available to avoid fetching oversized images
+      const contentLength = response.headers.get('content-length');
+      if (contentLength && parseInt(contentLength, 10) > MAX_IMAGE_SIZE_BYTES) {
+        logger?.warn('Image too large, skipping', { url: url.substring(0, 100), contentLength });
+        return null;
+      }
+
+      const buffer = await response.arrayBuffer();
+
+      // Double-check actual size after download
+      if (buffer.byteLength > MAX_IMAGE_SIZE_BYTES) {
+        logger?.warn('Image exceeds size limit after download', { url: url.substring(0, 100), size: buffer.byteLength });
+        return null;
+      }
+
+      const mimeType = response.headers.get('content-type') || 'image/jpeg';
+      return { buffer, mimeType };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        logger?.warn('Image fetch timed out', { url: url.substring(0, 100) });
+      } else {
+        logger?.warn('Image fetch error', { url: url.substring(0, 100), error: String(error) });
+      }
       return null;
     }
-    const buffer = await response.arrayBuffer();
-    const mimeType = response.headers.get('content-type') || 'image/jpeg';
-    return { buffer, mimeType };
-  } catch (error) {
-    console.warn('[generate-pdfs] Image fetch error', url, error);
-    return null;
-  }
+  });
 }
 
 /**
@@ -193,17 +241,18 @@ async function renderTitlePage(
   page: PrintStoryBookPage,
   layout: PrintLayout,
   bodyFont: PDFFont,
-  fontSize: number
+  fontSize: number,
+  logger?: ReturnType<typeof createLogger>
 ) {
   const { width: pageWidth, height: pageHeight } = pdfPage.getSize();
   const lineHeight = fontSize * 1.6; // Slightly more spacing for title pages
 
   if (!page.displayText) {
-    console.log(`[generate-pdfs] Title page ${page.pageNumber} has no text`);
+    logger?.debug('Title page has no text', { pageNumber: page.pageNumber });
     return;
   }
 
-  console.log(`[generate-pdfs] Rendering title page ${page.pageNumber}`);
+  logger?.debug('Rendering title page', { pageNumber: page.pageNumber });
 
   // Split text by newlines to preserve the multi-line format
   // Title page text format: "Title" / written by / "Child name" / on / "Date"
@@ -215,7 +264,7 @@ async function renderTitlePage(
   // Center vertically: start from center point minus half of total height
   const startY = (pageHeight / 2) + (totalTextHeight / 2) - fontSize;
 
-  console.log(`[generate-pdfs] Title page: ${textLines.length} lines, startY=${startY}`);
+  logger?.debug('Title page layout', { pageNumber: page.pageNumber, lines: textLines.length, startY });
 
   // Draw each line centered horizontally
   textLines.forEach((line, index) => {
@@ -252,11 +301,12 @@ async function renderPageContent(
   layout: PrintLayout,
   bodyFont: PDFFont,
   fontSize: number,
-  pageType: PrintLayoutPageType = 'inside'
+  pageType: PrintLayoutPageType = 'inside',
+  logger?: ReturnType<typeof createLogger>
 ) {
   // Special handling for title pages - full page centered text
   if (pageType === 'titlePage') {
-    await renderTitlePage(pdfPage, page, layout, bodyFont, fontSize);
+    await renderTitlePage(pdfPage, page, layout, bodyFont, fontSize, logger);
     return;
   }
 
@@ -267,14 +317,14 @@ async function renderPageContent(
   // Get page-type-specific layout configuration
   const pageLayout = getLayoutForPageType(layout, pageType);
 
-  console.log(`[generate-pdfs] Rendering page ${page.pageNumber}, type: ${page.type}, pageType: ${pageType}, hasImage: ${!!page.imageUrl}, hasText: ${!!page.displayText}`);
+  logger?.debug('Rendering page', { pageNumber: page.pageNumber, type: page.type, pageType, hasImage: !!page.imageUrl, hasText: !!page.displayText });
 
   // 1. Render image first (background layer)
   if (page.imageUrl) {
-    console.log(`[generate-pdfs] Fetching image: ${page.imageUrl.substring(0, 100)}...`);
-    const imageData = await fetchImageBytes(page.imageUrl);
+    logger?.debug('Fetching image', { pageNumber: page.pageNumber, url: page.imageUrl.substring(0, 100) });
+    const imageData = await fetchImageBytes(page.imageUrl, logger);
     if (imageData) {
-      console.log(`[generate-pdfs] Image fetched, mimeType: ${imageData.mimeType}, size: ${imageData.buffer.byteLength}`);
+      logger?.debug('Image fetched', { pageNumber: page.pageNumber, mimeType: imageData.mimeType, size: imageData.buffer.byteLength });
       try {
         let image;
         if (imageData.mimeType.includes('png')) {
@@ -316,7 +366,7 @@ async function renderPageContent(
               width: drawWidth,
               height: drawHeight,
             });
-            console.log(`[generate-pdfs] Drew full-page image at (${drawX}, ${drawY}) size ${drawWidth}x${drawHeight}`);
+            logger?.debug('Drew full-page image', { pageNumber: page.pageNumber, x: drawX, y: drawY, width: drawWidth, height: drawHeight });
           } else {
             // Use imageBox from page-type layout
             const boxX = Number(imageBox.x) * INCH_TO_POINTS;
@@ -333,14 +383,14 @@ async function renderPageContent(
               width: boxWidth,
               height: boxHeight,
             });
-            console.log(`[generate-pdfs] Drew image in box at (${boxX}, ${pdfY}) size ${boxWidth}x${boxHeight}`);
+            logger?.debug('Drew image in box', { pageNumber: page.pageNumber, x: boxX, y: pdfY, width: boxWidth, height: boxHeight });
           }
         }
       } catch (error) {
-        console.warn('[generate-pdfs] Failed to embed image:', error);
+        logger?.warn('Failed to embed image', { pageNumber: page.pageNumber, error: String(error) });
       }
     } else {
-      console.warn(`[generate-pdfs] Failed to fetch image for page ${page.pageNumber}`);
+      logger?.warn('Failed to fetch image for page', { pageNumber: page.pageNumber });
     }
   }
 
@@ -391,7 +441,7 @@ async function renderPageContent(
         borderRadius,
         bgColor
       );
-      console.log(`[generate-pdfs] Drew text box background: ${backgroundColor} with radius ${borderRadius}pt at (${textBoxX}, ${textBoxBottomInPdf})`);
+      logger?.debug('Drew text box background', { pageNumber: page.pageNumber, backgroundColor, borderRadius, x: textBoxX, y: textBoxBottomInPdf });
     }
 
     // Determine text color: explicit textColor, or contrasting color based on background, or default black
@@ -404,15 +454,13 @@ async function renderPageContent(
 
     // 3. Wrap and render text
     const lines = wrapText(page.displayText, bodyFont, fontSize, textBoxWidth - 20); // Slight padding
-    const totalTextHeight = lines.length * lineHeight;
 
     // Text starts at TOP of text box (convert from top-left to bottom-left origin)
     // First line baseline is at: pageHeight - textBoxY - fontSize (approximately)
     const textBoxTopInPdf = pageHeight - textBoxY;
     const firstLineY = textBoxTopInPdf - fontSize - 10; // Position first line baseline with padding
 
-    console.log(`[generate-pdfs] Text box: x=${textBoxX}, y=${textBoxY}, w=${textBoxWidth}, h=${textBoxHeight}`);
-    console.log(`[generate-pdfs] Text: ${lines.length} lines, firstLineY=${firstLineY}, textColor=${JSON.stringify(finalTextColor)}`);
+    logger?.debug('Rendering text', { pageNumber: page.pageNumber, lines: lines.length, textBoxX, textBoxY, textBoxWidth, textBoxHeight });
 
     // Draw each line centered horizontally, starting from top
     lines.forEach((line, index) => {
@@ -438,7 +486,11 @@ async function renderPageContent(
  * Renders cover PDF - only front cover and back cover (2 pages)
  * Endpapers are part of the binding process, not the cover PDF
  */
-async function renderCoverPdf(pages: PrintStoryBookPage[], layout: PrintLayout) {
+async function renderCoverPdf(
+  pages: PrintStoryBookPage[],
+  layout: PrintLayout,
+  logger?: ReturnType<typeof createLogger>
+) {
   const pdfDoc = await PDFDocument.create();
   const fontType = getStandardFont(layout.font);
   const bodyFont = await pdfDoc.embedFont(fontType);
@@ -458,14 +510,14 @@ async function renderCoverPdf(pages: PrintStoryBookPage[], layout: PrintLayout) 
     layout.leafWidth * INCH_TO_POINTS,
     layout.leafHeight * INCH_TO_POINTS,
   ]);
-  await renderPageContent(frontPage, frontCover, layout, bodyFont, fontSize, 'cover');
+  await renderPageContent(frontPage, frontCover, layout, bodyFont, fontSize, 'cover', logger);
 
   // Add back cover - use 'backCover' pageType for back cover layout
   const backPage = pdfDoc.addPage([
     layout.leafWidth * INCH_TO_POINTS,
     layout.leafHeight * INCH_TO_POINTS,
   ]);
-  await renderPageContent(backPage, backCover, layout, bodyFont, fontSize, 'backCover');
+  await renderPageContent(backPage, backCover, layout, bodyFont, fontSize, 'backCover', logger);
 
   return await pdfDoc.save();
 }
@@ -474,7 +526,11 @@ async function renderCoverPdf(pages: PrintStoryBookPage[], layout: PrintLayout) 
  * Renders interior PDF - includes endpapers and all interior pages
  * Pages alternate: text page, image page (for spread layout)
  */
-async function renderInteriorPdf(pages: PrintStoryBookPage[], layout: PrintLayout) {
+async function renderInteriorPdf(
+  pages: PrintStoryBookPage[],
+  layout: PrintLayout,
+  logger?: ReturnType<typeof createLogger>
+) {
   const pdfDoc = await PDFDocument.create();
   const fontType = getStandardFont(layout.font);
   const bodyFont = await pdfDoc.embedFont(fontType);
@@ -497,7 +553,7 @@ async function renderInteriorPdf(pages: PrintStoryBookPage[], layout: PrintLayou
       layout.leafWidth * INCH_TO_POINTS,
       layout.leafHeight * INCH_TO_POINTS,
     ]);
-    await renderPageContent(endpaperPage, frontEndpaper, layout, bodyFont, fontSize, 'inside');
+    await renderPageContent(endpaperPage, frontEndpaper, layout, bodyFont, fontSize, 'inside', logger);
   }
 
   // Add interior pages - all use 'inside' layout
@@ -506,7 +562,7 @@ async function renderInteriorPdf(pages: PrintStoryBookPage[], layout: PrintLayou
       layout.leafWidth * INCH_TO_POINTS,
       layout.leafHeight * INCH_TO_POINTS,
     ]);
-    await renderPageContent(pdfPage, page, layout, bodyFont, fontSize, 'inside');
+    await renderPageContent(pdfPage, page, layout, bodyFont, fontSize, 'inside', logger);
   }
 
   // Add back endpaper (blank page) - use 'inside' layout
@@ -515,15 +571,13 @@ async function renderInteriorPdf(pages: PrintStoryBookPage[], layout: PrintLayou
       layout.leafWidth * INCH_TO_POINTS,
       layout.leafHeight * INCH_TO_POINTS,
     ]);
-    await renderPageContent(endpaperPage, backEndpaper, layout, bodyFont, fontSize, 'inside');
+    await renderPageContent(endpaperPage, backEndpaper, layout, bodyFont, fontSize, 'inside', logger);
   }
 
   // Interior page count must be divisible by 4
   const totalInteriorPages = pdfDoc.getPageCount();
   if (totalInteriorPages % 4 !== 0) {
-    console.warn(
-      `[generate-pdfs] Interior page count ${totalInteriorPages} is not divisible by 4`
-    );
+    logger?.warn('Interior page count not divisible by 4', { totalInteriorPages });
   }
 
   return await pdfDoc.save();
@@ -634,8 +688,13 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ printStoryBookId: string }> }
 ) {
+  const requestId = generateRequestId();
+  const logger = createLogger({ route: '/api/printStoryBooks/generate-pdfs', method: 'POST', requestId });
+
   try {
     const { printStoryBookId } = await params;
+    logger.info('PDF generation request received', { printStoryBookId });
+
     await initFirebaseAdminApp();
     const db = getFirestore();
 
@@ -644,6 +703,7 @@ export async function POST(
     const printStoryBookDoc = await printStoryBookRef.get();
 
     if (!printStoryBookDoc.exists) {
+      logger.warn('Print storybook not found', { printStoryBookId });
       return NextResponse.json(
         { error: 'Print storybook not found' },
         { status: 404 }
@@ -651,12 +711,25 @@ export async function POST(
     }
 
     const printStoryBook = printStoryBookDoc.data() as PrintStoryBook;
+    const pageCount = printStoryBook.pages?.length ?? 0;
+    const imageCount = printStoryBook.pages?.filter(p => p.imageUrl).length ?? 0;
+    logger.info('PrintStoryBook loaded', { printStoryBookId, pageCount, imageCount });
+
+    // Guard against oversized inputs
+    if (pageCount > 100) {
+      logger.error('Too many pages in storybook', new Error(`Page count ${pageCount} exceeds limit of 100`), { printStoryBookId });
+      return NextResponse.json(
+        { error: 'Storybook has too many pages (max 100)' },
+        { status: 400 }
+      );
+    }
 
     // Fetch the print layout
     const layoutRef = db.collection('printLayouts').doc(printStoryBook.printLayoutId);
     const layoutDoc = await layoutRef.get();
 
     if (!layoutDoc.exists) {
+      logger.warn('Print layout not found', { printLayoutId: printStoryBook.printLayoutId });
       return NextResponse.json(
         { error: 'Print layout not found' },
         { status: 404 }
@@ -664,6 +737,7 @@ export async function POST(
     }
 
     const layout = { id: layoutDoc.id, ...layoutDoc.data() } as PrintLayout;
+    logger.info('Print layout loaded', { printLayoutId: layout.id });
 
     // Update status to generating
     await printStoryBookRef.update({
@@ -671,18 +745,29 @@ export async function POST(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    const startTime = Date.now();
+
     try {
       // Generate cover and interior PDFs
+      // Note: These run in parallel but each uses the ConcurrencyLimiter for image fetching
+      logger.info('Starting PDF generation', { printStoryBookId });
       const [coverBytes, interiorBytes] = await Promise.all([
-        renderCoverPdf(printStoryBook.pages, layout),
-        renderInteriorPdf(printStoryBook.pages, layout),
+        renderCoverPdf(printStoryBook.pages, layout, logger),
+        renderInteriorPdf(printStoryBook.pages, layout, logger),
       ]);
 
+      const generationDurationMs = Date.now() - startTime;
+      logger.info('PDF generation completed', { printStoryBookId, generationDurationMs, coverSize: coverBytes.length, interiorSize: interiorBytes.length });
+
       // Upload both PDFs
+      logger.info('Starting PDF upload', { printStoryBookId });
       const [coverUpload, interiorUpload] = await Promise.all([
         uploadCoverPdf(coverBytes, printStoryBookId),
         uploadInteriorPdf(interiorBytes, printStoryBookId),
       ]);
+
+      const totalDurationMs = Date.now() - startTime;
+      logger.info('PDF upload completed', { printStoryBookId, totalDurationMs });
 
       // Calculate metadata - cover is now 2 pages (front + back)
       const coverPageCount = 2;
@@ -718,6 +803,9 @@ export async function POST(
         metadata: printableMetadata,
       });
     } catch (generationError: any) {
+      const durationMs = Date.now() - startTime;
+      logger.error('PDF generation failed', generationError, { printStoryBookId, durationMs });
+
       // Update status to error
       await printStoryBookRef.update({
         pdfStatus: 'error',
@@ -728,12 +816,12 @@ export async function POST(
       throw generationError;
     }
   } catch (error: any) {
-    console.error('[generate-pdfs] Error:', error);
+    logger.error('Unhandled exception in route', error);
     return NextResponse.json(
       {
         error: 'Failed to generate PDFs',
         details: error?.message || String(error),
-        stack: error?.stack,
+        requestId,
       },
       { status: 500 }
     );

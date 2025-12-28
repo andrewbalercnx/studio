@@ -1,5 +1,3 @@
-'use server';
-
 /**
  * @fileOverview AI Run Trace - Aggregates all AI generation calls for a story session.
  *
@@ -13,9 +11,11 @@
  *
  * The trace document is stored at: aiRunTraces/{sessionId}
  * Each AI call is appended to the `calls` array with full context.
+ *
+ * NOTE: This is NOT a Server Action file. It's a utility module called from Genkit flows.
  */
 
-import { FieldValue, type Firestore } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 import { getServerFirestore } from '@/lib/server-firestore';
 
 // Token costs per 1M tokens (as of Dec 2024 for Google AI models)
@@ -178,44 +178,56 @@ export async function initializeRunTrace(params: {
   storyTypeId?: string;
   storyTypeName?: string;
 }): Promise<void> {
-  const firestore = await getServerFirestore();
-  const traceRef = firestore.collection('aiRunTraces').doc(params.sessionId);
+  try {
+    console.log('[ai-run-trace] Initializing run trace for session:', params.sessionId);
+    const firestore = await getServerFirestore();
+    const traceRef = firestore.collection('aiRunTraces').doc(params.sessionId);
 
-  const existingTrace = await traceRef.get();
-  if (existingTrace.exists) {
-    // Trace already exists, just update the lastUpdatedAt
-    await traceRef.update({
+    const existingTrace = await traceRef.get();
+    if (existingTrace.exists) {
+      // Trace already exists, just update the lastUpdatedAt
+      console.log('[ai-run-trace] Trace already exists, updating lastUpdatedAt');
+      await traceRef.update({
+        lastUpdatedAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    const trace: Omit<AIRunTrace, 'calls'> & { calls: AICallTrace[] } = {
+      sessionId: params.sessionId,
+      parentUid: params.parentUid,
+      childId: params.childId,
+      storyTypeId: params.storyTypeId,
+      storyTypeName: params.storyTypeName,
+      startedAt: FieldValue.serverTimestamp(),
       lastUpdatedAt: FieldValue.serverTimestamp(),
+      status: 'in_progress',
+      calls: [],
+      summary: {
+        totalCalls: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalThinkingTokens: 0,
+        totalCachedTokens: 0,
+        totalTokens: 0,
+        totalCost: 0,
+        totalLatencyMs: 0,
+        averageLatencyMs: 0,
+        callsByFlow: {},
+        errorCount: 0,
+      },
+    };
+
+    await traceRef.set(trace);
+    console.log('[ai-run-trace] Successfully created run trace for session:', params.sessionId);
+  } catch (err: any) {
+    console.error('[ai-run-trace] Failed to initialize run trace:', {
+      sessionId: params.sessionId,
+      error: err.message,
+      stack: err.stack,
     });
-    return;
+    // Don't throw - we don't want trace logging to break the main flow
   }
-
-  const trace: Omit<AIRunTrace, 'calls'> & { calls: AICallTrace[] } = {
-    sessionId: params.sessionId,
-    parentUid: params.parentUid,
-    childId: params.childId,
-    storyTypeId: params.storyTypeId,
-    storyTypeName: params.storyTypeName,
-    startedAt: FieldValue.serverTimestamp(),
-    lastUpdatedAt: FieldValue.serverTimestamp(),
-    status: 'in_progress',
-    calls: [],
-    summary: {
-      totalCalls: 0,
-      totalInputTokens: 0,
-      totalOutputTokens: 0,
-      totalThinkingTokens: 0,
-      totalCachedTokens: 0,
-      totalTokens: 0,
-      totalCost: 0,
-      totalLatencyMs: 0,
-      averageLatencyMs: 0,
-      callsByFlow: {},
-      errorCount: 0,
-    },
-  };
-
-  await traceRef.set(trace);
 }
 
 /**
@@ -242,6 +254,11 @@ export type LogAICallParams = {
  */
 export async function logAICallToTrace(params: LogAICallParams): Promise<void> {
   try {
+    console.log('[ai-run-trace] Logging AI call to trace:', {
+      sessionId: params.sessionId,
+      flowName: params.flowName,
+      modelName: params.modelName,
+    });
     const firestore = await getServerFirestore();
     const traceRef = firestore.collection('aiRunTraces').doc(params.sessionId);
 
@@ -311,6 +328,7 @@ export async function logAICallToTrace(params: LogAICallParams): Promise<void> {
 
     if (!traceDoc.exists) {
       // Create a minimal trace if it doesn't exist (shouldn't happen normally)
+      console.log('[ai-run-trace] Trace document does not exist, creating new one');
       await traceRef.set({
         sessionId: params.sessionId,
         parentUid: 'unknown',
@@ -332,6 +350,7 @@ export async function logAICallToTrace(params: LogAICallParams): Promise<void> {
           errorCount: isError ? 1 : 0,
         },
       });
+      console.log('[ai-run-trace] Successfully created trace with first call');
       return;
     }
 
@@ -378,17 +397,20 @@ export async function logAICallToTrace(params: LogAICallParams): Promise<void> {
       errorCount: existingSummary.errorCount + (isError ? 1 : 0),
     };
 
+    console.log('[ai-run-trace] Updating trace with new call, existing calls:', existingCalls.length);
     await traceRef.update({
       calls: [...existingCalls, callTrace],
       summary: updatedSummary,
       lastUpdatedAt: FieldValue.serverTimestamp(),
     });
+    console.log('[ai-run-trace] Successfully added call to trace, new total:', existingCalls.length + 1);
 
   } catch (err: any) {
-    console.warn('[ai-run-trace] Failed to log AI call to trace', {
+    console.error('[ai-run-trace] Failed to log AI call to trace', {
       sessionId: params.sessionId,
       flowName: params.flowName,
       error: err.message,
+      stack: err.stack,
     });
   }
 }

@@ -213,7 +213,9 @@ Now, generate the JSON object containing the polished story and synopsis.`;
             const modelName = 'googleai/gemini-2.5-pro';
 
             let llmResponse;
+            let structuredOutput;
             const startTime = Date.now();
+
             try {
                 llmResponse = await ai.generate({
                     model: modelName,
@@ -232,35 +234,20 @@ Now, generate the JSON object containing the polished story and synopsis.`;
                     response: llmResponse,
                     startTime,
                 });
-            } catch (e: any) {
-                await logAIFlow({ flowName: 'storyTextCompileFlow', sessionId, parentId: parentUid, prompt: systemPrompt, error: e, startTime, modelName });
-                await logAICallToTrace({
-                    sessionId,
-                    flowName: 'storyTextCompileFlow',
-                    modelName,
-                    temperature,
-                    maxOutputTokens,
-                    systemPrompt,
-                    error: e,
-                    startTime,
-                });
-                throw e;
-            }
 
-            debug.stage = 'ai_generate_result';
-            debug.details.finishReason = (llmResponse as any).finishReason ?? (llmResponse as any).raw?.candidates?.[0]?.finishReason;
+                debug.stage = 'ai_generate_result';
+                debug.details.finishReason = (llmResponse as any).finishReason ?? (llmResponse as any).raw?.candidates?.[0]?.finishReason;
 
-            // 5. Extract structured output
-            let structuredOutput = llmResponse.output;
+                // Extract structured output
+                structuredOutput = llmResponse.output;
 
-            if (!structuredOutput) {
-                const rawText = llmResponse.text;
-                if (!rawText || rawText.trim() === '') {
-                    throw new Error("Model returned empty text for story text compilation.");
-                }
+                if (!structuredOutput) {
+                    const rawText = llmResponse.text;
+                    if (!rawText || rawText.trim() === '') {
+                        throw new Error("Model returned empty text for story text compilation.");
+                    }
 
-                debug.stage = 'json_parse';
-                try {
+                    debug.stage = 'json_parse';
                     const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
                     const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
                     const parsed = JSON.parse(jsonToParse);
@@ -270,8 +257,78 @@ Now, generate the JSON object containing the polished story and synopsis.`;
                     } else {
                         throw new Error(`Model JSON does not match expected shape: ${manualValidation.error.message}`);
                     }
-                } catch (err: any) {
-                    throw new Error("Model output is not valid JSON for story text compilation.");
+                }
+            } catch (e: any) {
+                // Check if this is a schema validation error (model returned null or invalid JSON)
+                const isSchemaError = e.message?.includes('Schema validation failed') ||
+                                      e.message?.includes('INVALID_ARGUMENT');
+
+                if (isSchemaError) {
+                    console.warn(`[storyTextCompileFlow] Schema validation failed, retrying without schema constraint...`);
+                    debug.details.schemaRetry = true;
+
+                    // Retry without schema constraint to get raw text
+                    try {
+                        const retryStartTime = Date.now();
+                        llmResponse = await ai.generate({
+                            model: modelName,
+                            prompt: systemPrompt,
+                            config: { temperature, maxOutputTokens },
+                        });
+                        await logAIFlow({ flowName: 'storyTextCompileFlow:retry', sessionId, parentId: parentUid, prompt: systemPrompt, response: llmResponse, startTime: retryStartTime, modelName });
+                        await logAICallToTrace({
+                            sessionId,
+                            flowName: 'storyTextCompileFlow:retry',
+                            modelName,
+                            temperature,
+                            maxOutputTokens,
+                            systemPrompt,
+                            response: llmResponse,
+                            startTime: retryStartTime,
+                        });
+
+                        const rawText = llmResponse.text;
+                        if (!rawText || rawText.trim() === '') {
+                            throw new Error("Model returned empty text on retry for story text compilation.");
+                        }
+
+                        debug.stage = 'json_parse';
+                        const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
+                        const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
+                        const parsed = JSON.parse(jsonToParse);
+                        const manualValidation = StoryTextCompileResultSchema.safeParse(parsed);
+                        if (manualValidation.success) {
+                            structuredOutput = manualValidation.data;
+                        } else {
+                            throw new Error(`Model JSON does not match expected shape on retry: ${manualValidation.error.message}`);
+                        }
+                    } catch (retryErr: any) {
+                        await logAIFlow({ flowName: 'storyTextCompileFlow:retry', sessionId, parentId: parentUid, prompt: systemPrompt, error: retryErr, startTime, modelName });
+                        await logAICallToTrace({
+                            sessionId,
+                            flowName: 'storyTextCompileFlow:retry',
+                            modelName,
+                            temperature,
+                            maxOutputTokens,
+                            systemPrompt,
+                            error: retryErr,
+                            startTime,
+                        });
+                        throw retryErr;
+                    }
+                } else {
+                    await logAIFlow({ flowName: 'storyTextCompileFlow', sessionId, parentId: parentUid, prompt: systemPrompt, error: e, startTime, modelName });
+                    await logAICallToTrace({
+                        sessionId,
+                        flowName: 'storyTextCompileFlow',
+                        modelName,
+                        temperature,
+                        maxOutputTokens,
+                        systemPrompt,
+                        error: e,
+                        startTime,
+                    });
+                    throw e;
                 }
             }
 

@@ -6,6 +6,10 @@ import { deleteStorageObject } from '@/firebase/admin/storage';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue, Firestore } from 'firebase-admin/firestore';
 import { mapPageKindToLayoutType, calculateImageDimensionsForPageType, getAspectRatioForPageType } from '@/lib/print-layout-utils';
+import { createLogger, generateRequestId } from '@/lib/server-logger';
+
+// Allow up to 5 minutes for image generation (can take a while with many pages)
+export const maxDuration = 300;
 
 type ImageJobRequest = {
   storyId: string;
@@ -64,14 +68,43 @@ function summarizeCounts(pages: PageWithId[]) {
 }
 
 /**
+ * Check if an error message indicates a rate limit was hit
+ */
+function isRateLimitError(errorMessage: string): boolean {
+  const rateLimitPatterns = [
+    'RESOURCE_EXHAUSTED',
+    '429',
+    'quota',
+    'rate limit',
+    'Rate limit',
+    'timed out',
+    'too many requests',
+    'Too Many Requests',
+  ];
+  return rateLimitPatterns.some(pattern => errorMessage.includes(pattern));
+}
+
+/**
+ * Calculate when to retry after a rate limit (1 hour from now)
+ */
+function calculateRetryTime(): Date {
+  const retryTime = new Date();
+  retryTime.setHours(retryTime.getHours() + 1);
+  return retryTime;
+}
+
+/**
  * New API route for generating images for a StoryBookOutput.
  * Uses the new data model: stories/{storyId}/storybooks/{storybookId}/pages
  * Supports dimension-aware image generation.
  */
 export async function POST(request: Request) {
+  const requestId = generateRequestId();
+  const logger = createLogger({ route: '/api/storybookV2/images', method: 'POST', requestId });
   const allLogs: string[] = [];
   let storyIdFromRequest: string | undefined;
   let storybookIdFromRequest: string | undefined;
+  const startTime = Date.now();
 
   try {
     const body = (await request.json()) as ImageJobRequest;
@@ -88,14 +121,16 @@ export async function POST(request: Request) {
     storyIdFromRequest = storyId;
     storybookIdFromRequest = storybookId;
 
-    console.log(`[/api/storybook/images] Received request: storyId=${storyId}, storybookId=${storybookId}, pageId=${pageId || 'all'}`);
+    logger.info('Request received', { storyId, storybookId, pageId: pageId || 'all', forceRegenerate });
 
     if (!storyId || typeof storyId !== 'string') {
-      return NextResponse.json({ ok: false, errorMessage: 'Missing storyId' }, { status: 400 });
+      logger.warn('Missing storyId in request');
+      return NextResponse.json({ ok: false, errorMessage: 'Missing storyId', requestId }, { status: 400 });
     }
 
     if (!storybookId || typeof storybookId !== 'string') {
-      return NextResponse.json({ ok: false, errorMessage: 'Missing storybookId' }, { status: 400 });
+      logger.warn('Missing storybookId in request');
+      return NextResponse.json({ ok: false, errorMessage: 'Missing storybookId', requestId }, { status: 400 });
     }
 
     await initFirebaseAdminApp();
@@ -268,9 +303,10 @@ export async function POST(request: Request) {
     }
     await Promise.all(prepPromises);
 
-    // Generate images for all pages in parallel
+    // Generate images with controlled concurrency to avoid overwhelming the API
     const jobsNeedingGeneration = pageJobs.filter(job => job.needsGeneration && job.flowInput);
-    allLogs.push(`[parallel] Starting ${jobsNeedingGeneration.length} image generation jobs in parallel`);
+    const CONCURRENCY_LIMIT = 3; // Process 3 images at a time to avoid rate limits
+    allLogs.push(`[parallel] Starting ${jobsNeedingGeneration.length} image generation jobs (concurrency: ${CONCURRENCY_LIMIT})`);
 
     // Initialize progress counters before starting parallel generation
     // pagesReady starts at 0, each storyImageFlow will atomically increment it
@@ -281,20 +317,52 @@ export async function POST(request: Request) {
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    const imagePromises = jobsNeedingGeneration.map(async (job) => {
-      const flowResult = await storyImageFlow(job.flowInput!);
-      return { pageId: job.page.id, flowResult };
-    });
+    // Process in batches with concurrency limit
+    const imageResults: Array<{ pageId: string; flowResult: Awaited<ReturnType<typeof storyImageFlow>> }> = [];
 
-    const imageResults = await Promise.all(imagePromises);
+    for (let i = 0; i < jobsNeedingGeneration.length; i += CONCURRENCY_LIMIT) {
+      const batch = jobsNeedingGeneration.slice(i, i + CONCURRENCY_LIMIT);
+      allLogs.push(`[batch] Processing batch ${Math.floor(i / CONCURRENCY_LIMIT) + 1}/${Math.ceil(jobsNeedingGeneration.length / CONCURRENCY_LIMIT)} (${batch.length} images)`);
 
-    // Collect results and logs
+      const batchPromises = batch.map(async (job) => {
+        try {
+          const flowResult = await storyImageFlow(job.flowInput!);
+          return { pageId: job.page.id, flowResult };
+        } catch (flowError: any) {
+          allLogs.push(`[error] ${job.page.id} threw exception: ${flowError?.message || flowError}`);
+          return {
+            pageId: job.page.id,
+            flowResult: {
+              ok: false as const,
+              storyId: job.flowInput!.storyId,
+              pageId: job.page.id,
+              imageStatus: 'error' as const,
+              errorMessage: flowError?.message || 'Unknown error in storyImageFlow',
+              logs: [`Exception: ${flowError?.message || flowError}`],
+            },
+          };
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      imageResults.push(...batchResults);
+    }
+
+    // Collect results and logs, detect rate limit errors
+    let hasRateLimitError = false;
+    let rateLimitErrorMessage = '';
+
     for (const { pageId, flowResult } of imageResults) {
       if (flowResult.logs) {
         allLogs.push(...flowResult.logs);
       }
       if (!flowResult.ok) {
         allLogs.push(`[error] ${pageId}: ${flowResult.errorMessage}`);
+        // Check if this is a rate limit error
+        if (flowResult.errorMessage && isRateLimitError(flowResult.errorMessage)) {
+          hasRateLimitError = true;
+          rateLimitErrorMessage = flowResult.errorMessage;
+        }
       } else {
         allLogs.push(`[ready] ${pageId} imageUrl=${flowResult.imageUrl?.substring(0, 100)}...`);
       }
@@ -308,32 +376,70 @@ export async function POST(request: Request) {
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    // Final status update
+    // Final status update - check for rate limit vs regular error
     const refreshedPages = await loadPages(firestore, storyId, storybookId);
     const counts = summarizeCounts(refreshedPages);
-    const finalStatus = counts.ready === counts.total ? 'ready' : 'error';
 
-    await storybookRef.update({
+    let finalStatus: 'ready' | 'error' | 'rate_limited';
+    let finalErrorMessage: string | null = null;
+
+    if (counts.ready === counts.total) {
+      finalStatus = 'ready';
+    } else if (hasRateLimitError) {
+      finalStatus = 'rate_limited';
+      finalErrorMessage = 'The Story Wizard is taking a nap! We\'ll try again soon.';
+      allLogs.push(`[rate_limited] Detected rate limit error, scheduling retry in 1 hour`);
+    } else {
+      finalStatus = 'error';
+      finalErrorMessage = 'One or more pages failed to render.';
+    }
+
+    // Build the update object
+    const statusUpdate: Record<string, any> = {
       'imageGeneration.status': finalStatus,
       'imageGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
-      'imageGeneration.lastErrorMessage':
-        finalStatus === 'ready' ? null : 'One or more pages failed to render.',
+      'imageGeneration.lastErrorMessage': finalErrorMessage,
       'imageGeneration.pagesReady': counts.ready,
       'imageGeneration.pagesTotal': counts.total,
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    };
+
+    // If rate limited, schedule a retry
+    if (finalStatus === 'rate_limited') {
+      const retryTime = calculateRetryTime();
+      const currentRetryCount = storybookData?.imageGeneration?.rateLimitRetryCount || 0;
+      statusUpdate['imageGeneration.rateLimitRetryAt'] = retryTime;
+      statusUpdate['imageGeneration.rateLimitRetryCount'] = currentRetryCount + 1;
+      allLogs.push(`[retry] Scheduled retry at ${retryTime.toISOString()} (attempt ${currentRetryCount + 1})`);
+    }
+
+    await storybookRef.update(statusUpdate);
+
+    const durationMs = Date.now() - startTime;
+    if (finalStatus === 'ready') {
+      logger.info('Request completed successfully', { storyId, storybookId, ready: counts.ready, total: counts.total, durationMs });
+    } else if (finalStatus === 'rate_limited') {
+      logger.warn('Request completed with rate limit', { storyId, storybookId, ready: counts.ready, total: counts.total, durationMs });
+    } else {
+      logger.error('Request completed with errors', new Error(finalErrorMessage ?? 'Unknown error'), { storyId, storybookId, ready: counts.ready, total: counts.total, durationMs });
+    }
 
     return NextResponse.json({
-      ok: true,
+      ok: finalStatus === 'ready',
       storyId,
       storybookId,
       status: finalStatus,
       ready: counts.ready,
       total: counts.total,
+      rateLimited: hasRateLimitError,
+      retryAt: hasRateLimitError ? calculateRetryTime().toISOString() : undefined,
       logs: allLogs,
     });
   } catch (error: any) {
-    console.error('[storybook/images] error', error);
+    const durationMs = Date.now() - startTime;
+    logger.error('Unhandled exception in route', error, { storyId: storyIdFromRequest, storybookId: storybookIdFromRequest, durationMs });
+    const errorMessage = error?.message ?? 'Unknown error';
+    const isRateLimit = isRateLimitError(errorMessage);
 
     // Try to update status
     if (storyIdFromRequest && storybookIdFromRequest) {
@@ -344,11 +450,28 @@ export async function POST(request: Request) {
           .doc(storyIdFromRequest)
           .collection('storybooks')
           .doc(storybookIdFromRequest);
-        await storybookRef.update({
-          'imageGeneration.status': 'error',
-          'imageGeneration.lastErrorMessage': error?.message ?? 'Unknown error',
-          updatedAt: FieldValue.serverTimestamp(),
-        });
+
+        if (isRateLimit) {
+          // Rate limit at top level - schedule retry
+          const retryTime = calculateRetryTime();
+          const storybookSnap = await storybookRef.get();
+          const currentRetryCount = storybookSnap.data()?.imageGeneration?.rateLimitRetryCount || 0;
+
+          await storybookRef.update({
+            'imageGeneration.status': 'rate_limited',
+            'imageGeneration.lastErrorMessage': 'The Story Wizard is taking a nap! We\'ll try again soon.',
+            'imageGeneration.rateLimitRetryAt': retryTime,
+            'imageGeneration.rateLimitRetryCount': currentRetryCount + 1,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          allLogs.push(`[rate_limited] Top-level rate limit, retry at ${retryTime.toISOString()}`);
+        } else {
+          await storybookRef.update({
+            'imageGeneration.status': 'error',
+            'imageGeneration.lastErrorMessage': errorMessage,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
       } catch (updateError) {
         console.error('[storybook/images] Failed to update error status:', updateError);
       }
@@ -357,12 +480,16 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        errorMessage: error?.message ?? 'Unexpected /api/storybook/images error.',
+        errorMessage: isRateLimit
+          ? 'The Story Wizard is taking a nap! We\'ll try again soon.'
+          : errorMessage,
+        rateLimited: isRateLimit,
+        retryAt: isRateLimit ? calculateRetryTime().toISOString() : undefined,
         logs: allLogs,
         storyId: storyIdFromRequest,
         storybookId: storybookIdFromRequest,
       },
-      { status: 500 }
+      { status: isRateLimit ? 429 : 500 }
     );
   }
 }

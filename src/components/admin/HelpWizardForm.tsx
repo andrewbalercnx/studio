@@ -21,10 +21,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 const wizardSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
   status: z.enum(['draft', 'live']),
+  order: z.coerce.number().int().min(0, "Order must be 0 or greater"),
   pages: z.array(z.object({
     title: z.string().min(1),
     description: z.string().min(1),
     route: z.string().min(1),
+    highlightSelector: z.string().optional(),
   })).min(1, "At least one page is required"),
 });
 
@@ -42,6 +44,7 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
     defaultValues: {
       title: wizard?.title || '',
       status: wizard?.status || 'draft',
+      order: wizard?.order ?? 0,
       pages: wizard?.pages || [],
     }
   });
@@ -112,21 +115,28 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
         {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="status">Status</Label>
-        <Controller
-          name="status"
-          control={control}
-          render={({ field }) => (
-            <Select onValueChange={field.onChange} defaultValue={field.value}>
-              <SelectTrigger id="status"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="live">Live</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="status">Status</Label>
+          <Controller
+            name="status"
+            control={control}
+            render={({ field }) => (
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <SelectTrigger id="status"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="live">Live</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="order">Display Order</Label>
+          <Input id="order" type="number" min={0} {...register('order')} />
+          {errors.order && <p className="text-xs text-destructive">{errors.order.message}</p>}
+        </div>
       </div>
 
       <Card>

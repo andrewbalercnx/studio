@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useRef, useMemo } from 'react';
+import { use, useEffect, useRef, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
@@ -10,7 +10,7 @@ import type { StoryBookOutput, Story, StoryOutputPage } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { LoaderCircle, CheckCircle2, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { LoaderCircle, CheckCircle2, AlertTriangle, ArrowLeft, ChevronDown, ChevronUp, Moon, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -27,7 +27,7 @@ function calculateOverallProgress(storybook: StoryBookOutput): number {
   // Phase 1: Page generation (0-25%)
   if (pageStatus === 'idle') return 0;
   if (pageStatus === 'running') return 12; // Mid-point of phase 1
-  if (pageStatus === 'error') return 0;
+  if (pageStatus === 'error' || pageStatus === 'rate_limited') return 0;
 
   // Pages ready, check images
   if (pageStatus === 'ready' && imageStatus === 'idle') return 25;
@@ -39,7 +39,10 @@ function calculateOverallProgress(storybook: StoryBookOutput): number {
   }
 
   if (imageStatus === 'ready') return 100;
-  if (imageStatus === 'error') return 25 + Math.round((pagesReady / Math.max(pagesTotal, 1)) * 75);
+  // For rate_limited or error, show partial progress
+  if (imageStatus === 'error' || imageStatus === 'rate_limited') {
+    return 25 + Math.round((pagesReady / Math.max(pagesTotal, 1)) * 75);
+  }
 
   return 25;
 }
@@ -53,6 +56,7 @@ function getStatusMessage(storybook: StoryBookOutput): string {
 
   if (pageStatus === 'idle') return 'Getting ready to create your book...';
   if (pageStatus === 'running') return 'Creating story pages...';
+  if (pageStatus === 'rate_limited') return 'The Story Wizard is taking a nap!';
   if (pageStatus === 'error') return 'Oops! Something went wrong with the pages.';
 
   if (pageStatus === 'ready' && imageStatus === 'idle') return 'Pages ready! Starting the art...';
@@ -60,9 +64,27 @@ function getStatusMessage(storybook: StoryBookOutput): string {
     return `Painting illustrations (${pagesReady} of ${pagesTotal} done)...`;
   }
   if (imageStatus === 'ready') return 'Your book is complete!';
+  if (imageStatus === 'rate_limited') return 'The Story Wizard is taking a nap!';
   if (imageStatus === 'error') return 'Oops! Something went wrong with the pictures.';
 
   return 'Working on your book...';
+}
+
+// Format retry time in a child-friendly way
+function formatRetryTime(retryAt: any): string {
+  if (!retryAt) return 'soon';
+
+  const retryDate = typeof retryAt.toDate === 'function' ? retryAt.toDate() : new Date(retryAt);
+  const now = new Date();
+  const diffMs = retryDate.getTime() - now.getTime();
+  const diffMins = Math.max(0, Math.ceil(diffMs / (1000 * 60)));
+
+  if (diffMins <= 0) return 'any moment now';
+  if (diffMins < 60) return `in about ${diffMins} minutes`;
+
+  const diffHours = Math.ceil(diffMins / 60);
+  if (diffHours === 1) return 'in about an hour';
+  return `in about ${diffHours} hours`;
 }
 
 export default function BookGeneratingPage({
@@ -82,6 +104,7 @@ export default function BookGeneratingPage({
 
   const hasTriggeredPages = useRef(false);
   const hasTriggeredImages = useRef(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   // Load storybook (only when authenticated and auth token is ready)
   // We wait for idTokenResult to ensure Firebase auth is fully synced with Firestore
@@ -237,10 +260,16 @@ export default function BookGeneratingPage({
   const hasError =
     storybook.pageGeneration?.status === 'error' ||
     storybook.imageGeneration?.status === 'error';
+  const isRateLimited =
+    storybook.pageGeneration?.status === 'rate_limited' ||
+    storybook.imageGeneration?.status === 'rate_limited';
   const isComplete = storybook.imageGeneration?.status === 'ready';
   const errorMessage =
     storybook.pageGeneration?.lastErrorMessage ||
     storybook.imageGeneration?.lastErrorMessage;
+  const retryAt =
+    storybook.pageGeneration?.rateLimitRetryAt ||
+    storybook.imageGeneration?.rateLimitRetryAt;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background py-10">
@@ -248,10 +277,12 @@ export default function BookGeneratingPage({
         {/* Header */}
         <div className="text-center space-y-3">
           <h1 className="text-4xl font-headline text-primary">
-            {isComplete ? 'Your Book is Ready!' : 'Creating Your Book!'}
+            {isComplete ? 'Your Book is Ready!' : isRateLimited ? 'Taking a Little Break!' : 'Creating Your Book!'}
           </h1>
           <p className="text-xl text-muted-foreground">
-            {story?.metadata?.title || 'Your story'} is being turned into a beautiful book!
+            {isRateLimited
+              ? 'The Story Wizard worked really hard and needs a quick rest!'
+              : `${story?.metadata?.title || 'Your story'} is being turned into a beautiful book!`}
           </p>
         </div>
 
@@ -260,21 +291,26 @@ export default function BookGeneratingPage({
           className={cn(
             'border-2',
             hasError && 'border-destructive/50 bg-destructive/5',
+            isRateLimited && 'border-amber-500/50 bg-amber-50',
             isComplete && 'border-green-500/50 bg-green-50',
-            !hasError && !isComplete && 'border-primary/50 bg-primary/5'
+            !hasError && !isRateLimited && !isComplete && 'border-primary/50 bg-primary/5'
           )}
         >
           <CardHeader>
             <div className="flex items-center gap-3">
               {hasError ? (
                 <AlertTriangle className="h-8 w-8 text-destructive" />
+              ) : isRateLimited ? (
+                <Moon className="h-8 w-8 text-amber-500" />
               ) : isComplete ? (
                 <CheckCircle2 className="h-8 w-8 text-green-500" />
               ) : (
                 <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
               )}
               <div className="flex-1">
-                <CardTitle className="text-xl">Book Creation Progress</CardTitle>
+                <CardTitle className="text-xl">
+                  {isRateLimited ? 'Wizard Nap Time' : 'Book Creation Progress'}
+                </CardTitle>
                 <CardDescription>{statusMessage}</CardDescription>
               </div>
             </div>
@@ -285,6 +321,7 @@ export default function BookGeneratingPage({
               className={cn(
                 'h-4',
                 hasError && 'bg-destructive/20',
+                isRateLimited && 'bg-amber-100',
                 isComplete && 'bg-green-100'
               )}
             />
@@ -293,13 +330,28 @@ export default function BookGeneratingPage({
                 className={cn(
                   'text-4xl font-bold',
                   hasError && 'text-destructive',
+                  isRateLimited && 'text-amber-600',
                   isComplete && 'text-green-600',
-                  !hasError && !isComplete && 'text-primary'
+                  !hasError && !isRateLimited && !isComplete && 'text-primary'
                 )}
               >
                 {progress}%
               </p>
             </div>
+
+            {/* Rate Limited Message */}
+            {isRateLimited && (
+              <div className="rounded-lg bg-amber-100 p-4 text-sm text-amber-800">
+                <div className="flex items-center gap-2 font-medium">
+                  <Clock className="h-4 w-4" />
+                  <span>We&apos;ll try again {formatRetryTime(retryAt)}!</span>
+                </div>
+                <p className="mt-2">
+                  Don&apos;t worry - your book is safe! The Story Wizard just needs a little rest.
+                  We&apos;ll keep working on it automatically. Come back later to see your finished book!
+                </p>
+              </div>
+            )}
 
             {/* Error Message */}
             {hasError && errorMessage && (
@@ -308,11 +360,40 @@ export default function BookGeneratingPage({
                 <p>{errorMessage}</p>
               </div>
             )}
+
+            {/* Diagnostics Toggle */}
+            {storybook?.pageGeneration?.diagnostics && (
+              <div className="pt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDiagnostics(!showDiagnostics)}
+                  className="w-full text-muted-foreground text-xs"
+                >
+                  {showDiagnostics ? (
+                    <>
+                      <ChevronUp className="mr-1 h-3 w-3" />
+                      Hide Diagnostics
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="mr-1 h-3 w-3" />
+                      Show Diagnostics
+                    </>
+                  )}
+                </Button>
+                {showDiagnostics && (
+                  <pre className="mt-2 rounded-lg bg-muted p-3 text-xs overflow-auto max-h-64">
+                    {JSON.stringify(storybook.pageGeneration.diagnostics, null, 2)}
+                  </pre>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Fun Animation (when not complete/error) */}
-        {!isComplete && !hasError && (
+        {/* Fun Animation (when not complete/error/rate-limited) */}
+        {!isComplete && !hasError && !isRateLimited && (
           <div className="text-center space-y-4 pt-4">
             <div className="flex justify-center">
               <ChildAvatarAnimation
@@ -330,6 +411,24 @@ export default function BookGeneratingPage({
           </div>
         )}
 
+        {/* Rate Limited - Sleepy Wizard Animation */}
+        {isRateLimited && (
+          <div className="text-center space-y-4 pt-4">
+            <div className="flex justify-center">
+              <div className="relative">
+                <Moon className="h-24 w-24 text-amber-400 animate-pulse" />
+                <span className="absolute -top-2 -right-2 text-3xl">💤</span>
+              </div>
+            </div>
+            <p className="text-lg text-amber-700 italic">
+              Shhh... The Story Wizard is resting!
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Your book will be ready when you come back. Go play and check again later!
+            </p>
+          </div>
+        )}
+
         {/* Complete Message */}
         {isComplete && (
           <div className="text-center space-y-4">
@@ -338,6 +437,20 @@ export default function BookGeneratingPage({
             <Button asChild size="lg">
               <Link href={`/child/${childId}/books`}>Go to My Books</Link>
             </Button>
+          </div>
+        )}
+
+        {/* Rate Limited Actions */}
+        {isRateLimited && (
+          <div className="flex flex-col gap-3 items-center">
+            <Button asChild size="lg" className="bg-amber-500 hover:bg-amber-600">
+              <Link href={`/child/${childId}/books`}>
+                Go to My Books
+              </Link>
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              We&apos;ll notify you when your book is ready!
+            </p>
           </div>
         )}
 
@@ -354,7 +467,7 @@ export default function BookGeneratingPage({
         )}
 
         {/* Back Link (when in progress) */}
-        {!isComplete && !hasError && (
+        {!isComplete && !hasError && !isRateLimited && (
           <div className="text-center pt-4">
             <Button variant="ghost" asChild>
               <Link href={`/child/${childId}`}>Back to Dashboard</Link>

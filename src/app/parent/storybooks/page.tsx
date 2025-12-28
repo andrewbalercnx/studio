@@ -523,7 +523,7 @@ export default function ParentStorybooksPage() {
                   totalPages: stats.totalPages,
                   isNewModel: true,
                   // Print layout for generating printable PDFs
-                  printLayoutId: sb.printLayoutId,
+                  printLayoutId: sb.printLayoutId || undefined,
                   // Include printable PDF URLs from finalization if available
                   printablePdfUrl: sb.finalization?.printablePdfUrl || undefined,
                   printableCoverPdfUrl: sb.finalization?.printableCoverPdfUrl || undefined,

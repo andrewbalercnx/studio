@@ -3,24 +3,35 @@ import { storyPageFlow } from '@/ai/flows/story-page-flow';
 import { storyPageAudioFlow } from '@/ai/flows/story-page-audio-flow';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { createLogger, generateRequestId } from '@/lib/server-logger';
+
+// Allow up to 2 minutes for page generation
+export const maxDuration = 120;
 
 /**
  * New API route for generating pages for a StoryBookOutput.
  * Uses the new data model: stories/{storyId}/storybooks/{storybookId}/pages
  */
 export async function POST(request: Request) {
+  const requestId = generateRequestId();
+  const logger = createLogger({ route: '/api/storybookV2/pages', method: 'POST', requestId });
+
   const { storyId, storybookId } = await request.json();
+  logger.info('Request received', { storyId, storybookId });
 
   if (!storyId || typeof storyId !== 'string') {
-    return NextResponse.json({ ok: false, errorMessage: 'Missing storyId' }, { status: 400 });
+    logger.warn('Missing storyId in request');
+    return NextResponse.json({ ok: false, errorMessage: 'Missing storyId', requestId }, { status: 400 });
   }
 
   if (!storybookId || typeof storybookId !== 'string') {
-    return NextResponse.json({ ok: false, errorMessage: 'Missing storybookId' }, { status: 400 });
+    logger.warn('Missing storybookId in request');
+    return NextResponse.json({ ok: false, errorMessage: 'Missing storybookId', requestId }, { status: 400 });
   }
 
   await initFirebaseAdminApp();
   const firestore = getFirestore();
+  const startTime = Date.now();
 
   try {
     // Step 1: Get Story document
@@ -51,20 +62,24 @@ export async function POST(request: Request) {
     });
 
     // Step 4: Run page generation flow
-    // Note: The flow currently reads from the main story document
+    // Pass storyOutputTypeId from the storybook so the flow can use AI pagination
     const flowResult = await storyPageFlow({
       storyId,
+      storyOutputTypeId: storybookData?.storyOutputTypeId,
     });
 
     if (!flowResult.ok || !flowResult.pages || flowResult.pages.length === 0) {
       const errorMessage = !flowResult.ok ? flowResult.errorMessage : 'storyPageFlow returned no pages.';
+      const durationMs = Date.now() - startTime;
+      logger.error('storyPageFlow failed', new Error(errorMessage ?? 'Unknown error'), { storyId, storybookId, durationMs });
       await storybookRef.update({
         'pageGeneration.status': 'error',
         'pageGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
         'pageGeneration.lastErrorMessage': errorMessage,
+        'pageGeneration.diagnostics': flowResult.diagnostics ?? null,
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return NextResponse.json({ ok: false, errorMessage, diagnostics: flowResult.diagnostics ?? null }, { status: 500 });
+      return NextResponse.json({ ok: false, errorMessage, diagnostics: flowResult.diagnostics ?? null, requestId }, { status: 500 });
     }
 
     // Step 5: Write pages to storybook subcollection
@@ -78,8 +93,12 @@ export async function POST(request: Request) {
     sortedPages.forEach((page) => {
       const pageId = `page-${String(page.pageNumber).padStart(3, '0')}`;
       const pageRef = pagesCollection.doc(pageId);
+      // Filter out undefined values to avoid Firestore errors
+      const pageData = Object.fromEntries(
+        Object.entries(page).filter(([, value]) => value !== undefined)
+      );
       batch.set(pageRef, {
-        ...page,
+        ...pageData,
         id: pageId,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -94,6 +113,7 @@ export async function POST(request: Request) {
       'pageGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
       'pageGeneration.lastErrorMessage': null,
       'pageGeneration.pagesCount': sortedPages.length,
+      'pageGeneration.diagnostics': flowResult.diagnostics ?? null,
       'imageGeneration.status': 'idle',
       'imageGeneration.pagesReady': 0,
       'imageGeneration.pagesTotal': sortedPages.length,
@@ -107,8 +127,11 @@ export async function POST(request: Request) {
     // Step 7: Trigger page audio generation in the background (fire-and-forget)
     // This generates narration for each page with actor descriptions
     storyPageAudioFlow({ storyId, storybookId }).catch((err) => {
-      console.error('[storybookV2/pages] Background page audio generation failed:', err);
+      logger.error('Background page audio generation failed', err, { storyId, storybookId });
     });
+
+    const durationMs = Date.now() - startTime;
+    logger.info('Request completed successfully', { storyId, storybookId, pagesCount: sortedPages.length, durationMs });
 
     return NextResponse.json({
       ok: true,
@@ -118,6 +141,9 @@ export async function POST(request: Request) {
       diagnostics: flowResult.diagnostics ?? null,
     });
   } catch (error: any) {
+    const durationMs = Date.now() - startTime;
+    logger.error('Unhandled exception in route', error, { storyId, storybookId, durationMs });
+
     // Try to update status to error
     try {
       const storybookRef = firestore.collection('stories').doc(storyId).collection('storybooks').doc(storybookId);
@@ -127,11 +153,11 @@ export async function POST(request: Request) {
         updatedAt: FieldValue.serverTimestamp(),
       });
     } catch (updateError) {
-      console.error('[storybook/pages] Failed to update error status:', updateError);
+      logger.error('Failed to update error status', updateError, { storyId, storybookId });
     }
 
     return NextResponse.json(
-      { ok: false, errorMessage: error?.message ?? 'Unexpected /api/storybook/pages error.' },
+      { ok: false, errorMessage: error?.message ?? 'Unexpected /api/storybook/pages error.', requestId },
       { status: 500 }
     );
   }

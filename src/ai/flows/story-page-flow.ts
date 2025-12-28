@@ -36,6 +36,7 @@ const FlowPageSchema = z.object({
   bodyText: z.string().optional(),
   displayText: z.string().optional(),
   entityIds: z.array(z.string()).optional(),
+  imageDescription: z.string().optional(),
   imagePrompt: z.string().optional(),
   imageUrl: z.string().optional(),
   layoutHints: PageLayoutSchema.optional(),
@@ -220,18 +221,28 @@ function buildCharacterDetails(characters: Character[]): string {
  * Build image prompt for a content page (uses page text and actors on that page)
  * New structured format with full actor details
  * Actors can be Characters (pets, friends, etc.) or ChildProfiles (siblings)
+ *
+ * @param text - The page text (used as fallback if no imageDescription)
+ * @param child - The main child profile
+ * @param storyTitle - The story title
+ * @param actorsOnPage - Characters and siblings appearing on this page
+ * @param pageEntityIds - Entity IDs mentioned on this page
+ * @param imageDescription - AI-generated image description (preferred over text)
  */
 function buildImagePrompt(
   text: string,
   child?: ChildProfile | null,
   storyTitle?: string | null,
   actorsOnPage: (Character | ChildProfile)[] = [],
-  pageEntityIds: string[] = []
+  pageEntityIds: string[] = [],
+  imageDescription?: string
 ): string {
   const childAge = child ? getChildAgeYears(child) : null;
   const childAgeText = childAge ? `${childAge} years old` : 'a young child';
 
-  let prompt = `Create an image, with no text, that describes this scene: ${text}\n\n`;
+  // Use imageDescription if available (from AI pagination), otherwise fall back to page text
+  const sceneDescription = imageDescription || text;
+  let prompt = `Create an image, with no text, that describes this scene: ${sceneDescription}\n\n`;
 
   if (child) {
     prompt += `The story is being created for $$${child.id}$$, age ${childAgeText}.\n\n`;
@@ -348,7 +359,7 @@ const StoryPageFlowOutput = z.object({
   bookId: z.string(),
   pages: z.array(FlowPageSchema),
   stats: z.object({
-    totalSentences: z.number(),
+    totalPages: z.number(),
     interiorPages: z.number(),
   }),
   diagnostics: z.any(),
@@ -363,10 +374,15 @@ const StoryPageFlowOutput = z.object({
 export const storyPageFlow = ai.defineFlow(
   {
     name: 'storyPageFlow',
-    inputSchema: z.object({ storyId: z.string() }),
+    inputSchema: z.object({
+      storyId: z.string(),
+      // Optional: pass storyOutputTypeId directly (e.g., from StoryBookOutput)
+      // If not provided, falls back to session.storyOutputTypeId
+      storyOutputTypeId: z.string().optional(),
+    }),
     outputSchema: StoryPageFlowOutput,
   },
-  async ({ storyId }) => {
+  async ({ storyId, storyOutputTypeId: inputStoryOutputTypeId }) => {
     let diagnostics: StoryPageFlowDiagnostics = { stage: 'init', details: { storyId } };
 
     try {
@@ -386,10 +402,11 @@ export const storyPageFlow = ai.defineFlow(
       ]);
 
       const session = (sessionSnap && sessionSnap.exists) ? (sessionSnap.data() as StorySession) : null;
-      const child = (childSnap && childSnap.exists) ? (childSnap.data() as ChildProfile) : null;
+      const child = (childSnap && childSnap.exists) ? { id: childSnap.id, ...childSnap.data() } as ChildProfile : null;
 
       // Load the story output type to get target page count
-      const storyOutputTypeId = session?.storyOutputTypeId;
+      // Priority: explicit input parameter > session.storyOutputTypeId
+      const storyOutputTypeId = inputStoryOutputTypeId || session?.storyOutputTypeId;
       let storyOutputType: StoryOutputType | null = null;
       if (storyOutputTypeId) {
         const outputTypeSnap = await firestore.collection('storyOutputTypes').doc(storyOutputTypeId).get();
@@ -510,6 +527,7 @@ export const storyPageFlow = ai.defineFlow(
       // This replaces the old chunkSentences algorithm
       let chunks: string[][] = [];
       let aiPaginatedEntityIds: string[][] = [];
+      let aiImageDescriptions: (string | undefined)[] = [];
       let usedAIPagination = false;
 
       if (storyOutputTypeId) {
@@ -523,6 +541,7 @@ export const storyPageFlow = ai.defineFlow(
             // Convert AI pagination result to chunks format
             chunks = paginationResult.pages.map((page: { bodyText: string }) => [page.bodyText]);
             aiPaginatedEntityIds = paginationResult.pages.map((page: { entityIds: string[] }) => page.entityIds || []);
+            aiImageDescriptions = paginationResult.pages.map((page: { imageDescription?: string }) => page.imageDescription);
             usedAIPagination = true;
             diagnostics.details.usedAIPagination = true;
             diagnostics.details.aiPageCount = paginationResult.pages.length;
@@ -554,7 +573,6 @@ export const storyPageFlow = ai.defineFlow(
         stage: 'building_pages',
         details: {
           ...diagnostics.details,
-          sentences: sentences.length,
           chunks: chunks.length,
         },
       };
@@ -610,6 +628,8 @@ export const storyPageFlow = ai.defineFlow(
         const pageEntityIds = usedAIPagination && aiPaginatedEntityIds[index]
           ? aiPaginatedEntityIds[index]
           : extractEntityIds(text);
+        // Use AI-provided imageDescription if available
+        const pageImageDescription = usedAIPagination ? aiImageDescriptions[index] : undefined;
         // Get all actors that appear on this specific page (characters and siblings)
         // Look up by the entity ID which might be a document ID or displayName
         const actorsOnPage = pageEntityIds
@@ -621,7 +641,8 @@ export const storyPageFlow = ai.defineFlow(
           bodyText: text,
           displayText: displayText,
           entityIds: pageEntityIds,
-          imagePrompt: buildImagePrompt(displayText, child, derivedTitle, actorsOnPage, pageEntityIds),
+          imageDescription: pageImageDescription,
+          imagePrompt: buildImagePrompt(displayText, child, derivedTitle, actorsOnPage, pageEntityIds, pageImageDescription),
           imageUrl: choosePlaceholderImage(index + 2), // +2 to account for cover and title page
           layoutHints: {
             aspectRatio: 'landscape',
@@ -712,7 +733,7 @@ export const storyPageFlow = ai.defineFlow(
         bookId: storyId, // The input is storyId which is the bookId now
         pages,
         stats: {
-          totalSentences: sentences.length,
+          totalPages: chunks.length,
           interiorPages: Math.max(0, pages.length - 2),
         },
         diagnostics,

@@ -1,7 +1,7 @@
 'use server';
 
 /**
- * @fileOverview A flow to generate audio narration for individual storybook pages using Gemini Pro TTS.
+ * @fileOverview A flow to generate audio narration for individual storybook pages using ElevenLabs TTS.
  * This generates audio for each page so it can be played during the interactive book reader.
  */
 
@@ -9,13 +9,12 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getStoryBucket } from '@/firebase/admin/storage';
 import { randomUUID } from 'crypto';
-import { GoogleGenAI } from '@google/genai';
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import type { Story, ChildProfile, StoryOutputPage } from '@/lib/types';
-import { DEFAULT_TTS_VOICE } from '@/lib/tts-config';
+import { DEFAULT_TTS_VOICE, ELEVENLABS_MODEL } from '@/lib/tts-config';
 import {
   resolveEntitiesInText,
   replacePlaceholdersInText,
-  buildActorDescriptionsForAudio,
   type EntityMap,
 } from '@/lib/resolve-placeholders.server';
 import { logAIFlow } from '@/lib/ai-flow-logger';
@@ -46,51 +45,6 @@ export type PageAudioFlowOutput = {
 };
 
 /**
- * Convert raw PCM audio data to WAV format by adding proper headers.
- */
-function pcmToWav(pcmBuffer: Buffer, sampleRate: number = 24000, channels: number = 1, bitsPerSample: number = 16): Buffer {
-  const byteRate = sampleRate * channels * (bitsPerSample / 8);
-  const blockAlign = channels * (bitsPerSample / 8);
-  const dataSize = pcmBuffer.length;
-  const headerSize = 44;
-  const fileSize = headerSize + dataSize - 8;
-
-  const wavBuffer = Buffer.alloc(headerSize + dataSize);
-
-  // RIFF header
-  wavBuffer.write('RIFF', 0);
-  wavBuffer.writeUInt32LE(fileSize, 4);
-  wavBuffer.write('WAVE', 8);
-
-  // fmt subchunk
-  wavBuffer.write('fmt ', 12);
-  wavBuffer.writeUInt32LE(16, 16);
-  wavBuffer.writeUInt16LE(1, 20);
-  wavBuffer.writeUInt16LE(channels, 22);
-  wavBuffer.writeUInt32LE(sampleRate, 24);
-  wavBuffer.writeUInt32LE(byteRate, 28);
-  wavBuffer.writeUInt16LE(blockAlign, 32);
-  wavBuffer.writeUInt16LE(bitsPerSample, 34);
-
-  // data subchunk
-  wavBuffer.write('data', 36);
-  wavBuffer.writeUInt32LE(dataSize, 40);
-
-  // Copy PCM data
-  pcmBuffer.copy(wavBuffer, headerSize);
-
-  return wavBuffer;
-}
-
-/**
- * Parse sample rate from mime type like "audio/L16;codec=pcm;rate=24000"
- */
-function parseSampleRate(mimeType: string): number {
-  const rateMatch = mimeType.match(/rate=(\d+)/);
-  return rateMatch ? parseInt(rateMatch[1], 10) : 24000;
-}
-
-/**
  * Calculate child's age from date of birth
  */
 function calculateAge(dateOfBirth: any): number | null {
@@ -106,16 +60,30 @@ function calculateAge(dateOfBirth: any): number | null {
 }
 
 /**
+ * Convert a readable stream to a buffer
+ */
+async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+
+  return Buffer.concat(chunks);
+}
+
+/**
  * Generate audio for a single page
  */
 async function generatePageAudio(
   page: StoryOutputPage,
   storyId: string,
   parentUid: string | null,
-  voiceName: string,
-  ageHint: string,
-  pronunciationHint: string,
-  genai: GoogleGenAI,
+  voiceId: string,
+  elevenlabs: ElevenLabsClient,
   bucket: any,
   entityMap?: EntityMap
 ): Promise<{ audioUrl: string; metadata: any } | null> {
@@ -132,98 +100,50 @@ async function generatePageAudio(
     return null;
   }
 
-  // Build actor descriptions for the characters on this page
-  let actorDescriptions = '';
-  if (entityMap && page.entityIds && page.entityIds.length > 0) {
-    actorDescriptions = await buildActorDescriptionsForAudio(page.entityIds, entityMap);
-    console.log(`[page-audio-flow] Page ${page.pageNumber} has ${page.entityIds.length} actors`);
-  }
-
-  // Build a prompt for this page with actor context
-  // The actor descriptions provide context about who the characters are
-  const prompt = `Read aloud in a way suitable for a ${ageHint} child. Use a British English accent. Read warmly and engagingly, with appropriate pauses and expression for a bedtime story.${pronunciationHint}${actorDescriptions}\n\nStory text to read:\n${textToNarrate}`;
-
   console.log(`[page-audio-flow] Generating audio for page ${page.pageNumber}: "${textToNarrate.slice(0, 50)}..."`);
 
-  // Generate audio using Gemini Pro TTS
-  const modelName = 'gemini-2.5-pro-preview-tts';
+  // Generate audio using ElevenLabs TTS
   const startTime = Date.now();
-  let response;
+  let audioStream;
   try {
-    response = await genai.models.generateContent({
-      model: modelName,
-      contents: prompt,
-      config: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: voiceName,
-            },
-          },
-        },
-      },
+    audioStream = await elevenlabs.textToSpeech.convert(voiceId, {
+      text: textToNarrate,
+      modelId: ELEVENLABS_MODEL,
+      languageCode: 'en-GB',
     });
-    // Log success - note: TTS response doesn't have text, just audio data
+
+    // Log success
     await logAIFlow({
       flowName: 'storyPageAudioFlow',
       sessionId: storyId,
       parentId: parentUid,
-      prompt,
+      prompt: textToNarrate,
       response: {
         text: `[Audio generated for page ${page.pageNumber}]`,
-        finishReason: response.candidates?.[0]?.finishReason,
-        model: modelName,
+        model: ELEVENLABS_MODEL,
       },
       startTime,
-      modelName,
+      modelName: ELEVENLABS_MODEL,
     });
   } catch (e: any) {
     await logAIFlow({
       flowName: 'storyPageAudioFlow',
       sessionId: storyId,
       parentId: parentUid,
-      prompt,
+      prompt: textToNarrate,
       error: e,
       startTime,
-      modelName,
+      modelName: ELEVENLABS_MODEL,
     });
     throw e;
   }
 
-  // Extract audio data from response
-  const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-  if (!audioData?.data) {
-    throw new Error(`Gemini TTS returned no audio content for page ${page.pageNumber}`);
-  }
+  // Convert stream to buffer
+  const audioBuffer = await streamToBuffer(audioStream as unknown as ReadableStream<Uint8Array>);
 
-  // Decode base64 audio data
-  const rawAudioBuffer = Buffer.from(audioData.data, 'base64');
-  const rawMimeType = audioData.mimeType || 'audio/wav';
-
-  // Convert PCM to WAV if needed
-  let audioBuffer: Buffer;
-  let mimeType: string;
-  let fileExtension: string;
-
-  if (rawMimeType.includes('L16') || rawMimeType.includes('pcm')) {
-    const sampleRate = parseSampleRate(rawMimeType);
-    audioBuffer = pcmToWav(rawAudioBuffer, sampleRate);
-    mimeType = 'audio/wav';
-    fileExtension = 'wav';
-  } else if (rawMimeType.includes('mp3')) {
-    audioBuffer = rawAudioBuffer;
-    mimeType = rawMimeType;
-    fileExtension = 'mp3';
-  } else if (rawMimeType.includes('wav')) {
-    audioBuffer = rawAudioBuffer;
-    mimeType = rawMimeType;
-    fileExtension = 'wav';
-  } else {
-    audioBuffer = pcmToWav(rawAudioBuffer);
-    mimeType = 'audio/wav';
-    fileExtension = 'wav';
-  }
+  // ElevenLabs returns MP3 by default
+  const mimeType = 'audio/mpeg';
+  const fileExtension = 'mp3';
 
   // Upload to Firebase Storage
   const downloadToken = randomUUID();
@@ -237,8 +157,8 @@ async function generatePageAudio(
       metadata: {
         storyId,
         pageNumber: String(page.pageNumber),
-        voiceId: voiceName,
-        model: 'gemini-2.5-pro-preview-tts',
+        voiceId: voiceId,
+        model: ELEVENLABS_MODEL,
         firebaseStorageDownloadTokens: downloadToken,
       },
     },
@@ -257,7 +177,7 @@ async function generatePageAudio(
       storagePath,
       downloadToken,
       durationSeconds: estimatedDurationSeconds,
-      voiceId: voiceName,
+      voiceId: voiceId,
       sizeBytes: audioBuffer.byteLength,
     },
   };
@@ -289,19 +209,13 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
 
     const story = { id: storySnap.id, ...storySnap.data() } as Story;
 
-    // Load child profile to get age, voice preference, and name pronunciation
-    let childAge: number | null = null;
+    // Load child profile to get voice preference
     let preferredVoice = DEFAULT_TTS_VOICE;
-    let childName: string | null = null;
-    let namePronunciation: string | null = null;
 
     if (story.childId) {
       const childSnap = await firestore.collection('children').doc(story.childId).get();
       if (childSnap.exists) {
         const childProfile = childSnap.data() as ChildProfile;
-        childAge = calculateAge(childProfile.dateOfBirth);
-        childName = childProfile.displayName || null;
-        namePronunciation = childProfile.namePronunciation || null;
         if (childProfile.preferredVoiceId) {
           preferredVoice = childProfile.preferredVoiceId;
         }
@@ -309,14 +223,7 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
     }
 
     // Voice from input takes priority
-    const voiceName = voiceConfig?.voiceName || preferredVoice;
-
-    // Build context strings
-    const ageHint = childAge ? `${childAge} year old` : 'young';
-    let pronunciationHint = '';
-    if (childName && namePronunciation) {
-      pronunciationHint = `\n\nIMPORTANT: The name "${childName}" should be pronounced as "${namePronunciation}".`;
-    }
+    const voiceId = voiceConfig?.voiceName || preferredVoice;
 
     // Load pages - path depends on model:
     // New model: stories/{storyId}/storybooks/{storybookId}/pages
@@ -358,7 +265,7 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
     const pages = pagesSnap.docs.map((doc: FirebaseFirestore.QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as StoryOutputPage));
     console.log(`[page-audio-flow] Found ${pages.length} pages to process`);
 
-    // Build entity map for all actors in the story (for actor descriptions)
+    // Build entity map for all actors in the story (for resolving placeholders)
     // Collect all unique entity IDs from all pages
     const allEntityIds = new Set<string>();
     for (const page of pages) {
@@ -374,13 +281,15 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
     // Resolve all entities for the story
     const entityIdsText = Array.from(allEntityIds).map(id => `$$${id}$$`).join(' ');
     const entityMap = await resolveEntitiesInText(entityIdsText);
-    console.log(`[page-audio-flow] Resolved ${entityMap.size} entities for actor descriptions`);
+    console.log(`[page-audio-flow] Resolved ${entityMap.size} entities`);
 
-    // Initialize Gemini client
-    console.log(`[page-audio-flow] Initializing Gemini client...`);
-    const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+    // Initialize ElevenLabs client
+    console.log(`[page-audio-flow] Initializing ElevenLabs client...`);
+    const elevenlabs = new ElevenLabsClient({
+      apiKey: process.env.ELEVENLABS_API_KEY!,
+    });
     const bucket = await getStoryBucket();
-    console.log(`[page-audio-flow] Gemini client and storage bucket ready`);
+    console.log(`[page-audio-flow] ElevenLabs client and storage bucket ready`);
 
     const results: PageAudioResult[] = [];
     let pagesProcessed = 0;
@@ -424,10 +333,8 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
           page,
           storyId,
           story.parentUid || null,
-          voiceName,
-          ageHint,
-          pronunciationHint,
-          genai,
+          voiceId,
+          elevenlabs,
           bucket,
           entityMap
         );
@@ -440,7 +347,7 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
             audioMetadata: {
               ...result.metadata,
               generatedAt: FieldValue.serverTimestamp(),
-              model: 'gemini-2.5-pro-preview-tts',
+              model: ELEVENLABS_MODEL,
             },
             updatedAt: FieldValue.serverTimestamp(),
           });

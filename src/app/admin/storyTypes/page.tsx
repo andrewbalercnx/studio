@@ -3,7 +3,7 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Copy, LoaderCircle, ChevronDown, ChevronUp, Trash2, Plus, GripVertical, Pencil, X, Check, Wand2 } from 'lucide-react';
+import { Copy, LoaderCircle, ChevronDown, ChevronUp, Trash2, Plus, GripVertical, Pencil, X, Check } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFirestore, useAuth } from '@/firebase';
@@ -1346,8 +1346,6 @@ export default function AdminStoryTypesPage() {
   const [types, setTypes] = useState<StoryType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [migrating, setMigrating] = useState(false);
-  const [migrationResult, setMigrationResult] = useState<any>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -1454,48 +1452,6 @@ export default function AdminStoryTypesPage() {
     }
   };
 
-  const handleMigrateAll = async () => {
-    if (!auth?.currentUser) {
-      toast({ title: 'Error', description: 'Not authenticated', variant: 'destructive' });
-      return;
-    }
-
-    setMigrating(true);
-    setMigrationResult(null);
-
-    try {
-      const token = await auth.currentUser.getIdToken();
-      const response = await fetch('/api/admin/migrate/story-types', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Migration failed');
-      }
-
-      setMigrationResult(result);
-      toast({
-        title: result.success ? 'Migration Complete' : 'Migration Completed with Errors',
-        description: `Migrated: ${result.summary.migrated}, Skipped: ${result.summary.skipped}, Errors: ${result.summary.errors}`,
-        variant: result.success ? 'default' : 'destructive',
-      });
-    } catch (e: any) {
-      console.error("Migration error:", e);
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    } finally {
-      setMigrating(false);
-    }
-  };
-
-  // Count story types needing migration
-  const needsMigration = types.filter(t => !t.promptConfig).length;
-
   const diagnostics = {
     page: 'admin-storyTypes',
     auth: {
@@ -1571,12 +1527,6 @@ export default function AdminStoryTypesPage() {
               <Plus className="h-4 w-4 mr-2" />
               Create New
             </Button>
-            {needsMigration > 0 && (
-              <Button variant="default" onClick={handleMigrateAll} disabled={migrating}>
-                {migrating ? <LoaderCircle className="h-4 w-4 animate-spin mr-2" /> : <Wand2 className="h-4 w-4 mr-2" />}
-                Migrate {needsMigration} Story Types
-              </Button>
-            )}
             {types.length > 0 && (
               <Button variant="outline" onClick={handleCreateSampleTypes}>
                 Reset to Sample Types
@@ -1585,37 +1535,6 @@ export default function AdminStoryTypesPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {migrationResult && (
-            <div className={`mb-4 p-4 rounded-lg ${migrationResult.success ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}`}>
-              <h4 className="font-medium mb-2">
-                {migrationResult.success ? 'Migration Complete' : 'Migration Completed with Issues'}
-              </h4>
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Migrated:</span>{' '}
-                  <span className="font-medium text-green-600">{migrationResult.summary.migrated}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Skipped:</span>{' '}
-                  <span className="font-medium">{migrationResult.summary.skipped}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Errors:</span>{' '}
-                  <span className="font-medium text-red-600">{migrationResult.summary.errors}</span>
-                </div>
-              </div>
-              {migrationResult.results && migrationResult.results.length > 0 && (
-                <details className="mt-2">
-                  <summary className="text-sm cursor-pointer text-muted-foreground hover:text-foreground">
-                    View details
-                  </summary>
-                  <pre className="mt-2 text-xs bg-muted p-2 rounded overflow-x-auto">
-                    {JSON.stringify(migrationResult.results, null, 2)}
-                  </pre>
-                </details>
-              )}
-            </div>
-          )}
           {renderContent()}
         </CardContent>
       </Card>

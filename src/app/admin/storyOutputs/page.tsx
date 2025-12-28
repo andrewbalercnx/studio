@@ -9,7 +9,7 @@ import { useFirestore } from '@/firebase';
 import { collection, doc, onSnapshot, query, orderBy, writeBatch, serverTimestamp, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import type { StoryOutputType } from '@/lib/types';
+import type { StoryOutputType, PrintLayout } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useForm, Controller } from 'react-hook-form';
@@ -86,6 +86,7 @@ const outputTypeSchema = z.object({
   ageRange: z.string(),
   category: z.enum(["picture_book", "poem", "coloring_pages", "audio_script"]),
   status: z.enum(["live", "draft", "archived"]),
+  defaultPrintLayoutId: z.string().optional(),
   'layoutHints.pageCount': z.coerce.number().optional(),
   'layoutHints.needsImages': z.boolean().optional(),
   'aiHints.style': z.string().optional(),
@@ -99,6 +100,23 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
     const firestore = useFirestore();
     const { toast } = useToast();
     const [isSaving, setIsSaving] = useState(false);
+    const [printLayouts, setPrintLayouts] = useState<PrintLayout[]>([]);
+    const [loadingLayouts, setLoadingLayouts] = useState(true);
+
+    // Load print layouts
+    useEffect(() => {
+        if (!firestore) return;
+        setLoadingLayouts(true);
+        getDocs(collection(firestore, 'printLayouts'))
+            .then((snapshot) => {
+                const layouts = snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as PrintLayout);
+                setPrintLayouts(layouts);
+            })
+            .catch((err) => {
+                console.error('Error loading print layouts:', err);
+            })
+            .finally(() => setLoadingLayouts(false));
+    }, [firestore]);
 
     const { register, handleSubmit, control, formState: { errors } } = useForm<OutputTypeFormValues>({
         resolver: zodResolver(outputTypeSchema),
@@ -109,6 +127,7 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
             ageRange: editingType?.ageRange || '3-5',
             category: editingType?.category || 'picture_book',
             status: editingType?.status || 'draft',
+            defaultPrintLayoutId: editingType?.defaultPrintLayoutId || '',
             'layoutHints.pageCount': editingType?.layoutHints?.pageCount,
             'layoutHints.needsImages': editingType?.layoutHints?.needsImages ?? true,
             'aiHints.style': editingType?.aiHints?.style || '',
@@ -127,6 +146,7 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
             ageRange: data.ageRange,
             category: data.category,
             status: data.status,
+            defaultPrintLayoutId: data.defaultPrintLayoutId || undefined,
             layoutHints: {
                 pageCount: data['layoutHints.pageCount'],
                 needsImages: data['layoutHints.needsImages'],
@@ -202,6 +222,33 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
                 <Label htmlFor="shortDescription">About this output</Label>
                 <Textarea id="shortDescription" {...register('shortDescription')} />
                 {errors.shortDescription && <p className="text-xs text-destructive">{errors.shortDescription.message}</p>}
+            </div>
+
+            <div className="space-y-1">
+                <Label>Default Print Layout (Optional)</Label>
+                <Controller name="defaultPrintLayoutId" control={control} render={({ field }) => (
+                    <Select
+                        onValueChange={(val) => field.onChange(val === '__none__' ? '' : val)}
+                        value={field.value || '__none__'}
+                        disabled={loadingLayouts}
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder={loadingLayouts ? 'Loading layouts...' : 'No layout (unconstrained)'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__none__">No layout (unconstrained)</SelectItem>
+                            {printLayouts.map((layout) => (
+                                <SelectItem key={layout.id} value={layout.id}>
+                                    {layout.name} ({layout.leafWidth}" × {layout.leafHeight}")
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )} />
+                <p className="text-xs text-muted-foreground">
+                    When set, images will be generated with dimensions matching this print layout.
+                    Leave empty for unconstrained (square) images.
+                </p>
             </div>
 
             <Card>

@@ -14,13 +14,19 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from './ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
-import { useAuth } from '@/firebase';
+import { useAuth, useFirestore } from '@/firebase';
 import { Badge } from './ui/badge';
-import { Shield, Pen, User as UserIcon, HelpCircle } from 'lucide-react';
+import { Shield, Pen, User as UserIcon, HelpCircle, BookOpen } from 'lucide-react';
 import { useParentGuard } from '@/hooks/use-parent-guard';
+import { useEffect, useState } from 'react';
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import type { HelpWizard } from '@/lib/types';
 
 type RoleClaims = {
   isAdmin?: boolean;
@@ -30,11 +36,34 @@ type RoleClaims = {
 
 export default function Header() {
   const auth = useAuth();
+  const firestore = useFirestore();
   const router = useRouter();
   const { user, idTokenResult } = useUser();
   const { roleMode, switchToParentMode, activeChildId, startWizard } = useAppContext();
   const { showPinModal } = useParentGuard();
   const roleClaims: RoleClaims | null = idTokenResult?.claims ? (idTokenResult.claims as RoleClaims) : null;
+  const [liveWizards, setLiveWizards] = useState<HelpWizard[]>([]);
+
+  // Fetch live help wizards ordered by 'order' field
+  useEffect(() => {
+    if (!firestore) return;
+
+    const wizardsRef = collection(firestore, 'helpWizards');
+    const q = query(
+      wizardsRef,
+      where('status', '==', 'live'),
+      orderBy('order', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const wizards = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as HelpWizard));
+      setLiveWizards(wizards);
+    }, (error) => {
+      console.error('Error fetching help wizards:', error);
+    });
+
+    return () => unsubscribe();
+  }, [firestore]);
 
   const handleSignOut = async () => {
     if (!auth) return;
@@ -51,17 +80,11 @@ export default function Header() {
   const renderNavLinks = () => {
     switch (roleMode) {
       case 'admin':
+      case 'writer':
         return (
           <>
             <Button asChild variant="ghost"><Link href="/admin">Dashboard</Link></Button>
             <Button asChild variant="ghost"><Link href="/admin/users">Users</Link></Button>
-            <Button asChild variant="ghost"><Link href="/writer">Writer Tools</Link></Button>
-          </>
-        );
-      case 'writer':
-        return (
-          <>
-            <Button asChild variant="ghost"><Link href="/writer">Story Designer</Link></Button>
           </>
         );
       case 'child':
@@ -133,19 +156,33 @@ export default function Header() {
                   {renderRoleBadges()}
                 </div>
                 <DropdownMenuSeparator />
-                {roleClaims?.isAdmin && (
+                {(roleClaims?.isAdmin || roleClaims?.isWriter) && (
                     <DropdownMenuItem onClick={() => router.push('/admin')}>
                     Admin Dashboard
-                    </DropdownMenuItem>
-                )}
-                 {roleClaims?.isWriter && !roleClaims?.isAdmin && (
-                    <DropdownMenuItem onClick={() => router.push('/writer')}>
-                    Writer Dashboard
                     </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={() => router.push('/parent/settings')}>
                   Settings
                 </DropdownMenuItem>
+                {liveWizards.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <HelpCircle className="mr-2 h-4 w-4" />
+                        Help Tours
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {liveWizards.map((wizard) => (
+                          <DropdownMenuItem key={wizard.id} onClick={() => startWizard(wizard.id)}>
+                            <BookOpen className="mr-2 h-4 w-4" />
+                            {wizard.title}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
                   Sign out

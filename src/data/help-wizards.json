@@ -4,6 +4,7 @@
       "id": "parent-onboarding",
       "title": "Welcome to StoryPic Kids!",
       "status": "live",
+      "order": 1,
       "pages": [
         {
           "title": "Welcome! Let's get started.",

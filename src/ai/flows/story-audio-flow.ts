@@ -1,64 +1,18 @@
 'use server';
 
 /**
- * @fileOverview A flow to generate audio narration for stories using Gemini Pro TTS.
- * Generates high-quality audio optimized for children's stories with UK English.
+ * @fileOverview A flow to generate audio narration for stories using ElevenLabs TTS.
+ * Generates high-quality audio optimized for children's stories.
  */
 
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getStoryBucket } from '@/firebase/admin/storage';
 import { randomUUID } from 'crypto';
-import { GoogleGenAI } from '@google/genai';
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import type { Story, ChildProfile } from '@/lib/types';
-import { DEFAULT_TTS_VOICE } from '@/lib/tts-config';
+import { DEFAULT_TTS_VOICE, ELEVENLABS_MODEL } from '@/lib/tts-config';
 import type { StoryAudioFlowInput, StoryAudioFlowOutput } from '@/lib/tts-config';
-
-/**
- * Convert raw PCM audio data to WAV format by adding proper headers.
- * Gemini TTS returns audio/L16 (16-bit linear PCM) which browsers cannot play directly.
- */
-function pcmToWav(pcmBuffer: Buffer, sampleRate: number = 24000, channels: number = 1, bitsPerSample: number = 16): Buffer {
-  const byteRate = sampleRate * channels * (bitsPerSample / 8);
-  const blockAlign = channels * (bitsPerSample / 8);
-  const dataSize = pcmBuffer.length;
-  const headerSize = 44;
-  const fileSize = headerSize + dataSize - 8;
-
-  const wavBuffer = Buffer.alloc(headerSize + dataSize);
-
-  // RIFF header
-  wavBuffer.write('RIFF', 0);
-  wavBuffer.writeUInt32LE(fileSize, 4);
-  wavBuffer.write('WAVE', 8);
-
-  // fmt subchunk
-  wavBuffer.write('fmt ', 12);
-  wavBuffer.writeUInt32LE(16, 16); // Subchunk1Size (16 for PCM)
-  wavBuffer.writeUInt16LE(1, 20); // AudioFormat (1 for PCM)
-  wavBuffer.writeUInt16LE(channels, 22);
-  wavBuffer.writeUInt32LE(sampleRate, 24);
-  wavBuffer.writeUInt32LE(byteRate, 28);
-  wavBuffer.writeUInt16LE(blockAlign, 32);
-  wavBuffer.writeUInt16LE(bitsPerSample, 34);
-
-  // data subchunk
-  wavBuffer.write('data', 36);
-  wavBuffer.writeUInt32LE(dataSize, 40);
-
-  // Copy PCM data
-  pcmBuffer.copy(wavBuffer, headerSize);
-
-  return wavBuffer;
-}
-
-/**
- * Parse sample rate from mime type like "audio/L16;codec=pcm;rate=24000"
- */
-function parseSampleRate(mimeType: string): number {
-  const rateMatch = mimeType.match(/rate=(\d+)/);
-  return rateMatch ? parseInt(rateMatch[1], 10) : 24000;
-}
 
 /**
  * Calculate child's age from date of birth
@@ -76,7 +30,23 @@ function calculateAge(dateOfBirth: any): number | null {
 }
 
 /**
- * Main flow to generate audio narration for a story using Gemini Pro TTS
+ * Convert a readable stream to a buffer
+ */
+async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+
+  return Buffer.concat(chunks);
+}
+
+/**
+ * Main flow to generate audio narration for a story using ElevenLabs TTS
  */
 export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryAudioFlowOutput> {
   const { storyId, forceRegenerate = false, voiceConfig } = input;
@@ -111,19 +81,15 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
       return { ok: false, errorMessage: 'Story has no text to narrate' };
     }
 
-    // Load child profile to get age, voice preference, and name pronunciation
+    // Load child profile to get age and voice preference
     let childAge: number | null = null;
     let preferredVoice = DEFAULT_TTS_VOICE;
-    let childName: string | null = null;
-    let namePronunciation: string | null = null;
 
     if (story.childId) {
       const childSnap = await firestore.collection('children').doc(story.childId).get();
       if (childSnap.exists) {
         const childProfile = childSnap.data() as ChildProfile;
         childAge = calculateAge(childProfile.dateOfBirth);
-        childName = childProfile.displayName || null;
-        namePronunciation = childProfile.namePronunciation || null;
         // Use child's preferred voice if set
         if (childProfile.preferredVoiceId) {
           preferredVoice = childProfile.preferredVoiceId;
@@ -132,7 +98,7 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
     }
 
     // Voice from input takes priority
-    const voiceName = voiceConfig?.voiceName || preferredVoice;
+    const voiceId = voiceConfig?.voiceName || preferredVoice;
 
     // Update status to generating
     await storyRef.update({
@@ -142,79 +108,28 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    // Build the prompt for Gemini TTS
-    // Use UK English and age-appropriate reading style
-    const ageHint = childAge ? `${childAge} year old` : 'young';
+    console.log(`[story-audio-flow] Calling ElevenLabs TTS with voice: ${voiceId}, model: ${ELEVENLABS_MODEL}`);
 
-    // Build pronunciation guidance if available
-    let pronunciationHint = '';
-    if (childName && namePronunciation) {
-      pronunciationHint = `\n\nIMPORTANT: The name "${childName}" should be pronounced as "${namePronunciation}".`;
-    }
-
-    const prompt = `Read aloud in a way suitable for a ${ageHint} child. Use a British English accent. Read warmly and engagingly, with appropriate pauses and expression for a bedtime story.${pronunciationHint}\n\n${story.storyText}`;
-
-    console.log(`[story-audio-flow] Calling Gemini Pro TTS with voice: ${voiceName}, age hint: ${ageHint}${namePronunciation ? `, pronunciation hint for ${childName}` : ''}`);
-
-    // Initialize Gemini client
-    const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-
-    // Generate audio using Gemini Pro TTS
-    const response = await genai.models.generateContent({
-      model: 'gemini-2.5-pro-preview-tts',
-      contents: prompt,
-      config: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: voiceName,
-            },
-          },
-        },
-      },
+    // Initialize ElevenLabs client
+    const elevenlabs = new ElevenLabsClient({
+      apiKey: process.env.ELEVENLABS_API_KEY!,
     });
 
-    // Extract audio data from response
-    const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-    if (!audioData?.data) {
-      throw new Error('Gemini TTS returned no audio content');
-    }
+    // Generate audio using ElevenLabs TTS with British English pronunciation
+    const audioStream = await elevenlabs.textToSpeech.convert(voiceId, {
+      text: story.storyText,
+      modelId: ELEVENLABS_MODEL,
+      languageCode: 'en-GB',
+    });
 
-    // Decode base64 audio data
-    const rawAudioBuffer = Buffer.from(audioData.data, 'base64');
-    const rawMimeType = audioData.mimeType || 'audio/wav';
+    // Convert stream to buffer
+    const audioBuffer = await streamToBuffer(audioStream as unknown as ReadableStream<Uint8Array>);
 
-    console.log(`[story-audio-flow] Received audio: ${rawAudioBuffer.byteLength} bytes, type: ${rawMimeType}`);
+    console.log(`[story-audio-flow] Received audio: ${audioBuffer.byteLength} bytes`);
 
-    // Convert PCM to WAV if needed (Gemini TTS returns audio/L16 which browsers can't play)
-    let audioBuffer: Buffer;
-    let mimeType: string;
-    let fileExtension: string;
-
-    if (rawMimeType.includes('L16') || rawMimeType.includes('pcm')) {
-      const sampleRate = parseSampleRate(rawMimeType);
-      console.log(`[story-audio-flow] Converting PCM to WAV (sample rate: ${sampleRate})`);
-      audioBuffer = pcmToWav(rawAudioBuffer, sampleRate);
-      mimeType = 'audio/wav';
-      fileExtension = 'wav';
-    } else if (rawMimeType.includes('mp3')) {
-      audioBuffer = rawAudioBuffer;
-      mimeType = rawMimeType;
-      fileExtension = 'mp3';
-    } else if (rawMimeType.includes('wav')) {
-      audioBuffer = rawAudioBuffer;
-      mimeType = rawMimeType;
-      fileExtension = 'wav';
-    } else {
-      // Default: assume it might be PCM and convert to be safe
-      console.log(`[story-audio-flow] Unknown format ${rawMimeType}, attempting PCM to WAV conversion`);
-      audioBuffer = pcmToWav(rawAudioBuffer);
-      mimeType = 'audio/wav';
-      fileExtension = 'wav';
-    }
-
-    console.log(`[story-audio-flow] Final audio: ${audioBuffer.byteLength} bytes, type: ${mimeType}`);
+    // ElevenLabs returns MP3 by default
+    const mimeType = 'audio/mpeg';
+    const fileExtension = 'mp3';
 
     // Upload to Firebase Storage
     const bucket = await getStoryBucket();
@@ -229,8 +144,8 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
         metadata: {
           storyId,
           parentUid: story.parentUid,
-          voiceId: voiceName,
-          model: 'gemini-2.5-pro-preview-tts',
+          voiceId: voiceId,
+          model: ELEVENLABS_MODEL,
           firebaseStorageDownloadTokens: downloadToken,
         },
       },
@@ -249,7 +164,7 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
       storagePath,
       downloadToken,
       durationSeconds: estimatedDurationSeconds,
-      voiceId: voiceName,
+      voiceId: voiceId,
       sizeBytes: audioBuffer.byteLength,
     };
 
@@ -259,7 +174,7 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
       audioMetadata: {
         ...audioMetadata,
         generatedAt: FieldValue.serverTimestamp(),
-        model: 'gemini-2.5-pro-preview-tts',
+        model: ELEVENLABS_MODEL,
       },
       'audioGeneration.status': 'ready',
       'audioGeneration.lastCompletedAt': FieldValue.serverTimestamp(),

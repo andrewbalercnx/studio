@@ -13,7 +13,6 @@ import {
   Volume2,
   VolumeX,
   Wand2,
-  Eye,
   Loader2,
   Mic,
   RefreshCw,
@@ -283,10 +282,10 @@ export function StoryCard({
           )}
         </div>
 
-        {/* View Story button */}
+        {/* View Story button - links to child-friendly reader */}
         <Button asChild variant="outline" size="sm" className="w-full">
-          <Link href={`/story/session/${story.storySessionId}/compiled`}>
-            <Eye className="mr-2 h-4 w-4" />
+          <Link href={`/child/${childId}/story/${story.id}/read`}>
+            <BookOpen className="mr-2 h-4 w-4" />
             View Story
           </Link>
         </Button>

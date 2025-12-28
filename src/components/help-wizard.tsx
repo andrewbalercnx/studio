@@ -28,6 +28,7 @@ export function HelpWizard() {
   const [returnUrl, setReturnUrl] = useState<string | null>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const offsetRef = useRef({ x: 0, y: 0 });
 
@@ -55,6 +56,45 @@ export function HelpWizard() {
       router.push(currentPage.route);
     }
   }, [currentPage, router]);
+
+  // Handle element highlighting
+  useEffect(() => {
+    if (!currentPage?.highlightSelector) {
+      setHighlightRect(null);
+      return;
+    }
+
+    // Small delay to allow page navigation to complete
+    const timeoutId = setTimeout(() => {
+      const element = document.querySelector(currentPage.highlightSelector!);
+      if (element) {
+        const rect = element.getBoundingClientRect();
+        setHighlightRect(rect);
+
+        // Scroll element into view if needed
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        setHighlightRect(null);
+      }
+    }, 300);
+
+    // Update highlight position on scroll/resize
+    const updateHighlight = () => {
+      const element = document.querySelector(currentPage.highlightSelector!);
+      if (element) {
+        setHighlightRect(element.getBoundingClientRect());
+      }
+    };
+
+    window.addEventListener('scroll', updateHighlight, true);
+    window.addEventListener('resize', updateHighlight);
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('scroll', updateHighlight, true);
+      window.removeEventListener('resize', updateHighlight);
+    };
+  }, [currentPage?.highlightSelector, currentPage?.route]);
 
   const handleClose = () => {
     if (returnUrl) {
@@ -121,7 +161,33 @@ export function HelpWizard() {
   }
 
   return (
-    <Dialog open={true} onOpenChange={(isOpen) => !isOpen && handleClose()} modal={false}>
+    <>
+      {/* Highlight overlay for selected element */}
+      {highlightRect && (
+        <div
+          className="pointer-events-none fixed inset-0 z-40"
+          style={{
+            background: `
+              linear-gradient(to bottom, rgba(0,0,0,0.5) ${highlightRect.top - 8}px, transparent ${highlightRect.top - 8}px),
+              linear-gradient(to top, rgba(0,0,0,0.5) ${window.innerHeight - highlightRect.bottom - 8}px, transparent ${window.innerHeight - highlightRect.bottom - 8}px),
+              linear-gradient(to right, rgba(0,0,0,0.5) ${highlightRect.left - 8}px, transparent ${highlightRect.left - 8}px),
+              linear-gradient(to left, rgba(0,0,0,0.5) ${window.innerWidth - highlightRect.right - 8}px, transparent ${window.innerWidth - highlightRect.right - 8}px)
+            `,
+          }}
+        />
+      )}
+      {highlightRect && (
+        <div
+          className="pointer-events-none fixed z-40 rounded-lg ring-4 ring-primary ring-offset-2 ring-offset-background"
+          style={{
+            top: highlightRect.top - 4,
+            left: highlightRect.left - 4,
+            width: highlightRect.width + 8,
+            height: highlightRect.height + 8,
+          }}
+        />
+      )}
+      <Dialog open={true} onOpenChange={(isOpen) => !isOpen && handleClose()} modal={false}>
        <DialogContent
         ref={dialogRef}
         className="sm:max-w-md cursor-grab"
@@ -167,5 +233,6 @@ export function HelpWizard() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

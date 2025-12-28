@@ -96,6 +96,9 @@ export const createStoryCharacterFlow = ai.defineFlow(
         updatedAt: FieldValue.serverTimestamp(),
         avatarUrl: `https://picsum.photos/seed/${encodeURIComponent(displayName)}/200/200`,
         photos: [],
+        isParentGenerated: false, // AI-generated during story
+        usageCount: 1, // Created during story, so count starts at 1
+        lastUsedAt: FieldValue.serverTimestamp(),
       };
 
       const newCharacterRef = await charactersRef.add(newCharacterData);

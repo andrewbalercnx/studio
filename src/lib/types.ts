@@ -61,6 +61,18 @@ export type UserProfile = {
   savedShippingAddress?: PrintOrderAddress;
 };
 
+// Parent's cloned voice for TTS (stored in Firestore: users/{parentUid}/voices/{voiceId})
+export type ParentVoice = {
+  id: string; // Firestore document ID (same as ElevenLabs voice_id)
+  parentUid: string; // Owner's Firebase UID
+  name: string; // Display name (e.g., "Mum", "Dad", "Grandma")
+  elevenLabsVoiceId: string; // ElevenLabs voice ID returned from cloning
+  sampleAudioUrl?: string; // URL to the original audio sample in Firebase Storage
+  sampleStoragePath?: string; // Storage path for the sample
+  createdAt: any;
+  updatedAt?: any;
+};
+
 export type Choice = {
     id: string;
     text: string;
@@ -345,7 +357,7 @@ export type StoryBookOutput = {
   storyOutputTypeId: string;      // Picture Book, Poem, etc.
   imageStyleId: string;           // Watercolor, Cartoon, etc.
   imageStylePrompt: string;       // The actual style prompt for image generation
-  printLayoutId: string;          // Determines image dimensions
+  printLayoutId?: string | null;  // Determines image dimensions (optional - if not set, uses unconstrained defaults)
 
   // Computed from PrintLayout for image generation
   imageWidthPx?: number;          // Width in pixels (layoutWidth * 300 DPI)
@@ -445,20 +457,27 @@ export type PrintStoryBook = {
 };
 
 export type StoryBookPageGenerationStatus = {
-    status: 'idle' | 'running' | 'ready' | 'error';
+    status: 'idle' | 'running' | 'ready' | 'error' | 'rate_limited';
     lastRunAt?: any;
     lastCompletedAt?: any;
     lastErrorMessage?: string | null;
     pagesCount?: number;
+    diagnostics?: Record<string, unknown> | null;
+    // Rate limit retry tracking
+    rateLimitRetryAt?: any;        // When the next automatic retry will occur
+    rateLimitRetryCount?: number;  // How many retries have been attempted
 };
 
 export type StoryBookImageGenerationStatus = {
-    status: 'idle' | 'running' | 'ready' | 'error';
+    status: 'idle' | 'running' | 'ready' | 'error' | 'rate_limited';
     lastRunAt?: any;
     lastCompletedAt?: any;
     lastErrorMessage?: string | null;
     pagesReady?: number;
     pagesTotal?: number;
+    // Rate limit retry tracking
+    rateLimitRetryAt?: any;        // When the next automatic retry will occur
+    rateLimitRetryCount?: number;  // How many retries have been attempted
 };
 
 export type StoryOutputPage = {
@@ -469,6 +488,7 @@ export type StoryOutputPage = {
     bodyText?: string;
     displayText?: string;
     entityIds?: string[];  // IDs of characters/children referenced on this page ($$id$$ placeholders)
+    imageDescription?: string;  // AI-generated scene description for image generation (uses $$id$$ placeholders)
     imagePrompt?: string;
     imageUrl?: string;
     imageStatus?: 'pending' | 'generating' | 'ready' | 'error';
@@ -919,17 +939,9 @@ export type ChildProfile = {
     // Can be phonetic spelling (e.g., "SEE-oh-ban" for Siobhan) or IPA
     namePronunciation?: string;
 
-    // Preferred AI voice for Gemini TTS story reading
-    // Available voices: Puck, Charon, Kore, Fenrir, Aoede, Leda, Orus, Zephyr, etc.
+    // Preferred AI voice for TTS story reading
+    // Can be an ElevenLabs preset voice ID or a parent's cloned voice ID
     preferredVoiceId?: string;
-
-    // Custom voice configuration (for future use with voice cloning)
-    customVoice?: {
-      audioStoragePath?: string; // Path to uploaded voice sample
-      audioUrl?: string;
-      voiceName?: string; // Custom name for the voice
-      createdAt?: any;
-    };
 
     // Legacy: Preferred speech model for browser's Web Speech API
     // Uses browser's Web Speech API voice name (e.g., 'Google US English', 'Microsoft Zira')
@@ -1058,6 +1070,11 @@ export type Character = {
     createdAt: Timestamp;
     updatedAt: Timestamp;
 
+    // Character origin and usage tracking
+    isParentGenerated?: boolean; // true = created by parent, false/undefined = AI-generated during story
+    usageCount?: number; // Number of times this character has been used in stories
+    lastUsedAt?: any; // Timestamp of when character was last used in a story
+
     // Legacy fields for backwards compatibility with existing flows
     sessionId?: string;
     role?: string; // Legacy: use 'type' instead
@@ -1087,6 +1104,10 @@ export type StoryOutputType = {
     shortDescription: string;
     childFacingLabel: string;
     category: "picture_book" | "poem" | "coloring_pages" | "audio_script";
+    // Optional default print layout for this output type
+    // When specified, images will be generated with dimensions from this layout
+    // When not specified, image dimensions are unconstrained (default square)
+    defaultPrintLayoutId?: string;
     layoutHints?: {
         pageCount?: number;
         needsImages?: boolean;
@@ -1111,6 +1132,7 @@ export type HelpWizardPage = {
   title: string;
   description: string;
   route: string;
+  highlightSelector?: string; // CSS selector for element to highlight (e.g., "#submit-btn", ".nav-menu")
 };
 
 export type StoryWizardAnswer = {
@@ -1155,6 +1177,7 @@ export type HelpWizard = {
   title: string;
   pages: HelpWizardPage[];
   status: 'draft' | 'live';
+  order: number; // Display order in help menu (lower numbers appear first)
   createdAt: any;
   updatedAt: any;
 };

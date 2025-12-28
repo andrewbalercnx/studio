@@ -3,7 +3,8 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, PlusCircle, Copy, BookOpen, Edit } from 'lucide-react';
+import { LoaderCircle, PlusCircle, BookOpen, Edit } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { useFirestore } from '@/firebase';
 import { collection, onSnapshot, query, orderBy, writeBatch, doc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { useEffect, useState, useCallback } from 'react';
@@ -56,7 +57,7 @@ export default function AdminHelpWizardsPage() {
 
     setLoading(true);
     const wizardsRef = collection(firestore, 'helpWizards');
-    const q = query(wizardsRef, orderBy('title', 'asc'));
+    const q = query(wizardsRef, orderBy('order', 'asc'));
 
     const unsubscribe = onSnapshot(q,
       (snapshot) => {
@@ -105,6 +106,10 @@ export default function AdminHelpWizardsPage() {
                 <div className="flex items-center gap-2">
                     <BookOpen className="h-4 w-4 text-primary" />
                     <span>{wizard.title}</span>
+                    <Badge variant={wizard.status === 'live' ? 'default' : 'secondary'} className="ml-2">
+                      {wizard.status}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground ml-2">#{wizard.order ?? 0}</span>
                 </div>
               </AccordionTrigger>
               <Button variant="ghost" size="sm" className="shrink-0" onClick={(e) => { e.stopPropagation(); handleOpenForm(wizard);}}>

@@ -2,13 +2,13 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { LoaderCircle, CheckCircle2, Sparkles } from 'lucide-react';
+import { LoaderCircle, CheckCircle2, Sparkles, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type WorkflowProgressProps = {
   title: string;
   description: string;
-  status: 'idle' | 'running' | 'ready' | 'error';
+  status: 'idle' | 'running' | 'ready' | 'error' | 'rate_limited';
   currentStep?: number;
   totalSteps?: number;
   errorMessage?: string | null;
@@ -39,6 +39,8 @@ export function WorkflowProgress({
         return <LoaderCircle className="h-6 w-6 animate-spin text-primary" />;
       case 'ready':
         return <CheckCircle2 className="h-6 w-6 text-green-500" />;
+      case 'rate_limited':
+        return <Moon className="h-6 w-6 text-amber-500" />;
       case 'error':
         return <span className="text-2xl">⚠️</span>;
       default:
@@ -55,6 +57,8 @@ export function WorkflowProgress({
         return 'Processing...';
       case 'ready':
         return 'Complete!';
+      case 'rate_limited':
+        return 'Taking a break - will retry automatically';
       case 'error':
         return errorMessage || 'An error occurred';
       default:
@@ -66,6 +70,7 @@ export function WorkflowProgress({
     <Card className={cn('border-2',
       status === 'running' && 'border-primary/50 bg-primary/5',
       status === 'ready' && 'border-green-500/50 bg-green-50',
+      status === 'rate_limited' && 'border-amber-500/50 bg-amber-50',
       status === 'error' && 'border-destructive/50 bg-destructive/5',
       className
     )}>
@@ -84,6 +89,7 @@ export function WorkflowProgress({
           className={cn(
             "h-2",
             status === 'ready' && "bg-green-100",
+            status === 'rate_limited' && "bg-amber-100",
             status === 'error' && "bg-destructive/20"
           )}
         />
@@ -91,6 +97,7 @@ export function WorkflowProgress({
           "text-sm",
           status === 'running' && "text-primary font-medium",
           status === 'ready' && "text-green-600 font-medium",
+          status === 'rate_limited' && "text-amber-600 font-medium",
           status === 'error' && "text-destructive",
           status === 'idle' && "text-muted-foreground"
         )}>

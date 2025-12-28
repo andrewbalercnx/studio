@@ -374,6 +374,8 @@ export function EntityEditor({
             photos: [],
             avatarUrl: `https://picsum.photos/seed/${docId}/200/200`,
             createdAt: serverTimestamp(),
+            isParentGenerated: true, // Parent-created character
+            usageCount: 0, // Not used in any story yet
           });
         }
       } else {

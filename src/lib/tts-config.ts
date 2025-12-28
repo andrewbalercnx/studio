@@ -1,34 +1,42 @@
 /**
- * Shared TTS configuration - voices and types for Gemini TTS
+ * Shared TTS configuration - voices and types for ElevenLabs TTS
  */
 
 /**
- * Available Gemini TTS voices with their characteristics
+ * Available ElevenLabs TTS voices with their characteristics
  * These are optimized for different storytelling styles
+ * Using eleven_turbo_v2_5 model for fast, high-quality output
  */
-export const GEMINI_TTS_VOICES = [
-  { id: 'Puck', name: 'Puck', description: 'Upbeat and playful', recommended: true },
-  { id: 'Charon', name: 'Charon', description: 'Calm and soothing', recommended: false },
-  { id: 'Kore', name: 'Kore', description: 'Warm and friendly', recommended: true },
-  { id: 'Fenrir', name: 'Fenrir', description: 'Strong and confident', recommended: false },
-  { id: 'Aoede', name: 'Aoede', description: 'Gentle and melodic', recommended: true },
-  { id: 'Leda', name: 'Leda', description: 'Bright and cheerful', recommended: false },
-  { id: 'Orus', name: 'Orus', description: 'Deep and resonant', recommended: false },
-  { id: 'Zephyr', name: 'Zephyr', description: 'Light and airy', recommended: false },
-  { id: 'Callirrhoe', name: 'Callirrhoe', description: 'Expressive storyteller', recommended: false },
-  { id: 'Autonoe', name: 'Autonoe', description: 'Nurturing and kind', recommended: false },
+export const ELEVENLABS_TTS_VOICES = [
+  { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', description: 'Warm and calm, American', recommended: true },
+  { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella', description: 'Soft and gentle, American', recommended: true },
+  { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni', description: 'Expressive and warm, American', recommended: false },
+  { id: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli', description: 'Young and friendly, American', recommended: true },
+  { id: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh', description: 'Deep and engaging, American', recommended: false },
+  { id: 'VR6AewLTigWG4xSOukaG', name: 'Arnold', description: 'Strong and clear, American', recommended: false },
+  { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam', description: 'Deep and narrating, American', recommended: false },
+  { id: 'yoZ06aMxZJJ28mfd3POQ', name: 'Sam', description: 'Calm narrator, American', recommended: false },
+  { id: 'jBpfuIE2acCO8z3wKNLl', name: 'Gigi', description: 'Childlike and playful, American', recommended: true },
+  { id: 'ThT5KcBeYPX3keUQqHPh', name: 'Dorothy', description: 'British and pleasant', recommended: true },
 ] as const;
 
-export type GeminiVoiceId = typeof GEMINI_TTS_VOICES[number]['id'];
+// Keep old export name for backwards compatibility during migration
+export const GEMINI_TTS_VOICES = ELEVENLABS_TTS_VOICES;
 
-// Default voice - Kore is warm and friendly, great for children's stories
-export const DEFAULT_TTS_VOICE = 'Kore';
+export type ElevenLabsVoiceId = typeof ELEVENLABS_TTS_VOICES[number]['id'];
+export type GeminiVoiceId = ElevenLabsVoiceId; // Backwards compatibility
+
+// Default voice - Rachel is warm and calm, great for children's stories
+export const DEFAULT_TTS_VOICE = '21m00Tcm4TlvDq8ikWAM'; // Rachel
+
+// ElevenLabs model to use
+export const ELEVENLABS_MODEL = 'eleven_turbo_v2_5';
 
 export type StoryAudioFlowInput = {
   storyId: string;
   forceRegenerate?: boolean;
   voiceConfig?: {
-    voiceName?: string; // Gemini voice: Puck, Charon, Kore, Fenrir, Aoede, etc.
+    voiceName?: string; // ElevenLabs voice ID
   };
 };
 

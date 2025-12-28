@@ -14,6 +14,7 @@ import { logServerSessionEvent } from '@/lib/session-events.server';
 import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
 import { initializeRunTrace, logAICallToTrace, completeRunTrace } from '@/lib/ai-run-trace';
 import { storyTextCompileFlow } from './story-text-compile-flow';
+import { updateCharacterUsage } from '@/lib/character-usage';
 
 /**
  * Extract all $$id$$ placeholders from text
@@ -178,6 +179,9 @@ export const storyCompileFlow = ai.defineFlow(
 
                 await storyRef.set(storyPayload, { merge: true });
 
+                // Update character usage statistics
+                await updateCharacterUsage(actors, childId);
+
                 await logServerSessionEvent({
                     firestore,
                     sessionId,
@@ -294,6 +298,9 @@ export const storyCompileFlow = ai.defineFlow(
 
             await storyRef.set(storyPayload, { merge: true });
             debug.details.storyDocId = storyRef.id;
+
+            // Update character usage statistics
+            await updateCharacterUsage(finalActorIds, childId);
 
             await logServerSessionEvent({
                 firestore,

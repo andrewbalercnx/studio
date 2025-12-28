@@ -1,6 +1,9 @@
-// Rules version: v16 - Soft delete protection: deleted items only visible to admins
+// Rules version: v17 - Added aiRunTraces collection for AI generation tracing
 // IMPORTANT: Firebase Admin SDK bypasses these rules entirely.
 // These rules only apply to client-side (browser/mobile) requests.
+//
+// CHANGES IN v17:
+// - Added aiRunTraces collection for comprehensive AI call tracing (read/write: admin only)
 //
 // CHANGES IN v16:
 // - Added notDeleted() helper to check if document is soft-deleted
@@ -293,6 +296,10 @@ service cloud.firestore {
 
     // ========== SYSTEM & LOG COLLECTIONS ==========
     match /aiFlowLogs/{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    match /aiRunTraces/{document=**} {
       allow read, write: if isAdmin();
     }
 

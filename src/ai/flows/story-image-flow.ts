@@ -778,6 +778,7 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
 
   let generation;
   const MAX_RETRIES = 2;
+  const GENERATION_TIMEOUT_MS = 120000; // 2 minute timeout for image generation
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -805,11 +806,20 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
       }
 
-      generation = await ai.generate({
+      // Wrap ai.generate in a timeout to prevent hanging on rate limits
+      const generatePromise = ai.generate({
         model: DEFAULT_IMAGE_MODEL,
         prompt: currentPromptParts,
         config: generateConfig,
       });
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Image generation timed out after ${GENERATION_TIMEOUT_MS / 1000} seconds. The API may be rate limited or experiencing issues.`));
+        }, GENERATION_TIMEOUT_MS);
+      });
+
+      generation = await Promise.race([generatePromise, timeoutPromise]);
       console.log('[story-image-flow] Generation completed. Keys:', Object.keys(generation));
       await logAIFlow({ flowName: 'storyImageFlow:createImage', sessionId: null, prompt: currentPromptText, response: generation, startTime, modelName: DEFAULT_IMAGE_MODEL });
       lastError = null;
@@ -822,7 +832,12 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
 
       // Check if this is a retryable error
       const isPatternError = errorMessage.includes('did not match the expected pattern');
-      const isTransientError = errorMessage.includes('RESOURCE_EXHAUSTED') ||
+      const isRateLimitError = errorMessage.includes('RESOURCE_EXHAUSTED') ||
+                               errorMessage.includes('429') ||
+                               errorMessage.includes('quota') ||
+                               errorMessage.includes('rate') ||
+                               errorMessage.includes('timed out');
+      const isTransientError = isRateLimitError ||
                                errorMessage.includes('UNAVAILABLE') ||
                                errorMessage.includes('DEADLINE_EXCEEDED') ||
                                errorMessage.includes('temporarily');
@@ -833,7 +848,14 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
       }
 
       if (attempt === MAX_RETRIES) {
-        // Final attempt failed
+        // Final attempt failed - provide clear error messages
+        if (isRateLimitError) {
+          throw new Error(
+            `Image generation failed: Rate limit exceeded or timeout. ` +
+            `The Gemini API quota has been exhausted. Please wait a few minutes and try again. ` +
+            `Original error: ${errorMessage}`
+          );
+        }
         if (isPatternError) {
           // Truncate prompt for error message (keep it readable but include key info)
           const promptPreview = currentPromptText.length > 300
@@ -1012,8 +1034,9 @@ export const storyImageFlow = ai.defineFlow(
           logs.push(`[aspectRatio] ${aspectRatio}`);
         }
 
-        // Use bodyText (with $$Id$$ placeholders) as the scene text, falling back to imagePrompt
-        const sceneText = page.bodyText || page.imagePrompt;
+        // Use imageDescription (from pagination flow) as the scene text, with fallbacks
+        // Priority: imageDescription > bodyText > imagePrompt
+        const sceneText = page.imageDescription || page.bodyText || page.imagePrompt;
 
         generated = await createImage({
           sceneText,

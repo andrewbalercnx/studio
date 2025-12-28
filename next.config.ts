@@ -1,9 +1,15 @@
 
 import type {NextConfig} from 'next';
 
+// Only ignore TypeScript errors in development/preview environments
+// Production builds should fail on type errors to catch issues early
+const shouldIgnoreTypeErrors = process.env.NODE_ENV !== 'production' ||
+  process.env.IGNORE_BUILD_ERRORS === 'true';
+
 const nextConfig: NextConfig = {
   typescript: {
-    ignoreBuildErrors: true,
+    // In production, type errors will fail the build unless IGNORE_BUILD_ERRORS is set
+    ignoreBuildErrors: shouldIgnoreTypeErrors,
   },
   images: {
     remotePatterns: [

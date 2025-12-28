@@ -2,6 +2,21 @@
 # https://firebase.google.com/docs/app-hosting/configure
 
 runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
-  maxInstances: 1
+  # Allow auto-scaling up to 5 instances under load
+  # This prevents CPU/memory-heavy requests (AI flows, PDF generation)
+  # from piling onto a single VM and causing crashes
+  minInstances: 0
+  maxInstances: 5
+
+  # Resource limits for each instance
+  # AI and PDF generation are CPU/memory intensive
+  cpu: 2
+  memoryMiB: 2048
+
+  # Request timeout (5 minutes) for long-running operations
+  # Note: Consider moving very long operations to Cloud Functions or Cloud Run Jobs
+  timeoutSeconds: 300
+
+  # Concurrency limit per instance
+  # Lower value prevents memory exhaustion from parallel heavy requests
+  concurrency: 10

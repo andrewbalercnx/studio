@@ -280,20 +280,36 @@ function RunTraceDetail({ trace }: { trace: AIRunTrace }) {
       {/* Individual Calls */}
       <div>
         <h3 className="text-sm font-semibold mb-3">AI Calls ({calls.length})</h3>
-        <div className="space-y-2">
-          {displayedCalls.map((call, index) => (
-            <CallTraceCard key={call.callId || index} call={call} index={index} />
-          ))}
-        </div>
-        {calls.length > 5 && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-3 w-full"
-            onClick={() => setShowAllCalls(!showAllCalls)}
-          >
-            {showAllCalls ? 'Show Less' : `Show All ${calls.length} Calls`}
-          </Button>
+        {calls.length === 0 ? (
+          <div className="text-center py-8 border-2 border-dashed rounded-lg bg-muted/30">
+            <p className="text-muted-foreground mb-2">No AI calls recorded for this trace.</p>
+            <p className="text-xs text-muted-foreground">
+              This can happen if:
+            </p>
+            <ul className="text-xs text-muted-foreground mt-1 space-y-1">
+              <li>• The session was completed before instrumentation was deployed</li>
+              <li>• The trace was initialized but no AI calls were made yet</li>
+              <li>• There was an error logging the calls</li>
+            </ul>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              {displayedCalls.map((call, index) => (
+                <CallTraceCard key={call.callId || index} call={call} index={index} />
+              ))}
+            </div>
+            {calls.length > 5 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 w-full"
+                onClick={() => setShowAllCalls(!showAllCalls)}
+              >
+                {showAllCalls ? 'Show Less' : `Show All ${calls.length} Calls`}
+              </Button>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -425,6 +441,14 @@ export default function AdminRunTracesPage() {
 
         {error && <p className="text-destructive text-sm">{error}</p>}
 
+        {/* Recent Traces Header */}
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Recent Traces</h3>
+          <p className="text-xs text-muted-foreground">
+            Showing {traces.length} most recent traces
+          </p>
+        </div>
+
         {traces.length === 0 ? (
           <div className="text-center py-8 border-2 border-dashed rounded-lg">
             <p className="text-muted-foreground">No run traces found yet.</p>
@@ -434,49 +458,61 @@ export default function AdminRunTracesPage() {
           </div>
         ) : (
           <div className="space-y-2">
-            {traces.map((trace) => (
-              <button
-                key={trace.id}
-                onClick={() => setSelectedTrace(trace)}
-                className="w-full p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-sm">{trace.sessionId}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {trace.storyTypeName || 'Unknown Story Type'}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-sm font-mono">{trace.summary?.totalCalls || 0} calls</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatTokens(trace.summary?.totalTokens)} tokens
-                      </p>
+            {traces.map((trace) => {
+              const hasCalls = (trace.summary?.totalCalls || 0) > 0;
+              return (
+                <button
+                  key={trace.id}
+                  onClick={() => setSelectedTrace(trace)}
+                  className={`w-full p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left ${
+                    !hasCalls ? 'opacity-60' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <p className="font-semibold text-sm">{trace.sessionId}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {trace.storyTypeName || 'Unknown Story Type'} &bull; {formatTimestamp(trace.startedAt)}
+                        </p>
+                      </div>
+                      {!hasCalls && (
+                        <Badge variant="outline" className="text-xs">
+                          No calls
+                        </Badge>
+                      )}
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-mono text-green-600">
-                        {formatCost(trace.summary?.totalCost || 0)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {((trace.summary?.totalLatencyMs || 0) / 1000).toFixed(1)}s
-                      </p>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-sm font-mono">{trace.summary?.totalCalls || 0} calls</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatTokens(trace.summary?.totalTokens)} tokens
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-mono text-green-600">
+                          {formatCost(trace.summary?.totalCost || 0)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {((trace.summary?.totalLatencyMs || 0) / 1000).toFixed(1)}s
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          trace.status === 'completed'
+                            ? 'default'
+                            : trace.status === 'error'
+                            ? 'destructive'
+                            : 'secondary'
+                        }
+                      >
+                        {trace.status}
+                      </Badge>
                     </div>
-                    <Badge
-                      variant={
-                        trace.status === 'completed'
-                          ? 'default'
-                          : trace.status === 'error'
-                          ? 'destructive'
-                          : 'secondary'
-                      }
-                    >
-                      {trace.status}
-                    </Badge>
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
