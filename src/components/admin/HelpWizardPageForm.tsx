@@ -44,12 +44,16 @@ export function HelpWizardPageForm({ page, onSave, onCancel }: HelpWizardPageFor
     }
   });
 
-  const onSubmit = (data: HelpWizardPageFormValues) => {
-    onSave({ ...data, position });
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleSubmit((data) => {
+      onSave({ ...data, position });
+    })(e);
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="page-title">Page Title</Label>
         <Input id="page-title" {...register('title')} />

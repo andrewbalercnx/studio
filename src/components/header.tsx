@@ -26,7 +26,7 @@ import { Shield, Pen, User as UserIcon, HelpCircle, BookOpen, Target } from 'luc
 import { useParentGuard } from '@/hooks/use-parent-guard';
 import { useWizardTargetDiagnosticsOptional } from '@/hooks/use-wizard-target-diagnostics';
 import { useEffect, useState } from 'react';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import type { HelpWizard } from '@/lib/types';
 
 type RoleClaims = {
@@ -47,18 +47,17 @@ export default function Header() {
   const [liveWizards, setLiveWizards] = useState<HelpWizard[]>([]);
 
   // Fetch live help wizards ordered by 'order' field
+  // Note: We fetch all and filter/sort client-side to avoid requiring a composite index
   useEffect(() => {
     if (!firestore) return;
 
     const wizardsRef = collection(firestore, 'helpWizards');
-    const q = query(
-      wizardsRef,
-      where('status', '==', 'live'),
-      orderBy('order', 'asc')
-    );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const wizards = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as HelpWizard));
+    const unsubscribe = onSnapshot(wizardsRef, (snapshot) => {
+      const wizards = snapshot.docs
+        .map(doc => ({ ...doc.data(), id: doc.id } as HelpWizard))
+        .filter(w => w.status === 'live')
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       setLiveWizards(wizards);
     }, (error) => {
       console.error('Error fetching help wizards:', error);
