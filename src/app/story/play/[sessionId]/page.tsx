@@ -13,11 +13,13 @@ import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, wr
 import type { StorySession, ChatMessage as Message, Choice, Character, StoryType, StoryBook, ChildProfile, StoryOutputType } from '@/lib/types';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import { useToast } from '@/hooks/use-toast';
+import { useStoryTTS } from '@/hooks/use-story-tts';
 import { Badge } from '@/components/ui/badge';
 import { logSessionEvent } from '@/lib/session-events';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ChoiceButton, CharacterIntroductionCard, type ChoiceWithEntities } from '@/components/story';
 import { ChildAvatarAnimation } from '@/components/child/child-avatar-animation';
+import { SpeechModeToggle } from '@/components/child/speech-mode-toggle';
 
 // Helper to extract $$id$$ placeholders from text
 function extractActorIdsFromText(text: string): string[] {
@@ -114,6 +116,13 @@ export default function StoryPlayPage() {
     const { data: recentMessages, loading: messagesLoading, error: messagesError } = useCollection<Message>(messagesQuery);
     const childRef = useMemo(() => (session?.childId && firestore) ? doc(firestore, 'children', session.childId) : null, [firestore, session?.childId]);
     const { data: childProfile } = useDocument<ChildProfile>(childRef);
+
+    // TTS for speech mode
+    const { isSpeechModeEnabled, speakStoryContent, stopSpeech, isSpeaking, isLoading: isTTSLoading } = useStoryTTS({
+        childProfile: childProfile ?? null,
+        onError: (error) => toast({ title: 'Speech error', description: error, variant: 'destructive' }),
+    });
+
     const storyTypesQuery = useMemo(() => firestore ? query(collection(firestore, 'storyTypes'), where('status', '==', 'live')) : null, [firestore]);
     const { data: storyTypes } = useCollection<StoryType>(storyTypesQuery);
     const storyOutputTypesQuery = useMemo(() => firestore ? query(collection(firestore, 'storyOutputTypes'), where('status', '==', 'live')) : null, [firestore]);
@@ -778,6 +787,50 @@ export default function StoryPlayPage() {
         }
     }, [recentMessages, hasAutoCompiled, isCompiling, storyOutputTypes, autoCompileStory]);
 
+    // TTS: Speak story content when new messages arrive and speech mode is enabled
+    useEffect(() => {
+        if (!isSpeechModeEnabled || isProcessing) return;
+
+        const latestAssistant = recentMessages?.find(m => m.sender === 'assistant');
+        if (!latestAssistant) return;
+
+        // Determine what content to speak based on message kind
+        const beatContinuation = recentMessages?.find(m => m.sender === 'assistant' && m.kind === 'beat_continuation');
+        const beatOptions = recentMessages?.find(m => m.sender === 'assistant' && m.kind === 'beat_options');
+
+        // Build content for different message types
+        let headerText: string | undefined;
+        let questionText: string | undefined;
+        let options: Array<{ text: string }> | undefined;
+
+        switch (latestAssistant.kind) {
+            case 'beat_continuation':
+            case 'beat_options':
+                // For beat flow, combine continuation and options
+                headerText = (beatContinuation as any)?.textResolved || beatContinuation?.text;
+                questionText = (beatOptions as any)?.textResolved || beatOptions?.text;
+                options = (beatOptions as any)?.optionsResolved || beatOptions?.options;
+                break;
+            case 'gemini3_question':
+            case 'gemini4_question':
+                questionText = (latestAssistant as any).textResolved || latestAssistant.text;
+                options = (latestAssistant as any).optionsResolved || latestAssistant.options;
+                break;
+            case 'ending_options':
+                questionText = (latestAssistant as any).textResolved || latestAssistant.text;
+                options = latestAssistant.options;
+                break;
+            case 'gemini3_final_story':
+            case 'gemini4_final_story':
+                headerText = (latestAssistant as any).textResolved || latestAssistant.text;
+                break;
+            default:
+                return; // Don't speak for other message types
+        }
+
+        speakStoryContent({ headerText, questionText, options });
+    }, [recentMessages, isSpeechModeEnabled, isProcessing, speakStoryContent]);
+
     if (userLoading || sessionLoading) {
         return <div className="h-screen w-screen flex items-center justify-center bg-background"><LoaderCircle className="h-12 w-12 animate-spin text-primary" /></div>;
     }
@@ -796,7 +849,11 @@ export default function StoryPlayPage() {
 
     return (
         <div className="min-h-screen bg-background text-foreground flex flex-col items-center p-4">
-            <div className="absolute top-4 right-4">
+            <div className="absolute top-4 right-4 flex items-center gap-2">
+                {/* Speech mode toggle - only shows if child has preferred voice */}
+                {childProfile && (
+                    <SpeechModeToggle childProfile={childProfile} />
+                )}
                 <Button variant="ghost" size="sm" asChild>
                     <Link href={`/story/session/${sessionId}`} title="Diagnostic View">
                         <Settings className="h-4 w-4" />

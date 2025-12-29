@@ -944,6 +944,10 @@ export type ChildProfile = {
     // Can be an ElevenLabs preset voice ID or a parent's cloned voice ID
     preferredVoiceId?: string;
 
+    // Whether speech mode is enabled for interactive story creation
+    // When true, all text and options will be read aloud using TTS
+    speechModeEnabled?: boolean;
+
     // Legacy: Preferred speech model for browser's Web Speech API
     // Uses browser's Web Speech API voice name (e.g., 'Google US English', 'Microsoft Zira')
     preferredSpeechModel?: string;
