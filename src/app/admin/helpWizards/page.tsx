@@ -3,10 +3,10 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, PlusCircle, BookOpen, Edit } from 'lucide-react';
+import { LoaderCircle, PlusCircle, BookOpen, Edit, Copy } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useFirestore } from '@/firebase';
-import { collection, onSnapshot, query, orderBy, writeBatch, doc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, writeBatch, doc, serverTimestamp, getDocs, setDoc } from 'firebase/firestore';
 import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -84,6 +84,28 @@ export default function AdminHelpWizardsPage() {
     setIsFormOpen(true);
   };
 
+  const handleDuplicateWizard = async (wizard: HelpWizard) => {
+    if (!firestore) return;
+
+    try {
+      const newDocRef = doc(collection(firestore, 'helpWizards'));
+      const duplicatedWizard = {
+        ...wizard,
+        id: newDocRef.id,
+        title: `${wizard.title} (Copy)`,
+        status: 'draft' as const,
+        pages: wizard.pages.map(page => ({ ...page })),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      await setDoc(newDocRef, duplicatedWizard);
+      toast({ title: 'Success', description: `Wizard duplicated as "${duplicatedWizard.title}"` });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  };
+
   const renderContent = () => {
     if (authLoading || loading) return <div className="flex items-center gap-2"><LoaderCircle className="h-5 w-5 animate-spin" /><span>Loading wizards...</span></div>;
     if (!isAuthenticated || (!isAdmin && !isWriter)) return <p>Admin or writer access required.</p>;
@@ -112,6 +134,9 @@ export default function AdminHelpWizardsPage() {
                     <span className="text-xs text-muted-foreground ml-2">#{wizard.order ?? 0}</span>
                 </div>
               </AccordionTrigger>
+              <Button variant="ghost" size="sm" className="shrink-0" onClick={(e) => { e.stopPropagation(); handleDuplicateWizard(wizard);}}>
+                  <Copy className="h-4 w-4 mr-2" /> Duplicate
+              </Button>
               <Button variant="ghost" size="sm" className="shrink-0" onClick={(e) => { e.stopPropagation(); handleOpenForm(wizard);}}>
                   <Edit className="h-4 w-4 mr-2" /> Edit
               </Button>
