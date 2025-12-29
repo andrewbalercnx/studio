@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useFirestore } from '@/firebase';
-import { collection, query, where, getDocs, Firestore } from 'firebase/firestore';
+import { doc, getDoc, Firestore } from 'firebase/firestore';
 import type { Character, ChildProfile } from '@/lib/types';
 
 type EntityMap = Map<string, { displayName: string; document: Character | ChildProfile }>;
@@ -13,65 +13,34 @@ async function fetchEntitiesWithFirestore(firestore: Firestore, ids: string[]): 
 
   const uniqueIds = [...new Set(ids)];
 
-  // First, try to find by document ID in characters
-  try {
-    const characterDocs = await getDocs(
-      query(collection(firestore, 'characters'), where('__name__', 'in', uniqueIds))
-    );
-    characterDocs.forEach((doc) => {
-      const char = doc.data() as Character;
-      entityMap.set(doc.id, { displayName: char.displayName, document: char });
-    });
-  } catch (e) {
-    console.warn('[useResolvePlaceholders] Error fetching characters by ID:', e);
-  }
-
-  // Check remaining IDs in children
-  const remainingIds = uniqueIds.filter((id) => !entityMap.has(id));
-  if (remainingIds.length > 0) {
-    try {
-      const childrenDocs = await getDocs(
-        query(collection(firestore, 'children'), where('__name__', 'in', remainingIds))
-      );
-      childrenDocs.forEach((doc) => {
-        const child = doc.data() as ChildProfile;
-        entityMap.set(doc.id, { displayName: child.displayName, document: child });
-      });
-    } catch (e) {
-      console.warn('[useResolvePlaceholders] Error fetching children by ID:', e);
-    }
-  }
-
-  // Fallback: Try to find by displayName for legacy data
-  const stillRemainingIds = uniqueIds.filter((id) => !entityMap.has(id));
-  if (stillRemainingIds.length > 0) {
-    try {
-      const charsByName = await getDocs(
-        query(collection(firestore, 'characters'), where('displayName', 'in', stillRemainingIds))
-      );
-      charsByName.forEach((doc) => {
-        const char = doc.data() as Character;
-        entityMap.set(char.displayName, { displayName: char.displayName, document: char });
-      });
-    } catch (e) {
-      console.warn('[useResolvePlaceholders] Error fetching characters by displayName:', e);
-    }
-
-    const finalRemaining = stillRemainingIds.filter((id) => !entityMap.has(id));
-    if (finalRemaining.length > 0) {
+  // Fetch each ID individually using getDoc (works with security rules that check ownership)
+  // Try characters first, then children
+  await Promise.all(
+    uniqueIds.map(async (id) => {
+      // Try as character first
       try {
-        const childrenByName = await getDocs(
-          query(collection(firestore, 'children'), where('displayName', 'in', finalRemaining))
-        );
-        childrenByName.forEach((doc) => {
-          const child = doc.data() as ChildProfile;
-          entityMap.set(child.displayName, { displayName: child.displayName, document: child });
-        });
-      } catch (e) {
-        console.warn('[useResolvePlaceholders] Error fetching children by displayName:', e);
+        const charDoc = await getDoc(doc(firestore, 'characters', id));
+        if (charDoc.exists()) {
+          const char = charDoc.data() as Character;
+          entityMap.set(id, { displayName: char.displayName, document: char });
+          return;
+        }
+      } catch {
+        // Silently continue - may not have permission or doc doesn't exist
       }
-    }
-  }
+
+      // Try as child
+      try {
+        const childDoc = await getDoc(doc(firestore, 'children', id));
+        if (childDoc.exists()) {
+          const child = childDoc.data() as ChildProfile;
+          entityMap.set(id, { displayName: child.displayName, document: child });
+        }
+      } catch {
+        // Silently continue - may not have permission or doc doesn't exist
+      }
+    })
+  );
 
   return entityMap;
 }
