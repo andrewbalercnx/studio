@@ -27,7 +27,7 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
           <h2 className="text-xl font-semibold">Parent Console</h2>
           <p className="text-sm text-muted-foreground">Manage profiles, security, and orders.</p>
         </div>
-        <nav className="rounded-xl border bg-card p-2">
+        <nav className="rounded-xl border bg-card p-2" data-wiz-target="parent-main-menu">
           {NAV_LINKS.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href;
             return (
