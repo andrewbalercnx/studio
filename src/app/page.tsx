@@ -123,9 +123,6 @@ export default function HomePage() {
         <CardHeader>
           <CardTitle>Who is playing?</CardTitle>
           <CardDescription>Select a child to start creating a story.</CardDescription>
-          <p className="text-xs text-muted-foreground mt-2 bg-green-100 dark:bg-green-900 px-2 py-1 rounded">
-            ✓ Deployed from Local Claude Code - 2025-12-28
-          </p>
         </CardHeader>
         <CardContent>
           {renderContent()}
