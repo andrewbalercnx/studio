@@ -25,6 +25,7 @@ import { Badge } from './ui/badge';
 import { Shield, Pen, User as UserIcon, HelpCircle, BookOpen, Target } from 'lucide-react';
 import { useParentGuard } from '@/hooks/use-parent-guard';
 import { useWizardTargetDiagnosticsOptional } from '@/hooks/use-wizard-target-diagnostics';
+import { useAdminStatus } from '@/hooks/use-admin-status';
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import type { HelpWizard } from '@/lib/types';
@@ -43,6 +44,7 @@ export default function Header() {
   const { roleMode, switchToParentMode, activeChildId, startWizard } = useAppContext();
   const { showPinModal } = useParentGuard();
   const wizardTargetDiagnostics = useWizardTargetDiagnosticsOptional();
+  const { canShowWizardTargets } = useAdminStatus();
   const roleClaims: RoleClaims | null = idTokenResult?.claims ? (idTokenResult.claims as RoleClaims) : null;
   const [liveWizards, setLiveWizards] = useState<HelpWizard[]>([]);
 
@@ -183,7 +185,7 @@ export default function Header() {
                     </DropdownMenuSub>
                   </>
                 )}
-                {(roleClaims?.isAdmin || roleClaims?.isWriter) && wizardTargetDiagnostics && (
+                {canShowWizardTargets && wizardTargetDiagnostics && (
                   <DropdownMenuItem onClick={() => wizardTargetDiagnostics.toggle()}>
                     <Target className="mr-2 h-4 w-4" />
                     {wizardTargetDiagnostics.enabled ? 'Hide' : 'Show'} Wizard Targets

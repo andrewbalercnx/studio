@@ -59,6 +59,7 @@ export type UserProfile = {
   pinSalt?: string;
   pinUpdatedAt?: any;
   savedShippingAddress?: PrintOrderAddress;
+  canShowWizardTargets?: boolean; // Allow this user to toggle wizard target overlays
 };
 
 // Parent's cloned voice for TTS (stored in Firestore: users/{parentUid}/voices/{voiceId})
@@ -1365,7 +1366,6 @@ export type ImageStyle = {
 export type DiagnosticsConfig = {
   id?: string;
   showDiagnosticsPanel: boolean;     // Show diagnostic cards on pages
-  showWizardTargets: boolean;        // Show wizard target overlays for all users
   enableClientLogging: boolean;      // Console logs on client
   enableServerLogging: boolean;      // Detailed server logs
   enableAIFlowLogging: boolean;      // AI flow detailed logging
@@ -1376,7 +1376,6 @@ export type DiagnosticsConfig = {
 // Default diagnostics config when none exists
 export const DEFAULT_DIAGNOSTICS_CONFIG: DiagnosticsConfig = {
   showDiagnosticsPanel: false,
-  showWizardTargets: false,
   enableClientLogging: false,
   enableServerLogging: true,
   enableAIFlowLogging: true,

@@ -10,6 +10,7 @@ interface AdminStatus {
   email: string | null;
   isAdmin: boolean;
   isWriter: boolean;
+  canShowWizardTargets: boolean;
   loading: boolean;
   error: string | null;
 }
@@ -19,6 +20,7 @@ export function useAdminStatus(): AdminStatus {
   const firestore = useFirestore();
   const [firestoreAdmin, setFirestoreAdmin] = useState<boolean>(false);
   const [firestoreWriter, setFirestoreWriter] = useState<boolean>(false);
+  const [canShowWizardTargets, setCanShowWizardTargets] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -35,6 +37,7 @@ export function useAdminStatus(): AdminStatus {
     if (!user || !firestore) {
       setFirestoreAdmin(false);
       setFirestoreWriter(false);
+      setCanShowWizardTargets(false);
       setLoading(false);
       return;
     }
@@ -48,10 +51,12 @@ export function useAdminStatus(): AdminStatus {
           const data = doc.data();
           setFirestoreAdmin(data.isAdmin === true);
           setFirestoreWriter(data.isWriter === true);
+          setCanShowWizardTargets(data.canShowWizardTargets === true);
         } else {
           // Document might not exist yet if sign-up is in progress
           setFirestoreAdmin(false);
           setFirestoreWriter(false);
+          setCanShowWizardTargets(false);
         }
         setError(null);
         setLoading(false);
@@ -61,6 +66,7 @@ export function useAdminStatus(): AdminStatus {
         setError("Could not verify admin status.");
         setFirestoreAdmin(false);
         setFirestoreWriter(false);
+        setCanShowWizardTargets(false);
         setLoading(false);
       }
     );
@@ -77,6 +83,7 @@ export function useAdminStatus(): AdminStatus {
     email: user?.email || null,
     isAdmin,
     isWriter,
+    canShowWizardTargets: isAdmin || isWriter || canShowWizardTargets, // Admins/writers always have access
     loading: authLoading || loading,
     error,
   };

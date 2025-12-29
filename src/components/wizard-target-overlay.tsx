@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useWizardTargetDiagnosticsOptional } from '@/hooks/use-wizard-target-diagnostics';
-import { useDiagnosticsOptional } from '@/hooks/use-diagnostics';
 import { cn } from '@/lib/utils';
 
 interface TargetInfo {
@@ -20,13 +19,9 @@ interface TargetInfo {
  * This helps Help Wizard editors identify which selectors to use.
  */
 export function WizardTargetOverlay() {
-  const localDiagnostics = useWizardTargetDiagnosticsOptional();
-  const globalDiagnostics = useDiagnosticsOptional();
+  const diagnostics = useWizardTargetDiagnosticsOptional();
   const [targets, setTargets] = useState<TargetInfo[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  // Enable if either local toggle OR global admin setting is enabled
-  const isEnabled = localDiagnostics?.enabled || globalDiagnostics?.showWizardTargets;
 
   // Scan for all elements with data-wiz-target attribute
   const scanTargets = useCallback(() => {
@@ -46,7 +41,7 @@ export function WizardTargetOverlay() {
 
   // Scan on mount and when diagnostics mode changes
   useEffect(() => {
-    if (!isEnabled) {
+    if (!diagnostics?.enabled) {
       setTargets([]);
       return;
     }
@@ -80,7 +75,7 @@ export function WizardTargetOverlay() {
       window.removeEventListener('resize', handleUpdate);
       clearInterval(intervalId);
     };
-  }, [isEnabled, scanTargets]);
+  }, [diagnostics?.enabled, scanTargets]);
 
   // Handle copying target ID to clipboard
   const handleCopyId = useCallback(async (id: string) => {
@@ -94,28 +89,19 @@ export function WizardTargetOverlay() {
   }, []);
 
   // Don't render if diagnostics mode is not enabled
-  if (!isEnabled) {
+  if (!diagnostics?.enabled) {
     return null;
   }
 
-  // Determine if this was enabled via global admin setting
-  const isGloballyEnabled = globalDiagnostics?.showWizardTargets && !localDiagnostics?.enabled;
-
   return (
     <>
-      {/* Diagnostic mode indicator banner - click to disable (if locally enabled) */}
-      {isGloballyEnabled ? (
-        <div className="fixed top-14 left-0 right-0 z-[60] bg-amber-500 text-amber-950 text-center py-1 text-sm font-medium">
-          🎯 Wizard Target Diagnostics Mode (Admin enabled) — Click any target badge to copy its selector
-        </div>
-      ) : (
-        <button
-          onClick={() => localDiagnostics?.disable()}
-          className="fixed top-14 left-0 right-0 z-[60] bg-amber-500 text-amber-950 text-center py-1 text-sm font-medium hover:bg-amber-400 transition-colors cursor-pointer"
-        >
-          🎯 Wizard Target Diagnostics Mode — Click here to exit, or click any target badge to copy its selector
-        </button>
-      )}
+      {/* Diagnostic mode indicator banner - click to disable */}
+      <button
+        onClick={() => diagnostics?.disable()}
+        className="fixed top-14 left-0 right-0 z-[60] bg-amber-500 text-amber-950 text-center py-1 text-sm font-medium hover:bg-amber-400 transition-colors cursor-pointer"
+      >
+        🎯 Wizard Target Diagnostics Mode — Click here to exit, or click any target badge to copy its selector
+      </button>
 
       {/* Render overlays for each target */}
       {targets.map((target) => (

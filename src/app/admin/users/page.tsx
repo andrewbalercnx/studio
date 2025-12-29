@@ -3,7 +3,7 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, Shield, ShieldOff, BrainCircuit, Pencil, User as UserIcon, RefreshCw } from 'lucide-react';
+import { LoaderCircle, Shield, ShieldOff, BrainCircuit, Pencil, User as UserIcon, RefreshCw, Target } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFirestore, useAuth } from '@/firebase';
@@ -121,6 +121,22 @@ export default function AdminUsersPage() {
     }
   };
 
+  const toggleWizardTargets = async (user: UserProfile) => {
+    if (!firestore) return;
+    const userRef = doc(firestore, 'users', user.id);
+    const newValue = !user.canShowWizardTargets;
+    try {
+      await updateDoc(userRef, { canShowWizardTargets: newValue });
+      toast({
+        title: 'Success',
+        description: `${user.email} can ${newValue ? 'now' : 'no longer'} toggle wizard targets.`
+      });
+    } catch (e: any) {
+      console.error('Error updating wizard targets permission:', e);
+      toast({ title: 'Error updating permission', description: e.message, variant: 'destructive' });
+    }
+  };
+
   const renderUsersTable = () => (
     <Table>
       <TableHeader>
@@ -159,6 +175,14 @@ export default function AdminUsersPage() {
                 onClick={() => revokePin(user)}
               >
                 Revoke PIN
+              </Button>
+              <Button
+                variant={user.canShowWizardTargets ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => toggleWizardTargets(user)}
+              >
+                <Target className="mr-1 h-4 w-4" />
+                {user.canShowWizardTargets ? 'Wizard Targets On' : 'Wizard Targets Off'}
               </Button>
             </TableCell>
           </TableRow>

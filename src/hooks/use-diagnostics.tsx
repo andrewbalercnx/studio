@@ -13,7 +13,6 @@ interface DiagnosticsContextType {
   loading: boolean;
   error: string | null;
   showDiagnosticsPanel: boolean;
-  showWizardTargets: boolean;
   enableClientLogging: boolean;
   enableServerLogging: boolean;
   enableAIFlowLogging: boolean;
@@ -79,7 +78,6 @@ export function DiagnosticsProvider({ children }: { children: React.ReactNode })
     loading,
     error: error?.message || null,
     showDiagnosticsPanel: config.showDiagnosticsPanel,
-    showWizardTargets: config.showWizardTargets,
     enableClientLogging: config.enableClientLogging,
     enableServerLogging: config.enableServerLogging,
     enableAIFlowLogging: config.enableAIFlowLogging,
