@@ -49,7 +49,7 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
     }
   });
 
-  const { fields, append, remove, move } = useFieldArray({
+  const { fields, append, remove, move, replace } = useFieldArray({
     control,
     name: 'pages'
   });
@@ -59,31 +59,57 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
     setPageFormOpen(true);
   };
 
-  const handleSavePage = (pageData: HelpWizardPage, index: number | null) => {
-    if (index !== null) {
-      setValue(`pages.${index}`, pageData, { shouldValidate: true });
-    } else {
-      append(pageData);
-    }
-    setPageFormOpen(false);
-  };
-
-  const onSubmit = async (data: HelpWizardFormValues) => {
+  const saveWizardToFirestore = async (data: HelpWizardFormValues) => {
     if (!firestore) return;
-    setIsSaving(true);
-    
+
     const payload = {
       ...data,
       updatedAt: serverTimestamp(),
     };
 
+    if (wizard) {
+      await setDoc(doc(firestore, 'helpWizards', wizard.id), payload, { merge: true });
+    } else {
+      const newDocRef = doc(collection(firestore, 'helpWizards'));
+      await setDoc(newDocRef, { ...payload, id: newDocRef.id, createdAt: serverTimestamp() });
+    }
+  };
+
+  const handleSavePage = async (pageData: HelpWizardPage, index: number | null) => {
+    // Update local form state
+    let updatedPages: HelpWizardPage[];
+    if (index !== null) {
+      setValue(`pages.${index}`, pageData, { shouldValidate: true });
+      updatedPages = [...fields];
+      updatedPages[index] = pageData;
+    } else {
+      append(pageData);
+      updatedPages = [...fields, pageData];
+    }
+    setPageFormOpen(false);
+
+    // Auto-save to Firestore
+    setIsSaving(true);
     try {
-      if (wizard) {
-        await setDoc(doc(firestore, 'helpWizards', wizard.id), payload, { merge: true });
-      } else {
-        const newDocRef = doc(collection(firestore, 'helpWizards'));
-        await setDoc(newDocRef, { ...payload, id: newDocRef.id, createdAt: serverTimestamp() });
-      }
+      const currentValues = control._formValues as HelpWizardFormValues;
+      await saveWizardToFirestore({
+        ...currentValues,
+        pages: updatedPages,
+      });
+      toast({ title: 'Success', description: 'Page saved.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const onSubmit = async (data: HelpWizardFormValues) => {
+    if (!firestore) return;
+    setIsSaving(true);
+
+    try {
+      await saveWizardToFirestore(data);
       toast({ title: 'Success', description: 'Help wizard saved.' });
       onSave();
     } catch (e: any) {
