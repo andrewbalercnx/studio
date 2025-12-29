@@ -138,6 +138,12 @@ This feature is controlled by the `showApiDocumentation` field in `systemConfig/
 
 ---
 
+## Git Workflow
+
+**Auto-push rule**: Always push to main immediately after a successful commit. Do not wait for user confirmation.
+
+---
+
 ## Allowed Commands
 
 The following commands are pre-approved and should always be allowed without prompting:
@@ -177,6 +183,7 @@ tree
 
 | Date | Changes |
 |------|---------|
+| 2025-12-29 | Added Git Workflow auto-push rule |
 | 2025-12-29 | Added Allowed Commands section |
 | 2025-12-29 | Added System Design and Change History requirements |
 | 2025-12-29 | Initial rules established |
