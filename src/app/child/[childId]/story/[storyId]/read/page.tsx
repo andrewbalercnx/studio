@@ -6,7 +6,7 @@ import { useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { useDocument } from '@/lib/firestore-hooks';
 import type { Story } from '@/lib/types';
-import { resolvePlaceholders } from '@/lib/resolve-placeholders';
+import { useResolvePlaceholdersMultiple } from '@/hooks/use-resolve-placeholders';
 import { useAppContext } from '@/hooks/use-app-context';
 import { LoaderCircle, ArrowLeft, Volume2, VolumeX, Mic, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
@@ -37,11 +37,6 @@ export default function StoryReadPage({
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // State for resolved story text (with placeholders replaced)
-  const [resolvedStoryText, setResolvedStoryText] = useState<string | null>(null);
-  const [resolvedTitle, setResolvedTitle] = useState<string | null>(null);
-  const [isResolvingText, setIsResolvingText] = useState(false);
-
   // Sync route childId with app context
   useEffect(() => {
     if (routeChildId && routeChildId !== activeChildId) {
@@ -60,38 +55,14 @@ export default function StoryReadPage({
 
   const { data: story, loading: storyLoading } = useDocument<Story>(storyRef);
 
-  // Resolve placeholders in story text and title
-  useEffect(() => {
-    if (!story?.storyText) {
-      setResolvedStoryText(null);
-      setResolvedTitle(null);
-      return;
-    }
-
-    setIsResolvingText(true);
-    const textsToResolve = [story.storyText];
-    if (story.metadata?.title) {
-      textsToResolve.push(story.metadata.title);
-    }
-
-    resolvePlaceholders(textsToResolve)
-      .then((resolved) => {
-        setResolvedStoryText(resolved[story.storyText] || story.storyText);
-        if (story.metadata?.title) {
-          setResolvedTitle(resolved[story.metadata.title] || story.metadata.title);
-        } else {
-          setResolvedTitle(null);
-        }
-      })
-      .catch((err) => {
-        console.error('[StoryReadPage] Failed to resolve placeholders:', err);
-        setResolvedStoryText(story.storyText);
-        setResolvedTitle(story.metadata?.title || null);
-      })
-      .finally(() => {
-        setIsResolvingText(false);
-      });
-  }, [story?.storyText, story?.metadata?.title]);
+  // Resolve placeholders in story text and title using the authenticated Firestore hook
+  const textsToResolve = useMemo(
+    () => [story?.storyText, story?.metadata?.title],
+    [story?.storyText, story?.metadata?.title]
+  );
+  const { resolvedTexts, isResolving: isResolvingText } = useResolvePlaceholdersMultiple(textsToResolve);
+  const resolvedStoryText = resolvedTexts[0];
+  const resolvedTitle = resolvedTexts[1];
 
   // Stop current audio playback
   const stopPlayback = useCallback(() => {
