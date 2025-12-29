@@ -12,6 +12,7 @@ async function fetchEntitiesWithFirestore(firestore: Firestore, ids: string[]): 
   if (ids.length === 0) return entityMap;
 
   const uniqueIds = [...new Set(ids)];
+  console.debug('[useResolvePlaceholders] Fetching entities for IDs:', uniqueIds);
 
   // Fetch each ID individually using getDoc (works with security rules that check ownership)
   // Try characters first, then children
@@ -23,10 +24,11 @@ async function fetchEntitiesWithFirestore(firestore: Firestore, ids: string[]): 
         if (charDoc.exists()) {
           const char = charDoc.data() as Character;
           entityMap.set(id, { displayName: char.displayName, document: char });
+          console.debug('[useResolvePlaceholders] Found character:', id, char.displayName);
           return;
         }
-      } catch {
-        // Silently continue - may not have permission or doc doesn't exist
+      } catch (e) {
+        console.warn('[useResolvePlaceholders] Error fetching characters by ID:', e);
       }
 
       // Try as child
@@ -35,13 +37,15 @@ async function fetchEntitiesWithFirestore(firestore: Firestore, ids: string[]): 
         if (childDoc.exists()) {
           const child = childDoc.data() as ChildProfile;
           entityMap.set(id, { displayName: child.displayName, document: child });
+          console.debug('[useResolvePlaceholders] Found child:', id, child.displayName);
         }
-      } catch {
-        // Silently continue - may not have permission or doc doesn't exist
+      } catch (e) {
+        console.warn('[useResolvePlaceholders] Error fetching children by ID:', e);
       }
     })
   );
 
+  console.debug('[useResolvePlaceholders] Final entityMap size:', entityMap.size);
   return entityMap;
 }
 
