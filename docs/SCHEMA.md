@@ -62,6 +62,7 @@ Child profiles owned by parents.
 | `namePronunciation` | string | No | Phonetic pronunciation for TTS |
 | `preferredVoiceId` | string | No | Preferred TTS voice ID |
 | `speechModeEnabled` | boolean | No | Enable speech mode for stories |
+| `autoReadAloud` | boolean | No | Auto-read stories in reader |
 | `deletedAt` | timestamp | No | Soft delete timestamp |
 | `deletedBy` | string | No | UID of user who deleted |
 

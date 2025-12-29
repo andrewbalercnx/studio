@@ -3,7 +3,7 @@
 import { use, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { useDocument } from '@/lib/firestore-hooks';
 import type { Story } from '@/lib/types';
 import { useResolvePlaceholdersMultiple } from '@/hooks/use-resolve-placeholders';
@@ -89,14 +89,33 @@ export default function StoryReadPage({
     speechSynthesis.speak(utterance);
   }, []);
 
+  // Persist autoReadAloud preference to child profile
+  const persistAutoReadAloud = useCallback(
+    async (enabled: boolean) => {
+      if (!firestore || !routeChildId) return;
+      try {
+        const childRef = doc(firestore, 'children', routeChildId);
+        await updateDoc(childRef, { autoReadAloud: enabled });
+      } catch (e) {
+        console.warn('[StoryReadPage] Failed to persist autoReadAloud preference:', e);
+      }
+    },
+    [firestore, routeChildId]
+  );
+
   // Handle read aloud - prefers AI audio, falls back to browser TTS
   const handleReadAloud = useCallback(() => {
     if (isReading) {
       stopPlayback();
+      // Persist that user turned off auto-read
+      persistAutoReadAloud(false);
       return;
     }
 
     if (!story || !resolvedStoryText) return;
+
+    // Persist that user turned on auto-read
+    persistAutoReadAloud(true);
 
     // Check if AI audio is available and ready
     if (story.audioUrl && story.audioGeneration?.status === 'ready') {
@@ -121,7 +140,7 @@ export default function StoryReadPage({
     } else {
       playBrowserTTS(resolvedStoryText);
     }
-  }, [isReading, story, resolvedStoryText, stopPlayback, playBrowserTTS]);
+  }, [isReading, story, resolvedStoryText, stopPlayback, playBrowserTTS, persistAutoReadAloud]);
 
   // Request AI audio generation
   const handleGenerateAudio = useCallback(
@@ -165,6 +184,28 @@ export default function StoryReadPage({
     },
     [isGeneratingAudio, user, storyId, toast]
   );
+
+  // Track if we've already auto-started reading for this story
+  const hasAutoStartedRef = useRef(false);
+
+  // Auto-start reading if child has autoReadAloud preference enabled
+  useEffect(() => {
+    if (
+      activeChildProfile?.autoReadAloud &&
+      resolvedStoryText &&
+      story &&
+      !isReading &&
+      !isResolvingText &&
+      !hasAutoStartedRef.current
+    ) {
+      hasAutoStartedRef.current = true;
+      // Small delay to let the page render first
+      const timer = setTimeout(() => {
+        handleReadAloud();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [activeChildProfile?.autoReadAloud, resolvedStoryText, story, isReading, isResolvingText, handleReadAloud]);
 
   // Clean up audio on unmount
   useEffect(() => {

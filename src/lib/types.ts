@@ -948,6 +948,10 @@ export type ChildProfile = {
     // When true, all text and options will be read aloud using TTS
     speechModeEnabled?: boolean;
 
+    // Whether to automatically read stories aloud when viewing in the story reader
+    // Persists the "Read to Me" preference for this child
+    autoReadAloud?: boolean;
+
     // Legacy: Preferred speech model for browser's Web Speech API
     // Uses browser's Web Speech API voice name (e.g., 'Google US English', 'Microsoft Zira')
     preferredSpeechModel?: string;
