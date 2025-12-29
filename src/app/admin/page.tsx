@@ -68,6 +68,7 @@ export default function AdminDashboardPage() {
     enableClientLogging,
     enableServerLogging,
     enableAIFlowLogging,
+    showApiDocumentation,
   } = useDiagnostics();
 
   const diagnostics = {
@@ -431,6 +432,19 @@ export default function AdminDashboardPage() {
                     id="enableAIFlowLogging"
                     checked={enableAIFlowLogging}
                     onCheckedChange={(checked) => updateConfig({ enableAIFlowLogging: checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="showApiDocumentation">API Documentation</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Expose API documentation at /api-documentation
+                    </p>
+                  </div>
+                  <Switch
+                    id="showApiDocumentation"
+                    checked={showApiDocumentation}
+                    onCheckedChange={(checked) => updateConfig({ showApiDocumentation: checked })}
                   />
                 </div>
               </div>

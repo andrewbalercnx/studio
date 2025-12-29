@@ -16,6 +16,7 @@ interface DiagnosticsContextType {
   enableClientLogging: boolean;
   enableServerLogging: boolean;
   enableAIFlowLogging: boolean;
+  showApiDocumentation: boolean;
   updateConfig: (updates: Partial<DiagnosticsConfig>) => Promise<void>;
   toggleDiagnosticsPanel: () => Promise<void>;
 }
@@ -81,6 +82,7 @@ export function DiagnosticsProvider({ children }: { children: React.ReactNode })
     enableClientLogging: config.enableClientLogging,
     enableServerLogging: config.enableServerLogging,
     enableAIFlowLogging: config.enableAIFlowLogging,
+    showApiDocumentation: config.showApiDocumentation,
     updateConfig,
     toggleDiagnosticsPanel,
   };

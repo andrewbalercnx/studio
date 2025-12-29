@@ -1373,6 +1373,7 @@ export type DiagnosticsConfig = {
   enableClientLogging: boolean;      // Console logs on client
   enableServerLogging: boolean;      // Detailed server logs
   enableAIFlowLogging: boolean;      // AI flow detailed logging
+  showApiDocumentation: boolean;     // Expose API docs at /api-documentation
   updatedAt?: any;
   updatedBy?: string;
 };
@@ -1383,6 +1384,7 @@ export const DEFAULT_DIAGNOSTICS_CONFIG: DiagnosticsConfig = {
   enableClientLogging: false,
   enableServerLogging: true,
   enableAIFlowLogging: true,
+  showApiDocumentation: false,
 };
 
 // Global prompt configuration - prepended to all AI prompts
