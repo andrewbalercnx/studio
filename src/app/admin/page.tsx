@@ -65,6 +65,7 @@ export default function AdminDashboardPage() {
     loading: diagnosticsLoading,
     updateConfig,
     showDiagnosticsPanel,
+    showWizardTargets,
     enableClientLogging,
     enableServerLogging,
     enableAIFlowLogging,
@@ -392,6 +393,19 @@ export default function AdminDashboardPage() {
                     id="showDiagnosticsPanel"
                     checked={showDiagnosticsPanel}
                     onCheckedChange={(checked) => updateConfig({ showDiagnosticsPanel: checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="showWizardTargets">Show Wizard Targets</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Display wizard target overlays for all users (for Help Wizard editing)
+                    </p>
+                  </div>
+                  <Switch
+                    id="showWizardTargets"
+                    checked={showWizardTargets}
+                    onCheckedChange={(checked) => updateConfig({ showWizardTargets: checked })}
                   />
                 </div>
                 <div className="flex items-center justify-between">

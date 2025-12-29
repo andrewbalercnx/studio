@@ -205,20 +205,7 @@ export function HelpWizard() {
 
   return (
     <>
-      {/* Highlight overlay for selected element */}
-      {highlightRect && (
-        <div
-          className="pointer-events-none fixed inset-0 z-40"
-          style={{
-            background: `
-              linear-gradient(to bottom, rgba(0,0,0,0.5) ${highlightRect.top - 8}px, transparent ${highlightRect.top - 8}px),
-              linear-gradient(to top, rgba(0,0,0,0.5) ${window.innerHeight - highlightRect.bottom - 8}px, transparent ${window.innerHeight - highlightRect.bottom - 8}px),
-              linear-gradient(to right, rgba(0,0,0,0.5) ${highlightRect.left - 8}px, transparent ${highlightRect.left - 8}px),
-              linear-gradient(to left, rgba(0,0,0,0.5) ${window.innerWidth - highlightRect.right - 8}px, transparent ${window.innerWidth - highlightRect.right - 8}px)
-            `,
-          }}
-        />
-      )}
+      {/* Highlight overlay - uses box-shadow to create spotlight effect */}
       {highlightRect && (
         <div
           className="pointer-events-none fixed z-40 rounded-lg ring-4 ring-primary ring-offset-2 ring-offset-background"
@@ -227,6 +214,7 @@ export function HelpWizard() {
             left: highlightRect.left - 4,
             width: highlightRect.width + 8,
             height: highlightRect.height + 8,
+            boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
           }}
         />
       )}
