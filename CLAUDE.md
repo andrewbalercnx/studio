@@ -138,9 +138,45 @@ This feature is controlled by the `showApiDocumentation` field in `systemConfig/
 
 ---
 
+## Allowed Commands
+
+The following commands are pre-approved and should always be allowed without prompting:
+
+```
+# Git operations
+git add
+git commit
+git push
+git pull
+git fetch
+git checkout
+git merge
+git status
+git log
+git diff
+git reset
+git restore
+
+# Build and type checking
+npm run build
+npm run typecheck
+npm install
+
+# File operations
+ls
+cat
+find
+cp
+mkdir
+tree
+```
+
+---
+
 ## Version History
 
 | Date | Changes |
 |------|---------|
+| 2025-12-29 | Added Allowed Commands section |
 | 2025-12-29 | Added System Design and Change History requirements |
 | 2025-12-29 | Initial rules established |
