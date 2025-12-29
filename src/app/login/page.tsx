@@ -20,7 +20,8 @@ export default function LoginPage() {
   const router = useRouter();
   const auth = useAuth();
 
-  const handleSignIn = async () => {
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!auth) {
       toast({
         title: 'Error',
@@ -53,27 +54,29 @@ export default function LoginPage() {
           <CardTitle>Welcome Back!</CardTitle>
           <CardDescription>Sign in to continue to your storybook.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" placeholder="m@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </div>
-        </CardContent>
-        <CardFooter className="flex flex-col gap-4">
-          <Button onClick={handleSignIn} disabled={isLoading} className="w-full">
-            {isLoading ? 'Signing In...' : 'Sign In'}
-          </Button>
-          <p className="text-sm text-muted-foreground">
-            Don't have an account?{' '}
-            <Link href="/signup" className="text-primary hover:underline">
-              Sign up
-            </Link>
-          </p>
-        </CardFooter>
+        <form onSubmit={handleSignIn}>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" name="email" type="email" autoComplete="email" placeholder="m@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" name="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-4">
+            <Button type="submit" disabled={isLoading} className="w-full">
+              {isLoading ? 'Signing In...' : 'Sign In'}
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              Don't have an account?{' '}
+              <Link href="/signup" className="text-primary hover:underline">
+                Sign up
+              </Link>
+            </p>
+          </CardFooter>
+        </form>
       </Card>
     </div>
   );
