@@ -1,0 +1,275 @@
+# Change History
+
+> **Purpose**: Track all significant changes to the codebase by commit ID for easy searching and reference.
+>
+> **IMPORTANT**: This document must be updated with every push to main. Append new entries at the top.
+
+---
+
+## How to Use This Document
+
+- **Search by commit ID**: Use Ctrl+F / Cmd+F to find a specific commit
+- **Search by feature**: Look for keywords in the description
+- **Search by date**: Entries are ordered newest first
+
+---
+
+## Changes
+
+### 2025-12-29
+
+#### `ad90320` - Add system design and change history documentation
+
+**Type**: Infrastructure
+
+**Summary**: Added comprehensive system design documentation and change tracking.
+
+**Changes**:
+- Created `docs/SYSTEM_DESIGN.md` with full architecture overview
+  - Technology stack with rationale for choices
+  - Component interactions and data flow diagrams
+  - Security model and performance considerations
+  - Directory structure reference
+- Created `docs/CHANGES.md` for tracking changes by commit ID
+  - Append-only history format
+  - Template for consistent entries
+- Updated `CLAUDE.md` with new documentation requirements
+  - System design must be read before major work
+  - Changes document updated on every push
+
+**Files Created**:
+- `docs/SYSTEM_DESIGN.md`
+- `docs/CHANGES.md`
+
+**Files Modified**:
+- `CLAUDE.md`
+
+---
+
+#### `4e8dd88` - Add documentation infrastructure and standing rules
+
+**Type**: Infrastructure
+
+**Summary**: Established documentation system for maintaining codebase knowledge.
+
+**Changes**:
+- Created `docs/SCHEMA.md` - Complete Firestore schema documentation
+- Created `docs/API.md` - Full API route documentation (55+ endpoints)
+- Created `docs/SYSTEM_DESIGN.md` - System architecture overview
+- Created `docs/CHANGES.md` - This change tracking document
+- Created `CLAUDE.md` - Standing rules for development workflow
+- Added `showApiDocumentation` diagnostic switch to Admin panel
+- Created `/api-documentation` page (visible when switch enabled)
+- Updated `DiagnosticsConfig` type with new field
+
+**Files Modified**:
+- `src/lib/types.ts`
+- `src/hooks/use-diagnostics.tsx`
+- `src/app/admin/page.tsx`
+
+**Files Created**:
+- `CLAUDE.md`
+- `docs/SCHEMA.md`
+- `docs/API.md`
+- `docs/SYSTEM_DESIGN.md`
+- `docs/CHANGES.md`
+- `src/app/api-documentation/page.tsx`
+
+---
+
+#### `442599e` - Add speech mode for interactive story creation
+
+**Type**: Feature
+
+**Summary**: Added speech mode that reads story text and options aloud during interactive story creation.
+
+**Changes**:
+- Added `speechModeEnabled` field to `ChildProfile` type
+- Implemented TTS for story text and options during play
+- Added toggle in child settings
+
+---
+
+#### `395e188` - Add duplicate wizard feature
+
+**Type**: Feature
+
+**Summary**: Allow duplicating help wizards in the admin panel.
+
+---
+
+#### `922f63c` - Add debug logging for helpWizards fetch
+
+**Type**: Debug
+
+**Summary**: Added logging to troubleshoot help wizard loading issues.
+
+---
+
+#### `210673e` - Remove deployment timestamp from home page
+
+**Type**: Cleanup
+
+**Summary**: Removed build timestamp display from landing page.
+
+---
+
+#### `d6262b9` - Add wizard target to parent main menu
+
+**Type**: Feature
+
+**Summary**: Added `data-wiz-target` attribute to parent navigation for help wizard targeting.
+
+---
+
+#### `c145339` - Add /logout route for emergency logout access
+
+**Type**: Feature
+
+**Summary**: Created dedicated logout route for cases where normal logout is inaccessible.
+
+---
+
+#### `8b83ad4` - Add per-user wizard targets permission
+
+**Type**: Feature
+
+**Summary**: Added `canShowWizardTargets` field to UserProfile for editor mode access control.
+
+---
+
+#### `40bdccb` - Fix wizard highlight overlay using box-shadow spotlight
+
+**Type**: Bugfix
+
+**Summary**: Fixed visual highlight effect for wizard targets using CSS box-shadow technique.
+
+---
+
+#### `b35c5b4` - Add wizardTargetId and position to wizard page schema
+
+**Type**: Schema
+
+**Summary**: Extended `HelpWizardPage` type with `wizardTargetId` and `position` fields.
+
+---
+
+#### `315f34d` - Auto-save wizard to Firestore when saving a page
+
+**Type**: Feature
+
+**Summary**: Wizard edits now auto-save to Firestore.
+
+---
+
+#### `08c2fa9` - Add favicon.ico fallback to public folder
+
+**Type**: Bugfix
+
+**Summary**: Added favicon.ico to public folder for browsers that don't support SVG favicons.
+
+---
+
+#### `ae87e32` - Exclude serviceAccount.json from Docker build
+
+**Type**: Security
+
+**Summary**: Prevented service account credentials from being included in Docker images.
+
+---
+
+#### `8cf0002` - Add app options logging to debug initialization
+
+**Type**: Debug
+
+**Summary**: Added logging for Firebase app initialization debugging (v3).
+
+---
+
+#### `cca3ef4` - Add version stamp to verify-pin error response
+
+**Type**: Debug
+
+**Summary**: Added version identifier to PIN verification errors for debugging.
+
+---
+
+#### `4b745f9` - Fix Firestore auth by using applicationDefault credentials
+
+**Type**: Bugfix
+
+**Summary**: Fixed Firestore authentication in production by using application default credentials.
+
+---
+
+#### `a862f54` - Add detailed logging for PIN verification auth debugging
+
+**Type**: Debug
+
+**Summary**: Enhanced logging for PIN verification flow troubleshooting.
+
+---
+
+#### `89e991e` - Fix Firebase Admin init race condition in PIN routes
+
+**Type**: Bugfix
+
+**Summary**: Fixed race condition in Firebase Admin SDK initialization affecting PIN routes.
+
+---
+
+#### `667132d` - Add magical book favicon and PWA icons
+
+**Type**: Feature
+
+**Summary**: Added custom favicon and PWA manifest icons with magical book theme.
+
+---
+
+#### `8c15cd1` - Fix Docker build: include docs/backend.json
+
+**Type**: Bugfix
+
+**Summary**: Fixed Docker build by including required backend configuration file.
+
+---
+
+## Change Type Legend
+
+| Type | Description |
+|------|-------------|
+| Feature | New functionality |
+| Bugfix | Fix for existing functionality |
+| Schema | Database schema changes |
+| API | API route changes |
+| Security | Security-related changes |
+| Infrastructure | Build, deployment, documentation |
+| Cleanup | Code cleanup, refactoring |
+| Debug | Debugging additions (temporary or permanent) |
+
+---
+
+## Template for New Entries
+
+```markdown
+#### `COMMIT_ID` - Commit message summary
+
+**Type**: Feature | Bugfix | Schema | API | Security | Infrastructure | Cleanup | Debug
+
+**Summary**: One-line description of what changed and why.
+
+**Changes**:
+- Bullet points of specific changes
+
+**Files Modified**:
+- List of modified files (for significant changes)
+
+**Files Created**:
+- List of new files (if any)
+
+**Breaking Changes**: (if applicable)
+- Description of breaking changes
+
+**Migration Notes**: (if applicable)
+- Steps needed to migrate
+```

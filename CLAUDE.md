@@ -8,6 +8,17 @@ This document contains the standing rules and workflow requirements for working 
 
 ## Documentation Requirements
 
+### System Design Document
+Location: `docs/SYSTEM_DESIGN.md`
+
+This document describes the current architecture of the system, including technology stack, component interactions, data flows, and architectural decisions with their rationale.
+
+**Rules**:
+- **Read at the start of any major piece of work** to understand the system architecture
+- Update whenever architectural changes are made
+- Always reflects the **current state** of the system (not a history of changes)
+- Include rationale for architectural decisions
+
 ### Schema Documentation
 Location: `docs/SCHEMA.md`
 
@@ -22,6 +33,16 @@ This file documents all API routes, their methods, request/response formats, and
 
 **Rule**: Any time you add, modify, or remove an API route, you **MUST** update `docs/API.md` before completing your work.
 
+### Change History
+Location: `docs/CHANGES.md`
+
+This document tracks all significant changes by commit ID for easy searching and reference.
+
+**Rules**:
+- **Append new entries** at the top of the document with every push to main
+- Include commit ID, type, summary, and detailed changes
+- Never remove or modify existing entries (append-only)
+
 ### Regression Tests
 Location: `src/app/admin/regression/page.tsx`
 
@@ -33,41 +54,58 @@ The regression test page contains automated tests for API routes and data access
 
 ## Workflow
 
-### Before Starting Work
+### Before Starting Major Work
 
-1. **Check the latest documentation**:
+1. **Read the System Design Document**:
+   - Review `docs/SYSTEM_DESIGN.md` to understand the architecture
+   - Understand how your changes fit into the existing system
+   - Note any architectural decisions that may affect your work
+
+2. **Check the latest documentation**:
    - Review `docs/SCHEMA.md` to understand the current database structure
    - Review `docs/API.md` to understand the current API surface
    - This ensures you understand the existing architecture before making changes
 
-2. **Understand the change scope**:
+3. **Understand the change scope**:
    - Will you be modifying the database schema?
    - Will you be adding or changing API routes?
+   - Will you be making architectural changes?
    - Plan your documentation updates accordingly
 
 ### On Completion
 
 Before pushing to main, complete this checklist:
 
-1. **Update Schema Documentation** (if schema changed):
+1. **Update System Design** (if architecture changed):
+   - [ ] Updated `docs/SYSTEM_DESIGN.md` to reflect current architecture
+   - [ ] Added rationale for any architectural decisions
+   - [ ] Ensured document describes current state (not change history)
+   - [ ] Updated the "Last Updated" date
+
+2. **Update Schema Documentation** (if schema changed):
    - [ ] Updated `docs/SCHEMA.md` with all schema changes
    - [ ] Added any new collections or fields
    - [ ] Updated security rules documentation if changed
    - [ ] Updated the "Last Updated" date
 
-2. **Update API Documentation** (if API changed):
+3. **Update API Documentation** (if API changed):
    - [ ] Updated `docs/API.md` with all API changes
    - [ ] Added documentation for new endpoints
    - [ ] Updated request/response formats for modified endpoints
    - [ ] Removed documentation for deleted endpoints
    - [ ] Updated the "Last Updated" date
 
-3. **Update Regression Tests** (if API changed):
+4. **Update Regression Tests** (if API changed):
    - [ ] Added tests for new API endpoints
    - [ ] Updated tests for modified endpoints
    - [ ] Removed tests for deleted endpoints
 
-4. **Push to main**:
+5. **Update Change History**:
+   - [ ] Added entry to `docs/CHANGES.md` with commit ID
+   - [ ] Included type, summary, and detailed changes
+   - [ ] Listed modified and created files for significant changes
+
+6. **Push to main**:
    - [ ] All documentation is up to date
    - [ ] Build passes (`npm run build`)
    - [ ] TypeScript checks pass (`npm run typecheck`)
@@ -89,12 +127,14 @@ This feature is controlled by the `showApiDocumentation` field in `systemConfig/
 
 ## Quick Reference
 
-| Documentation | Location | Update When |
-|---------------|----------|-------------|
-| Schema | `docs/SCHEMA.md` | Collections, fields, or security rules change |
-| API | `docs/API.md` | API routes are added, modified, or removed |
-| Regression Tests | `src/app/admin/regression/page.tsx` | API routes change |
-| Standing Rules | `CLAUDE.md` | Workflow or requirements change |
+| Documentation | Location | Update When | Notes |
+|---------------|----------|-------------|-------|
+| System Design | `docs/SYSTEM_DESIGN.md` | Architecture changes | Read before major work |
+| Schema | `docs/SCHEMA.md` | Database changes | Fields, collections, rules |
+| API | `docs/API.md` | API route changes | Endpoints, formats |
+| Changes | `docs/CHANGES.md` | Every push | Append-only history |
+| Regression Tests | `src/app/admin/regression/page.tsx` | API changes | Automated tests |
+| Standing Rules | `CLAUDE.md` | Workflow changes | This file |
 
 ---
 
@@ -102,4 +142,5 @@ This feature is controlled by the `showApiDocumentation` field in `systemConfig/
 
 | Date | Changes |
 |------|---------|
+| 2025-12-29 | Added System Design and Change History requirements |
 | 2025-12-29 | Initial rules established |
