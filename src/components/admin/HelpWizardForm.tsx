@@ -26,7 +26,13 @@ const wizardSchema = z.object({
     title: z.string().min(1),
     description: z.string().min(1),
     route: z.string().min(1),
+    wizardTargetId: z.string().optional(),
     highlightSelector: z.string().optional(),
+    position: z.enum([
+      'top-left', 'top-center', 'top-right',
+      'center-left', 'center-center', 'center-right',
+      'bottom-left', 'bottom-center', 'bottom-right',
+    ]).optional(),
   })).min(1, "At least one page is required"),
 });
 
