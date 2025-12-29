@@ -10,7 +10,7 @@ import { Volume2, Loader2, Check, Star, Mic, MicOff, Trash2, Plus, User } from '
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase/auth/use-user';
 import type { ChildProfile, ParentVoice } from '@/lib/types';
-import { GEMINI_TTS_VOICES, DEFAULT_TTS_VOICE } from '@/lib/tts-config';
+import { ELEVENLABS_TTS_VOICES, DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 
 type VoiceSelectorProps = {
   child: ChildProfile;
@@ -158,7 +158,7 @@ export function VoiceSelector({ child, onVoiceSelect }: VoiceSelectorProps) {
     try {
       await onVoiceSelect(selectedVoice);
       // Find voice name from preset or parent voices
-      const presetVoice = GEMINI_TTS_VOICES.find(v => v.id === selectedVoice);
+      const presetVoice = ELEVENLABS_TTS_VOICES.find(v => v.id === selectedVoice);
       const parentVoice = parentVoices.find(v => v.elevenLabsVoiceId === selectedVoice);
       const voiceName = presetVoice?.name || parentVoice?.name || selectedVoice;
       toast({
@@ -317,7 +317,7 @@ export function VoiceSelector({ child, onVoiceSelect }: VoiceSelectorProps) {
   // Get current voice name for display
   const getCurrentVoiceName = () => {
     const currentId = child.preferredVoiceId || DEFAULT_TTS_VOICE;
-    const presetVoice = GEMINI_TTS_VOICES.find(v => v.id === currentId);
+    const presetVoice = ELEVENLABS_TTS_VOICES.find(v => v.id === currentId);
     if (presetVoice) return presetVoice.name;
     const parentVoice = parentVoices.find(v => v.elevenLabsVoiceId === currentId);
     if (parentVoice) return parentVoice.name;
@@ -515,13 +515,13 @@ export function VoiceSelector({ child, onVoiceSelect }: VoiceSelectorProps) {
 
       {/* Preset Voices Section */}
       <div className="space-y-3">
-        <h4 className="text-sm font-medium">AI Voices</h4>
+        <h4 className="text-sm font-medium">ElevenLabs Voices</h4>
         <RadioGroup
           value={selectedVoice}
           onValueChange={setSelectedVoice}
           className="grid grid-cols-1 sm:grid-cols-2 gap-3"
         >
-          {GEMINI_TTS_VOICES.map((voice) => (
+          {ELEVENLABS_TTS_VOICES.map((voice) => (
             <div key={voice.id} className="relative">
               <RadioGroupItem
                 value={voice.id}

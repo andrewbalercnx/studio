@@ -1117,6 +1117,10 @@ export type StoryOutputType = {
     // When specified, images will be generated with dimensions from this layout
     // When not specified, image dimensions are unconstrained (default square)
     defaultPrintLayoutId?: string;
+    // Display image for the output type card (shown to children when selecting)
+    imageUrl?: string;
+    // AI prompt for generating the display image
+    imagePrompt?: string;
     layoutHints?: {
         pageCount?: number;
         needsImages?: boolean;

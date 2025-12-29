@@ -3,10 +3,9 @@
 import { use, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFirestore } from '@/firebase';
-import { doc, collection, query, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, query, orderBy, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { useDocument, useCollection } from '@/lib/firestore-hooks';
 import type { Story, StoryBookOutput, ChildProfile, PrintLayout, ImageStyle, StoryOutputType } from '@/lib/types';
-import { DEFAULT_PRINT_LAYOUT_ID } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle, Plus, Book, Image as ImageIcon, Printer, Eye } from 'lucide-react';
@@ -47,7 +46,7 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
   const storyRef = useMemo(() => (firestore ? doc(firestore, 'stories', storyId) : null), [firestore, storyId]);
   const { data: story, loading: storyLoading, error: storyError } = useDocument<Story>(storyRef);
 
-  // Load child profile for default print layout
+  // Load child profile for display name
   const childRef = useMemo(() => (firestore && story?.childId ? doc(firestore, 'children', story.childId) : null), [firestore, story?.childId]);
   const { data: childProfile } = useDocument<ChildProfile>(childRef);
 
@@ -75,16 +74,9 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
   }, [firestore]);
   const { data: imageStyles } = useCollection<ImageStyle>(imageStylesQuery);
 
-  // Load print layout for dimensions
-  const printLayoutId = childProfile?.defaultPrintLayoutId || DEFAULT_PRINT_LAYOUT_ID;
-  console.log('[story-page] Print layout selection:', {
-    childProfileLoaded: !!childProfile,
-    childDefaultPrintLayoutId: childProfile?.defaultPrintLayoutId,
-    selectedPrintLayoutId: printLayoutId,
-    usingDefault: !childProfile?.defaultPrintLayoutId,
-  });
-  const printLayoutRef = useMemo(() => (firestore ? doc(firestore, 'printLayouts', printLayoutId) : null), [firestore, printLayoutId]);
-  const { data: printLayout } = useDocument<PrintLayout>(printLayoutRef);
+  // Get print layout from the selected output type (not the child)
+  const selectedOutputType = outputTypes?.find(t => t.id === selectedOutputTypeId);
+  const printLayoutId = selectedOutputType?.defaultPrintLayoutId || undefined;
 
   const handleCreateStorybook = async () => {
     if (!firestore || !story || !selectedOutputTypeId || !selectedImageStyleId) {
@@ -92,27 +84,35 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
       return;
     }
 
-    const selectedOutputType = outputTypes?.find(t => t.id === selectedOutputTypeId);
+    const outputType = outputTypes?.find(t => t.id === selectedOutputTypeId);
     const selectedImageStyle = imageStyles?.find(s => s.id === selectedImageStyleId);
 
-    if (!selectedOutputType || !selectedImageStyle) {
+    if (!outputType || !selectedImageStyle) {
       toast({ title: 'Error', description: 'Invalid selection', variant: 'destructive' });
       return;
     }
 
     setIsCreating(true);
     try {
-      // Calculate image dimensions from print layout
-      // Default dimensions: 8x8 inches at 300 DPI = 2400x2400 pixels (standard children's book size)
+      // Use print layout from storyOutputType if specified, otherwise unconstrained
+      const outputTypePrintLayoutId = outputType.defaultPrintLayoutId || undefined;
+
+      // Default dimensions: 8x8 inches at 300 DPI = 2400x2400 pixels (unconstrained square)
       const DEFAULT_IMAGE_WIDTH_PX = 2400;
       const DEFAULT_IMAGE_HEIGHT_PX = 2400;
 
       let imageWidthPx: number = DEFAULT_IMAGE_WIDTH_PX;
       let imageHeightPx: number = DEFAULT_IMAGE_HEIGHT_PX;
-      if (printLayout) {
-        const dimensions = calculateImageDimensions(printLayout);
-        imageWidthPx = dimensions.widthPx;
-        imageHeightPx = dimensions.heightPx;
+
+      // Only calculate dimensions from layout if a print layout is specified on the output type
+      if (outputTypePrintLayoutId) {
+        const layoutDoc = await getDoc(doc(firestore, 'printLayouts', outputTypePrintLayoutId));
+        const layout = layoutDoc.exists() ? (layoutDoc.data() as PrintLayout) : null;
+        if (layout) {
+          const dimensions = calculateImageDimensions(layout);
+          imageWidthPx = dimensions.widthPx;
+          imageHeightPx = dimensions.heightPx;
+        }
       }
 
       // Create new StoryBookOutput document
@@ -124,7 +124,7 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
         storyOutputTypeId: selectedOutputTypeId,
         imageStyleId: selectedImageStyleId,
         imageStylePrompt: selectedImageStyle.stylePrompt,
-        printLayoutId,
+        printLayoutId: outputTypePrintLayoutId || null,
         imageWidthPx,
         imageHeightPx,
         pageGeneration: { status: 'idle' },
@@ -138,7 +138,7 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
 
       toast({
         title: 'Storybook Created!',
-        description: `Creating ${selectedOutputType.childFacingLabel} with ${selectedImageStyle.title} style...`,
+        description: `Creating ${outputType.childFacingLabel} with ${selectedImageStyle.title} style...`,
       });
 
       setIsCreateDialogOpen(false);
@@ -263,10 +263,14 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
                     </Select>
                   </div>
 
-                  {printLayout && (
+                  {printLayoutId && (
                     <p className="text-sm text-muted-foreground">
-                      Images will be generated at {printLayout.leafWidth}" × {printLayout.leafHeight}"
-                      ({childProfile?.defaultPrintLayoutId ? 'child default' : 'system default'} layout)
+                      Image dimensions determined by output type's print layout
+                    </p>
+                  )}
+                  {!printLayoutId && selectedOutputTypeId && (
+                    <p className="text-sm text-muted-foreground">
+                      Images will be generated at default size (8" × 8" square)
                     </p>
                   )}
 

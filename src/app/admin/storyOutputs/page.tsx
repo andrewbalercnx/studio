@@ -3,9 +3,10 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, PlusCircle, Copy } from 'lucide-react';
+import { LoaderCircle, PlusCircle, Copy, ImageIcon, Sparkles } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { useFirestore } from '@/firebase';
+import { useUser } from '@/firebase/auth/use-user';
 import { collection, doc, onSnapshot, query, orderBy, writeBatch, serverTimestamp, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -20,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
+import Image from 'next/image';
 
 const slugify = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
@@ -87,6 +89,7 @@ const outputTypeSchema = z.object({
   category: z.enum(["picture_book", "poem", "coloring_pages", "audio_script"]),
   status: z.enum(["live", "draft", "archived"]),
   defaultPrintLayoutId: z.string().optional(),
+  imagePrompt: z.string().optional(),
   'layoutHints.pageCount': z.coerce.number().optional(),
   'layoutHints.needsImages': z.boolean().optional(),
   'aiHints.style': z.string().optional(),
@@ -128,6 +131,7 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
             category: editingType?.category || 'picture_book',
             status: editingType?.status || 'draft',
             defaultPrintLayoutId: editingType?.defaultPrintLayoutId || '',
+            imagePrompt: editingType?.imagePrompt || '',
             'layoutHints.pageCount': editingType?.layoutHints?.pageCount,
             'layoutHints.needsImages': editingType?.layoutHints?.needsImages ?? true,
             'aiHints.style': editingType?.aiHints?.style || '',
@@ -147,6 +151,7 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
             category: data.category,
             status: data.status,
             defaultPrintLayoutId: data.defaultPrintLayoutId || undefined,
+            imagePrompt: data.imagePrompt || undefined,
             layoutHints: {
                 pageCount: data['layoutHints.pageCount'],
                 needsImages: data['layoutHints.needsImages'],
@@ -188,6 +193,18 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
                 {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
             </div>
 
+            <div className="space-y-1">
+                <Label htmlFor="childFacingLabel">Child-Facing Label</Label>
+                <Input id="childFacingLabel" {...register('childFacingLabel')} placeholder="e.g., A little picture book about your day" />
+                {errors.childFacingLabel && <p className="text-xs text-destructive">{errors.childFacingLabel.message}</p>}
+                <p className="text-xs text-muted-foreground">This is what children see when selecting a book type.</p>
+            </div>
+
+            <div className="space-y-1">
+                <Label htmlFor="ageRange">Age Range</Label>
+                <Input id="ageRange" {...register('ageRange')} placeholder="e.g., 3-5" />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
                  <div className="space-y-1">
                     <Label>Category</Label>
@@ -222,6 +239,27 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
                 <Label htmlFor="shortDescription">About this output</Label>
                 <Textarea id="shortDescription" {...register('shortDescription')} />
                 {errors.shortDescription && <p className="text-xs text-destructive">{errors.shortDescription.message}</p>}
+            </div>
+
+            <div className="space-y-1">
+                <Label htmlFor="imagePrompt">Image Generation Prompt</Label>
+                <Textarea
+                    id="imagePrompt"
+                    {...register('imagePrompt')}
+                    placeholder="e.g., A colorful stack of children's picture books with whimsical illustrations peeking out"
+                    rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                    Describe the image that will represent this output type to children. After saving, use the &quot;Generate Image&quot; button to create it.
+                </p>
+                {editingType?.imageUrl && (
+                    <div className="mt-2">
+                        <p className="text-xs text-muted-foreground mb-1">Current image:</p>
+                        <div className="relative w-24 h-24 rounded-md overflow-hidden border">
+                            <Image src={editingType.imageUrl} alt="Current" fill className="object-cover" />
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="space-y-1">
@@ -294,14 +332,46 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
 export default function AdminStoryOutputsPage() {
   const { isAuthenticated, isAdmin, isWriter, loading: authLoading } = useAdminStatus();
   const firestore = useFirestore();
+  const { user } = useUser();
   const { toast } = useToast();
 
   const [outputTypes, setOutputTypes] = useState<StoryOutputType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [generatingImageFor, setGeneratingImageFor] = useState<string | null>(null);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingType, setEditingType] = useState<StoryOutputType | null>(null);
+
+  const handleGenerateImage = async (typeId: string) => {
+    if (!user) {
+      toast({ title: 'Error', description: 'Please sign in', variant: 'destructive' });
+      return;
+    }
+
+    setGeneratingImageFor(typeId);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch('/api/storyOutputTypes/generateImage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ storyOutputTypeId: typeId }),
+      });
+      const result = await response.json();
+      if (result.ok) {
+        toast({ title: 'Success', description: 'Image generated successfully!' });
+      } else {
+        toast({ title: 'Error', description: result.errorMessage, variant: 'destructive' });
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setGeneratingImageFor(null);
+    }
+  };
 
   const handleCreateSampleData = useCallback(async () => {
     if (!firestore) return;
@@ -400,14 +470,46 @@ export default function AdminStoryOutputsPage() {
                         </CardTitle>
                         <CardDescription>{type.ageRange} / {type.category}</CardDescription>
                     </CardHeader>
-                    <CardContent className="flex-grow">
+                    <CardContent className="flex-grow space-y-3">
+                        {type.imageUrl ? (
+                            <div className="relative w-full h-32 rounded-md overflow-hidden">
+                                <Image
+                                    src={type.imageUrl}
+                                    alt={type.childFacingLabel}
+                                    fill
+                                    className="object-cover"
+                                />
+                            </div>
+                        ) : (
+                            <div className="w-full h-32 rounded-md bg-muted flex items-center justify-center">
+                                <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                            </div>
+                        )}
                         <p className="text-sm text-muted-foreground">{type.shortDescription}</p>
+                        <p className="text-xs font-medium">&quot;{type.childFacingLabel}&quot;</p>
                     </CardContent>
-                    <CardFooter className="flex justify-between">
-                         <div className="flex flex-wrap gap-1">
-                            {type.tags?.map(tag => <Badge key={tag} variant="outline">{tag}</Badge>)}
+                    <CardFooter className="flex flex-col gap-2">
+                        <div className="flex justify-between w-full">
+                            <div className="flex flex-wrap gap-1">
+                                {type.tags?.map(tag => <Badge key={tag} variant="outline">{tag}</Badge>)}
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => handleEdit(type)}>Edit</Button>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(type)}>Edit</Button>
+                        {type.imagePrompt && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => handleGenerateImage(type.id)}
+                                disabled={generatingImageFor === type.id}
+                            >
+                                {generatingImageFor === type.id ? (
+                                    <><LoaderCircle className="h-4 w-4 animate-spin mr-2" /> Generating...</>
+                                ) : (
+                                    <><Sparkles className="h-4 w-4 mr-2" /> {type.imageUrl ? 'Regenerate Image' : 'Generate Image'}</>
+                                )}
+                            </Button>
+                        )}
                     </CardFooter>
                 </Card>
             ))}
@@ -426,7 +528,7 @@ export default function AdminStoryOutputsPage() {
                 <Button onClick={handleAddNew}><PlusCircle className="mr-2"/> Add New</Button>
             </div>
 
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{editingType ? 'Edit Output Type' : 'Add New Output Type'}</DialogTitle>
                 </DialogHeader>

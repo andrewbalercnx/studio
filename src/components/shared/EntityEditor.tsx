@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { doc, setDoc, updateDoc, serverTimestamp, collection as firestoreCollection, query as firestoreQuery, getDocs, orderBy as firestoreOrderBy } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, serverTimestamp, collection as firestoreCollection } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,8 +21,7 @@ import { useUser } from '@/firebase/auth/use-user';
 import { useUploadFile } from '@/firebase/storage/use-upload-file';
 import { LoaderCircle, Sparkles, Upload, User as UserIcon, X } from 'lucide-react';
 import Image from 'next/image';
-import type { ChildProfile, Character, PrintLayout, Pronouns } from '@/lib/types';
-import { DEFAULT_PRINT_LAYOUT_ID } from '@/lib/types';
+import type { ChildProfile, Character, Pronouns } from '@/lib/types';
 
 const PRONOUN_OPTIONS: { value: Pronouns; label: string }[] = [
   { value: 'he/him', label: 'He/Him' },
@@ -91,9 +90,6 @@ export function EntityEditor({
   const [childId, setChildId] = useState<string>('__family_wide__'); // Special value = family-wide
 
   // Child-specific fields
-  const [defaultPrintLayoutId, setDefaultPrintLayoutId] = useState<string>(DEFAULT_PRINT_LAYOUT_ID);
-  const [printLayouts, setPrintLayouts] = useState<PrintLayout[]>([]);
-  const [loadingLayouts, setLoadingLayouts] = useState(false);
   const [namePronunciation, setNamePronunciation] = useState<string>('');
 
   // Avatar generation state
@@ -139,36 +135,13 @@ export function EntityEditor({
         setChildId((entity as Character).childId || '__family_wide__');
       }
 
-      // Child-specific: load default print layout and pronunciation
+      // Child-specific: load pronunciation
       if (!isCharacter) {
         const childEntity = entity as ChildProfile;
-        setDefaultPrintLayoutId(childEntity.defaultPrintLayoutId || DEFAULT_PRINT_LAYOUT_ID);
         setNamePronunciation(childEntity.namePronunciation || '');
       }
     }
   }, [entity, isCharacter]);
-
-  // Load available print layouts for children
-  useEffect(() => {
-    if (isCharacter || !firestore) return;
-
-    const loadPrintLayouts = async () => {
-      setLoadingLayouts(true);
-      try {
-        const layoutsRef = firestoreCollection(firestore, 'printLayouts');
-        const layoutsQuery = firestoreQuery(layoutsRef, firestoreOrderBy('name', 'asc'));
-        const snapshot = await getDocs(layoutsQuery);
-        const layouts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as PrintLayout);
-        setPrintLayouts(layouts);
-      } catch (err) {
-        console.error('Error loading print layouts:', err);
-      } finally {
-        setLoadingLayouts(false);
-      }
-    };
-
-    loadPrintLayouts();
-  }, [firestore, isCharacter]);
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!user || !entity?.id) return;
@@ -379,10 +352,9 @@ export function EntityEditor({
           });
         }
       } else {
-        // Child data - include default print layout and pronunciation
+        // Child data
         const childData: any = {
           ...commonData,
-          defaultPrintLayoutId: defaultPrintLayoutId || DEFAULT_PRINT_LAYOUT_ID,
         };
 
         // Only add pronunciation if it has a value
@@ -573,42 +545,6 @@ export function EntityEditor({
             </div>
           )}
         </>
-      )}
-
-      {/* Child-specific: Default Print Layout */}
-      {!isCharacter && (
-        <div className="space-y-2">
-          <Label htmlFor="defaultPrintLayoutId">Default Print Layout</Label>
-          <Select
-            value={defaultPrintLayoutId}
-            onValueChange={(val) => {
-              // Guard against spurious/invalid value changes (e.g., empty strings)
-              const validValues = [DEFAULT_PRINT_LAYOUT_ID, ...printLayouts.map(l => l.id)];
-              if (!val || !validValues.includes(val)) return;
-              setDefaultPrintLayoutId(val);
-            }}
-            disabled={loadingLayouts}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder={loadingLayouts ? 'Loading layouts...' : 'Select a layout'} />
-            </SelectTrigger>
-            <SelectContent>
-              {printLayouts.length === 0 && !loadingLayouts && (
-                <SelectItem value={DEFAULT_PRINT_LAYOUT_ID}>
-                  A4 Portrait Spread (default)
-                </SelectItem>
-              )}
-              {printLayouts.map((layout) => (
-                <SelectItem key={layout.id} value={layout.id}>
-                  {layout.name} ({layout.leafWidth}" × {layout.leafHeight}")
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            This determines the image dimensions when creating storybooks for this child.
-          </p>
-        </div>
       )}
 
       <div className="space-y-2">

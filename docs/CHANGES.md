@@ -18,6 +18,60 @@
 
 ### 2025-12-29
 
+#### `pending` - Add images to storyOutputTypes and two-step book creation flow
+
+**Type**: Feature
+
+**Summary**: Added image support to story output types and redesigned the create-book flow into a two-step wizard with visual card selection.
+
+**Changes**:
+- Added `imageUrl` and `imagePrompt` fields to `StoryOutputType` type
+- Created API route `/api/storyOutputTypes/generateImage` for AI image generation
+- Created `story-output-type-image-flow.ts` for generating display images with Gemini
+- Updated admin storyOutputTypes page with:
+  - Image prompt field in the editor
+  - Generate Image button on each card
+  - Image preview display on cards
+- Redesigned `/child/[childId]/create-book/[storyId]` page:
+  - Split into two separate pages/steps
+  - Step 1: Card-based output type selection with images
+  - Step 2: Image style selection with hover expansion
+  - Auto-advance on output type selection
+  - Auto-create book on image style selection
+  - Full-screen loading overlay during book creation
+
+**Files Created**:
+- `src/ai/flows/story-output-type-image-flow.ts`
+- `src/app/api/storyOutputTypes/generateImage/route.ts`
+
+**Files Modified**:
+- `src/lib/types.ts`
+- `src/app/admin/storyOutputs/page.tsx`
+- `src/app/child/[childId]/create-book/[storyId]/page.tsx`
+- `docs/SCHEMA.md`
+
+---
+
+#### `pending` - Use storyOutputType's printLayoutId for image dimensions
+
+**Type**: Feature Change
+
+**Summary**: Image dimensions for storybook generation now come from the storyOutputType's printLayoutId instead of the child's defaultPrintLayoutId.
+
+**Changes**:
+- Updated `src/app/story/[storyId]/page.tsx` to use the selected storyOutputType's `defaultPrintLayoutId` when creating storybooks
+- Removed the Default Print Layout selection from the child entity editor (it was redundant since output types control this)
+- Updated SCHEMA.md to reflect this change
+
+**Rationale**: The print layout should be determined by the output type (e.g., "Picture Book" vs "Coloring Pages") rather than the child profile. This provides more consistent output dimensions based on the type of book being created.
+
+**Files Modified**:
+- `src/app/story/[storyId]/page.tsx`
+- `src/components/shared/EntityEditor.tsx`
+- `docs/SCHEMA.md`
+
+---
+
 #### `ad90320` - Add system design and change history documentation
 
 **Type**: Infrastructure

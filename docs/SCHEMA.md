@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2025-12-29
+> **Last Updated**: 2025-12-29 (updated to remove defaultPrintLayoutId from children)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -58,7 +58,6 @@ Child profiles owned by parents.
 | `ownerParentUid` | string | Yes | Parent's Firebase UID |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | No | Last update time |
-| `defaultPrintLayoutId` | string | No | Default print layout (defaults to 'a4-portrait-spread-v1') |
 | `namePronunciation` | string | No | Phonetic pronunciation for TTS |
 | `preferredVoiceId` | string | No | Preferred TTS voice ID |
 | `speechModeEnabled` | boolean | No | Enable speech mode for stories |
@@ -335,7 +334,9 @@ Output format definitions (Picture Book, Poem, etc.).
 | `shortDescription` | string | Yes | Brief description |
 | `childFacingLabel` | string | Yes | Child-friendly label |
 | `category` | 'picture_book' \| 'poem' \| 'coloring_pages' \| 'audio_script' | Yes | Output category |
-| `defaultPrintLayoutId` | string | No | Default print layout |
+| `defaultPrintLayoutId` | string | No | Print layout ID - determines image dimensions for storybooks |
+| `imageUrl` | string | No | Display image URL shown to children when selecting book type |
+| `imagePrompt` | string | No | AI prompt for generating the display image |
 | `layoutHints` | object | No | Page count, aspect ratio hints |
 | `aiHints` | object | No | AI generation hints |
 | `paginationPrompt` | string | No | Pagination prompt |
