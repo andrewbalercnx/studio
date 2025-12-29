@@ -51,18 +51,24 @@ export default function Header() {
   // Fetch live help wizards ordered by 'order' field
   // Note: We fetch all and filter/sort client-side to avoid requiring a composite index
   useEffect(() => {
-    if (!firestore) return;
+    if (!firestore) {
+      console.log('[Header] No firestore instance available');
+      return;
+    }
 
+    console.log('[Header] Setting up helpWizards listener');
     const wizardsRef = collection(firestore, 'helpWizards');
 
     const unsubscribe = onSnapshot(wizardsRef, (snapshot) => {
+      console.log('[Header] Got helpWizards snapshot, docs:', snapshot.docs.length);
       const wizards = snapshot.docs
         .map(doc => ({ ...doc.data(), id: doc.id } as HelpWizard))
         .filter(w => w.status === 'live')
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      console.log('[Header] Live wizards:', wizards.length, wizards.map(w => w.title));
       setLiveWizards(wizards);
     }, (error) => {
-      console.error('Error fetching help wizards:', error);
+      console.error('[Header] Error fetching help wizards:', error);
     });
 
     return () => unsubscribe();
