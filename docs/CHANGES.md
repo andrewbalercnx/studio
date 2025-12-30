@@ -18,6 +18,21 @@
 
 ### 2025-12-30
 
+#### `89ba65a` - Exclude parent PIN dialogs from path recording
+
+**Type**: Bugfix
+
+**Summary**: When recording a HelpWizard flow with "Save My Path", clicks on parent PIN challenge dialogs are now excluded from the recording.
+
+**Changes**:
+- Added `data-path-recording-ui` attribute to all three DialogContent variants in PinForm
+- Prevents PIN verification steps from being captured in wizard recordings
+
+**Modified files**:
+- `src/components/parent/pin-form.tsx`
+
+---
+
 #### `385e844` - Add role field to HelpWizards
 
 **Type**: Feature
