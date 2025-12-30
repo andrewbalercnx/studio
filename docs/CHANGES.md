@@ -18,7 +18,7 @@
 
 ### 2025-12-30
 
-#### `pending` - Improve HelpWizard page editor UX
+#### `869bdaf` - Improve HelpWizard page editor UX
 
 **Type**: Enhancement
 
