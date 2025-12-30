@@ -18,6 +18,57 @@
 
 ### 2025-12-30
 
+#### `e3992db` - Kids PWA parity with StoryBookOutput model
+
+**Type**: Feature / Refactor
+
+**Summary**: Brought `/kids/*` PWA routes to feature parity with `/child/*` routes by adopting the new `StoryBookOutput` model. New books are now stored in the `stories/{storyId}/storybooks/{storybookId}` subcollection and use v2 API endpoints.
+
+**Changes**:
+
+**Book Creation Flow**:
+- Kids style selection now creates `StoryBookOutput` documents instead of updating Story directly
+- Uses `calculateImageDimensions()` from print-layout-utils for proper dimensions
+- Gets `printLayoutId` from selected output type's `defaultPrintLayoutId`
+- Redirects to generating page with `storybookId` query param
+
+**Generating Page**:
+- Supports both legacy and new model based on `storybookId` query param
+- Uses `/api/storybookV2/pages` and `/api/storybookV2/images` for new model
+- Added rate-limited state UI with "Wizard Nap Time" messaging
+- Added error state handling with friendly messaging
+- Auto-redirects to /kids/books on completion
+
+**New Books List Page**:
+- Created `/kids/books` page mirroring child flow
+- Shows books from both legacy and new model
+- Displays cover thumbnails, output type, image style badges
+- Shows generation status: "Making Art", "Art Coming", "Wizard Napping"
+
+**Reader Updates**:
+- Updated to support both legacy and new page paths
+- Uses `storyId` query param to distinguish new model
+- Legacy path: `stories/{bookId}/pages`
+- New path: `stories/{storyId}/storybooks/{storybookId}/pages`
+
+**Navigation Updates**:
+- Kids home "Read a Book" → "My Books" linking to `/kids/books`
+- Kids stories removed filter tabs, simplified to show all stories
+- Story cards now show "Create Book" button for stories without books
+- Story cards show "Read Book", "View Progress", "Check Status" based on state
+
+**Files Created**:
+- `src/app/kids/books/page.tsx` - New books list page
+
+**Files Modified**:
+- `src/app/kids/create/[sessionId]/style/page.tsx` - Create StoryBookOutput
+- `src/app/kids/create/[sessionId]/generating/page.tsx` - Dual model support, v2 APIs
+- `src/app/kids/read/[bookId]/page.tsx` - Dual model page paths
+- `src/app/kids/page.tsx` - Updated navigation
+- `src/app/kids/stories/page.tsx` - Simplified, added action buttons
+
+---
+
 #### `458a137` - Add HelpWizard export/import and path recording
 
 **Type**: Feature

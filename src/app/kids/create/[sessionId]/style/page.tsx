@@ -4,10 +4,11 @@ import { use, useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
-import { collection, query, orderBy, doc, setDoc, serverTimestamp, where } from 'firebase/firestore';
+import { collection, query, orderBy, doc, addDoc, getDoc, serverTimestamp, where } from 'firebase/firestore';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import { useKidsPWA } from '../../../layout';
-import type { ImageStyle, StorySession, Story, StoryOutputType, ChildProfile } from '@/lib/types';
+import type { ImageStyle, StorySession, Story, StoryOutputType, ChildProfile, StoryBookOutput, PrintLayout } from '@/lib/types';
+import { calculateImageDimensions } from '@/lib/print-layout-utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoaderCircle, ArrowLeft, Check, Palette, Book } from 'lucide-react';
@@ -111,45 +112,67 @@ export default function KidsStyleSelectionPage({ params }: { params: Promise<{ s
 
   // Handle style selection and start generation
   const handleSelectStyle = async (imageStyle: ImageStyle) => {
-    if (!firestore || !sessionRef || !storyRef || isSubmitting) return;
+    if (!firestore || !story || !selectedOutputTypeId || isSubmitting) return;
 
     setSelectedStyleId(imageStyle.id);
     setIsSubmitting(true);
 
     try {
-      // Update session with output type
-      await setDoc(
-        sessionRef,
-        {
-          storyOutputTypeId: selectedOutputTypeId,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      // Get the selected output type to check for default print layout
+      const outputType = outputTypes?.find((t) => t.id === selectedOutputTypeId);
+      const printLayoutId = outputType?.defaultPrintLayoutId || undefined;
 
-      // Update story with image style
-      await setDoc(
-        storyRef,
-        {
-          selectedImageStyleId: imageStyle.id,
-          selectedImageStylePrompt: imageStyle.stylePrompt,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      // Default dimensions: 8x8 inches at 300 DPI = 2400x2400 pixels (unconstrained square)
+      const DEFAULT_IMAGE_WIDTH_PX = 2400;
+      const DEFAULT_IMAGE_HEIGHT_PX = 2400;
+
+      let imageWidthPx: number = DEFAULT_IMAGE_WIDTH_PX;
+      let imageHeightPx: number = DEFAULT_IMAGE_HEIGHT_PX;
+
+      // Only calculate dimensions from layout if a print layout is specified
+      if (printLayoutId) {
+        const layoutDoc = await getDoc(doc(firestore, 'printLayouts', printLayoutId));
+        const layout = layoutDoc.exists() ? (layoutDoc.data() as PrintLayout) : null;
+        if (layout) {
+          const dimensions = calculateImageDimensions(layout);
+          imageWidthPx = dimensions.widthPx;
+          imageHeightPx = dimensions.heightPx;
+        }
+      }
+
+      // Create StoryBookOutput document in the new model
+      const storybooksRef = collection(firestore, 'stories', sessionId, 'storybooks');
+      const newStorybook: Omit<StoryBookOutput, 'id'> = {
+        storyId: sessionId,
+        childId: childId!,
+        parentUid: story.parentUid,
+        storyOutputTypeId: selectedOutputTypeId,
+        imageStyleId: imageStyle.id,
+        imageStylePrompt: imageStyle.stylePrompt,
+        printLayoutId: printLayoutId || null,
+        imageWidthPx,
+        imageHeightPx,
+        pageGeneration: { status: 'idle' },
+        imageGeneration: { status: 'idle' },
+        title: story.metadata?.title,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      const docRef = await addDoc(storybooksRef, newStorybook);
 
       toast({
-        title: 'Choices Saved!',
-        description: 'Starting to create your book...',
+        title: 'Creating Your Book!',
+        description: `Making a ${outputType?.childFacingLabel || 'book'} with ${imageStyle.title} pictures...`,
       });
 
-      // Redirect to generating page
-      router.push(`/kids/create/${sessionId}/generating`);
+      // Redirect to generating page with storybookId
+      router.push(`/kids/create/${sessionId}/generating?storybookId=${docRef.id}`);
     } catch (err: any) {
-      console.error('[KidsStyle] Error saving selections:', err);
+      console.error('[KidsStyle] Error creating storybook:', err);
       toast({
         title: 'Error',
-        description: err.message || 'Failed to save your choices',
+        description: err.message || 'Failed to create your book',
         variant: 'destructive',
       });
       setIsSubmitting(false);

@@ -119,16 +119,16 @@ export default function KidsHomePage() {
             </Card>
           </Link>
 
-          {/* Read a Book - placeholder for when they have completed books */}
-          <Link href="/kids/stories?filter=ready" className="block">
+          {/* My Books - completed illustrated storybooks */}
+          <Link href="/kids/books" className="block">
             <Card className="border-2 border-amber-200 hover:border-amber-400 hover:shadow-lg transition-all active:scale-98 bg-white">
               <CardContent className="flex items-center gap-4 p-6">
                 <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-green-400 to-teal-500 flex items-center justify-center">
                   <BookOpen className="h-8 w-8 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h2 className="text-xl font-bold text-gray-900">Read a Book</h2>
-                  <p className="text-gray-600 text-sm">Enjoy your finished books</p>
+                  <h2 className="text-xl font-bold text-gray-900">My Books</h2>
+                  <p className="text-gray-600 text-sm">Read your illustrated books</p>
                 </div>
               </CardContent>
             </Card>
