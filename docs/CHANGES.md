@@ -16,6 +16,23 @@
 
 ## Changes
 
+### 2025-12-30
+
+#### `e8ba6bf` - Fix UNAUTHENTICATED error for image generation on Cloud Run
+
+**Type**: Bug Fix
+
+**Summary**: Fixed image generation failing with UNAUTHENTICATED error on Cloud Run. The googleAI plugin was attempting to use Application Default Credentials instead of the API key when GOOGLE_CLOUD_PROJECT was set.
+
+**Changes**:
+- Explicitly pass GEMINI_API_KEY to the googleAI plugin configuration
+- Ensures API key authentication is used regardless of environment (local or Cloud Run)
+
+**Files Modified**:
+- `src/ai/genkit.ts` - Pass explicit apiKey to googleAI plugin configuration
+
+---
+
 ### 2025-12-29
 
 #### `pending` - Use name pronunciation for TTS
