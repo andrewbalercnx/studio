@@ -133,6 +133,8 @@ export function EntityEditor({
         setCharacterType((entity as Character).type || 'Friend');
         setRelationship((entity as Character).relationship || '');
         setChildId((entity as Character).childId || '__family_wide__');
+        // Load pronunciation for characters
+        setNamePronunciation((entity as Character).namePronunciation || '');
       }
 
       // Child-specific: load pronunciation
@@ -336,6 +338,11 @@ export function EntityEditor({
           characterData.childId = childId;
         }
 
+        // Only add pronunciation if it has a value
+        if (namePronunciation.trim()) {
+          characterData.namePronunciation = namePronunciation.trim();
+        }
+
         const cleanedData = removeUndefined(characterData);
 
         if (isEditing) {
@@ -435,21 +442,19 @@ export function EntityEditor({
         </p>
       </div>
 
-      {/* Child-specific: Name Pronunciation for TTS */}
-      {!isCharacter && (
-        <div className="space-y-2">
-          <Label htmlFor="namePronunciation">Name Pronunciation (optional)</Label>
-          <Input
-            id="namePronunciation"
-            value={namePronunciation}
-            onChange={(e) => setNamePronunciation(e.target.value)}
-            placeholder="e.g., SEE-oh-ban for Siobhan"
-          />
-          <p className="text-xs text-muted-foreground">
-            How to pronounce the name for AI voice narration. Use phonetic spelling (e.g., &quot;SEE-oh-ban&quot; for Siobhan, &quot;SHIV-on&quot; for Siobhán).
-          </p>
-        </div>
-      )}
+      {/* Name Pronunciation for TTS - available for both children and characters */}
+      <div className="space-y-2">
+        <Label htmlFor="namePronunciation">Name Pronunciation (optional)</Label>
+        <Input
+          id="namePronunciation"
+          value={namePronunciation}
+          onChange={(e) => setNamePronunciation(e.target.value)}
+          placeholder="e.g., SEE-oh-ban for Siobhan"
+        />
+        <p className="text-xs text-muted-foreground">
+          How to pronounce the name for AI voice narration. Use phonetic spelling (e.g., &quot;SEE-oh-ban&quot; for Siobhan, &quot;SHIV-on&quot; for Siobhán).
+        </p>
+      </div>
 
       {isCharacter && (
         <>

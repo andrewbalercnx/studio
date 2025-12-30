@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2025-12-29 (updated to remove defaultPrintLayoutId from children)
+> **Last Updated**: 2025-12-29 (added namePronunciation to characters for TTS)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -80,6 +80,7 @@ Story characters with traits, owned by parents.
 | `pronouns` | 'he/him' \| 'she/her' \| 'they/them' | No | Defaults to 'they/them' |
 | `type` | 'Family' \| 'Friend' \| 'Pet' \| 'Toy' \| 'Other' | Yes | Character type |
 | `relationship` | string | No | Family relationship (for type='Family') |
+| `namePronunciation` | string | No | Phonetic pronunciation for TTS |
 | `photos` | string[] | No | Photo URLs |
 | `avatarUrl` | string | No | AI-generated avatar URL |
 | `avatarAnimationUrl` | string | No | Dancing avatar animation URL |

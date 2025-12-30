@@ -111,6 +111,24 @@ export async function replacePlaceholdersInText(text: string, entityMap: EntityM
   });
 }
 
+/**
+ * Replace placeholders in text for TTS (Text-to-Speech).
+ * Uses namePronunciation if available, otherwise falls back to displayName.
+ * This ensures names like "Siobhan" are pronounced correctly as "shiv-AWN".
+ */
+export async function replacePlaceholdersForTTS(text: string, entityMap: EntityMap): Promise<string> {
+  if (!text) return '';
+  return text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
+    const entity = entityMap.get(id);
+    if (!entity) return match;
+
+    // Use pronunciation if available, otherwise fall back to displayName
+    const doc = entity.document;
+    const pronunciation = 'namePronunciation' in doc ? doc.namePronunciation : undefined;
+    return pronunciation || entity.displayName;
+  });
+}
+
 export type EntityMetadata = {
   id: string;
   displayName: string;

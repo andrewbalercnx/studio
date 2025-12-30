@@ -4,6 +4,7 @@ import { ELEVENLABS_TTS_VOICES, ELEVENLABS_MODEL, DEFAULT_TTS_VOICE } from '@/li
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { resolveEntitiesInText, replacePlaceholdersForTTS } from '@/lib/resolve-placeholders.server';
 
 // Valid preset voice IDs from shared config
 const VALID_PRESET_VOICE_IDS = ELEVENLABS_TTS_VOICES.map(v => v.id);
@@ -120,6 +121,14 @@ export async function POST(request: Request) {
       }
     }
 
+    // Resolve any placeholders using namePronunciation for correct TTS
+    // This handles $$childId$$ or $$characterId$$ patterns in the text
+    let textForTTS = text;
+    if (text.includes('$$')) {
+      const entityMap = await resolveEntitiesInText(text);
+      textForTTS = await replacePlaceholdersForTTS(text, entityMap);
+    }
+
     // Initialize ElevenLabs client
     const elevenlabs = new ElevenLabsClient({
       apiKey: process.env.ELEVENLABS_API_KEY!,
@@ -127,7 +136,7 @@ export async function POST(request: Request) {
 
     // Generate audio with British English pronunciation
     const audioStream = await elevenlabs.textToSpeech.convert(finalVoiceId, {
-      text,
+      text: textForTTS,
       modelId: ELEVENLABS_MODEL,
       languageCode: 'en-GB',
     });

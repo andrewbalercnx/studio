@@ -14,7 +14,7 @@ import type { Story, ChildProfile, StoryOutputPage } from '@/lib/types';
 import { DEFAULT_TTS_VOICE, ELEVENLABS_MODEL } from '@/lib/tts-config';
 import {
   resolveEntitiesInText,
-  replacePlaceholdersInText,
+  replacePlaceholdersForTTS,
   type EntityMap,
 } from '@/lib/resolve-placeholders.server';
 import { logAIFlow } from '@/lib/ai-flow-logger';
@@ -90,9 +90,10 @@ async function generatePageAudio(
   // Get the base text to narrate - prefer displayText (resolved placeholders) over bodyText
   let textToNarrate = page.displayText || page.bodyText || page.title;
 
-  // If we have bodyText with placeholders, resolve them
+  // If we have bodyText with placeholders, resolve them for TTS
+  // This uses namePronunciation when available for correct name pronunciation
   if (!textToNarrate && page.bodyText && entityMap) {
-    textToNarrate = await replacePlaceholdersInText(page.bodyText, entityMap);
+    textToNarrate = await replacePlaceholdersForTTS(page.bodyText, entityMap);
   }
 
   if (!textToNarrate || textToNarrate.trim().length === 0) {

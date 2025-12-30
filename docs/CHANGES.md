@@ -18,6 +18,29 @@
 
 ### 2025-12-29
 
+#### `pending` - Use name pronunciation for TTS
+
+**Type**: Enhancement
+
+**Summary**: When resolving text for TTS (Text-to-Speech), use the character/child's `namePronunciation` field if available instead of the display name. This ensures names like "Siobhan" are pronounced correctly as "shiv-AWN".
+
+**Changes**:
+- Added `namePronunciation` field to `Character` type (children already had it)
+- Created `replacePlaceholdersForTTS()` function in resolve-placeholders.server.ts
+- Updated `/api/tts` route to resolve placeholders with pronunciation
+- Updated `story-page-audio-flow.ts` to use TTS-specific placeholder resolution
+- Extended EntityEditor to show pronunciation field for both children and characters
+
+**Files Modified**:
+- `src/lib/types.ts` - Added namePronunciation to Character type
+- `src/lib/resolve-placeholders.server.ts` - Added replacePlaceholdersForTTS function
+- `src/app/api/tts/route.ts` - Resolve placeholders with pronunciation
+- `src/ai/flows/story-page-audio-flow.ts` - Use TTS placeholder resolution
+- `src/components/shared/EntityEditor.tsx` - Show pronunciation for characters too
+- `docs/SCHEMA.md` - Document namePronunciation field on characters
+
+---
+
 #### `pending` - Add images to storyOutputTypes and two-step book creation flow
 
 **Type**: Feature

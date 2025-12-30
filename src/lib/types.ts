@@ -1071,6 +1071,9 @@ export type Character = {
     // Relationship to the child (only applicable for type='Family')
     // e.g., 'mother', 'father', 'grandmother', 'grandfather', 'aunt', 'uncle', 'sibling', 'cousin'
     relationship?: string;
+    // Pronunciation guide for the character's name (for TTS)
+    // Can be phonetic spelling (e.g., "SEE-oh-ban" for Siobhan) or IPA
+    namePronunciation?: string;
     likes: string[]; // New field (replaces traits)
     dislikes: string[]; // New field for negative preferences
     description?: string;
