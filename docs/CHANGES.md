@@ -18,6 +18,24 @@
 
 ### 2025-12-30
 
+#### `dc50497` - Add Secret Manager configuration for Firebase App Hosting
+
+**Type**: Configuration
+
+**Summary**: Configure Firebase App Hosting to inject secrets from Google Cloud Secret Manager at runtime. This enables API keys (GEMINI_API_KEY, ELEVENLABS_API_KEY, etc.) to be available to the application when deployed via App Hosting.
+
+**Changes**:
+- Added `env` section to apphosting.yaml with secret references
+- Configured all required secrets: GEMINI_API_KEY, ELEVENLABS_API_KEY, FIREBASE_SERVICE_ACCOUNT_KEY, MIXAM_USERNAME, MIXAM_PASSWORD
+
+**Files Modified**:
+- `apphosting.yaml` - Added secrets configuration
+
+**Setup Required**:
+After deployment, run: `firebase apphosting:secrets:grantaccess`
+
+---
+
 #### `e8ba6bf` - Fix UNAUTHENTICATED error for image generation on Cloud Run
 
 **Type**: Bug Fix
