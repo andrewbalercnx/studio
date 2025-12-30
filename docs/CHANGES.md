@@ -18,7 +18,7 @@
 
 ### 2025-12-30
 
-#### `pending` - Add role field to HelpWizards
+#### `385e844` - Add role field to HelpWizards
 
 **Type**: Feature
 
