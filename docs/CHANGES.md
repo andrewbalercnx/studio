@@ -18,7 +18,7 @@
 
 ### 2025-12-30
 
-#### `pending` - Fix Firestore undefined field error in HelpWizard save
+#### `7bc61cd` - Fix Firestore undefined field error in HelpWizard save
 
 **Type**: Bug Fix
 
