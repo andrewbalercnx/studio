@@ -146,10 +146,12 @@ This feature is controlled by the `showApiDocumentation` field in `systemConfig/
 
 ## Allowed Commands
 
-The following commands are pre-approved and should always be allowed without prompting:
+The following commands are pre-approved and should always be allowed without prompting.
+
+**Note**: These apply to the project directory and should be allowed with any arguments or flags.
 
 ```
-# Git operations
+# Git operations (all flags/arguments allowed)
 git add
 git commit
 git push
@@ -162,11 +164,13 @@ git log
 git diff
 git reset
 git restore
+git branch
 
 # Build and type checking
 npm run build
 npm run typecheck
 npm install
+npx tsc
 
 # File operations
 ls
@@ -175,7 +179,19 @@ find
 cp
 mkdir
 tree
+
+# Project-specific scripts
+node scripts/generate-icons.mjs
+node scripts/generate-favicon-ico.mjs
+
+# Cloud tools (read-only)
+gcloud secrets list
 ```
+
+**End of Development Cycle**: After completing work, always:
+1. `git add` the changed files
+2. `git commit` with a descriptive message
+3. `git push` to main immediately (per auto-push rule above)
 
 ---
 
