@@ -18,6 +18,29 @@
 
 ### 2025-12-30
 
+#### `2dac294` - Add action field to HelpWizard for click automation
+
+**Type**: Feature
+
+**Summary**: HelpWizard pages can now have an `action: 'click'` property that clicks the highlighted element when the user advances. Path recording generates two steps per click: one to highlight and click, one to show the result.
+
+**Changes**:
+- Added `HelpWizardAction` type ('click') to types.ts
+- Path recording now generates two pages per recorded click
+- Added "Action on Advance" selector to HelpWizardPageForm
+- Help wizard executes click action on advance when configured
+- Added HelpWizardPage and HelpWizardPosition types to SCHEMA.md
+
+**Modified files**:
+- `src/lib/types.ts`
+- `src/hooks/use-path-recording.tsx`
+- `src/components/admin/HelpWizardPageForm.tsx`
+- `src/components/admin/HelpWizardForm.tsx`
+- `src/components/help-wizard.tsx`
+- `docs/SCHEMA.md`
+
+---
+
 #### `36ef09f` - Add timeout and retry config to ElevenLabs TTS calls
 
 **Type**: Bugfix
