@@ -74,7 +74,10 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
 
     try {
       // Create abort controller for this request
-      abortControllerRef.current = new AbortController();
+      // Store in local variable to avoid race condition if stop() is called
+      // during async operations (getIdToken) which would null the ref
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
       // Get fresh ID token
       const idToken = await user.getIdToken();
@@ -90,7 +93,7 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
           voiceId,
           childId,
         }),
-        signal: abortControllerRef.current.signal,
+        signal: controller.signal,
       });
 
       const result = await response.json();
