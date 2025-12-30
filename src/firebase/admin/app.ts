@@ -22,13 +22,21 @@ export async function initFirebaseAdminApp() {
 
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
     console.log('[firebase-admin] Initializing with FIREBASE_SERVICE_ACCOUNT_KEY env var');
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY) as ServiceAccount;
-    console.log('[firebase-admin] Service account project_id:', (serviceAccount as any).project_id);
-    adminApp = initializeApp({
-      credential: credential.cert(serviceAccount),
-      ...getStorageBucketOption(),
-    });
-    return adminApp;
+    console.log('[firebase-admin] Key length:', process.env.FIREBASE_SERVICE_ACCOUNT_KEY.length);
+    console.log('[firebase-admin] Key starts with:', process.env.FIREBASE_SERVICE_ACCOUNT_KEY.substring(0, 50));
+    try {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY) as ServiceAccount;
+      console.log('[firebase-admin] Service account project_id:', (serviceAccount as any).project_id);
+      console.log('[firebase-admin] Service account client_email:', (serviceAccount as any).client_email);
+      adminApp = initializeApp({
+        credential: credential.cert(serviceAccount),
+        ...getStorageBucketOption(),
+      });
+      return adminApp;
+    } catch (parseError: any) {
+      console.error('[firebase-admin] Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:', parseError.message);
+      console.error('[firebase-admin] This may cause authentication failures. Falling back to ADC.');
+    }
   }
 
   const localPath = process.env.FIREBASE_SERVICE_ACCOUNT_FILE ?? join(process.cwd(), 'serviceAccount.json');
