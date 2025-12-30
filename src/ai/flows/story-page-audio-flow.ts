@@ -284,10 +284,17 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
     const entityMap = await resolveEntitiesInText(entityIdsText);
     console.log(`[page-audio-flow] Resolved ${entityMap.size} entities`);
 
+    // Check for API key before initializing client
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    if (!apiKey) {
+      console.error('[page-audio-flow] ELEVENLABS_API_KEY environment variable not set');
+      return { ok: false, errorMessage: 'Text-to-speech service is not configured' };
+    }
+
     // Initialize ElevenLabs client
     console.log(`[page-audio-flow] Initializing ElevenLabs client...`);
     const elevenlabs = new ElevenLabsClient({
-      apiKey: process.env.ELEVENLABS_API_KEY!,
+      apiKey,
     });
     const bucket = await getStoryBucket();
     console.log(`[page-audio-flow] ElevenLabs client and storage bucket ready`);

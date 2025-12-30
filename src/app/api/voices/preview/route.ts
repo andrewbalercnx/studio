@@ -74,9 +74,19 @@ export async function POST(request: Request) {
       }
     }
 
+    // Check for API key before initializing client
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    if (!apiKey) {
+      console.error('[api/voices/preview] ELEVENLABS_API_KEY environment variable not set');
+      return NextResponse.json(
+        { ok: false, errorMessage: 'Voice preview service is not configured. Please contact support.' },
+        { status: 503 }
+      );
+    }
+
     // Initialize ElevenLabs client
     const elevenlabs = new ElevenLabsClient({
-      apiKey: process.env.ELEVENLABS_API_KEY!,
+      apiKey,
     });
 
     // Generate audio preview with British English pronunciation

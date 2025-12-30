@@ -129,9 +129,19 @@ export async function POST(request: Request) {
       textForTTS = await replacePlaceholdersForTTS(text, entityMap);
     }
 
+    // Check for API key before initializing client
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    if (!apiKey) {
+      console.error('[api/tts] ELEVENLABS_API_KEY environment variable not set');
+      return NextResponse.json(
+        { ok: false, errorMessage: 'Text-to-speech service is not configured. Please contact support.' },
+        { status: 503 }
+      );
+    }
+
     // Initialize ElevenLabs client
     const elevenlabs = new ElevenLabsClient({
-      apiKey: process.env.ELEVENLABS_API_KEY!,
+      apiKey,
     });
 
     // Generate audio with British English pronunciation

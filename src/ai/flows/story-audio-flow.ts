@@ -110,9 +110,16 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
 
     console.log(`[story-audio-flow] Calling ElevenLabs TTS with voice: ${voiceId}, model: ${ELEVENLABS_MODEL}`);
 
+    // Check for API key before initializing client
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    if (!apiKey) {
+      console.error('[story-audio-flow] ELEVENLABS_API_KEY environment variable not set');
+      return { ok: false, errorMessage: 'Text-to-speech service is not configured' };
+    }
+
     // Initialize ElevenLabs client
     const elevenlabs = new ElevenLabsClient({
-      apiKey: process.env.ELEVENLABS_API_KEY!,
+      apiKey,
     });
 
     // Generate audio using ElevenLabs TTS with British English pronunciation
