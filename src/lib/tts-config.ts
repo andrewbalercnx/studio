@@ -5,7 +5,7 @@
 /**
  * Available ElevenLabs TTS voices with their characteristics
  * These are optimized for different storytelling styles
- * Using eleven_turbo_v2_5 model for fast, high-quality output
+ * Using eleven_multilingual_v2 model for language code support (en-GB)
  */
 export const ELEVENLABS_TTS_VOICES = [
   { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', description: 'Warm and calm, American', recommended: true },
@@ -29,8 +29,8 @@ export type GeminiVoiceId = ElevenLabsVoiceId; // Backwards compatibility
 // Default voice - Rachel is warm and calm, great for children's stories
 export const DEFAULT_TTS_VOICE = '21m00Tcm4TlvDq8ikWAM'; // Rachel
 
-// ElevenLabs model to use
-export const ELEVENLABS_MODEL = 'eleven_turbo_v2_5';
+// ElevenLabs model to use - multilingual_v2 supports language codes (en-GB)
+export const ELEVENLABS_MODEL = 'eleven_multilingual_v2';
 
 export type StoryAudioFlowInput = {
   storyId: string;

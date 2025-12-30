@@ -18,6 +18,25 @@
 
 ### 2025-12-30
 
+#### `pending` - Switch to eleven_multilingual_v2 for en-GB language support
+
+**Type**: Bug Fix
+
+**Summary**: Switch ElevenLabs TTS model from `eleven_turbo_v2_5` to `eleven_multilingual_v2` to support `languageCode: 'en-GB'`. The turbo model doesn't support language codes, causing voice preview and TTS generation to fail with "unsupported_language" error. The multilingual model supports 29 languages including British English.
+
+**Changes**:
+- Changed ELEVENLABS_MODEL from 'eleven_turbo_v2_5' to 'eleven_multilingual_v2'
+- Retained languageCode: 'en-GB' in all TTS calls for British English pronunciation
+
+**Files Modified**:
+- `src/lib/tts-config.ts`
+- `src/app/api/voices/preview/route.ts`
+- `src/ai/flows/story-audio-flow.ts`
+- `src/ai/flows/story-page-audio-flow.ts`
+- `src/app/api/tts/route.ts`
+
+---
+
 #### `dc50497` - Add Secret Manager configuration for Firebase App Hosting
 
 **Type**: Configuration
