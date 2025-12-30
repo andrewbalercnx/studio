@@ -56,6 +56,17 @@ export const storyBeatFlow = ai.defineFlow(
     async ({ sessionId }) => {
         let debug: StoryBeatDebugInfo = { stage: 'unknown', details: {} };
 
+        // Check for Gemini API key before doing anything else
+        const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+        if (!geminiApiKey) {
+            console.error('[storyBeatFlow] GEMINI_API_KEY or GOOGLE_API_KEY environment variable not set');
+            return {
+                ok: false,
+                sessionId,
+                errorMessage: 'Story generation service is not configured. Please contact support.',
+            };
+        }
+
         try {
             const firestore = await getServerFirestore();
 
