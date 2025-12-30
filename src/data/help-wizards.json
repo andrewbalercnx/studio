@@ -1,30 +1,294 @@
 {
   "wizards": [
     {
-      "id": "parent-onboarding",
-      "title": "Welcome to StoryPic Kids!",
+      "id": "parent-complete-guide",
+      "title": "Complete Parent Guide",
       "status": "live",
+      "role": "parent",
       "order": 1,
       "pages": [
         {
-          "title": "Welcome! Let's get started.",
-          "description": "This is the Parent Dashboard. From here, you can select a child to play as, or manage your family's profiles and settings.",
-          "route": "/parent"
+          "title": "Welcome to StoryPic Kids!",
+          "description": "Welcome! This guide will walk you through everything you need to know as a parent.\n\nYou'll learn how to:\n- Set up child profiles\n- Create and manage characters\n- Help your child create stories\n- Turn stories into beautiful storybooks\n- Order printed books\n\nLet's get started!",
+          "route": "/parent",
+          "position": "center-center"
         },
         {
-          "title": "Manage Your Children",
-          "description": "This is where you add or edit profiles for your children. You can upload photos to help personalize their story's illustrations.",
-          "route": "/parent/children"
+          "title": "The Parent Dashboard",
+          "description": "This is your **Parent Dashboard** - your home base for managing everything.\n\nFrom here, you can:\n- Select which child will be playing\n- Access the navigation menu for all features\n- Switch between parent and child modes",
+          "route": "/parent",
+          "wizardTargetId": "parent-child-select-card",
+          "position": "bottom-right"
         },
         {
-          "title": "Create Your Book",
-          "description": "After a story is finished, come here to turn it into a book! Use the 'Create My Book' panel to compile the text, build the pages, and paint the art.",
-          "route": "/story/session/sample-session-1"
+          "title": "Navigation Menu",
+          "description": "The **navigation menu** gives you quick access to all parent features:\n\n- **Children** - Manage child profiles\n- **Characters** - Create story companions\n- **Storybooks** - View all created books\n- **Orders** - Track print orders\n- **Settings** - Account & security",
+          "route": "/parent",
+          "wizardTargetId": "parent-main-menu",
+          "position": "center-right"
         },
         {
-          "title": "Ready to Play!",
-          "description": "Now you're all set. Select a child from the main dashboard to start creating a magical story together.",
-          "route": "/parent"
+          "title": "Managing Children",
+          "description": "Let's visit the **Children** page where you manage child profiles.\n\nEach child gets their own profile with:\n- A display name and photo\n- Personality traits (likes & dislikes)\n- Voice settings for read-aloud features\n- Their own library of stories and books",
+          "route": "/parent/children",
+          "position": "center-center"
+        },
+        {
+          "title": "Adding a New Child",
+          "description": "Click the **Add New Child** button to create a profile.\n\nYou'll be asked to provide:\n- Their name (and pronunciation for read-aloud)\n- Pronouns (he/him, she/her, they/them)\n- A photo (optional but recommended for AI illustrations)\n- Things they love and things they don't like\n\nThese details help create personalized stories!",
+          "route": "/parent/children",
+          "wizardTargetId": "children-add-button",
+          "position": "bottom-center"
+        },
+        {
+          "title": "Child Profile Details",
+          "description": "Here's a demo child profile. Notice the key elements:\n\n- **Avatar/Photo**: Used by AI to create illustrations\n- **Likes & Dislikes**: Shape story themes and content\n- **Voice Settings**: Control read-aloud preferences\n\nYou can edit any profile by clicking on it.",
+          "route": "/child/help-child",
+          "position": "center-right"
+        },
+        {
+          "title": "Managing Characters",
+          "description": "Now let's look at **Characters** - the friends and companions in your child's stories!\n\nCharacters can be:\n- Real pets (dogs, cats, etc.)\n- Imaginary friends\n- Family members\n- Stuffed animals\n- Any special companion!",
+          "route": "/parent/characters",
+          "position": "center-center"
+        },
+        {
+          "title": "Creating Characters",
+          "description": "To add a new character:\n\n1. Click **Add New Character**\n2. Choose which child they belong to\n3. Add their name, type (pet, friend, etc.)\n4. Upload a photo for AI illustrations\n5. Add personality traits\n\nCharacters will appear in story options when that child plays!",
+          "route": "/parent/characters",
+          "position": "bottom-center"
+        },
+        {
+          "title": "The Storybooks Library",
+          "description": "The **Storybooks** page shows all books created by your family.\n\nFrom here you can:\n- View any child's storybooks\n- Open books to read or edit\n- Check the status of art generation\n- Access print ordering options",
+          "route": "/parent/storybooks",
+          "position": "center-center"
+        },
+        {
+          "title": "Storybook Status",
+          "description": "Each storybook shows its current status:\n\n- **Text Ready**: Story text is complete\n- **Generating Art**: AI is creating illustrations\n- **Art Ready**: Illustrations are complete\n- **Print Ready**: Ready for ordering\n\nClick any book to open it!",
+          "route": "/parent/storybooks",
+          "wizardTargetId": "storybooks-refresh",
+          "position": "bottom-center"
+        },
+        {
+          "title": "Inside a Storybook",
+          "description": "When you open a storybook, you'll see the main viewer with:\n\n- Page-by-page story text\n- Generated illustrations (when complete)\n- Action buttons for reading, printing, and more\n\nThis is where you prepare books for printing!",
+          "route": "/storybook/help-storybook",
+          "wizardTargetId": "storybook-viewer-card",
+          "position": "bottom-center"
+        },
+        {
+          "title": "Storybook Actions",
+          "description": "The action buttons let you:\n\n- **Generate Art**: Create AI illustrations for each page\n- **Read**: Open the book reader view\n- **Print Layout**: Prepare the book for printing\n\nArt generation typically takes a few minutes per page.",
+          "route": "/storybook/help-storybook",
+          "wizardTargetId": "storybook-actions",
+          "position": "top-center"
+        },
+        {
+          "title": "Print Layout Setup",
+          "description": "When you're ready to print, click **Print Layout** to:\n\n1. Choose a print size (A4, Letter, etc.)\n2. Arrange pages for professional printing\n3. Add cover designs\n4. Preview the final layout\n\nThis creates a print-ready version of your book!",
+          "route": "/storybook/help-storybook",
+          "wizardTargetId": "storybook-print-layout",
+          "position": "top-center"
+        },
+        {
+          "title": "Managing Print Orders",
+          "description": "The **Orders** page tracks all your print orders.\n\nYou can see:\n- Order status (processing, shipped, delivered)\n- Tracking information\n- Order history\n- Payment status",
+          "route": "/parent/orders",
+          "position": "center-center"
+        },
+        {
+          "title": "Parent Settings",
+          "description": "Finally, let's look at **Settings** where you manage your account.",
+          "route": "/parent/settings",
+          "position": "center-center"
+        },
+        {
+          "title": "Setting Up a PIN",
+          "description": "The **PIN** feature protects parent-only areas.\n\nWhen set, children will need to enter the PIN to:\n- Access parent settings\n- Make purchases\n- Edit profiles\n\nThis keeps little hands from making accidental changes!",
+          "route": "/parent/settings",
+          "wizardTargetId": "settings-pin-section",
+          "position": "bottom-center"
+        },
+        {
+          "title": "User Menu",
+          "description": "The **user menu** (top right) gives quick access to:\n\n- Switch to parent view\n- Sign out\n- Access settings\n- Toggle diagnostic tools (for troubleshooting)",
+          "route": "/parent",
+          "wizardTargetId": "header-user-menu",
+          "position": "bottom-left"
+        },
+        {
+          "title": "Starting a Story Session",
+          "description": "Now let's see how stories are created!\n\nWhen a child is selected, they see their **Child Dashboard** with three main options:\n\n- **New Story**: Start creating a new adventure\n- **My Stories**: View stories in progress\n- **My Books**: See completed storybooks",
+          "route": "/child/help-child",
+          "position": "center-center"
+        },
+        {
+          "title": "New Story Option",
+          "description": "Clicking **New Story** starts the story creation journey.\n\nYour child will:\n1. Choose a story type (adventure, bedtime, etc.)\n2. Select characters to include\n3. Answer fun questions about the story\n4. Watch their personalized story come to life!",
+          "route": "/child/help-child",
+          "wizardTargetId": "child-new-story",
+          "position": "bottom-center"
+        },
+        {
+          "title": "My Stories Library",
+          "description": "**My Stories** shows all stories this child has created.\n\nStories can be:\n- Read again anytime\n- Turned into storybooks\n- Shared with family members",
+          "route": "/child/help-child",
+          "wizardTargetId": "child-my-stories",
+          "position": "bottom-center"
+        },
+        {
+          "title": "My Books Library",
+          "description": "**My Books** contains all the illustrated storybooks.\n\nFrom here, children can:\n- Read their books with beautiful illustrations\n- Listen to stories read aloud\n- Watch animated page turns",
+          "route": "/child/help-child",
+          "wizardTargetId": "child-my-books",
+          "position": "bottom-center"
+        },
+        {
+          "title": "You're All Set!",
+          "description": "Congratulations! You now know the basics of StoryPic Kids.\n\n**Quick Reference:**\n- **Children page**: Add/edit child profiles\n- **Characters page**: Create story companions\n- **Storybooks page**: Manage all books\n- **Orders page**: Track print orders\n- **Settings**: Security & account options\n\nHave fun creating magical stories with your children!",
+          "route": "/parent",
+          "position": "center-center"
+        }
+      ]
+    },
+    {
+      "id": "child-story-journey",
+      "title": "Your Story Adventure",
+      "status": "live",
+      "role": "parent",
+      "order": 2,
+      "pages": [
+        {
+          "title": "Welcome, Young Storyteller!",
+          "description": "This guide shows you the magical journey your child takes when creating stories.\n\nWe'll follow along from:\n- Starting a new story\n- Making choices that shape the adventure\n- Reading the finished story\n- Creating a beautiful storybook\n\nLet's see the magic!",
+          "route": "/child/help-child",
+          "position": "center-center"
+        },
+        {
+          "title": "The Child's Dashboard",
+          "description": "When your child logs in, they see their own special dashboard!\n\nIt's designed to be simple and fun with big, colorful cards:\n\n- **New Story** - Start a fresh adventure\n- **My Stories** - Continue or re-read stories\n- **My Books** - View illustrated storybooks",
+          "route": "/child/help-child",
+          "position": "bottom-center"
+        },
+        {
+          "title": "Starting a New Story",
+          "description": "Clicking **New Story** begins the creative journey!\n\nYour child will be guided through fun, interactive choices that shape their unique story.",
+          "route": "/child/help-child",
+          "wizardTargetId": "child-new-story",
+          "position": "bottom-right",
+          "action": "click"
+        },
+        {
+          "title": "Choosing a Story Type",
+          "description": "First, your child picks what kind of story they want:\n\n- **Adventure** - Exciting quests and discoveries\n- **Bedtime** - Calm, cozy stories for nighttime\n- **Funny** - Silly stories full of giggles\n- **Learning** - Educational adventures\n\nEach type creates a different mood and style!",
+          "route": "/story/start",
+          "position": "center-center"
+        },
+        {
+          "title": "Picking the Story Mode",
+          "description": "Next, they choose how to create the story:\n\n- **Wizard Mode**: Answer guided questions (best for younger kids)\n- **Chat Mode**: Have a conversation with the AI storyteller\n\nBoth create wonderful personalized stories!",
+          "route": "/story/start",
+          "position": "center-center"
+        },
+        {
+          "title": "The Story Wizard",
+          "description": "In **Wizard Mode**, your child answers fun questions:\n\n- Who should be in the story? (themselves, pets, friends)\n- What's the setting? (forest, space, underwater)\n- What happens? (find treasure, make friends, solve a mystery)\n\nThe AI uses these answers to craft a unique tale!",
+          "route": "/story/type/help-session",
+          "position": "center-center"
+        },
+        {
+          "title": "Selecting Characters",
+          "description": "Your child picks who appears in their story!\n\nThey'll see:\n- Themselves (using their profile photo)\n- Their characters (pets, friends you've created)\n- Special guest characters\n\nSelected characters become the stars of the adventure!",
+          "route": "/story/type/help-session",
+          "position": "bottom-center"
+        },
+        {
+          "title": "Story Generation",
+          "description": "Once all choices are made, the AI gets to work!\n\nYour child sees a fun animation while their personalized story is being written. This usually takes about 30 seconds to a minute.",
+          "route": "/story/session/help-session/generating",
+          "position": "center-center"
+        },
+        {
+          "title": "The Finished Story",
+          "description": "The completed story appears with:\n\n- A unique title based on the adventure\n- Personalized text featuring your child's name\n- Their chosen characters woven throughout\n- A satisfying beginning, middle, and end",
+          "route": "/story/session/help-session/compiled",
+          "position": "center-center"
+        },
+        {
+          "title": "Reading the Story",
+          "description": "Now for the fun part - **reading**!\n\nYour child can:\n- Read the story themselves\n- Have it read aloud (AI voice or browser TTS)\n- Follow along with highlighted text\n\nThe read-aloud feature is great for bedtime!",
+          "route": "/child/help-child/story/help-story/read",
+          "position": "center-center"
+        },
+        {
+          "title": "Read to Me Feature",
+          "description": "The **Read to Me** button activates voice narration.\n\nYou can configure this in the child's Voice Settings:\n- Choose AI voice or browser voice\n- Adjust speaking speed\n- Set it to auto-start when opening stories",
+          "route": "/child/help-child/story/help-story/read",
+          "position": "bottom-center"
+        },
+        {
+          "title": "Creating a Storybook",
+          "description": "After reading, your child can turn their story into an illustrated **storybook**!\n\nClick **Create My Book** to start the process.",
+          "route": "/child/help-child/stories",
+          "position": "center-center"
+        },
+        {
+          "title": "Choosing an Output Type",
+          "description": "First, select what kind of book to create:\n\n- **Picture Book**: Traditional storybook layout\n- **Comic Book**: Panel-style illustrations\n- **Memory Book**: Scrapbook-style pages\n\nEach has a unique visual style!",
+          "route": "/story/session/help-session/select-output-type",
+          "position": "center-center"
+        },
+        {
+          "title": "Selecting Art Style",
+          "description": "Next, choose the **illustration style**:\n\n- **Watercolor**: Soft, painterly look\n- **Digital Art**: Bright and modern\n- **Cartoon**: Fun and expressive\n- **Storybook Classic**: Traditional children's book style\n\nThe AI will create all illustrations in this style!",
+          "route": "/story/session/help-session/select-image-style",
+          "position": "center-center"
+        },
+        {
+          "title": "Art Generation",
+          "description": "The AI now creates beautiful illustrations for each page!\n\nThis is the longest step - each image takes about 30-60 seconds. Your child can watch the progress or come back later.",
+          "route": "/child/help-child/book/help-storybook/generating",
+          "position": "center-center"
+        },
+        {
+          "title": "The Finished Storybook",
+          "description": "When complete, your child has a beautiful illustrated storybook!\n\nThey can:\n- Flip through the pages\n- Read with illustrations\n- Show off to family and friends",
+          "route": "/storybook/help-storybook",
+          "position": "center-center"
+        },
+        {
+          "title": "Reading the Storybook",
+          "description": "The **Read** button opens an immersive book reader:\n\n- Full-screen illustrations\n- Page-turn animations\n- Read-aloud narration\n- Perfect for bedtime reading!",
+          "route": "/storybook/help-storybook",
+          "wizardTargetId": "storybook-read",
+          "position": "top-center"
+        },
+        {
+          "title": "Watching the Book",
+          "description": "In the book reader, your child experiences their story like a real book:\n\n- Swipe or click to turn pages\n- Beautiful full-page illustrations\n- Their name and characters throughout\n- Optional background music",
+          "route": "/storybook/help-storybook/read",
+          "position": "center-center"
+        },
+        {
+          "title": "My Books Library",
+          "description": "All completed storybooks appear in **My Books**.\n\nYour child can:\n- Re-read favorites anytime\n- Show off their collection\n- Pick which ones to print!",
+          "route": "/child/help-child/books",
+          "position": "center-center"
+        },
+        {
+          "title": "Printing a Real Book",
+          "description": "The best part? You can turn digital books into **real printed books**!\n\nAs a parent, you can:\n1. Open the storybook\n2. Click Print Layout\n3. Configure the print settings\n4. Order a professionally printed book\n\nImagine your child holding their own published book!",
+          "route": "/storybook/help-storybook",
+          "wizardTargetId": "storybook-print-layout",
+          "position": "top-center"
+        },
+        {
+          "title": "The Complete Journey",
+          "description": "And that's the complete story journey!\n\n**Summary:**\n1. Child picks story type & characters\n2. AI creates personalized story\n3. Child reads (or listens to) their story\n4. Choose illustration style\n5. AI generates beautiful artwork\n6. Read the finished storybook\n7. Optionally print a real book!\n\nEvery story is unique and special, just like your child.",
+          "route": "/child/help-child",
+          "position": "center-center"
         }
       ]
     }

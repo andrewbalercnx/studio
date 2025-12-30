@@ -18,7 +18,40 @@
 
 ### 2025-12-30
 
-#### `pending` - Persist HelpWizard state to survive page navigations
+#### `pending` - Add comprehensive help wizard guides
+
+**Type**: Feature
+
+**Summary**: Created two end-to-end help wizards for parents.
+
+**Changes**:
+- **Complete Parent Guide** (22 pages): Walks through all parent features
+  - Setting up child profiles
+  - Managing characters
+  - Viewing and managing storybooks
+  - Print ordering
+  - Parent settings and PIN setup
+  - Understanding the child dashboard
+
+- **Your Story Adventure** (21 pages): Shows the child's story creation journey
+  - Child dashboard navigation
+  - Story type and mode selection
+  - Character selection
+  - Story generation process
+  - Reading stories with read-aloud
+  - Creating illustrated storybooks
+  - Art style selection
+  - Book reading experience
+  - Print book ordering
+
+Both wizards use the `help-*` sample data for demonstrations and include wizard target highlighting where available.
+
+**Modified files**:
+- `src/data/help-wizards.json`
+
+---
+
+#### `c073713` - Persist HelpWizard state to survive page navigations
 
 **Type**: Bug Fix
 
