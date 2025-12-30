@@ -18,6 +18,35 @@
 
 ### 2025-12-30
 
+#### `pending` - Add background music generation for story creation
+
+**Type**: Feature
+
+**Summary**: Added AI-generated background music to the story creation flow. Music is stored per-story-type, plays when the child's avatar animation is shown during AI processing, and automatically ducks (lowers volume) when TTS (Read to Me) is speaking.
+
+**Changes**:
+- Added `backgroundMusic` field to `StoryType` schema for storing music config
+- Created `/api/music/generate` endpoint using ElevenLabs Music API
+- Added Music tab to Story Types admin page with prompt editor, generate button, and preview player
+- Created `useBackgroundMusic` hook with Web Audio API for volume ducking
+- Integrated background music in story play page - plays during processing state when avatar is shown
+- Music automatically fades in/out and ducks to 10% volume when TTS speaks
+
+**Files Created**:
+- `src/app/api/music/generate/route.ts`
+- `src/hooks/use-background-music.ts`
+
+**Files Modified**:
+- `src/lib/types.ts` - Added backgroundMusic to StoryType
+- `src/app/admin/storyTypes/page.tsx` - Added Music tab and BackgroundMusicEditor component
+- `src/app/story/play/[sessionId]/page.tsx` - Integrated background music playback
+
+**Documentation Updated**:
+- `docs/SCHEMA.md` - Added backgroundMusic fields
+- `docs/API.md` - Added Music Routes section
+
+---
+
 #### `pending` - Unify TTS preference to use autoReadAloud
 
 **Type**: Enhancement

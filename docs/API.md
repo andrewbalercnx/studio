@@ -26,6 +26,7 @@ StoryPic Kids API uses Next.js App Router API routes. All endpoints require auth
 - [Print Routes](#print-routes)
 - [Admin Routes](#admin-routes)
 - [Voice Routes](#voice-routes)
+- [Music Routes](#music-routes)
 - [Webhook Routes](#webhook-routes)
 
 ---
@@ -877,6 +878,52 @@ Generate text-to-speech audio.
   "audioUrl": "https://..."
 }
 ```
+
+---
+
+## Music Routes
+
+### POST `/api/music/generate`
+
+Generate background music for a story type using ElevenLabs Music API.
+
+**Authorization**: Requires `isAdmin` or `isWriter` role.
+
+**Request Body**:
+```json
+{
+  "storyTypeId": "animal_adventure_v1",
+  "prompt": "gentle whimsical lullaby with soft piano and magical sparkles",
+  "durationMs": 45000
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `storyTypeId` | string | Yes | Target story type ID |
+| `prompt` | string | No | Music prompt (uses story type's saved prompt if not provided) |
+| `durationMs` | number | No | Duration in ms (30000-60000, default 45000) |
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "audioUrl": "https://firebasestorage.googleapis.com/...",
+  "durationMs": 45000
+}
+```
+
+**Error Responses**:
+- `400` - Missing storyTypeId or no prompt provided
+- `403` - Not admin or writer
+- `404` - Story type not found
+- `503` - Music service not configured (missing API key)
+- `500` - Generation failed
+
+**Notes**:
+- Music is uploaded to Firebase Storage at `story-types/{storyTypeId}/background-music.mp3`
+- Updates `backgroundMusic` field on the story type document
+- Generation status is tracked in `backgroundMusic.generation.status`
 
 ---
 

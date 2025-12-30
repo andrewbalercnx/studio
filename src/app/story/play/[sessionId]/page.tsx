@@ -14,6 +14,7 @@ import type { StorySession, ChatMessage as Message, Choice, Character, StoryType
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import { useToast } from '@/hooks/use-toast';
 import { useStoryTTS } from '@/hooks/use-story-tts';
+import { useBackgroundMusic } from '@/hooks/use-background-music';
 import { Badge } from '@/components/ui/badge';
 import { logSessionEvent } from '@/lib/session-events';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -125,6 +126,41 @@ export default function StoryPlayPage() {
 
     const storyTypesQuery = useMemo(() => firestore ? query(collection(firestore, 'storyTypes'), where('status', '==', 'live')) : null, [firestore]);
     const { data: storyTypes } = useCollection<StoryType>(storyTypesQuery);
+
+    // Get the active story type for background music
+    const activeStoryType = useMemo(() => {
+        if (!storyTypes || !session?.storyTypeId) return null;
+        return storyTypes.find((type) => type.id === session.storyTypeId) ?? null;
+    }, [storyTypes, session?.storyTypeId]);
+
+    // Background music during story generation
+    const backgroundMusicUrl = activeStoryType?.backgroundMusic?.audioUrl;
+    const backgroundMusic = useBackgroundMusic({
+        audioUrl: backgroundMusicUrl,
+        isSpeaking, // Duck when TTS speaks
+        normalVolume: 0.4,
+        duckedVolume: 0.1,
+    });
+
+    // Start/stop background music based on processing state and avatar visibility
+    useEffect(() => {
+        const hasAvatar = childProfile?.avatarAnimationUrl || childProfile?.avatarUrl;
+        const shouldPlayMusic = isProcessing && hasAvatar && backgroundMusicUrl;
+
+        if (shouldPlayMusic && backgroundMusic.isLoaded && !backgroundMusic.isPlaying) {
+            backgroundMusic.play();
+        } else if (!shouldPlayMusic && backgroundMusic.isPlaying) {
+            backgroundMusic.fadeOut();
+        }
+    }, [isProcessing, childProfile?.avatarAnimationUrl, childProfile?.avatarUrl, backgroundMusicUrl, backgroundMusic]);
+
+    // Cleanup background music on unmount
+    useEffect(() => {
+        return () => {
+            backgroundMusic.stop();
+        };
+    }, [backgroundMusic.stop]);
+
     const storyOutputTypesQuery = useMemo(() => firestore ? query(collection(firestore, 'storyOutputTypes'), where('status', '==', 'live')) : null, [firestore]);
     const { data: storyOutputTypes } = useCollection<StoryOutputType>(storyOutputTypesQuery);
 
@@ -154,11 +190,6 @@ export default function StoryPlayPage() {
             .slice(0, 4)
             .map(({ type }) => type);
     }, [storyTypes, preferenceKeywords, childAge]);
-    
-    const activeStoryType = useMemo(() => {
-        if (!storyTypes || !session?.storyTypeId) return null;
-        return storyTypes.find((type) => type.id === session.storyTypeId) ?? null;
-    }, [storyTypes, session?.storyTypeId]);
 
     const latestMessage = useMemo(() => {
         if (!recentMessages || recentMessages.length === 0) return null;

@@ -3,7 +3,7 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Copy, LoaderCircle, ChevronDown, ChevronUp, Trash2, Plus, GripVertical, Pencil, X, Check } from 'lucide-react';
+import { Copy, LoaderCircle, ChevronDown, ChevronUp, Trash2, Plus, GripVertical, Pencil, X, Check, Music, Play, Square, CheckCircle } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFirestore, useAuth } from '@/firebase';
@@ -994,23 +994,233 @@ function SettingsEditor({
   );
 }
 
+// Background Music Editor Component
+function BackgroundMusicEditor({
+  storyType,
+  onSave,
+  onDirtyChange
+}: {
+  storyType: StoryType;
+  onSave: (musicConfig: { prompt: string }) => Promise<void>;
+  onDirtyChange?: (isDirty: boolean) => void;
+}) {
+  const auth = useAuth();
+  const { toast } = useToast();
+  const [prompt, setPrompt] = useState(storyType.backgroundMusic?.prompt || '');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const musicStatus = storyType.backgroundMusic?.generation?.status || 'idle';
+  const audioUrl = storyType.backgroundMusic?.audioUrl;
+  const durationMs = storyType.backgroundMusic?.durationMs;
+
+  const hasChanges = prompt !== (storyType.backgroundMusic?.prompt || '');
+
+  // Notify parent of dirty state changes
+  const prevHasChanges = useRef(hasChanges);
+  useEffect(() => {
+    if (prevHasChanges.current !== hasChanges) {
+      prevHasChanges.current = hasChanges;
+      onDirtyChange?.(hasChanges);
+    }
+  }, [hasChanges, onDirtyChange]);
+
+  // Update local state when storyType prop changes (e.g., after generation completes)
+  useEffect(() => {
+    setPrompt(storyType.backgroundMusic?.prompt || '');
+  }, [storyType.backgroundMusic?.prompt]);
+
+  const handleSavePrompt = async () => {
+    setSaving(true);
+    try {
+      await onSave({ prompt });
+      toast({ title: 'Saved', description: 'Music prompt saved successfully' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleGenerateMusic = async () => {
+    if (!auth.currentUser || !prompt) return;
+    setIsGenerating(true);
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/music/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          storyTypeId: storyType.id,
+          prompt,
+          durationMs: 45000, // 45 seconds
+        }),
+      });
+      const result = await response.json();
+      if (!result.ok) {
+        throw new Error(result.errorMessage);
+      }
+      toast({ title: 'Success', description: 'Background music generated!' });
+    } catch (error: any) {
+      toast({ title: 'Error generating music', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handlePlayPreview = () => {
+    if (!audioUrl) return;
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    audioRef.current = new Audio(audioUrl);
+    audioRef.current.loop = true;
+    audioRef.current.volume = 0.5;
+    audioRef.current.play().catch((e) => {
+      console.error('Play failed:', e);
+      toast({ title: 'Playback error', description: 'Could not play audio', variant: 'destructive' });
+    });
+    setIsPlaying(true);
+    audioRef.current.onended = () => setIsPlaying(false);
+  };
+
+  const handleStopPreview = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setIsPlaying(false);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h4 className="font-medium">Background Music</h4>
+        {hasChanges && (
+          <Button size="sm" onClick={handleSavePrompt} disabled={saving}>
+            {saving ? <LoaderCircle className="h-4 w-4 animate-spin mr-2" /> : null}
+            Save Prompt
+          </Button>
+        )}
+      </div>
+
+      <p className="text-sm text-muted-foreground">
+        Background music plays during story generation when the child&apos;s avatar animation is shown.
+        The music automatically lowers in volume when the Read to Me feature is speaking.
+      </p>
+
+      {/* Music Prompt */}
+      <div className="space-y-2">
+        <Label htmlFor="musicPrompt">Music Prompt</Label>
+        <Textarea
+          id="musicPrompt"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="e.g., gentle whimsical lullaby with soft piano and magical sparkles, suitable for children"
+          rows={3}
+        />
+        <p className="text-xs text-muted-foreground">
+          Describe the style of background music. Should be calming and child-friendly. Music will be 45 seconds and loop seamlessly.
+        </p>
+      </div>
+
+      {/* Generate Button */}
+      <div className="flex items-center gap-4">
+        <Button
+          onClick={handleGenerateMusic}
+          disabled={!prompt || isGenerating || musicStatus === 'generating'}
+        >
+          {isGenerating || musicStatus === 'generating' ? (
+            <>
+              <LoaderCircle className="h-4 w-4 animate-spin mr-2" />
+              Generating...
+            </>
+          ) : audioUrl ? (
+            <>
+              <Music className="h-4 w-4 mr-2" />
+              Regenerate Music
+            </>
+          ) : (
+            <>
+              <Music className="h-4 w-4 mr-2" />
+              Generate Music
+            </>
+          )}
+        </Button>
+
+        {/* Status indicator */}
+        {musicStatus === 'ready' && audioUrl && (
+          <span className="text-sm text-green-600 flex items-center gap-1">
+            <CheckCircle className="h-4 w-4" /> Music ready
+          </span>
+        )}
+        {musicStatus === 'error' && (
+          <span className="text-sm text-red-600">
+            Error: {storyType.backgroundMusic?.generation?.lastErrorMessage || 'Unknown error'}
+          </span>
+        )}
+      </div>
+
+      {/* Preview Player */}
+      {audioUrl && (
+        <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+          <Label>Preview</Label>
+          <div className="flex items-center gap-3">
+            {!isPlaying ? (
+              <Button variant="outline" size="sm" onClick={handlePlayPreview}>
+                <Play className="h-4 w-4 mr-1" /> Play
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={handleStopPreview}>
+                <Square className="h-4 w-4 mr-1" /> Stop
+              </Button>
+            )}
+            {durationMs && (
+              <span className="text-xs text-muted-foreground">
+                Duration: {Math.round(durationMs / 1000)}s (loops during story generation)
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Story Type Detail Card
 function StoryTypeCard({
   storyType,
   onUpdateArcSteps,
   onUpdatePromptConfig,
-  onUpdateSettings
+  onUpdateSettings,
+  onUpdateMusic
 }: {
   storyType: StoryType;
   onUpdateArcSteps: (storyTypeId: string, steps: ArcStep[]) => Promise<void>;
   onUpdatePromptConfig: (storyTypeId: string, promptConfig: StoryTypePromptConfig) => Promise<void>;
   onUpdateSettings: (storyTypeId: string, updates: Partial<StoryType>) => Promise<void>;
+  onUpdateMusic: (storyTypeId: string, musicConfig: { prompt: string }) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState<'settings' | 'arc' | 'prompt'>('settings');
-  const [dirtyState, setDirtyState] = useState({ settings: false, arc: false, prompt: false });
+  const [activeTab, setActiveTab] = useState<'settings' | 'arc' | 'prompt' | 'music'>('settings');
+  const [dirtyState, setDirtyState] = useState({ settings: false, arc: false, prompt: false, music: false });
 
-  const hasUnsavedChanges = dirtyState.settings || dirtyState.arc || dirtyState.prompt;
+  const hasUnsavedChanges = dirtyState.settings || dirtyState.arc || dirtyState.prompt || dirtyState.music;
 
   // Browser beforeunload warning
   useEffect(() => {
@@ -1035,7 +1245,7 @@ function StoryTypeCard({
     setExpanded(!expanded);
   }, [expanded, hasUnsavedChanges]);
 
-  const handleTabChange = useCallback((newTab: 'settings' | 'arc' | 'prompt') => {
+  const handleTabChange = useCallback((newTab: 'settings' | 'arc' | 'prompt' | 'music') => {
     // Check if current tab has unsaved changes
     const currentTabDirty = dirtyState[activeTab];
     if (currentTabDirty) {
@@ -1107,6 +1317,15 @@ function StoryTypeCard({
             >
               Prompt Config{dirtyState.prompt ? ' *' : ''}
             </button>
+            <button
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1 ${
+                activeTab === 'music' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+              } ${dirtyState.music ? 'text-yellow-600' : ''}`}
+              onClick={() => handleTabChange('music')}
+            >
+              <Music className="h-4 w-4" />
+              Music{dirtyState.music ? ' *' : ''}
+            </button>
           </div>
 
           {activeTab === 'settings' && (
@@ -1130,6 +1349,14 @@ function StoryTypeCard({
               storyType={storyType}
               onSave={(config) => onUpdatePromptConfig(storyType.id, config)}
               onDirtyChange={(isDirty) => setDirtyState(prev => ({ ...prev, prompt: isDirty }))}
+            />
+          )}
+
+          {activeTab === 'music' && (
+            <BackgroundMusicEditor
+              storyType={storyType}
+              onSave={(musicConfig) => onUpdateMusic(storyType.id, musicConfig)}
+              onDirtyChange={(isDirty) => setDirtyState(prev => ({ ...prev, music: isDirty }))}
             />
           )}
         </CardContent>
@@ -1452,6 +1679,21 @@ export default function AdminStoryTypesPage() {
     }
   };
 
+  const handleUpdateMusic = async (storyTypeId: string, musicConfig: { prompt: string }) => {
+    if (!firestore) return;
+    try {
+      const docRef = doc(firestore, 'storyTypes', storyTypeId);
+      await updateDoc(docRef, {
+        'backgroundMusic.prompt': musicConfig.prompt,
+        updatedAt: new Date()
+      });
+      // Note: toast is shown by the BackgroundMusicEditor component
+    } catch (e: any) {
+      console.error("Error updating music config:", e);
+      throw e; // Re-throw so the editor can handle it
+    }
+  };
+
   const diagnostics = {
     page: 'admin-storyTypes',
     auth: {
@@ -1506,6 +1748,7 @@ export default function AdminStoryTypesPage() {
             onUpdateArcSteps={handleUpdateArcSteps}
             onUpdatePromptConfig={handleUpdatePromptConfig}
             onUpdateSettings={handleUpdateSettings}
+            onUpdateMusic={handleUpdateMusic}
           />
         ))}
       </div>

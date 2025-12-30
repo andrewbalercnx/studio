@@ -1050,6 +1050,20 @@ export type StoryType = {
   defaultPhaseId?: string;
   endingPhaseId?: string;
   levelBands?: string[];
+
+  // Background music for story generation waiting screen
+  backgroundMusic?: {
+    prompt?: string;           // AI prompt for music generation
+    audioUrl?: string | null;  // Firebase Storage URL
+    storagePath?: string;      // Storage path for management
+    durationMs?: number;       // Duration in milliseconds
+    generation?: {
+      status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
+      lastRunAt?: any;
+      lastCompletedAt?: any;
+      lastErrorMessage?: string | null;
+    };
+  };
 };
 
 export type Character = {

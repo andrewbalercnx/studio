@@ -314,6 +314,16 @@ Story format types (Adventure, Mystery, etc.).
 | `arcTemplate` | object | Yes | Arc steps configuration |
 | `promptConfig` | StoryTypePromptConfig | No | Prompt configuration |
 | `levelBandOverrides` | object | No | Age-appropriate adjustments |
+| `backgroundMusic` | object | No | Background music for story generation |
+| `backgroundMusic.prompt` | string | No | AI prompt for music generation |
+| `backgroundMusic.audioUrl` | string | No | Firebase Storage URL for music |
+| `backgroundMusic.storagePath` | string | No | Storage path for management |
+| `backgroundMusic.durationMs` | number | No | Duration in milliseconds |
+| `backgroundMusic.generation` | object | No | Generation status tracking |
+| `backgroundMusic.generation.status` | 'idle' \| 'pending' \| 'generating' \| 'ready' \| 'error' | No | Generation status |
+| `backgroundMusic.generation.lastRunAt` | timestamp | No | Last generation attempt |
+| `backgroundMusic.generation.lastCompletedAt` | timestamp | No | Last successful generation |
+| `backgroundMusic.generation.lastErrorMessage` | string | No | Error message if failed |
 | `version` | number | No | Config version |
 | `createdAt` | timestamp | No | Creation time |
 | `updatedAt` | timestamp | No | Last update time |
