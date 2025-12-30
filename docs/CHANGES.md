@@ -18,7 +18,7 @@
 
 ### 2025-12-30
 
-#### `pending` - Fix ElevenLabs unsupported_language error
+#### `42f05e0` - Fix ElevenLabs unsupported_language error
 
 **Type**: Bugfix
 
