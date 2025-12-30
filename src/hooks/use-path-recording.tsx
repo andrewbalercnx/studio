@@ -4,6 +4,82 @@ import React, { createContext, useContext, useState, useCallback, useRef } from 
 import { generateCssSelector, getWizardTargetId } from '@/lib/css-selector';
 import type { HelpWizardPage, HelpWizard } from '@/lib/types';
 
+/**
+ * Map of dynamic route parameter names to their help-* sample document IDs.
+ * These IDs match the documents created by the help sample data seeder.
+ */
+const HELP_ID_MAPPINGS: Record<string, string> = {
+  childId: 'help-child',
+  characterId: 'help-character',
+  sessionId: 'help-session',
+  storyId: 'help-story',
+  storybookId: 'help-storybook',
+  bookId: 'help-storybook',
+  printStoryBookId: 'help-print-storybook',
+  orderId: 'help-print-order',
+};
+
+/**
+ * Replace dynamic route segments with help-* IDs for wizard recordings.
+ * This allows recorded wizards to work with the sample help data.
+ *
+ * Examples:
+ * - /child/abc123/story/xyz789 → /child/help-child/story/help-story
+ * - /story/play/abc123 → /story/play/help-session
+ */
+function replaceRouteWithHelpIds(route: string): string {
+  // Match common dynamic ID patterns (UUIDs, Firebase IDs, etc.)
+  // but skip paths that are clearly not IDs (like 'create-book', 'print-layout')
+  const segments = route.split('/');
+  const result: string[] = [];
+
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+    const prevSegment = segments[i - 1];
+
+    // Check if this segment looks like a dynamic ID
+    // (alphanumeric, 10+ chars, or contains numbers mixed with letters)
+    const looksLikeId = segment.length >= 10 &&
+      /^[a-zA-Z0-9_-]+$/.test(segment) &&
+      !/^[a-z-]+$/.test(segment); // Not a route name like 'create-book'
+
+    if (looksLikeId && prevSegment) {
+      // Determine which help ID to use based on the previous segment
+      const paramName = getParamNameFromSegment(prevSegment);
+      if (paramName && HELP_ID_MAPPINGS[paramName]) {
+        result.push(HELP_ID_MAPPINGS[paramName]);
+        continue;
+      }
+    }
+
+    result.push(segment);
+  }
+
+  return result.join('/');
+}
+
+/**
+ * Map route segment names to their parameter names.
+ */
+function getParamNameFromSegment(segment: string): string | null {
+  const mapping: Record<string, string> = {
+    'child': 'childId',
+    'character': 'characterId',
+    'session': 'sessionId',
+    'story': 'storyId',
+    'storybook': 'storybookId',
+    'book': 'bookId',
+    'play': 'sessionId',
+    'read': 'bookId',
+    'create': 'sessionId',
+    'wizard': 'sessionId',
+    'type': 'sessionId',
+    'print-layout': 'printStoryBookId',
+    'print-orders': 'orderId',
+  };
+  return mapping[segment] || null;
+}
+
 interface RecordedStep {
   route: string;
   wizardTargetId?: string;
@@ -92,11 +168,14 @@ export function PathRecordingProvider({ children }: { children: React.ReactNode 
     let pageNumber = 1;
 
     steps.forEach((step) => {
+      // Replace dynamic IDs in route with help-* IDs
+      const helpRoute = replaceRouteWithHelpIds(step.route);
+
       // Page 1: Highlight the element to click, with action: 'click'
       pages.push({
         title: `Step ${pageNumber}`,
         description: `[Edit] Click on ${step.elementTagName}${step.elementText ? `: "${step.elementText}"` : ''}`,
-        route: step.route,
+        route: helpRoute,
         wizardTargetId: step.wizardTargetId,
         highlightSelector: step.highlightSelector,
         position: 'bottom-center' as const,
@@ -108,7 +187,7 @@ export function PathRecordingProvider({ children }: { children: React.ReactNode 
       pages.push({
         title: `Step ${pageNumber}`,
         description: `[Edit] Describe what opened or appeared after clicking`,
-        route: step.route,
+        route: helpRoute,
         position: 'center-center' as const,
         // No highlight or action - this is for showing/describing the result
       });

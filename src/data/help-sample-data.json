@@ -1,0 +1,136 @@
+{
+  "description": "Sample data for Help Wizard demonstrations. All IDs start with 'help-' to allow public access via security rules.",
+  "version": 1,
+  "children": [
+    {
+      "id": "help-child",
+      "displayName": "Demo Child",
+      "pronouns": "they/them",
+      "likes": ["adventures", "dinosaurs", "puzzles"],
+      "dislikes": ["scary things"],
+      "description": "A demo child profile for help wizard tutorials",
+      "avatarUrl": null,
+      "photos": []
+    }
+  ],
+  "characters": [
+    {
+      "id": "help-character",
+      "displayName": "Fluffy",
+      "pronouns": "they/them",
+      "type": "Pet",
+      "likes": ["treats", "walks"],
+      "dislikes": ["loud noises"],
+      "description": "A friendly demo pet for help wizard tutorials",
+      "avatarUrl": null,
+      "photos": [],
+      "childId": "help-child",
+      "isParentGenerated": true
+    }
+  ],
+  "storySessions": [
+    {
+      "id": "help-session",
+      "childId": "help-child",
+      "status": "completed",
+      "currentPhase": "completed",
+      "currentStepIndex": 0,
+      "storyTitle": "Demo Adventure",
+      "storyVibe": "happy",
+      "finalStoryText": "Once upon a time, Demo Child went on an amazing adventure with their best friend Fluffy. They discovered a magical garden full of colorful butterflies. The end.",
+      "storyMode": "gemini4",
+      "actors": ["help-child", "help-character"]
+    }
+  ],
+  "stories": [
+    {
+      "id": "help-story",
+      "storySessionId": "help-session",
+      "childId": "help-child",
+      "storyText": "Once upon a time, Demo Child went on an amazing adventure with their best friend Fluffy. They discovered a magical garden full of colorful butterflies. The end.",
+      "status": "text_ready",
+      "metadata": {
+        "title": "Demo Adventure",
+        "vibe": "happy",
+        "paragraphs": [
+          "Once upon a time, Demo Child went on an amazing adventure with their best friend Fluffy.",
+          "They discovered a magical garden full of colorful butterflies.",
+          "The end."
+        ],
+        "characterIds": ["help-character"]
+      },
+      "synopsis": "Demo Child and Fluffy explore a magical butterfly garden.",
+      "actors": ["help-child", "help-character"]
+    }
+  ],
+  "storyBooks": [
+    {
+      "id": "help-storybook",
+      "storyId": "help-story",
+      "title": "Demo Adventure Book",
+      "status": "text_ready",
+      "pages": [
+        {
+          "pageNumber": 1,
+          "text": "Once upon a time, Demo Child went on an amazing adventure with their best friend Fluffy.",
+          "imageUrl": null
+        },
+        {
+          "pageNumber": 2,
+          "text": "They discovered a magical garden full of colorful butterflies.",
+          "imageUrl": null
+        },
+        {
+          "pageNumber": 3,
+          "text": "The end.",
+          "imageUrl": null
+        }
+      ]
+    }
+  ],
+  "printStoryBooks": [
+    {
+      "id": "help-print-storybook",
+      "storyId": "help-story",
+      "storybookId": "help-storybook",
+      "title": "Demo Adventure - Print Edition",
+      "childName": "Demo Child",
+      "printLayoutId": "a4-portrait-spread-v1",
+      "pages": [],
+      "pdfStatus": "draft"
+    }
+  ],
+  "printOrders": [
+    {
+      "id": "help-print-order",
+      "storyId": "help-story",
+      "outputId": "help-storybook",
+      "version": 1,
+      "printProductId": "demo-product",
+      "productSnapshot": {
+        "name": "Demo Book",
+        "description": "A demo print product"
+      },
+      "quantity": 1,
+      "trimSize": {
+        "width": 210,
+        "height": 297,
+        "label": "A4"
+      },
+      "pageCount": 8,
+      "shippingAddress": {
+        "name": "Demo User",
+        "line1": "123 Demo Street",
+        "city": "Demo City",
+        "state": "Demo State",
+        "postalCode": "12345",
+        "country": "Demo Country"
+      },
+      "contactEmail": "demo@example.com",
+      "paymentStatus": "unpaid",
+      "fulfillmentStatus": "pending",
+      "approvalStatus": "pending",
+      "statusHistory": []
+    }
+  ]
+}

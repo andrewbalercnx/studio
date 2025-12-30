@@ -3,9 +3,10 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, PlusCircle, BookOpen, Edit, Copy, Download, Upload } from 'lucide-react';
+import { LoaderCircle, PlusCircle, BookOpen, Edit, Copy, Download, Upload, Database } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useAuth } from '@/firebase';
+import { useUser } from '@/firebase/auth/use-user';
 import { collection, onSnapshot, query, orderBy, writeBatch, doc, serverTimestamp, getDocs, setDoc } from 'firebase/firestore';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,8 @@ import { HelpWizardForm } from '@/components/admin/HelpWizardForm';
 export default function AdminHelpWizardsPage() {
   const { isAuthenticated, isAdmin, isWriter, loading: authLoading } = useAdminStatus();
   const firestore = useFirestore();
+  const auth = useAuth();
+  const { user } = useUser();
   const { toast } = useToast();
 
   const [wizards, setWizards] = useState<HelpWizard[]>([]);
@@ -26,6 +29,7 @@ export default function AdminHelpWizardsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWizard, setEditingWizard] = useState<HelpWizard | null>(null);
+  const [seedingHelpData, setSeedingHelpData] = useState(false);
 
   const handleSeedWizards = useCallback(async () => {
     if (!firestore) return;
@@ -82,6 +86,42 @@ export default function AdminHelpWizardsPage() {
   const handleOpenForm = (wizard: HelpWizard | null = null) => {
     setEditingWizard(wizard);
     setIsFormOpen(true);
+  };
+
+  const handleSeedHelpData = async () => {
+    if (!user) return;
+    setSeedingHelpData(true);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/admin/help-sample-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+      const result = await response.json();
+      if (result.ok) {
+        toast({
+          title: 'Success',
+          description: `Seeded ${result.seededDocs?.length || 0} help sample documents`,
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: result.errorMessage || 'Failed to seed help data',
+          variant: 'destructive',
+        });
+      }
+    } catch (e: unknown) {
+      toast({
+        title: 'Error',
+        description: e instanceof Error ? e.message : 'Failed to seed help data',
+        variant: 'destructive',
+      });
+    } finally {
+      setSeedingHelpData(false);
+    }
   };
 
   const handleDuplicateWizard = async (wizard: HelpWizard) => {
@@ -264,6 +304,10 @@ export default function AdminHelpWizardsPage() {
             onChange={handleImportWizard}
             className="hidden"
           />
+          <Button variant="outline" onClick={handleSeedHelpData} disabled={seedingHelpData}>
+            {seedingHelpData ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Database className="mr-2 h-4 w-4" />}
+            Seed Help Data
+          </Button>
           <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
             <Upload className="mr-2 h-4 w-4" /> Import
           </Button>
