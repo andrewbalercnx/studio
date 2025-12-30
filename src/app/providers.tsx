@@ -9,6 +9,7 @@ import { ParentGuardProvider } from '@/hooks/use-parent-guard';
 import { AppContextProvider } from '@/hooks/use-app-context';
 import { DiagnosticsProvider } from '@/hooks/use-diagnostics';
 import { WizardTargetDiagnosticsProvider } from '@/hooks/use-wizard-target-diagnostics';
+import { PathRecordingProvider } from '@/hooks/use-path-recording';
 import { HelpWizard } from '@/components/help-wizard';
 import { WizardTargetOverlay } from '@/components/wizard-target-overlay';
 
@@ -18,7 +19,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <AppContextProvider>
         <DiagnosticsProvider>
           <WizardTargetDiagnosticsProvider>
-            <ParentGuardProvider>
+            <PathRecordingProvider>
+              <ParentGuardProvider>
               <div className="relative flex min-h-screen flex-col">
                 <Header />
                 <main className="flex-1">{children}</main>
@@ -28,6 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
               <HelpWizard />
               <WizardTargetOverlay />
             </ParentGuardProvider>
+            </PathRecordingProvider>
           </WizardTargetDiagnosticsProvider>
         </DiagnosticsProvider>
       </AppContextProvider>

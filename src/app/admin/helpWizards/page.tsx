@@ -3,11 +3,11 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, PlusCircle, BookOpen, Edit, Copy } from 'lucide-react';
+import { LoaderCircle, PlusCircle, BookOpen, Edit, Copy, Download, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useFirestore } from '@/firebase';
 import { collection, onSnapshot, query, orderBy, writeBatch, doc, serverTimestamp, getDocs, setDoc } from 'firebase/firestore';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { HelpWizard } from '@/lib/types';
@@ -106,6 +106,75 @@ export default function AdminHelpWizardsPage() {
     }
   };
 
+  const handleExportWizard = (wizard: HelpWizard) => {
+    const exportData = {
+      id: wizard.id,
+      title: wizard.title,
+      pages: wizard.pages,
+      status: wizard.status,
+      order: wizard.order,
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `helpwizard-${wizard.id}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: 'Exported', description: `Downloaded ${wizard.title}` });
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportWizard = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !firestore) return;
+
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      // Basic validation
+      if (!data.title || !Array.isArray(data.pages) || data.pages.length === 0) {
+        throw new Error('Invalid wizard format: must have title and at least one page');
+      }
+
+      // Validate each page has required fields
+      for (const page of data.pages) {
+        if (!page.title || !page.description || !page.route) {
+          throw new Error('Invalid page format: each page must have title, description, and route');
+        }
+      }
+
+      // Use existing ID if provided, otherwise generate new one
+      const docRef = data.id
+        ? doc(firestore, 'helpWizards', data.id)
+        : doc(collection(firestore, 'helpWizards'));
+
+      await setDoc(docRef, {
+        id: docRef.id,
+        title: data.title,
+        pages: data.pages,
+        status: data.status || 'draft',
+        order: data.order ?? 99,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      toast({ title: 'Imported', description: `Wizard "${data.title}" imported successfully` });
+    } catch (e: any) {
+      toast({ title: 'Import Error', description: e.message, variant: 'destructive' });
+    }
+
+    // Reset input so the same file can be imported again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const renderContent = () => {
     if (authLoading || loading) return <div className="flex items-center gap-2"><LoaderCircle className="h-5 w-5 animate-spin" /><span>Loading wizards...</span></div>;
     if (!isAuthenticated || (!isAdmin && !isWriter)) return <p>Admin or writer access required.</p>;
@@ -139,6 +208,9 @@ export default function AdminHelpWizardsPage() {
               </Button>
               <Button variant="ghost" size="sm" className="shrink-0" onClick={(e) => { e.stopPropagation(); handleOpenForm(wizard);}}>
                   <Edit className="h-4 w-4 mr-2" /> Edit
+              </Button>
+              <Button variant="ghost" size="sm" className="shrink-0" onClick={(e) => { e.stopPropagation(); handleExportWizard(wizard);}}>
+                  <Download className="h-4 w-4 mr-2" /> Export
               </Button>
             </div>
             <AccordionContent>
@@ -181,9 +253,21 @@ export default function AdminHelpWizardsPage() {
           <h1 className="text-3xl font-bold">Help Wizards</h1>
           <p className="text-muted-foreground">Manage the guided tours for users.</p>
         </div>
-        <Button onClick={() => handleOpenForm()}>
-          <PlusCircle className="mr-2" /> Add New
-        </Button>
+        <div className="flex gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".json"
+            onChange={handleImportWizard}
+            className="hidden"
+          />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="mr-2 h-4 w-4" /> Import
+          </Button>
+          <Button onClick={() => handleOpenForm()}>
+            <PlusCircle className="mr-2" /> Add New
+          </Button>
+        </div>
       </div>
       <Card>
         <CardContent className="pt-6">

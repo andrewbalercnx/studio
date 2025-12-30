@@ -18,6 +18,38 @@
 
 ### 2025-12-30
 
+#### `pending` - Add HelpWizard export/import and path recording
+
+**Type**: Feature
+
+**Summary**: Added two features to simplify HelpWizard creation: JSON export/import for offline editing, and "Save My Path" recording to capture user clicks and generate wizard pages automatically.
+
+**Changes**:
+
+**Export/Import**:
+- Added Export button per wizard (downloads JSON file)
+- Added Import button at page header (creates/updates wizard from JSON)
+- JSON format preserves wizard ID for re-import
+
+**Path Recording ("Save My Path")**:
+- Added "Save My Path" toggle in user menu (visible when Wizard Targets enabled)
+- Records ALL clicks with page route and element selector
+- Auto-generates CSS selectors for elements without `data-wiz-target`
+- Downloads complete HelpWizard JSON file ready for import
+- Visual indicator: banner turns red and pulses during recording
+
+**Files Created**:
+- `src/lib/css-selector.ts` - CSS selector generation utility
+- `src/hooks/use-path-recording.tsx` - Path recording context and logic
+
+**Files Modified**:
+- `src/app/admin/helpWizards/page.tsx` - Export/Import buttons
+- `src/app/providers.tsx` - PathRecordingProvider added
+- `src/components/header.tsx` - Save My Path menu item and title dialog
+- `src/components/wizard-target-overlay.tsx` - Recording mode visual indicator
+
+---
+
 #### `89f9b8d` - Add middleware to fix double-slash URL SecurityError
 
 **Type**: Bug Fix

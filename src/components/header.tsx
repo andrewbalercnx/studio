@@ -22,10 +22,13 @@ import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
 import { useAuth, useFirestore } from '@/firebase';
 import { Badge } from './ui/badge';
-import { Shield, Pen, User as UserIcon, HelpCircle, BookOpen, Target } from 'lucide-react';
+import { Shield, Pen, User as UserIcon, HelpCircle, BookOpen, Target, Circle, CircleDot } from 'lucide-react';
 import { useParentGuard } from '@/hooks/use-parent-guard';
 import { useWizardTargetDiagnosticsOptional } from '@/hooks/use-wizard-target-diagnostics';
+import { usePathRecordingOptional } from '@/hooks/use-path-recording';
 import { useAdminStatus } from '@/hooks/use-admin-status';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import type { HelpWizard } from '@/lib/types';
@@ -44,9 +47,12 @@ export default function Header() {
   const { roleMode, switchToParentMode, activeChildId, startWizard } = useAppContext();
   const { showPinModal } = useParentGuard();
   const wizardTargetDiagnostics = useWizardTargetDiagnosticsOptional();
+  const pathRecording = usePathRecordingOptional();
   const { canShowWizardTargets } = useAdminStatus();
   const roleClaims: RoleClaims | null = idTokenResult?.claims ? (idTokenResult.claims as RoleClaims) : null;
   const [liveWizards, setLiveWizards] = useState<HelpWizard[]>([]);
+  const [showTitleDialog, setShowTitleDialog] = useState(false);
+  const [wizardTitle, setWizardTitle] = useState('');
 
   // Fetch live help wizards ordered by 'order' field
   // Note: We fetch all and filter/sort client-side to avoid requiring a composite index
@@ -86,6 +92,30 @@ export default function Header() {
     router.push('/parent');
   };
 
+  const handleToggleRecording = () => {
+    if (!pathRecording) return;
+    if (pathRecording.isRecording) {
+      pathRecording.stopRecording();
+      if (pathRecording.steps.length > 0) {
+        setShowTitleDialog(true);
+      }
+    } else {
+      pathRecording.startRecording();
+    }
+  };
+
+  const handleSaveRecording = () => {
+    pathRecording?.downloadWizard(wizardTitle);
+    setShowTitleDialog(false);
+    setWizardTitle('');
+  };
+
+  const handleCancelRecording = () => {
+    pathRecording?.clearRecording();
+    setShowTitleDialog(false);
+    setWizardTitle('');
+  };
+
   const renderNavLinks = () => {
     switch (roleMode) {
       case 'admin':
@@ -119,6 +149,7 @@ export default function Header() {
   };
 
   return (
+    <>
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 max-w-screen-2xl items-center justify-between">
         <div className="flex items-center gap-4">
@@ -197,6 +228,21 @@ export default function Header() {
                     {wizardTargetDiagnostics.enabled ? 'Hide' : 'Show'} Wizard Targets
                   </DropdownMenuItem>
                 )}
+                {canShowWizardTargets && wizardTargetDiagnostics?.enabled && pathRecording && (
+                  <DropdownMenuItem onClick={handleToggleRecording}>
+                    {pathRecording.isRecording ? (
+                      <>
+                        <CircleDot className="mr-2 h-4 w-4 text-red-500" />
+                        Stop Recording ({pathRecording.steps.length} steps)
+                      </>
+                    ) : (
+                      <>
+                        <Circle className="mr-2 h-4 w-4" />
+                        Save My Path
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
                   Sign out
@@ -211,5 +257,33 @@ export default function Header() {
         </nav>
       </div>
     </header>
+
+    <Dialog open={showTitleDialog} onOpenChange={setShowTitleDialog}>
+      <DialogContent className="sm:max-w-md" data-path-recording-ui>
+        <DialogHeader>
+          <DialogTitle>Save Recorded Path</DialogTitle>
+          <DialogDescription>
+            Enter a title for your wizard. You recorded {pathRecording?.steps.length ?? 0} steps.
+            You can edit the descriptions after importing.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <Input
+            placeholder="My Wizard Title"
+            value={wizardTitle}
+            onChange={(e) => setWizardTitle(e.target.value)}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={handleCancelRecording}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveRecording}>
+              Download Wizard
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
