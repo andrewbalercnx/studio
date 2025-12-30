@@ -13,6 +13,7 @@ import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import type { Story, ChildProfile } from '@/lib/types';
 import { DEFAULT_TTS_VOICE, ELEVENLABS_MODEL } from '@/lib/tts-config';
 import type { StoryAudioFlowInput, StoryAudioFlowOutput } from '@/lib/tts-config';
+import { resolveEntitiesInText, replacePlaceholdersForTTS } from '@/lib/resolve-placeholders.server';
 
 /**
  * Calculate child's age from date of birth
@@ -122,9 +123,19 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
       apiKey,
     });
 
+    // Resolve placeholders in story text for TTS
+    // This replaces $$childId$$ and $$characterId$$ with actual names (using pronunciation if available)
+    let textForTTS = story.storyText;
+    if (story.storyText.includes('$$')) {
+      console.log(`[story-audio-flow] Resolving placeholders in story text`);
+      const entityMap = await resolveEntitiesInText(story.storyText);
+      textForTTS = await replacePlaceholdersForTTS(story.storyText, entityMap);
+      console.log(`[story-audio-flow] Resolved text length: ${textForTTS.length} chars`);
+    }
+
     // Generate audio using ElevenLabs TTS with British English pronunciation
     const audioStream = await elevenlabs.textToSpeech.convert(voiceId, {
-      text: story.storyText,
+      text: textForTTS,
       modelId: ELEVENLABS_MODEL,
       languageCode: 'en-GB',
     });
