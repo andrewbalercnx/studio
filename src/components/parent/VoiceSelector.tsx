@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Volume2, Loader2, Check, Star, Mic, MicOff, Trash2, Plus, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase/auth/use-user';
@@ -15,15 +16,18 @@ import { ELEVENLABS_TTS_VOICES, DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 type VoiceSelectorProps = {
   child: ChildProfile;
   onVoiceSelect: (voiceId: string) => Promise<void>;
+  onAutoReadAloudChange?: (enabled: boolean) => Promise<void>;
 };
 
-export function VoiceSelector({ child, onVoiceSelect }: VoiceSelectorProps) {
+export function VoiceSelector({ child, onVoiceSelect, onAutoReadAloudChange }: VoiceSelectorProps) {
   const { toast } = useToast();
   const { user } = useUser();
   const [selectedVoice, setSelectedVoice] = useState<string>(child.preferredVoiceId || DEFAULT_TTS_VOICE);
+  const [autoReadAloud, setAutoReadAloud] = useState<boolean>(child.autoReadAloud ?? false);
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savingAutoRead, setSavingAutoRead] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Parent voice state
@@ -175,6 +179,33 @@ export function VoiceSelector({ child, onVoiceSelect }: VoiceSelectorProps) {
       setSaving(false);
     }
   }, [selectedVoice, onVoiceSelect, child.displayName, toast, parentVoices]);
+
+  const handleAutoReadAloudChange = useCallback(async (enabled: boolean) => {
+    setSavingAutoRead(true);
+    setAutoReadAloud(enabled);
+
+    try {
+      if (onAutoReadAloudChange) {
+        await onAutoReadAloudChange(enabled);
+      }
+      toast({
+        title: enabled ? 'Read aloud enabled' : 'Read aloud disabled',
+        description: enabled
+          ? `Stories will automatically be read to ${child.displayName}.`
+          : `Stories will not automatically be read aloud.`,
+      });
+    } catch (error) {
+      // Revert on error
+      setAutoReadAloud(!enabled);
+      toast({
+        title: 'Failed to update setting',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingAutoRead(false);
+    }
+  }, [onAutoReadAloudChange, child.displayName, toast]);
 
   // Recording functions
   const startRecording = useCallback(async () => {
@@ -333,6 +364,24 @@ export function VoiceSelector({ child, onVoiceSelect }: VoiceSelectorProps) {
         <p className="text-sm text-muted-foreground">
           Choose a voice for reading {child.displayName}'s stories aloud.
         </p>
+      </div>
+
+      {/* Read Aloud Toggle */}
+      <div className="flex items-center justify-between rounded-lg border p-4">
+        <div className="space-y-0.5">
+          <Label htmlFor="auto-read-aloud" className="text-base font-medium">
+            Read to Me
+          </Label>
+          <p className="text-sm text-muted-foreground">
+            Automatically read text and options aloud during story creation and reading.
+          </p>
+        </div>
+        <Switch
+          id="auto-read-aloud"
+          checked={autoReadAloud}
+          onCheckedChange={handleAutoReadAloudChange}
+          disabled={savingAutoRead}
+        />
       </div>
 
       {/* Parent Voices Section */}

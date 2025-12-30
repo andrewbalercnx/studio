@@ -577,6 +577,15 @@ export default function ManageChildrenPage() {
         });
     }
 
+    const handleAutoReadAloudChange = async (childId: string, enabled: boolean) => {
+        if (!firestore) return;
+        const childRef = doc(firestore, 'children', childId);
+        await updateDoc(childRef, {
+            autoReadAloud: enabled,
+            updatedAt: serverTimestamp(),
+        });
+    }
+
     // Delete with undo functionality
     const { deletedItem, markAsDeleted, clearDeletedItem } = useDeleteWithUndo();
 
@@ -775,6 +784,7 @@ export default function ManageChildrenPage() {
                             <VoiceSelector
                                 child={voiceChild}
                                 onVoiceSelect={(voiceId) => handleVoiceSelect(voiceChild.id, voiceId)}
+                                onAutoReadAloudChange={(enabled) => handleAutoReadAloudChange(voiceChild.id, enabled)}
                             />
                         )}
                     </DialogContent>

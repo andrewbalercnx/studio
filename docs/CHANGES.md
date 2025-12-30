@@ -27,11 +27,15 @@
 **Changes**:
 - Updated `useStoryTTS` hook to check `autoReadAloud` instead of `speechModeEnabled`
 - Updated `SpeechModeToggle` component to toggle `autoReadAloud` instead of `speechModeEnabled`
+- Added "Read to Me" toggle to VoiceSelector in parent settings
+- Added `onAutoReadAloudChange` prop to VoiceSelector component
 - Updated SCHEMA.md to mark `speechModeEnabled` as deprecated
 
 **Files Modified**:
 - `src/hooks/use-story-tts.ts`
 - `src/components/child/speech-mode-toggle.tsx`
+- `src/components/parent/VoiceSelector.tsx`
+- `src/app/parent/children/page.tsx`
 - `docs/SCHEMA.md`
 
 ---
