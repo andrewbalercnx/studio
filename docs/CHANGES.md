@@ -18,6 +18,38 @@
 
 ### 2025-12-30
 
+#### `1a313d8` - Add help sample data seeding and route ID replacement
+
+**Type**: Feature
+
+**Summary**: Added ability to seed sample "help-*" documents for HelpWizard demonstrations, and path recording now automatically replaces dynamic IDs with help-* equivalents.
+
+**Changes**:
+- Created `help-sample-data.json` with demo documents for all major collections
+- Created `/api/admin/help-sample-data` endpoint to seed/check the data
+- Added "Seed Help Data" button to Help Wizards admin page
+- Path recording now replaces dynamic route IDs with help-* IDs (e.g., `/child/abc123` → `/child/help-child`)
+
+**Sample data IDs**:
+- `help-child` (children)
+- `help-character` (characters)
+- `help-session` (storySessions)
+- `help-story` (stories)
+- `help-storybook` (storyBooks)
+- `help-print-storybook` (printStoryBooks)
+- `help-print-order` (printOrders)
+
+**New files**:
+- `src/data/help-sample-data.json`
+- `src/app/api/admin/help-sample-data/route.ts`
+
+**Modified files**:
+- `src/app/admin/helpWizards/page.tsx`
+- `src/hooks/use-path-recording.tsx`
+- `docs/API.md`
+
+---
+
 #### `2dac294` - Add action field to HelpWizard for click automation
 
 **Type**: Feature

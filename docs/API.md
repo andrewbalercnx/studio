@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2025-12-29
+> **Last Updated**: 2025-12-30
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -1148,6 +1148,49 @@ Seed print product catalog.
 {
   "success": true,
   "count": 3
+}
+```
+
+---
+
+### POST `/api/admin/help-sample-data`
+
+Seed sample data for Help Wizard demonstrations. Creates demo documents with "help-*" IDs in multiple collections (children, characters, storySessions, stories, storyBooks, printStoryBooks, printOrders).
+
+**Required Role**: Admin or Writer
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "message": "Help sample data seeded successfully",
+  "seededDocs": [
+    "children/help-child",
+    "characters/help-character",
+    "storySessions/help-session",
+    "stories/help-story",
+    "storyBooks/help-storybook",
+    "printStoryBooks/help-print-storybook",
+    "printOrders/help-print-order"
+  ]
+}
+```
+
+---
+
+### GET `/api/admin/help-sample-data`
+
+Check which help sample documents exist.
+
+**Required Role**: Admin or Writer
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "existingDocs": ["children/help-child", ...],
+  "missingDocs": [],
+  "allSeeded": true
 }
 ```
 
