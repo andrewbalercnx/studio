@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { useFirestore } from '@/firebase';
+import { useUser } from '@/firebase/auth/use-user';
 import { collection, doc, addDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
 import type { StoryPhase, PromptConfig, StoryOutputType } from '@/lib/types';
@@ -58,6 +59,7 @@ type StoryOutputForm = {
   pageCount: string;
   imagePrompt: string;
   defaultPrintLayoutId: string;
+  imageUrl?: string;
 };
 
 export default function AdminDashboardPage() {
@@ -886,11 +888,13 @@ function PromptConfigsPanel() {
 // Story Outputs Panel
 function StoryOutputsPanel() {
   const firestore = useFirestore();
+  const { user } = useUser();
   const outputsQuery = useMemo(() => (firestore ? collection(firestore, 'storyOutputTypes') : null), [firestore]);
   const { data: outputs, loading } = useCollection<StoryOutputType>(outputsQuery);
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const defaultForm: StoryOutputForm = {
     name: '',
     shortDescription: '',
@@ -921,8 +925,47 @@ function StoryOutputsPanel() {
       pageCount: String(output.layoutHints?.pageCount ?? '8'),
       imagePrompt: output.imagePrompt || '',
       defaultPrintLayoutId: output.defaultPrintLayoutId || '',
+      imageUrl: output.imageUrl,
     });
     setDialogOpen(true);
+  };
+
+  const handleGenerateImage = async () => {
+    if (!user || !form.id) {
+      toast({ title: 'Error', description: 'Please save the output type first', variant: 'destructive' });
+      return;
+    }
+    if (!form.imagePrompt) {
+      toast({ title: 'Error', description: 'Please enter an image prompt first', variant: 'destructive' });
+      return;
+    }
+
+    setIsGeneratingImage(true);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch('/api/storyOutputTypes/generateImage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ storyOutputTypeId: form.id }),
+      });
+      const result = await response.json();
+      if (result.ok) {
+        toast({ title: 'Success', description: 'Image generated successfully!' });
+        // Update the form with the new image URL
+        if (result.imageUrl) {
+          setForm(prev => ({ ...prev, imageUrl: result.imageUrl }));
+        }
+      } else {
+        toast({ title: 'Error', description: result.errorMessage, variant: 'destructive' });
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setIsGeneratingImage(false);
+    }
   };
 
   const handleSave = async () => {
@@ -1067,7 +1110,31 @@ function StoryOutputsPanel() {
                   rows={2}
                   placeholder="Describe the image that will represent this output type to children"
                 />
-                <p className="text-xs text-muted-foreground">After saving, generate the image from /admin/storyOutputs</p>
+                {form.imageUrl && (
+                  <div className="mt-2">
+                    <p className="text-xs text-muted-foreground mb-1">Current image:</p>
+                    <img src={form.imageUrl} alt="Current" className="w-24 h-24 rounded-md object-cover border" />
+                  </div>
+                )}
+                {form.id && form.imagePrompt && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={handleGenerateImage}
+                    disabled={isGeneratingImage}
+                  >
+                    {isGeneratingImage ? (
+                      <><LoaderCircle className="h-4 w-4 animate-spin mr-2" /> Generating...</>
+                    ) : (
+                      <><Sparkles className="h-4 w-4 mr-2" /> {form.imageUrl ? 'Regenerate Image' : 'Generate Image'}</>
+                    )}
+                  </Button>
+                )}
+                {!form.id && form.imagePrompt && (
+                  <p className="text-xs text-muted-foreground">Save first to generate the image</p>
+                )}
             </div>
             <div className="grid gap-2">
                 <Label>Default Print Layout ID</Label>
