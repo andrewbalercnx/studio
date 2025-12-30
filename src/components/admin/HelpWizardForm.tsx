@@ -14,7 +14,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, PlusCircle, Trash2, ArrowUp, ArrowDown, Edit } from 'lucide-react';
+import { LoaderCircle, PlusCircle, Trash2, ArrowUp, ArrowDown, Edit, MousePointerClick } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { HelpWizardPageForm } from './HelpWizardPageForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
@@ -203,7 +204,15 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
           {fields.map((field, index) => (
             <div key={field.id} className="flex items-center gap-2 rounded-md border p-3">
               <div className="flex-grow">
-                <p className="font-semibold">{field.title}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold">{field.title}</p>
+                  {field.action === 'click' && (
+                    <Badge variant="secondary" className="text-xs gap-1">
+                      <MousePointerClick className="h-3 w-3" />
+                      Click
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-sm text-muted-foreground">{field.route}</p>
               </div>
               <div className="flex items-center gap-1">

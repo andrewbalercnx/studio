@@ -18,6 +18,26 @@
 
 ### 2025-12-30
 
+#### `pending` - Improve HelpWizard click action visibility
+
+**Type**: Enhancement
+
+**Summary**: Improved the visibility and UX of the click action feature in HelpWizards.
+
+**Changes**:
+- Added visual badge indicator in wizard page list showing which pages have "Click" action
+- Added 500ms delay after click action executes so users can see what opened
+- Improved recorded step titles and descriptions:
+  - Title now shows element being clicked (e.g., "Click 'user menu'")
+  - Descriptions include markdown formatting and editing hints
+
+**Modified files**:
+- `src/components/admin/HelpWizardForm.tsx` - Added Click badge to page list
+- `src/components/help-wizard.tsx` - Added delay after click action
+- `src/hooks/use-path-recording.tsx` - Improved step titles/descriptions
+
+---
+
 #### `1a313d8` - Add help sample data seeding and route ID replacement
 
 **Type**: Feature

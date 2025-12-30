@@ -167,14 +167,21 @@ export function PathRecordingProvider({ children }: { children: React.ReactNode 
     const pages: HelpWizardPage[] = [];
     let pageNumber = 1;
 
-    steps.forEach((step) => {
+    steps.forEach((step, stepIndex) => {
       // Replace dynamic IDs in route with help-* IDs
       const helpRoute = replaceRouteWithHelpIds(step.route);
 
+      // Generate a descriptive action label
+      const elementLabel = step.wizardTargetId
+        ? `"${step.wizardTargetId.replace(/-/g, ' ')}"`
+        : step.elementText
+          ? `"${step.elementText}"`
+          : step.elementTagName;
+
       // Page 1: Highlight the element to click, with action: 'click'
       pages.push({
-        title: `Step ${pageNumber}`,
-        description: `[Edit] Click on ${step.elementTagName}${step.elementText ? `: "${step.elementText}"` : ''}`,
+        title: `Click ${elementLabel}`,
+        description: `Click on the highlighted ${step.elementTagName} element to continue.\n\n*Edit this description to explain why the user should click here.*`,
         route: helpRoute,
         wizardTargetId: step.wizardTargetId,
         highlightSelector: step.highlightSelector,
@@ -185,8 +192,8 @@ export function PathRecordingProvider({ children }: { children: React.ReactNode 
 
       // Page 2: Show the opened content (no highlight, user describes what opened)
       pages.push({
-        title: `Step ${pageNumber}`,
-        description: `[Edit] Describe what opened or appeared after clicking`,
+        title: `View Result`,
+        description: `The ${step.elementTagName} has been clicked.\n\n*Edit this to describe what the user should see or do next.*`,
         route: helpRoute,
         position: 'center-center' as const,
         // No highlight or action - this is for showing/describing the result

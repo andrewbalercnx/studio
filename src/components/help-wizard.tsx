@@ -157,6 +157,15 @@ export function HelpWizard() {
         const element = document.querySelector(selector) as HTMLElement;
         if (element) {
           element.click();
+          // Add a short delay after clicking so the user can see what opened
+          setTimeout(() => {
+            if (wizard && activeWizard && activeWizard.step < wizard.pages.length - 1) {
+              advanceWizard();
+            } else {
+              handleClose();
+            }
+          }, 500);
+          return;
         }
       }
     }
