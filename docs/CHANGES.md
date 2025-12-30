@@ -18,6 +18,22 @@
 
 ### 2025-12-30
 
+#### `4995cee` - Fix race condition in useTTS causing null signal error
+
+**Type**: Bug Fix
+
+**Summary**: Fixed a race condition in the `useTTS` hook that caused "Cannot read properties of null (reading 'signal')" errors when TTS was called rapidly or cleanup effects ran during async operations.
+
+**Changes**:
+- Store AbortController in local variable before async operations
+- Use local variable for fetch signal instead of accessing ref directly
+- Prevents null reference error when stop() is called during getIdToken() await
+
+**Files Modified**:
+- `src/hooks/use-tts.ts`
+
+---
+
 #### `pending` - Add background music generation for story creation
 
 **Type**: Feature
