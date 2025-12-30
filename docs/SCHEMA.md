@@ -501,6 +501,7 @@ In-app help wizard configurations.
 | `title` | string | Yes | Wizard title |
 | `pages` | HelpWizardPage[] | Yes | Wizard pages |
 | `status` | 'draft' \| 'live' | Yes | Wizard status |
+| `role` | 'parent' \| 'writer' \| 'admin' | Yes | Target audience (parents see parent, writers see parent+writer, admins see all) |
 | `order` | number | Yes | Display order |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |

@@ -200,6 +200,9 @@ export default function AdminHelpWizardsPage() {
                     <Badge variant={wizard.status === 'live' ? 'default' : 'secondary'} className="ml-2">
                       {wizard.status}
                     </Badge>
+                    <Badge variant="outline" className="ml-1">
+                      {wizard.role || 'parent'}
+                    </Badge>
                     <span className="text-xs text-muted-foreground ml-2">#{wizard.order ?? 0}</span>
                 </div>
               </AccordionTrigger>

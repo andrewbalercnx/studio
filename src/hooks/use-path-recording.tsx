@@ -99,6 +99,7 @@ export function PathRecordingProvider({ children }: { children: React.ReactNode 
       title: title || 'Recorded Wizard',
       pages,
       status: 'draft',
+      role: 'parent',
       order: 99,
     };
 

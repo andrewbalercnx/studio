@@ -70,6 +70,13 @@ export default function Header() {
       const wizards = snapshot.docs
         .map(doc => ({ ...doc.data(), id: doc.id } as HelpWizard))
         .filter(w => w.status === 'live')
+        .filter(w => {
+          // Filter by role: admins see all, writers see parent+writer, parents see only parent
+          const wizardRole = w.role || 'parent'; // Default to parent for backwards compatibility
+          if (roleClaims?.isAdmin) return true;
+          if (roleClaims?.isWriter) return wizardRole === 'parent' || wizardRole === 'writer';
+          return wizardRole === 'parent';
+        })
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       console.log('[Header] Live wizards:', wizards.length, wizards.map(w => w.title));
       setLiveWizards(wizards);
@@ -78,7 +85,7 @@ export default function Header() {
     });
 
     return () => unsubscribe();
-  }, [firestore]);
+  }, [firestore, roleClaims?.isAdmin, roleClaims?.isWriter]);
 
   const handleSignOut = async () => {
     if (!auth) return;

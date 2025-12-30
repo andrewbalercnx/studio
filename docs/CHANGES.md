@@ -18,6 +18,29 @@
 
 ### 2025-12-30
 
+#### `pending` - Add role field to HelpWizards
+
+**Type**: Feature
+
+**Summary**: Added a `role` field to HelpWizards to control visibility based on user role. Parents see only parent wizards, writers see parent and writer wizards, admins see all.
+
+**Changes**:
+- Added `HelpWizardRole` type: 'parent' | 'writer' | 'admin'
+- Added `role` field to `HelpWizard` type
+- Added "Audience" selector to HelpWizard editor form
+- Header filters Help Tours submenu by user role
+- Admin wizard list shows role badge for each wizard
+
+**Files Modified**:
+- `src/lib/types.ts` - Added HelpWizardRole type and role field
+- `src/components/admin/HelpWizardForm.tsx` - Added role selector
+- `src/components/header.tsx` - Filter wizards by role
+- `src/hooks/use-path-recording.tsx` - Include role in downloaded wizard
+- `src/app/admin/helpWizards/page.tsx` - Show role badge in list
+- `docs/SCHEMA.md` - Document new field
+
+---
+
 #### `e3992db` - Kids PWA parity with StoryBookOutput model
 
 **Type**: Feature / Refactor

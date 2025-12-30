@@ -1219,11 +1219,14 @@ export type StoryWizardOutput =
       ok: false;
     };
 
+export type HelpWizardRole = 'parent' | 'writer' | 'admin';
+
 export type HelpWizard = {
   id: string;
   title: string;
   pages: HelpWizardPage[];
   status: 'draft' | 'live';
+  role: HelpWizardRole; // Who can see this wizard: parent, writer, or admin
   order: number; // Display order in help menu (lower numbers appear first)
   createdAt: any;
   updatedAt: any;

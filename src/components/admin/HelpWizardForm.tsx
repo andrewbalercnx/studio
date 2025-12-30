@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { useFirestore } from '@/firebase';
 import { doc, setDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import type { HelpWizard, HelpWizardPage } from '@/lib/types';
+import type { HelpWizard, HelpWizardPage, HelpWizardRole } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 const wizardSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
   status: z.enum(['draft', 'live']),
+  role: z.enum(['parent', 'writer', 'admin']),
   order: z.coerce.number().int().min(0, "Order must be 0 or greater"),
   pages: z.array(z.object({
     title: z.string().min(1),
@@ -50,6 +51,7 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
     defaultValues: {
       title: wizard?.title || '',
       status: wizard?.status || 'draft',
+      role: wizard?.role || 'parent',
       order: wizard?.order ?? 0,
       pages: wizard?.pages || [],
     }
@@ -147,7 +149,7 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
         {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label htmlFor="status">Status</Label>
           <Controller
@@ -159,6 +161,23 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
                 <SelectContent>
                   <SelectItem value="draft">Draft</SelectItem>
                   <SelectItem value="live">Live</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="role">Audience</Label>
+          <Controller
+            name="role"
+            control={control}
+            render={({ field }) => (
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <SelectTrigger id="role"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="parent">Parent</SelectItem>
+                  <SelectItem value="writer">Writer</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
                 </SelectContent>
               </Select>
             )}
