@@ -41,6 +41,8 @@ steps:
       - 'gcr.io/$PROJECT_ID/studio:latest'
 
   # Step 6: Deploy to Cloud Run
+  # API keys are stored in Secret Manager and referenced here
+  # To create secrets: gcloud secrets create SECRET_NAME --data-file=-
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
     args:
@@ -50,7 +52,7 @@ steps:
       - '--image'
       - 'gcr.io/$PROJECT_ID/studio:$COMMIT_SHA'
       - '--region'
-      - 'us-central1'
+      - '${_DEPLOY_REGION}'
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
@@ -62,6 +64,8 @@ steps:
       - '0'
       - '--max-instances'
       - '10'
+      - '--set-secrets'
+      - 'GEMINI_API_KEY=GEMINI_API_KEY:latest,ELEVENLABS_API_KEY=ELEVENLABS_API_KEY:latest,FIREBASE_SERVICE_ACCOUNT_KEY=FIREBASE_SERVICE_ACCOUNT_KEY:latest'
 
 images:
   - 'gcr.io/$PROJECT_ID/studio:$COMMIT_SHA'
@@ -69,3 +73,6 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _DEPLOY_REGION: 'europe-west1'  # Default region, can be overridden in trigger
