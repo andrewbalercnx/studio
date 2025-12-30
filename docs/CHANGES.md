@@ -18,7 +18,7 @@
 
 ### 2025-12-30
 
-#### `pending` - Add HelpWizard export/import and path recording
+#### `458a137` - Add HelpWizard export/import and path recording
 
 **Type**: Feature
 
