@@ -56,6 +56,8 @@ type StoryOutputForm = {
   category: 'picture_book' | 'poem' | 'coloring_pages' | 'audio_script';
   status: 'draft' | 'live' | 'archived';
   pageCount: string;
+  imagePrompt: string;
+  defaultPrintLayoutId: string;
 };
 
 export default function AdminDashboardPage() {
@@ -897,6 +899,8 @@ function StoryOutputsPanel() {
     category: 'picture_book',
     status: 'draft',
     pageCount: '8',
+    imagePrompt: '',
+    defaultPrintLayoutId: '',
   };
   const [form, setForm] = useState<StoryOutputForm>(defaultForm);
 
@@ -915,6 +919,8 @@ function StoryOutputsPanel() {
       category: output.category,
       status: output.status || 'draft',
       pageCount: String(output.layoutHints?.pageCount ?? '8'),
+      imagePrompt: output.imagePrompt || '',
+      defaultPrintLayoutId: output.defaultPrintLayoutId || '',
     });
     setDialogOpen(true);
   };
@@ -926,7 +932,7 @@ function StoryOutputsPanel() {
       return;
     }
     setIsSaving(true);
-    const payload = {
+    const payload: Record<string, any> = {
       name: form.name,
       shortDescription: form.shortDescription,
       ageRange: form.ageRange,
@@ -938,6 +944,9 @@ function StoryOutputsPanel() {
       },
       updatedAt: serverTimestamp(),
     };
+    // Only include optional fields if they have values
+    if (form.imagePrompt) payload.imagePrompt = form.imagePrompt;
+    if (form.defaultPrintLayoutId) payload.defaultPrintLayoutId = form.defaultPrintLayoutId;
     try {
       if (form.id) {
         await setDoc(doc(firestore, 'storyOutputTypes', form.id), payload, { merge: true });
@@ -998,7 +1007,7 @@ function StoryOutputsPanel() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{form.id ? 'Edit Output Type' : 'New Output Type'}</DialogTitle>
           </DialogHeader>
@@ -1049,6 +1058,25 @@ function StoryOutputsPanel() {
             <div className="grid gap-2">
                 <Label>Page Count</Label>
                 <Input type="number" value={form.pageCount} onChange={(e) => setForm({ ...form, pageCount: e.target.value })} placeholder="e.g. 8" />
+            </div>
+            <div className="grid gap-2">
+                <Label>Image Prompt</Label>
+                <Textarea
+                  value={form.imagePrompt}
+                  onChange={(e) => setForm({ ...form, imagePrompt: e.target.value })}
+                  rows={2}
+                  placeholder="Describe the image that will represent this output type to children"
+                />
+                <p className="text-xs text-muted-foreground">After saving, generate the image from /admin/storyOutputs</p>
+            </div>
+            <div className="grid gap-2">
+                <Label>Default Print Layout ID</Label>
+                <Input
+                  value={form.defaultPrintLayoutId}
+                  onChange={(e) => setForm({ ...form, defaultPrintLayoutId: e.target.value })}
+                  placeholder="e.g. mixam_square_8x8"
+                />
+                <p className="text-xs text-muted-foreground">Optional: Constrains image dimensions for this output type</p>
             </div>
           </div>
           <DialogFooter>
