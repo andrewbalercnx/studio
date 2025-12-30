@@ -60,8 +60,8 @@ Child profiles owned by parents.
 | `updatedAt` | timestamp | No | Last update time |
 | `namePronunciation` | string | No | Phonetic pronunciation for TTS |
 | `preferredVoiceId` | string | No | Preferred TTS voice ID |
-| `speechModeEnabled` | boolean | No | Enable speech mode for stories |
-| `autoReadAloud` | boolean | No | Auto-read stories in reader |
+| `speechModeEnabled` | boolean | No | **Deprecated**: Use `autoReadAloud` instead |
+| `autoReadAloud` | boolean | No | Enable TTS for stories (story creation & reader) |
 | `deletedAt` | timestamp | No | Soft delete timestamp |
 | `deletedBy` | string | No | UID of user who deleted |
 

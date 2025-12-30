@@ -30,7 +30,7 @@ export function SpeechModeToggle({ childProfile, className }: SpeechModeTogglePr
     return null;
   }
 
-  const isEnabled = childProfile.speechModeEnabled ?? false;
+  const isEnabled = childProfile.autoReadAloud ?? false;
 
   const handleToggle = async () => {
     if (!firestore || isUpdating) return;
@@ -39,7 +39,7 @@ export function SpeechModeToggle({ childProfile, className }: SpeechModeTogglePr
     try {
       const childRef = doc(firestore, 'children', childProfile.id);
       await updateDoc(childRef, {
-        speechModeEnabled: !isEnabled,
+        autoReadAloud: !isEnabled,
         updatedAt: serverTimestamp(),
       });
 

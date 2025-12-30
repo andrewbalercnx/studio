@@ -8,7 +8,7 @@ import type { ChildProfile } from '@/lib/types';
 const OPTION_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
 interface UseStoryTTSOptions {
-  /** The child profile (used to check speechModeEnabled and get voice) */
+  /** The child profile (used to check autoReadAloud and get voice) */
   childProfile: ChildProfile | null;
   /** Called when TTS encounters an error */
   onError?: (error: string) => void;
@@ -38,9 +38,9 @@ interface UseStoryTTSReturn {
 export function useStoryTTS(options: UseStoryTTSOptions): UseStoryTTSReturn {
   const { childProfile, onError } = options;
 
-  // Check if speech mode is enabled (requires both preferredVoiceId and speechModeEnabled)
+  // Check if speech mode is enabled (requires both preferredVoiceId and autoReadAloud)
   const isSpeechModeEnabled = !!(
-    childProfile?.preferredVoiceId && childProfile?.speechModeEnabled
+    childProfile?.preferredVoiceId && childProfile?.autoReadAloud
   );
 
   const tts = useTTS({

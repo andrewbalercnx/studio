@@ -18,7 +18,25 @@
 
 ### 2025-12-30
 
-#### `pending` - Switch to eleven_multilingual_v2 for en-GB language support
+#### `pending` - Unify TTS preference to use autoReadAloud
+
+**Type**: Enhancement
+
+**Summary**: Unified the TTS preference field for story play page to use `autoReadAloud` instead of `speechModeEnabled`. Both the story play page (interactive story creation) and story read page (reading completed stories) now use the same `autoReadAloud` preference. The `speechModeEnabled` field is now deprecated.
+
+**Changes**:
+- Updated `useStoryTTS` hook to check `autoReadAloud` instead of `speechModeEnabled`
+- Updated `SpeechModeToggle` component to toggle `autoReadAloud` instead of `speechModeEnabled`
+- Updated SCHEMA.md to mark `speechModeEnabled` as deprecated
+
+**Files Modified**:
+- `src/hooks/use-story-tts.ts`
+- `src/components/child/speech-mode-toggle.tsx`
+- `docs/SCHEMA.md`
+
+---
+
+#### `ab16242` - Switch to eleven_multilingual_v2 for en-GB language support
 
 **Type**: Bug Fix
 
