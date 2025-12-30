@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { useFirestore } from '@/firebase';
 import { doc, setDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { removeUndefinedFields, parseFirestoreError } from '@/lib/utils';
 import type { HelpWizard, HelpWizardPage, HelpWizardRole } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,10 +73,14 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
   const saveWizardToFirestore = async (data: HelpWizardFormValues) => {
     if (!firestore) return;
 
-    const payload = {
+    // Clean pages to remove undefined values (Firestore doesn't accept undefined)
+    const cleanedPages = data.pages.map(page => removeUndefinedFields(page));
+
+    const payload = removeUndefinedFields({
       ...data,
+      pages: cleanedPages,
       updatedAt: serverTimestamp(),
-    };
+    });
 
     if (wizard) {
       await setDoc(doc(firestore, 'helpWizards', wizard.id), payload, { merge: true });
@@ -107,8 +112,8 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
         pages: updatedPages,
       });
       toast({ title: 'Success', description: 'Page saved.' });
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } catch (e: unknown) {
+      toast({ title: 'Error saving page', description: parseFirestoreError(e), variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -122,8 +127,8 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
       await saveWizardToFirestore(data);
       toast({ title: 'Success', description: 'Help wizard saved.' });
       onSave();
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } catch (e: unknown) {
+      toast({ title: 'Error saving wizard', description: parseFirestoreError(e), variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }

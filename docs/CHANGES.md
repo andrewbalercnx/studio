@@ -18,6 +18,29 @@
 
 ### 2025-12-30
 
+#### `pending` - Fix Firestore undefined field error in HelpWizard save
+
+**Type**: Bug Fix
+
+**Summary**: Fixed "Unsupported field value: undefined" error when saving HelpWizard pages with optional fields.
+
+**Changes**:
+- Created `removeUndefinedFields()` utility that recursively strips undefined values before Firestore save
+- Created `parseFirestoreError()` utility for user-friendly error messages
+- Updated HelpWizardForm to clean data before saving to Firestore
+- Improved error toast messages to be more descriptive
+
+**Root cause**: Firestore doesn't accept `undefined` values. When optional fields like `action`, `wizardTargetId`, or `highlightSelector` were not set, they had value `undefined` which caused the save to fail.
+
+**New files**:
+- None (utilities added to existing `src/lib/utils.ts`)
+
+**Modified files**:
+- `src/lib/utils.ts` - Added `removeUndefinedFields()` and `parseFirestoreError()`
+- `src/components/admin/HelpWizardForm.tsx` - Use utilities when saving
+
+---
+
 #### `a49403d` - Improve HelpWizard click action visibility
 
 **Type**: Enhancement
