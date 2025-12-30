@@ -155,7 +155,7 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
   if (isFetchingProfile) {
     return (
       <Dialog open onOpenChange={onOpenChange}>
-        <DialogContent>
+        <DialogContent data-path-recording-ui>
           <div className="flex justify-center items-center p-8">
             <LoaderCircle className="animate-spin text-primary" />
           </div>
@@ -167,7 +167,7 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
   if (!hasPinSetup) {
     return (
       <Dialog open onOpenChange={onOpenChange}>
-        <DialogContent>
+        <DialogContent data-path-recording-ui>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertCircle className="text-amber-500" /> Secure Your Parent Space
@@ -226,7 +226,7 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent data-path-recording-ui>
         <DialogHeader>
           <DialogTitle>Enter Parent PIN</DialogTitle>
         <DialogDescription>
