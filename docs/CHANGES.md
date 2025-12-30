@@ -18,7 +18,7 @@
 
 ### 2025-12-30
 
-#### `pending` - Improve HelpWizard click action visibility
+#### `a49403d` - Improve HelpWizard click action visibility
 
 **Type**: Enhancement
 
