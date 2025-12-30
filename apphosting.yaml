@@ -20,3 +20,33 @@ runConfig:
   # Concurrency limit per instance
   # Lower value prevents memory exhaustion from parallel heavy requests
   concurrency: 10
+
+# Environment variables and secrets
+# Secrets are stored in Google Cloud Secret Manager
+# Grant access with: firebase apphosting:secrets:grantaccess
+env:
+  # API Keys from Secret Manager
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY
+    availability:
+      - RUNTIME
+
+  - variable: ELEVENLABS_API_KEY
+    secret: ELEVENLABS_API_KEY
+    availability:
+      - RUNTIME
+
+  - variable: FIREBASE_SERVICE_ACCOUNT_KEY
+    secret: FIREBASE_SERVICE_ACCOUNT_KEY
+    availability:
+      - RUNTIME
+
+  - variable: MIXAM_USERNAME
+    secret: MIXAM_USERNAME
+    availability:
+      - RUNTIME
+
+  - variable: MIXAM_PASSWORD
+    secret: MIXAM_PASSWORD
+    availability:
+      - RUNTIME
