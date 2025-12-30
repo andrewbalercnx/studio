@@ -18,7 +18,7 @@
 
 ### 2025-12-30
 
-#### `pending` - Fix HelpWizard positioning and Previous button
+#### `af8eb3e` - Fix HelpWizard positioning and Previous button
 
 **Type**: Bug Fix
 
