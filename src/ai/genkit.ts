@@ -13,9 +13,13 @@ if (!geminiApiKey && typeof window === 'undefined') {
   console.warn('[genkit] Warning: GEMINI_API_KEY or GOOGLE_API_KEY environment variable not set. AI features will fail.');
 }
 
+// Explicitly pass API key to googleAI plugin to prevent it from attempting
+// to use Application Default Credentials on Cloud Run
+const googleAIConfig = geminiApiKey ? { apiKey: geminiApiKey } : {};
+
 export const ai = genkit({
   plugins: [
-    googleAI(),
+    googleAI(googleAIConfig),
     // Add Vertex AI plugin for Veo video generation and other Vertex-specific models
     ...(gcpProject ? [vertexAI({ projectId: gcpProject, location: gcpLocation })] : []),
   ],
@@ -25,7 +29,7 @@ export const ai = genkit({
 // Beta API instance for chat functionality
 export const aiBeta = genkitBeta({
   plugins: [
-    googleAI(),
+    googleAI(googleAIConfig),
     ...(gcpProject ? [vertexAI({ projectId: gcpProject, location: gcpLocation })] : []),
   ],
   model: 'googleai/gemini-2.5-pro',
