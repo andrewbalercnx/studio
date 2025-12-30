@@ -18,6 +18,22 @@
 
 ### 2025-12-30
 
+#### `89f9b8d` - Add middleware to fix double-slash URL SecurityError
+
+**Type**: Bug Fix
+
+**Summary**: Added Next.js middleware to redirect URLs containing double slashes to normalized versions, preventing SecurityErrors when the App Router tries to use history.replaceState with malformed URLs.
+
+**Changes**:
+- Created `src/middleware.ts` to intercept requests with double slashes
+- Redirects `//api-documentation` to `/api-documentation` (and similar)
+- Prevents browser SecurityError: "Blocked attempt to use history.replaceState()"
+
+**Files Created**:
+- `src/middleware.ts`
+
+---
+
 #### `4995cee` - Fix race condition in useTTS causing null signal error
 
 **Type**: Bug Fix

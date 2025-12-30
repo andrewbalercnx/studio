@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useWizardTargetDiagnosticsOptional } from '@/hooks/use-wizard-target-diagnostics';
 import { cn } from '@/lib/utils';
 
 interface TargetInfo {
   id: string;
-  rect: DOMRect;
-  element: Element;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
 }
 
 /**
@@ -22,21 +24,39 @@ export function WizardTargetOverlay() {
   const diagnostics = useWizardTargetDiagnosticsOptional();
   const [targets, setTargets] = useState<TargetInfo[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   // Scan for all elements with data-wiz-target attribute
   const scanTargets = useCallback(() => {
-    const elements = document.querySelectorAll('[data-wiz-target]');
-    const newTargets: TargetInfo[] = [];
+    // Cancel any pending animation frame
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+    }
 
-    elements.forEach((element) => {
-      const id = element.getAttribute('data-wiz-target');
-      if (id) {
-        const rect = element.getBoundingClientRect();
-        newTargets.push({ id, rect, element });
-      }
+    // Use requestAnimationFrame to batch DOM reads and ensure accurate measurements
+    rafRef.current = requestAnimationFrame(() => {
+      const elements = document.querySelectorAll('[data-wiz-target]');
+      const newTargets: TargetInfo[] = [];
+
+      elements.forEach((element) => {
+        const id = element.getAttribute('data-wiz-target');
+        if (id) {
+          const rect = element.getBoundingClientRect();
+          // Only include visible elements
+          if (rect.width > 0 && rect.height > 0) {
+            newTargets.push({
+              id,
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              height: rect.height,
+            });
+          }
+        }
+      });
+
+      setTargets(newTargets);
     });
-
-    setTargets(newTargets);
   }, []);
 
   // Scan on mount and when diagnostics mode changes
@@ -46,8 +66,8 @@ export function WizardTargetOverlay() {
       return;
     }
 
-    // Initial scan
-    scanTargets();
+    // Initial scan after a short delay to ensure DOM is ready
+    const initialTimeout = setTimeout(scanTargets, 100);
 
     // Set up a MutationObserver to detect DOM changes
     const observer = new MutationObserver(() => {
@@ -61,17 +81,21 @@ export function WizardTargetOverlay() {
       attributeFilter: ['data-wiz-target'],
     });
 
-    // Update positions on scroll/resize
+    // Update positions on scroll/resize with passive listeners for performance
     const handleUpdate = () => scanTargets();
-    window.addEventListener('scroll', handleUpdate, true);
-    window.addEventListener('resize', handleUpdate);
+    window.addEventListener('scroll', handleUpdate, { capture: true, passive: true });
+    window.addEventListener('resize', handleUpdate, { passive: true });
 
     // Periodic refresh for dynamic content
     const intervalId = setInterval(scanTargets, 1000);
 
     return () => {
+      clearTimeout(initialTimeout);
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
       observer.disconnect();
-      window.removeEventListener('scroll', handleUpdate, true);
+      window.removeEventListener('scroll', handleUpdate, { capture: true } as EventListenerOptions);
       window.removeEventListener('resize', handleUpdate);
       clearInterval(intervalId);
     };
@@ -110,10 +134,10 @@ export function WizardTargetOverlay() {
           <div
             className="pointer-events-none fixed z-[55] rounded border-2 border-dashed border-amber-500"
             style={{
-              top: target.rect.top - 2,
-              left: target.rect.left - 2,
-              width: target.rect.width + 4,
-              height: target.rect.height + 4,
+              top: target.top - 2,
+              left: target.left - 2,
+              width: target.width + 4,
+              height: target.height + 4,
             }}
           />
 
@@ -129,8 +153,8 @@ export function WizardTargetOverlay() {
                 : "bg-amber-500 text-amber-950 hover:bg-amber-400"
             )}
             style={{
-              top: Math.max(0, target.rect.top - 24),
-              left: target.rect.left,
+              top: Math.max(0, target.top - 24),
+              left: target.left,
             }}
             title={`Click to copy: [data-wiz-target="${target.id}"]`}
           >
