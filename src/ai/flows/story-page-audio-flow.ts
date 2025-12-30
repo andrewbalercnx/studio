@@ -107,10 +107,10 @@ async function generatePageAudio(
   const startTime = Date.now();
   let audioStream;
   try {
+    // Note: eleven_multilingual_v2 auto-detects language and doesn't support languageCode parameter
     audioStream = await elevenlabs.textToSpeech.convert(voiceId, {
       text: textToNarrate,
       modelId: ELEVENLABS_MODEL,
-      languageCode: 'en-GB',
     });
 
     // Log success

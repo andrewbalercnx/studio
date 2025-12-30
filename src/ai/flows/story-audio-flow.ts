@@ -133,11 +133,11 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
       console.log(`[story-audio-flow] Resolved text length: ${textForTTS.length} chars`);
     }
 
-    // Generate audio using ElevenLabs TTS with British English pronunciation
+    // Generate audio using ElevenLabs TTS
+    // Note: eleven_multilingual_v2 auto-detects language and doesn't support languageCode parameter
     const audioStream = await elevenlabs.textToSpeech.convert(voiceId, {
       text: textForTTS,
       modelId: ELEVENLABS_MODEL,
-      languageCode: 'en-GB',
     });
 
     // Convert stream to buffer

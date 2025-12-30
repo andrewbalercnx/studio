@@ -18,6 +18,26 @@
 
 ### 2025-12-30
 
+#### `pending` - Fix ElevenLabs unsupported_language error
+
+**Type**: Bugfix
+
+**Summary**: Removed the `languageCode: 'en-GB'` parameter from ElevenLabs TTS calls. The `eleven_multilingual_v2` model auto-detects language from text and doesn't support the `languageCode` parameter, which was causing 400 errors.
+
+**Changes**:
+- Removed `languageCode` parameter from all ElevenLabs TTS calls
+- Updated comments to clarify that eleven_multilingual_v2 auto-detects language
+- Fixed error: "Model 'eleven_multilingual_v2' does not support the language_code en-GB"
+
+**Modified files**:
+- `src/app/api/voices/preview/route.ts`
+- `src/app/api/tts/route.ts`
+- `src/ai/flows/story-audio-flow.ts`
+- `src/ai/flows/story-page-audio-flow.ts`
+- `src/lib/tts-config.ts`
+
+---
+
 #### `89ba65a` - Exclude parent PIN dialogs from path recording
 
 **Type**: Bugfix

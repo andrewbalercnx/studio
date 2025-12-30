@@ -89,11 +89,11 @@ export async function POST(request: Request) {
       apiKey,
     });
 
-    // Generate audio preview with British English pronunciation
+    // Generate audio preview
+    // Note: eleven_multilingual_v2 auto-detects language and doesn't support languageCode parameter
     const audioStream = await elevenlabs.textToSpeech.convert(voiceName, {
       text: PREVIEW_TEXT,
       modelId: ELEVENLABS_MODEL,
-      languageCode: 'en-GB',
     });
 
     // Convert stream to buffer
