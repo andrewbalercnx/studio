@@ -141,9 +141,9 @@ export function WizardTargetOverlay() {
       {/* Render overlays for each target */}
       {targets.map((target) => (
         <div key={target.id}>
-          {/* Border highlight around the element */}
+          {/* Border highlight around the element - pointer-events-none so clicks pass through */}
           <div
-            className="pointer-events-none fixed z-[55] rounded border-2 border-dashed border-amber-500"
+            className="pointer-events-none fixed z-[45] rounded border-2 border-dashed border-amber-500"
             style={{
               top: target.top - 2,
               left: target.left - 2,
@@ -152,11 +152,11 @@ export function WizardTargetOverlay() {
             }}
           />
 
-          {/* Target ID badge */}
+          {/* Target ID badge - positioned to the right of the element to avoid blocking */}
           <button
             onClick={() => handleCopyId(target.id)}
             className={cn(
-              "fixed z-[56] px-2 py-0.5 rounded text-xs font-mono font-medium shadow-lg",
+              "fixed z-[45] px-2 py-0.5 rounded text-xs font-mono font-medium shadow-lg",
               "transition-all duration-150 cursor-pointer",
               "hover:scale-105 active:scale-95",
               copiedId === target.id
@@ -164,8 +164,13 @@ export function WizardTargetOverlay() {
                 : "bg-amber-500 text-amber-950 hover:bg-amber-400"
             )}
             style={{
-              top: Math.max(0, target.top - 24),
-              left: target.left,
+              // Position badge to the right of the element, or above if no room on right
+              top: target.left + target.width + 100 < window.innerWidth
+                ? target.top
+                : Math.max(0, target.top - 24),
+              left: target.left + target.width + 100 < window.innerWidth
+                ? target.left + target.width + 4
+                : target.left,
             }}
             title={`Click to copy: [data-wiz-target="${target.id}"]`}
           >
