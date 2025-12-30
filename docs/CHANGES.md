@@ -18,7 +18,7 @@
 
 ### 2025-12-30
 
-#### `pending` - Add timeout and retry config to ElevenLabs TTS calls
+#### `36ef09f` - Add timeout and retry config to ElevenLabs TTS calls
 
 **Type**: Bugfix
 
