@@ -291,6 +291,288 @@
           "position": "center-center"
         }
       ]
+    },
+    {
+      "id": "writer-guide",
+      "title": "Writer's Guide to Story Design",
+      "status": "live",
+      "role": "writer",
+      "order": 1,
+      "pages": [
+        {
+          "title": "Welcome, Story Writer!",
+          "description": "Welcome to the StoryPic Kids content creation system!\n\nAs a **Writer**, you have access to powerful tools for:\n- Designing story types and templates\n- Configuring AI prompts and behavior\n- Creating output formats (books, poems, etc.)\n- Managing image styles and print layouts\n- Testing AI story generation\n\nLet's explore your creative toolkit!",
+          "route": "/admin",
+          "position": "center-center"
+        },
+        {
+          "title": "The Admin Dashboard",
+          "description": "This is the **Admin Dashboard** - your central hub for content management.\n\nThe dashboard is organized into sections. As a Writer, you have access to:\n\n- **Story Editor** - Design story types and prompts\n- **Data Management** - Manage profiles and assets\n- **Testing & Development** - Test your creations",
+          "route": "/admin",
+          "position": "center-center"
+        },
+        {
+          "title": "Story Editor Section",
+          "description": "The **Story Editor** is your main workspace!\n\nIt contains four key areas:\n- **Story Types** - Define adventure templates\n- **Story Phases** - Configure the story flow\n- **Prompt Configs** - Control AI behavior\n- **Output Types** - Design final deliverables\n\nClick the tabs to switch between them.",
+          "route": "/admin",
+          "wizardTargetId": "admin-story-editor",
+          "position": "center-right"
+        },
+        {
+          "title": "Story Types Overview",
+          "description": "**Story Types** define the different kinds of adventures children can create.\n\nEach story type includes:\n- A name and description\n- Age-appropriate level bands\n- Story arc templates\n- Associated prompt configurations\n\nExamples: Animal Adventure, Magical Friend, Big Feelings",
+          "route": "/admin/storyTypes",
+          "position": "center-center"
+        },
+        {
+          "title": "Creating a Story Type",
+          "description": "When creating a story type, you'll configure:\n\n- **Title & Description**: What the child sees when selecting\n- **Level Bands**: Age ranges (3-5, 6-8, 9-12)\n- **Arc Template**: The story structure steps\n- **Status**: Draft or Live\n\nStory types in 'Draft' won't appear to users.",
+          "route": "/admin/storyTypes",
+          "position": "bottom-center"
+        },
+        {
+          "title": "Story Phases",
+          "description": "**Story Phases** control the flow of story creation.\n\nThe main phases are:\n- **Warmup**: Introduction and character selection\n- **Story Beat**: The interactive story building\n- **Ending**: Story conclusion and wrap-up\n\nEach phase has configurable choice counts and ordering.",
+          "route": "/admin/storyPhases",
+          "position": "center-center"
+        },
+        {
+          "title": "Prompt Configurations",
+          "description": "**Prompt Configs** are the heart of AI behavior!\n\nFor each phase and level band, you configure:\n- **System Prompt**: AI personality and rules\n- **User Prompt Template**: Input structure\n- **Model Settings**: Which AI model to use\n- **Temperature**: Creativity level (0-1)\n\nGood prompts create magical stories!",
+          "route": "/admin/prompts",
+          "position": "center-center"
+        },
+        {
+          "title": "Writing Effective Prompts",
+          "description": "Tips for great prompts:\n\n1. **Be specific** about tone and style\n2. **Include age-appropriate** language guidance\n3. **Define guardrails** for content safety\n4. **Use placeholders** like `{{childName}}` for personalization\n5. **Test extensively** with different scenarios\n\nSmall prompt changes can dramatically affect output!",
+          "route": "/admin/prompts",
+          "position": "bottom-center"
+        },
+        {
+          "title": "Output Types",
+          "description": "**Output Types** define what gets created from a story.\n\nCurrent output types include:\n- **Picture Book**: Traditional illustrated storybook\n- **Poem**: Rhyming verse version\n- **Coloring Pages**: Black and white illustrations\n- **Audio Script**: Optimized for text-to-speech\n\nEach has its own image generation settings.",
+          "route": "/admin/storyOutputs",
+          "position": "center-center"
+        },
+        {
+          "title": "Output Type Configuration",
+          "description": "When configuring an output type:\n\n- **Name & Description**: What users see\n- **Image Prompt**: AI instructions for illustrations\n- **Default Print Layout**: Associated print template\n- **Display Image**: Preview image for selection\n\nYou can generate display images directly from the admin!",
+          "route": "/admin/storyOutputs",
+          "position": "bottom-center"
+        },
+        {
+          "title": "Data Management Section",
+          "description": "The **Data Management** section lets you manage content assets.\n\nYou can access:\n- **Children & Characters**: View user-created profiles\n- **Story Sessions**: Monitor active story creation\n- **Help Wizards**: Create in-app tutorials\n- **Image Styles**: Design illustration styles\n- **Print Layouts & Products**: Configure printing options",
+          "route": "/admin",
+          "wizardTargetId": "admin-data-management",
+          "position": "center-right"
+        },
+        {
+          "title": "Image Styles",
+          "description": "**Image Styles** define how AI generates illustrations.\n\nEach style includes:\n- **Name**: What users see (e.g., \"Watercolor\")\n- **Prompt Suffix**: Added to all image prompts\n- **Preview Image**: Example of the style\n- **Status**: Draft or Live\n\nStyles dramatically change the look of storybooks!",
+          "route": "/admin/image-styles",
+          "position": "center-center"
+        },
+        {
+          "title": "Print Layouts",
+          "description": "**Print Layouts** control how storybooks are formatted for printing.\n\nLayout settings include:\n- **Page Size**: A4, Letter, Square, etc.\n- **Margins & Bleed**: Print-safe areas\n- **Text Positioning**: Where text appears on pages\n- **Image Placement**: Full-page, half-page, etc.\n\nGood layouts create professional-looking books!",
+          "route": "/admin/print-layouts",
+          "position": "center-center"
+        },
+        {
+          "title": "Print Products",
+          "description": "**Print Products** define what can be ordered.\n\nProduct configuration includes:\n- **Name & Description**: Customer-facing info\n- **Mixam Specifications**: Print vendor settings\n- **Pricing**: Cost calculation rules\n- **Page Count Limits**: Min/max pages\n\nProducts connect layouts to the printing service.",
+          "route": "/admin/print-products",
+          "position": "center-center"
+        },
+        {
+          "title": "Help Wizards",
+          "description": "**Help Wizards** are the interactive tutorials you're seeing right now!\n\nYou can create wizards that:\n- Guide users through features\n- Highlight specific UI elements\n- Navigate between pages automatically\n- Include markdown-formatted text\n\nGreat for onboarding and feature discovery!",
+          "route": "/admin/helpWizards",
+          "position": "center-center"
+        },
+        {
+          "title": "Testing Your Work",
+          "description": "The **Testing & Development** section helps you validate your creations.\n\nAvailable tests:\n- **Story Beat Test**: Test story continuation\n- **Story Arc Test**: Test overall structure\n- **Story Compile Test**: Test final assembly\n- **AI Flow Logs**: View execution details\n- **Run Traces**: See prompts, outputs, and costs",
+          "route": "/admin",
+          "wizardTargetId": "admin-testing",
+          "position": "center-right"
+        },
+        {
+          "title": "Story Beat Testing",
+          "description": "The **Story Beat Test** lets you:\n\n1. Select a story type and level band\n2. Provide sample context\n3. Run the AI generation\n4. Review the output quality\n\nThis is essential for tuning your prompts!",
+          "route": "/admin/storyBeatTest",
+          "position": "center-center"
+        },
+        {
+          "title": "Run Traces",
+          "description": "**Run Traces** show detailed AI execution logs.\n\nFor each generation, you can see:\n- The exact prompts sent to AI\n- The raw AI responses\n- Token usage and costs\n- Timing information\n\nInvaluable for debugging prompt issues!",
+          "route": "/admin/run-traces",
+          "position": "center-center"
+        },
+        {
+          "title": "Regression Tests",
+          "description": "**Regression Tests** ensure your changes don't break things.\n\nThe test suite covers:\n- API endpoint functionality\n- Data access patterns\n- Security rule validation\n\nRun these after making significant changes!",
+          "route": "/admin/regression",
+          "position": "center-center"
+        },
+        {
+          "title": "Story Designer Overview",
+          "description": "The **Story Designer** page provides a visual overview of all your story configurations.\n\nIt shows relationships between:\n- Story types\n- Prompt configs\n- Output types\n- Level bands\n\nGreat for understanding the big picture!",
+          "route": "/admin/storyDesigner",
+          "position": "center-center"
+        },
+        {
+          "title": "You're Ready to Create!",
+          "description": "Congratulations! You now understand the writer's toolkit.\n\n**Quick Reference:**\n- **Story Types**: Define adventure templates\n- **Story Phases**: Configure story flow\n- **Prompts**: Control AI behavior\n- **Output Types**: Design deliverables\n- **Image Styles**: Create visual styles\n- **Print Layouts**: Format for printing\n- **Testing**: Validate your work\n\nGo create amazing stories for kids!",
+          "route": "/admin",
+          "position": "center-center"
+        }
+      ]
+    },
+    {
+      "id": "admin-guide",
+      "title": "Administrator's Complete Guide",
+      "status": "live",
+      "role": "admin",
+      "order": 1,
+      "pages": [
+        {
+          "title": "Welcome, Administrator!",
+          "description": "Welcome to the StoryPic Kids administration system!\n\nAs an **Admin**, you have full access to:\n- All writer/content tools\n- User and role management\n- System configuration\n- Print order management\n- Diagnostics and logging\n- Database tools\n\nThis guide covers the admin-specific features.",
+          "route": "/admin",
+          "position": "center-center"
+        },
+        {
+          "title": "Admin Dashboard Overview",
+          "description": "The **Admin Dashboard** has 6 main sections:\n\n1. **System Maintenance** - Users & Orders\n2. **Story Editor** - Content creation\n3. **Data Management** - Profiles & assets\n4. **Testing** - AI flow testing\n5. **System Configuration** - Settings & tools\n6. **Diagnostics** - Logging & debugging\n\nLet's explore the admin-only sections!",
+          "route": "/admin",
+          "position": "center-center"
+        },
+        {
+          "title": "System Maintenance Section",
+          "description": "The **System Maintenance** section is admin-only.\n\nIt provides access to:\n- **Users**: Manage accounts and roles\n- **Print Orders**: Process and track orders\n\nThis is where you handle operational tasks.",
+          "route": "/admin",
+          "wizardTargetId": "admin-system-maintenance",
+          "position": "center-right"
+        },
+        {
+          "title": "User Management",
+          "description": "The **Users** page lets you manage all accounts.\n\nFor each user, you can:\n- View their profile and email\n- Toggle **Admin** role\n- Toggle **Writer** role\n- See token usage statistics\n- View their created content\n\nRoles determine dashboard access levels.",
+          "route": "/admin/users",
+          "position": "center-center"
+        },
+        {
+          "title": "Role Permissions",
+          "description": "Understanding role permissions:\n\n**Parent** (default):\n- Create and manage their children's content\n- Order printed books\n\n**Writer**:\n- All parent features\n- Story Editor access\n- Data Management access\n- Testing tools\n\n**Admin**:\n- All writer features\n- User management\n- System configuration\n- Diagnostics & logging",
+          "route": "/admin/users",
+          "position": "bottom-center"
+        },
+        {
+          "title": "Print Order Management",
+          "description": "The **Print Orders** page shows all book orders.\n\nOrder workflow:\n1. **Pending**: Awaiting approval\n2. **Approved**: Ready for submission\n3. **Submitted**: Sent to print vendor\n4. **Shipped**: In transit\n5. **Delivered**: Complete\n\nYou can filter by status and manage individual orders.",
+          "route": "/admin/print-orders",
+          "position": "center-center"
+        },
+        {
+          "title": "Order Details",
+          "description": "For each order, you can view:\n\n- Customer information\n- Book details and page count\n- Shipping address\n- Payment status\n- Print vendor (Mixam) reference\n- Status history\n\nClick an order to see full details and take actions.",
+          "route": "/admin/print-orders",
+          "position": "bottom-center"
+        },
+        {
+          "title": "System Configuration Section",
+          "description": "The **System Configuration** section controls platform behavior.\n\nIt includes:\n- **Database Tools**: Direct data access\n- **AI Prompts**: System-wide prompt settings\n- **Kids PWA**: Mobile app configuration\n\nChanges here affect all users!",
+          "route": "/admin",
+          "wizardTargetId": "admin-system-config",
+          "position": "center-right"
+        },
+        {
+          "title": "Database Manager",
+          "description": "The **Database Manager** provides direct Firestore access.\n\nYou can:\n- Browse any collection\n- Query and filter documents\n- View document details\n- Delete documents (carefully!)\n\n⚠️ Use caution - changes are immediate!",
+          "route": "/admin/database",
+          "position": "center-center"
+        },
+        {
+          "title": "Global Prompt Prefix",
+          "description": "The **Global Prompt Prefix** is added to ALL AI prompts.\n\nUse it for:\n- Safety instructions\n- Brand guidelines\n- Universal behavior rules\n- Content restrictions\n\nThis affects every story generated on the platform!",
+          "route": "/admin/global-prompts",
+          "position": "center-center"
+        },
+        {
+          "title": "Kids Flow Selection",
+          "description": "The **Kids Flows** page controls which story modes are available.\n\nYou can enable/disable:\n- **Wizard Mode**: Guided questions\n- **Chat Mode**: Conversational\n- **Gemini 3**: Specific AI model\n- **Gemini 4**: Newer AI model\n\nDisabled flows won't appear to users.",
+          "route": "/admin/kids-flows",
+          "position": "center-center"
+        },
+        {
+          "title": "Upload JSON Configs",
+          "description": "The **Upload** page lets you bulk import configurations.\n\nSupported imports:\n- Prompt configurations\n- Story type definitions\n- Image style presets\n\nUseful for migrating settings between environments!",
+          "route": "/admin/upload",
+          "position": "center-center"
+        },
+        {
+          "title": "Diagnostics Section",
+          "description": "The **Diagnostics & Logging** section helps with troubleshooting.\n\nYou can toggle:\n- **Diagnostics Panels**: Show debug info system-wide\n- **Client Logging**: Browser console output\n- **Server Logging**: Backend logs\n- **AI Flow Logging**: Genkit execution logs\n- **API Documentation**: Expose API docs endpoint",
+          "route": "/admin",
+          "wizardTargetId": "admin-diagnostics",
+          "position": "center-right"
+        },
+        {
+          "title": "Enabling Diagnostics",
+          "description": "When to enable each option:\n\n- **Diagnostics Panels**: General debugging\n- **Client Logging**: Frontend issues\n- **Server Logging**: API/backend problems\n- **AI Flow Logging**: Story generation issues\n- **API Docs**: Developer access needed\n\nRemember to disable after debugging!",
+          "route": "/admin",
+          "position": "bottom-center"
+        },
+        {
+          "title": "AI Flow Logs",
+          "description": "The **AI Logs** page shows detailed execution traces.\n\nFor each AI call, you see:\n- Input prompts\n- Output responses\n- Token counts\n- Execution time\n- Any errors\n\nEssential for debugging story generation issues!",
+          "route": "/admin/ai-logs",
+          "position": "center-center"
+        },
+        {
+          "title": "API Documentation",
+          "description": "When enabled, **/api-documentation** provides:\n\n- List of all API endpoints\n- Request/response formats\n- Authentication requirements\n- Example payloads\n\nUseful for developers and integrations.",
+          "route": "/api-documentation",
+          "position": "center-center"
+        },
+        {
+          "title": "Mixam Catalogue",
+          "description": "The **Mixam Catalogue** shows available print options.\n\nBrowse:\n- Paper types and weights\n- Binding options\n- Cover materials\n- Size specifications\n- Pricing tiers\n\nUse this when configuring print products.",
+          "route": "/admin/mixam-catalogue",
+          "position": "center-center"
+        },
+        {
+          "title": "Background Tasks",
+          "description": "The **Tasks** page shows background job status.\n\nMonitor:\n- Image generation queues\n- PDF compilation jobs\n- Batch processing tasks\n- Failed job retries\n\nUseful for troubleshooting stuck operations.",
+          "route": "/admin/tasks",
+          "position": "center-center"
+        },
+        {
+          "title": "Deleted Items Recovery",
+          "description": "The **Deleted Items** page shows soft-deleted content.\n\nYou can restore:\n- Children profiles\n- Character profiles\n- Storybooks\n\nItems remain recoverable until permanently purged.",
+          "route": "/admin/deleted-items",
+          "position": "center-center"
+        },
+        {
+          "title": "Create Test Data",
+          "description": "The **Create Data** page generates sample content for testing.\n\nYou can create:\n- Test child profiles\n- Sample characters\n- Demo story sessions\n\nUseful for development and QA testing.",
+          "route": "/admin/create",
+          "position": "center-center"
+        },
+        {
+          "title": "Security Best Practices",
+          "description": "Admin security reminders:\n\n1. **Limit admin accounts** - Only trusted team members\n2. **Use writer role** for content creators\n3. **Monitor user activity** regularly\n4. **Disable diagnostics** in production\n5. **Review API access** periodically\n6. **Backup before** major changes\n\nYou have powerful access - use it wisely!",
+          "route": "/admin",
+          "position": "center-center"
+        },
+        {
+          "title": "You're Fully Equipped!",
+          "description": "Congratulations! You now understand all admin capabilities.\n\n**Admin-Only Quick Reference:**\n- **Users**: Manage accounts & roles\n- **Print Orders**: Process book orders\n- **Database**: Direct data access\n- **Global Prompts**: System-wide AI rules\n- **Kids Flows**: Enable/disable modes\n- **Diagnostics**: Debugging tools\n- **Tasks**: Background job monitoring\n\nKeep the platform running smoothly!",
+          "route": "/admin",
+          "position": "center-center"
+        }
+      ]
     }
   ]
 }

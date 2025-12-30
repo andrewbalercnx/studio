@@ -18,7 +18,40 @@
 
 ### 2025-12-30
 
-#### `pending` - Add comprehensive help wizard guides
+#### `pending` - Add writer and admin help wizard guides
+
+**Type**: Feature
+
+**Summary**: Created comprehensive help wizards for Writers and Administrators.
+
+**Changes**:
+- **Writer's Guide to Story Design** (21 pages): Covers content creation tools
+  - Story Editor overview (types, phases, prompts, outputs)
+  - Creating and configuring story types
+  - Writing effective AI prompts
+  - Output type configuration
+  - Image styles and print layouts
+  - Help wizard creation
+  - Testing tools (story beat, arc, compile tests)
+  - Run traces and regression tests
+
+- **Administrator's Complete Guide** (22 pages): Covers admin-only features
+  - System Maintenance (users, print orders)
+  - User management and role permissions
+  - Print order workflow
+  - System Configuration (database, global prompts, kids flows)
+  - Diagnostics and logging controls
+  - AI flow logs and API documentation
+  - Mixam catalogue and background tasks
+  - Deleted items recovery
+  - Security best practices
+
+**Modified files**:
+- `src/data/help-wizards.json`
+
+---
+
+#### `b43ff29` - Add comprehensive help wizard guides
 
 **Type**: Feature
 
