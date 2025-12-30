@@ -27,8 +27,40 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppContextProvider({ children }: { children: React.ReactNode }) {
   const { user, idTokenResult, loading: userLoading } = useUser();
   const [activeChildId, setActiveChildIdState] = useState<string | null>(null);
-  const [activeWizard, setActiveWizard] = useState<{ id: string; step: number } | null>(null);
+  const [activeWizardState, setActiveWizardState] = useState<{ id: string; step: number } | null>(null);
   const firestore = useFirestore();
+
+  // Persist wizard state to sessionStorage so it survives page navigations
+  const setActiveWizard = useCallback((value: { id: string; step: number } | null | ((prev: { id: string; step: number } | null) => { id: string; step: number } | null)) => {
+    setActiveWizardState(prev => {
+      const newValue = typeof value === 'function' ? value(prev) : value;
+      if (typeof window !== 'undefined') {
+        if (newValue) {
+          sessionStorage.setItem('activeWizard', JSON.stringify(newValue));
+        } else {
+          sessionStorage.removeItem('activeWizard');
+        }
+      }
+      return newValue;
+    });
+  }, []);
+
+  // Hydrate wizard state from sessionStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('activeWizard');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed.id === 'string' && typeof parsed.step === 'number') {
+            setActiveWizardState(parsed);
+          }
+        } catch (e) {
+          sessionStorage.removeItem('activeWizard');
+        }
+      }
+    }
+  }, []);
 
   // Only query for child profile when auth is fully ready (idTokenResult exists)
   // This prevents Firestore permission errors on page refresh
@@ -117,7 +149,7 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     activeChildProfileLoading,
     setActiveChildId,
     switchToParentMode,
-    activeWizard,
+    activeWizard: activeWizardState,
     startWizard,
     advanceWizard,
     goBackWizard,

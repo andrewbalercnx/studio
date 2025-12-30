@@ -18,6 +18,24 @@
 
 ### 2025-12-30
 
+#### `pending` - Persist HelpWizard state to survive page navigations
+
+**Type**: Bug Fix
+
+**Summary**: Fixed wizard being cancelled when clicking a link that navigates to a new page.
+
+**Changes**:
+- Wizard state (id and step) is now persisted to sessionStorage
+- State is hydrated from sessionStorage on component mount
+- Clicking links that cause full page navigations no longer loses wizard progress
+
+**Root cause**: When clicking a link element, the browser navigates to a new page, causing the React app to remount. Since wizard state was only in React state, it was lost. Now the state survives page navigations via sessionStorage.
+
+**Modified files**:
+- `src/hooks/use-app-context.tsx`
+
+---
+
 #### `af8eb3e` - Fix HelpWizard positioning and Previous button
 
 **Type**: Bug Fix
