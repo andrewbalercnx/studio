@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2025-12-29 (added namePronunciation to characters for TTS)
+> **Last Updated**: 2025-12-30 (added action field to HelpWizardPage for click automation)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -556,6 +556,26 @@ In-app help wizard configurations.
   existingCharacterId?: string;
   avatarUrl?: string;
 }
+```
+
+### `HelpWizardPage`
+```typescript
+{
+  title: string;
+  description: string;
+  route: string;
+  highlightSelector?: string;   // CSS selector for element to highlight
+  wizardTargetId?: string;      // data-wiz-target attribute value (preferred)
+  position?: HelpWizardPosition; // Card position on screen
+  action?: 'click';             // Action to perform when advancing (clicks the highlighted element)
+}
+```
+
+### `HelpWizardPosition`
+```typescript
+'top-left' | 'top-center' | 'top-right' |
+'center-left' | 'center-center' | 'center-right' |
+'bottom-left' | 'bottom-center' | 'bottom-right'
 ```
 
 ---

@@ -34,6 +34,7 @@ const wizardSchema = z.object({
       'center-left', 'center-center', 'center-right',
       'bottom-left', 'bottom-center', 'bottom-right',
     ]).optional(),
+    action: z.enum(['click']).optional(),
   })).min(1, "At least one page is required"),
 });
 

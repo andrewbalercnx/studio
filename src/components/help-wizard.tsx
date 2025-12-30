@@ -147,6 +147,20 @@ export function HelpWizard() {
   };
 
   const handleNext = () => {
+    // Execute action before advancing (e.g., click the highlighted element)
+    if (currentPage?.action === 'click') {
+      const selector = currentPage.wizardTargetId
+        ? `[data-wiz-target="${currentPage.wizardTargetId}"]`
+        : currentPage.highlightSelector;
+
+      if (selector) {
+        const element = document.querySelector(selector) as HTMLElement;
+        if (element) {
+          element.click();
+        }
+      }
+    }
+
     if (wizard && activeWizard && activeWizard.step < wizard.pages.length - 1) {
       advanceWizard();
     } else {

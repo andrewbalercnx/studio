@@ -85,14 +85,35 @@ export function PathRecordingProvider({ children }: { children: React.ReactNode 
   const downloadWizard = useCallback((title: string) => {
     if (steps.length === 0) return;
 
-    const pages: HelpWizardPage[] = steps.map((step, index) => ({
-      title: `Step ${index + 1}`,
-      description: `[Edit this description] Clicked on ${step.elementTagName}${step.elementText ? `: "${step.elementText}"` : ''}`,
-      route: step.route,
-      wizardTargetId: step.wizardTargetId,
-      highlightSelector: step.highlightSelector,
-      position: 'bottom-center' as const,
-    }));
+    // Generate two pages per recorded click:
+    // 1. First page highlights the element with action: 'click' (wizard will click it when user advances)
+    // 2. Second page shows the result after clicking (same route, no highlight)
+    const pages: HelpWizardPage[] = [];
+    let pageNumber = 1;
+
+    steps.forEach((step) => {
+      // Page 1: Highlight the element to click, with action: 'click'
+      pages.push({
+        title: `Step ${pageNumber}`,
+        description: `[Edit] Click on ${step.elementTagName}${step.elementText ? `: "${step.elementText}"` : ''}`,
+        route: step.route,
+        wizardTargetId: step.wizardTargetId,
+        highlightSelector: step.highlightSelector,
+        position: 'bottom-center' as const,
+        action: 'click',
+      });
+      pageNumber++;
+
+      // Page 2: Show the opened content (no highlight, user describes what opened)
+      pages.push({
+        title: `Step ${pageNumber}`,
+        description: `[Edit] Describe what opened or appeared after clicking`,
+        route: step.route,
+        position: 'center-center' as const,
+        // No highlight or action - this is for showing/describing the result
+      });
+      pageNumber++;
+    });
 
     const wizard: Omit<HelpWizard, 'createdAt' | 'updatedAt'> = {
       id: `recorded-${Date.now()}`,

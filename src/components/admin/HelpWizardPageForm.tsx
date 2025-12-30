@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import type { HelpWizardPage, HelpWizardPosition } from '@/lib/types';
+import type { HelpWizardPage, HelpWizardPosition, HelpWizardAction } from '@/lib/types';
 import { DEFAULT_WIZARD_POSITION } from '@/lib/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,6 +33,7 @@ export function HelpWizardPageForm({ page, onSave, onCancel }: HelpWizardPageFor
   const [position, setPosition] = useState<HelpWizardPosition>(
     page?.position || DEFAULT_WIZARD_POSITION
   );
+  const [action, setAction] = useState<HelpWizardAction | undefined>(page?.action);
 
   const { register, handleSubmit, formState: { errors } } = useForm<HelpWizardPageFormValues>({
     resolver: zodResolver(pageSchema),
@@ -48,7 +50,7 @@ export function HelpWizardPageForm({ page, onSave, onCancel }: HelpWizardPageFor
     e.preventDefault();
     e.stopPropagation();
     handleSubmit((data) => {
-      onSave({ ...data, position });
+      onSave({ ...data, position, action });
     })(e);
   };
 
@@ -89,6 +91,24 @@ export function HelpWizardPageForm({ page, onSave, onCancel }: HelpWizardPageFor
             Choose where the help card appears on screen. Default is bottom center.
           </p>
         </div>
+      </div>
+      <div className="space-y-2">
+        <Label>Action on Advance</Label>
+        <Select
+          value={action || 'none'}
+          onValueChange={(val) => setAction(val === 'none' ? undefined : val as HelpWizardAction)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="No action" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No action</SelectItem>
+            <SelectItem value="click">Click element</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          When set to &quot;Click element&quot;, the wizard will click the highlighted element when the user advances to the next step.
+        </p>
       </div>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>

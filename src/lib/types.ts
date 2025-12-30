@@ -1166,6 +1166,9 @@ export type HelpWizardPosition =
 
 export const DEFAULT_WIZARD_POSITION: HelpWizardPosition = 'bottom-center';
 
+// Action to perform when advancing from a wizard page
+export type HelpWizardAction = 'click'; // Click the highlighted element before advancing
+
 export type HelpWizardPage = {
   title: string;
   description: string;
@@ -1173,6 +1176,7 @@ export type HelpWizardPage = {
   highlightSelector?: string; // CSS selector for element to highlight (e.g., "#submit-btn", ".nav-menu")
   wizardTargetId?: string; // Unique identifier for targeting via data-wiz-target attribute
   position?: HelpWizardPosition; // Position of the help card on screen (default: bottom-center)
+  action?: HelpWizardAction; // Action to perform when user advances (e.g., 'click' to click the element)
 };
 
 // Wizard Target Diagnostics - for showing target identifiers in editor mode
