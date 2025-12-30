@@ -91,10 +91,18 @@ export async function POST(request: Request) {
 
     // Generate audio preview
     // Note: eleven_multilingual_v2 auto-detects language and doesn't support languageCode parameter
-    const audioStream = await elevenlabs.textToSpeech.convert(voiceName, {
-      text: PREVIEW_TEXT,
-      modelId: ELEVENLABS_MODEL,
-    });
+    // Use timeout and retries for reliability
+    const audioStream = await elevenlabs.textToSpeech.convert(
+      voiceName,
+      {
+        text: PREVIEW_TEXT,
+        modelId: ELEVENLABS_MODEL,
+      },
+      {
+        timeoutInSeconds: 30,
+        maxRetries: 2,
+      }
+    );
 
     // Convert stream to buffer
     const audioBuffer = await streamToBuffer(audioStream as unknown as ReadableStream<Uint8Array>);

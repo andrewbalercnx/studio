@@ -108,10 +108,18 @@ async function generatePageAudio(
   let audioStream;
   try {
     // Note: eleven_multilingual_v2 auto-detects language and doesn't support languageCode parameter
-    audioStream = await elevenlabs.textToSpeech.convert(voiceId, {
-      text: textToNarrate,
-      modelId: ELEVENLABS_MODEL,
-    });
+    // Use longer timeout and retries for reliability on Cloud Run
+    audioStream = await elevenlabs.textToSpeech.convert(
+      voiceId,
+      {
+        text: textToNarrate,
+        modelId: ELEVENLABS_MODEL,
+      },
+      {
+        timeoutInSeconds: 120,
+        maxRetries: 2,
+      }
+    );
 
     // Log success
     await logAIFlow({

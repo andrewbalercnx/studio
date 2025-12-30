@@ -135,10 +135,18 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
 
     // Generate audio using ElevenLabs TTS
     // Note: eleven_multilingual_v2 auto-detects language and doesn't support languageCode parameter
-    const audioStream = await elevenlabs.textToSpeech.convert(voiceId, {
-      text: textForTTS,
-      modelId: ELEVENLABS_MODEL,
-    });
+    // Use longer timeout and retries for reliability on Cloud Run
+    const audioStream = await elevenlabs.textToSpeech.convert(
+      voiceId,
+      {
+        text: textForTTS,
+        modelId: ELEVENLABS_MODEL,
+      },
+      {
+        timeoutInSeconds: 120,
+        maxRetries: 2,
+      }
+    );
 
     // Convert stream to buffer
     const audioBuffer = await streamToBuffer(audioStream as unknown as ReadableStream<Uint8Array>);

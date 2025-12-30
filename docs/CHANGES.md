@@ -18,6 +18,25 @@
 
 ### 2025-12-30
 
+#### `pending` - Add timeout and retry config to ElevenLabs TTS calls
+
+**Type**: Bugfix
+
+**Summary**: Added `timeoutInSeconds` and `maxRetries` options to ElevenLabs TTS calls to prevent "fetch failed" errors on Cloud Run. The default timeout was causing intermittent failures.
+
+**Changes**:
+- Added `timeoutInSeconds: 120` and `maxRetries: 2` for story audio flows
+- Added `timeoutInSeconds: 60` and `maxRetries: 2` for on-demand TTS API
+- Added `timeoutInSeconds: 30` and `maxRetries: 2` for voice previews
+
+**Modified files**:
+- `src/ai/flows/story-page-audio-flow.ts`
+- `src/ai/flows/story-audio-flow.ts`
+- `src/app/api/tts/route.ts`
+- `src/app/api/voices/preview/route.ts`
+
+---
+
 #### `42f05e0` - Fix ElevenLabs unsupported_language error
 
 **Type**: Bugfix
