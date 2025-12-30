@@ -18,6 +18,7 @@ interface AppContextType {
   activeWizard: { id: string; step: number } | null;
   startWizard: (wizardId: string) => void;
   advanceWizard: () => void;
+  goBackWizard: () => void;
   closeWizard: () => void;
 }
 
@@ -106,6 +107,7 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
   
   const startWizard = (wizardId: string) => setActiveWizard({ id: wizardId, step: 0 });
   const advanceWizard = () => setActiveWizard(prev => prev ? { ...prev, step: prev.step + 1 } : null);
+  const goBackWizard = () => setActiveWizard(prev => prev && prev.step > 0 ? { ...prev, step: prev.step - 1 } : prev);
   const closeWizard = () => setActiveWizard(null);
 
   const value = {
@@ -118,6 +120,7 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     activeWizard,
     startWizard,
     advanceWizard,
+    goBackWizard,
     closeWizard,
   };
 

@@ -15,12 +15,14 @@ import { useRouter } from 'next/navigation';
 import Markdown from 'react-markdown';
 
 // Calculate pixel position from HelpWizardPosition
-// Dialog is approximately 448px wide and 250px tall
 const DIALOG_WIDTH = 448;
-const DIALOG_HEIGHT = 250;
 const MARGIN = 24;
+const HEADER_HEIGHT = 56;
 
-function getPositionFromSetting(setting: HelpWizardPosition): { x: number; y: number } {
+function getPositionFromSetting(
+  setting: HelpWizardPosition,
+  dialogHeight: number = 300 // Default estimate, will be updated after render
+): { x: number; y: number } {
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1024;
   const vh = typeof window !== 'undefined' ? window.innerHeight : 768;
 
@@ -33,23 +35,34 @@ function getPositionFromSetting(setting: HelpWizardPosition): { x: number; y: nu
   } else if (setting.includes('right')) {
     x = vw - DIALOG_WIDTH - MARGIN;
   } else {
+    // center
     x = (vw - DIALOG_WIDTH) / 2;
   }
 
-  // Vertical position
+  // Vertical position - ensure dialog stays within viewport
   if (setting.includes('top')) {
-    y = MARGIN + 56; // Account for header height
+    y = MARGIN + HEADER_HEIGHT;
   } else if (setting.includes('bottom')) {
-    y = vh - DIALOG_HEIGHT - MARGIN;
+    // Position so the bottom of the dialog is at the bottom of the viewport (minus margin)
+    y = vh - dialogHeight - MARGIN;
   } else {
-    y = (vh - DIALOG_HEIGHT) / 2;
+    // center
+    y = (vh - dialogHeight) / 2;
   }
+
+  // Clamp to viewport bounds
+  const maxX = Math.max(0, vw - DIALOG_WIDTH - MARGIN);
+  const maxY = Math.max(0, vh - dialogHeight - MARGIN);
+  const minY = MARGIN + HEADER_HEIGHT;
+
+  x = Math.max(MARGIN, Math.min(x, maxX));
+  y = Math.max(minY, Math.min(y, maxY));
 
   return { x, y };
 }
 
 export function HelpWizard() {
-  const { activeWizard, advanceWizard, closeWizard } = useAppContext();
+  const { activeWizard, advanceWizard, goBackWizard, closeWizard } = useAppContext();
   const firestore = useFirestore();
   const router = useRouter();
 
@@ -85,8 +98,37 @@ export function HelpWizard() {
   useEffect(() => {
     if (!currentPage) return;
     const positionSetting = currentPage.position || DEFAULT_WIZARD_POSITION;
+
+    // Initial position with estimated height
     const newPosition = getPositionFromSetting(positionSetting);
     setPosition(newPosition);
+
+    // After render, measure actual height and recalculate if needed
+    const measureAndReposition = () => {
+      if (dialogRef.current) {
+        const actualHeight = dialogRef.current.getBoundingClientRect().height;
+        const adjustedPosition = getPositionFromSetting(positionSetting, actualHeight);
+        setPosition(adjustedPosition);
+      }
+    };
+
+    // Use requestAnimationFrame to wait for render
+    const rafId = requestAnimationFrame(measureAndReposition);
+    return () => cancelAnimationFrame(rafId);
+  }, [currentPage]);
+
+  // Also update position on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (!currentPage || !dialogRef.current) return;
+      const positionSetting = currentPage.position || DEFAULT_WIZARD_POSITION;
+      const actualHeight = dialogRef.current.getBoundingClientRect().height;
+      const newPosition = getPositionFromSetting(positionSetting, actualHeight);
+      setPosition(newPosition);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, [currentPage]);
 
   useEffect(() => {
@@ -178,9 +220,9 @@ export function HelpWizard() {
   };
 
   const handlePrev = () => {
-    // This is a simple implementation; a more complex one might use a state stack.
-    // For now, we just close it.
-    handleClose();
+    if (activeWizard && activeWizard.step > 0) {
+      goBackWizard();
+    }
   };
   
   const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {

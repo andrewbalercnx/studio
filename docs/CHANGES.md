@@ -18,6 +18,26 @@
 
 ### 2025-12-30
 
+#### `pending` - Fix HelpWizard positioning and Previous button
+
+**Type**: Bug Fix
+
+**Summary**: Fixed HelpWizard dialog going off-screen and Previous button closing wizard instead of going back.
+
+**Changes**:
+- Dialog now measures its actual height after render and repositions accordingly
+- Position is clamped to stay within viewport bounds (respects header height and margins)
+- Added window resize handler to reposition dialog when viewport size changes
+- "Bottom" positions now correctly place the dialog's bottom edge at the viewport bottom
+- Added `goBackWizard()` function to AppContext to decrement wizard step
+- Previous button now goes back a step instead of closing the wizard
+
+**Modified files**:
+- `src/components/help-wizard.tsx`
+- `src/hooks/use-app-context.tsx`
+
+---
+
 #### `869bdaf` - Improve HelpWizard page editor UX
 
 **Type**: Enhancement
