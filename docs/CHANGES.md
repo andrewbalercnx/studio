@@ -18,6 +18,23 @@
 
 ### 2025-12-30
 
+#### `pending` - Improve HelpWizard page editor UX
+
+**Type**: Enhancement
+
+**Summary**: Added insert page functionality and fixed data refresh after saving pages.
+
+**Changes**:
+- Added "Insert page after" button (+) to each page row for adding pages between existing steps
+- Fixed page list not refreshing after saving edits (now uses `replace()` to update form state)
+- Added step numbers to page list for easier identification
+- Added tooltips to all page action buttons
+
+**Modified files**:
+- `src/components/admin/HelpWizardForm.tsx`
+
+---
+
 #### `7bc61cd` - Fix Firestore undefined field error in HelpWizard save
 
 **Type**: Bug Fix

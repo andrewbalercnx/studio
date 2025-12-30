@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, PlusCircle, Trash2, ArrowUp, ArrowDown, Edit, MousePointerClick } from 'lucide-react';
+import { LoaderCircle, PlusCircle, Trash2, ArrowUp, ArrowDown, Edit, MousePointerClick, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { HelpWizardPageForm } from './HelpWizardPageForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -48,6 +48,7 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
   const [isSaving, setIsSaving] = useState(false);
   const [pageFormOpen, setPageFormOpen] = useState(false);
   const [editingPageIndex, setEditingPageIndex] = useState<number | null>(null);
+  const [insertAfterIndex, setInsertAfterIndex] = useState<number | null>(null);
 
   const { control, register, handleSubmit, formState: { errors }, setValue } = useForm<HelpWizardFormValues>({
     resolver: zodResolver(wizardSchema),
@@ -67,6 +68,13 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
 
   const openPageForm = (index: number | null = null) => {
     setEditingPageIndex(index);
+    setInsertAfterIndex(null);
+    setPageFormOpen(true);
+  };
+
+  const openInsertPageForm = (afterIndex: number) => {
+    setEditingPageIndex(null);
+    setInsertAfterIndex(afterIndex);
     setPageFormOpen(true);
   };
 
@@ -90,20 +98,30 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
     }
   };
 
-  const handleSavePage = async (pageData: HelpWizardPage, index: number | null) => {
-    // Update local form state
+  const handleSavePage = async (pageData: HelpWizardPage) => {
+    // Build updated pages array based on the operation type
     let updatedPages: HelpWizardPage[];
-    if (index !== null) {
-      setValue(`pages.${index}`, pageData, { shouldValidate: true });
-      updatedPages = [...fields];
-      updatedPages[index] = pageData;
+
+    if (editingPageIndex !== null) {
+      // Editing existing page - replace at index
+      updatedPages = fields.map((field, idx) =>
+        idx === editingPageIndex ? pageData : field
+      );
+    } else if (insertAfterIndex !== null) {
+      // Inserting new page after specific index
+      updatedPages = [
+        ...fields.slice(0, insertAfterIndex + 1),
+        pageData,
+        ...fields.slice(insertAfterIndex + 1),
+      ];
     } else {
-      append(pageData);
+      // Adding new page at the end
       updatedPages = [...fields, pageData];
     }
+
     setPageFormOpen(false);
 
-    // Auto-save to Firestore
+    // Auto-save to Firestore and update form state
     setIsSaving(true);
     try {
       const currentValues = control._formValues as HelpWizardFormValues;
@@ -111,6 +129,10 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
         ...currentValues,
         pages: updatedPages,
       });
+
+      // Update form state with new pages array to trigger re-render
+      replace(updatedPages);
+
       toast({ title: 'Success', description: 'Page saved.' });
     } catch (e: unknown) {
       toast({ title: 'Error saving page', description: parseFirestoreError(e), variant: 'destructive' });
@@ -139,12 +161,18 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
       <Dialog open={pageFormOpen} onOpenChange={setPageFormOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingPageIndex !== null ? 'Edit Page' : 'Add New Page'}</DialogTitle>
+            <DialogTitle>
+              {editingPageIndex !== null
+                ? 'Edit Page'
+                : insertAfterIndex !== null
+                  ? `Insert Page After Step ${insertAfterIndex + 1}`
+                  : 'Add New Page'}
+            </DialogTitle>
             <DialogDescription>Define a step in the guided tour.</DialogDescription>
           </DialogHeader>
           <HelpWizardPageForm
             page={editingPageIndex !== null ? fields[editingPageIndex] : null}
-            onSave={(pageData) => handleSavePage(pageData, editingPageIndex)}
+            onSave={handleSavePage}
             onCancel={() => setPageFormOpen(false)}
           />
         </DialogContent>
@@ -208,6 +236,9 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
         <CardContent className="space-y-2">
           {fields.map((field, index) => (
             <div key={field.id} className="flex items-center gap-2 rounded-md border p-3">
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-muted-foreground text-xs font-medium shrink-0">
+                {index + 1}
+              </div>
               <div className="flex-grow">
                 <div className="flex items-center gap-2">
                   <p className="font-semibold">{field.title}</p>
@@ -221,16 +252,19 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
                 <p className="text-sm text-muted-foreground">{field.route}</p>
               </div>
               <div className="flex items-center gap-1">
-                <Button type="button" variant="ghost" size="icon" disabled={index === 0} onClick={() => move(index, index - 1)}>
+                <Button type="button" variant="ghost" size="icon" disabled={index === 0} onClick={() => move(index, index - 1)} title="Move up">
                   <ArrowUp className="h-4 w-4" />
                 </Button>
-                <Button type="button" variant="ghost" size="icon" disabled={index === fields.length - 1} onClick={() => move(index, index + 1)}>
+                <Button type="button" variant="ghost" size="icon" disabled={index === fields.length - 1} onClick={() => move(index, index + 1)} title="Move down">
                   <ArrowDown className="h-4 w-4" />
                 </Button>
-                <Button type="button" variant="ghost" size="icon" onClick={() => openPageForm(index)}>
-                    <Edit className="h-4 w-4" />
+                <Button type="button" variant="ghost" size="icon" onClick={() => openInsertPageForm(index)} title="Insert page after">
+                  <Plus className="h-4 w-4" />
                 </Button>
-                <Button type="button" variant="ghost" size="icon" className="text-destructive" onClick={() => remove(index)}>
+                <Button type="button" variant="ghost" size="icon" onClick={() => openPageForm(index)} title="Edit page">
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="icon" className="text-destructive" onClick={() => remove(index)} title="Delete page">
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
