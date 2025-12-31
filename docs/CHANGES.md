@@ -18,7 +18,7 @@
 
 ### 2025-12-31
 
-#### `pending` - Add image upload to Story Output Types
+#### `30ced48` - Add image upload to Story Output Types
 
 **Type**: Feature
 
