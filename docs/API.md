@@ -1383,7 +1383,7 @@ List documents in a collection.
 
 ---
 
-### POST `/api/admin/audit-collections`
+### GET `/api/admin/audit-collections`
 
 Audit Firestore collections.
 
@@ -1391,6 +1391,108 @@ Audit Firestore collections.
 ```json
 {
   "collections": {...}
+}
+```
+
+---
+
+### GET `/api/admin/cleanup`
+
+Scan database for orphaned, incomplete, or deprecated data.
+
+**Response**: `200 OK`
+```json
+{
+  "timestamp": "2025-12-31T12:00:00.000Z",
+  "categories": [
+    {
+      "name": "Orphaned Children",
+      "description": "Child profiles not belonging to the production parent account",
+      "items": [
+        {
+          "id": "child-123",
+          "collection": "children",
+          "path": "children/child-123",
+          "reason": "Belongs to non-production parent",
+          "details": {
+            "displayName": "Test Child",
+            "ownerParentUid": "user-456"
+          },
+          "canDelete": true
+        }
+      ],
+      "totalCount": 5
+    }
+  ],
+  "summary": {
+    "totalItems": 42,
+    "deletableItems": 40,
+    "categoryCounts": {
+      "Orphaned Children": 5,
+      "Orphaned Characters": 8
+    }
+  }
+}
+```
+
+**Categories scanned**:
+- Orphaned Children (not belonging to `parent@rcnx.io`)
+- Orphaned Characters
+- Orphaned/Incomplete Sessions (in_progress for >24 hours)
+- Orphaned Stories
+- Non-Production Users (excluding admins)
+- Orphaned Print Documents
+- Old AI Logs (>30 days)
+- Deprecated Collections (legacy storyBooks, outputs)
+
+---
+
+### POST `/api/admin/cleanup`
+
+Delete selected cleanup items.
+
+**Request Body**:
+```json
+{
+  "items": [
+    {
+      "id": "child-123",
+      "collection": "children",
+      "path": "children/child-123",
+      "canDelete": true
+    }
+  ]
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "success": true,
+  "deleted": 5,
+  "failed": 0,
+  "errors": [],
+  "deletedItems": ["children/child-123", "..."]
+}
+```
+
+---
+
+### DELETE `/api/admin/cleanup`
+
+Delete all items in a category.
+
+**Query Parameters**:
+- `category` (string, required) - Category name to delete
+
+**Response**: `200 OK`
+```json
+{
+  "success": true,
+  "deleted": 15,
+  "failed": 0,
+  "errors": [],
+  "deletedItems": ["..."]
 }
 ```
 
@@ -1537,5 +1639,6 @@ Rate-limited responses return status `429` with:
 
 | Date | Changes |
 |------|---------|
+| 2025-12-31 | Added /api/admin/cleanup endpoints for database cleanup |
 | 2025-12-31 | Added storyOutputTypes/uploadImage endpoint |
 | 2025-12-29 | Initial documentation created |

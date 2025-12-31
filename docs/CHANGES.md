@@ -18,6 +18,36 @@
 
 ### 2025-12-31
 
+#### `0ce6ee6` - Add comprehensive database cleanup admin page
+
+**Type**: Feature
+
+**Summary**: Added a new admin page for identifying and cleaning up orphaned, incomplete, test, and deprecated data from the database.
+
+**Changes**:
+- Created `/api/admin/cleanup` API route with GET (scan), POST (delete selected), and DELETE (delete category) methods
+- Created `/admin/cleanup` page with scan/delete UI for each category
+- Scans for:
+  - Orphaned children (not belonging to `parent@rcnx.io`)
+  - Orphaned characters
+  - Incomplete sessions (in_progress for >24 hours)
+  - Orphaned stories
+  - Non-production users (excluding admins)
+  - Orphaned print documents
+  - Old AI logs (>30 days)
+  - Deprecated collections (legacy storyBooks, outputs)
+- Preserves help-* IDs and admin users
+- Handles subcollection deletion (messages, events, storybooks, pages, etc.)
+
+**New files**:
+- `src/app/api/admin/cleanup/route.ts`
+- `src/app/admin/cleanup/page.tsx`
+
+**Modified files**:
+- `docs/API.md` - Added cleanup endpoint documentation
+
+---
+
 #### `4878e0d` - Add concurrency limit for ElevenLabs TTS requests
 
 **Type**: Bug Fix
