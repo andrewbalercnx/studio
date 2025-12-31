@@ -906,7 +906,7 @@ function StoryOutputsPanel() {
     childFacingLabel: '',
     category: 'picture_book',
     status: 'draft',
-    pageCount: '8',
+    pageCount: '',
     imagePrompt: '',
     defaultPrintLayoutId: '',
   };
@@ -941,7 +941,7 @@ function StoryOutputsPanel() {
       childFacingLabel: output.childFacingLabel || '',
       category: output.category,
       status: output.status || 'draft',
-      pageCount: String(output.layoutHints?.pageCount ?? '8'),
+      pageCount: output.layoutHints?.pageCount ? String(output.layoutHints.pageCount) : '',
       imagePrompt: output.imagePrompt || '',
       defaultPrintLayoutId: output.defaultPrintLayoutId || '',
       imageUrl: output.imageUrl,
@@ -1050,6 +1050,8 @@ function StoryOutputsPanel() {
       return;
     }
     setIsSaving(true);
+    // Parse page count - allow blank for unconstrained pagination
+    const pageCountNum = form.pageCount ? Number(form.pageCount) : undefined;
     const payload: Record<string, any> = {
       name: form.name,
       shortDescription: form.shortDescription,
@@ -1058,7 +1060,7 @@ function StoryOutputsPanel() {
       category: form.category,
       status: form.status,
       layoutHints: {
-        pageCount: Number(form.pageCount) || 8,
+        ...(pageCountNum !== undefined ? { pageCount: pageCountNum } : {}),
       },
       updatedAt: serverTimestamp(),
     };
@@ -1176,7 +1178,8 @@ function StoryOutputsPanel() {
             </div>
             <div className="grid gap-2">
                 <Label>Page Count</Label>
-                <Input type="number" value={form.pageCount} onChange={(e) => setForm({ ...form, pageCount: e.target.value })} placeholder="e.g. 8" />
+                <Input type="number" value={form.pageCount} onChange={(e) => setForm({ ...form, pageCount: e.target.value })} placeholder="Leave blank for unconstrained" />
+                <p className="text-xs text-muted-foreground">Optional: Leave blank to allow AI to determine page count</p>
             </div>
             <div className="grid gap-2">
                 <Label>Image Prompt</Label>
