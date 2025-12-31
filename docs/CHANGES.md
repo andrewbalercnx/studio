@@ -18,6 +18,22 @@
 
 ### 2025-12-31
 
+#### `c90a3e7` - Add pagination prompt field to admin dashboard output types
+
+**Type**: Enhancement
+
+**Summary**: Added the missing paginationPrompt field to the Output Types editor on /admin dashboard.
+
+**Changes**:
+- Added paginationPrompt to StoryOutputForm type
+- Added Textarea field in the edit dialog with helpful placeholder text
+- Save handler now includes paginationPrompt in Firestore payload
+
+**Modified files**:
+- `src/app/admin/page.tsx`
+
+---
+
 #### `bb407a9` - Prepend output type pagination prompt to global prompt
 
 **Type**: Bug Fix
