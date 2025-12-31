@@ -235,8 +235,14 @@ export default function BookReaderPage() {
   // Filter out blank pages (they're for print alignment only, not reading)
   const readablePages = pages.filter((p) => p.kind !== 'blank');
 
-  // Check if all readable pages have images ready
-  const allImagesReady = readablePages.every(
+  // Pages that require images (exclude title_page and blank pages without imagePrompt)
+  // This matches the logic in the storybook viewer page
+  const pagesRequiringImages = pages.filter(
+    (p) => p.kind !== 'title_page' && p.kind !== 'blank' && p.imagePrompt
+  );
+
+  // Check if all pages that need images have them ready
+  const allImagesReady = pagesRequiringImages.every(
     (p) => p.imageStatus === 'ready' && p.imageUrl
   );
 
