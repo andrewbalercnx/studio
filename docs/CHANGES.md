@@ -18,6 +18,36 @@
 
 ### 2025-12-31
 
+#### `PENDING` - Fix Mixam page count mismatch and add error visibility
+
+**Type**: Bug Fix
+
+**Summary**: Fixed critical issue where interior PDF page count didn't match the Mixam order specification, causing order rejections. Also improved error visibility in admin UI.
+
+**Problems Fixed**:
+1. Interior PDF was generated with X pages, but Mixam order specified a different count (rounded to multiple of 4). PDFs must actually contain the number of pages specified in the order.
+2. Mixam submission errors weren't prominently displayed in the admin UI.
+3. Page count information wasn't visible in the order details.
+
+**Changes**:
+- Interior PDF generation now automatically adds blank padding pages to meet:
+  - Minimum page count from print product configuration (e.g., 24 for hardcover)
+  - Multiple of 4 requirement (pageCountIncrement from print product)
+- Added `paddingPageCount` and `contentPageCount` fields to PrintableAssetMetadata
+- Admin print order page now shows:
+  - Prominent error display when submission fails
+  - Link to Mixam order dashboard when order is submitted
+  - Page count breakdown showing interior pages and padding
+
+**Modified files**:
+- `src/app/api/printStoryBooks/[printStoryBookId]/generate-pdfs/route.ts`
+- `src/app/admin/print-orders/[orderId]/page.tsx`
+- `src/lib/types.ts`
+- `docs/SCHEMA.md`
+- `docs/API.md`
+
+---
+
 #### `c90a3e7` - Add pagination prompt field to admin dashboard output types
 
 **Type**: Enhancement

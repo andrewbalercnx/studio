@@ -523,14 +523,34 @@ async function renderCoverPdf(
 }
 
 /**
+ * Padding configuration for interior PDF
+ */
+type PaddingConfig = {
+  minPageCount: number;      // Minimum pages required (e.g., 24 for hardcover)
+  pageCountIncrement: number; // Must be divisible by this (e.g., 4)
+};
+
+/**
+ * Result from interior PDF rendering including padding info
+ */
+type InteriorPdfResult = {
+  pdfBytes: Uint8Array;
+  contentPageCount: number;  // Pages with actual content
+  paddingPageCount: number;  // Blank pages added for padding
+  totalPageCount: number;    // Total pages in PDF
+};
+
+/**
  * Renders interior PDF - includes endpapers and all interior pages
  * Pages alternate: text page, image page (for spread layout)
+ * Adds blank padding pages to meet minimum page count and divisibility requirements
  */
 async function renderInteriorPdf(
   pages: PrintStoryBookPage[],
   layout: PrintLayout,
+  paddingConfig: PaddingConfig,
   logger?: ReturnType<typeof createLogger>
-) {
+): Promise<InteriorPdfResult> {
   const pdfDoc = await PDFDocument.create();
   const fontType = getStandardFont(layout.font);
   const bodyFont = await pdfDoc.embedFont(fontType);
@@ -574,13 +594,44 @@ async function renderInteriorPdf(
     await renderPageContent(endpaperPage, backEndpaper, layout, bodyFont, fontSize, 'inside', logger);
   }
 
-  // Interior page count must be divisible by 4
-  const totalInteriorPages = pdfDoc.getPageCount();
-  if (totalInteriorPages % 4 !== 0) {
-    logger?.warn('Interior page count not divisible by 4', { totalInteriorPages });
+  // Calculate content pages before padding
+  const contentPageCount = pdfDoc.getPageCount();
+
+  // Calculate required total pages:
+  // 1. Round up to pageCountIncrement (typically 4)
+  // 2. Ensure minimum page count is met
+  const { minPageCount, pageCountIncrement } = paddingConfig;
+  const roundedUp = Math.ceil(contentPageCount / pageCountIncrement) * pageCountIncrement;
+  const requiredPages = Math.max(minPageCount, roundedUp);
+
+  // Add blank padding pages if needed
+  const paddingPageCount = requiredPages - contentPageCount;
+  if (paddingPageCount > 0) {
+    logger?.info('Adding padding pages to meet requirements', {
+      contentPageCount,
+      requiredPages,
+      paddingPageCount,
+      minPageCount,
+      pageCountIncrement,
+    });
+
+    for (let i = 0; i < paddingPageCount; i++) {
+      pdfDoc.addPage([
+        layout.leafWidth * INCH_TO_POINTS,
+        layout.leafHeight * INCH_TO_POINTS,
+      ]);
+    }
   }
 
-  return await pdfDoc.save();
+  const totalPageCount = pdfDoc.getPageCount();
+  logger?.info('Interior PDF complete', { contentPageCount, paddingPageCount, totalPageCount });
+
+  return {
+    pdfBytes: await pdfDoc.save(),
+    contentPageCount,
+    paddingPageCount,
+    totalPageCount,
+  };
 }
 
 /**
@@ -739,6 +790,18 @@ export async function POST(
     const layout = { id: layoutDoc.id, ...layoutDoc.data() } as PrintLayout;
     logger.info('Print layout loaded', { printLayoutId: layout.id });
 
+    // Use default padding configuration for hardcover books
+    // These are Mixam's requirements for hardcover/case-bound books:
+    // - Minimum 24 interior pages (for spine width)
+    // - Page count must be divisible by 4
+    // NOTE: If we support multiple print products in the future, this should be
+    // fetched from a print product document associated with the printStoryBook
+    const paddingConfig: PaddingConfig = {
+      minPageCount: 24,
+      pageCountIncrement: 4,
+    };
+    logger.info('Using padding config', paddingConfig);
+
     // Update status to generating
     await printStoryBookRef.update({
       pdfStatus: 'generating_pdfs',
@@ -750,20 +813,28 @@ export async function POST(
     try {
       // Generate cover and interior PDFs
       // Note: These run in parallel but each uses the ConcurrencyLimiter for image fetching
-      logger.info('Starting PDF generation', { printStoryBookId });
-      const [coverBytes, interiorBytes] = await Promise.all([
+      logger.info('Starting PDF generation', { printStoryBookId, paddingConfig });
+      const [coverBytes, interiorResult] = await Promise.all([
         renderCoverPdf(printStoryBook.pages, layout, logger),
-        renderInteriorPdf(printStoryBook.pages, layout, logger),
+        renderInteriorPdf(printStoryBook.pages, layout, paddingConfig, logger),
       ]);
 
       const generationDurationMs = Date.now() - startTime;
-      logger.info('PDF generation completed', { printStoryBookId, generationDurationMs, coverSize: coverBytes.length, interiorSize: interiorBytes.length });
+      logger.info('PDF generation completed', {
+        printStoryBookId,
+        generationDurationMs,
+        coverSize: coverBytes.length,
+        interiorSize: interiorResult.pdfBytes.length,
+        contentPages: interiorResult.contentPageCount,
+        paddingPages: interiorResult.paddingPageCount,
+        totalInteriorPages: interiorResult.totalPageCount,
+      });
 
       // Upload both PDFs
       logger.info('Starting PDF upload', { printStoryBookId });
       const [coverUpload, interiorUpload] = await Promise.all([
         uploadCoverPdf(coverBytes, printStoryBookId),
-        uploadInteriorPdf(interiorBytes, printStoryBookId),
+        uploadInteriorPdf(interiorResult.pdfBytes, printStoryBookId),
       ]);
 
       const totalDurationMs = Date.now() - startTime;
@@ -771,19 +842,21 @@ export async function POST(
 
       // Calculate metadata - cover is now 2 pages (front + back)
       const coverPageCount = 2;
-      const interiorPageCount = printStoryBook.pages.filter(
-        (p) => p.type === 'interior' || p.type === 'endpaper_front' || p.type === 'endpaper_back'
-      ).length;
 
       const printableMetadata = {
         dpi: 300,
         trimSize: `${layout.leafWidth}in x ${layout.leafHeight}in`,
         pageCount: printStoryBook.pages.length,
         coverPageCount,
-        interiorPageCount,
+        // interiorPageCount is the total pages in the interior PDF (content + padding)
+        // This is what we tell Mixam - must match the actual PDF
+        interiorPageCount: interiorResult.totalPageCount,
         spreadCount: Math.ceil(printStoryBook.pages.length / layout.leavesPerSpread),
         printLayoutId: layout.id,
         hasSeparatePDFs: true,
+        // Track padding separately for display and debugging
+        paddingPageCount: interiorResult.paddingPageCount,
+        contentPageCount: interiorResult.contentPageCount,
       };
 
       // Update PrintStoryBook with PDF URLs

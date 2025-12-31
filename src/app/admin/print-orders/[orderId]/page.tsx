@@ -378,6 +378,14 @@ export default function PrintOrderDetailPage() {
               <div>
                 <p className="text-sm text-gray-600">Mixam Order ID</p>
                 <p className="font-mono text-sm">{order.mixamOrderId}</p>
+                <a
+                  href={`https://mixam.co.uk/orders/${order.mixamOrderId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline text-xs"
+                >
+                  View in Mixam Dashboard
+                </a>
               </div>
               {order.mixamJobNumber && (
                 <div>
@@ -432,6 +440,19 @@ export default function PrintOrderDetailPage() {
                   </pre>
                 </details>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Submission Error (shown when order failed submission and is back to approved status) */}
+        {order.fulfillmentNotes && order.fulfillmentNotes.toLowerCase().includes('fail') && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
+            <h2 className="text-xl font-semibold text-red-900 mb-2">Submission Error</h2>
+            <p className="text-red-800">{order.fulfillmentNotes}</p>
+            {order.fulfillmentStatus === 'approved' && (
+              <p className="text-sm text-red-600 mt-2">
+                The order has been reset to "Approved" status. Review the error and try again.
+              </p>
             )}
           </div>
         )}
@@ -499,6 +520,22 @@ export default function PrintOrderDetailPage() {
                       <p>Ribbon: {order.customOptions.ribbonColor}</p>
                     )}
                   </div>
+                </div>
+              )}
+              {order.printableMetadata && (
+                <div>
+                  <p className="text-sm text-gray-600">Page Count</p>
+                  <p className="text-sm">
+                    Interior: {order.printableMetadata.interiorPageCount} pages
+                    {order.printableMetadata.paddingPageCount && order.printableMetadata.paddingPageCount > 0 && (
+                      <span className="text-gray-500 ml-1">
+                        (incl. {order.printableMetadata.paddingPageCount} padding)
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Cover: {order.printableMetadata.coverPageCount} pages
+                  </p>
                 </div>
               )}
             </div>

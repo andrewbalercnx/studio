@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2025-12-31 (added systemConfig/paginationPrompt for configurable pagination prompt)
+> **Last Updated**: 2025-12-31 (added PrintableAssetMetadata fields for padding pages)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -198,9 +198,24 @@ Print-ready storybook configurations.
 | `coverPdfUrl` | string | No | Cover PDF URL |
 | `interiorPdfUrl` | string | No | Interior PDF URL |
 | `combinedPdfUrl` | string | No | Combined PDF URL |
-| `printableMetadata` | object | No | Print metadata |
+| `printableMetadata` | PrintableAssetMetadata | No | Print metadata |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
+
+**PrintableAssetMetadata** (embedded object):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `dpi` | number | Yes | PDF resolution (e.g., 300) |
+| `trimSize` | string | Yes | Page dimensions (e.g., "8in x 10in") |
+| `pageCount` | number | Yes | Total pages in PrintStoryBook |
+| `coverPageCount` | number | Yes | Cover pages (2 for hardcover) |
+| `interiorPageCount` | number | Yes | Total pages in interior PDF (content + padding) |
+| `spreadCount` | number | Yes | Number of spreads |
+| `printLayoutId` | string | No | Print layout used |
+| `hasSeparatePDFs` | boolean | No | True if cover/interior are separate |
+| `paddingPageCount` | number | No | Blank pages added to meet Mixam requirements |
+| `contentPageCount` | number | No | Actual content pages (before padding) |
 
 **Security**: Users can CRUD their own printStoryBooks; admins have full access.
 

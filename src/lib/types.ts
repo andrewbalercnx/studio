@@ -189,15 +189,17 @@ export type StoryBookFinalizedPage = {
 export type PrintableAssetMetadata = {
   dpi: number;
   trimSize: string;
-  pageCount: number; // Total pages (cover + interior)
+  pageCount: number; // Total pages in the PrintStoryBook (cover + interior content)
   coverPageCount: number; // 2 for hardcover (front + back outside), 4 for paperback
-  interiorPageCount: number; // Content pages + padding pages
+  interiorPageCount: number; // Total pages in interior PDF (content + padding) - must match actual PDF
   spreadCount: number;
   printLayoutId?: string;
   // Mixam-specific: separate PDFs
   hasSeparatePDFs?: boolean;
   // Padding pages added to meet minimum requirements (for hardcover minimum 24 interior)
   paddingPageCount?: number;
+  // Actual content pages before padding (for display purposes)
+  contentPageCount?: number;
 };
 
 export type StoryBookFinalization = {
