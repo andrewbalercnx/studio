@@ -38,6 +38,8 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const currentTextRef = useRef<string | null>(null);
+  const pendingTextRef = useRef<string | null>(null);
 
   const stop = useCallback(() => {
     // Abort any pending request
@@ -52,6 +54,10 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
       audioRef.current.currentTime = 0;
       audioRef.current = null;
     }
+
+    // Clear text tracking
+    currentTextRef.current = null;
+    pendingTextRef.current = null;
 
     setIsSpeaking(false);
     setIsLoading(false);
@@ -71,8 +77,17 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
       return;
     }
 
+    // Skip if this is the same text we're already speaking or loading
+    if (text === currentTextRef.current || text === pendingTextRef.current) {
+      console.log('[useTTS] Same text already in progress, skipping');
+      return;
+    }
+
     // Stop any current speech
     stop();
+
+    // Track what we're about to speak
+    pendingTextRef.current = text;
 
     setIsLoading(true);
 
@@ -119,6 +134,7 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
         console.log('[useTTS] Audio playback ended');
         setIsSpeaking(false);
         audioRef.current = null;
+        currentTextRef.current = null;
         onEnd?.();
       };
 
@@ -126,11 +142,14 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
         console.error('[useTTS] Audio playback error:', e);
         setIsSpeaking(false);
         audioRef.current = null;
+        currentTextRef.current = null;
         onError?.('Audio playback failed');
       };
 
       setIsLoading(false);
       setIsSpeaking(true);
+      currentTextRef.current = text;
+      pendingTextRef.current = null;
       onStart?.();
 
       console.log('[useTTS] Starting audio playback...');
@@ -139,6 +158,7 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
     } catch (error: any) {
       setIsLoading(false);
       setIsSpeaking(false);
+      pendingTextRef.current = null;
 
       // Don't report abort errors
       if (error.name === 'AbortError') {
