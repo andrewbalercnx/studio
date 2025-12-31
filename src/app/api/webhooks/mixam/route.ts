@@ -172,9 +172,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true, error: 'Missing externalOrderId' });
     }
 
+    console.log(`[Mixam Webhook] Looking up order: ${ourOrderId}`);
+    console.log(`[Mixam Webhook] Firestore project: ${(firestore as any)._settings?.projectId || 'unknown'}`);
+
     const orderDoc = await firestore.collection('printOrders').doc(ourOrderId).get();
+    console.log(`[Mixam Webhook] Order exists: ${orderDoc.exists}`);
 
     if (!orderDoc.exists) {
+      // Try listing a few orders to verify collection access
+      try {
+        const testQuery = await firestore.collection('printOrders').limit(1).get();
+        console.log(`[Mixam Webhook] Test query found ${testQuery.size} orders`);
+        if (testQuery.size > 0) {
+          console.log(`[Mixam Webhook] Sample order ID: ${testQuery.docs[0].id}`);
+        }
+      } catch (e: any) {
+        console.error(`[Mixam Webhook] Test query failed: ${e.message}`);
+      }
+
       console.error(`[Mixam Webhook] Order not found: ${ourOrderId}`);
       // Return 200 anyway to prevent Mixam retries
       return NextResponse.json({ received: true, warning: 'Order not found' });
