@@ -629,11 +629,6 @@ export default function StorybookViewerPage() {
             </div>
             {currentPage.title && <h3 className="text-2xl font-semibold">{currentPage.title}</h3>}
             {(currentPage.displayText || currentPage.bodyText) && <p className="text-lg leading-relaxed">{currentPage.displayText || currentPage.bodyText}</p>}
-            {currentPage.imagePrompt && (
-              <p className="text-xs text-muted-foreground">
-                Prompt: <span className="font-medium">{currentPage.imagePrompt}</span>
-              </p>
-            )}
             <div className="flex flex-wrap gap-3">
               <Button
                 variant="outline"
@@ -666,9 +661,6 @@ export default function StorybookViewerPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <CardTitle>{storyBook?.metadata?.title ?? storyBook?.storyText?.slice(0, 32) ?? 'Storybook Viewer'}</CardTitle>
-                <CardDescription>
-                  Book ID: <span className="font-mono text-xs">{bookId}</span>
-                </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Badge variant={finalizationBadge.variant} className="uppercase tracking-wide text-xs">
@@ -775,9 +767,9 @@ export default function StorybookViewerPage() {
               <Button asChild variant="outline">
                 <Link href="/stories">Back to My Stories</Link>
               </Button>
-              {storyBook?.storySessionId && (
+              {story?.childId && (
                 <Button asChild variant="outline">
-                  <Link href={`/story/session/${storyBook.storySessionId}/compiled`}>View Story Text</Link>
+                  <Link href={`/child/${story.childId}/story/${storyId}/read`}>View Story Text</Link>
                 </Button>
               )}
               {allImagesReady && (
