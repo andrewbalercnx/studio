@@ -3,6 +3,9 @@ import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
 
+// Allow up to 60 seconds for the API call
+export const maxDuration = 60;
+
 type VoiceInfo = {
   id: string;
   name: string;
@@ -24,6 +27,8 @@ export async function GET(request: Request) {
     const search = searchParams.get('search') || 'british';
     const category = searchParams.get('category') || 'premade';
 
+    console.log('[api/voices/list] Searching for voices:', { search, category });
+
     // Check for API key before initializing client
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (!apiKey) {
@@ -40,12 +45,19 @@ export async function GET(request: Request) {
     });
 
     // Fetch voices using the v2 API with search
-    // The SDK should support the voices.search or voices.getAll method
-    const response = await elevenlabs.voices.search({
-      search,
-      category: category as 'premade' | 'cloned' | 'generated' | 'professional',
-      pageSize: 50,
-    });
+    // Use timeout for reliability
+    console.log('[api/voices/list] Calling ElevenLabs API...');
+    const response = await elevenlabs.voices.search(
+      {
+        search,
+        category: category as 'premade' | 'cloned' | 'generated' | 'professional',
+        pageSize: 50,
+      },
+      {
+        timeoutInSeconds: 30,
+      }
+    );
+    console.log('[api/voices/list] Got response with', response.voices?.length ?? 0, 'voices');
 
     // Extract voice information
     const voices: VoiceInfo[] = response.voices.map((voice) => ({
