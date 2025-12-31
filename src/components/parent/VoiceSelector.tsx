@@ -11,7 +11,7 @@ import { Volume2, Loader2, Check, Star, Mic, MicOff, Trash2, Plus, User } from '
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase/auth/use-user';
 import type { ChildProfile, ParentVoice } from '@/lib/types';
-import { ELEVENLABS_TTS_VOICES, DEFAULT_TTS_VOICE } from '@/lib/tts-config';
+import { ELEVENLABS_BRITISH_VOICES, ELEVENLABS_OTHER_VOICES, ELEVENLABS_TTS_VOICES, DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 
 type VoiceSelectorProps = {
   child: ChildProfile;
@@ -562,15 +562,70 @@ export function VoiceSelector({ child, onVoiceSelect, onAutoReadAloudChange }: V
         </Button>
       )}
 
-      {/* Preset Voices Section */}
+      {/* British Voices Section */}
       <div className="space-y-3">
-        <h4 className="text-sm font-medium">ElevenLabs Voices</h4>
+        <h4 className="text-sm font-medium">British Voices</h4>
         <RadioGroup
           value={selectedVoice}
           onValueChange={setSelectedVoice}
           className="grid grid-cols-1 sm:grid-cols-2 gap-3"
         >
-          {ELEVENLABS_TTS_VOICES.map((voice) => (
+          {ELEVENLABS_BRITISH_VOICES.map((voice) => (
+            <div key={voice.id} className="relative">
+              <RadioGroupItem
+                value={voice.id}
+                id={`voice-${voice.id}`}
+                className="peer sr-only"
+              />
+              <Label
+                htmlFor={`voice-${voice.id}`}
+                className="flex items-center justify-between rounded-lg border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{voice.name}</span>
+                      {voice.recommended && (
+                        <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
+                      )}
+                      {selectedVoice === voice.id && (
+                        <Check className="h-4 w-4 text-primary" />
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{voice.description}</p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handlePreviewVoice(voice.id);
+                  }}
+                  disabled={loadingPreview !== null && loadingPreview !== voice.id}
+                >
+                  {loadingPreview === voice.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Volume2 className="h-4 w-4" />
+                  )}
+                </Button>
+              </Label>
+            </div>
+          ))}
+        </RadioGroup>
+      </div>
+
+      {/* Other Voices Section */}
+      <div className="space-y-3">
+        <h4 className="text-sm font-medium">Other Voices</h4>
+        <RadioGroup
+          value={selectedVoice}
+          onValueChange={setSelectedVoice}
+          className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+        >
+          {ELEVENLABS_OTHER_VOICES.map((voice) => (
             <div key={voice.id} className="relative">
               <RadioGroupItem
                 value={voice.id}
