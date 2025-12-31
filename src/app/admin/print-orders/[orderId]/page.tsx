@@ -407,7 +407,7 @@ export default function PrintOrderDetailPage() {
               )}
             </div>
             {/* Shipping/Tracking Info (from webhooks) */}
-            {((order as any).mixamTrackingNumber || (order as any).mixamTrackingUrl || (order as any).mixamEstimatedDelivery || (order as any).mixamCarrier) && (
+            {((order as any).mixamTrackingNumber || (order as any).mixamTrackingUrl || (order as any).mixamEstimatedDelivery || (order as any).mixamCarrier || (order as any).mixamShipmentDate || (order as any).mixamParcelNumbers) && (
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <p className="text-sm font-medium text-gray-700 mb-2">Shipping Information</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -436,16 +436,68 @@ export default function PrintOrderDetailPage() {
                       </a>
                     </div>
                   )}
+                  {(order as any).mixamShipmentDate && (
+                    <div>
+                      <p className="text-sm text-gray-600">Shipment Date</p>
+                      <p className="text-sm">{(order as any).mixamShipmentDate}</p>
+                    </div>
+                  )}
                   {(order as any).mixamEstimatedDelivery && (
                     <div>
                       <p className="text-sm text-gray-600">Estimated Delivery</p>
                       <p className="text-sm">{formatDate((order as any).mixamEstimatedDelivery)}</p>
                     </div>
                   )}
+                  {(order as any).mixamParcelNumbers && (order as any).mixamParcelNumbers.length > 0 && (
+                    <div>
+                      <p className="text-sm text-gray-600">Parcel Numbers</p>
+                      <p className="font-mono text-sm">{(order as any).mixamParcelNumbers.join(', ')}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
-            {/* Mixam Validation Result (from webhook) */}
+            {/* Mixam Artwork Status (from webhook) */}
+            {((order as any).mixamArtworkComplete !== undefined || (order as any).mixamHasErrors !== undefined) && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <p className="text-sm font-medium text-gray-700 mb-2">Artwork Status</p>
+                <div className="flex gap-4">
+                  {(order as any).mixamArtworkComplete !== undefined && (
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${(order as any).mixamArtworkComplete ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                      {(order as any).mixamArtworkComplete ? '✓ Artwork Complete' : '⏳ Artwork Processing'}
+                    </span>
+                  )}
+                  {(order as any).mixamHasErrors && (
+                    <span className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
+                      ✗ Has Errors
+                    </span>
+                  )}
+                </div>
+                {(order as any).mixamStatusReason && (
+                  <p className="text-sm text-gray-600 mt-2">
+                    Reason: {(order as any).mixamStatusReason}
+                  </p>
+                )}
+              </div>
+            )}
+            {/* Mixam Artwork Errors (from webhook) */}
+            {(order as any).mixamArtworkErrors && (order as any).mixamArtworkErrors.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <p className="text-sm font-medium text-red-700 mb-2">Artwork Errors</p>
+                <div className="p-3 bg-red-50 border border-red-200 rounded">
+                  <ul className="space-y-2">
+                    {(order as any).mixamArtworkErrors.map((err: { itemId: string; filename: string; page: number; message: string }, i: number) => (
+                      <li key={i} className="text-sm text-red-700">
+                        <span className="font-medium">Page {err.page}</span>
+                        {err.filename && <span className="text-red-600"> ({err.filename})</span>}
+                        : {err.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+            {/* Mixam Validation Result (from webhook - legacy format) */}
             {(order as any).mixamValidation && (
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <p className="text-sm font-medium text-gray-700 mb-2">Mixam File Validation</p>
@@ -474,6 +526,24 @@ export default function PrintOrderDetailPage() {
                   </summary>
                   <pre className="mt-2 p-3 bg-gray-50 rounded text-xs overflow-auto max-h-48">
                     {JSON.stringify((order as any).mixamResponse, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            )}
+            {/* Last Webhook Payload (collapsible) */}
+            {(order as any).lastWebhookPayload && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <details className="cursor-pointer">
+                  <summary className="text-sm text-gray-600 hover:text-gray-900">
+                    View Last Webhook Payload
+                    {(order as any).lastWebhookAt && (
+                      <span className="ml-2 text-xs text-gray-400">
+                        ({formatDate((order as any).lastWebhookAt)})
+                      </span>
+                    )}
+                  </summary>
+                  <pre className="mt-2 p-3 bg-gray-50 rounded text-xs overflow-auto max-h-48">
+                    {JSON.stringify((order as any).lastWebhookPayload, null, 2)}
                   </pre>
                 </details>
               </div>

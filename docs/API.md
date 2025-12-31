@@ -1636,16 +1636,95 @@ Save user's shipping address.
 
 ### POST `/api/webhooks/mixam`
 
-Mixam webhook for order status updates.
+Mixam webhook for order status updates. Called by Mixam when order status changes.
 
-**Note**: This endpoint uses Mixam's webhook signature for authentication.
+**Authentication**: HMAC-SHA256 signature verification using `MIXAM_WEBHOOK_SECRET` (optional).
 
-**Request Body**: Mixam webhook payload
+**Request Headers**:
+- `X-Mixam-Signature` - HMAC-SHA256 signature (optional)
+
+**Request Body** (Mixam webhook payload):
+```json
+{
+  "orderId": "mixam-order-id",
+  "status": "PENDING|INPRODUCTION|DISPATCHED|ONHOLD|etc",
+  "statusReason": "Optional reason for status",
+  "metadata": {
+    "externalOrderId": "our-print-order-id",
+    "statusCallbackUrl": "webhook-url"
+  },
+  "items": [
+    {
+      "itemId": "item-id",
+      "metadata": { "externalItemId": "our-item-id" },
+      "errors": [
+        { "filename": "file.pdf", "page": 1, "message": "Error description" }
+      ],
+      "hasErrors": false
+    }
+  ],
+  "hasErrors": false,
+  "artworkComplete": true,
+  "shipments": [
+    {
+      "trackingUrl": "https://tracking.example.com/...",
+      "consignmentNumber": "TRACK123",
+      "courier": "Royal Mail",
+      "parcelNumbers": ["PKG001"],
+      "date": { "date": "2025-01-15", "timestamp": 1736899200 }
+    }
+  ]
+}
+```
 
 **Response**: `200 OK`
 ```json
 {
-  "received": true
+  "received": true,
+  "orderId": "our-print-order-id",
+  "status": "in_production"
+}
+```
+
+**Status Mapping**:
+| Mixam Status | Internal Status |
+|--------------|-----------------|
+| PENDING, RECEIVED | submitted |
+| CONFIRMED, ACCEPTED | confirmed |
+| INPRODUCTION, PRINTING | in_production |
+| DISPATCHED, SHIPPED | shipped |
+| DELIVERED | delivered |
+| CANCELLED, CANCELED | cancelled |
+| ONHOLD, ON_HOLD | on_hold |
+
+**Fields Updated on PrintOrder**:
+- `mixamStatus` - Raw Mixam status
+- `mixamArtworkComplete` - Whether artwork processing is complete
+- `mixamHasErrors` - Whether there are artwork errors
+- `mixamStatusReason` - Reason for current status
+- `mixamArtworkErrors` - Array of detailed artwork errors
+- `mixamTrackingUrl` - Shipment tracking URL
+- `mixamTrackingNumber` - Consignment number
+- `mixamCarrier` - Courier name
+- `mixamParcelNumbers` - Array of parcel numbers
+- `mixamShipmentDate` - Shipment date
+- `mixamShipments` - Full shipments array
+- `lastWebhookPayload` - Full webhook payload (for debugging)
+- `lastWebhookAt` - Timestamp of last webhook
+- `fulfillmentStatus` - Mapped internal status
+- `statusHistory` - Appended with new status entry
+
+### GET `/api/webhooks/mixam`
+
+Health check endpoint to verify webhook is accessible.
+
+**Response**: `200 OK`
+```json
+{
+  "service": "Mixam Webhook Handler",
+  "status": "ready",
+  "timestamp": "2025-01-15T12:00:00.000Z",
+  "endpoint": "/api/webhooks/mixam"
 }
 ```
 

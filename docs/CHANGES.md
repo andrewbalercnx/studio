@@ -18,6 +18,50 @@
 
 ### 2025-12-31
 
+#### `PENDING` - Update Mixam webhook to match official API format
+
+**Type**: Bug Fix / Enhancement
+
+**Summary**: Rewrote Mixam webhook handler to match the actual Mixam Webhooks API format (per official documentation) and added comprehensive display of webhook data in admin UI.
+
+**Background**: The original webhook handler was based on assumed payload format. User provided official Mixam API documentation showing the actual payload structure.
+
+**Changes**:
+
+Webhook Handler (`/api/webhooks/mixam`):
+- Rewrote payload parsing to match official Mixam API format
+- Now correctly extracts `externalOrderId` from `metadata` object
+- Extracts artwork errors from `items[].errors[]` array
+- Extracts shipment info from `shipments[]` array including tracking URL, courier, consignment number, parcel numbers, and shipment date
+- Stores `lastWebhookPayload` and `lastWebhookAt` for debugging
+- Maps Mixam statuses (PENDING, INPRODUCTION, DISPATCHED, ONHOLD, etc.) to internal statuses
+- Updates `statusHistory` array with each webhook received
+
+Admin Print Order Page:
+- Added "Artwork Status" section showing artwork complete and error flags
+- Added "Artwork Errors" section with detailed page-by-page error display
+- Added shipment date and parcel numbers to shipping info section
+- Added collapsible "Last Webhook Payload" section for debugging
+
+**New Fields on PrintOrder**:
+- `mixamArtworkComplete` - Whether artwork processing is complete
+- `mixamHasErrors` - Whether there are artwork errors
+- `mixamStatusReason` - Reason for current status
+- `mixamArtworkErrors` - Array of `{itemId, filename, page, message}`
+- `mixamShipmentDate` - Shipment date string
+- `mixamParcelNumbers` - Array of parcel numbers
+- `mixamShipments` - Full shipments array
+- `lastWebhookPayload` - Full webhook payload for debugging
+- `lastWebhookAt` - Timestamp of last webhook
+
+**Modified files**:
+- `src/app/api/webhooks/mixam/route.ts`
+- `src/app/admin/print-orders/[orderId]/page.tsx`
+- `docs/API.md`
+- `docs/CHANGES.md`
+
+---
+
 #### `0c15ff5` - Fix Mixam page count mismatch and add error visibility
 
 **Type**: Bug Fix

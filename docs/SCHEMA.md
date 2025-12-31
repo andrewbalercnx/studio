@@ -244,6 +244,19 @@ Print fulfillment orders.
 | `approvalStatus` | 'pending' \| 'approved' \| 'rejected' | Yes | Admin approval |
 | `mixamOrderId` | string | No | Mixam order ID |
 | `mixamJobNumber` | string | No | Mixam job number |
+| `mixamStatus` | string | No | Raw Mixam status from webhook |
+| `mixamArtworkComplete` | boolean | No | Whether artwork processing is complete |
+| `mixamHasErrors` | boolean | No | Whether there are artwork errors |
+| `mixamStatusReason` | string | No | Reason for current Mixam status |
+| `mixamArtworkErrors` | array | No | Detailed artwork errors [{itemId, filename, page, message}] |
+| `mixamTrackingUrl` | string | No | Shipment tracking URL |
+| `mixamTrackingNumber` | string | No | Consignment/tracking number |
+| `mixamCarrier` | string | No | Shipping carrier name |
+| `mixamParcelNumbers` | string[] | No | Array of parcel numbers |
+| `mixamShipmentDate` | string | No | Shipment date |
+| `mixamShipments` | array | No | Full shipments array from webhook |
+| `lastWebhookPayload` | object | No | Last webhook payload (for debugging) |
+| `lastWebhookAt` | timestamp | No | Timestamp of last webhook received |
 | `statusHistory` | array | Yes | Status change history |
 | `processLog` | array | No | Detailed event log |
 | `createdAt` | timestamp | Yes | Creation time |
