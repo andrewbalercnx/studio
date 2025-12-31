@@ -18,6 +18,26 @@
 
 ### 2025-12-31
 
+#### `e60390e` - Improve Output Types editor in admin dashboard
+
+**Type**: Enhancement
+
+**Summary**: Enhanced the Output Types inline editor in the admin dashboard to match the functionality of the dedicated `/admin/storyOutputs` page.
+
+**Changes**:
+- Added image upload capability with Upload button and hidden file input
+- Replaced plain text "Default Print Layout ID" input with a Select dropdown
+  that loads print layouts from Firestore
+- Fixed save issue where changes to `defaultPrintLayoutId` weren't persisting
+  (the field was only included in the payload when truthy, but merge updates
+  require explicit values to overwrite existing data)
+- Print layouts are now lazy-loaded when the edit dialog opens
+
+**Modified files**:
+- `src/app/admin/page.tsx` - Updated StoryOutputsPanel component
+
+---
+
 #### `0ce6ee6` - Add comprehensive database cleanup admin page
 
 **Type**: Feature
