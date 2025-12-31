@@ -76,11 +76,13 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
 
   const activeChildProfile = useMemo(() => {
     if (!user || !activeChildProfileRaw) return null;
-    if (activeChildProfileRaw.ownerParentUid !== user.uid) {
+    // Allow help-* demo profiles for wizard demonstrations (they have public access)
+    const isHelpProfile = activeChildId?.startsWith('help-');
+    if (!isHelpProfile && activeChildProfileRaw.ownerParentUid !== user.uid) {
       return null;
     }
     return activeChildProfileRaw;
-  }, [activeChildProfileRaw, user]);
+  }, [activeChildProfileRaw, user, activeChildId]);
 
   useEffect(() => {
     const storedChildId = typeof window !== 'undefined' ? localStorage.getItem('activeChildId') : null;

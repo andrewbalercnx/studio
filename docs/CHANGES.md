@@ -18,6 +18,22 @@
 
 ### 2025-12-30
 
+#### `pending` - Fix help-child profile access for wizard demos
+
+**Type**: Bug Fix
+
+**Summary**: Help wizard demo profiles (`help-*` IDs) were blocked by client-side ownership verification.
+
+**Changes**:
+- Added exception in `useAppContext` to allow `help-*` prefixed child profiles
+- These demo profiles have public Firestore access via security rules
+- Now users can navigate to `/child/help-child` during help wizard tours
+
+**Modified files**:
+- `src/hooks/use-app-context.tsx`
+
+---
+
 #### `pending` - Add writer and admin help wizard guides
 
 **Type**: Feature
