@@ -1410,6 +1410,7 @@ export type DiagnosticsConfig = {
   enableServerLogging: boolean;      // Detailed server logs
   enableAIFlowLogging: boolean;      // AI flow detailed logging
   showApiDocumentation: boolean;     // Expose API docs at /api-documentation
+  enableMixamWebhookLogging: boolean; // Debug logging for Mixam webhooks
   updatedAt?: any;
   updatedBy?: string;
 };
@@ -1421,6 +1422,7 @@ export const DEFAULT_DIAGNOSTICS_CONFIG: DiagnosticsConfig = {
   enableServerLogging: true,
   enableAIFlowLogging: true,
   showApiDocumentation: false,
+  enableMixamWebhookLogging: true, // Default on while testing
 };
 
 // Global prompt configuration - prepended to all AI prompts

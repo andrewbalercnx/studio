@@ -74,6 +74,7 @@ export default function AdminDashboardPage() {
     enableServerLogging,
     enableAIFlowLogging,
     showApiDocumentation,
+    enableMixamWebhookLogging,
   } = useDiagnostics();
 
   const diagnostics = {
@@ -453,6 +454,19 @@ export default function AdminDashboardPage() {
                     id="showApiDocumentation"
                     checked={showApiDocumentation}
                     onCheckedChange={(checked) => updateConfig({ showApiDocumentation: checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="enableMixamWebhookLogging">Mixam Webhook Logging</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Enable debug logging for Mixam webhook order lookups
+                    </p>
+                  </div>
+                  <Switch
+                    id="enableMixamWebhookLogging"
+                    checked={enableMixamWebhookLogging}
+                    onCheckedChange={(checked) => updateConfig({ enableMixamWebhookLogging: checked })}
                   />
                 </div>
               </div>

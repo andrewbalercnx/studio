@@ -1,7 +1,20 @@
 import { NextResponse } from 'next/server';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import type { PrintOrder } from '@/lib/types';
+import type { PrintOrder, DiagnosticsConfig } from '@/lib/types';
+import { DEFAULT_DIAGNOSTICS_CONFIG } from '@/lib/types';
+
+// Helper to check if debug logging is enabled
+async function isDebugLoggingEnabled(firestore: FirebaseFirestore.Firestore): Promise<boolean> {
+  try {
+    const configDoc = await firestore.doc('systemConfig/diagnostics').get();
+    if (!configDoc.exists) return DEFAULT_DIAGNOSTICS_CONFIG.enableMixamWebhookLogging;
+    const config = configDoc.data() as DiagnosticsConfig;
+    return config.enableMixamWebhookLogging ?? DEFAULT_DIAGNOSTICS_CONFIG.enableMixamWebhookLogging;
+  } catch {
+    return DEFAULT_DIAGNOSTICS_CONFIG.enableMixamWebhookLogging;
+  }
+}
 
 /**
  * Mixam Webhook Handler
@@ -138,11 +151,17 @@ function verifyWebhookSignature(
 export async function POST(request: Request) {
   try {
     await initFirebaseAdminApp();
+    const firestore = getFirestore();
+
+    // Check if debug logging is enabled
+    const debugLogging = await isDebugLoggingEnabled(firestore);
 
     // 1. Read raw body for signature verification
     const rawBody = await request.text();
 
-    console.log('[Mixam Webhook] Received webhook payload:', rawBody.substring(0, 500));
+    if (debugLogging) {
+      console.log('[Mixam Webhook] Received webhook payload:', rawBody.substring(0, 500));
+    }
 
     // 2. Verify webhook signature (if configured)
     const signature = request.headers.get('X-Mixam-Signature');
@@ -159,12 +178,15 @@ export async function POST(request: Request) {
     // 3. Parse webhook payload
     const webhook: MixamWebhookPayload = JSON.parse(rawBody);
 
+    // Always log basic info
     console.log(`[Mixam Webhook] Order ${webhook.orderId} status: ${webhook.status}`);
-    console.log(`[Mixam Webhook] External Order ID: ${webhook.metadata?.externalOrderId}`);
-    console.log(`[Mixam Webhook] Has errors: ${webhook.hasErrors}, Artwork complete: ${webhook.artworkComplete}`);
+
+    if (debugLogging) {
+      console.log(`[Mixam Webhook] External Order ID: ${webhook.metadata?.externalOrderId}`);
+      console.log(`[Mixam Webhook] Has errors: ${webhook.hasErrors}, Artwork complete: ${webhook.artworkComplete}`);
+    }
 
     // 4. Find the print order by our external order ID
-    const firestore = getFirestore();
     const ourOrderId = webhook.metadata?.externalOrderId;
 
     if (!ourOrderId) {
@@ -172,22 +194,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true, error: 'Missing externalOrderId' });
     }
 
-    console.log(`[Mixam Webhook] Looking up order: ${ourOrderId}`);
-    console.log(`[Mixam Webhook] Firestore project: ${(firestore as any)._settings?.projectId || 'unknown'}`);
+    if (debugLogging) {
+      console.log(`[Mixam Webhook] Looking up order: ${ourOrderId}`);
+      console.log(`[Mixam Webhook] Firestore project: ${(firestore as any)._settings?.projectId || 'unknown'}`);
+    }
 
     const orderDoc = await firestore.collection('printOrders').doc(ourOrderId).get();
-    console.log(`[Mixam Webhook] Order exists: ${orderDoc.exists}`);
+
+    if (debugLogging) {
+      console.log(`[Mixam Webhook] Order exists: ${orderDoc.exists}`);
+    }
 
     if (!orderDoc.exists) {
-      // Try listing a few orders to verify collection access
-      try {
-        const testQuery = await firestore.collection('printOrders').limit(1).get();
-        console.log(`[Mixam Webhook] Test query found ${testQuery.size} orders`);
-        if (testQuery.size > 0) {
-          console.log(`[Mixam Webhook] Sample order ID: ${testQuery.docs[0].id}`);
+      // Try listing a few orders to verify collection access (only if debug logging enabled)
+      if (debugLogging) {
+        try {
+          const testQuery = await firestore.collection('printOrders').limit(1).get();
+          console.log(`[Mixam Webhook] Test query found ${testQuery.size} orders`);
+          if (testQuery.size > 0) {
+            console.log(`[Mixam Webhook] Sample order ID: ${testQuery.docs[0].id}`);
+          }
+        } catch (e: any) {
+          console.error(`[Mixam Webhook] Test query failed: ${e.message}`);
         }
-      } catch (e: any) {
-        console.error(`[Mixam Webhook] Test query failed: ${e.message}`);
       }
 
       console.error(`[Mixam Webhook] Order not found: ${ourOrderId}`);
@@ -323,7 +352,9 @@ export async function POST(request: Request) {
     }
 
     console.log(`[Mixam Webhook] Successfully processed webhook for order ${ourOrderId}`);
-    console.log(`[Mixam Webhook] Status: ${newStatus}, Has errors: ${webhook.hasErrors}`);
+    if (debugLogging) {
+      console.log(`[Mixam Webhook] Status: ${newStatus}, Has errors: ${webhook.hasErrors}`);
+    }
 
     return NextResponse.json({
       received: true,
