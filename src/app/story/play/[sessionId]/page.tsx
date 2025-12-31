@@ -906,8 +906,8 @@ export default function StoryPlayPage() {
 
     return (
         <div className="min-h-screen bg-background text-foreground flex flex-col items-center p-4">
-            {/* Speech mode toggle - floating button positioned below the main header */}
-            <div className="fixed top-16 right-4 z-40 flex items-center gap-2">
+            {/* Speech mode toggle - positioned within header height, left of the user menu */}
+            <div className="fixed top-3 right-16 z-40 flex items-center gap-2">
                 {childProfile && (
                     <SpeechModeToggle childProfile={childProfile} />
                 )}

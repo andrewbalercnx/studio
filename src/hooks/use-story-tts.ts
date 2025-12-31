@@ -52,6 +52,10 @@ export function useStoryTTS(options: UseStoryTTSOptions): UseStoryTTSReturn {
   // Track content that has been spoken to avoid repeating
   const lastSpokenContentRef = useRef<string>('');
 
+  // Store stop function in ref to avoid effect dependency issues
+  const stopRef = useRef(tts.stop);
+  stopRef.current = tts.stop;
+
   /**
    * Build the full text to speak from story content.
    * Format: "[headerText]. [questionText]. Option A: [text]. Option B: [text]..."
@@ -131,12 +135,12 @@ export function useStoryTTS(options: UseStoryTTSOptions): UseStoryTTSReturn {
   // Stop speech when component unmounts or speech mode is disabled
   useEffect(() => {
     if (!isSpeechModeEnabled) {
-      tts.stop();
+      stopRef.current();
     }
     return () => {
-      tts.stop();
+      stopRef.current();
     };
-  }, [isSpeechModeEnabled, tts]);
+  }, [isSpeechModeEnabled]);
 
   return {
     isSpeechModeEnabled,
