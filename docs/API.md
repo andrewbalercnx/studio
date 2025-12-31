@@ -1135,6 +1135,34 @@ Reset order status.
 
 ---
 
+### POST `/api/admin/print-orders/[orderId]/cancel`
+
+Cancel an order. If already submitted to Mixam, will attempt to cancel with them (only works if not in production).
+
+**Request Body** (optional):
+```json
+{
+  "reason": "Cancellation reason"
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "orderId": "...",
+  "mixamCancelled": true
+}
+```
+
+**Error Responses**:
+- `400 Bad Request` - Order cannot be cancelled from current status
+- `403 Forbidden` - Admin access required
+- `404 Not Found` - Order not found
+- `409 Conflict` - Order already in production with Mixam
+
+---
+
 ### POST `/api/admin/print-orders/[orderId]/refresh-status`
 
 Refresh order status from Mixam.

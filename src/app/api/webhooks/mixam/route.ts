@@ -3,6 +3,7 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import type { PrintOrder, DiagnosticsConfig } from '@/lib/types';
 import { DEFAULT_DIAGNOSTICS_CONFIG } from '@/lib/types';
+import { notifyOrderStatusChanged } from '@/lib/email/notify-admins';
 
 // Helper to check if debug logging is enabled
 async function isDebugLoggingEnabled(firestore: FirebaseFirestore.Firestore): Promise<boolean> {
@@ -354,6 +355,22 @@ export async function POST(request: Request) {
     console.log(`[Mixam Webhook] Successfully processed webhook for order ${ourOrderId}`);
     if (debugLogging) {
       console.log(`[Mixam Webhook] Status: ${newStatus}, Has errors: ${webhook.hasErrors}`);
+    }
+
+    // 9. Send email notification to admins if status changed
+    if (order.fulfillmentStatus !== newStatus) {
+      try {
+        const updatedOrder = { ...order, id: order.id, fulfillmentStatus: newStatus } as PrintOrder;
+        await notifyOrderStatusChanged(
+          firestore,
+          updatedOrder,
+          order.fulfillmentStatus,
+          newStatus
+        );
+      } catch (emailError: any) {
+        console.warn('[Mixam Webhook] Failed to send status change notification:', emailError.message);
+        // Don't fail the webhook due to email errors
+      }
     }
 
     return NextResponse.json({

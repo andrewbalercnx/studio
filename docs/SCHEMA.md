@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2025-12-31 (added PrintableAssetMetadata fields for padding pages)
+> **Last Updated**: 2025-12-31 (added notifiedUser field, PrintOrder cancellation fields)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -31,6 +31,7 @@ User profiles with authentication and role information.
 | `savedShippingAddress` | PrintOrderAddress | No | Default shipping address |
 | `canShowWizardTargets` | boolean | No | Allow wizard target overlays |
 | `hasCompletedStartupWizard` | boolean | No | True after user has seen default startup wizard |
+| `notifiedUser` | boolean | No | Receives admin notifications for print orders |
 
 **Subcollections**:
 - `voices/{voiceId}` - Parent's cloned voices for TTS (see `ParentVoice` type)
@@ -261,6 +262,9 @@ Print fulfillment orders.
 | `processLog` | array | No | Detailed event log |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
+| `cancelledAt` | timestamp | No | Cancellation timestamp |
+| `cancellationReason` | string | No | Reason for cancellation |
+| `cancelledBy` | string | No | Admin UID who cancelled |
 
 **Security**: Parents can read their own orders; admins have full CRUD.
 

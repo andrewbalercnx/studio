@@ -61,6 +61,7 @@ export type UserProfile = {
   savedShippingAddress?: PrintOrderAddress;
   canShowWizardTargets?: boolean; // Allow this user to toggle wizard target overlays
   hasCompletedStartupWizard?: boolean; // True once user has seen the default startup wizard
+  notifiedUser?: boolean; // Receives admin notifications for print orders
 };
 
 // Parent's cloned voice for TTS (stored in Firestore: users/{parentUid}/voices/{voiceId})
@@ -878,6 +879,11 @@ export type PrintOrder = {
   fulfillmentNotes?: string | null;
   regressionTag?: string | null;
   regressionTest?: boolean;
+
+  // Cancellation tracking
+  cancelledAt?: any;
+  cancellationReason?: string;
+  cancelledBy?: string; // Admin user ID who cancelled
 };
 
 export type ArtStyle = {

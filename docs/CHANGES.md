@@ -18,6 +18,66 @@
 
 ### 2025-12-31
 
+#### `PENDING` - Print Order Management: Cancel, Notifications, Email
+
+**Type**: Feature
+
+**Summary**: Added three new features for print order management: cancel order functionality with Mixam, admin notification recipients configuration, and email notifications via Nodemailer/Gmail.
+
+**Features**:
+
+1. **Cancel Order with Mixam**
+   - Admin can cancel orders from the print order detail page
+   - Cancellation reason is required and stored
+   - Calls Mixam API to cancel order (PUT /api/public/orders/{orderId}/status with "CANCELED")
+   - Only available for orders not yet in production
+   - Sends email notification to marked admins
+
+2. **Admin Notification Recipients**
+   - Users can be marked as "notified users" in admin user management
+   - Toggle button with bell icon on each user row
+   - Notified users receive email alerts for print order events
+
+3. **Email Notifications**
+   - Uses Nodemailer with Gmail SMTP
+   - Sends emails on: order submission, approval, rejection, cancellation, and Mixam status changes
+   - Graceful handling when credentials not configured
+   - Professional HTML email templates with links to admin
+
+**New Fields**:
+- `UserProfile.notifiedUser` - Boolean flag for notification recipients
+- `PrintOrder.cancelledAt` - Timestamp of cancellation
+- `PrintOrder.cancellationReason` - Reason for cancellation
+- `PrintOrder.cancelledBy` - Admin user ID who cancelled
+
+**New Files**:
+- `src/lib/email/send-email.ts` - Core email utility
+- `src/lib/email/templates.ts` - HTML email templates
+- `src/lib/email/get-notified-users.ts` - Query notified users
+- `src/lib/email/notify-admins.ts` - Notification dispatcher functions
+- `src/app/api/admin/print-orders/[orderId]/cancel/route.ts` - Cancel API endpoint
+
+**Modified Files**:
+- `src/lib/types.ts` - Added notifiedUser and cancellation fields
+- `src/lib/mixam/client.ts` - Added cancelOrder method
+- `src/app/admin/print-orders/[orderId]/page.tsx` - Added cancel button and dialog
+- `src/app/admin/users/page.tsx` - Added notify toggle
+- `src/app/api/webhooks/mixam/route.ts` - Added email notification
+- `src/app/api/admin/print-orders/[orderId]/approve/route.ts` - Added email notification
+- `src/app/api/admin/print-orders/[orderId]/reject/route.ts` - Added email notification
+- `src/app/api/printOrders/mixam/route.ts` - Added email notification
+- `apphosting.yaml` - Added GMAIL_USER and GMAIL_APP_PASSWORD secrets
+- `docs/SCHEMA.md` - Documented new fields
+- `docs/API.md` - Documented cancel endpoint
+
+**Setup Required**:
+1. Create secrets in Google Cloud Secret Manager:
+   - `GMAIL_USER` - Gmail address for sending
+   - `GMAIL_APP_PASSWORD` - Gmail app password (not regular password)
+2. Grant access: `firebase apphosting:secrets:grantaccess`
+
+---
+
 #### `84436db` - Update Mixam webhook to match official API format
 
 **Type**: Bug Fix / Enhancement

@@ -3,6 +3,7 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import type { PrintOrder } from '@/lib/types';
+import { notifyOrderApproved } from '@/lib/email/notify-admins';
 
 /**
  * POST /api/admin/print-orders/[orderId]/approve
@@ -72,7 +73,14 @@ export async function POST(
 
     console.log(`[print-orders] Order ${orderId} approved by ${user.uid}`);
 
-    // TODO: Send email notification to parent
+    // Send email notification to notified admins
+    try {
+      const updatedOrder = { ...order, id: orderId } as PrintOrder;
+      await notifyOrderApproved(firestore, updatedOrder);
+    } catch (emailError: any) {
+      console.warn('[print-orders] Failed to send approval notification:', emailError.message);
+      // Don't fail the request due to email errors
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error: any) {

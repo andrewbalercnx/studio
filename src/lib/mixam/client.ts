@@ -409,6 +409,62 @@ class MixamAPIClient {
   }
 
   /**
+   * Cancels an order with Mixam
+   * MOCK MODE: Returns success immediately
+   *
+   * Note: Orders can only be cancelled if they are not already in production.
+   * Uses PUT /api/public/orders/{orderId}/status with body "CANCELED"
+   */
+  async cancelOrder(orderId: string): Promise<MixamOrderResponse> {
+    if (MIXAM_MOCK_MODE) {
+      return this.mockCancelOrder(orderId);
+    }
+
+    const token = await this.authenticate();
+    const url = `${MIXAM_API_BASE_URL}/api/public/orders/${orderId}/status`;
+
+    console.log(`[Mixam] Cancelling order ${orderId} via: ${url}`);
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify('CANCELED'),
+      });
+    } catch (fetchError: any) {
+      console.error(`[Mixam] Network error calling ${url}:`, fetchError);
+      throw new Error(`Network error calling Mixam API (${url}): ${fetchError.message || fetchError}`);
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      console.error(`[Mixam] Cancel order error ${response.status}:`, errorData);
+
+      if (response.status === 409) {
+        throw new Error('Order cannot be cancelled - already in production');
+      }
+      if (response.status === 404) {
+        throw new Error(`Order not found: ${orderId}`);
+      }
+
+      throw new Error(`Failed to cancel order: ${errorData.error || response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log('[Mixam] Cancel order response:', data);
+
+    return {
+      orderId: data.orderId || orderId,
+      jobNumber: data.orderNumber ? String(data.orderNumber) : '',
+      status: data.status || 'CANCELED',
+    };
+  }
+
+  /**
    * Gets a price quote for a given specification
    * MOCK MODE: Returns estimate based on quantity
    */
@@ -597,6 +653,15 @@ class MixamAPIClient {
       orderId: mockOrderId,
       jobNumber: mockJobNumber,
       status: 'submitted',
+    };
+  }
+
+  private mockCancelOrder(orderId: string): MixamOrderResponse {
+    console.log(`[MIXAM MOCK] Cancelling order: ${orderId}`);
+    return {
+      orderId,
+      jobNumber: '',
+      status: 'CANCELED',
     };
   }
 

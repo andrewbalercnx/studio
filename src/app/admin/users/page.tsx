@@ -3,7 +3,7 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, Shield, ShieldOff, BrainCircuit, Pencil, User as UserIcon, RefreshCw, Target } from 'lucide-react';
+import { LoaderCircle, Shield, ShieldOff, BrainCircuit, Pencil, User as UserIcon, RefreshCw, Target, Bell, BellOff } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFirestore, useAuth } from '@/firebase';
@@ -137,6 +137,22 @@ export default function AdminUsersPage() {
     }
   };
 
+  const toggleNotifiedUser = async (user: UserProfile) => {
+    if (!firestore) return;
+    const userRef = doc(firestore, 'users', user.id);
+    const newValue = !user.notifiedUser;
+    try {
+      await updateDoc(userRef, { notifiedUser: newValue });
+      toast({
+        title: 'Success',
+        description: `${user.email} will ${newValue ? 'now receive' : 'no longer receive'} print order notifications.`
+      });
+    } catch (e: any) {
+      console.error('Error updating notification setting:', e);
+      toast({ title: 'Error updating notification setting', description: e.message, variant: 'destructive' });
+    }
+  };
+
   const renderUsersTable = () => (
     <Table>
       <TableHeader>
@@ -183,6 +199,15 @@ export default function AdminUsersPage() {
               >
                 <Target className="mr-1 h-4 w-4" />
                 {user.canShowWizardTargets ? 'Wizard Targets On' : 'Wizard Targets Off'}
+              </Button>
+              <Button
+                variant={user.notifiedUser ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => toggleNotifiedUser(user)}
+                title={user.notifiedUser ? 'Receiving print order notifications' : 'Not receiving notifications'}
+              >
+                {user.notifiedUser ? <Bell className="mr-1 h-4 w-4" /> : <BellOff className="mr-1 h-4 w-4" />}
+                {user.notifiedUser ? 'Notify On' : 'Notify Off'}
               </Button>
             </TableCell>
           </TableRow>

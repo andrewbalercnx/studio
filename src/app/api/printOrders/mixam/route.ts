@@ -4,6 +4,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import type { PrintOrder, PrintProduct, PrintStoryBook } from '@/lib/types';
 import { validateUKAddress } from '@/lib/mixam/address-validator';
+import { notifyOrderSubmitted } from '@/lib/email/notify-admins';
 
 /**
  * POST /api/printOrders/mixam
@@ -308,6 +309,15 @@ export async function POST(request: NextRequest) {
     );
 
     console.log(`[printOrders/mixam] Order created: ${orderRef.id} for user ${user.uid}`);
+
+    // Send email notification to notified admins
+    try {
+      const newOrder = { ...cleanOrderData, id: orderRef.id } as PrintOrder;
+      await notifyOrderSubmitted(firestore, newOrder);
+    } catch (emailError: any) {
+      console.warn('[printOrders/mixam] Failed to send order notification:', emailError.message);
+      // Don't fail the request due to email errors
+    }
 
     return NextResponse.json({
       ok: true,
