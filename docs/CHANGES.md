@@ -18,6 +18,33 @@
 
 ### 2025-12-31
 
+#### `4878e0d` - Add concurrency limit for ElevenLabs TTS requests
+
+**Type**: Bug Fix
+
+**Summary**: Fixed "too_many_concurrent_requests" error from ElevenLabs by limiting concurrent TTS requests to 3 (their limit is 5, we leave headroom for on-demand requests).
+
+**Changes**:
+- Replaced `Promise.all` with a concurrency-limited pool in `story-page-audio-flow.ts`
+- Added `MAX_CONCURRENT_TTS = 3` constant
+- Pages now process 3 at a time instead of all at once
+
+**Files Modified**:
+- `src/ai/flows/story-page-audio-flow.ts`
+
+---
+
+#### `f928846` - Fix 404 error for missing logo.svg
+
+**Type**: Bug Fix
+
+**Summary**: Replaced references to non-existent `/logo.svg` with existing `/icons/magical-book.svg`.
+
+**Files Modified**:
+- `src/app/story/play/[sessionId]/page.tsx`
+
+---
+
 #### `f7e7130` - Add fallback to draft story text when AI compilation fails
 
 **Type**: Bug Fix / Resilience
