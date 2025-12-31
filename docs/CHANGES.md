@@ -18,6 +18,22 @@
 
 ### 2025-12-31
 
+#### `f0f9718` - Simplify storybook viewer for parents
+
+**Type**: UI Improvement
+
+**Summary**: Removed technical clutter from the parent-facing storybook viewer.
+
+**Changes**:
+- Removed Book ID from header (not useful for parents)
+- Removed image prompt display on each page
+- "View Story Text" now links to the resolved story reader (`/child/{childId}/story/{storyId}/read`) instead of the legacy compiled page which was showing unresolved placeholders
+
+**Modified files**:
+- `src/app/storybook/[bookId]/page.tsx`
+
+---
+
 #### `d195644` - Fix "Images Still Generating" false positive on read page
 
 **Type**: Bug Fix
