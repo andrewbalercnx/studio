@@ -289,20 +289,35 @@ Now, generate the JSON object containing the polished story and synopsis.`;
 
                         const rawText = llmResponse.text;
                         if (!rawText || rawText.trim() === '') {
-                            throw new Error("Model returned empty text on retry for story text compilation.");
-                        }
-
-                        debug.stage = 'json_parse';
-                        const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
-                        const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
-                        const parsed = JSON.parse(jsonToParse);
-                        const manualValidation = StoryTextCompileResultSchema.safeParse(parsed);
-                        if (manualValidation.success) {
-                            structuredOutput = manualValidation.data;
+                            // Fallback: use the draft story text as-is since AI compilation failed
+                            console.warn(`[storyTextCompileFlow] Model returned empty text on retry, falling back to draft story text`);
+                            debug.details.fallbackToDraft = true;
+                            structuredOutput = {
+                                storyText: draftStoryText,
+                                synopsis: 'A magical adventure story.',
+                            };
                         } else {
-                            throw new Error(`Model JSON does not match expected shape on retry: ${manualValidation.error.message}`);
+                            debug.stage = 'json_parse';
+                            const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
+                            const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
+                            const parsed = JSON.parse(jsonToParse);
+                            const manualValidation = StoryTextCompileResultSchema.safeParse(parsed);
+                            if (manualValidation.success) {
+                                structuredOutput = manualValidation.data;
+                            } else {
+                                // Fallback on parse failure too
+                                console.warn(`[storyTextCompileFlow] JSON parse failed on retry, falling back to draft story text: ${manualValidation.error.message}`);
+                                debug.details.fallbackToDraft = true;
+                                debug.details.parseError = manualValidation.error.message;
+                                structuredOutput = {
+                                    storyText: draftStoryText,
+                                    synopsis: 'A magical adventure story.',
+                                };
+                            }
                         }
                     } catch (retryErr: any) {
+                        // On any retry error, fall back to draft story text
+                        console.warn(`[storyTextCompileFlow] Retry failed, falling back to draft story text: ${retryErr.message}`);
                         await logAIFlow({ flowName: 'storyTextCompileFlow:retry', sessionId, parentId: parentUid, prompt: systemPrompt, error: retryErr, startTime, modelName });
                         await logAICallToTrace({
                             sessionId,
@@ -314,7 +329,12 @@ Now, generate the JSON object containing the polished story and synopsis.`;
                             error: retryErr,
                             startTime,
                         });
-                        throw retryErr;
+                        debug.details.fallbackToDraft = true;
+                        debug.details.retryError = retryErr.message;
+                        structuredOutput = {
+                            storyText: draftStoryText,
+                            synopsis: 'A magical adventure story.',
+                        };
                     }
                 } else {
                     await logAIFlow({ flowName: 'storyTextCompileFlow', sessionId, parentId: parentUid, prompt: systemPrompt, error: e, startTime, modelName });
