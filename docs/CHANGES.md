@@ -18,6 +18,26 @@
 
 ### 2025-12-31
 
+#### `46d4080` - Fix help wizard click actions for demo data
+
+**Type**: Bug Fix
+
+**Summary**: The help wizard click actions were not working because the help-* demo documents (help-child, help-character) were not appearing in the parent pages.
+
+**Root Cause**: The children and characters pages query by `ownerParentUid`, which excludes the public demo data that has no owner.
+
+**Changes**:
+- Added help-child fetch to /parent/children page
+- Added help-character fetch to /parent/characters page
+- Added debug logging to help-wizard click action handling
+
+**Modified files**:
+- `src/app/parent/children/page.tsx`
+- `src/app/parent/characters/page.tsx`
+- `src/components/help-wizard.tsx`
+
+---
+
 #### `b20ffc4` - Add configurable pagination prompt to admin
 
 **Type**: Feature
