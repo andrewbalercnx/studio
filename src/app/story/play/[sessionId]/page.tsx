@@ -821,6 +821,8 @@ export default function StoryPlayPage() {
     // TTS: Speak story content when new messages arrive and speech mode is enabled
     useEffect(() => {
         const allMessages = recentMessages?.map(m => ({ sender: m.sender, kind: m.kind })) || [];
+        const latestAssistant = recentMessages?.find(m => m.sender === 'assistant');
+
         console.log('[StoryPlayPage TTS] Effect triggered:', {
             isSpeechModeEnabled,
             isProcessing,
@@ -829,7 +831,8 @@ export default function StoryPlayPage() {
             autoReadAloud: childProfile?.autoReadAloud,
             messagesCount: recentMessages?.length || 0,
             allMessages,
-            latestMessageKind: recentMessages?.find(m => m.sender === 'assistant')?.kind,
+            latestAssistantKind: latestAssistant?.kind,
+            latestAssistantId: latestAssistant?.id,
         });
 
         if (!isSpeechModeEnabled || isProcessing) {
@@ -837,7 +840,6 @@ export default function StoryPlayPage() {
             return;
         }
 
-        const latestAssistant = recentMessages?.find(m => m.sender === 'assistant');
         if (!latestAssistant) {
             console.log('[StoryPlayPage TTS] No assistant message found in recentMessages');
             return;
@@ -884,7 +886,7 @@ export default function StoryPlayPage() {
             optionsCount: options?.length,
         });
         speakStoryContent({ headerText, questionText, options });
-    }, [recentMessages, isSpeechModeEnabled, isProcessing, speakStoryContent]);
+    }, [recentMessages, isSpeechModeEnabled, isProcessing, speakStoryContent, childProfile]);
 
     if (userLoading || sessionLoading) {
         return <div className="h-screen w-screen flex items-center justify-center bg-background"><LoaderCircle className="h-12 w-12 animate-spin text-primary" /></div>;
