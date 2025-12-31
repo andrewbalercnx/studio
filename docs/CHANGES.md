@@ -18,6 +18,27 @@
 
 ### 2025-12-31
 
+#### `pending` - Restore pagination test admin page
+
+**Type**: Feature Restoration
+
+**Summary**: Restored the `/admin/paginationTest` page for testing AI-driven story pagination flows.
+
+**Changes**:
+- Created `/admin/paginationTest` page with story and output type selectors
+- Created `/api/storyPagination` API route to expose `storyPaginationFlow` for testing
+- Displays paginated pages with entity IDs and image descriptions
+- Includes diagnostics panel for debugging
+
+**New files**:
+- `src/app/admin/paginationTest/page.tsx`
+- `src/app/api/storyPagination/route.ts`
+
+**Modified files**:
+- `docs/API.md` - Added `/api/storyPagination` documentation
+
+---
+
 #### `f0f9718` - Simplify storybook viewer for parents
 
 **Type**: UI Improvement

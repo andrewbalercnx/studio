@@ -316,6 +316,49 @@ Compile story session into final story text.
 
 ---
 
+### POST `/api/storyPagination`
+
+Paginate a compiled story into pages using AI-driven pagination.
+
+**Request Body**:
+```json
+{
+  "storyId": "story-id",
+  "storyOutputTypeId": "output-type-id"
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "storyId": "story-id",
+  "pages": [
+    {
+      "pageNumber": 1,
+      "bodyText": "Once upon a time...",
+      "entityIds": ["child-id", "character-id"],
+      "imageDescription": "A child standing in a magical forest..."
+    }
+  ],
+  "stats": {
+    "pageCount": 12,
+    "targetPageCount": 12
+  },
+  "debug": {
+    "stage": "done",
+    "details": {}
+  }
+}
+```
+
+**Notes**:
+- Uses AI to split story text into pages based on the output type's pagination prompt
+- Falls back to sentence-based chunking if AI pagination fails
+- Returns `entityIds` (actor IDs) and `imageDescription` for each page
+
+---
+
 ### POST `/api/gemini3`
 
 Generate story using Gemini 3 flow.
