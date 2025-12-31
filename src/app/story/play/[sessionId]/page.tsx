@@ -820,7 +820,19 @@ export default function StoryPlayPage() {
 
     // TTS: Speak story content when new messages arrive and speech mode is enabled
     useEffect(() => {
-        if (!isSpeechModeEnabled || isProcessing) return;
+        console.log('[StoryPlayPage TTS] Effect triggered:', {
+            isSpeechModeEnabled,
+            isProcessing,
+            hasChildProfile: !!childProfile,
+            preferredVoiceId: childProfile?.preferredVoiceId,
+            autoReadAloud: childProfile?.autoReadAloud,
+            latestMessageKind: recentMessages?.find(m => m.sender === 'assistant')?.kind,
+        });
+
+        if (!isSpeechModeEnabled || isProcessing) {
+            console.log('[StoryPlayPage TTS] Skipping - speechMode:', isSpeechModeEnabled, 'processing:', isProcessing);
+            return;
+        }
 
         const latestAssistant = recentMessages?.find(m => m.sender === 'assistant');
         if (!latestAssistant) return;
