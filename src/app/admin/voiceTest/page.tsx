@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { useAdminStatus } from '@/hooks/use-admin-status';
+import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Copy, LoaderCircle, Play, Volume2 } from 'lucide-react';
+import { Copy, LoaderCircle, Play } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +32,7 @@ type VoiceListResponse = {
 
 export default function AdminVoiceTestPage() {
     const { isAuthenticated, isAdmin, isWriter, loading: authLoading } = useAdminStatus();
+    const { user } = useUser();
     const { toast } = useToast();
 
     const [searchTerm, setSearchTerm] = useState('british');
@@ -41,16 +43,26 @@ export default function AdminVoiceTestPage() {
     const [lastError, setLastError] = useState<string | null>(null);
 
     const handleSearch = async () => {
+        if (!user) {
+            toast({ title: 'Error', description: 'Please sign in', variant: 'destructive' });
+            return;
+        }
+
         setLoading(true);
         setLastError(null);
         setVoices([]);
 
         try {
+            const token = await user.getIdToken();
             const params = new URLSearchParams({
                 search: searchTerm,
                 category,
             });
-            const response = await fetch(`/api/voices/list?${params}`);
+            const response = await fetch(`/api/voices/list?${params}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
             const result: VoiceListResponse = await response.json();
 
             if (!response.ok || !result.ok) {
@@ -70,12 +82,21 @@ export default function AdminVoiceTestPage() {
     };
 
     const handlePreview = async (voiceId: string) => {
+        if (!user) {
+            toast({ title: 'Error', description: 'Please sign in', variant: 'destructive' });
+            return;
+        }
+
         setPreviewLoading(voiceId);
 
         try {
+            const token = await user.getIdToken();
             const response = await fetch('/api/voices/preview', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
                 body: JSON.stringify({ voiceName: voiceId }),
             });
 
