@@ -18,7 +18,7 @@
 
 ### 2025-12-31
 
-#### `PENDING` - Print Order Management: Cancel, Notifications, Email
+#### `4286dd7` - Print Order Management: Cancel, Notifications, Email
 
 **Type**: Feature
 
