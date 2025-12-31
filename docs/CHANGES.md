@@ -18,6 +18,23 @@
 
 ### 2025-12-31
 
+#### `bb407a9` - Prepend output type pagination prompt to global prompt
+
+**Type**: Bug Fix
+
+**Summary**: The output type's `paginationPrompt` was completely replacing the global pagination prompt instead of being combined with it.
+
+**Problem**: When a storyOutputType had a paginationPrompt (e.g., "preserve rhyming structure"), it would replace the entire base pagination instructions, losing important guidance about page structure, actor tracking, and image descriptions.
+
+**Fix**: Now the output type's pagination prompt is **prepended** as type-specific guidance, while the global pagination prompt is always included:
+1. Output type's paginationPrompt (if set) - prepended as "OUTPUT TYPE SPECIFIC INSTRUCTIONS"
+2. Global pagination prompt (from system config or default) - always included as "GENERAL PAGINATION INSTRUCTIONS"
+
+**Modified files**:
+- `src/ai/flows/story-pagination-flow.ts`
+
+---
+
 #### `46d4080` - Fix help wizard click actions for demo data
 
 **Type**: Bug Fix
