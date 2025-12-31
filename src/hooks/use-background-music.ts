@@ -84,13 +84,16 @@ export function useBackgroundMusic(options: UseBackgroundMusicOptions): UseBackg
     }
 
     // Create audio element
+    // Note: We don't set crossOrigin because Firebase Storage may not have CORS configured
+    // This means we can't use Web Audio API for volume control, but playback will work
     const audio = new Audio();
     audio.src = audioUrl;
     audio.loop = true;
     audio.preload = 'auto';
-    audio.crossOrigin = 'anonymous'; // Required for Web Audio API
+    // Don't set crossOrigin - it causes CORS errors with Firebase Storage
 
     const handleCanPlay = () => {
+      console.log('[useBackgroundMusic] Audio loaded successfully:', audioUrl);
       setIsLoaded(true);
     };
 
@@ -118,18 +121,23 @@ export function useBackgroundMusic(options: UseBackgroundMusicOptions): UseBackg
 
   // Handle volume ducking when TTS speaks
   useEffect(() => {
-    if (!gainNodeRef.current || !audioContextRef.current || !isPlaying) return;
+    if (!isPlaying || !audioElementRef.current) return;
 
     const targetVolume = isSpeaking ? duckedVolume : normalVolume;
-    const currentTime = audioContextRef.current.currentTime;
 
-    // Smooth volume transition
-    gainNodeRef.current.gain.cancelScheduledValues(currentTime);
-    gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, currentTime);
-    gainNodeRef.current.gain.linearRampToValueAtTime(
-      targetVolume,
-      currentTime + fadeDuration / 1000
-    );
+    // If we have Web Audio API connected, use smooth transitions
+    if (gainNodeRef.current && audioContextRef.current) {
+      const currentTime = audioContextRef.current.currentTime;
+      gainNodeRef.current.gain.cancelScheduledValues(currentTime);
+      gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, currentTime);
+      gainNodeRef.current.gain.linearRampToValueAtTime(
+        targetVolume,
+        currentTime + fadeDuration / 1000
+      );
+    } else {
+      // Fallback: Set volume directly on audio element (no smooth transition)
+      audioElementRef.current.volume = targetVolume;
+    }
   }, [isSpeaking, normalVolume, duckedVolume, fadeDuration, isPlaying]);
 
   const play = useCallback(() => {
@@ -138,56 +146,18 @@ export function useBackgroundMusic(options: UseBackgroundMusicOptions): UseBackg
       return;
     }
 
-    // Create AudioContext on first play (browser autoplay policy requirement)
-    if (!audioContextRef.current) {
-      try {
-        audioContextRef.current = new AudioContext();
-      } catch (e) {
-        console.error('[useBackgroundMusic] Failed to create AudioContext:', e);
-        // Fallback: play without Web Audio API (no ducking)
-        audioElementRef.current.volume = normalVolume;
-        audioElementRef.current.play()
-          .then(() => setIsPlaying(true))
-          .catch((error) => console.error('[useBackgroundMusic] Fallback play failed:', error));
-        return;
-      }
-    }
-
-    // Create gain node if not exists
-    if (!gainNodeRef.current) {
-      gainNodeRef.current = audioContextRef.current.createGain();
-      gainNodeRef.current.gain.value = normalVolume;
-      gainNodeRef.current.connect(audioContextRef.current.destination);
-    }
-
-    // Connect audio element to Web Audio API (only once per element)
-    if (!isConnectedRef.current && audioElementRef.current) {
-      try {
-        sourceNodeRef.current = audioContextRef.current.createMediaElementSource(
-          audioElementRef.current
-        );
-        sourceNodeRef.current.connect(gainNodeRef.current);
-        isConnectedRef.current = true;
-      } catch (e) {
-        // May fail if already connected or CORS issue
-        console.warn('[useBackgroundMusic] Could not connect to Web Audio API:', e);
-      }
-    }
-
-    // Resume context if suspended (Safari requirement)
-    if (audioContextRef.current.state === 'suspended') {
-      audioContextRef.current.resume().catch((e) =>
-        console.warn('[useBackgroundMusic] Failed to resume AudioContext:', e)
-      );
-    }
-
     // Set initial volume based on current TTS state
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = isSpeaking ? duckedVolume : normalVolume;
-    }
+    // Using direct audio element volume (Web Audio API not available without CORS)
+    const initialVolume = isSpeaking ? duckedVolume : normalVolume;
+    audioElementRef.current.volume = initialVolume;
+
+    console.log('[useBackgroundMusic] Starting playback at volume:', initialVolume);
 
     audioElementRef.current.play()
-      .then(() => setIsPlaying(true))
+      .then(() => {
+        console.log('[useBackgroundMusic] Playback started successfully');
+        setIsPlaying(true);
+      })
       .catch((error) => {
         console.error('[useBackgroundMusic] Play failed:', error);
         setIsPlaying(false);
