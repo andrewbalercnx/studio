@@ -18,6 +18,23 @@
 
 ### 2025-12-31
 
+#### `f7e7130` - Add fallback to draft story text when AI compilation fails
+
+**Type**: Bug Fix / Resilience
+
+**Summary**: When the Gemini model returns empty text or fails during story compilation, the system now falls back to using the unpolished draft story text instead of throwing an error.
+
+**Changes**:
+- Added fallback when model returns empty text on retry
+- Added fallback when JSON parse fails on retry
+- Added fallback for any retry errors
+- Debug flags (`fallbackToDraft`) for monitoring which stories used the fallback
+
+**Files Modified**:
+- `src/ai/flows/story-text-compile-flow.ts`
+
+---
+
 #### `a7aafaa` - Restore pagination test admin page
 
 **Type**: Feature Restoration
