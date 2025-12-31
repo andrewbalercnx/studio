@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LoaderCircle, PenTool, Database, FlaskConical, Settings, Users, BookOpen, Palette, Printer, Bug, Trash2, MessageSquare, Sparkles, Plus, Edit, ExternalLink, ShieldCheck } from 'lucide-react';
+import { LoaderCircle, PenTool, Database, FlaskConical, Settings, Users, BookOpen, Palette, Printer, Bug, Trash2, MessageSquare, Sparkles, Plus, Edit, ExternalLink, ShieldCheck, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useDiagnostics } from '@/hooks/use-diagnostics';
 import { Switch } from '@/components/ui/switch';
@@ -19,9 +19,9 @@ import { Label } from '@/components/ui/label';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
-import { collection, doc, addDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, addDoc, setDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
-import type { StoryPhase, PromptConfig, StoryOutputType } from '@/lib/types';
+import type { StoryPhase, PromptConfig, StoryOutputType, PrintLayout } from '@/lib/types';
 
 type StoryPhaseForm = {
   id?: string;
@@ -895,6 +895,10 @@ function StoryOutputsPanel() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [printLayouts, setPrintLayouts] = useState<PrintLayout[]>([]);
+  const [loadingLayouts, setLoadingLayouts] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const defaultForm: StoryOutputForm = {
     name: '',
     shortDescription: '',
@@ -907,6 +911,21 @@ function StoryOutputsPanel() {
     defaultPrintLayoutId: '',
   };
   const [form, setForm] = useState<StoryOutputForm>(defaultForm);
+
+  // Load print layouts when dialog opens
+  useEffect(() => {
+    if (!dialogOpen || !firestore) return;
+    setLoadingLayouts(true);
+    getDocs(collection(firestore, 'printLayouts'))
+      .then((snapshot) => {
+        const layouts = snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as PrintLayout);
+        setPrintLayouts(layouts);
+      })
+      .catch((err) => {
+        console.error('Error loading print layouts:', err);
+      })
+      .finally(() => setLoadingLayouts(false));
+  }, [dialogOpen, firestore]);
 
   const openCreate = () => {
     setForm(defaultForm);
@@ -954,7 +973,6 @@ function StoryOutputsPanel() {
       const result = await response.json();
       if (result.ok) {
         toast({ title: 'Success', description: 'Image generated successfully!' });
-        // Update the form with the new image URL
         if (result.imageUrl) {
           setForm(prev => ({ ...prev, imageUrl: result.imageUrl }));
         }
@@ -965,6 +983,63 @@ function StoryOutputsPanel() {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally {
       setIsGeneratingImage(false);
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user || !form.id) {
+      if (!form.id) {
+        toast({ title: 'Error', description: 'Please save the output type first', variant: 'destructive' });
+      }
+      return;
+    }
+
+    // Clear the input so same file can be selected again
+    event.target.value = '';
+
+    setIsUploadingImage(true);
+    try {
+      // Convert file to data URL
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const token = await user.getIdToken();
+      const response = await fetch('/api/storyOutputTypes/uploadImage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          storyOutputTypeId: form.id,
+          dataUrl,
+          fileName: file.name,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.ok) {
+        toast({ title: 'Success', description: 'Image uploaded successfully!' });
+        if (result.imageUrl) {
+          setForm(prev => ({ ...prev, imageUrl: result.imageUrl }));
+        }
+      } else {
+        toast({ title: 'Error', description: result.errorMessage, variant: 'destructive' });
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Upload failed';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+    } finally {
+      setIsUploadingImage(false);
     }
   };
 
@@ -987,9 +1062,10 @@ function StoryOutputsPanel() {
       },
       updatedAt: serverTimestamp(),
     };
-    // Only include optional fields if they have values
-    if (form.imagePrompt) payload.imagePrompt = form.imagePrompt;
-    if (form.defaultPrintLayoutId) payload.defaultPrintLayoutId = form.defaultPrintLayoutId;
+    // Handle optional fields - set to empty string or include value
+    payload.imagePrompt = form.imagePrompt || '';
+    payload.defaultPrintLayoutId = form.defaultPrintLayoutId || '';
+
     try {
       if (form.id) {
         await setDoc(doc(firestore, 'storyOutputTypes', form.id), payload, { merge: true });
@@ -1116,33 +1192,69 @@ function StoryOutputsPanel() {
                     <img src={form.imageUrl} alt="Current" className="w-24 h-24 rounded-md object-cover border" />
                   </div>
                 )}
-                {form.id && form.imagePrompt && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-2"
-                    onClick={handleGenerateImage}
-                    disabled={isGeneratingImage}
-                  >
-                    {isGeneratingImage ? (
-                      <><LoaderCircle className="h-4 w-4 animate-spin mr-2" /> Generating...</>
-                    ) : (
-                      <><Sparkles className="h-4 w-4 mr-2" /> {form.imageUrl ? 'Regenerate Image' : 'Generate Image'}</>
-                    )}
-                  </Button>
-                )}
-                {!form.id && form.imagePrompt && (
-                  <p className="text-xs text-muted-foreground">Save first to generate the image</p>
+                {/* Hidden file input for upload */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                />
+                <div className="flex gap-2 mt-2">
+                  {form.id && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleUploadClick}
+                      disabled={isUploadingImage}
+                    >
+                      {isUploadingImage ? (
+                        <><LoaderCircle className="h-4 w-4 animate-spin mr-2" /> Uploading...</>
+                      ) : (
+                        <><Upload className="h-4 w-4 mr-2" /> Upload Image</>
+                      )}
+                    </Button>
+                  )}
+                  {form.id && form.imagePrompt && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGenerateImage}
+                      disabled={isGeneratingImage}
+                    >
+                      {isGeneratingImage ? (
+                        <><LoaderCircle className="h-4 w-4 animate-spin mr-2" /> Generating...</>
+                      ) : (
+                        <><Sparkles className="h-4 w-4 mr-2" /> {form.imageUrl ? 'Regenerate' : 'Generate'}</>
+                      )}
+                    </Button>
+                  )}
+                </div>
+                {!form.id && (
+                  <p className="text-xs text-muted-foreground">Save first to upload or generate an image</p>
                 )}
             </div>
             <div className="grid gap-2">
-                <Label>Default Print Layout ID</Label>
-                <Input
-                  value={form.defaultPrintLayoutId}
-                  onChange={(e) => setForm({ ...form, defaultPrintLayoutId: e.target.value })}
-                  placeholder="e.g. mixam_square_8x8"
-                />
+                <Label>Default Print Layout</Label>
+                <Select
+                  value={form.defaultPrintLayoutId || '__none__'}
+                  onValueChange={(value) => setForm({ ...form, defaultPrintLayoutId: value === '__none__' ? '' : value })}
+                  disabled={loadingLayouts}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={loadingLayouts ? 'Loading layouts...' : 'No layout (unconstrained)'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No layout (unconstrained)</SelectItem>
+                    {printLayouts.map((layout) => (
+                      <SelectItem key={layout.id} value={layout.id}>
+                        {layout.name} ({layout.leafWidth}&quot; × {layout.leafHeight}&quot;)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <p className="text-xs text-muted-foreground">Optional: Constrains image dimensions for this output type</p>
             </div>
           </div>
