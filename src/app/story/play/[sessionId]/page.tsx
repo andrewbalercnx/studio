@@ -820,12 +820,15 @@ export default function StoryPlayPage() {
 
     // TTS: Speak story content when new messages arrive and speech mode is enabled
     useEffect(() => {
+        const allMessages = recentMessages?.map(m => ({ sender: m.sender, kind: m.kind })) || [];
         console.log('[StoryPlayPage TTS] Effect triggered:', {
             isSpeechModeEnabled,
             isProcessing,
             hasChildProfile: !!childProfile,
             preferredVoiceId: childProfile?.preferredVoiceId,
             autoReadAloud: childProfile?.autoReadAloud,
+            messagesCount: recentMessages?.length || 0,
+            allMessages,
             latestMessageKind: recentMessages?.find(m => m.sender === 'assistant')?.kind,
         });
 
@@ -835,7 +838,10 @@ export default function StoryPlayPage() {
         }
 
         const latestAssistant = recentMessages?.find(m => m.sender === 'assistant');
-        if (!latestAssistant) return;
+        if (!latestAssistant) {
+            console.log('[StoryPlayPage TTS] No assistant message found in recentMessages');
+            return;
+        }
 
         // Determine what content to speak based on message kind
         const beatContinuation = recentMessages?.find(m => m.sender === 'assistant' && m.kind === 'beat_continuation');
@@ -868,9 +874,15 @@ export default function StoryPlayPage() {
                 headerText = (latestAssistant as any).textResolved || latestAssistant.text;
                 break;
             default:
+                console.log('[StoryPlayPage TTS] Unknown message kind, not speaking:', latestAssistant.kind);
                 return; // Don't speak for other message types
         }
 
+        console.log('[StoryPlayPage TTS] Calling speakStoryContent with:', {
+            headerText: headerText?.substring(0, 50),
+            questionText: questionText?.substring(0, 50),
+            optionsCount: options?.length,
+        });
         speakStoryContent({ headerText, questionText, options });
     }, [recentMessages, isSpeechModeEnabled, isProcessing, speakStoryContent]);
 

@@ -95,15 +95,31 @@ export function useStoryTTS(options: UseStoryTTSOptions): UseStoryTTSReturn {
     questionText?: string;
     options?: Array<{ text: string }>;
   }) => {
-    if (!isSpeechModeEnabled) return;
+    console.log('[useStoryTTS] speakStoryContent called:', {
+      isSpeechModeEnabled,
+      hasHeaderText: !!content.headerText,
+      hasQuestionText: !!content.questionText,
+      optionsCount: content.options?.length,
+    });
 
-    const textToSpeak = buildSpeechText(content);
-
-    // Don't speak if empty or same as last spoken
-    if (!textToSpeak || textToSpeak === lastSpokenContentRef.current) {
+    if (!isSpeechModeEnabled) {
+      console.log('[useStoryTTS] Speech mode not enabled, skipping');
       return;
     }
 
+    const textToSpeak = buildSpeechText(content);
+    console.log('[useStoryTTS] Built text to speak:', textToSpeak?.substring(0, 100));
+
+    // Don't speak if empty or same as last spoken
+    if (!textToSpeak || textToSpeak === lastSpokenContentRef.current) {
+      console.log('[useStoryTTS] Skipping - empty or same as last:', {
+        isEmpty: !textToSpeak,
+        isSameAsLast: textToSpeak === lastSpokenContentRef.current,
+      });
+      return;
+    }
+
+    console.log('[useStoryTTS] Calling tts.speak()');
     lastSpokenContentRef.current = textToSpeak;
     tts.speak(textToSpeak);
   }, [isSpeechModeEnabled, buildSpeechText, tts]);
