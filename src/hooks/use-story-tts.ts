@@ -52,9 +52,12 @@ export function useStoryTTS(options: UseStoryTTSOptions): UseStoryTTSReturn {
   // Track content that has been spoken to avoid repeating
   const lastSpokenContentRef = useRef<string>('');
 
-  // Store stop function in ref to avoid effect dependency issues
+  // Store TTS functions in refs to avoid callback dependency issues
+  // This prevents speakStoryContent from being recreated on every render
   const stopRef = useRef(tts.stop);
   stopRef.current = tts.stop;
+  const speakRef = useRef(tts.speak);
+  speakRef.current = tts.speak;
 
   /**
    * Build the full text to speak from story content.
@@ -125,8 +128,8 @@ export function useStoryTTS(options: UseStoryTTSOptions): UseStoryTTSReturn {
 
     console.log('[useStoryTTS] Calling tts.speak()');
     lastSpokenContentRef.current = textToSpeak;
-    tts.speak(textToSpeak);
-  }, [isSpeechModeEnabled, buildSpeechText, tts]);
+    speakRef.current(textToSpeak);
+  }, [isSpeechModeEnabled, buildSpeechText]);
 
   const stopSpeech = useCallback(() => {
     tts.stop();
