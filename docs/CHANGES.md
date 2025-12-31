@@ -18,7 +18,7 @@
 
 ### 2025-12-31
 
-#### `pending` - Add configurable pagination prompt to admin
+#### `b20ffc4` - Add configurable pagination prompt to admin
 
 **Type**: Feature
 
