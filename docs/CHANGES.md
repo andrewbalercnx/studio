@@ -18,7 +18,36 @@
 
 ### 2025-12-31
 
-#### `pending` - Fix help wizard pages to use click actions for overlay dialogs
+#### `pending` - Auto-start default help wizard for new users
+
+**Type**: Feature
+
+**Summary**: New users now automatically see a startup wizard when they first log in, introducing them to the app and showing them how to access Help Tours in the future.
+
+**Changes**:
+- Added `isDefaultStartup` field to `HelpWizard` type - one wizard can be marked as the default
+- Added `hasCompletedStartupWizard` field to `UserProfile` to track if user has seen it
+- Created `StartupWizardTrigger` component that auto-starts the wizard for new users
+- Added checkbox in HelpWizardForm to set a wizard as the default startup
+- Updated parent-complete-guide wizard:
+  - Marked as default startup wizard
+  - Added page highlighting user menu with click action
+  - Added page explaining Help Tours submenu
+- Added `data-wiz-target="user-menu-help-tours"` to header for Help Tours submenu
+
+**New files**:
+- `src/components/startup-wizard-trigger.tsx`
+
+**Modified files**:
+- `src/lib/types.ts` (added isDefaultStartup, hasCompletedStartupWizard)
+- `src/components/admin/HelpWizardForm.tsx`
+- `src/components/header.tsx`
+- `src/app/providers.tsx`
+- `src/data/help-wizards.json`
+
+---
+
+#### `7f781db` - Fix help wizard pages to use click actions for overlay dialogs
 
 **Type**: Bug Fix
 

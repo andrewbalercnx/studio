@@ -60,6 +60,7 @@ export type UserProfile = {
   pinUpdatedAt?: any;
   savedShippingAddress?: PrintOrderAddress;
   canShowWizardTargets?: boolean; // Allow this user to toggle wizard target overlays
+  hasCompletedStartupWizard?: boolean; // True once user has seen the default startup wizard
 };
 
 // Parent's cloned voice for TTS (stored in Firestore: users/{parentUid}/voices/{voiceId})
@@ -1232,6 +1233,7 @@ export type HelpWizard = {
   status: 'draft' | 'live';
   role: HelpWizardRole; // Who can see this wizard: parent, writer, or admin
   order: number; // Display order in help menu (lower numbers appear first)
+  isDefaultStartup?: boolean; // If true, this wizard auto-starts for new users
   createdAt: any;
   updatedAt: any;
 };

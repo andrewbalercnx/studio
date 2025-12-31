@@ -12,6 +12,7 @@ import { WizardTargetDiagnosticsProvider } from '@/hooks/use-wizard-target-diagn
 import { PathRecordingProvider } from '@/hooks/use-path-recording';
 import { HelpWizard } from '@/components/help-wizard';
 import { WizardTargetOverlay } from '@/components/wizard-target-overlay';
+import { StartupWizardTrigger } from '@/components/startup-wizard-trigger';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -29,6 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
               <FirebaseErrorListener />
               <HelpWizard />
               <WizardTargetOverlay />
+              <StartupWizardTrigger />
             </ParentGuardProvider>
             </PathRecordingProvider>
           </WizardTargetDiagnosticsProvider>

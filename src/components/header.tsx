@@ -214,7 +214,7 @@ export default function Header() {
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuSub>
-                      <DropdownMenuSubTrigger>
+                      <DropdownMenuSubTrigger data-wiz-target="user-menu-help-tours">
                         <HelpCircle className="mr-2 h-4 w-4" />
                         Help Tours
                       </DropdownMenuSubTrigger>

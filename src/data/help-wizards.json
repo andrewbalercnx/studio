@@ -6,6 +6,7 @@
       "status": "live",
       "role": "parent",
       "order": 1,
+      "isDefaultStartup": true,
       "pages": [
         {
           "title": "Welcome to StoryPic Kids!",
@@ -136,9 +137,17 @@
         },
         {
           "title": "User Menu",
-          "description": "The **user menu** (top right) gives quick access to:\n\n- Switch to parent view\n- Sign out\n- Access settings\n- Toggle diagnostic tools (for troubleshooting)",
+          "description": "The **user menu** (top right) is your central hub for account controls.\n\nClick on your profile icon to open it.",
           "route": "/parent",
           "wizardTargetId": "header-user-menu",
+          "position": "bottom-left",
+          "action": "click"
+        },
+        {
+          "title": "Help Tours",
+          "description": "Inside the user menu, you'll find **Help Tours** - interactive guides like this one!\n\nWhenever you need help:\n1. Click your profile icon (top right)\n2. Select **Help Tours**\n3. Choose a tour to learn about specific features\n\nYou can revisit these tours anytime to refresh your memory.",
+          "route": "/parent",
+          "wizardTargetId": "user-menu-help-tours",
           "position": "bottom-left"
         },
         {

@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { LoaderCircle, PlusCircle, Trash2, ArrowUp, ArrowDown, Edit, MousePointerClick, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { HelpWizardPageForm } from './HelpWizardPageForm';
@@ -25,6 +26,7 @@ const wizardSchema = z.object({
   status: z.enum(['draft', 'live']),
   role: z.enum(['parent', 'writer', 'admin']),
   order: z.coerce.number().int().min(0, "Order must be 0 or greater"),
+  isDefaultStartup: z.boolean().optional(),
   pages: z.array(z.object({
     title: z.string().min(1),
     description: z.string().min(1),
@@ -57,6 +59,7 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
       status: wizard?.status || 'draft',
       role: wizard?.role || 'parent',
       order: wizard?.order ?? 0,
+      isDefaultStartup: wizard?.isDefaultStartup ?? false,
       pages: wizard?.pages || [],
     }
   });
@@ -223,6 +226,23 @@ export function HelpWizardForm({ wizard, onSave }: { wizard: HelpWizard | null, 
           <Input id="order" type="number" min={0} {...register('order')} />
           {errors.order && <p className="text-xs text-destructive">{errors.order.message}</p>}
         </div>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Controller
+          name="isDefaultStartup"
+          control={control}
+          render={({ field }) => (
+            <Checkbox
+              id="isDefaultStartup"
+              checked={field.value}
+              onCheckedChange={field.onChange}
+            />
+          )}
+        />
+        <Label htmlFor="isDefaultStartup" className="text-sm font-normal cursor-pointer">
+          Default startup wizard (auto-starts for new users)
+        </Label>
       </div>
 
       <Card>

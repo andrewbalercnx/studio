@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2025-12-30 (added action field to HelpWizardPage for click automation)
+> **Last Updated**: 2025-12-31 (added isDefaultStartup to HelpWizard, hasCompletedStartupWizard to UserProfile)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -30,6 +30,7 @@ User profiles with authentication and role information.
 | `pinUpdatedAt` | timestamp | No | Last PIN update time |
 | `savedShippingAddress` | PrintOrderAddress | No | Default shipping address |
 | `canShowWizardTargets` | boolean | No | Allow wizard target overlays |
+| `hasCompletedStartupWizard` | boolean | No | True after user has seen default startup wizard |
 
 **Subcollections**:
 - `voices/{voiceId}` - Parent's cloned voices for TTS (see `ParentVoice` type)
@@ -503,6 +504,7 @@ In-app help wizard configurations.
 | `status` | 'draft' \| 'live' | Yes | Wizard status |
 | `role` | 'parent' \| 'writer' \| 'admin' | Yes | Target audience (parents see parent, writers see parent+writer, admins see all) |
 | `order` | number | Yes | Display order |
+| `isDefaultStartup` | boolean | No | If true, this wizard auto-starts for new users |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
 
