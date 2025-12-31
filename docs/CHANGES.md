@@ -18,6 +18,22 @@
 
 ### 2025-12-31
 
+#### `d195644` - Fix "Images Still Generating" false positive on read page
+
+**Type**: Bug Fix
+
+**Summary**: The storybook read page incorrectly showed "Images Still Generating" even when all illustration pages were ready.
+
+**Changes**:
+- The viewer page excluded `title_page` from image readiness checks, but the read page did not
+- Title pages don't have images, so including them caused the check to fail
+- Aligned the read page logic with the viewer page by filtering out `title_page`, `blank`, and pages without `imagePrompt`
+
+**Modified files**:
+- `src/app/storybook/[bookId]/read/page.tsx`
+
+---
+
 #### `30ced48` - Add image upload to Story Output Types
 
 **Type**: Feature
