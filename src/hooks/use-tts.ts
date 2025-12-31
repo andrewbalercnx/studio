@@ -58,12 +58,16 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
   }, []);
 
   const speak = useCallback(async (text: string) => {
+    console.log('[useTTS] speak() called:', { hasUser: !!user, textLength: text.length, voiceId, childId });
+
     if (!user) {
+      console.log('[useTTS] No user, aborting');
       onError?.('Not authenticated');
       return;
     }
 
     if (!text.trim()) {
+      console.log('[useTTS] Empty text, aborting');
       return;
     }
 
@@ -80,7 +84,9 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
       abortControllerRef.current = controller;
 
       // Get fresh ID token
+      console.log('[useTTS] Getting ID token...');
       const idToken = await user.getIdToken();
+      console.log('[useTTS] Got ID token, calling /api/tts...');
 
       const response = await fetch('/api/tts', {
         method: 'POST',
@@ -96,7 +102,9 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
         signal: controller.signal,
       });
 
+      console.log('[useTTS] Response status:', response.status);
       const result = await response.json();
+      console.log('[useTTS] Response result:', { ok: result.ok, hasAudioData: !!result.audioData, errorMessage: result.errorMessage });
 
       if (!result.ok) {
         throw new Error(result.errorMessage || 'TTS request failed');
@@ -108,12 +116,14 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
       audioRef.current = audio;
 
       audio.onended = () => {
+        console.log('[useTTS] Audio playback ended');
         setIsSpeaking(false);
         audioRef.current = null;
         onEnd?.();
       };
 
-      audio.onerror = () => {
+      audio.onerror = (e) => {
+        console.error('[useTTS] Audio playback error:', e);
         setIsSpeaking(false);
         audioRef.current = null;
         onError?.('Audio playback failed');
@@ -123,13 +133,16 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
       setIsSpeaking(true);
       onStart?.();
 
+      console.log('[useTTS] Starting audio playback...');
       await audio.play();
+      console.log('[useTTS] Audio playback started successfully');
     } catch (error: any) {
       setIsLoading(false);
       setIsSpeaking(false);
 
       // Don't report abort errors
       if (error.name === 'AbortError') {
+        console.log('[useTTS] Request aborted');
         return;
       }
 
