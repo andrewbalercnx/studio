@@ -41,10 +41,18 @@
           "position": "bottom-center"
         },
         {
-          "title": "Child Profile Details",
-          "description": "Here's a demo child profile. Notice the key elements:\n\n- **Avatar/Photo**: Used by AI to create illustrations\n- **Likes & Dislikes**: Shape story themes and content\n- **Voice Settings**: Control read-aloud preferences\n\nYou can edit any profile by clicking on it.",
-          "route": "/child/help-child",
-          "position": "center-right"
+          "title": "Editing a Child Profile",
+          "description": "To edit a child's profile, click the **Edit** button on their card.\n\nThis opens an overlay where you can update:\n- **Avatar/Photo**: Used by AI to create illustrations\n- **Likes & Dislikes**: Shape story themes and content\n- **Description**: Additional details for the AI",
+          "route": "/parent/children",
+          "wizardTargetId": "child-edit-help-child",
+          "position": "center-right",
+          "action": "click"
+        },
+        {
+          "title": "The Child Edit Form",
+          "description": "The edit form lets you configure everything about your child's profile.\n\nKey fields:\n- **Display Name**: How they appear in stories\n- **Pronouns**: For correct story text (he/she/they)\n- **Likes**: Things to include in stories\n- **Dislikes**: Things to avoid\n\nChanges are saved when you click **Save**.",
+          "route": "/parent/children",
+          "position": "center-center"
         },
         {
           "title": "Managing Characters",
@@ -53,10 +61,25 @@
           "position": "center-center"
         },
         {
-          "title": "Creating Characters",
-          "description": "To add a new character:\n\n1. Click **Add New Character**\n2. Choose which child they belong to\n3. Add their name, type (pet, friend, etc.)\n4. Upload a photo for AI illustrations\n5. Add personality traits\n\nCharacters will appear in story options when that child plays!",
+          "title": "Adding a Character",
+          "description": "Click the **Add New Character** button to create a character.\n\nThis opens an overlay where you can:\n- Name the character\n- Choose their type (Pet, Friend, Family)\n- Upload a photo for AI illustrations\n- Add personality traits",
           "route": "/parent/characters",
+          "wizardTargetId": "characters-add-button",
           "position": "bottom-center"
+        },
+        {
+          "title": "Editing a Character",
+          "description": "To edit an existing character, click the **Edit** button on their card.\n\nLet's open the demo character to see the edit form.",
+          "route": "/parent/characters",
+          "wizardTargetId": "character-edit-help-character",
+          "position": "center-right",
+          "action": "click"
+        },
+        {
+          "title": "The Character Edit Form",
+          "description": "The character form lets you configure:\n\n- **Name & Type**: How they appear in stories\n- **Associated Child**: Whose stories they appear in (or all children)\n- **Photo**: Used by AI for illustrations\n- **Likes & Dislikes**: Shape their personality in stories\n\nCharacters appear in story options when that child plays!",
+          "route": "/parent/characters",
+          "position": "center-center"
         },
         {
           "title": "The Storybooks Library",

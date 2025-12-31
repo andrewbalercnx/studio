@@ -173,7 +173,7 @@ export default function ManageCharactersPage() {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {visibleCharacters.map((char) => (
-          <Card key={char.id}>
+          <Card key={char.id} data-wiz-target={`character-card-${char.id}`}>
             <CardHeader className="flex flex-row items-center gap-4">
               <Avatar className="h-16 w-16">
                 <AvatarImage src={char.avatarUrl} alt={char.displayName} className="object-cover" />
@@ -214,7 +214,7 @@ export default function ManageCharactersPage() {
               ) : null}
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => openForm(char)}>
+              <Button variant="outline" size="sm" onClick={() => openForm(char)} data-wiz-target={`character-edit-${char.id}`}>
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit
               </Button>
@@ -246,7 +246,7 @@ export default function ManageCharactersPage() {
 
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Manage Characters</h1>
-          <Button onClick={() => openForm()}>
+          <Button onClick={() => openForm()} data-wiz-target="characters-add-button">
             <Plus className="mr-2" /> Add New Character
           </Button>
         </div>

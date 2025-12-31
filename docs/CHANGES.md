@@ -16,9 +16,29 @@
 
 ## Changes
 
+### 2025-12-31
+
+#### `pending` - Fix help wizard pages to use click actions for overlay dialogs
+
+**Type**: Bug Fix
+
+**Summary**: Help wizard pages were incorrectly navigating to routes like `/child/help-child` to show profile editing, when the actual edit UI opens as an overlay dialog via a button click on `/parent/children`.
+
+**Changes**:
+- Updated parent-complete-guide wizard to use `action: "click"` with wizard targets for child and character editing
+- Added two-page pattern: first page highlights the Edit button with click action, second page describes the opened dialog
+- Added wizard targets to characters page (`character-card-*`, `character-edit-*`, `characters-add-button`)
+- This pattern allows wizards to demonstrate overlay-based UI correctly
+
+**Modified files**:
+- `src/data/help-wizards.json`
+- `src/app/parent/characters/page.tsx`
+
+---
+
 ### 2025-12-30
 
-#### `pending` - Fix help-child profile access for wizard demos
+#### `fab7510` - Fix help-child profile access for wizard demos
 
 **Type**: Bug Fix
 
