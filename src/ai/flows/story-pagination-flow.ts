@@ -136,9 +136,17 @@ export const storyPaginationFlow = ai.defineFlow(
             // NOTE: We intentionally skip the global prefix for pagination.
             // The global prefix contains story generation guidance (character introduction, etc.)
             // which is not relevant for pagination - we're just splitting existing text into pages.
-            // Priority: 1) storyOutputType.paginationPrompt, 2) system config, 3) default
+            //
+            // Prompt structure:
+            // 1. Output type's paginationPrompt (if set) - prepended as type-specific guidance
+            // 2. Global pagination prompt (from system config or default) - always included
             const systemPaginationPrompt = await getPaginationPrompt();
-            const paginationInstructions = storyOutputType.paginationPrompt || systemPaginationPrompt || DEFAULT_PAGINATION_PROMPT;
+            const basePaginationPrompt = systemPaginationPrompt || DEFAULT_PAGINATION_PROMPT;
+
+            // If output type has a custom pagination prompt, prepend it to the base prompt
+            const paginationInstructions = storyOutputType.paginationPrompt
+                ? `**OUTPUT TYPE SPECIFIC INSTRUCTIONS:**\n${storyOutputType.paginationPrompt}\n\n**GENERAL PAGINATION INSTRUCTIONS:**\n${basePaginationPrompt}`
+                : basePaginationPrompt;
 
             const pageCountInstruction = targetPageCount > 0
                 ? `TARGET PAGE COUNT: Exactly ${targetPageCount} content pages. Distribute the story evenly across these pages.`
@@ -198,7 +206,8 @@ Generate the paginated output now.`;
             const finalPrompt = systemPrompt;
 
             debug.details.promptLength = finalPrompt.length;
-            debug.details.usedCustomPrompt = !!storyOutputType.paginationPrompt;
+            debug.details.hasOutputTypePaginationPrompt = !!storyOutputType.paginationPrompt;
+            debug.details.outputTypePaginationPrompt = storyOutputType.paginationPrompt || null;
             debug.details.prompt = finalPrompt;
 
             // Call AI for pagination
