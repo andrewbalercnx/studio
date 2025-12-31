@@ -960,7 +960,7 @@ export default function StoryPlayPage() {
                                 {latestBeatOptions && latestAssistantMessage.kind !== 'ending_options' && !introducingCharacter && (
                                     <div className="flex flex-col items-center gap-2">
                                         <Avatar className="h-16 w-16">
-                                            <AvatarImage src="/logo.svg" alt="Story Guide" />
+                                            <AvatarImage src="/icons/magical-book.svg" alt="Story Guide" />
                                             <AvatarFallback><Bot /></AvatarFallback>
                                         </Avatar>
                                         <p className="text-xl font-medium leading-relaxed">{(latestBeatOptions as any).textResolved || latestBeatOptions.text}</p>
@@ -1014,7 +1014,7 @@ export default function StoryPlayPage() {
                                 {latestAssistantMessage && !latestBeatOptions && !latestBeatContinuation && latestAssistantMessage.kind !== 'ending_options' && (
                                     <div className="flex flex-col items-center gap-2">
                                         <Avatar className="h-16 w-16">
-                                            <AvatarImage src="/logo.svg" alt="Story Guide" />
+                                            <AvatarImage src="/icons/magical-book.svg" alt="Story Guide" />
                                             <AvatarFallback><Bot /></AvatarFallback>
                                         </Avatar>
                                         <p className="text-xl font-medium leading-relaxed">{(latestAssistantMessage as any).textResolved || latestAssistantMessage.text}</p>
@@ -1024,7 +1024,7 @@ export default function StoryPlayPage() {
                                 {latestAssistantMessage.kind === 'ending_options' && (
                                     <div className="flex flex-col items-center gap-2 mb-4">
                                         <Avatar className="h-16 w-16">
-                                            <AvatarImage src="/logo.svg" alt="Story Guide" />
+                                            <AvatarImage src="/icons/magical-book.svg" alt="Story Guide" />
                                             <AvatarFallback><Bot /></AvatarFallback>
                                         </Avatar>
                                         <p className="text-xl font-medium leading-relaxed">{(latestAssistantMessage as any).textResolved || latestAssistantMessage.text}</p>
