@@ -406,34 +406,71 @@ export default function PrintOrderDetailPage() {
                 </div>
               )}
             </div>
-            {((order as any).mixamTrackingUrl || (order as any).mixamEstimatedDelivery) && (
-              <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-2 gap-4">
-                {(order as any).mixamTrackingUrl && (
-                  <div>
-                    <p className="text-sm text-gray-600">Tracking URL</p>
-                    <a
-                      href={(order as any).mixamTrackingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline text-sm"
-                    >
-                      Track Shipment →
-                    </a>
+            {/* Shipping/Tracking Info (from webhooks) */}
+            {((order as any).mixamTrackingNumber || (order as any).mixamTrackingUrl || (order as any).mixamEstimatedDelivery || (order as any).mixamCarrier) && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <p className="text-sm font-medium text-gray-700 mb-2">Shipping Information</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {(order as any).mixamCarrier && (
+                    <div>
+                      <p className="text-sm text-gray-600">Carrier</p>
+                      <p className="text-sm font-medium">{(order as any).mixamCarrier}</p>
+                    </div>
+                  )}
+                  {(order as any).mixamTrackingNumber && (
+                    <div>
+                      <p className="text-sm text-gray-600">Tracking Number</p>
+                      <p className="font-mono text-sm">{(order as any).mixamTrackingNumber}</p>
+                    </div>
+                  )}
+                  {(order as any).mixamTrackingUrl && (
+                    <div>
+                      <p className="text-sm text-gray-600">Track Shipment</p>
+                      <a
+                        href={(order as any).mixamTrackingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline text-sm"
+                      >
+                        Track Package →
+                      </a>
+                    </div>
+                  )}
+                  {(order as any).mixamEstimatedDelivery && (
+                    <div>
+                      <p className="text-sm text-gray-600">Estimated Delivery</p>
+                      <p className="text-sm">{formatDate((order as any).mixamEstimatedDelivery)}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* Mixam Validation Result (from webhook) */}
+            {(order as any).mixamValidation && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <p className="text-sm font-medium text-gray-700 mb-2">Mixam File Validation</p>
+                {(order as any).mixamValidation.valid ? (
+                  <div className="p-2 bg-green-50 border border-green-200 rounded text-sm text-green-800">
+                    Files validated successfully
                   </div>
-                )}
-                {(order as any).mixamEstimatedDelivery && (
-                  <div>
-                    <p className="text-sm text-gray-600">Estimated Delivery</p>
-                    <p className="text-sm">{formatDate((order as any).mixamEstimatedDelivery)}</p>
+                ) : (
+                  <div className="p-2 bg-red-50 border border-red-200 rounded">
+                    <p className="text-sm text-red-800 font-medium mb-1">Validation Failed</p>
+                    <ul className="list-disc list-inside text-sm text-red-700">
+                      {(order as any).mixamValidation.errors?.map((err: string, i: number) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </div>
             )}
+            {/* Full API Response (collapsible) */}
             {(order as any).mixamResponse && (
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <details className="cursor-pointer">
                   <summary className="text-sm text-gray-600 hover:text-gray-900">
-                    View Full Mixam Response
+                    View Full Mixam API Response
                   </summary>
                   <pre className="mt-2 p-3 bg-gray-50 rounded text-xs overflow-auto max-h-48">
                     {JSON.stringify((order as any).mixamResponse, null, 2)}

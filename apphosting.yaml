@@ -50,3 +50,13 @@ env:
     secret: MIXAM_PASSWORD
     availability:
       - RUNTIME
+
+  - variable: MIXAM_WEBHOOK_URL
+    secret: MIXAM_WEBHOOK_URL
+    availability:
+      - RUNTIME
+
+  - variable: MIXAM_WEBHOOK_SECRET
+    secret: MIXAM_WEBHOOK_SECRET
+    availability:
+      - RUNTIME
