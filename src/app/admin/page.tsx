@@ -59,6 +59,7 @@ type StoryOutputForm = {
   pageCount: string;
   imagePrompt: string;
   defaultPrintLayoutId: string;
+  paginationPrompt: string;
   imageUrl?: string;
 };
 
@@ -912,6 +913,7 @@ function StoryOutputsPanel() {
     pageCount: '',
     imagePrompt: '',
     defaultPrintLayoutId: '',
+    paginationPrompt: '',
   };
   const [form, setForm] = useState<StoryOutputForm>(defaultForm);
 
@@ -947,6 +949,7 @@ function StoryOutputsPanel() {
       pageCount: output.layoutHints?.pageCount ? String(output.layoutHints.pageCount) : '',
       imagePrompt: output.imagePrompt || '',
       defaultPrintLayoutId: output.defaultPrintLayoutId || '',
+      paginationPrompt: output.paginationPrompt || '',
       imageUrl: output.imageUrl,
     });
     setDialogOpen(true);
@@ -1070,6 +1073,7 @@ function StoryOutputsPanel() {
     // Handle optional fields - set to empty string or include value
     payload.imagePrompt = form.imagePrompt || '';
     payload.defaultPrintLayoutId = form.defaultPrintLayoutId || '';
+    payload.paginationPrompt = form.paginationPrompt || '';
 
     try {
       if (form.id) {
@@ -1262,6 +1266,17 @@ function StoryOutputsPanel() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">Optional: Constrains image dimensions for this output type</p>
+            </div>
+            <div className="grid gap-2">
+                <Label>Pagination Prompt</Label>
+                <Textarea
+                  value={form.paginationPrompt}
+                  onChange={(e) => setForm({ ...form, paginationPrompt: e.target.value })}
+                  rows={4}
+                  placeholder="e.g., This is a rhyming poem - preserve the rhyme scheme when splitting across pages"
+                  className="font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground">Optional: Type-specific instructions prepended to the global pagination prompt</p>
             </div>
           </div>
           <DialogFooter>
