@@ -145,18 +145,19 @@ export default function StoryPlayPage() {
         duckedVolume: 0.1,
     });
 
-    // Start/stop background music based on processing state, avatar visibility, and TTS speaking
-    // Music plays during processing OR while TTS is speaking (ducked)
+    // Start/stop background music based on processing state, avatar visibility, TTS loading/speaking
+    // Music plays during: processing, TTS loading, or TTS speaking (ducked when speaking)
     useEffect(() => {
         const hasAvatar = childProfile?.avatarAnimationUrl || childProfile?.avatarUrl;
-        const shouldPlayMusic = (isProcessing && hasAvatar && backgroundMusicUrl) || (isSpeaking && backgroundMusicUrl);
+        const isShowingAvatar = isProcessing || (isSpeechModeEnabled && isTTSLoading);
+        const shouldPlayMusic = (isShowingAvatar && hasAvatar && backgroundMusicUrl) || (isSpeaking && backgroundMusicUrl);
 
         if (shouldPlayMusic && backgroundMusic.isLoaded && !backgroundMusic.isPlaying) {
             backgroundMusic.play();
         } else if (!shouldPlayMusic && backgroundMusic.isPlaying) {
             backgroundMusic.fadeOut();
         }
-    }, [isProcessing, childProfile?.avatarAnimationUrl, childProfile?.avatarUrl, backgroundMusicUrl, backgroundMusic, isSpeaking]);
+    }, [isProcessing, childProfile?.avatarAnimationUrl, childProfile?.avatarUrl, backgroundMusicUrl, backgroundMusic, isSpeaking, isSpeechModeEnabled, isTTSLoading]);
 
     // Cleanup background music on unmount
     useEffect(() => {
@@ -918,6 +919,11 @@ export default function StoryPlayPage() {
     // Show story type picker if no story type is set and we have story types available OR if no messages exist yet
     const showStoryTypePicker = !session.storyTypeId && (curatedStoryTypes.length > 0 || (!latestAssistantMessage && storyTypes && storyTypes.length > 0));
 
+    // When speech mode is enabled, keep showing the avatar animation while TTS is loading
+    // This syncs the text reveal with the audio playback
+    const isWaitingForTTS = isSpeechModeEnabled && isTTSLoading;
+    const showAvatarAnimation = isProcessing || isWaitingForTTS;
+
     return (
         <div className="min-h-screen bg-background text-foreground flex flex-col items-center p-4">
             {/* Speech mode toggle - positioned within header, left of the user menu */}
@@ -933,7 +939,7 @@ export default function StoryPlayPage() {
             </div>
 
             <div className="flex-grow flex flex-col items-center justify-center w-full max-w-2xl text-center">
-                {isProcessing && (
+                {showAvatarAnimation && (
                     <div className="flex flex-col items-center justify-center gap-4">
                         {childProfile?.avatarAnimationUrl || childProfile?.avatarUrl ? (
                             <ChildAvatarAnimation
@@ -944,11 +950,13 @@ export default function StoryPlayPage() {
                         ) : (
                             <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
                         )}
-                        <p className="text-muted-foreground animate-pulse">Creating your story...</p>
+                        <p className="text-muted-foreground animate-pulse">
+                            {isWaitingForTTS ? 'Getting ready to read...' : 'Creating your story...'}
+                        </p>
                     </div>
                 )}
 
-                {!isProcessing && (
+                {!showAvatarAnimation && (
                     <>
                         {showStoryTypePicker ? (
                             <Card className="w-full">
