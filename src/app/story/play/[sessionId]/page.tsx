@@ -905,20 +905,23 @@ export default function StoryPlayPage() {
     const showStoryTypePicker = !session.storyTypeId && (curatedStoryTypes.length > 0 || (!latestAssistantMessage && storyTypes && storyTypes.length > 0));
 
     return (
-        <div className="min-h-screen bg-background text-foreground flex flex-col items-center p-4">
-            <div className="absolute top-4 right-4 flex items-center gap-2">
-                {/* Speech mode toggle - only shows if child has preferred voice */}
-                {childProfile && (
-                    <SpeechModeToggle childProfile={childProfile} />
-                )}
-                <Button variant="ghost" size="sm" asChild>
-                    <Link href={`/story/session/${sessionId}`} title="Diagnostic View">
-                        <Settings className="h-4 w-4" />
-                    </Link>
-                </Button>
+        <div className="min-h-screen bg-background text-foreground flex flex-col">
+            {/* Header bar with controls */}
+            <div className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+                <div className="flex items-center justify-end gap-2 px-4 py-2">
+                    {/* Speech mode toggle - only shows if child has preferred voice */}
+                    {childProfile && (
+                        <SpeechModeToggle childProfile={childProfile} />
+                    )}
+                    <Button variant="ghost" size="sm" asChild>
+                        <Link href={`/story/session/${sessionId}`} title="Diagnostic View">
+                            <Settings className="h-4 w-4" />
+                        </Link>
+                    </Button>
+                </div>
             </div>
 
-            <div className="flex-grow flex flex-col items-center justify-center w-full max-w-2xl text-center">
+            <div className="flex-grow flex flex-col items-center justify-center w-full max-w-2xl text-center mx-auto p-4">
                 {isProcessing && (
                     <div className="flex flex-col items-center justify-center gap-4">
                         {childProfile?.avatarAnimationUrl || childProfile?.avatarUrl ? (
