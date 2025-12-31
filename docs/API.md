@@ -1149,6 +1149,18 @@ Refresh order status from Mixam.
 
 ---
 
+### Mixam Order Management
+
+After an order is submitted to Mixam, it can be viewed in the Mixam dashboard at:
+
+```
+https://mixam.co.uk/orders/{mixamOrderId}
+```
+
+Where `{mixamOrderId}` is the order ID returned from the `/api/admin/print-orders/[orderId]/submit` endpoint.
+
+---
+
 ### GET `/api/admin/system-config/prompts`
 
 Get global prompt configuration.
