@@ -18,7 +18,7 @@
 
 ### 2025-12-31
 
-#### `PENDING` - Update Mixam webhook to match official API format
+#### `84436db` - Update Mixam webhook to match official API format
 
 **Type**: Bug Fix / Enhancement
 
