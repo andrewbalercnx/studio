@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Copy, LoaderCircle, Plus, User, Pencil, X, Sparkles, Image as ImageIcon, Volume2, Trash2 } from 'lucide-react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useFirestore } from '@/firebase';
-import { collection, doc, onSnapshot, setDoc, serverTimestamp, query, where, writeBatch, updateDoc, deleteField } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc, serverTimestamp, query, where, writeBatch, updateDoc, deleteField, getDoc } from 'firebase/firestore';
 import { DeleteButton, UndoBanner, useDeleteWithUndo, type DeletedItem } from '@/components/shared/DeleteWithUndo';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -530,28 +530,59 @@ export default function ManageChildrenPage() {
     }, [user, firestore]);
 
     useEffect(() => {
-        if (!childrenQuery) {
+        if (!childrenQuery || !firestore) {
             setLoading(false);
             return;
         }
         setLoading(true);
+
+        // Track if component is still mounted
+        let isMounted = true;
+
+        // Also fetch help-child for wizard demonstrations
+        const fetchHelpChild = async () => {
+            try {
+                const helpChildDoc = await getDoc(doc(firestore, 'children', 'help-child'));
+                if (helpChildDoc.exists() && isMounted) {
+                    return { ...helpChildDoc.data(), id: helpChildDoc.id } as ChildProfile;
+                }
+            } catch {
+                // Silently fail - help-child is optional for wizard demos
+            }
+            return null;
+        };
+
         const unsubscribe = onSnapshot(childrenQuery,
-            (snapshot) => {
+            async (snapshot) => {
                 const childrenList = snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as ChildProfile);
-                setChildren(childrenList);
-                setLoading(false);
-                setError(null);
+
+                // Include help-child if it exists (for wizard demonstrations)
+                const helpChild = await fetchHelpChild();
+                if (helpChild && !childrenList.some(c => c.id === 'help-child')) {
+                    childrenList.push(helpChild);
+                }
+
+                if (isMounted) {
+                    setChildren(childrenList);
+                    setLoading(false);
+                    setError(null);
+                }
             },
             (serverError) => {
                 const permissionError = new FirestorePermissionError({ path: 'children', operation: 'list' });
                 errorEmitter.emit('permission-error', permissionError);
-                setError("Could not fetch children profiles. Check console for details.");
-                setChildren([]);
-                setLoading(false);
+                if (isMounted) {
+                    setError("Could not fetch children profiles. Check console for details.");
+                    setChildren([]);
+                    setLoading(false);
+                }
             }
         );
-        return () => unsubscribe();
-    }, [childrenQuery]);
+        return () => {
+            isMounted = false;
+            unsubscribe();
+        };
+    }, [childrenQuery, firestore]);
 
     const handleManagePhotos = (child: ChildProfile) => {
         setSelectedChild(child);

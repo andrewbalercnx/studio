@@ -15,6 +15,7 @@ import {
   writeBatch,
   updateDoc,
   deleteField,
+  getDoc,
 } from 'firebase/firestore';
 import type { Character, ChildProfile } from '@/lib/types';
 import { LoaderCircle, Plus, User, Pencil, Smile, Image as ImageIcon } from 'lucide-react';
@@ -78,25 +79,56 @@ export default function ManageCharactersPage() {
   }, [user, firestore]);
 
   useEffect(() => {
-    if (!charactersQuery) {
+    if (!charactersQuery || !firestore) {
       setLoading(false);
       return;
     }
     setLoading(true);
+
+    // Track if component is still mounted
+    let isMounted = true;
+
+    // Also fetch help-character for wizard demonstrations
+    const fetchHelpCharacter = async () => {
+      try {
+        const helpCharDoc = await getDoc(doc(firestore, 'characters', 'help-character'));
+        if (helpCharDoc.exists() && isMounted) {
+          return { ...helpCharDoc.data(), id: helpCharDoc.id } as Character;
+        }
+      } catch {
+        // Silently fail - help-character is optional for wizard demos
+      }
+      return null;
+    };
+
     const unsubscribe = onSnapshot(
       charactersQuery,
-      (snapshot) => {
+      async (snapshot) => {
         const characterList = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as Character));
-        setCharacters(characterList);
-        setLoading(false);
+
+        // Include help-character if it exists (for wizard demonstrations)
+        const helpCharacter = await fetchHelpCharacter();
+        if (helpCharacter && !characterList.some(c => c.id === 'help-character')) {
+          characterList.push(helpCharacter);
+        }
+
+        if (isMounted) {
+          setCharacters(characterList);
+          setLoading(false);
+        }
       },
       (error) => {
-        toast({ title: 'Error loading characters', description: error.message, variant: 'destructive' });
-        setLoading(false);
+        if (isMounted) {
+          toast({ title: 'Error loading characters', description: error.message, variant: 'destructive' });
+          setLoading(false);
+        }
       }
     );
-    return () => unsubscribe();
-  }, [charactersQuery]);
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [charactersQuery, firestore]);
 
   useEffect(() => {
     if (!childrenQuery) return;

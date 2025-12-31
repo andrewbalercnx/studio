@@ -195,9 +195,22 @@ export function HelpWizard() {
         ? `[data-wiz-target="${currentPage.wizardTargetId}"]`
         : currentPage.highlightSelector;
 
+      console.debug('[HelpWizard] Click action triggered', {
+        wizardTargetId: currentPage.wizardTargetId,
+        highlightSelector: currentPage.highlightSelector,
+        selector
+      });
+
       if (selector) {
         const element = document.querySelector(selector) as HTMLElement;
+        console.debug('[HelpWizard] Element lookup result', {
+          found: !!element,
+          tagName: element?.tagName,
+          selector
+        });
+
         if (element) {
+          console.debug('[HelpWizard] Clicking element...', element);
           element.click();
           // Add a short delay after clicking so the user can see what opened
           setTimeout(() => {
@@ -208,6 +221,8 @@ export function HelpWizard() {
             }
           }, 500);
           return;
+        } else {
+          console.warn('[HelpWizard] Element not found for selector:', selector);
         }
       }
     }
