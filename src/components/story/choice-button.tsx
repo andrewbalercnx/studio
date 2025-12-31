@@ -27,6 +27,8 @@ interface ChoiceButtonProps {
   icon?: React.ReactNode;
   variant?: 'secondary' | 'outline';
   className?: string;
+  /** Optional label like "A", "B", "C" shown in a badge */
+  optionLabel?: string;
 }
 
 /**
@@ -40,7 +42,8 @@ export function ChoiceButton({
   disabled,
   icon,
   variant = 'secondary',
-  className = ''
+  className = '',
+  optionLabel
 }: ChoiceButtonProps) {
   const entities = choice.entities || [];
   const hasEntities = entities.length > 0 && entities.some(e => e.avatarUrl);
@@ -55,6 +58,11 @@ export function ChoiceButton({
       disabled={disabled}
     >
       <div className="flex items-center gap-3 w-full">
+        {optionLabel && (
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg">
+            {optionLabel}
+          </div>
+        )}
         {introducesCharacter && (
           <div className="flex-shrink-0">
             <Badge variant="secondary" className="gap-1 bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
@@ -63,7 +71,7 @@ export function ChoiceButton({
             </Badge>
           </div>
         )}
-        {hasEntities && !introducesCharacter && (
+        {hasEntities && !introducesCharacter && !optionLabel && (
           <div className="flex -space-x-2 flex-shrink-0">
             {entities.filter(e => e.avatarUrl).slice(0, 3).map((entity) => (
               <Avatar key={entity.id} className="h-8 w-8 border-2 border-background">

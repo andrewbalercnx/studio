@@ -62,25 +62,17 @@ export function useStoryTTS(options: UseStoryTTSOptions): UseStoryTTSReturn {
   /**
    * Build the full text to speak from story content.
    * Format: "[headerText]. [questionText]. Option A: [text]. Option B: [text]..."
+   * Respects 1000 character limit by prioritizing question/options over header text.
    */
   const buildSpeechText = useCallback((content: {
     headerText?: string;
     questionText?: string;
     options?: Array<{ text: string }>;
   }): string => {
-    const parts: string[] = [];
+    const MAX_LENGTH = 950; // Leave some buffer under 1000
 
-    // Add header text if present
-    if (content.headerText?.trim()) {
-      parts.push(content.headerText.trim());
-    }
-
-    // Add question text if present
-    if (content.questionText?.trim()) {
-      parts.push(content.questionText.trim());
-    }
-
-    // Add options with labels
+    // Build options text first (most important for child to hear)
+    let optionsText = '';
     if (content.options && content.options.length > 0) {
       const optionTexts = content.options
         .filter(opt => opt.text?.trim() && !(opt as any).isMoreOption) // Skip "more" options
@@ -90,11 +82,40 @@ export function useStoryTTS(options: UseStoryTTSOptions): UseStoryTTSReturn {
         });
 
       if (optionTexts.length > 0) {
-        parts.push(optionTexts.join('. '));
+        optionsText = optionTexts.join('. ');
       }
     }
 
-    return parts.join('. ');
+    // Build question text
+    const questionText = content.questionText?.trim() || '';
+
+    // Build header text
+    const headerText = content.headerText?.trim() || '';
+
+    // Start with question + options (most important)
+    let result = '';
+    if (questionText && optionsText) {
+      result = `${questionText}. ${optionsText}`;
+    } else if (optionsText) {
+      result = optionsText;
+    } else if (questionText) {
+      result = questionText;
+    }
+
+    // Add header text if there's room
+    if (headerText && result.length + headerText.length + 2 <= MAX_LENGTH) {
+      result = headerText + '. ' + result;
+    } else if (headerText && !result) {
+      // Only header text, truncate if needed
+      result = headerText.length > MAX_LENGTH ? headerText.substring(0, MAX_LENGTH - 3) + '...' : headerText;
+    }
+
+    // Final safety truncation
+    if (result.length > MAX_LENGTH) {
+      result = result.substring(0, MAX_LENGTH - 3) + '...';
+    }
+
+    return result;
   }, []);
 
   const speakStoryContent = useCallback((content: {

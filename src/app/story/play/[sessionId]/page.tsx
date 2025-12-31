@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
@@ -102,6 +102,9 @@ export default function StoryPlayPage() {
     const [isCompiling, setIsCompiling] = useState(false);
     const [hasAutoCompiled, setHasAutoCompiled] = useState(false);
 
+    // Track the last message ID that was spoken to avoid replaying
+    const lastSpokenMessageIdRef = useRef<string | null>(null);
+
     // State for character introduction flow
     const [introducingCharacter, setIntroducingCharacter] = useState<{
         characterId: string;
@@ -142,17 +145,18 @@ export default function StoryPlayPage() {
         duckedVolume: 0.1,
     });
 
-    // Start/stop background music based on processing state and avatar visibility
+    // Start/stop background music based on processing state, avatar visibility, and TTS speaking
+    // Music plays during processing OR while TTS is speaking (ducked)
     useEffect(() => {
         const hasAvatar = childProfile?.avatarAnimationUrl || childProfile?.avatarUrl;
-        const shouldPlayMusic = isProcessing && hasAvatar && backgroundMusicUrl;
+        const shouldPlayMusic = (isProcessing && hasAvatar && backgroundMusicUrl) || (isSpeaking && backgroundMusicUrl);
 
         if (shouldPlayMusic && backgroundMusic.isLoaded && !backgroundMusic.isPlaying) {
             backgroundMusic.play();
         } else if (!shouldPlayMusic && backgroundMusic.isPlaying) {
             backgroundMusic.fadeOut();
         }
-    }, [isProcessing, childProfile?.avatarAnimationUrl, childProfile?.avatarUrl, backgroundMusicUrl, backgroundMusic]);
+    }, [isProcessing, childProfile?.avatarAnimationUrl, childProfile?.avatarUrl, backgroundMusicUrl, backgroundMusic, isSpeaking]);
 
     // Cleanup background music on unmount
     useEffect(() => {
@@ -833,6 +837,7 @@ export default function StoryPlayPage() {
             allMessages,
             latestAssistantKind: latestAssistant?.kind,
             latestAssistantId: latestAssistant?.id,
+            lastSpokenMessageId: lastSpokenMessageIdRef.current,
         });
 
         if (!isSpeechModeEnabled || isProcessing) {
@@ -842,6 +847,12 @@ export default function StoryPlayPage() {
 
         if (!latestAssistant) {
             console.log('[StoryPlayPage TTS] No assistant message found in recentMessages');
+            return;
+        }
+
+        // Skip if we already spoke this message (prevents replaying on re-renders)
+        if (latestAssistant.id === lastSpokenMessageIdRef.current) {
+            console.log('[StoryPlayPage TTS] Already spoke this message, skipping:', latestAssistant.id);
             return;
         }
 
@@ -885,6 +896,9 @@ export default function StoryPlayPage() {
             questionText: questionText?.substring(0, 50),
             optionsCount: options?.length,
         });
+
+        // Mark this message as spoken before calling speakStoryContent
+        lastSpokenMessageIdRef.current = latestAssistant.id;
         speakStoryContent({ headerText, questionText, options });
     }, [recentMessages, isSpeechModeEnabled, isProcessing, speakStoryContent, childProfile]);
 
@@ -906,12 +920,12 @@ export default function StoryPlayPage() {
 
     return (
         <div className="min-h-screen bg-background text-foreground flex flex-col items-center p-4">
-            {/* Speech mode toggle - positioned within header height, left of the user menu */}
-            <div className="fixed top-3 right-16 z-40 flex items-center gap-2">
+            {/* Speech mode toggle - positioned within header, left of the user menu */}
+            <div className="fixed top-0 right-14 z-50 h-14 flex items-center gap-2">
                 {childProfile && (
                     <SpeechModeToggle childProfile={childProfile} />
                 )}
-                <Button variant="ghost" size="sm" asChild>
+                <Button variant="ghost" size="icon" asChild>
                     <Link href={`/story/session/${sessionId}`} title="Diagnostic View">
                         <Settings className="h-4 w-4" />
                     </Link>
@@ -1000,12 +1014,14 @@ export default function StoryPlayPage() {
                                             {((latestBeatOptions as any).optionsResolved || latestBeatOptions.options)?.map((opt: ChoiceWithEntities, idx: number) => {
                                                 // Get the original option for onClick (with placeholders for storage)
                                                 const originalOpt = latestBeatOptions.options?.[idx] || opt;
+                                                const optionLabel = String.fromCharCode(65 + idx); // A, B, C, D...
                                                 return (
                                                     <ChoiceButton
                                                         key={opt.id}
                                                         choice={opt}
                                                         onClick={() => handleChooseOption(originalOpt)}
                                                         disabled={isProcessing}
+                                                        optionLabel={optionLabel}
                                                     />
                                                 );
                                             })}
@@ -1047,12 +1063,13 @@ export default function StoryPlayPage() {
 
                                 {latestAssistantMessage.kind === 'ending_options' && (
                                      <div className="grid grid-cols-1 gap-3 w-full">
-                                        {latestAssistantMessage.options?.map((opt) => (
+                                        {latestAssistantMessage.options?.map((opt, idx) => (
                                             <ChoiceButton
                                                 key={opt.id}
                                                 choice={opt as ChoiceWithEntities}
                                                 onClick={() => handleChooseEnding(opt)}
                                                 disabled={isProcessing}
+                                                optionLabel={String.fromCharCode(65 + idx)}
                                                 icon={<Star className="w-4 h-4 mr-2 text-amber-400 flex-shrink-0" />}
                                             />
                                         ))}
@@ -1071,6 +1088,7 @@ export default function StoryPlayPage() {
                                                         choice={opt}
                                                         onClick={() => handleGemini3Choice(originalOpt)}
                                                         disabled={isProcessing}
+                                                        optionLabel={String.fromCharCode(65 + idx)}
                                                         icon={<Sparkles className="w-4 h-4 mr-2 text-purple-500 flex-shrink-0" />}
                                                     />
                                                 );
@@ -1127,6 +1145,7 @@ export default function StoryPlayPage() {
                                                     disabled={isProcessing}
                                                     variant={isMoreOption ? "outline" : "secondary"}
                                                     className={isMoreOption ? 'border-dashed' : ''}
+                                                    optionLabel={isMoreOption ? undefined : String.fromCharCode(65 + idx)}
                                                     icon={isMoreOption ? (
                                                         <RefreshCw className="w-4 h-4 mr-2 text-muted-foreground flex-shrink-0" />
                                                     ) : (
