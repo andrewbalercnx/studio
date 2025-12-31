@@ -18,6 +18,26 @@
 
 ### 2025-12-31
 
+#### `pending` - Add image upload to Story Output Types
+
+**Type**: Feature
+
+**Summary**: Admins can now upload images for story output types in addition to AI generation.
+
+**Changes**:
+- Created `/api/storyOutputTypes/uploadImage` route for uploading images
+- Added Upload button alongside Generate button on story output type cards
+- Images are stored in Firebase Storage at `storyOutputTypes/{typeId}/...`
+
+**New files**:
+- `src/app/api/storyOutputTypes/uploadImage/route.ts`
+
+**Modified files**:
+- `src/app/admin/storyOutputs/page.tsx`
+- `docs/API.md`
+
+---
+
 #### `pending` - Auto-start default help wizard for new users
 
 **Type**: Feature

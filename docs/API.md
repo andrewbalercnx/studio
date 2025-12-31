@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2025-12-30
+> **Last Updated**: 2025-12-31
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -27,6 +27,7 @@ StoryPic Kids API uses Next.js App Router API routes. All endpoints require auth
 - [Admin Routes](#admin-routes)
 - [Voice Routes](#voice-routes)
 - [Music Routes](#music-routes)
+- [Story Output Types Routes](#story-output-types-routes)
 - [Webhook Routes](#webhook-routes)
 
 ---
@@ -927,6 +928,76 @@ Generate background music for a story type using ElevenLabs Music API.
 
 ---
 
+## Story Output Types Routes
+
+> All routes require `isAdmin` role.
+
+### POST `/api/storyOutputTypes/generateImage`
+
+Generate an image for a story output type using AI.
+
+**Request Body**:
+```json
+{
+  "storyOutputTypeId": "picture_book_standard_v1"
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "imageUrl": "https://firebasestorage.googleapis.com/..."
+}
+```
+
+**Errors**:
+- `400` - Missing storyOutputTypeId
+- `403` - Admin access required
+- `404` - Story output type not found or missing imagePrompt
+- `500` - Image generation failed
+
+---
+
+### POST `/api/storyOutputTypes/uploadImage`
+
+Upload an image for a story output type.
+
+**Request Body**:
+```json
+{
+  "storyOutputTypeId": "picture_book_standard_v1",
+  "dataUrl": "data:image/png;base64,...",
+  "fileName": "book-cover.png"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `storyOutputTypeId` | string | Yes | Target story output type ID |
+| `dataUrl` | string | Yes | Base64 data URL of the image |
+| `fileName` | string | No | Original file name (for extension) |
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "imageUrl": "https://firebasestorage.googleapis.com/...",
+  "objectPath": "storyOutputTypes/picture_book_standard_v1/...",
+  "contentType": "image/png",
+  "size": 245678
+}
+```
+
+**Errors**:
+- `400` - Missing storyOutputTypeId, missing dataUrl, invalid data URL, or not an image
+- `403` - Admin access required
+- `404` - Story output type not found
+- `413` - Image exceeds maximum size (8MB)
+- `500` - Upload failed
+
+---
+
 ## Admin Routes
 
 > All admin routes require `isAdmin` or `isWriter` role.
@@ -1423,4 +1494,5 @@ Rate-limited responses return status `429` with:
 
 | Date | Changes |
 |------|---------|
+| 2025-12-31 | Added storyOutputTypes/uploadImage endpoint |
 | 2025-12-29 | Initial documentation created |

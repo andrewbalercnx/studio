@@ -3,8 +3,8 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, PlusCircle, Copy, ImageIcon, Sparkles } from 'lucide-react';
-import { useEffect, useState, useCallback } from 'react';
+import { LoaderCircle, PlusCircle, Copy, ImageIcon, Sparkles, Upload } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
 import { collection, doc, onSnapshot, query, orderBy, writeBatch, serverTimestamp, getDocs } from 'firebase/firestore';
@@ -339,6 +339,8 @@ export default function AdminStoryOutputsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generatingImageFor, setGeneratingImageFor] = useState<string | null>(null);
+  const [uploadingImageFor, setUploadingImageFor] = useState<string | null>(null);
+  const fileInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingType, setEditingType] = useState<StoryOutputType | null>(null);
@@ -370,6 +372,58 @@ export default function AdminStoryOutputsPage() {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally {
       setGeneratingImageFor(null);
+    }
+  };
+
+  const handleUploadClick = (typeId: string) => {
+    const input = fileInputRefs.current.get(typeId);
+    if (input) {
+      input.click();
+    }
+  };
+
+  const handleFileChange = async (typeId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user) return;
+
+    // Clear the input so same file can be selected again
+    event.target.value = '';
+
+    setUploadingImageFor(typeId);
+    try {
+      // Convert file to data URL
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const token = await user.getIdToken();
+      const response = await fetch('/api/storyOutputTypes/uploadImage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          storyOutputTypeId: typeId,
+          dataUrl,
+          fileName: file.name,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.ok) {
+        toast({ title: 'Success', description: 'Image uploaded successfully!' });
+      } else {
+        toast({ title: 'Error', description: result.errorMessage, variant: 'destructive' });
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Upload failed';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+    } finally {
+      setUploadingImageFor(null);
     }
   };
 
@@ -495,21 +549,46 @@ export default function AdminStoryOutputsPage() {
                             </div>
                             <Button variant="ghost" size="sm" onClick={() => handleEdit(type)}>Edit</Button>
                         </div>
-                        {type.imagePrompt && (
+                        <div className="flex gap-2 w-full">
+                            {/* Hidden file input */}
+                            <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                ref={(el) => {
+                                    if (el) fileInputRefs.current.set(type.id, el);
+                                }}
+                                onChange={(e) => handleFileChange(type.id, e)}
+                            />
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="w-full"
-                                onClick={() => handleGenerateImage(type.id)}
-                                disabled={generatingImageFor === type.id}
+                                className="flex-1"
+                                onClick={() => handleUploadClick(type.id)}
+                                disabled={uploadingImageFor === type.id}
                             >
-                                {generatingImageFor === type.id ? (
-                                    <><LoaderCircle className="h-4 w-4 animate-spin mr-2" /> Generating...</>
+                                {uploadingImageFor === type.id ? (
+                                    <><LoaderCircle className="h-4 w-4 animate-spin mr-2" /> Uploading...</>
                                 ) : (
-                                    <><Sparkles className="h-4 w-4 mr-2" /> {type.imageUrl ? 'Regenerate Image' : 'Generate Image'}</>
+                                    <><Upload className="h-4 w-4 mr-2" /> Upload</>
                                 )}
                             </Button>
-                        )}
+                            {type.imagePrompt && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
+                                    onClick={() => handleGenerateImage(type.id)}
+                                    disabled={generatingImageFor === type.id}
+                                >
+                                    {generatingImageFor === type.id ? (
+                                        <><LoaderCircle className="h-4 w-4 animate-spin mr-2" /> Generating...</>
+                                    ) : (
+                                        <><Sparkles className="h-4 w-4 mr-2" /> Generate</>
+                                    )}
+                                </Button>
+                            )}
+                        </div>
                     </CardFooter>
                 </Card>
             ))}
