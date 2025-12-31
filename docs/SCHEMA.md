@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2025-12-31 (added isDefaultStartup to HelpWizard, hasCompletedStartupWizard to UserProfile)
+> **Last Updated**: 2025-12-31 (added systemConfig/paginationPrompt for configurable pagination prompt)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -432,6 +432,14 @@ System-wide configuration documents.
 |-------|------|----------|-------------|
 | `compilePrompt` | string | Yes | Compile prompt text |
 | `enabled` | boolean | Yes | Enable compile prompt |
+| `updatedAt` | timestamp | No | Last update time |
+| `updatedBy` | string | No | Email of last updater |
+
+#### `systemConfig/paginationPrompt`
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `paginationPrompt` | string | Yes | Default pagination prompt for dividing stories into pages |
+| `enabled` | boolean | Yes | When true, use custom prompt; when false, use hardcoded default |
 | `updatedAt` | timestamp | No | Last update time |
 | `updatedBy` | string | No | Email of last updater |
 

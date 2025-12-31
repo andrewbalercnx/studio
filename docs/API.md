@@ -1211,6 +1211,49 @@ Update compile prompt configuration.
 
 ---
 
+### GET `/api/admin/system-config/pagination-prompt`
+
+Get pagination prompt configuration.
+
+**Auth**: Admin only
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "config": {
+    "paginationPrompt": "You are a children's book pagination expert...",
+    "enabled": true
+  }
+}
+```
+
+---
+
+### PUT `/api/admin/system-config/pagination-prompt`
+
+Update pagination prompt configuration.
+
+**Auth**: Admin only
+
+**Request Body**:
+```json
+{
+  "paginationPrompt": "Your custom pagination prompt...",
+  "enabled": true
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "message": "Pagination prompt configuration updated successfully"
+}
+```
+
+---
+
 ### GET `/api/admin/system-config/kids-flows`
 
 Get kids flow configuration.

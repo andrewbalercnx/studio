@@ -12,8 +12,10 @@
 import { ai } from '@/ai/genkit';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
-import type { Story, StoryOutputType, ChildProfile, Character } from '@/lib/types';
+import type { Story, StoryOutputType, ChildProfile } from '@/lib/types';
+import { DEFAULT_PAGINATION_PROMPT } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { getPaginationPrompt } from '@/lib/pagination-prompt-config.server';
 import {
     type ActorInfo,
     buildActorListForPrompt,
@@ -31,19 +33,6 @@ const PaginationAIOutputSchema = z.object({
     imageDescription: z.string().optional().default(''),
   })),
 });
-
-// Default pagination prompt used when storyOutputType doesn't have one
-const DEFAULT_PAGINATION_PROMPT = `You are a children's book pagination expert. Take the story text and divide it into pages suitable for a children's picture book.
-
-RULES:
-1. Each page should have a natural amount of text for young children (2-4 short sentences, about 15-40 words)
-2. Preserve ALL $$id$$ actor references exactly as they appear - do not change them
-3. List which actor IDs (the IDs inside $$...$$) appear on each page in the actors array
-4. Create natural narrative breaks between pages - end pages at scene changes or emotional beats
-5. Build to a satisfying conclusion
-6. Do not add or remove any content from the story - just divide it into pages
-7. The first page should be an engaging opening, the last page should provide closure
-8. For each page, write an imageDescription that describes what should be illustrated - include setting, action, mood, and which characters are present (use $$id$$ placeholders, same as in the text)`;
 
 type PaginationDebugInfo = {
     stage: 'init' | 'loading' | 'building_prompt' | 'ai_generate' | 'processing' | 'done' | 'error';
@@ -147,7 +136,9 @@ export const storyPaginationFlow = ai.defineFlow(
             // NOTE: We intentionally skip the global prefix for pagination.
             // The global prefix contains story generation guidance (character introduction, etc.)
             // which is not relevant for pagination - we're just splitting existing text into pages.
-            const paginationInstructions = storyOutputType.paginationPrompt || DEFAULT_PAGINATION_PROMPT;
+            // Priority: 1) storyOutputType.paginationPrompt, 2) system config, 3) default
+            const systemPaginationPrompt = await getPaginationPrompt();
+            const paginationInstructions = storyOutputType.paginationPrompt || systemPaginationPrompt || DEFAULT_PAGINATION_PROMPT;
 
             const pageCountInstruction = targetPageCount > 0
                 ? `TARGET PAGE COUNT: Exactly ${targetPageCount} content pages. Distribute the story evenly across these pages.`

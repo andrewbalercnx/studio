@@ -1447,6 +1447,32 @@ export const DEFAULT_COMPILE_PROMPT_CONFIG: CompilePromptConfig = {
   enabled: false,
 };
 
+// Pagination prompt configuration - used by story-pagination-flow to paginate story text
+export type PaginationPromptConfig = {
+  paginationPrompt: string;
+  enabled: boolean;
+  updatedAt?: any;
+  updatedBy?: string;
+};
+
+// Default pagination prompt from story-pagination-flow.ts
+export const DEFAULT_PAGINATION_PROMPT = `You are a children's book pagination expert. Take the story text and divide it into pages suitable for a children's picture book.
+
+RULES:
+1. Each page should have a natural amount of text for young children (2-4 short sentences, about 15-40 words)
+2. Preserve ALL $$id$$ actor references exactly as they appear - do not change them
+3. List which actor IDs (the IDs inside $$...$$) appear on each page in the actors array
+4. Create natural narrative breaks between pages - end pages at scene changes or emotional beats
+5. Build to a satisfying conclusion
+6. Do not add or remove any content from the story - just divide it into pages
+7. The first page should be an engaging opening, the last page should provide closure
+8. For each page, write an imageDescription that describes what should be illustrated - include setting, action, mood, and which characters are present (use $$id$$ placeholders, same as in the text)`;
+
+export const DEFAULT_PAGINATION_PROMPT_CONFIG: PaginationPromptConfig = {
+  paginationPrompt: DEFAULT_PAGINATION_PROMPT,
+  enabled: true, // Enabled by default since the prompt is required
+};
+
 // Kids flow configuration - controls which story flows are available in /kids endpoint
 export type KidsFlowConfig = {
   wizardEnabled: boolean;

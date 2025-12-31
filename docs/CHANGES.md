@@ -18,6 +18,40 @@
 
 ### 2025-12-31
 
+#### `pending` - Add configurable pagination prompt to admin
+
+**Type**: Feature
+
+**Summary**: Exposed the default pagination prompt in the System Configuration AI Prompts section, allowing admins to customize how stories are divided into picture book pages.
+
+**Changes**:
+- Added `PaginationPromptConfig` type and `DEFAULT_PAGINATION_PROMPT` constant to `types.ts`
+- Created `pagination-prompt-config.server.ts` with caching for server-side config access
+- Created `/api/admin/system-config/pagination-prompt` API route (GET/PUT)
+- Created `/admin/pagination-prompt` page with:
+  - Enable/disable toggle for custom prompt
+  - Prompt editor with "Reset to Default" button
+  - Info about auto-appended context and per-output-type overrides
+- Added "Pagination Prompt" link to admin dashboard AI Prompts section
+- Updated `story-pagination-flow.ts` to use configurable prompt with priority:
+  1. Per-output-type `paginationPrompt` field
+  2. System config `paginationPrompt` (if enabled)
+  3. Hardcoded default
+
+**Created files**:
+- `src/lib/pagination-prompt-config.server.ts`
+- `src/app/api/admin/system-config/pagination-prompt/route.ts`
+- `src/app/admin/pagination-prompt/page.tsx`
+
+**Modified files**:
+- `src/lib/types.ts` - Added PaginationPromptConfig type
+- `src/ai/flows/story-pagination-flow.ts` - Use configurable prompt
+- `src/app/admin/page.tsx` - Added link to pagination prompt page
+- `docs/SCHEMA.md` - Added systemConfig/paginationPrompt documentation
+- `docs/API.md` - Added pagination-prompt API documentation
+
+---
+
 #### `e60390e` - Improve Output Types editor in admin dashboard
 
 **Type**: Enhancement
