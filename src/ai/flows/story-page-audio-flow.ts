@@ -325,7 +325,11 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
     }
 
     pagesSkipped = pagesToSkip.length;
-    console.log(`[page-audio-flow] Processing ${pagesToProcess.length} pages in parallel, skipping ${pagesSkipped}`);
+
+    // Limit concurrent TTS requests to avoid hitting ElevenLabs rate limits
+    // Their limit is 5 concurrent requests, we use 3 to leave headroom for on-demand TTS
+    const MAX_CONCURRENT_TTS = 3;
+    console.log(`[page-audio-flow] Processing ${pagesToProcess.length} pages with concurrency ${MAX_CONCURRENT_TTS}, skipping ${pagesSkipped}`);
 
     // Update all pages to 'generating' status in parallel
     await Promise.all(
@@ -339,8 +343,8 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
       })
     );
 
-    // Process all pages in parallel
-    const audioPromises = pagesToProcess.map(async (page) => {
+    // Process pages with limited concurrency to avoid hitting ElevenLabs rate limits
+    const processPage = async (page: StoryOutputPage) => {
       const pageRef = pagesCollectionRef.doc(page.id!);
 
       try {
@@ -395,10 +399,31 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
         });
         return { success: false, error: pageError.message };
       }
-    });
+    };
 
-    // Wait for all audio generation to complete
-    const audioResults = await Promise.all(audioPromises);
+    // Process with concurrency limit using a simple pool
+    const audioResults: Array<{ success: boolean; result?: PageAudioResult; skipped?: boolean; error?: string }> = [];
+    const queue = [...pagesToProcess];
+    const inFlight: Promise<void>[] = [];
+
+    while (queue.length > 0 || inFlight.length > 0) {
+      // Start new tasks up to the concurrency limit
+      while (inFlight.length < MAX_CONCURRENT_TTS && queue.length > 0) {
+        const page = queue.shift()!;
+        const promise = processPage(page).then((result) => {
+          audioResults.push(result);
+          // Remove this promise from inFlight
+          const idx = inFlight.indexOf(promise);
+          if (idx > -1) inFlight.splice(idx, 1);
+        });
+        inFlight.push(promise);
+      }
+
+      // Wait for at least one to complete before continuing
+      if (inFlight.length > 0) {
+        await Promise.race(inFlight);
+      }
+    }
 
     // Collect results
     for (const res of audioResults) {
