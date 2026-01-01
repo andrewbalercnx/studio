@@ -18,6 +18,34 @@
 
 ### 2026-01-01
 
+#### `6086ba7` - Switch email from SMTP to Microsoft Graph API
+
+**Type**: Feature / Infrastructure
+
+**Summary**: Replaced SMTP-based email sending with Microsoft Graph API. Security Defaults in Microsoft 365 blocks SMTP basic auth, so switched to modern OAuth via Azure AD App Registration.
+
+**Changes**:
+- Replaced nodemailer with @azure/identity and @microsoft/microsoft-graph-client
+- Updated send-email.ts to use Graph API sendMail endpoint
+- Updated test-email route to check for Azure credentials
+- Updated apphosting.yaml with AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET secrets
+- Added "Send Test Email" button to Admin Dashboard Diagnostics section
+
+**Files Created**:
+- `src/app/api/admin/test-email/route.ts`
+
+**Files Modified**:
+- `src/lib/email/send-email.ts` - Switched from nodemailer to Microsoft Graph
+- `src/app/admin/page.tsx` - Added test email button
+- `apphosting.yaml` - Replaced SMTP secrets with Azure secrets
+- `docs/API.md` - Added test-email endpoint documentation
+
+**Setup Required**:
+- Azure AD App Registration with Mail.Send application permission
+- Secrets: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
+
+---
+
 #### `37beb80` - Add print product page constraints to storybook pipeline
 
 **Type**: Feature

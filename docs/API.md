@@ -1047,7 +1047,7 @@ Upload an image for a story output type.
 
 ### POST `/api/admin/test-email`
 
-Send a test email to verify SMTP configuration. Admin only.
+Send a test email to verify Microsoft Graph configuration. Admin only.
 
 **Request Body** (optional):
 ```json
@@ -1071,7 +1071,7 @@ If `email` is not provided, sends to the authenticated admin's email.
 ```json
 {
   "ok": false,
-  "error": "SMTP not configured. Set SMTP_USER and SMTP_PASSWORD environment variables.",
+  "error": "Microsoft Graph not configured. Set AZURE_TENANT_ID, AZURE_CLIENT_ID, and AZURE_CLIENT_SECRET environment variables.",
   "configured": false
 }
 ```
