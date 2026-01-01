@@ -13,9 +13,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { LoaderCircle, Plus, Edit, Trash2 } from 'lucide-react';
-import type { PrintLayout } from '@/lib/types';
+import { LoaderCircle, Plus, Edit, Trash2, Link2, Link2Off } from 'lucide-react';
+import type { PrintLayout, PrintProduct } from '@/lib/types';
 import SampleLayoutData from '@/data/print-layouts.json';
+import { query, where } from 'firebase/firestore';
 import { writeBatch } from 'firebase/firestore';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -65,6 +66,13 @@ const pageLayoutConfigSchema = z.object({
   imageBox: imageLayoutBoxSchema,
 }).optional();
 
+// Page constraints schema
+const pageConstraintsSchema = z.object({
+  minPages: numberOrEmpty,
+  maxPages: numberOrEmpty,
+  pageMultiple: z.enum(['1', '2', '4']).optional(),
+}).optional();
+
 const printLayoutFormSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, 'Name is required'),
@@ -79,6 +87,9 @@ const printLayoutFormSchema = z.object({
   backCoverLayout: pageLayoutConfigSchema,
   insideLayout: pageLayoutConfigSchema,
   titlePageLayout: pageLayoutConfigSchema,
+  // Print product link and page constraints
+  printProductId: z.string().optional(),
+  pageConstraints: pageConstraintsSchema,
   // Legacy arrays (still used for backwards compatibility)
   textBoxes: z.array(boxSchema).min(1, 'At least one text box is required'),
   imageBoxes: z.array(boxSchema).min(1, 'At least one image box is required'),
@@ -116,9 +127,11 @@ const defaultFormValues: PrintLayoutFormValues = {
 function PrintLayoutForm({
   editingLayout,
   onSave,
+  printProducts,
 }: {
   editingLayout?: PrintLayout | null;
   onSave: () => void;
+  printProducts: PrintProduct[];
 }) {
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -128,6 +141,8 @@ function PrintLayoutForm({
     register,
     control,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<PrintLayoutFormValues>({
     resolver: zodResolver(printLayoutFormSchema),
@@ -144,11 +159,47 @@ function PrintLayoutForm({
           backCoverLayout: editingLayout.backCoverLayout || defaultFormValues.backCoverLayout,
           insideLayout: editingLayout.insideLayout || defaultFormValues.insideLayout,
           titlePageLayout: editingLayout.titlePageLayout || defaultFormValues.titlePageLayout,
+          printProductId: editingLayout.printProductId || undefined,
+          pageConstraints: editingLayout.pageConstraints ? {
+            minPages: editingLayout.pageConstraints.minPages,
+            maxPages: editingLayout.pageConstraints.maxPages,
+            pageMultiple: editingLayout.pageConstraints.pageMultiple?.toString() as '1' | '2' | '4' | undefined,
+          } : undefined,
           textBoxes: editingLayout.textBoxes || [],
           imageBoxes: editingLayout.imageBoxes || [],
         }
       : defaultFormValues,
   });
+
+  // Watch printProductId for auto-sync
+  const watchedProductId = watch('printProductId');
+
+  // Auto-sync trim size when product changes
+  useEffect(() => {
+    if (!watchedProductId) return;
+
+    const product = printProducts.find(p => p.id === watchedProductId);
+    if (!product?.mixamSpec?.format?.allowedTrimSizes?.length) return;
+
+    // Use the first allowed trim size
+    const trimSize = product.mixamSpec.format.allowedTrimSizes[0];
+    // Convert mm to inches (25.4mm = 1 inch)
+    const widthInches = Math.round((trimSize.width / 25.4) * 100) / 100;
+    const heightInches = Math.round((trimSize.height / 25.4) * 100) / 100;
+
+    setValue('leafWidth', widthInches);
+    setValue('leafHeight', heightInches);
+
+    toast({
+      title: 'Trim size synced',
+      description: `Set to ${widthInches}" × ${heightInches}" from ${product.name}`,
+    });
+  }, [watchedProductId, printProducts, setValue, toast]);
+
+  // Get the linked product for displaying inherited constraints
+  const linkedProduct = watchedProductId
+    ? printProducts.find(p => p.id === watchedProductId)
+    : null;
 
   const {
     fields: textBoxFields,
@@ -194,6 +245,22 @@ function PrintLayoutForm({
     return Object.keys(cleaned).length > 0 ? cleaned : undefined;
   };
 
+  // Clean up page constraints to remove undefined/empty values
+  const cleanPageConstraints = (constraints: PrintLayoutFormValues['pageConstraints']) => {
+    if (!constraints) return undefined;
+    const cleaned: Record<string, any> = {};
+    if (constraints.minPages !== undefined && constraints.minPages !== null) {
+      cleaned.minPages = constraints.minPages;
+    }
+    if (constraints.maxPages !== undefined && constraints.maxPages !== null) {
+      cleaned.maxPages = constraints.maxPages;
+    }
+    if (constraints.pageMultiple) {
+      cleaned.pageMultiple = Number(constraints.pageMultiple) as 1 | 2 | 4;
+    }
+    return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+  };
+
   const onSubmit = async (data: PrintLayoutFormValues) => {
     if (!firestore) return;
 
@@ -204,6 +271,10 @@ function PrintLayoutForm({
       // Clean up optional string fields
       font: data.font || undefined,
       fontSize: data.fontSize || undefined,
+      // Print product link (empty string -> undefined)
+      printProductId: data.printProductId || undefined,
+      // Page constraints
+      pageConstraints: cleanPageConstraints(data.pageConstraints),
       // Clean layout configs to remove empty strings
       coverLayout: cleanLayoutConfig(data.coverLayout),
       backCoverLayout: cleanLayoutConfig(data.backCoverLayout),
@@ -456,6 +527,114 @@ function PrintLayoutForm({
         </div>
       </div>
 
+      {/* Print Product Link & Page Constraints */}
+      <div className="space-y-4">
+        <h3 className="font-medium text-sm border-b pb-2">Print Product & Page Constraints</h3>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Print Product Link */}
+          <div className="space-y-2">
+            <Label>Linked Print Product</Label>
+            <Controller
+              name="printProductId"
+              control={control}
+              render={({ field }) => (
+                <Select onValueChange={field.onChange} value={field.value || ''}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="No product linked">
+                      {field.value ? (
+                        <span className="flex items-center gap-2">
+                          <Link2 className="h-4 w-4 text-green-600" />
+                          {printProducts.find(p => p.id === field.value)?.name || field.value}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <Link2Off className="h-4 w-4 text-muted-foreground" />
+                          No product linked
+                        </span>
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">
+                      <span className="flex items-center gap-2">
+                        <Link2Off className="h-4 w-4" />
+                        No product linked
+                      </span>
+                    </SelectItem>
+                    {printProducts.map((product) => (
+                      <SelectItem key={product.id} value={product.id}>
+                        <span className="flex items-center gap-2">
+                          <Link2 className="h-4 w-4" />
+                          {product.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <p className="text-xs text-muted-foreground">
+              When linked, trim size auto-syncs from product. Page constraints default to product settings.
+            </p>
+            {linkedProduct && (
+              <p className="text-xs text-blue-600">
+                Product constraints: {linkedProduct.mixamSpec?.format?.minPageCount ?? 0}-{linkedProduct.mixamSpec?.format?.maxPageCount ?? '∞'} pages,
+                multiple of {linkedProduct.mixamSpec?.format?.pageCountIncrement ?? 4}
+              </p>
+            )}
+          </div>
+
+          {/* Page Constraints */}
+          <div className="space-y-3">
+            <Label className="text-sm">Page Constraints (override product defaults)</Label>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Min Pages</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder={linkedProduct ? String(linkedProduct.mixamSpec?.format?.minPageCount ?? '') : '0'}
+                  {...register('pageConstraints.minPages')}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Max Pages</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder={linkedProduct ? String(linkedProduct.mixamSpec?.format?.maxPageCount ?? '') : '∞'}
+                  {...register('pageConstraints.maxPages')}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Page Multiple</Label>
+                <Controller
+                  name="pageConstraints.pageMultiple"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value || ''}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={linkedProduct ? `${linkedProduct.mixamSpec?.format?.pageCountIncrement ?? 4}` : 'Default'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Use default</SelectItem>
+                        <SelectItem value="1">Any (1)</SelectItem>
+                        <SelectItem value="2">Even (2)</SelectItem>
+                        <SelectItem value="4">Multiple of 4</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Leave blank to inherit from linked product, or set explicit values to override.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Legacy text/image boxes (collapsed by default) */}
       <details className="border rounded-lg p-4">
         <summary className="font-medium text-sm cursor-pointer">Legacy Box Arrays (for backwards compatibility)</summary>
@@ -499,6 +678,14 @@ function PrintLayoutsPanel() {
   const firestore = useFirestore();
   const layoutsQuery = useMemo(() => (firestore ? collection(firestore, 'printLayouts') : null), [firestore]);
   const { data: layouts, loading, error } = useCollection<PrintLayout>(layoutsQuery);
+
+  // Load print products for the form dropdown
+  const printProductsQuery = useMemo(
+    () => firestore ? query(collection(firestore, 'printProducts'), where('active', '==', true)) : null,
+    [firestore]
+  );
+  const { data: printProducts, loading: productsLoading } = useCollection<PrintProduct>(printProductsQuery);
+
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLayout, setEditingLayout] = useState<PrintLayout | null>(null);
@@ -559,44 +746,64 @@ function PrintLayoutsPanel() {
         </div>
       </CardHeader>
       <CardContent>
-        {loading && <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />}
-        {!loading && layouts && layouts.length === 0 && (
+        {(loading || productsLoading) && <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />}
+        {!loading && !productsLoading && layouts && layouts.length === 0 && (
           <p className="text-sm text-muted-foreground">No print layouts yet. Seeding default...</p>
         )}
-        {!loading && layouts && layouts.length > 0 && (
+        {!loading && !productsLoading && layouts && layouts.length > 0 && (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Dimensions</TableHead>
                 <TableHead>Spreads</TableHead>
+                <TableHead>Print Product</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {layouts.map((layout) => (
-                <TableRow key={layout.id}>
-                  <TableCell className="font-medium">{layout.name}</TableCell>
-                  <TableCell>{layout.leafWidth}" x {layout.leafHeight}"</TableCell>
-                  <TableCell>{layout.leavesPerSpread === 2 ? 'Two-leaf' : 'One-leaf'}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(layout)}>
-                      <Edit className="mr-1 h-4 w-4" /> Edit
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {layouts.map((layout) => {
+                const linkedProduct = layout.printProductId
+                  ? printProducts?.find(p => p.id === layout.printProductId)
+                  : null;
+                return (
+                  <TableRow key={layout.id}>
+                    <TableCell className="font-medium">{layout.name}</TableCell>
+                    <TableCell>{layout.leafWidth}" x {layout.leafHeight}"</TableCell>
+                    <TableCell>{layout.leavesPerSpread === 2 ? 'Two-leaf' : 'One-leaf'}</TableCell>
+                    <TableCell>
+                      {linkedProduct ? (
+                        <span className="flex items-center gap-1 text-sm">
+                          <Link2 className="h-3 w-3 text-green-600" />
+                          {linkedProduct.name}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(layout)}>
+                        <Edit className="mr-1 h-4 w-4" /> Edit
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
       </CardContent>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingLayout ? 'Edit Print Layout' : 'New Print Layout'}</DialogTitle>
           </DialogHeader>
-          <PrintLayoutForm editingLayout={editingLayout} onSave={handleSave} />
+          <PrintLayoutForm
+            editingLayout={editingLayout}
+            onSave={handleSave}
+            printProducts={printProducts || []}
+          />
         </DialogContent>
       </Dialog>
     </Card>

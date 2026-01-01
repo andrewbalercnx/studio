@@ -456,6 +456,8 @@ export type PrintStoryBook = {
   combinedPdfUrl?: string;
   printableMetadata?: PrintableAssetMetadata;
   pdfErrorMessage?: string;
+  // Warnings generated during PDF creation (page count adjustments, truncations)
+  pdfGenerationWarnings?: string[];
   createdAt: any;
   updatedAt: any;
   generatedAt?: any;
@@ -1385,6 +1387,13 @@ export type PageLayoutConfig = {
 // Page type for layout resolution
 export type PrintLayoutPageType = 'cover' | 'inside' | 'backCover' | 'titlePage';
 
+// Page constraints for print layouts - controls story pagination and PDF generation
+export type PrintLayoutPageConstraints = {
+  minPages?: number;      // Minimum content pages (excluding covers)
+  maxPages?: number;      // Maximum content pages
+  pageMultiple?: 1 | 2 | 4;  // Pages must be divisible by this (1=any, 2=even, 4=multiple of 4)
+};
+
 export type PrintLayout = {
   id: string;
   name: string;
@@ -1404,6 +1413,14 @@ export type PrintLayout = {
 
   // Title page layout (optional, defaults to full-page centered text)
   titlePageLayout?: PageLayoutConfig;
+
+  // Link to a PrintProduct for trim size and default constraints
+  // When set, leafWidth/leafHeight should sync from the product's allowedTrimSizes
+  printProductId?: string;
+
+  // Page constraints for story pagination and PDF generation
+  // If set, these override the linked PrintProduct's constraints
+  pageConstraints?: PrintLayoutPageConstraints;
 
   // @deprecated - Legacy arrays, will be removed after migration
   // Use coverLayout, backCoverLayout, and insideLayout instead

@@ -18,6 +18,36 @@
 
 ### 2026-01-01
 
+#### `pending` - Add print product page constraints to storybook pipeline
+
+**Type**: Feature
+
+**Summary**: Added page constraints (min/max pages, page multiple) to the storybook generation pipeline, flowing from PrintProduct through PrintLayout to AI pagination and PDF generation.
+
+**Changes**:
+- PrintLayout can now link to a PrintProduct via `printProductId` field
+- PrintLayout can override product constraints via `pageConstraints` field (minPages, maxPages, pageMultiple)
+- When a PrintLayout is linked to a PrintProduct, leafWidth/leafHeight auto-sync from the product's trim size
+- AI pagination flow now receives min/max page guidance in the prompt
+- PDF generation validates page count against constraints:
+  - Truncates content if over maximum (with warning)
+  - Pads with blank pages if under minimum
+  - Ensures page count meets pageMultiple requirement (1=any, 2=even, 4=multiple of 4)
+- Warnings from PDF generation are stored and displayed in admin UI
+
+**Files Created**:
+- `src/lib/print-constraints.ts` - Constraint resolution and validation utilities
+
+**Files Modified**:
+- `src/lib/types.ts` - Added PrintLayoutPageConstraints type, extended PrintLayout and PrintStoryBook
+- `src/app/admin/print-layouts/page.tsx` - Added UI for printProductId and pageConstraints
+- `src/ai/flows/story-pagination-flow.ts` - Added constraint resolution and prompt guidance
+- `src/app/api/storyBook/printable/route.ts` - Added constraint validation and warning generation
+- `src/app/admin/print-orders/[orderId]/page.tsx` - Added PDF generation warnings display
+- `docs/SCHEMA.md` - Documented new fields
+
+---
+
 #### `1e7a5d9` - Add test email button to admin page
 
 **Type**: Feature

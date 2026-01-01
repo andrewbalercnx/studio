@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-01 (added mixamInteractions field, MixamInteraction type)
+> **Last Updated**: 2026-01-01 (added printProductId, pageConstraints to printLayouts; pdfGenerationWarnings to printStoryBooks)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -200,6 +200,7 @@ Print-ready storybook configurations.
 | `interiorPdfUrl` | string | No | Interior PDF URL |
 | `combinedPdfUrl` | string | No | Combined PDF URL |
 | `printableMetadata` | PrintableAssetMetadata | No | Print metadata |
+| `pdfGenerationWarnings` | string[] | No | Warnings from PDF generation (truncation, padding) |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
 
@@ -427,8 +428,18 @@ Print layout templates.
 | `backCoverLayout` | PageLayoutConfig | No | Back cover config |
 | `insideLayout` | PageLayoutConfig | No | Interior pages config |
 | `titlePageLayout` | PageLayoutConfig | No | Title page config |
+| `printProductId` | string | No | Link to PrintProduct for trim size and default constraints |
+| `pageConstraints` | PrintLayoutPageConstraints | No | Page count constraints (overrides product defaults) |
 | `createdAt` | timestamp | No | Creation time |
 | `updatedAt` | timestamp | No | Last update time |
+
+**PrintLayoutPageConstraints** (embedded object):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `minPages` | number | No | Minimum content pages (excluding covers) |
+| `maxPages` | number | No | Maximum content pages |
+| `pageMultiple` | 1 \| 2 \| 4 | No | Pages must be divisible by this (1=any, 2=even, 4=multiple of 4) |
 
 **Security**: Read/write by writers and admins.
 

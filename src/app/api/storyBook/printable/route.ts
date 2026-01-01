@@ -6,9 +6,10 @@ import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
-import type { PrintLayout, StoryOutputPage, PrintableAssetMetadata, PrintLayoutPageType } from '@/lib/types';
+import type { PrintLayout, StoryOutputPage, PrintableAssetMetadata, PrintLayoutPageType, PrintProduct } from '@/lib/types';
 import { getLayoutForPageType, mapPageKindToLayoutType } from '@/lib/print-layout-utils';
 import SampleLayoutData from '@/data/print-layouts.json';
+import { resolvePageConstraints, validatePageCount } from '@/lib/print-constraints';
 
 /**
  * Request body for generating printable PDFs.
@@ -799,7 +800,7 @@ export async function POST(request: Request) {
     const printLayoutSnap = await firestore.collection('printLayouts').doc(printLayoutId).get();
     let printLayout: PrintLayout;
     if (printLayoutSnap.exists) {
-      printLayout = printLayoutSnap.data() as PrintLayout;
+      printLayout = { id: printLayoutSnap.id, ...printLayoutSnap.data() } as PrintLayout;
     } else {
       const sampleLayout = SampleLayoutData.printLayouts.find(l => l.id === printLayoutId);
       if (!sampleLayout) {
@@ -808,6 +809,20 @@ export async function POST(request: Request) {
       printLayout = sampleLayout as PrintLayout;
       console.log(`[printable] Using fallback layout data for ${printLayoutId}`);
     }
+
+    // Load linked print product if specified for page constraints
+    let printProduct: PrintProduct | null = null;
+    if (printLayout.printProductId) {
+      const productSnap = await firestore.collection('printProducts').doc(printLayout.printProductId).get();
+      if (productSnap.exists) {
+        printProduct = { id: productSnap.id, ...productSnap.data() } as PrintProduct;
+        console.log(`[printable] Loaded linked print product: ${printProduct.name}`);
+      }
+    }
+
+    // Resolve page constraints from layout -> product chain
+    const resolvedConstraints = resolvePageConstraints(printLayout, printProduct);
+    console.log(`[printable] Resolved constraints:`, resolvedConstraints);
 
     const storyData = storySnap.data() as Record<string, any>;
 
@@ -852,34 +867,53 @@ export async function POST(request: Request) {
     // Prepare metadata - count pages by kind
     // Cover PDF has 3 pages: back cover + spine + front cover
     const coverPageCount = 3; // Back cover, spine (blank), front cover
-    const interiorPageCount = pages.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back').length;
+    const contentPageCount = pages.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back').length;
 
-    // Calculate padding pages needed to ensure interior page count is a multiple of 4
-    const currentInterior = interiorPageCount;
-    const targetPages = Math.ceil(currentInterior / 4) * 4;
-    const paddingPageCount = targetPages - currentInterior;
+    // Validate page count against constraints and calculate adjustments
+    const pageValidation = validatePageCount(contentPageCount, resolvedConstraints);
+    const pdfGenerationWarnings: string[] = pageValidation.warnings;
 
-    if (paddingPageCount > 0) {
-      console.log(`[printable] Interior pages: ${currentInterior}, padding with ${paddingPageCount} blank pages to reach ${targetPages}`);
+    // Log warnings
+    if (pdfGenerationWarnings.length > 0) {
+      console.log(`[printable] Page count validation warnings:`, pdfGenerationWarnings);
     }
 
-    const totalInteriorWithPadding = currentInterior + paddingPageCount;
+    // Handle truncation if content exceeds maximum
+    let pagesToRender = pages;
+    if (pageValidation.wasTruncated && resolvedConstraints.maxPages > 0) {
+      // Keep covers + only up to maxPages of content
+      const coverPages = pages.filter(p => p.kind === 'cover_front' || p.kind === 'cover_back');
+      const contentPages = pages.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back');
+      const truncatedContent = contentPages.slice(0, resolvedConstraints.maxPages);
+      pagesToRender = [...coverPages.filter(p => p.kind === 'cover_front'), ...truncatedContent, ...coverPages.filter(p => p.kind === 'cover_back')];
+      console.log(`[printable] Truncated from ${contentPages.length} to ${truncatedContent.length} content pages`);
+    }
 
-    // Sanity check
-    if (totalInteriorWithPadding % 4 !== 0) {
-      console.error(`[printable] BUG: totalInteriorWithPadding (${totalInteriorWithPadding}) is not a multiple of 4!`);
+    // Calculate padding pages needed
+    const actualContentCount = pagesToRender.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back').length;
+    const paddingPageCount = pageValidation.adjustedCount - actualContentCount;
+    const totalInteriorWithPadding = actualContentCount + paddingPageCount;
+
+    if (paddingPageCount > 0) {
+      console.log(`[printable] Interior pages: ${actualContentCount}, padding with ${paddingPageCount} blank pages to reach ${totalInteriorWithPadding}`);
+    }
+
+    // Sanity check for page multiple
+    if (resolvedConstraints.pageMultiple > 1 && totalInteriorWithPadding % resolvedConstraints.pageMultiple !== 0) {
+      console.error(`[printable] BUG: totalInteriorWithPadding (${totalInteriorWithPadding}) is not a multiple of ${resolvedConstraints.pageMultiple}!`);
     }
 
     const printableMetadata: PrintableAssetMetadata = {
       dpi: 300,
       trimSize: `${printLayout.leafWidth}in x ${printLayout.leafHeight}in`,
-      pageCount: pages.length,
+      pageCount: pagesToRender.length,
       coverPageCount,
       interiorPageCount: totalInteriorWithPadding, // Include padding in count
-      spreadCount: Math.ceil(pages.length / printLayout.leavesPerSpread),
+      spreadCount: Math.ceil(pagesToRender.length / printLayout.leavesPerSpread),
       printLayoutId: printLayout.id,
       hasSeparatePDFs: true,
       paddingPageCount, // Track how many blank pages were added
+      contentPageCount: actualContentCount, // Track actual content pages (before padding)
     };
 
     const finalization = storybookData?.finalization;
@@ -894,16 +928,16 @@ export async function POST(request: Request) {
       const fontType = getStandardFont(printLayout.font);
       const tempFont = await tempDoc.embedFont(fontType);
       const maxFontSize = Number(printLayout.fontSize) || 24;
-      const unifiedFontSize = calculateMinimumFontSizeForPages(pages, printLayout, tempFont, maxFontSize);
+      const unifiedFontSize = calculateMinimumFontSizeForPages(pagesToRender, printLayout, tempFont, maxFontSize);
       console.log(`[printable] Using unified font size: ${unifiedFontSize}pt (max was ${maxFontSize}pt)`);
 
       // Generate PDFs in parallel using the unified font size
       // Note: padding pages are now appended directly to the interior PDF
       // instead of being a separate file. This ensures correct page ordering.
       const [combinedBytes, coverBytes, interiorBytes] = await Promise.all([
-        renderCombinedPdf(pages, printLayout, unifiedFontSize),
-        renderCoverPdf(pages, printLayout, unifiedFontSize),
-        renderInteriorPdf(pages, printLayout, unifiedFontSize, paddingPageCount), // Include padding in interior PDF
+        renderCombinedPdf(pagesToRender, printLayout, unifiedFontSize),
+        renderCoverPdf(pagesToRender, printLayout, unifiedFontSize),
+        renderInteriorPdf(pagesToRender, printLayout, unifiedFontSize, paddingPageCount), // Include padding in interior PDF
       ]);
 
       console.log(`[printable] PDFs generated - combined: ${combinedBytes.length}B, cover: ${coverBytes.length}B, interior: ${interiorBytes.length}B (includes ${paddingPageCount} padding pages)`);
@@ -929,6 +963,8 @@ export async function POST(request: Request) {
         'finalization.printableMetadata': printableMetadata,
         'finalization.printableStatus': 'ready',
         'finalization.status': 'printable_ready',
+        // Store any warnings from page count validation (truncation, padding, etc.)
+        'finalization.pdfGenerationWarnings': pdfGenerationWarnings.length > 0 ? pdfGenerationWarnings : null,
         // Clear any legacy padding PDF fields (padding is now included in interior PDF)
         'finalization.printablePaddingPdfUrl': null,
         'finalization.printablePaddingStoragePath': null,

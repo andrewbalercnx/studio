@@ -695,6 +695,16 @@ export default function PrintOrderDetailPage() {
                   </p>
                 </div>
               )}
+              {(order as any).pdfGenerationWarnings && (order as any).pdfGenerationWarnings.length > 0 && (
+                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm font-medium text-yellow-800 mb-1">PDF Generation Warnings</p>
+                  <ul className="text-xs text-yellow-700 list-disc list-inside space-y-1">
+                    {(order as any).pdfGenerationWarnings.map((warning: string, i: number) => (
+                      <li key={i}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
 

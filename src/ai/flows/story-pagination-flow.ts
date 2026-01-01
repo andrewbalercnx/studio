@@ -12,7 +12,7 @@
 import { ai } from '@/ai/genkit';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
-import type { Story, StoryOutputType, ChildProfile } from '@/lib/types';
+import type { Story, StoryOutputType, ChildProfile, PrintLayout, PrintProduct } from '@/lib/types';
 import { DEFAULT_PAGINATION_PROMPT } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { getPaginationPrompt } from '@/lib/pagination-prompt-config.server';
@@ -21,6 +21,11 @@ import {
     buildActorListForPrompt,
     getActorsDetails,
 } from '@/lib/story-context-builder';
+import {
+    resolvePageConstraints,
+    buildPageCountInstruction,
+    type ResolvedPageConstraints,
+} from '@/lib/print-constraints';
 
 // Schema for the AI's paginated output
 // Note: We use permissive string validation here to avoid schema errors.
@@ -94,6 +99,43 @@ export const storyPaginationFlow = ai.defineFlow(
             // Get target page count from output type (0 = flexible)
             const targetPageCount = storyOutputType.layoutHints?.pageCount || 0;
 
+            // Load print layout and product for page constraints
+            debug.details.step = 'loadPrintConstraints';
+            let printLayout: PrintLayout | null = null;
+            let printProduct: PrintProduct | null = null;
+            let resolvedConstraints: ResolvedPageConstraints = {
+                minPages: 0,
+                maxPages: 0,
+                pageMultiple: 4,
+                source: 'default',
+            };
+
+            if (storyOutputType.defaultPrintLayoutId) {
+                try {
+                    const layoutSnap = await firestore.collection('printLayouts').doc(storyOutputType.defaultPrintLayoutId).get();
+                    if (layoutSnap.exists) {
+                        printLayout = { id: layoutSnap.id, ...layoutSnap.data() } as PrintLayout;
+
+                        // Load linked product if specified
+                        if (printLayout.printProductId) {
+                            const productSnap = await firestore.collection('printProducts').doc(printLayout.printProductId).get();
+                            if (productSnap.exists) {
+                                printProduct = { id: productSnap.id, ...productSnap.data() } as PrintProduct;
+                            }
+                        }
+
+                        // Resolve constraints from the chain
+                        resolvedConstraints = resolvePageConstraints(printLayout, printProduct);
+                    }
+                } catch (constraintError: any) {
+                    debug.details.constraintLoadError = constraintError.message || String(constraintError);
+                    // Continue with default constraints
+                }
+            }
+
+            debug.details.resolvedConstraints = resolvedConstraints;
+            debug.details.step = 'constraintsResolved';
+
             // Load actor details for context
             debug.details.step = 'loadActorDetails';
             const actorIds = story.actors || [];
@@ -148,9 +190,8 @@ export const storyPaginationFlow = ai.defineFlow(
                 ? `**OUTPUT TYPE SPECIFIC INSTRUCTIONS:**\n${storyOutputType.paginationPrompt}\n\n**GENERAL PAGINATION INSTRUCTIONS:**\n${basePaginationPrompt}`
                 : basePaginationPrompt;
 
-            const pageCountInstruction = targetPageCount > 0
-                ? `TARGET PAGE COUNT: Exactly ${targetPageCount} content pages. Distribute the story evenly across these pages.`
-                : `PAGE COUNT: Use your judgment to create an appropriate number of pages (typically 8-16 for a picture book). Each page should have enough text to be meaningful but not overwhelming for young children.`;
+            // Build page count instruction using resolved constraints
+            const pageCountInstruction = buildPageCountInstruction(targetPageCount, resolvedConstraints);
 
             const styleInstruction = storyOutputType.aiHints?.style
                 ? `STYLE: ${storyOutputType.aiHints.style}`
@@ -299,6 +340,7 @@ Generate the paginated output now.`;
                 stats: {
                     pageCount: validPages.length,
                     targetPageCount,
+                    resolvedConstraints, // Include for downstream PDF generation
                 },
                 debug,
             };
