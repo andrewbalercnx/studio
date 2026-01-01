@@ -441,17 +441,34 @@ class MixamAPIClient {
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      console.error(`[Mixam] Cancel order error ${response.status}:`, errorData);
+      // Get raw response text first for debugging
+      const rawText = await response.text();
+      console.error(`[Mixam] Cancel order error ${response.status}, raw response:`, rawText);
+
+      // Try to parse as JSON
+      let errorData: any = { error: 'Unknown error' };
+      try {
+        errorData = JSON.parse(rawText);
+      } catch {
+        // Response wasn't JSON, use raw text as error message
+        errorData = { error: rawText || 'Unknown error' };
+      }
+
+      // Extract error message from various possible formats
+      const errorMessage = errorData.message || errorData.error || errorData.reason || rawText || 'Unknown error';
 
       if (response.status === 409) {
-        throw new Error('Order cannot be cancelled - already in production');
+        // 409 Conflict - could be various reasons (in production, already cancelled, etc.)
+        throw new Error(`Order cannot be cancelled: ${errorMessage}`);
       }
       if (response.status === 404) {
         throw new Error(`Order not found: ${orderId}`);
       }
+      if (response.status === 400) {
+        throw new Error(`Invalid cancel request: ${errorMessage}`);
+      }
 
-      throw new Error(`Failed to cancel order: ${errorData.error || response.statusText}`);
+      throw new Error(`Failed to cancel order (${response.status}): ${errorMessage}`);
     }
 
     const data = await response.json();
