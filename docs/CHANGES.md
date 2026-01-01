@@ -18,7 +18,7 @@
 
 ### 2026-01-01
 
-#### `5973414` - Add test email button to admin page
+#### `1e7a5d9` - Add test email button to admin page
 
 **Type**: Feature
 
