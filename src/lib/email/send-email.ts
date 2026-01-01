@@ -4,16 +4,23 @@ import nodemailer from 'nodemailer';
 let transporter: nodemailer.Transporter | null = null;
 
 function getTransporter(): nodemailer.Transporter | null {
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
     return null;
   }
 
   if (!transporter) {
+    // Microsoft 365 / Outlook SMTP configuration
     transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.office365.com',
+      port: 587,
+      secure: false, // Use STARTTLS
       auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
+      },
+      tls: {
+        ciphers: 'SSLv3',
+        rejectUnauthorized: false,
       },
     });
   }
@@ -28,21 +35,21 @@ export type SendEmailOptions = {
 };
 
 /**
- * Send an email using Gmail SMTP.
- * Requires GMAIL_USER and GMAIL_APP_PASSWORD environment variables.
+ * Send an email using Microsoft 365 SMTP.
+ * Requires SMTP_USER and SMTP_PASSWORD environment variables.
  * If credentials aren't configured, logs a warning and returns silently.
  */
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
   const mailer = getTransporter();
 
   if (!mailer) {
-    console.warn('[Email] Gmail credentials not configured (GMAIL_USER, GMAIL_APP_PASSWORD), skipping email');
+    console.warn('[Email] SMTP credentials not configured (SMTP_USER, SMTP_PASSWORD), skipping email');
     return;
   }
 
   try {
     await mailer.sendMail({
-      from: `"StoryPic Kids" <${process.env.GMAIL_USER}>`,
+      from: `"StoryPic Kids" <${process.env.SMTP_USER}>`,
       to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
       subject: options.subject,
       html: options.html,

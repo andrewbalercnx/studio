@@ -18,6 +18,27 @@
 
 ### 2026-01-01
 
+#### `PENDING` - Switch email from Gmail to Microsoft 365 SMTP
+
+**Type**: Configuration
+
+**Summary**: Email notifications now use Microsoft 365/Outlook SMTP instead of Gmail.
+
+**Changes**:
+- Updated email transporter to use Microsoft 365 SMTP (smtp.office365.com:587)
+- Changed environment variables from GMAIL_USER/GMAIL_APP_PASSWORD to SMTP_USER/SMTP_PASSWORD
+- Created new secrets in Google Cloud Secret Manager
+- Granted App Hosting access to new secrets
+
+**Modified Files**:
+- `src/lib/email/send-email.ts` - Microsoft 365 SMTP configuration
+- `apphosting.yaml` - Updated secret references
+
+**Setup Required**:
+- Set SMTP_PASSWORD secret to Microsoft app password or account password
+
+---
+
 #### `001cfe5` - Use unified font size across all pages in print PDFs
 
 **Type**: Enhancement

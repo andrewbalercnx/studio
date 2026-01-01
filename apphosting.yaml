@@ -61,14 +61,14 @@ env:
     availability:
       - RUNTIME
 
-  # Gmail credentials for email notifications
-  # Use a Gmail App Password, not the regular password
-  - variable: GMAIL_USER
-    secret: GMAIL_USER
+  # Microsoft 365 SMTP credentials for email notifications
+  # Use an App Password if MFA is enabled, or regular password otherwise
+  - variable: SMTP_USER
+    secret: SMTP_USER
     availability:
       - RUNTIME
 
-  - variable: GMAIL_APP_PASSWORD
-    secret: GMAIL_APP_PASSWORD
+  - variable: SMTP_PASSWORD
+    secret: SMTP_PASSWORD
     availability:
       - RUNTIME
