@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2025-12-31 (added notifiedUser field, PrintOrder cancellation fields)
+> **Last Updated**: 2026-01-01 (added mixamInteractions field, MixamInteraction type)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -260,11 +260,31 @@ Print fulfillment orders.
 | `lastWebhookAt` | timestamp | No | Timestamp of last webhook received |
 | `statusHistory` | array | Yes | Status change history |
 | `processLog` | array | No | Detailed event log |
+| `mixamInteractions` | MixamInteraction[] | No | API request/response and webhook log |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
 | `cancelledAt` | timestamp | No | Cancellation timestamp |
 | `cancellationReason` | string | No | Reason for cancellation |
 | `cancelledBy` | string | No | Admin UID who cancelled |
+
+**MixamInteraction** (embedded object):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Unique interaction ID (mxi_*) |
+| `timestamp` | string | Yes | ISO timestamp |
+| `type` | 'api_request' \| 'api_response' \| 'webhook' | Yes | Interaction type |
+| `method` | 'GET' \| 'POST' \| 'PUT' \| 'DELETE' | No | HTTP method (for API calls) |
+| `endpoint` | string | No | API endpoint path |
+| `requestBody` | any | No | Sanitized request payload |
+| `statusCode` | number | No | HTTP status code (for responses) |
+| `responseBody` | any | No | Sanitized response payload |
+| `durationMs` | number | No | Request duration in milliseconds |
+| `error` | string | No | Error message if failed |
+| `webhookEvent` | string | No | Webhook event type (for webhooks) |
+| `webhookPayload` | any | No | Webhook payload |
+| `action` | string | No | Human-readable action name |
+| `orderId` | string | No | Mixam order ID |
 
 **Security**: Parents can read their own orders; admins have full CRUD.
 

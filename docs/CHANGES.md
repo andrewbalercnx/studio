@@ -18,6 +18,36 @@
 
 ### 2026-01-01
 
+#### `PENDING` - Add Mixam API interaction logging
+
+**Type**: Feature
+
+**Summary**: Track all Mixam API requests, responses, and webhook events for debugging and auditing.
+
+**Changes**:
+- Added `mixamInteractions` field to `PrintOrder` type to store interaction history
+- Added `MixamInteraction` type for tracking API calls and webhooks
+- Created `interaction-logger.ts` helper for logging interactions to Firestore
+- Added logging wrapper methods to Mixam client (`submitOrderWithLogging`, `cancelOrderWithLogging`, `getOrderStatusWithLogging`)
+- Updated submit, cancel, and refresh-status API routes to use logging methods
+- Updated webhook handler to log incoming webhooks
+- Added "Mixam API Log" panel to print order detail page with expandable request/response viewing
+
+**New Files**:
+- `src/lib/mixam/interaction-logger.ts` - Interaction logging utilities
+
+**Modified Files**:
+- `src/lib/types.ts` - Added `MixamInteraction` type and field
+- `src/lib/mixam/client.ts` - Added logging wrapper methods and types
+- `src/app/api/admin/print-orders/[orderId]/submit/route.ts` - Added interaction logging
+- `src/app/api/admin/print-orders/[orderId]/cancel/route.ts` - Added interaction logging
+- `src/app/api/admin/print-orders/[orderId]/refresh-status/route.ts` - Added interaction logging
+- `src/app/api/webhooks/mixam/route.ts` - Added webhook logging
+- `src/app/admin/print-orders/[orderId]/page.tsx` - Added API log panel
+- `docs/SCHEMA.md` - Documented new field and type
+
+---
+
 #### `fe066cf` - Switch email from Gmail to Microsoft 365 SMTP
 
 **Type**: Configuration

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useUser } from '@/firebase/auth/use-user';
-import type { PrintOrder, PrintOrderAddress } from '@/lib/types';
+import type { PrintOrder, PrintOrderAddress, MixamInteraction } from '@/lib/types';
 
 export default function PrintOrderDetailPage() {
   const router = useRouter();
@@ -21,6 +21,8 @@ export default function PrintOrderDetailPage() {
   const [cancelReason, setCancelReason] = useState('');
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [actionResult, setActionResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [showInteractions, setShowInteractions] = useState(false);
+  const [expandedInteraction, setExpandedInteraction] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userLoading && user) {
@@ -804,6 +806,127 @@ export default function PrintOrderDetailPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Mixam API Interactions */}
+        {order.mixamInteractions && order.mixamInteractions.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Mixam API Log ({order.mixamInteractions.length})
+              </h2>
+              <button
+                onClick={() => setShowInteractions(!showInteractions)}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                {showInteractions ? 'Hide Details' : 'Show Details'}
+              </button>
+            </div>
+            {showInteractions && (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {[...order.mixamInteractions].reverse().map((interaction: MixamInteraction) => (
+                  <div
+                    key={interaction.id}
+                    className={`border rounded-lg p-3 ${
+                      interaction.type === 'webhook'
+                        ? 'border-purple-200 bg-purple-50'
+                        : interaction.error
+                        ? 'border-red-200 bg-red-50'
+                        : interaction.type === 'api_request'
+                        ? 'border-blue-200 bg-blue-50'
+                        : 'border-green-200 bg-green-50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs font-medium px-2 py-0.5 rounded ${
+                            interaction.type === 'webhook'
+                              ? 'bg-purple-200 text-purple-800'
+                              : interaction.type === 'api_request'
+                              ? 'bg-blue-200 text-blue-800'
+                              : 'bg-green-200 text-green-800'
+                          }`}
+                        >
+                          {interaction.type === 'webhook'
+                            ? 'WEBHOOK'
+                            : interaction.type === 'api_request'
+                            ? `${interaction.method} →`
+                            : `← ${interaction.statusCode}`}
+                        </span>
+                        <span className="font-medium text-sm text-gray-900">
+                          {interaction.action}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-500">
+                        {formatDate(interaction.timestamp)}
+                      </span>
+                    </div>
+
+                    {interaction.endpoint && (
+                      <p className="text-xs font-mono text-gray-600 mt-1">
+                        {interaction.endpoint}
+                      </p>
+                    )}
+
+                    {interaction.error && (
+                      <p className="text-sm text-red-600 mt-1">{interaction.error}</p>
+                    )}
+
+                    {interaction.durationMs !== undefined && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Duration: {interaction.durationMs}ms
+                      </p>
+                    )}
+
+                    <button
+                      onClick={() =>
+                        setExpandedInteraction(
+                          expandedInteraction === interaction.id ? null : interaction.id
+                        )
+                      }
+                      className="text-xs text-blue-600 hover:text-blue-800 mt-2"
+                    >
+                      {expandedInteraction === interaction.id ? 'Hide payload' : 'Show payload'}
+                    </button>
+
+                    {expandedInteraction === interaction.id && (
+                      <div className="mt-2">
+                        {interaction.requestBody && (
+                          <div className="mb-2">
+                            <p className="text-xs font-semibold text-gray-700">Request:</p>
+                            <pre className="text-xs bg-white p-2 rounded border overflow-x-auto max-h-40">
+                              {typeof interaction.requestBody === 'string'
+                                ? interaction.requestBody
+                                : JSON.stringify(interaction.requestBody, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                        {interaction.responseBody && (
+                          <div className="mb-2">
+                            <p className="text-xs font-semibold text-gray-700">Response:</p>
+                            <pre className="text-xs bg-white p-2 rounded border overflow-x-auto max-h-40">
+                              {typeof interaction.responseBody === 'string'
+                                ? interaction.responseBody
+                                : JSON.stringify(interaction.responseBody, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                        {interaction.webhookPayload && (
+                          <div>
+                            <p className="text-xs font-semibold text-gray-700">Webhook Payload:</p>
+                            <pre className="text-xs bg-white p-2 rounded border overflow-x-auto max-h-40">
+                              {JSON.stringify(interaction.webhookPayload, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

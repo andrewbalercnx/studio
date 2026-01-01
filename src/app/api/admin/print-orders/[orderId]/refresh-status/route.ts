@@ -4,6 +4,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import type { PrintOrder } from '@/lib/types';
 import { mixamClient } from '@/lib/mixam/client';
+import { logMixamInteractions, toMixamInteractions } from '@/lib/mixam/interaction-logger';
 
 /**
  * POST /api/admin/print-orders/[orderId]/refresh-status
@@ -50,19 +51,34 @@ export async function POST(
     const lookupId = order.mixamOrderId || order.mixamJobNumber;
     console.log(`[print-orders] Refreshing status from Mixam for order ${orderId}, Mixam ID: ${order.mixamOrderId}, Job Number: ${order.mixamJobNumber}`);
 
-    // Fetch status from Mixam
+    // Fetch status from Mixam with logging
     let mixamStatus;
+    let statusInteractions: any[] = [];
     try {
-      mixamStatus = await mixamClient.getOrderStatus(order.mixamOrderId);
+      const result = await mixamClient.getOrderStatusWithLogging(order.mixamOrderId);
+      const { interactions, ...status } = result;
+      mixamStatus = status;
+      statusInteractions = interactions;
     } catch (error: any) {
+      // Log interactions from failed attempt
+      if (error.interactions) {
+        await logMixamInteractions(firestore, orderId, toMixamInteractions(error.interactions, order.mixamOrderId));
+      }
+
       // If order ID lookup fails, try with job number
       if (order.mixamJobNumber && order.mixamJobNumber !== order.mixamOrderId) {
         console.log(`[print-orders] Order ID lookup failed, trying job number: ${order.mixamJobNumber}`);
-        mixamStatus = await mixamClient.getOrderStatus(order.mixamJobNumber);
+        const result = await mixamClient.getOrderStatusWithLogging(order.mixamJobNumber);
+        const { interactions, ...status } = result;
+        mixamStatus = status;
+        statusInteractions = interactions;
       } else {
         throw error;
       }
     }
+
+    // Log the API interactions
+    await logMixamInteractions(firestore, orderId, toMixamInteractions(statusInteractions, order.mixamOrderId));
 
     console.log(`[print-orders] Mixam status response:`, JSON.stringify(mixamStatus, null, 2));
 

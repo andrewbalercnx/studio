@@ -4,6 +4,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import type { PrintOrder, DiagnosticsConfig } from '@/lib/types';
 import { DEFAULT_DIAGNOSTICS_CONFIG } from '@/lib/types';
 import { notifyOrderStatusChanged } from '@/lib/email/notify-admins';
+import { logMixamInteraction, createWebhookInteraction } from '@/lib/mixam/interaction-logger';
 
 // Helper to check if debug logging is enabled
 async function isDebugLoggingEnabled(firestore: FirebaseFirestore.Firestore): Promise<boolean> {
@@ -226,6 +227,14 @@ export async function POST(request: Request) {
     }
 
     const order = { id: orderDoc.id, ...orderDoc.data() } as PrintOrder;
+
+    // Log the webhook interaction
+    const webhookInteraction = createWebhookInteraction({
+      webhookEvent: `status.${webhook.status}`,
+      webhookPayload: webhook,
+      orderId: webhook.orderId,
+    });
+    await logMixamInteraction(firestore, ourOrderId, webhookInteraction);
 
     // 5. Map status
     const newStatus = mapMixamStatusToInternal(webhook.status, webhook.hasErrors);

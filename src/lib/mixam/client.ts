@@ -28,6 +28,25 @@ type MixamOrderResponse = {
   status: string;
 };
 
+// Extended response that includes interaction logging data
+export type MixamOrderResponseWithInteractions = MixamOrderResponse & {
+  interactions: MixamApiInteraction[];
+};
+
+// Interaction data for logging (before persisting to Firestore)
+export type MixamApiInteraction = {
+  type: 'api_request' | 'api_response';
+  timestamp: string;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  endpoint: string;
+  requestBody?: any;
+  statusCode?: number;
+  responseBody?: any;
+  durationMs?: number;
+  error?: string;
+  action: string;
+};
+
 type MixamPriceQuote = {
   unitPrice: number;
   totalPrice: number;
@@ -483,6 +502,181 @@ class MixamAPIClient {
   }
 
   /**
+   * Submits an order to Mixam with interaction logging
+   * Returns both the result and interaction data for persistence
+   */
+  async submitOrderWithLogging(mxjdf: MxJdfDocument): Promise<MixamOrderResponseWithInteractions> {
+    const interactions: MixamApiInteraction[] = [];
+    const endpoint = '/api/public/orders';
+    const startTime = Date.now();
+
+    // Log the request
+    interactions.push({
+      type: 'api_request',
+      timestamp: new Date().toISOString(),
+      method: 'POST',
+      endpoint,
+      requestBody: sanitizePayload(mxjdf),
+      action: 'Submit Order',
+    });
+
+    try {
+      const result = await this.submitOrder(mxjdf);
+      const durationMs = Date.now() - startTime;
+
+      // Log successful response
+      interactions.push({
+        type: 'api_response',
+        timestamp: new Date().toISOString(),
+        method: 'POST',
+        endpoint,
+        statusCode: 200,
+        responseBody: result,
+        durationMs,
+        action: 'Submit Order',
+      });
+
+      return { ...result, interactions };
+    } catch (error: any) {
+      const durationMs = Date.now() - startTime;
+
+      // Log error response
+      interactions.push({
+        type: 'api_response',
+        timestamp: new Date().toISOString(),
+        method: 'POST',
+        endpoint,
+        statusCode: error.statusCode || 500,
+        error: error.message,
+        durationMs,
+        action: 'Submit Order',
+      });
+
+      // Re-throw with interactions attached
+      const errorWithInteractions = new Error(error.message) as any;
+      errorWithInteractions.interactions = interactions;
+      throw errorWithInteractions;
+    }
+  }
+
+  /**
+   * Cancels an order with Mixam with interaction logging
+   * Returns both the result and interaction data for persistence
+   */
+  async cancelOrderWithLogging(orderId: string): Promise<MixamOrderResponseWithInteractions> {
+    const interactions: MixamApiInteraction[] = [];
+    const endpoint = `/api/public/orders/${orderId}/status`;
+    const startTime = Date.now();
+
+    // Log the request
+    interactions.push({
+      type: 'api_request',
+      timestamp: new Date().toISOString(),
+      method: 'PUT',
+      endpoint,
+      requestBody: 'CANCELED',
+      action: 'Cancel Order',
+    });
+
+    try {
+      const result = await this.cancelOrder(orderId);
+      const durationMs = Date.now() - startTime;
+
+      // Log successful response
+      interactions.push({
+        type: 'api_response',
+        timestamp: new Date().toISOString(),
+        method: 'PUT',
+        endpoint,
+        statusCode: 200,
+        responseBody: result,
+        durationMs,
+        action: 'Cancel Order',
+      });
+
+      return { ...result, interactions };
+    } catch (error: any) {
+      const durationMs = Date.now() - startTime;
+
+      // Log error response
+      interactions.push({
+        type: 'api_response',
+        timestamp: new Date().toISOString(),
+        method: 'PUT',
+        endpoint,
+        statusCode: error.statusCode || 500,
+        error: error.message,
+        durationMs,
+        action: 'Cancel Order',
+      });
+
+      const errorWithInteractions = new Error(error.message) as any;
+      errorWithInteractions.interactions = interactions;
+      throw errorWithInteractions;
+    }
+  }
+
+  /**
+   * Gets order status with interaction logging
+   */
+  async getOrderStatusWithLogging(orderId: string): Promise<{
+    status: string;
+    trackingUrl?: string;
+    estimatedDelivery?: string;
+    interactions: MixamApiInteraction[];
+  }> {
+    const interactions: MixamApiInteraction[] = [];
+    const endpoint = `/api/public/orders/${orderId}`;
+    const startTime = Date.now();
+
+    // Log the request
+    interactions.push({
+      type: 'api_request',
+      timestamp: new Date().toISOString(),
+      method: 'GET',
+      endpoint,
+      action: 'Get Order Status',
+    });
+
+    try {
+      const result = await this.getOrderStatus(orderId);
+      const durationMs = Date.now() - startTime;
+
+      // Log successful response
+      interactions.push({
+        type: 'api_response',
+        timestamp: new Date().toISOString(),
+        method: 'GET',
+        endpoint,
+        statusCode: 200,
+        responseBody: result,
+        durationMs,
+        action: 'Get Order Status',
+      });
+
+      return { ...result, interactions };
+    } catch (error: any) {
+      const durationMs = Date.now() - startTime;
+
+      // Log error response
+      interactions.push({
+        type: 'api_response',
+        timestamp: new Date().toISOString(),
+        method: 'GET',
+        endpoint,
+        statusCode: error.statusCode || 500,
+        error: error.message,
+        durationMs,
+        action: 'Get Order Status',
+      });
+
+      const errorWithInteractions = new Error(error.message) as any;
+      errorWithInteractions.interactions = interactions;
+      throw errorWithInteractions;
+    }
+  }
+
+  /**
    * Gets a price quote for a given specification
    * MOCK MODE: Returns estimate based on quantity
    */
@@ -814,6 +1008,43 @@ class MixamAPIClient {
 export const mixamClient = new MixamAPIClient();
 
 // Export helper functions
+
+/**
+ * Sanitizes request/response bodies by removing sensitive data and truncating large payloads
+ */
+function sanitizePayload(payload: any, maxLength: number = 5000): any {
+  if (!payload) return payload;
+
+  let jsonString: string;
+  try {
+    jsonString = JSON.stringify(payload);
+  } catch {
+    return '[Unable to serialize]';
+  }
+
+  // Truncate if too large
+  if (jsonString.length > maxLength) {
+    return {
+      _truncated: true,
+      _originalLength: jsonString.length,
+      _preview: jsonString.substring(0, 1000) + '...',
+    };
+  }
+
+  // Remove sensitive fields from objects
+  if (typeof payload === 'object' && payload !== null && !Array.isArray(payload)) {
+    const sanitized = { ...payload };
+    const sensitiveFields = ['authorization', 'Authorization', 'token', 'password', 'secret', 'apiKey', 'api_key'];
+    for (const field of sensitiveFields) {
+      if (field in sanitized) {
+        sanitized[field] = '[REDACTED]';
+      }
+    }
+    return sanitized;
+  }
+
+  return payload;
+}
 
 /**
  * Downloads a PDF from a URL and returns as Buffer

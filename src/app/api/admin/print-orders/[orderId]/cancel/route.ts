@@ -5,6 +5,7 @@ import { requireParentOrAdminUser } from '@/lib/server-auth';
 import type { PrintOrder } from '@/lib/types';
 import { mixamClient } from '@/lib/mixam/client';
 import { notifyOrderCancelled } from '@/lib/email/notify-admins';
+import { logMixamInteractions, toMixamInteractions } from '@/lib/mixam/interaction-logger';
 
 /**
  * POST /api/admin/print-orders/[orderId]/cancel
@@ -78,10 +79,21 @@ export async function POST(
     if (order.mixamOrderId) {
       try {
         console.log(`[print-orders] Cancelling order ${orderId} with Mixam (${order.mixamOrderId})`);
-        mixamCancelResult = await mixamClient.cancelOrder(order.mixamOrderId);
+        const cancelResult = await mixamClient.cancelOrderWithLogging(order.mixamOrderId);
+        const { interactions, ...result } = cancelResult;
+        mixamCancelResult = result;
+
+        // Log the API interactions
+        await logMixamInteractions(firestore, orderId, toMixamInteractions(interactions, order.mixamOrderId));
+
         console.log(`[print-orders] Mixam cancel response:`, mixamCancelResult);
       } catch (mixamError: any) {
         console.error(`[print-orders] Mixam cancel failed:`, mixamError);
+
+        // Log any interactions from the failed call
+        if (mixamError.interactions) {
+          await logMixamInteractions(firestore, orderId, toMixamInteractions(mixamError.interactions, order.mixamOrderId));
+        }
 
         // If Mixam says order is already in production, don't allow cancellation
         if (mixamError.message?.includes('already in production')) {

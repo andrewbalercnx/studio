@@ -5,6 +5,7 @@ import { requireParentOrAdminUser } from '@/lib/server-auth';
 import type { PrintOrder } from '@/lib/types';
 import { mixamClient } from '@/lib/mixam/client';
 import { buildMxJdfDocument } from '@/lib/mixam/mxjdf-builder';
+import { logMixamInteractions, toMixamInteractions } from '@/lib/mixam/interaction-logger';
 
 /**
  * POST /api/admin/print-orders/[orderId]/submit
@@ -123,11 +124,15 @@ export async function POST(
         interiorFileRef: interiorPdfUrl, // Direct URL - Mixam will fetch (includes padding)
       });
 
-      // Step 4: Submit order to Mixam
+      // Step 4: Submit order to Mixam with interaction logging
       console.log('[print-orders] Submitting order to Mixam API...');
       console.log('[print-orders] MxJdf document:', JSON.stringify(mxjdf, null, 2));
 
-      const mixamOrder = await mixamClient.submitOrder(mxjdf);
+      const mixamResult = await mixamClient.submitOrderWithLogging(mxjdf);
+      const { interactions, ...mixamOrder } = mixamResult;
+
+      // Log the API interactions
+      await logMixamInteractions(firestore, orderId, toMixamInteractions(interactions, mixamOrder.orderId));
 
       console.log(`[print-orders] Mixam response:`, JSON.stringify(mixamOrder, null, 2));
 
@@ -204,6 +209,11 @@ export async function POST(
     } catch (error: any) {
       // Submission failed - update status back to approved
       console.error('[print-orders] Mixam submission failed:', error);
+
+      // Log any interactions that were captured before the error
+      if (error.interactions) {
+        await logMixamInteractions(firestore, orderId, toMixamInteractions(error.interactions));
+      }
 
       // Note: FieldValue.serverTimestamp() cannot be used inside arrayUnion, so use Date
       const errorTime = new Date();

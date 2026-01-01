@@ -884,6 +884,35 @@ export type PrintOrder = {
   cancelledAt?: any;
   cancellationReason?: string;
   cancelledBy?: string; // Admin user ID who cancelled
+
+  // Mixam API interaction log - tracks all API calls and webhook events
+  mixamInteractions?: MixamInteraction[];
+};
+
+// Tracks individual API calls to Mixam and webhook events received
+export type MixamInteraction = {
+  id: string; // Unique ID for this interaction
+  timestamp: any; // When the interaction occurred
+  type: 'api_request' | 'api_response' | 'webhook';
+
+  // For API requests
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  endpoint?: string; // e.g., '/api/public/orders', '/api/public/orders/{id}/status'
+  requestBody?: any; // Sanitized request payload (no auth tokens)
+
+  // For API responses
+  statusCode?: number;
+  responseBody?: any; // Sanitized response (truncated if very large)
+  durationMs?: number; // How long the API call took
+  error?: string; // Error message if the call failed
+
+  // For webhooks
+  webhookEvent?: string; // e.g., 'order.status.updated', 'order.shipped'
+  webhookPayload?: any; // The webhook payload received
+
+  // Context
+  action?: string; // Human-readable action (e.g., 'Submit Order', 'Cancel Order', 'Get Status')
+  orderId?: string; // Mixam order ID if known
 };
 
 export type ArtStyle = {
