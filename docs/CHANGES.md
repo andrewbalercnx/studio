@@ -16,6 +16,26 @@
 
 ## Changes
 
+### 2026-01-01
+
+#### `8833056` - Fix print pagination issues
+
+**Type**: Bug Fix
+
+**Summary**: Fixed three issues with print PDF generation for storybooks.
+
+**Fixes**:
+
+1. **Cover page order**: Changed PDF page order from back-spine-front to front-spine-back
+2. **Cover text format**: Changed from `"Title"\nwritten by\nChild` to `Title\nby\nChild` (removed unnecessary quotes around title, simplified "written by" to just "by")
+3. **Blank page padding**: Removed the 24-page minimum interior page requirement. Now only adds blank pages as needed to reach a multiple of 4.
+
+**Modified Files**:
+- `src/app/api/storyBook/printable/route.ts` - Cover order and padding logic
+- `src/ai/flows/story-page-flow.ts` - Cover text format
+
+---
+
 ### 2025-12-31
 
 #### `4286dd7` - Print Order Management: Cancel, Notifications, Email
