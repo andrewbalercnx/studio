@@ -6,6 +6,10 @@
  * 1. PrintLayout.pageConstraints (if set) - layout-level overrides
  * 2. PrintProduct.mixamSpec.format (if printProductId set) - product defaults
  * 3. Defaults (no constraints)
+ *
+ * Page count calculation:
+ * Total pages = 2 (cover) + blankPages + inside pages
+ * The inside PDF must meet minPageCount and be a multiple of 4.
  */
 
 import type { PrintLayout, PrintProduct, PrintLayoutPageConstraints } from './types';
@@ -205,4 +209,94 @@ export function buildPageCountInstruction(
   }
 
   return parts.join(' ');
+}
+
+/**
+ * Result from calculateInteriorPageAdjustment
+ */
+export type InteriorPageAdjustment = {
+  finalInteriorPages: number;  // The adjusted interior page count
+  paddingNeeded: number;       // Blank pages to add to reach finalInteriorPages
+  wasTruncated: boolean;       // True if pages were removed to meet max constraint
+  warnings: string[];          // List of warnings/adjustments made
+};
+
+/**
+ * Calculate interior page adjustments for a print product.
+ *
+ * Rules:
+ * 1. The number of inside PDF pages must be at least the minimum (minPageCount)
+ * 2. Total pages (2 for cover + blankPages + inside pages) must be a multiple of 4
+ * 3. If inside pages exceeds maximum, truncate to maximum
+ *
+ * @param contentPageCount - Number of actual content pages (excluding covers)
+ * @param blankPages - Fixed blank pages in the product (e.g., endpapers)
+ * @param constraints - Resolved page constraints from product/layout
+ * @returns Adjustment details including final page count and padding needed
+ */
+export function calculateInteriorPageAdjustment(
+  contentPageCount: number,
+  blankPages: number,
+  constraints: ResolvedPageConstraints
+): InteriorPageAdjustment {
+  const warnings: string[] = [];
+  let insidePages = contentPageCount;
+  let wasTruncated = false;
+
+  // The cover counts as 2 pages in the total
+  const coverPages = 2;
+
+  // Step 1: Ensure inside pages meets minimum
+  if (constraints.minPages > 0 && insidePages < constraints.minPages) {
+    const pagesToAdd = constraints.minPages - insidePages;
+    warnings.push(
+      `Padded ${pagesToAdd} page${pagesToAdd === 1 ? '' : 's'} to meet minimum of ${constraints.minPages}.`
+    );
+    insidePages = constraints.minPages;
+  }
+
+  // Step 2: Ensure total is a multiple of 4
+  // Total = coverPages + blankPages + insidePages
+  const totalBeforeAlignment = coverPages + blankPages + insidePages;
+  const remainder = totalBeforeAlignment % 4;
+  if (remainder !== 0) {
+    const additionalPadding = 4 - remainder;
+    warnings.push(
+      `Added ${additionalPadding} page${additionalPadding === 1 ? '' : 's'} for 4-page alignment (total: ${totalBeforeAlignment} -> ${totalBeforeAlignment + additionalPadding}).`
+    );
+    insidePages += additionalPadding;
+  }
+
+  // Step 3: Truncate if exceeds maximum
+  if (constraints.maxPages > 0 && insidePages > constraints.maxPages) {
+    const pagesToRemove = insidePages - constraints.maxPages;
+    warnings.push(
+      `WARNING: Truncated ${pagesToRemove} page${pagesToRemove === 1 ? '' : 's'} to meet maximum of ${constraints.maxPages}.`
+    );
+    insidePages = constraints.maxPages;
+    wasTruncated = true;
+
+    // After truncation, we may need to re-align to multiple of 4
+    // But we must stay at or below maximum, so we can only pad up to max
+    const totalAfterTruncation = coverPages + blankPages + insidePages;
+    const remainderAfterTruncation = totalAfterTruncation % 4;
+    if (remainderAfterTruncation !== 0) {
+      // We need to pad, but that would exceed max
+      // So we truncate further to get to a valid multiple of 4
+      const truncateMore = remainderAfterTruncation;
+      insidePages -= truncateMore;
+      warnings.push(
+        `Reduced by ${truncateMore} more page${truncateMore === 1 ? '' : 's'} to maintain 4-page alignment within maximum.`
+      );
+    }
+  }
+
+  const paddingNeeded = insidePages - contentPageCount;
+
+  return {
+    finalInteriorPages: insidePages,
+    paddingNeeded: paddingNeeded > 0 ? paddingNeeded : 0,
+    wasTruncated,
+    warnings,
+  };
 }

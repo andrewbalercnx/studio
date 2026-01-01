@@ -301,12 +301,19 @@ Print product catalog.
 | `name` | string | Yes | Product name |
 | `description` | string | Yes | Product description |
 | `active` | boolean | Yes | Product availability |
+| `blankPages` | number | Yes | Fixed blank pages (e.g., endpapers). Default: 0 |
+| `spine` | boolean | Yes | Whether cover PDF includes spine page. Default: true |
 | `mixamSpec` | object | Yes | Mixam MxJdf specifications |
 | `pricingTiers` | array | Yes | Pricing tiers |
 | `shippingCost` | object | Yes | Shipping rates |
 | `displayOrder` | number | Yes | Display order |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
+
+**Page Composition**: The `blankPages` and `spine` fields control PDF generation:
+- `blankPages`: Number of fixed blank pages (e.g., front/back endpapers). These are counted in the total page count but not included in the interior PDF.
+- `spine`: If true, cover PDF includes front cover + spine + back cover. If false, cover PDF is just front + back.
+- Total pages = 2 (cover) + blankPages + interior pages. Must be a multiple of 4.
 
 **Security**: Read by authenticated users; write by admins only.
 

@@ -9,7 +9,7 @@ import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
 import type { PrintLayout, StoryOutputPage, PrintableAssetMetadata, PrintLayoutPageType, PrintProduct } from '@/lib/types';
 import { getLayoutForPageType, mapPageKindToLayoutType } from '@/lib/print-layout-utils';
 import SampleLayoutData from '@/data/print-layouts.json';
-import { resolvePageConstraints, validatePageCount } from '@/lib/print-constraints';
+import { resolvePageConstraints, calculateInteriorPageAdjustment } from '@/lib/print-constraints';
 
 /**
  * Request body for generating printable PDFs.
@@ -615,16 +615,22 @@ async function renderCombinedPdf(pages: StoryOutputPage[], layout: PrintLayout, 
 }
 
 /**
- * Renders COVER pages - front cover, spine, and back cover (3 pages)
- * For hardcover books, the cover PDF should have:
+ * Renders COVER pages - front cover, optionally spine, and back cover
+ * For hardcover books with spine=true, the cover PDF has:
  * 1. Front cover
  * 2. Spine (middle - narrow strip, typically 9mm wide)
  * 3. Back cover
  *
+ * For products without spine (spine=false):
+ * 1. Front cover
+ * 2. Back cover
+ *
  * The spine is intentionally blank (white) at this point.
  * Uses unified font size calculated across all pages for consistency.
+ *
+ * @param includeSpine - Whether to include a spine page (true for hardcover, false for paperback)
  */
-async function renderCoverPdf(pages: StoryOutputPage[], layout: PrintLayout, unifiedFontSize: number) {
+async function renderCoverPdf(pages: StoryOutputPage[], layout: PrintLayout, unifiedFontSize: number, includeSpine: boolean = true) {
   const pdfDoc = await PDFDocument.create();
   const fontType = getStandardFont(layout.font);
   const bodyFont = await pdfDoc.embedFont(fontType);
@@ -640,12 +646,6 @@ async function renderCoverPdf(pages: StoryOutputPage[], layout: PrintLayout, uni
     throw new Error('Cover must have a back cover page (kind: cover_back)');
   }
 
-  // Spine dimensions: 9mm wide, full book height
-  const SPINE_WIDTH_MM = 9;
-  const MM_TO_POINTS = 72 / 25.4; // 1 inch = 25.4mm, 72 points per inch
-  const spineWidthPoints = SPINE_WIDTH_MM * MM_TO_POINTS;
-  const bookHeightPoints = layout.leafHeight * INCH_TO_POINTS;
-
   // Page 1: Front cover
   const frontPage = pdfDoc.addPage([
     layout.leafWidth * INCH_TO_POINTS,
@@ -653,19 +653,31 @@ async function renderCoverPdf(pages: StoryOutputPage[], layout: PrintLayout, uni
   ]);
   await renderPageContent(frontPage, frontCover, layout, bodyFont, unifiedFontSize);
 
-  // Page 2: Spine (blank white page, 9mm wide x book height)
-  // The spine page is intentionally blank - just a white rectangle
-  pdfDoc.addPage([spineWidthPoints, bookHeightPoints]);
-  // No content rendered - spine is blank/white
+  // Page 2: Spine (only if includeSpine is true)
+  if (includeSpine) {
+    // Spine dimensions: 9mm wide, full book height
+    const SPINE_WIDTH_MM = 9;
+    const MM_TO_POINTS = 72 / 25.4; // 1 inch = 25.4mm, 72 points per inch
+    const spineWidthPoints = SPINE_WIDTH_MM * MM_TO_POINTS;
+    const bookHeightPoints = layout.leafHeight * INCH_TO_POINTS;
 
-  // Page 3: Back cover
+    // The spine page is intentionally blank - just a white rectangle
+    pdfDoc.addPage([spineWidthPoints, bookHeightPoints]);
+    // No content rendered - spine is blank/white
+  }
+
+  // Page 3 (or 2 if no spine): Back cover
   const backPage = pdfDoc.addPage([
     layout.leafWidth * INCH_TO_POINTS,
     layout.leafHeight * INCH_TO_POINTS
   ]);
   await renderPageContent(backPage, backCover, layout, bodyFont, unifiedFontSize);
 
-  console.log(`[printable] Cover PDF: front cover + spine (${SPINE_WIDTH_MM}mm) + back cover at ${unifiedFontSize}pt`);
+  if (includeSpine) {
+    console.log(`[printable] Cover PDF: front cover + spine (9mm) + back cover at ${unifiedFontSize}pt`);
+  } else {
+    console.log(`[printable] Cover PDF: front cover + back cover (no spine) at ${unifiedFontSize}pt`);
+  }
 
   return await pdfDoc.save();
 }
@@ -864,43 +876,52 @@ export async function POST(request: Request) {
     });
     console.log('[printable] Status updated to generating');
 
+    // Get product-specific settings (blankPages, spine)
+    const blankPages = printProduct?.blankPages ?? 0;
+    const includeSpine = printProduct?.spine ?? true; // Default to true for backwards compatibility
+
     // Prepare metadata - count pages by kind
-    // Cover PDF has 3 pages: back cover + spine + front cover
-    const coverPageCount = 3; // Back cover, spine (blank), front cover
+    // Cover PDF page count depends on whether spine is included
+    const coverPageCount = includeSpine ? 3 : 2; // front + spine? + back
     const contentPageCount = pages.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back').length;
 
-    // Validate page count against constraints and calculate adjustments
-    const pageValidation = validatePageCount(contentPageCount, resolvedConstraints);
-    const pdfGenerationWarnings: string[] = pageValidation.warnings;
+    // Calculate interior page adjustments using the new rules:
+    // 1. Inside pages must be at least minPageCount
+    // 2. Total (2 cover + blankPages + inside) must be multiple of 4
+    // 3. If inside exceeds max, truncate
+    const interiorAdjustment = calculateInteriorPageAdjustment(contentPageCount, blankPages, resolvedConstraints);
+    const pdfGenerationWarnings: string[] = interiorAdjustment.warnings;
 
-    // Log warnings
+    // Log warnings and settings
+    console.log(`[printable] Product settings: blankPages=${blankPages}, spine=${includeSpine}`);
     if (pdfGenerationWarnings.length > 0) {
-      console.log(`[printable] Page count validation warnings:`, pdfGenerationWarnings);
+      console.log(`[printable] Page count adjustment warnings:`, pdfGenerationWarnings);
     }
 
     // Handle truncation if content exceeds maximum
     let pagesToRender = pages;
-    if (pageValidation.wasTruncated && resolvedConstraints.maxPages > 0) {
-      // Keep covers + only up to maxPages of content
+    if (interiorAdjustment.wasTruncated && resolvedConstraints.maxPages > 0) {
+      // Keep covers + only up to finalInteriorPages of content
       const coverPages = pages.filter(p => p.kind === 'cover_front' || p.kind === 'cover_back');
       const contentPages = pages.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back');
-      const truncatedContent = contentPages.slice(0, resolvedConstraints.maxPages);
+      const truncatedContent = contentPages.slice(0, interiorAdjustment.finalInteriorPages);
       pagesToRender = [...coverPages.filter(p => p.kind === 'cover_front'), ...truncatedContent, ...coverPages.filter(p => p.kind === 'cover_back')];
       console.log(`[printable] Truncated from ${contentPages.length} to ${truncatedContent.length} content pages`);
     }
 
     // Calculate padding pages needed
     const actualContentCount = pagesToRender.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back').length;
-    const paddingPageCount = pageValidation.adjustedCount - actualContentCount;
-    const totalInteriorWithPadding = actualContentCount + paddingPageCount;
+    const paddingPageCount = interiorAdjustment.paddingNeeded;
+    const totalInteriorWithPadding = interiorAdjustment.finalInteriorPages;
 
     if (paddingPageCount > 0) {
       console.log(`[printable] Interior pages: ${actualContentCount}, padding with ${paddingPageCount} blank pages to reach ${totalInteriorWithPadding}`);
     }
 
-    // Sanity check for page multiple
-    if (resolvedConstraints.pageMultiple > 1 && totalInteriorWithPadding % resolvedConstraints.pageMultiple !== 0) {
-      console.error(`[printable] BUG: totalInteriorWithPadding (${totalInteriorWithPadding}) is not a multiple of ${resolvedConstraints.pageMultiple}!`);
+    // Sanity check for total page multiple of 4
+    const totalPages = 2 + blankPages + totalInteriorWithPadding; // 2 for cover
+    if (totalPages % 4 !== 0) {
+      console.error(`[printable] BUG: totalPages (${totalPages}) is not a multiple of 4! (2 cover + ${blankPages} blank + ${totalInteriorWithPadding} interior)`);
     }
 
     const printableMetadata: PrintableAssetMetadata = {
@@ -936,7 +957,7 @@ export async function POST(request: Request) {
       // instead of being a separate file. This ensures correct page ordering.
       const [combinedBytes, coverBytes, interiorBytes] = await Promise.all([
         renderCombinedPdf(pagesToRender, printLayout, unifiedFontSize),
-        renderCoverPdf(pagesToRender, printLayout, unifiedFontSize),
+        renderCoverPdf(pagesToRender, printLayout, unifiedFontSize, includeSpine),
         renderInteriorPdf(pagesToRender, printLayout, unifiedFontSize, paddingPageCount), // Include padding in interior PDF
       ]);
 

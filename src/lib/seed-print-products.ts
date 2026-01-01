@@ -29,6 +29,10 @@ export async function seedHardcoverProduct(): Promise<{ success: boolean; produc
       description: 'Premium hardcover picture book with gloss laminated cover, silk paper interior. Perfect for personalized storybooks.',
       active: true,
 
+      // Page composition settings for hardcover
+      blankPages: 2, // Front and back endpapers
+      spine: true,   // Hardcover includes spine in cover PDF
+
       mixamSpec: {
         product: 'books',
         subProduct: 'hardcover_poth', // Hardcover POTH (Print On The Hardcover)

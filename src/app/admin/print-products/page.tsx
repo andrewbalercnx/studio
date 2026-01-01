@@ -75,6 +75,10 @@ const printProductFormSchema = z.object({
   active: z.boolean(),
   displayOrder: z.coerce.number().min(0),
 
+  // Page composition settings
+  blankPages: z.coerce.number().min(0),
+  spine: z.boolean(),
+
   // Mixam specifications
   mixamSpec: z.object({
     product: z.literal('books'),
@@ -158,6 +162,8 @@ const defaultFormValues: PrintProductFormValues = {
   description: '',
   active: true,
   displayOrder: 1,
+  blankPages: 0,
+  spine: true,
   mixamSpec: {
     product: 'books',
     subProduct: 'hardcover_poth',
@@ -247,6 +253,8 @@ function PrintProductForm({
           description: editingProduct.description,
           active: editingProduct.active,
           displayOrder: editingProduct.displayOrder,
+          blankPages: editingProduct.blankPages ?? 0,
+          spine: editingProduct.spine ?? true,
           mixamSpec: editingProduct.mixamSpec,
           pricingTiers: editingProduct.pricingTiers,
           shippingCost: editingProduct.shippingCost,
@@ -294,6 +302,8 @@ function PrintProductForm({
         description: data.description,
         active: data.active,
         displayOrder: data.displayOrder,
+        blankPages: data.blankPages,
+        spine: data.spine,
         mixamSpec: data.mixamSpec,
         pricingTiers: data.pricingTiers,
         shippingCost: data.shippingCost,
@@ -353,6 +363,28 @@ function PrintProductForm({
             )}
           />
           <Label htmlFor="active">Active</Label>
+        </div>
+      </div>
+
+      {/* Page Composition */}
+      <div className="space-y-4">
+        <h3 className="font-medium text-sm border-b pb-2">Page Composition</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="blankPages">Blank Pages</Label>
+            <Input id="blankPages" type="number" min="0" {...register('blankPages')} />
+            <p className="text-xs text-muted-foreground">Fixed blank pages (e.g., endpapers)</p>
+          </div>
+          <div className="flex items-center gap-2 pt-6">
+            <Controller
+              name="spine"
+              control={control}
+              render={({ field }) => (
+                <Switch id="spine" checked={field.value} onCheckedChange={field.onChange} />
+              )}
+            />
+            <Label htmlFor="spine">Include Spine in Cover PDF</Label>
+          </div>
         </div>
       </div>
 

@@ -18,6 +18,31 @@
 
 ### 2026-01-01
 
+#### `PENDING` - Add blankPages and spine fields to PrintProduct
+
+**Type**: Feature
+
+**Summary**: Added page composition settings to PrintProduct for controlling PDF generation. The `blankPages` field specifies fixed blank pages (e.g., endpapers) and `spine` controls whether the cover PDF includes a spine page.
+
+**Changes**:
+- Added `blankPages` (number) and `spine` (boolean) fields to PrintProduct type
+- Updated print products admin page with Page Composition section
+- Updated PDF generation to use new interior page adjustment logic:
+  1. Inside pages must meet minimum page count
+  2. Total pages (2 cover + blankPages + inside) must be multiple of 4
+  3. Truncate if inside exceeds maximum
+- Cover PDF now respects `spine` setting (front + spine + back or just front + back)
+- Added `calculateInteriorPageAdjustment()` function to print-constraints.ts
+
+**Files Modified**:
+- `src/lib/types.ts` - Added blankPages and spine to PrintProduct
+- `src/app/admin/print-products/page.tsx` - Added UI fields for page composition
+- `src/lib/print-constraints.ts` - Added calculateInteriorPageAdjustment function
+- `src/app/api/storyBook/printable/route.ts` - Updated PDF generation logic
+- `docs/SCHEMA.md` - Documented new fields
+
+---
+
 #### `f028774` - Fix createdAt showing N/A on print orders admin page
 
 **Type**: Bug Fix

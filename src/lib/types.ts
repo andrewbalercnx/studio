@@ -604,6 +604,10 @@ export type PrintProduct = {
   description: string;
   active: boolean;
 
+  // Page composition settings
+  blankPages: number;    // Number of blank pages to include (e.g., 2 for front/back endpapers)
+  spine: boolean;        // Whether the cover PDF includes a spine (hardcover typically true)
+
   // Mixam MxJdf specifications
   mixamSpec: {
     product: 'books';
