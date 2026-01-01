@@ -38,19 +38,36 @@ export async function GET(
     // Helper to convert Firestore Timestamp to serializable format
     const convertTimestamp = (timestamp: any): { _seconds: number; _nanoseconds: number } | null => {
       if (!timestamp) return null;
-      // Firebase Admin SDK Timestamp has toMillis() method
+      // Firebase Admin SDK Timestamp has toDate() method and _seconds/_nanoseconds properties
+      if (timestamp._seconds !== undefined) {
+        return {
+          _seconds: timestamp._seconds,
+          _nanoseconds: timestamp._nanoseconds ?? 0,
+        };
+      }
+      // Alternative format with seconds/nanoseconds
+      if (timestamp.seconds !== undefined) {
+        return {
+          _seconds: timestamp.seconds,
+          _nanoseconds: timestamp.nanoseconds ?? 0,
+        };
+      }
+      // Firebase Admin SDK Timestamp with toMillis() method
       if (timestamp.toMillis && typeof timestamp.toMillis === 'function') {
         return {
           _seconds: Math.floor(timestamp.toMillis() / 1000),
           _nanoseconds: (timestamp.toMillis() % 1000) * 1000000,
         };
       }
-      // Already in serialized format
-      if (timestamp._seconds !== undefined || timestamp.seconds !== undefined) {
-        return {
-          _seconds: timestamp._seconds ?? timestamp.seconds,
-          _nanoseconds: timestamp._nanoseconds ?? timestamp.nanoseconds ?? 0,
-        };
+      // ISO string format
+      if (typeof timestamp === 'string') {
+        const date = new Date(timestamp);
+        if (!isNaN(date.getTime())) {
+          return {
+            _seconds: Math.floor(date.getTime() / 1000),
+            _nanoseconds: 0,
+          };
+        }
       }
       return null;
     };
