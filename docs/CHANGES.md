@@ -18,6 +18,22 @@
 
 ### 2026-01-01
 
+#### `7462688` - Add auto-fit text sizing for print text boxes
+
+**Type**: Enhancement
+
+**Summary**: Text in text boxes now automatically reduces font size to fit all content, preventing text loss.
+
+**Changes**:
+- Added `calculateFittingFontSize()` function that iteratively reduces font size from the layout maximum (typically 24pt) down to a minimum of 10pt until all text fits within the text box
+- Removed the y-position check that was silently dropping lines that fell below the text box boundary
+- Empty lines are preserved for visual spacing between paragraphs
+
+**Modified Files**:
+- `src/app/api/storyBook/printable/route.ts` - Added auto-fit logic to `renderPageContent()`
+
+---
+
 #### `19041ce` - Fix text truncation in cover text rendering
 
 **Type**: Bug Fix
