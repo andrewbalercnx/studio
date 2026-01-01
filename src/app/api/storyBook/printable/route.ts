@@ -231,15 +231,16 @@ function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: numbe
 /**
  * Calculate the optimal font size to fit text within a text box.
  * Reduces font size iteratively until all text fits, with a minimum size limit.
+ * Returns just the font size (for pre-calculation pass).
  */
-function calculateFittingFontSize(
+function calculateFittingFontSizeOnly(
   text: string,
   font: PDFFont,
   maxFontSize: number,
   textBoxWidth: number,
   textBoxHeight: number,
   padding: number = 20
-): { fontSize: number; lines: string[]; lineHeight: number } {
+): number {
   const MIN_FONT_SIZE = 10;
   const availableWidth = textBoxWidth - padding;
   const availableHeight = textBoxHeight - padding;
@@ -257,19 +258,69 @@ function calculateFittingFontSize(
     const totalTextHeight = (nonEmptyLineCount * lineHeight) + (emptyLineCount * lineHeight * 0.5);
 
     if (totalTextHeight <= availableHeight) {
-      console.log(`[printable] Font size ${currentFontSize}pt fits: ${lines.length} lines, height ${totalTextHeight.toFixed(1)}pt <= ${availableHeight.toFixed(1)}pt`);
-      return { fontSize: currentFontSize, lines, lineHeight };
+      return currentFontSize;
     }
 
     // Reduce font size and try again
     currentFontSize -= 1;
   }
 
-  // If we hit minimum, use it anyway (text may still overflow but at minimum readable size)
-  const lineHeight = MIN_FONT_SIZE * 1.4;
-  const lines = wrapText(text, font, MIN_FONT_SIZE, availableWidth);
-  console.log(`[printable] Using minimum font size ${MIN_FONT_SIZE}pt with ${lines.length} lines`);
-  return { fontSize: MIN_FONT_SIZE, lines, lineHeight };
+  return MIN_FONT_SIZE;
+}
+
+/**
+ * Calculate the minimum font size needed to fit all pages' text within their text boxes.
+ * This ensures consistent font size across all pages.
+ */
+function calculateMinimumFontSizeForPages(
+  pages: StoryOutputPage[],
+  layout: PrintLayout,
+  font: PDFFont,
+  maxFontSize: number
+): number {
+  let minFontSize = maxFontSize;
+  const pageWidth = layout.leafWidth * INCH_TO_POINTS;
+  const pageHeight = layout.leafHeight * INCH_TO_POINTS;
+
+  for (const page of pages) {
+    // Skip pages without text or special page types
+    if (!page.displayText || page.kind === 'blank') continue;
+
+    // Get page-type-specific layout
+    const pageType = mapPageKindToLayoutType(page.kind);
+
+    // Title pages use different rendering - skip for now (they have full page)
+    if (pageType === 'titlePage') continue;
+
+    const pageLayout = getLayoutForPageType(layout, pageType);
+    const textBox = pageLayout.textBox;
+
+    // Calculate text box dimensions
+    let textBoxWidth = pageWidth - (2 * INCH_TO_POINTS);
+    let textBoxHeight = pageHeight - (2 * INCH_TO_POINTS);
+
+    if (textBox) {
+      textBoxWidth = Number(textBox.width) * INCH_TO_POINTS;
+      textBoxHeight = Number(textBox.height) * INCH_TO_POINTS;
+    }
+
+    const sanitizedText = sanitizeTextForPdf(page.displayText);
+    const requiredFontSize = calculateFittingFontSizeOnly(
+      sanitizedText,
+      font,
+      maxFontSize,
+      textBoxWidth,
+      textBoxHeight
+    );
+
+    if (requiredFontSize < minFontSize) {
+      console.log(`[printable] Page ${page.pageNumber} requires font size ${requiredFontSize}pt (was ${minFontSize}pt)`);
+      minFontSize = requiredFontSize;
+    }
+  }
+
+  console.log(`[printable] Minimum font size for all pages: ${minFontSize}pt`);
+  return minFontSize;
 }
 
 /**
@@ -468,25 +519,21 @@ async function renderPageContent(
       finalTextColor = getContrastingTextColor(backgroundColor);
     }
 
-    // Sanitize text and calculate fitting font size
+    // Sanitize text and wrap at the unified font size
     console.log(`[printable] Page ${page.pageNumber} raw text: ${JSON.stringify(page.displayText.substring(0, 100))}`);
     const sanitizedText = sanitizeTextForPdf(page.displayText);
     console.log(`[printable] Page ${page.pageNumber} sanitized text: ${JSON.stringify(sanitizedText.substring(0, 100))}`);
 
-    // Calculate font size that fits all text within the text box
-    const { fontSize: fittedFontSize, lines, lineHeight: fittedLineHeight } = calculateFittingFontSize(
-      sanitizedText,
-      bodyFont,
-      fontSize, // max font size from layout
-      textBoxWidth,
-      textBoxHeight
-    );
+    // Use the provided fontSize (which should be the unified size calculated across all pages)
+    const textFontSize = fontSize;
+    const textLineHeight = textFontSize * 1.4;
+    const lines = wrapText(sanitizedText, bodyFont, textFontSize, textBoxWidth - 20);
 
     const textBoxTopInPdf = pageHeight - textBoxY;
-    const firstLineY = textBoxTopInPdf - fittedFontSize - 10;
+    const firstLineY = textBoxTopInPdf - textFontSize - 10;
 
     console.log(`[printable] Text box: x=${textBoxX}, y=${textBoxY}, w=${textBoxWidth}, h=${textBoxHeight}`);
-    console.log(`[printable] Text: ${lines.length} lines at ${fittedFontSize}pt, firstLineY=${firstLineY}`);
+    console.log(`[printable] Text: ${lines.length} lines at ${textFontSize}pt, firstLineY=${firstLineY}`);
 
     let lineIndex = 0;
     for (const line of lines) {
@@ -497,22 +544,22 @@ async function renderPageContent(
       }
 
       try {
-        const lineWidth = bodyFont.widthOfTextAtSize(line, fittedFontSize);
+        const lineWidth = bodyFont.widthOfTextAtSize(line, textFontSize);
         const centerX = textBoxX + (textBoxWidth / 2) - (lineWidth / 2);
-        const y = firstLineY - (lineIndex * fittedLineHeight);
+        const y = firstLineY - (lineIndex * textLineHeight);
 
         pdfPage.drawText(line, {
           x: centerX,
           y,
           font: bodyFont,
-          size: fittedFontSize,
+          size: textFontSize,
           color: rgb(finalTextColor.r, finalTextColor.g, finalTextColor.b),
         });
       } catch (err: any) {
         console.error(`[printable] Page ${page.pageNumber} error rendering line ${lineIndex}: ${err?.message}`);
         console.error(`[printable] Problematic line (${line.length} chars): ${JSON.stringify(line)}`);
         // Log character codes for debugging
-        const charCodes = line.split('').map(c => c.charCodeAt(0));
+        const charCodes = line.split('').map((c: string) => c.charCodeAt(0));
         console.error(`[printable] Character codes: ${JSON.stringify(charCodes)}`);
         // Skip this line but continue with others
       }
@@ -542,13 +589,19 @@ function getStandardFont(fontName?: string): typeof StandardFonts[keyof typeof S
 
 /**
  * Renders all pages into a single combined PDF
+ * Uses the pre-calculated unified font size for consistency across all pages.
  */
-async function renderCombinedPdf(pages: StoryOutputPage[], layout: PrintLayout) {
+async function renderCombinedPdf(pages: StoryOutputPage[], layout: PrintLayout, unifiedFontSize?: number) {
   const pdfDoc = await PDFDocument.create();
   const fontType = getStandardFont(layout.font);
   const bodyFont = await pdfDoc.embedFont(fontType);
-  const fontSize = Number(layout.fontSize) || 24;
+  const maxFontSize = Number(layout.fontSize) || 24;
 
+  // Use provided unified font size, or calculate if not provided
+  const fontSize = unifiedFontSize ?? calculateMinimumFontSizeForPages(pages, layout, bodyFont, maxFontSize);
+  console.log(`[printable] Combined PDF using font size: ${fontSize}pt`);
+
+  // Render all pages at the unified font size
   for (const page of pages) {
     const pdfPage = pdfDoc.addPage([
       layout.leafWidth * INCH_TO_POINTS,
@@ -568,12 +621,12 @@ async function renderCombinedPdf(pages: StoryOutputPage[], layout: PrintLayout) 
  * 3. Back cover
  *
  * The spine is intentionally blank (white) at this point.
+ * Uses unified font size calculated across all pages for consistency.
  */
-async function renderCoverPdf(pages: StoryOutputPage[], layout: PrintLayout) {
+async function renderCoverPdf(pages: StoryOutputPage[], layout: PrintLayout, unifiedFontSize: number) {
   const pdfDoc = await PDFDocument.create();
   const fontType = getStandardFont(layout.font);
   const bodyFont = await pdfDoc.embedFont(fontType);
-  const fontSize = Number(layout.fontSize) || 24;
 
   // Find front and back covers by kind
   const frontCover = pages.find(p => p.kind === 'cover_front');
@@ -597,7 +650,7 @@ async function renderCoverPdf(pages: StoryOutputPage[], layout: PrintLayout) {
     layout.leafWidth * INCH_TO_POINTS,
     layout.leafHeight * INCH_TO_POINTS
   ]);
-  await renderPageContent(frontPage, frontCover, layout, bodyFont, fontSize);
+  await renderPageContent(frontPage, frontCover, layout, bodyFont, unifiedFontSize);
 
   // Page 2: Spine (blank white page, 9mm wide x book height)
   // The spine page is intentionally blank - just a white rectangle
@@ -609,9 +662,9 @@ async function renderCoverPdf(pages: StoryOutputPage[], layout: PrintLayout) {
     layout.leafWidth * INCH_TO_POINTS,
     layout.leafHeight * INCH_TO_POINTS
   ]);
-  await renderPageContent(backPage, backCover, layout, bodyFont, fontSize);
+  await renderPageContent(backPage, backCover, layout, bodyFont, unifiedFontSize);
 
-  console.log(`[printable] Cover PDF: front cover + spine (${SPINE_WIDTH_MM}mm) + back cover`);
+  console.log(`[printable] Cover PDF: front cover + spine (${SPINE_WIDTH_MM}mm) + back cover at ${unifiedFontSize}pt`);
 
   return await pdfDoc.save();
 }
@@ -620,13 +673,13 @@ async function renderCoverPdf(pages: StoryOutputPage[], layout: PrintLayout) {
  * Renders INTERIOR pages only - all pages that are not cover_front or cover_back
  * This includes: title_page, text, image, blank
  *
+ * @param unifiedFontSize - The consistent font size to use across all pages
  * @param paddingPageCount - Number of blank pages to append at the end to meet Mixam requirements
  */
-async function renderInteriorPdf(pages: StoryOutputPage[], layout: PrintLayout, paddingPageCount: number = 0) {
+async function renderInteriorPdf(pages: StoryOutputPage[], layout: PrintLayout, unifiedFontSize: number, paddingPageCount: number = 0) {
   const pdfDoc = await PDFDocument.create();
   const fontType = getStandardFont(layout.font);
   const bodyFont = await pdfDoc.embedFont(fontType);
-  const fontSize = Number(layout.fontSize) || 24;
 
   // Filter out cover pages - interior is everything except covers
   const interiorPages = pages.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back');
@@ -635,13 +688,13 @@ async function renderInteriorPdf(pages: StoryOutputPage[], layout: PrintLayout, 
     throw new Error('No interior pages found');
   }
 
-  // Render content pages
+  // Render content pages at the unified font size
   for (const page of interiorPages) {
     const pdfPage = pdfDoc.addPage([
       layout.leafWidth * INCH_TO_POINTS,
       layout.leafHeight * INCH_TO_POINTS
     ]);
-    await renderPageContent(pdfPage, page, layout, bodyFont, fontSize);
+    await renderPageContent(pdfPage, page, layout, bodyFont, unifiedFontSize);
   }
 
   // Append blank padding pages at the end to meet Mixam requirements
@@ -659,6 +712,8 @@ async function renderInteriorPdf(pages: StoryOutputPage[], layout: PrintLayout, 
   if (totalPages % 4 !== 0) {
     console.warn(`[printable] Total interior page count ${totalPages} is not divisible by 4`);
   }
+
+  console.log(`[printable] Interior PDF: ${interiorPages.length} content pages + ${paddingPageCount} padding at ${unifiedFontSize}pt`);
 
   return await pdfDoc.save();
 }
@@ -832,13 +887,23 @@ export async function POST(request: Request) {
 
     try {
       console.log('[printable] Starting PDF generation...');
-      // Generate PDFs in parallel
+
+      // First, calculate unified font size across all pages
+      // We need to embed the font first to measure text
+      const tempDoc = await PDFDocument.create();
+      const fontType = getStandardFont(printLayout.font);
+      const tempFont = await tempDoc.embedFont(fontType);
+      const maxFontSize = Number(printLayout.fontSize) || 24;
+      const unifiedFontSize = calculateMinimumFontSizeForPages(pages, printLayout, tempFont, maxFontSize);
+      console.log(`[printable] Using unified font size: ${unifiedFontSize}pt (max was ${maxFontSize}pt)`);
+
+      // Generate PDFs in parallel using the unified font size
       // Note: padding pages are now appended directly to the interior PDF
       // instead of being a separate file. This ensures correct page ordering.
       const [combinedBytes, coverBytes, interiorBytes] = await Promise.all([
-        renderCombinedPdf(pages, printLayout),
-        renderCoverPdf(pages, printLayout),
-        renderInteriorPdf(pages, printLayout, paddingPageCount), // Include padding in interior PDF
+        renderCombinedPdf(pages, printLayout, unifiedFontSize),
+        renderCoverPdf(pages, printLayout, unifiedFontSize),
+        renderInteriorPdf(pages, printLayout, unifiedFontSize, paddingPageCount), // Include padding in interior PDF
       ]);
 
       console.log(`[printable] PDFs generated - combined: ${combinedBytes.length}B, cover: ${coverBytes.length}B, interior: ${interiorBytes.length}B (includes ${paddingPageCount} padding pages)`);
