@@ -18,7 +18,7 @@
 
 ### 2026-01-01
 
-#### `PENDING` - Add blankPages and spine fields to PrintProduct
+#### `3a2131e` - Add blankPages and spine fields to PrintProduct
 
 **Type**: Feature
 
