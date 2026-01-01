@@ -170,47 +170,62 @@ function sanitizeTextForPdf(text: string): string {
 }
 
 /**
- * Wraps text to fit within a given width
+ * Wraps text to fit within a given width, preserving explicit newlines
  */
 function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: number): string[] {
   if (!text || text.trim().length === 0) {
     return [];
   }
 
-  const words = text.split(' ').filter(w => w.length > 0);
-  if (words.length === 0) {
-    return [];
-  }
+  const allLines: string[] = [];
 
-  const lines: string[] = [];
-  let currentLine = '';
+  // First split by newlines to preserve explicit line breaks
+  const paragraphs = text.split('\n');
 
-  for (const word of words) {
-    // Skip empty words
-    if (!word || word.length === 0) continue;
+  for (const paragraph of paragraphs) {
+    const trimmedParagraph = paragraph.trim();
 
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    try {
-      const testWidth = font.widthOfTextAtSize(testLine, fontSize);
-
-      if (testWidth > maxWidth && currentLine) {
-        lines.push(currentLine);
-        currentLine = word;
-      } else {
-        currentLine = testLine;
-      }
-    } catch (err) {
-      console.warn('[printable] wrapText error measuring:', testLine, err);
-      // Skip problematic text
+    // Keep empty lines as empty strings to preserve spacing
+    if (trimmedParagraph.length === 0) {
+      allLines.push('');
       continue;
+    }
+
+    const words = trimmedParagraph.split(' ').filter(w => w.length > 0);
+    if (words.length === 0) {
+      allLines.push('');
+      continue;
+    }
+
+    let currentLine = '';
+
+    for (const word of words) {
+      // Skip empty words
+      if (!word || word.length === 0) continue;
+
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      try {
+        const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+
+        if (testWidth > maxWidth && currentLine) {
+          allLines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      } catch (err) {
+        console.warn('[printable] wrapText error measuring:', testLine, err);
+        // Skip problematic text
+        continue;
+      }
+    }
+
+    if (currentLine && currentLine.length > 0) {
+      allLines.push(currentLine);
     }
   }
 
-  if (currentLine && currentLine.length > 0) {
-    lines.push(currentLine);
-  }
-
-  return lines;
+  return allLines;
 }
 
 /**
