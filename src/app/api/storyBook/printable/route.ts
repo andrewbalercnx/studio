@@ -229,6 +229,50 @@ function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: numbe
 }
 
 /**
+ * Calculate the optimal font size to fit text within a text box.
+ * Reduces font size iteratively until all text fits, with a minimum size limit.
+ */
+function calculateFittingFontSize(
+  text: string,
+  font: PDFFont,
+  maxFontSize: number,
+  textBoxWidth: number,
+  textBoxHeight: number,
+  padding: number = 20
+): { fontSize: number; lines: string[]; lineHeight: number } {
+  const MIN_FONT_SIZE = 10;
+  const availableWidth = textBoxWidth - padding;
+  const availableHeight = textBoxHeight - padding;
+
+  let currentFontSize = maxFontSize;
+
+  while (currentFontSize >= MIN_FONT_SIZE) {
+    const lineHeight = currentFontSize * 1.4;
+    const lines = wrapText(text, font, currentFontSize, availableWidth);
+
+    // Filter out empty lines for height calculation but keep them for rendering
+    const nonEmptyLineCount = lines.filter(l => l.length > 0).length;
+    const emptyLineCount = lines.length - nonEmptyLineCount;
+    // Empty lines take half the height
+    const totalTextHeight = (nonEmptyLineCount * lineHeight) + (emptyLineCount * lineHeight * 0.5);
+
+    if (totalTextHeight <= availableHeight) {
+      console.log(`[printable] Font size ${currentFontSize}pt fits: ${lines.length} lines, height ${totalTextHeight.toFixed(1)}pt <= ${availableHeight.toFixed(1)}pt`);
+      return { fontSize: currentFontSize, lines, lineHeight };
+    }
+
+    // Reduce font size and try again
+    currentFontSize -= 1;
+  }
+
+  // If we hit minimum, use it anyway (text may still overflow but at minimum readable size)
+  const lineHeight = MIN_FONT_SIZE * 1.4;
+  const lines = wrapText(text, font, MIN_FONT_SIZE, availableWidth);
+  console.log(`[printable] Using minimum font size ${MIN_FONT_SIZE}pt with ${lines.length} lines`);
+  return { fontSize: MIN_FONT_SIZE, lines, lineHeight };
+}
+
+/**
  * Renders a title page with full-page centered text (no image)
  */
 async function renderTitlePage(
@@ -424,46 +468,55 @@ async function renderPageContent(
       finalTextColor = getContrastingTextColor(backgroundColor);
     }
 
-    // Sanitize, wrap and render text
+    // Sanitize text and calculate fitting font size
     console.log(`[printable] Page ${page.pageNumber} raw text: ${JSON.stringify(page.displayText.substring(0, 100))}`);
     const sanitizedText = sanitizeTextForPdf(page.displayText);
     console.log(`[printable] Page ${page.pageNumber} sanitized text: ${JSON.stringify(sanitizedText.substring(0, 100))}`);
 
-    const lines = wrapText(sanitizedText, bodyFont, fontSize, textBoxWidth - 20);
+    // Calculate font size that fits all text within the text box
+    const { fontSize: fittedFontSize, lines, lineHeight: fittedLineHeight } = calculateFittingFontSize(
+      sanitizedText,
+      bodyFont,
+      fontSize, // max font size from layout
+      textBoxWidth,
+      textBoxHeight
+    );
+
     const textBoxTopInPdf = pageHeight - textBoxY;
-    const firstLineY = textBoxTopInPdf - fontSize - 10;
+    const firstLineY = textBoxTopInPdf - fittedFontSize - 10;
 
     console.log(`[printable] Text box: x=${textBoxX}, y=${textBoxY}, w=${textBoxWidth}, h=${textBoxHeight}`);
-    console.log(`[printable] Text: ${lines.length} lines, firstLineY=${firstLineY}`);
+    console.log(`[printable] Text: ${lines.length} lines at ${fittedFontSize}pt, firstLineY=${firstLineY}`);
 
-    for (let index = 0; index < lines.length; index++) {
-      const line = lines[index];
-
-      // Skip empty lines
-      if (!line || line.length === 0) continue;
+    let lineIndex = 0;
+    for (const line of lines) {
+      // Empty lines still take up space (half height) for visual separation
+      if (!line || line.length === 0) {
+        lineIndex++;
+        continue;
+      }
 
       try {
-        const lineWidth = bodyFont.widthOfTextAtSize(line, fontSize);
+        const lineWidth = bodyFont.widthOfTextAtSize(line, fittedFontSize);
         const centerX = textBoxX + (textBoxWidth / 2) - (lineWidth / 2);
-        const y = firstLineY - (index * lineHeight);
+        const y = firstLineY - (lineIndex * fittedLineHeight);
 
-        if (y >= textBoxBottomInPdf + 10) {
-          pdfPage.drawText(line, {
-            x: centerX,
-            y,
-            font: bodyFont,
-            size: fontSize,
-            color: rgb(finalTextColor.r, finalTextColor.g, finalTextColor.b),
-          });
-        }
+        pdfPage.drawText(line, {
+          x: centerX,
+          y,
+          font: bodyFont,
+          size: fittedFontSize,
+          color: rgb(finalTextColor.r, finalTextColor.g, finalTextColor.b),
+        });
       } catch (err: any) {
-        console.error(`[printable] Page ${page.pageNumber} error rendering line ${index}: ${err?.message}`);
+        console.error(`[printable] Page ${page.pageNumber} error rendering line ${lineIndex}: ${err?.message}`);
         console.error(`[printable] Problematic line (${line.length} chars): ${JSON.stringify(line)}`);
         // Log character codes for debugging
         const charCodes = line.split('').map(c => c.charCodeAt(0));
         console.error(`[printable] Character codes: ${JSON.stringify(charCodes)}`);
         // Skip this line but continue with others
       }
+      lineIndex++;
     }
   }
 }
