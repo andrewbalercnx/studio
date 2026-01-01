@@ -19,6 +19,8 @@ export default function PrintLayoutSelectionPage() {
   const params = useParams<{ bookId: string }>();
   const bookId = params.bookId;
   const searchParams = useSearchParams();
+  // Support both storyId (from storybook viewer) and storybookId (legacy) query params
+  const storyIdParam = searchParams.get('storyId');
   const storybookIdParam = searchParams.get('storybookId');
   const router = useRouter();
   const firestore = useFirestore();
@@ -26,29 +28,37 @@ export default function PrintLayoutSelectionPage() {
   const { toast } = useToast();
   const { isParentGuardValidated, showPinModal } = useParentGuard();
 
+  // Determine if we're in new model mode:
+  // - If storyId is in query params, we're in new model: bookId is storybookId, storyId is storyId
+  // - Otherwise, bookId is the storyId (legacy model)
+  const isNewModel = !!storyIdParam;
+  const storyId = isNewModel ? storyIdParam : bookId;
+
   const [selectedLayoutId, setSelectedLayoutId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [storybookId, setStorybookId] = useState<string | null>(storybookIdParam);
-  const [storybookLoading, setStorybookLoading] = useState(!storybookIdParam);
+  // In new model, bookId IS the storybookId; in legacy, we need to find it
+  const [storybookId, setStorybookId] = useState<string | null>(isNewModel ? bookId : storybookIdParam);
+  const [storybookLoading, setStorybookLoading] = useState(!isNewModel && !storybookIdParam);
 
   // Fetch the story
   const storyRef = useMemo(
-    () => (firestore && bookId ? doc(firestore, 'stories', bookId) : null),
-    [firestore, bookId]
+    () => (firestore && storyId ? doc(firestore, 'stories', storyId) : null),
+    [firestore, storyId]
   );
   const { data: story, loading: storyLoading } = useDocument<Story>(storyRef);
 
-  // If no storybookId param, try to find the most recent storybook for this story
+  // If no storybookId param and not new model, try to find the most recent storybook for this story
   useEffect(() => {
     const findStorybook = async () => {
-      if (!firestore || !bookId || storybookIdParam) {
+      // In new model, we already have the storybookId from bookId param
+      if (!firestore || !storyId || isNewModel || storybookIdParam) {
         setStorybookLoading(false);
         return;
       }
 
       try {
         // Query for the most recent storybook with ready images
-        const storybooksRef = collection(firestore, 'stories', bookId, 'storybooks');
+        const storybooksRef = collection(firestore, 'stories', storyId, 'storybooks');
         const storybooksQuery = query(
           storybooksRef,
           where('imageGeneration.status', '==', 'ready'),
@@ -72,7 +82,7 @@ export default function PrintLayoutSelectionPage() {
     };
 
     findStorybook();
-  }, [firestore, bookId, storybookIdParam]);
+  }, [firestore, storyId, isNewModel, storybookIdParam]);
 
   // Fetch available print layouts
   const layoutsQuery = useMemo(
@@ -123,7 +133,7 @@ export default function PrintLayoutSelectionPage() {
 
       const newPrintStoryBook: Record<string, any> = {
         ownerUserId: user.uid,
-        storyId: bookId,
+        storyId: storyId,
         storySessionId: story.storySessionId,
         title: story.metadata?.title || 'Untitled Story',
         childName: story.childId || '',
