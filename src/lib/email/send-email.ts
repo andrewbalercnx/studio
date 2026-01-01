@@ -1,31 +1,34 @@
-import nodemailer from 'nodemailer';
+import { ClientSecretCredential } from '@azure/identity';
+import { Client } from '@microsoft/microsoft-graph-client';
+import { TokenCredentialAuthenticationProvider } from '@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials';
 
-// Create transporter lazily to avoid issues when env vars aren't set
-let transporter: nodemailer.Transporter | null = null;
+// Lazily initialized Graph client
+let graphClient: Client | null = null;
 
-function getTransporter(): nodemailer.Transporter | null {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
+// The sender email address (must be a valid mailbox in the tenant)
+const SENDER_EMAIL = 'andrew.bale@rcnx.io';
+
+function getGraphClient(): Client | null {
+  const tenantId = process.env.AZURE_TENANT_ID;
+  const clientId = process.env.AZURE_CLIENT_ID;
+  const clientSecret = process.env.AZURE_CLIENT_SECRET;
+
+  if (!tenantId || !clientId || !clientSecret) {
     return null;
   }
 
-  if (!transporter) {
-    // Microsoft 365 / Outlook SMTP configuration
-    transporter = nodemailer.createTransport({
-      host: 'smtp.office365.com',
-      port: 587,
-      secure: false, // Use STARTTLS
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD,
-      },
-      tls: {
-        ciphers: 'SSLv3',
-        rejectUnauthorized: false,
-      },
+  if (!graphClient) {
+    const credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+    const authProvider = new TokenCredentialAuthenticationProvider(credential, {
+      scopes: ['https://graph.microsoft.com/.default'],
+    });
+
+    graphClient = Client.initWithMiddleware({
+      authProvider,
     });
   }
 
-  return transporter;
+  return graphClient;
 }
 
 export type SendEmailOptions = {
@@ -35,27 +38,39 @@ export type SendEmailOptions = {
 };
 
 /**
- * Send an email using Microsoft 365 SMTP.
- * Requires SMTP_USER and SMTP_PASSWORD environment variables.
+ * Send an email using Microsoft Graph API.
+ * Requires AZURE_TENANT_ID, AZURE_CLIENT_ID, and AZURE_CLIENT_SECRET environment variables.
  * If credentials aren't configured, logs a warning and returns silently.
  */
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
-  const mailer = getTransporter();
+  const client = getGraphClient();
 
-  if (!mailer) {
-    console.warn('[Email] SMTP credentials not configured (SMTP_USER, SMTP_PASSWORD), skipping email');
+  if (!client) {
+    console.warn('[Email] Microsoft Graph credentials not configured (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET), skipping email');
     return;
   }
 
-  try {
-    await mailer.sendMail({
-      from: `"StoryPic Kids" <${process.env.SMTP_USER}>`,
-      to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
-      subject: options.subject,
-      html: options.html,
-    });
+  const recipients = Array.isArray(options.to) ? options.to : [options.to];
 
-    console.log(`[Email] Sent: "${options.subject}" to ${Array.isArray(options.to) ? options.to.join(', ') : options.to}`);
+  const message = {
+    subject: options.subject,
+    body: {
+      contentType: 'HTML',
+      content: options.html,
+    },
+    toRecipients: recipients.map((email) => ({
+      emailAddress: {
+        address: email,
+      },
+    })),
+  };
+
+  try {
+    await client
+      .api(`/users/${SENDER_EMAIL}/sendMail`)
+      .post({ message, saveToSentItems: false });
+
+    console.log(`[Email] Sent: "${options.subject}" to ${recipients.join(', ')}`);
   } catch (error: any) {
     console.error(`[Email] Failed to send: ${error.message}`);
     throw error;

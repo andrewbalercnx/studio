@@ -61,14 +61,19 @@ env:
     availability:
       - RUNTIME
 
-  # Microsoft 365 SMTP credentials for email notifications
-  # Use an App Password if MFA is enabled, or regular password otherwise
-  - variable: SMTP_USER
-    secret: SMTP_USER
+  # Microsoft Graph API credentials for email notifications
+  # Uses Azure AD App Registration with Mail.Send permission
+  - variable: AZURE_TENANT_ID
+    secret: AZURE_TENANT_ID
     availability:
       - RUNTIME
 
-  - variable: SMTP_PASSWORD
-    secret: SMTP_PASSWORD
+  - variable: AZURE_CLIENT_ID
+    secret: AZURE_CLIENT_ID
+    availability:
+      - RUNTIME
+
+  - variable: AZURE_CLIENT_SECRET
+    secret: AZURE_CLIENT_SECRET
     availability:
       - RUNTIME

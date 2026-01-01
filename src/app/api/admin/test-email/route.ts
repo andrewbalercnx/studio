@@ -34,12 +34,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if SMTP is configured
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
+    // Check if Microsoft Graph is configured
+    if (!process.env.AZURE_TENANT_ID || !process.env.AZURE_CLIENT_ID || !process.env.AZURE_CLIENT_SECRET) {
       return NextResponse.json(
         {
           ok: false,
-          error: 'SMTP not configured. Set SMTP_USER and SMTP_PASSWORD environment variables.',
+          error: 'Microsoft Graph not configured. Set AZURE_TENANT_ID, AZURE_CLIENT_ID, and AZURE_CLIENT_SECRET environment variables.',
           configured: false
         },
         { status: 503 }
@@ -76,13 +76,13 @@ export async function POST(request: NextRequest) {
 
     <div class="success-box">
       <strong>Email is working correctly!</strong>
-      <p>Your SMTP configuration is valid and emails can be sent successfully.</p>
+      <p>Your Microsoft Graph configuration is valid and emails can be sent successfully.</p>
     </div>
 
     <div class="details">
       <p><span class="label">Sent at:</span> <span class="value">${timestamp}</span></p>
       <p><span class="label">Sent by:</span> <span class="value">${user.email}</span></p>
-      <p><span class="label">SMTP User:</span> <span class="value">${process.env.SMTP_USER}</span></p>
+      <p><span class="label">Method:</span> <span class="value">Microsoft Graph API</span></p>
     </div>
 
     <div class="footer">
