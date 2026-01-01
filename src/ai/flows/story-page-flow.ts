@@ -582,10 +582,10 @@ export const storyPageFlow = ai.defineFlow(
 
       // =================================================================
       // FRONT COVER (page 0)
-      // - Text: "Title" written by "Child name"
+      // - Text: Title / by / Child name (three lines, centered)
       // - Image: Derived from synopsis + full list of actors
       // =================================================================
-      const frontCoverText = `"${derivedTitle}"\nwritten by\n${childName}`;
+      const frontCoverText = `${derivedTitle}\nby\n${childName}`;
       pages.push({
         pageNumber: pageNumber++,
         kind: 'cover_front',

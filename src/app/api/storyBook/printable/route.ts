@@ -493,11 +493,11 @@ async function renderCombinedPdf(pages: StoryOutputPage[], layout: PrintLayout) 
 }
 
 /**
- * Renders COVER pages - back cover, spine, and front cover (3 pages)
+ * Renders COVER pages - front cover, spine, and back cover (3 pages)
  * For hardcover books, the cover PDF should have:
- * 1. Back cover (left side when book is open)
+ * 1. Front cover
  * 2. Spine (middle - narrow strip, typically 9mm wide)
- * 3. Front cover (right side when book is open)
+ * 3. Back cover
  *
  * The spine is intentionally blank (white) at this point.
  */
@@ -524,26 +524,26 @@ async function renderCoverPdf(pages: StoryOutputPage[], layout: PrintLayout) {
   const spineWidthPoints = SPINE_WIDTH_MM * MM_TO_POINTS;
   const bookHeightPoints = layout.leafHeight * INCH_TO_POINTS;
 
-  // Page 1: Back cover
-  const backPage = pdfDoc.addPage([
-    layout.leafWidth * INCH_TO_POINTS,
-    layout.leafHeight * INCH_TO_POINTS
-  ]);
-  await renderPageContent(backPage, backCover, layout, bodyFont, fontSize);
-
-  // Page 2: Spine (blank white page, 9mm wide x book height)
-  // The spine page is intentionally blank - just a white rectangle
-  pdfDoc.addPage([spineWidthPoints, bookHeightPoints]);
-  // No content rendered - spine is blank/white
-
-  // Page 3: Front cover
+  // Page 1: Front cover
   const frontPage = pdfDoc.addPage([
     layout.leafWidth * INCH_TO_POINTS,
     layout.leafHeight * INCH_TO_POINTS
   ]);
   await renderPageContent(frontPage, frontCover, layout, bodyFont, fontSize);
 
-  console.log(`[printable] Cover PDF: back cover + spine (${SPINE_WIDTH_MM}mm) + front cover`);
+  // Page 2: Spine (blank white page, 9mm wide x book height)
+  // The spine page is intentionally blank - just a white rectangle
+  pdfDoc.addPage([spineWidthPoints, bookHeightPoints]);
+  // No content rendered - spine is blank/white
+
+  // Page 3: Back cover
+  const backPage = pdfDoc.addPage([
+    layout.leafWidth * INCH_TO_POINTS,
+    layout.leafHeight * INCH_TO_POINTS
+  ]);
+  await renderPageContent(backPage, backCover, layout, bodyFont, fontSize);
+
+  console.log(`[printable] Cover PDF: front cover + spine (${SPINE_WIDTH_MM}mm) + back cover`);
 
   return await pdfDoc.save();
 }
@@ -731,18 +731,10 @@ export async function POST(request: Request) {
     const coverPageCount = 3; // Back cover, spine (blank), front cover
     const interiorPageCount = pages.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back').length;
 
-    // Calculate padding pages needed for hardcover minimum (24 interior pages)
-    // Must also ensure total is a multiple of 4
-    const HARDCOVER_MIN_INTERIOR = 24;
+    // Calculate padding pages needed to ensure interior page count is a multiple of 4
     const currentInterior = interiorPageCount;
-    let paddingPageCount = 0;
-
-    // Calculate the target total interior pages:
-    // 1. Must be at least HARDCOVER_MIN_INTERIOR (24)
-    // 2. Must be a multiple of 4
-    const minTarget = Math.max(currentInterior, HARDCOVER_MIN_INTERIOR);
-    const targetPages = Math.ceil(minTarget / 4) * 4;
-    paddingPageCount = targetPages - currentInterior;
+    const targetPages = Math.ceil(currentInterior / 4) * 4;
+    const paddingPageCount = targetPages - currentInterior;
 
     if (paddingPageCount > 0) {
       console.log(`[printable] Interior pages: ${currentInterior}, padding with ${paddingPageCount} blank pages to reach ${targetPages}`);
@@ -753,9 +745,6 @@ export async function POST(request: Request) {
     // Sanity check
     if (totalInteriorWithPadding % 4 !== 0) {
       console.error(`[printable] BUG: totalInteriorWithPadding (${totalInteriorWithPadding}) is not a multiple of 4!`);
-    }
-    if (totalInteriorWithPadding < HARDCOVER_MIN_INTERIOR) {
-      console.error(`[printable] BUG: totalInteriorWithPadding (${totalInteriorWithPadding}) is below minimum ${HARDCOVER_MIN_INTERIOR}!`);
     }
 
     const printableMetadata: PrintableAssetMetadata = {
