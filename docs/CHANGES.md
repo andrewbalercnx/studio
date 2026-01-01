@@ -18,6 +18,27 @@
 
 ### 2026-01-01
 
+#### `5973414` - Add test email button to admin page
+
+**Type**: Feature
+
+**Summary**: Added a "Send Test Email" button to the Admin Dashboard Diagnostics section to verify SMTP configuration.
+
+**Changes**:
+- Created `/api/admin/test-email` endpoint for sending test emails
+- Added "Test Email (SMTP)" button in Diagnostics & Logging card
+- Button sends test email to the logged-in admin's email address
+- Shows appropriate success/error toasts
+
+**Files Created**:
+- `src/app/api/admin/test-email/route.ts`
+
+**Files Modified**:
+- `src/app/admin/page.tsx` - Added test email button and handler
+- `docs/API.md` - Added endpoint documentation
+
+---
+
 #### `acbbe47` - Fix print-layout page permissions error for new model storybooks
 
 **Type**: Bug fix

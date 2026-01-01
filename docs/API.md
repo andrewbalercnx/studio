@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2025-12-31
+> **Last Updated**: 2026-01-01
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -1044,6 +1044,39 @@ Upload an image for a story output type.
 ## Admin Routes
 
 > All admin routes require `isAdmin` or `isWriter` role.
+
+### POST `/api/admin/test-email`
+
+Send a test email to verify SMTP configuration. Admin only.
+
+**Request Body** (optional):
+```json
+{
+  "email": "recipient@example.com"
+}
+```
+
+If `email` is not provided, sends to the authenticated admin's email.
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "message": "Test email sent to recipient@example.com",
+  "recipient": "recipient@example.com"
+}
+```
+
+**Error Response**: `503 Service Unavailable`
+```json
+{
+  "ok": false,
+  "error": "SMTP not configured. Set SMTP_USER and SMTP_PASSWORD environment variables.",
+  "configured": false
+}
+```
+
+---
 
 ### GET `/api/admin/print-orders`
 

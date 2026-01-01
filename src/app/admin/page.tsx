@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LoaderCircle, PenTool, Database, FlaskConical, Settings, Users, BookOpen, Palette, Printer, Bug, Trash2, MessageSquare, Sparkles, Plus, Edit, ExternalLink, ShieldCheck, Upload } from 'lucide-react';
+import { LoaderCircle, PenTool, Database, FlaskConical, Settings, Users, BookOpen, Palette, Printer, Bug, Trash2, MessageSquare, Sparkles, Plus, Edit, ExternalLink, ShieldCheck, Upload, Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useDiagnostics } from '@/hooks/use-diagnostics';
 import { Switch } from '@/components/ui/switch';
@@ -76,6 +76,41 @@ export default function AdminDashboardPage() {
     showApiDocumentation,
     enableMixamWebhookLogging,
   } = useDiagnostics();
+  const { toast } = useToast();
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+
+  const handleSendTestEmail = async () => {
+    setSendingTestEmail(true);
+    try {
+      const response = await fetch('/api/admin/test-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await response.json();
+
+      if (data.ok) {
+        toast({
+          title: 'Test email sent',
+          description: `Email sent to ${data.recipient}`,
+        });
+      } else {
+        toast({
+          title: 'Failed to send test email',
+          description: data.error || 'Unknown error',
+          variant: 'destructive',
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: err.message || 'Failed to send test email',
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingTestEmail(false);
+    }
+  };
 
   const diagnostics = {
     page: 'admin-dashboard',
@@ -468,6 +503,36 @@ export default function AdminDashboardPage() {
                     checked={enableMixamWebhookLogging}
                     onCheckedChange={(checked) => updateConfig({ enableMixamWebhookLogging: checked })}
                   />
+                </div>
+
+                {/* Test Email Button */}
+                <div className="pt-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Test Email (SMTP)</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Send a test email to verify SMTP configuration
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSendTestEmail}
+                      disabled={sendingTestEmail}
+                    >
+                      {sendingTestEmail ? (
+                        <>
+                          <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="mr-2 h-4 w-4" />
+                          Send Test Email
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
