@@ -50,6 +50,15 @@ export async function GET(request: NextRequest) {
     // Helper to convert Firestore Timestamp to serializable format
     const convertTimestamp = (timestamp: any): { _seconds: number; _nanoseconds: number } | null => {
       if (!timestamp) return null;
+      // Firebase Admin SDK Timestamp with toDate() method - check this first
+      // The Admin SDK Timestamp has seconds/nanoseconds as getters, not enumerable properties
+      if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+        const date = timestamp.toDate() as Date;
+        return {
+          _seconds: Math.floor(date.getTime() / 1000),
+          _nanoseconds: (date.getTime() % 1000) * 1000000,
+        };
+      }
       // Firebase Admin SDK Timestamp has _seconds/_nanoseconds properties
       if (timestamp._seconds !== undefined) {
         return {
@@ -57,18 +66,11 @@ export async function GET(request: NextRequest) {
           _nanoseconds: timestamp._nanoseconds ?? 0,
         };
       }
-      // Alternative format with seconds/nanoseconds
+      // Alternative format with seconds/nanoseconds (e.g., from JSON serialization)
       if (timestamp.seconds !== undefined) {
         return {
           _seconds: timestamp.seconds,
           _nanoseconds: timestamp.nanoseconds ?? 0,
-        };
-      }
-      // Firebase Admin SDK Timestamp with toMillis() method
-      if (timestamp.toMillis && typeof timestamp.toMillis === 'function') {
-        return {
-          _seconds: Math.floor(timestamp.toMillis() / 1000),
-          _nanoseconds: (timestamp.toMillis() % 1000) * 1000000,
         };
       }
       // ISO string format
