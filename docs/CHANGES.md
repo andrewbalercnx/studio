@@ -18,6 +18,23 @@
 
 ### 2026-01-01
 
+#### `001cfe5` - Use unified font size across all pages in print PDFs
+
+**Type**: Enhancement
+
+**Summary**: All pages in a printed book now use the same font size for consistent typography.
+
+**Changes**:
+- Implemented two-pass approach: first calculates minimum font size needed across ALL pages, then renders all pages at that size
+- Added `calculateMinimumFontSizeForPages()` function to determine the smallest font needed
+- Updated `renderCombinedPdf()`, `renderCoverPdf()`, and `renderInteriorPdf()` to accept unified font size
+- Font size is calculated once and shared across all PDF outputs (combined, cover, interior)
+
+**Modified Files**:
+- `src/app/api/storyBook/printable/route.ts` - Two-pass font size calculation
+
+---
+
 #### `7462688` - Add auto-fit text sizing for print text boxes
 
 **Type**: Enhancement
