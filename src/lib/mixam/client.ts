@@ -424,17 +424,17 @@ class MixamAPIClient {
 
     console.log(`[Mixam] Cancelling order ${orderId} via: ${url}`);
 
-    // Try different body formats - Mixam API docs aren't clear on exact format
-    // Trying plain text first since JSON.stringify('CANCELED') produces '"CANCELED"'
+    // Mixam requires application/json content type
+    // The body should be just the status string as JSON (e.g., "CANCELED")
     let response: Response;
     try {
       response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'text/plain',
+          'Content-Type': 'application/json',
         },
-        body: 'CANCELED',
+        body: JSON.stringify('CANCELED'),
       });
     } catch (fetchError: any) {
       console.error(`[Mixam] Network error calling ${url}:`, fetchError);
