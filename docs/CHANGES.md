@@ -18,7 +18,7 @@
 
 ### 2026-01-01
 
-#### `PENDING` - Switch email from Gmail to Microsoft 365 SMTP
+#### `fe066cf` - Switch email from Gmail to Microsoft 365 SMTP
 
 **Type**: Configuration
 
