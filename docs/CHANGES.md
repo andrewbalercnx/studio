@@ -18,6 +18,21 @@
 
 ### 2026-01-01
 
+#### `f028774` - Fix createdAt showing N/A on print orders admin page
+
+**Type**: Bug Fix
+
+**Summary**: The Created date was showing "N/A" on `/admin/print-orders` because the Firebase Admin SDK Timestamp wasn't being converted correctly when serializing for JSON response.
+
+**Changes**:
+- Reordered timestamp conversion checks to prioritize `toDate()` method
+- Admin SDK Timestamps have seconds/nanoseconds as getter properties (not enumerable), so the `toDate()` method is the reliable way to extract the value
+
+**Files Modified**:
+- `src/app/api/admin/print-orders/route.ts` - Fixed convertTimestamp function
+
+---
+
 #### `6086ba7` - Switch email from SMTP to Microsoft Graph API
 
 **Type**: Feature / Infrastructure
