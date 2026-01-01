@@ -819,23 +819,26 @@ export default function PrintOrderDetailPage() {
           </div>
         )}
 
-        {/* Mixam API Interactions */}
-        {order.mixamInteractions && order.mixamInteractions.length > 0 && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Mixam API Log ({order.mixamInteractions.length})
-              </h2>
+        {/* Mixam API Interactions - Always shown */}
+        <div className="bg-white rounded-lg shadow p-6 mt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">
+              Mixam API Log {order.mixamInteractions && order.mixamInteractions.length > 0 && `(${order.mixamInteractions.length})`}
+            </h2>
+            {order.mixamInteractions && order.mixamInteractions.length > 0 && (
               <button
                 onClick={() => setShowInteractions(!showInteractions)}
                 className="text-sm text-blue-600 hover:text-blue-800"
               >
                 {showInteractions ? 'Hide Details' : 'Show Details'}
               </button>
-            </div>
-            {showInteractions && (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {[...order.mixamInteractions].reverse().map((interaction: MixamInteraction) => (
+            )}
+          </div>
+          {!order.mixamInteractions || order.mixamInteractions.length === 0 ? (
+            <p className="text-gray-500 text-sm">No Mixam interactions recorded yet.</p>
+          ) : showInteractions && (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {[...order.mixamInteractions].reverse().map((interaction: MixamInteraction) => (
                   <div
                     key={interaction.id}
                     className={`border rounded-lg p-3 ${
@@ -937,8 +940,7 @@ export default function PrintOrderDetailPage() {
                 ))}
               </div>
             )}
-          </div>
-        )}
+        </div>
 
         {/* Reject Dialog */}
         {showRejectDialog && (
