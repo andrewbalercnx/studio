@@ -18,7 +18,7 @@
 
 ### 2026-01-01
 
-#### `pending` - Add print product page constraints to storybook pipeline
+#### `37beb80` - Add print product page constraints to storybook pipeline
 
 **Type**: Feature
 
