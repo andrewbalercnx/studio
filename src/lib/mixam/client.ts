@@ -272,7 +272,7 @@ class MixamAPIClient {
     }
 
     const data = await response.json();
-    console.log('[Mixam] Order submission response:', data);
+    console.log(`[Mixam] Order submission response: ${JSON.stringify(data).substring(0, 500)}`);
 
     // Mixam returns { order: { id, orderNumber, orderStatus, ... } }
     const orderData = data.order || data;
@@ -315,7 +315,7 @@ class MixamAPIClient {
 
     if (singleResponse.ok) {
       const data = await singleResponse.json();
-      console.log(`[Mixam] Single order response:`, JSON.stringify(data, null, 2).substring(0, 1000));
+      console.log(`[Mixam] Single order response: ${JSON.stringify(data).substring(0, 500)}`);
 
       // Response could be { order: {...} } or just the order object
       const order = data.order || data;
@@ -346,10 +346,9 @@ class MixamAPIClient {
 
     const data = await response.json();
 
-    // Log full response structure for debugging
-    console.log(`[Mixam] Orders API response type: ${typeof data}, isArray: ${Array.isArray(data)}`);
-    console.log(`[Mixam] Orders API response keys:`, data && typeof data === 'object' ? Object.keys(data) : 'N/A');
-    console.log(`[Mixam] Orders API full response:`, JSON.stringify(data, null, 2).substring(0, 2000));
+    // Log response structure for debugging (single line)
+    console.log(`[Mixam] Orders API response type: ${typeof data}, isArray: ${Array.isArray(data)}, keys: ${data && typeof data === 'object' ? Object.keys(data).join(',') : 'N/A'}`);
+    console.log(`[Mixam] Orders API response: ${JSON.stringify(data).substring(0, 500)}`);
 
     // The response should be an array of orders or { orders: [...] } or other structure
     let orders: any[] = [];
@@ -389,7 +388,7 @@ class MixamAPIClient {
         orderNumber: o.orderNumber,
         status: o.orderStatus || o.status
       }));
-      console.log(`[Mixam] All orders in response:`, JSON.stringify(orderSummaries, null, 2));
+      console.log(`[Mixam] All orders in response: ${JSON.stringify(orderSummaries)}`);
 
       // Include order summaries in error for debugging
       const orderList = orderSummaries.length > 0
@@ -399,7 +398,7 @@ class MixamAPIClient {
       throw new Error(`Order ${orderId} not found in Mixam orders list.${orderList}${hint}`);
     }
 
-    console.log(`[Mixam] Found order:`, { id: order.id, orderNumber: order.orderNumber, status: order.orderStatus });
+    console.log(`[Mixam] Found order: id=${order.id}, orderNumber=${order.orderNumber}, status=${order.orderStatus}`);
 
     return {
       status: order.orderStatus || order.status || 'UNKNOWN',
@@ -474,7 +473,7 @@ class MixamAPIClient {
     }
 
     const data = await response.json();
-    console.log('[Mixam] Cancel order response:', data);
+    console.log(`[Mixam] Cancel order response: ${JSON.stringify(data).substring(0, 300)}`);
 
     return {
       orderId: data.orderId || orderId,
