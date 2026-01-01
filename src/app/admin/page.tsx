@@ -77,14 +77,28 @@ export default function AdminDashboardPage() {
     enableMixamWebhookLogging,
   } = useDiagnostics();
   const { toast } = useToast();
+  const { user } = useUser();
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
 
   const handleSendTestEmail = async () => {
+    if (!user) {
+      toast({
+        title: 'Error',
+        description: 'You must be signed in to send test emails',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSendingTestEmail(true);
     try {
+      const token = await user.getIdToken();
       const response = await fetch('/api/admin/test-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({ email }),
       });
       const data = await response.json();
