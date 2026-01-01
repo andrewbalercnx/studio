@@ -18,6 +18,24 @@
 
 ### 2026-01-01
 
+#### `acbbe47` - Fix print-layout page permissions error for new model storybooks
+
+**Type**: Bug fix
+
+**Summary**: Fixed permissions error when accessing print-layout page from storybook viewer for new model storybooks.
+
+**Changes**:
+- The print-layout page was looking for `storybookId` query param but storybook viewer passes `storyId`
+- In new model, the `bookId` URL param is the storybookId, with `storyId` in query params
+- The Story document query was using the wrong ID (bookId instead of storyId)
+- Now correctly detects new model mode and uses the right IDs for queries
+- PrintStoryBook document now stores the correct storyId
+
+**Files Modified**:
+- `src/app/storybook/[bookId]/print-layout/page.tsx`
+
+---
+
 #### `730e92f` - Add Mixam API interaction logging
 
 **Type**: Feature
