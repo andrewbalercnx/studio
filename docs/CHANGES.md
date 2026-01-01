@@ -18,6 +18,21 @@
 
 ### 2026-01-01
 
+#### `19041ce` - Fix text truncation in cover text rendering
+
+**Type**: Bug Fix
+
+**Summary**: Fixed truncation of cover text (e.g., `"John's Kicktastic` instead of full title with author).
+
+**Root Cause**: The `wrapText` function split text by spaces only, embedding newline characters inside "words". When `font.widthOfTextAtSize` measured these words containing `\n`, it threw errors that were silently caught and skipped, truncating the output.
+
+**Fix**: Split on newlines first to preserve explicit line breaks, then wrap each paragraph independently.
+
+**Modified Files**:
+- `src/app/api/storyBook/printable/route.ts` - Updated `wrapText()` function
+
+---
+
 #### `8833056` - Fix print pagination issues
 
 **Type**: Bug Fix
