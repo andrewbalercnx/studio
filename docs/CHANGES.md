@@ -18,6 +18,32 @@
 
 ### 2026-01-02
 
+#### `31a19ee` - Fix StoryBrowser arc progression and add diagnostics
+
+**Type**: Bugfix
+
+**Summary**: Fixed critical bug where StoryBrowser wasn't incrementing the arcStepIndex when options were selected, preventing story progression. Added comprehensive diagnostics to debug flow state.
+
+**Changes**:
+
+1. **Arc Step Progression**:
+   - Added arcStepIndex increment when child selects an option
+   - Fetches arc template from story type to calculate next step
+   - Detects when arc ends and transitions to ending phase
+   - Only increments during normal story phase (not ending phase)
+
+2. **Enhanced Diagnostics Panel**:
+   - Added `errorMessage` display for error state visibility
+   - Added generator info (name, endpoint, requiresStoryType, etc.)
+   - Added session info (storyTypeId, arcStepIndex, currentPhase)
+   - Added story type info (id, name, arcStepsCount)
+   - Renamed `limit` import to `firestoreLimit` to avoid conflicts
+
+**Files Modified**:
+- `src/components/story/story-browser.tsx`
+
+---
+
 #### `1986cab` - Unify story play pages with StoryBrowser
 
 **Type**: Refactor
