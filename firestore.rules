@@ -1,6 +1,9 @@
-// Rules version: v17 - Added aiRunTraces collection for AI generation tracing
+// Rules version: v18 - Added storyGenerators collection for story flow configs
 // IMPORTANT: Firebase Admin SDK bypasses these rules entirely.
 // These rules only apply to client-side (browser/mobile) requests.
+//
+// CHANGES IN v18:
+// - Added storyGenerators collection for story flow configurations (read: authenticated, write: admin)
 //
 // CHANGES IN v17:
 // - Added aiRunTraces collection for comprehensive AI call tracing (read/write: admin only)
@@ -290,6 +293,11 @@ service cloud.firestore {
     }
 
     match /imageStyles/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /storyGenerators/{document=**} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
