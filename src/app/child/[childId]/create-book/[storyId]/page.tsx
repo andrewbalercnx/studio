@@ -125,12 +125,17 @@ export default function CreateBookPage({
   }, [firestore, user, userLoading, idTokenResult]);
   const { data: imageStylesRaw, loading: imageStylesLoading } = useCollection<ImageStyle>(imageStylesQuery);
 
-  // Sort image styles by title alphabetically
+  // Sort image styles: preferred first, then alphabetically by title
   const imageStyles = useMemo(() => {
     if (!imageStylesRaw) return null;
-    return [...imageStylesRaw].sort((a, b) =>
-      (a.title || '').localeCompare(b.title || '')
-    );
+    return [...imageStylesRaw].sort((a, b) => {
+      // Preferred styles come first
+      const aPreferred = a.preferred ? 1 : 0;
+      const bPreferred = b.preferred ? 1 : 0;
+      if (aPreferred !== bPreferred) return bPreferred - aPreferred;
+      // Then sort alphabetically by title
+      return (a.title || '').localeCompare(b.title || '');
+    });
   }, [imageStylesRaw]);
 
   // Filter styles based on age appropriateness

@@ -18,6 +18,21 @@
 
 ### 2026-01-02
 
+#### `PENDING` - Add preferred flag to image styles
+
+**Type**: Feature
+
+**Summary**: Added a `preferred` boolean field to ImageStyle. When set to true, these styles appear first in child-facing image style selection, sorted alphabetically within the preferred group, followed by non-preferred styles also sorted alphabetically.
+
+**Files Modified**:
+- `src/lib/types.ts` - Added `preferred?: boolean` field to ImageStyle type
+- `docs/SCHEMA.md` - Documented the new field
+- `src/app/child/[childId]/create-book/[storyId]/page.tsx` - Sort preferred styles first
+- `src/app/kids/create/[sessionId]/style/page.tsx` - Sort preferred styles first
+- `src/app/admin/image-styles/page.tsx` - Added Preferred badge and toggle switch in editor
+
+---
+
 #### `258f1b6` - Remove help-child from parent's children list
 
 **Type**: Bug fix

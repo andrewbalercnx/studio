@@ -1420,6 +1420,7 @@ export type ImageStyle = {
   sampleDescription: string;
   sampleImageUrl?: string | null;
   exampleImages?: ImageStyleExampleImage[]; // Reference images for AI generation
+  preferred?: boolean; // If true, shown first in child-facing image style selection
   createdAt: any;
   updatedAt: any;
 };

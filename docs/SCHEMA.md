@@ -465,6 +465,7 @@ Art style configurations for image generation.
 | `sampleDescription` | string | Yes | Sample image description |
 | `sampleImageUrl` | string | No | Sample image URL |
 | `exampleImages` | array | No | Example images for AI style reference |
+| `preferred` | boolean | No | If true, shown first in child-facing selection (sorted alphabetically within preferred/non-preferred groups) |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
 

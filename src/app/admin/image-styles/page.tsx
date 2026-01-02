@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import { User } from 'firebase/auth';
 
 export default function ImageStylesAdminPage() {
@@ -160,7 +161,14 @@ export default function ImageStylesAdminPage() {
                     {imageStyles.map((style) => (
                         <Card key={style.id} className="flex flex-col">
                             <CardHeader>
-                                <CardTitle className="text-lg">{style.title}</CardTitle>
+                                <div className="flex items-center gap-2">
+                                    <CardTitle className="text-lg">{style.title}</CardTitle>
+                                    {style.preferred && (
+                                        <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">
+                                            Preferred
+                                        </span>
+                                    )}
+                                </div>
                                 <CardDescription>
                                     Ages: {style.ageFrom ?? 0}
                                     {style.ageTo ? `-${style.ageTo}` : '+'}
@@ -456,6 +464,20 @@ function ImageStyleEditor({ style, onClose, firestore, user }: { style: ImageSty
                     />
                     <p className="text-xs text-muted-foreground mt-1">Legacy text</p>
                 </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+                <Switch
+                    id="preferred"
+                    checked={formData.preferred ?? false}
+                    onCheckedChange={(checked) => setFormData({ ...formData, preferred: checked })}
+                />
+                <Label htmlFor="preferred" className="cursor-pointer">
+                    Preferred Style
+                </Label>
+                <span className="text-xs text-muted-foreground">
+                    (shown first in child selection)
+                </span>
             </div>
 
             <div>

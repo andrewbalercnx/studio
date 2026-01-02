@@ -4,7 +4,7 @@ import { use, useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
-import { collection, query, orderBy, doc, addDoc, getDoc, serverTimestamp, where } from 'firebase/firestore';
+import { collection, query, doc, addDoc, getDoc, serverTimestamp, where } from 'firebase/firestore';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import { useKidsPWA } from '../../../layout';
 import type { ImageStyle, StorySession, Story, StoryOutputType, ChildProfile, StoryBookOutput, PrintLayout } from '@/lib/types';
@@ -87,9 +87,22 @@ export default function KidsStyleSelectionPage({ params }: { params: Promise<{ s
   // Load available image styles
   const imageStylesQuery = useMemo(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'imageStyles'), orderBy('title', 'asc'));
+    return query(collection(firestore, 'imageStyles'));
   }, [firestore]);
-  const { data: imageStyles, loading: imageStylesLoading } = useCollection<ImageStyle>(imageStylesQuery);
+  const { data: imageStylesRaw, loading: imageStylesLoading } = useCollection<ImageStyle>(imageStylesQuery);
+
+  // Sort image styles: preferred first, then alphabetically by title
+  const imageStyles = useMemo(() => {
+    if (!imageStylesRaw) return [];
+    return [...imageStylesRaw].sort((a, b) => {
+      // Preferred styles come first
+      const aPreferred = a.preferred ? 1 : 0;
+      const bPreferred = b.preferred ? 1 : 0;
+      if (aPreferred !== bPreferred) return bPreferred - aPreferred;
+      // Then sort alphabetically by title
+      return (a.title || '').localeCompare(b.title || '');
+    });
+  }, [imageStylesRaw]);
 
   // Filter styles based on age
   const ageAppropriateStyles = useMemo(() => {
