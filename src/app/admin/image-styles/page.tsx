@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
-import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { ImageStyle, ImageStyleExampleImage } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -116,6 +116,19 @@ export default function ImageStylesAdminPage() {
         }
     };
 
+    const handleTogglePreferred = async (styleId: string, currentValue: boolean) => {
+        if (!firestore) return;
+
+        try {
+            await updateDoc(doc(firestore, 'imageStyles', styleId), {
+                preferred: !currentValue,
+                updatedAt: new Date(),
+            });
+        } catch (error: any) {
+            alert(`Error updating preferred status: ${error.message}`);
+        }
+    };
+
     const handleCreateNew = () => {
         setSelectedStyle({
             id: '',
@@ -161,13 +174,18 @@ export default function ImageStylesAdminPage() {
                     {imageStyles.map((style) => (
                         <Card key={style.id} className="flex flex-col">
                             <CardHeader>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center justify-between gap-2">
                                     <CardTitle className="text-lg">{style.title}</CardTitle>
-                                    {style.preferred && (
-                                        <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">
-                                            Preferred
+                                    <div className="flex items-center gap-2">
+                                        <Switch
+                                            checked={style.preferred ?? false}
+                                            onCheckedChange={() => handleTogglePreferred(style.id, style.preferred ?? false)}
+                                            aria-label="Toggle preferred"
+                                        />
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${style.preferred ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-500'}`}>
+                                            {style.preferred ? 'Preferred' : 'Standard'}
                                         </span>
-                                    )}
+                                    </div>
                                 </div>
                                 <CardDescription>
                                     Ages: {style.ageFrom ?? 0}
