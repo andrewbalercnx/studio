@@ -123,7 +123,7 @@ export function StoryBrowser({
     () => (firestore ? doc(firestore, 'storyGenerators', generatorId) : null),
     [firestore, generatorId]
   );
-  const { data: generator, loading: generatorLoading } = useDocument<StoryGenerator>(generatorRef);
+  const { data: generator, loading: generatorLoading, error: generatorError } = useDocument<StoryGenerator>(generatorRef);
 
   const sessionRef = useMemo(
     () => (firestore ? doc(firestore, 'storySessions', sessionId) : null),
@@ -402,6 +402,70 @@ export function StoryBrowser({
   }, [generator, user, firestore, sessionId, sessionRef, stopSpeech, generatorId, autoCompileStory, onError]);
 
   // ---------------------------------------------------------------------------
+  // Ending Flow API Call
+  // ---------------------------------------------------------------------------
+  const callEndingAPI = useCallback(async () => {
+    if (!user || !firestore || !sessionRef) return;
+
+    setBrowserState('generating');
+    stopSpeech();
+
+    try {
+      const response = await fetch('/api/storyEnding', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await user.getIdToken()}`,
+        },
+        body: JSON.stringify({ sessionId }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ending API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.ok) {
+        throw new Error(result.errorMessage || 'Failed to generate endings');
+      }
+
+      // Store debug info
+      setDebugInfo(result.debug || {});
+
+      // Store ending options message in Firestore
+      const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
+      const endings = result.endings || [];
+      const endingOptions: StoryGeneratorResponseOption[] = endings.map((ending: { id: string; text: string; textResolved?: string }) => ({
+        id: ending.id,
+        text: ending.text,
+        textResolved: ending.textResolved || ending.text,
+      }));
+
+      await addDoc(messagesRef, {
+        sender: 'assistant',
+        text: 'How would you like your story to end?',
+        kind: 'ending_options',
+        options: endingOptions,
+        createdAt: serverTimestamp(),
+      });
+
+      // Display ending options
+      setIsEndingPhase(true);
+      setHeaderText('');
+      setCurrentQuestion('How would you like your story to end?');
+      setCurrentOptions(endingOptions);
+      setBrowserState('ending');
+
+    } catch (e: any) {
+      console.error('[StoryBrowser] Ending API error:', e);
+      setErrorMessage(e.message || 'Failed to generate endings');
+      setBrowserState('error');
+      onError?.(e.message);
+    }
+  }, [user, firestore, sessionId, sessionRef, stopSpeech, onError]);
+
+  // ---------------------------------------------------------------------------
   // Option Selection
   // ---------------------------------------------------------------------------
   const handleSelectOption = useCallback(async (option: StoryGeneratorResponseOption) => {
@@ -490,8 +554,24 @@ export function StoryBrowser({
       return;
     }
 
-    // Increment arc step before calling API (unless in ending phase)
-    if (!isEndingPhase && sessionRef) {
+    // If in ending phase, user is selecting their ending - save it and compile
+    if (isEndingPhase && sessionRef) {
+      console.log('[StoryBrowser] Ending selected, saving and compiling...');
+
+      // Save the selected ending to the session
+      await updateDoc(sessionRef, {
+        selectedEndingId: option.id,
+        selectedEndingText: option.text,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Auto-compile the story
+      await autoCompileStory();
+      return;
+    }
+
+    // Increment arc step before calling API
+    if (sessionRef) {
       // Get arc steps from active story type or fetch from Firestore
       let arcSteps = activeStoryType?.arcTemplate?.steps;
       if (!arcSteps && session.storyTypeId) {
@@ -526,16 +606,17 @@ export function StoryBrowser({
         updatedAt: serverTimestamp(),
       });
 
-      // If we've reached the end of the arc, transition to ending phase
+      // If we've reached the end of the arc, call the ending API
       if (reachedEnd) {
-        setIsEndingPhase(true);
-        console.log('[StoryBrowser] Arc completed, entering ending phase');
+        console.log('[StoryBrowser] Arc completed, calling ending API');
+        await callEndingAPI();
+        return;
       }
     }
 
     // Call API with selected option
     await callGeneratorAPI(option.id, option.text);
-  }, [generator, firestore, user, session, sessionId, sessionRef, isEndingPhase, activeStoryType, childProfile, callGeneratorAPI, toast]);
+  }, [generator, firestore, user, session, sessionId, sessionRef, isEndingPhase, activeStoryType, childProfile, callGeneratorAPI, callEndingAPI, autoCompileStory, toast]);
 
   // ---------------------------------------------------------------------------
   // Continue after character introduction
@@ -828,6 +909,8 @@ export function StoryBrowser({
             supportsCharacterIntroduction: generator.capabilities?.supportsCharacterIntroduction,
           } : null,
           generatorLoading,
+          generatorError: generatorError?.message || null,
+          firestoreReady: !!firestore,
           // Session info
           session: session ? {
             storyTypeId: session.storyTypeId || null,
