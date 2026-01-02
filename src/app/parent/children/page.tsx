@@ -7,7 +7,7 @@ import { LoaderCircle, Plus, User, Pencil, X, Sparkles, Image as ImageIcon, Volu
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useFirestore } from '@/firebase';
-import { collection, doc, onSnapshot, setDoc, serverTimestamp, query, where, writeBatch, updateDoc, deleteField, getDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc, serverTimestamp, query, where, writeBatch, updateDoc, deleteField } from 'firebase/firestore';
 import { DeleteButton, UndoBanner, useDeleteWithUndo, type DeletedItem } from '@/components/shared/DeleteWithUndo';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -540,28 +540,9 @@ export default function ManageChildrenPage() {
         // Track if component is still mounted
         let isMounted = true;
 
-        // Also fetch help-child for wizard demonstrations
-        const fetchHelpChild = async () => {
-            try {
-                const helpChildDoc = await getDoc(doc(firestore, 'children', 'help-child'));
-                if (helpChildDoc.exists() && isMounted) {
-                    return { ...helpChildDoc.data(), id: helpChildDoc.id } as ChildProfile;
-                }
-            } catch {
-                // Silently fail - help-child is optional for wizard demos
-            }
-            return null;
-        };
-
         const unsubscribe = onSnapshot(childrenQuery,
-            async (snapshot) => {
+            (snapshot) => {
                 const childrenList = snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as ChildProfile);
-
-                // Include help-child if it exists (for wizard demonstrations)
-                const helpChild = await fetchHelpChild();
-                if (helpChild && !childrenList.some(c => c.id === 'help-child')) {
-                    childrenList.push(helpChild);
-                }
 
                 if (isMounted) {
                     setChildren(childrenList);
