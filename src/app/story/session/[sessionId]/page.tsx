@@ -1556,9 +1556,9 @@ export default function StorySessionPage() {
     const renderGeminiCompletedStory = () => {
         if (!geminiFinalStory) return null;
 
-        // Get the resolved version from messages if available
+        // Use the text from messages (will be resolved dynamically if needed in future)
         const finalMessage = messages?.find(m => m.kind === 'gemini4_final_story' || m.kind === 'gemini3_final_story');
-        const displayText = finalMessage?.textResolved || geminiFinalStory;
+        const displayText = finalMessage?.text || geminiFinalStory;
 
         return (
             <Card className="w-full max-w-2xl">

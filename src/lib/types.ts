@@ -101,9 +101,7 @@ export type ChatMessage = {
     // New structured fields
     kind?: 'beat_continuation' | 'beat_options' | 'child_choice' | 'character_traits_question' | 'character_traits_answer' | 'ending_options' | 'child_ending_choice' | 'system_status' | 'gemini3_question' | 'gemini3_choice' | 'gemini3_final_story' | 'gemini4_question' | 'gemini4_choice' | 'gemini4_final_story';
     options?: Choice[];
-    optionsResolved?: Choice[]; // Options with placeholders resolved for display
     selectedOptionId?: string;
-    textResolved?: string; // Text with placeholders resolved for display
 };
 
 export type StoryBeat = {

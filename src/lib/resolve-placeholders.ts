@@ -148,5 +148,5 @@ export async function getEntitiesInText(text: string, entityMap: EntityMap): Pro
   const uniqueIds = [...new Set(ids)];
   return uniqueIds
     .map(id => entityMap.get(id)?.document)
-    .filter((doc): doc is Character => !!doc && 'displayName' in doc && 'role' in doc);
+    .filter((doc): doc is Character => !!doc && 'displayName' in doc && 'type' in doc);
 }

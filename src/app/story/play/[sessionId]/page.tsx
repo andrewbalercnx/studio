@@ -223,7 +223,7 @@ export default function StoryPlayPage() {
 
             if (!response.ok || !flowResult.ok) throw new Error(flowResult.errorMessage || "An unknown API error occurred.");
 
-            const { storyContinuation, storyContinuationResolved, options, optionsResolved, debug: flowDebug } = flowResult;
+            const { storyContinuation, options, debug: flowDebug } = flowResult;
 
             // Extract actor IDs from story continuation and options
             const continuationActorIds = extractActorIdsFromText(storyContinuation || '');
@@ -232,11 +232,10 @@ export default function StoryPlayPage() {
 
             const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
             const batch = writeBatch(firestore);
-            // Store original with placeholders, but also store resolved version for display
+            // Store original with placeholders - resolved dynamically at display time
             batch.set(doc(messagesRef), {
                 sender: 'assistant',
                 text: storyContinuation,
-                textResolved: storyContinuationResolved,
                 kind: 'beat_continuation',
                 createdAt: serverTimestamp()
             });
@@ -245,7 +244,6 @@ export default function StoryPlayPage() {
                 text: "What happens next?",
                 kind: 'beat_options',
                 options: options,
-                optionsResolved: optionsResolved,
                 createdAt: serverTimestamp()
             });
 
@@ -391,7 +389,7 @@ export default function StoryPlayPage() {
 
             if (!response.ok || !flowResult.ok) throw new Error(flowResult.errorMessage || "An unknown API error occurred.");
 
-            const { question, questionResolved, options, optionsResolved, isStoryComplete, finalStory, finalStoryResolved, debug: flowDebug } = flowResult;
+            const { question, options, isStoryComplete, finalStory, debug: flowDebug } = flowResult;
             const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
 
             // Extract actor IDs from question/story and options
@@ -417,24 +415,21 @@ export default function StoryPlayPage() {
             }
 
             if (isStoryComplete && finalStory) {
-                // Story is complete - store ORIGINAL with placeholders, but also store resolved for display
+                // Story is complete - resolved dynamically at display time
                 await addDoc(messagesRef, {
                     sender: 'assistant',
-                    text: finalStory, // ORIGINAL with placeholders
-                    textResolved: finalStoryResolved, // Resolved for display
+                    text: finalStory,
                     kind: 'gemini3_final_story',
                     createdAt: serverTimestamp()
                 });
                 await logClientStage('gemini3.completed');
             } else {
-                // Continue the conversation - store ORIGINAL with placeholders, but also store resolved for display
+                // Continue the conversation - resolved dynamically at display time
                 await addDoc(messagesRef, {
                     sender: 'assistant',
-                    text: question, // ORIGINAL with placeholders
-                    textResolved: questionResolved, // Resolved for display
+                    text: question,
                     kind: 'gemini3_question',
-                    options: options, // ORIGINAL with placeholders
-                    optionsResolved: optionsResolved, // Resolved for display
+                    options: options,
                     createdAt: serverTimestamp()
                 });
             }
@@ -523,7 +518,7 @@ export default function StoryPlayPage() {
 
             if (!response.ok || !flowResult.ok) throw new Error(flowResult.errorMessage || "An unknown API error occurred.");
 
-            const { options, optionsResolved } = flowResult;
+            const { options } = flowResult;
 
             // Find the latest beat_options message and update it with new options
             const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
@@ -533,7 +528,6 @@ export default function StoryPlayPage() {
             if (beatOptionsDoc) {
                 await updateDoc(beatOptionsDoc.ref, {
                     options: options,
-                    optionsResolved: optionsResolved,
                     updatedAt: serverTimestamp()
                 });
             }
@@ -559,7 +553,7 @@ export default function StoryPlayPage() {
 
             if (!response.ok || !flowResult.ok) throw new Error(flowResult.errorMessage || "An unknown API error occurred.");
 
-            const { options, optionsResolved } = flowResult;
+            const { options } = flowResult;
 
             // Find the latest gemini3_question message and update it with new options
             const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
@@ -569,7 +563,6 @@ export default function StoryPlayPage() {
             if (gemini3QuestionDoc) {
                 await updateDoc(gemini3QuestionDoc.ref, {
                     options: options,
-                    optionsResolved: optionsResolved,
                     updatedAt: serverTimestamp()
                 });
             }
@@ -678,7 +671,7 @@ export default function StoryPlayPage() {
 
             if (!response.ok || !flowResult.ok) throw new Error(flowResult.errorMessage || "An unknown API error occurred.");
 
-            const { question, questionResolved, options, optionsResolved, isStoryComplete, finalStory, finalStoryResolved, questionPhase, debug: flowDebug } = flowResult;
+            const { question, options, isStoryComplete, finalStory, questionPhase, debug: flowDebug } = flowResult;
             const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
 
             // Extract actor IDs from question/story and options
@@ -704,24 +697,21 @@ export default function StoryPlayPage() {
             }
 
             if (isStoryComplete && finalStory) {
-                // Story is complete
+                // Story is complete - resolved dynamically at display time
                 await addDoc(messagesRef, {
                     sender: 'assistant',
                     text: finalStory,
-                    textResolved: finalStoryResolved,
                     kind: 'gemini4_final_story',
                     createdAt: serverTimestamp()
                 });
                 await logClientStage('gemini4.completed', { questionPhase });
             } else {
-                // Continue the conversation
+                // Continue the conversation - resolved dynamically at display time
                 await addDoc(messagesRef, {
                     sender: 'assistant',
                     text: question,
-                    textResolved: questionResolved,
                     kind: 'gemini4_question',
                     options: options,
-                    optionsResolved: optionsResolved,
                     createdAt: serverTimestamp()
                 });
             }
