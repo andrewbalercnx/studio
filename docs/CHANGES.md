@@ -18,7 +18,7 @@
 
 ### 2026-01-02
 
-#### `pending` - Add email configuration admin page
+#### `2dfbea3` - Add email configuration admin page
 
 **Type**: Feature
 
