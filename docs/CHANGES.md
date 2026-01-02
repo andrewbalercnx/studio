@@ -18,6 +18,36 @@
 
 ### 2026-01-02
 
+#### `[pending]` - Migrate wizard page to StoryBrowser
+
+**Type**: Refactor
+
+**Summary**: First migration to the unified StoryBrowser architecture. The wizard page now uses the StoryBrowser component instead of its own custom UI.
+
+**Changes**:
+
+1. **New API Route** (`src/app/api/storyWizard/route.ts`):
+   - Wraps `storyWizardFlow` with standard `StoryGeneratorResponse` format
+   - Stores wizard Q&A state in session (`wizardAnswers`, `wizardLastQuestion`, `wizardLastChoices`)
+   - Enables StoryBrowser to drive the wizard flow
+
+2. **Updated Types** (`src/lib/types.ts`):
+   - Added `wizardAnswers?: StoryWizardAnswer[]` to `StorySession`
+
+3. **Refactored Wizard Page** (`src/app/story/wizard/[sessionId]/page.tsx`):
+   - Now uses `<StoryBrowser generatorId="wizard" />` instead of custom UI
+   - Reduced from ~200 lines to ~100 lines
+   - Gains: TTS, A/B/C labels, speech toggle header, consistent styling
+
+**Files Modified**:
+- `src/lib/types.ts` - Added wizardAnswers to StorySession
+- `src/app/api/storyWizard/route.ts` - New API route
+- `src/app/story/wizard/[sessionId]/page.tsx` - Migrated to StoryBrowser
+- `docs/SCHEMA.md` - Added wizard fields to storySessions
+- `docs/API.md` - Added storyWizard endpoint
+
+---
+
 #### `53da81c` - Add Story Browser architecture foundation
 
 **Type**: Feature (Foundation)

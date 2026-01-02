@@ -145,6 +145,8 @@ export type StorySession = {
     storyMode?: 'gemini3' | 'gemini4' | 'wizard' | 'chat';
     gemini3FinalStory?: string;
     gemini4FinalStory?: string;
+    // Wizard mode: tracks Q&A answers across API calls
+    wizardAnswers?: StoryWizardAnswer[];
     // List of actor IDs ($$id$$ placeholders) discovered during story play
     // This gets copied to Story.actors at compile time
     actors?: string[];

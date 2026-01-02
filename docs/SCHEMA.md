@@ -122,6 +122,9 @@ Interactive story creation sessions.
 | `supportingCharacterIds` | string[] | No | Supporting character IDs |
 | `storyMode` | 'gemini3' \| 'gemini4' \| 'wizard' \| 'chat' | No | Story generation mode |
 | `actors` | string[] | No | Actor IDs ($$id$$ placeholders) |
+| `wizardAnswers` | object[] | No | Wizard mode Q&A state (question, answer pairs) |
+| `wizardLastQuestion` | string | No | Wizard mode: last question asked |
+| `wizardLastChoices` | object[] | No | Wizard mode: last choices offered |
 | `progress` | object | No | Phase completion timestamps |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |

@@ -241,6 +241,53 @@ Generate story beat options.
 
 ---
 
+### POST `/api/storyWizard`
+
+Generate wizard questions and final story. The wizard asks 4 questions to gather story preferences, then generates a complete story. Uses the standard `StoryGeneratorResponse` format for StoryBrowser compatibility.
+
+**Request Body**:
+```json
+{
+  "sessionId": "session-id",
+  "selectedOptionId": "A"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sessionId` | string | Yes | Story session ID |
+| `selectedOptionId` | string | No | Option letter (A, B, C, D) from previous question |
+
+**Response**: `200 OK` (StoryGeneratorResponse format)
+```json
+{
+  "ok": true,
+  "sessionId": "session-id",
+  "question": "What kind of adventure would you like?",
+  "questionResolved": "What kind of adventure would you like?",
+  "options": [
+    {"id": "A", "text": "A magical journey", "introducesCharacter": false},
+    {"id": "B", "text": "A space adventure", "introducesCharacter": false}
+  ],
+  "isStoryComplete": false
+}
+```
+
+**Response (Story Complete)**: `200 OK`
+```json
+{
+  "ok": true,
+  "sessionId": "session-id",
+  "question": "Your story is complete!",
+  "options": [],
+  "isStoryComplete": true,
+  "finalStory": "Once upon a time...",
+  "finalStoryResolved": "Once upon a time..."
+}
+```
+
+---
+
 ### POST `/api/storyArc`
 
 Generate or retrieve story arc structure.
