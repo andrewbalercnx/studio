@@ -76,15 +76,9 @@ function matchesChildAge(storyType: StoryType, age: number | null): boolean {
 }
 
 function buildPreferenceKeywords(child?: ChildProfile | null): string[] {
-    if (!child?.preferences) return [];
-    const values = [
-        ...(child.preferences.favoriteColors ?? []),
-        ...(child.preferences.favoriteFoods ?? []),
-        ...(child.preferences.favoriteGames ?? []),
-        ...(child.preferences.favoriteSubjects ?? []),
-        ...(child.favouriteGenres ?? []),
-        ...(child.favouriteCharacterTypes ?? []),
-    ];
+    if (!child) return [];
+    // Use likes array for preference-based keyword building
+    const values = child.likes ?? [];
     return values.map((value) => value.toLowerCase());
 }
 
@@ -654,7 +648,6 @@ export default function StoryPlayPage() {
             const newTitle = existingTitle || `${childName}'s ${storyType.name}`;
             await updateDoc(sessionRef, {
                 storyTypeId: storyType.id,
-                storyTypeName: storyType.name,
                 storyPhaseId: storyType.defaultPhaseId || 'story_beat_phase_v1',
                 endingPhaseId: storyType.endingPhaseId || 'ending_phase_v1',
                 arcStepIndex: 0,
@@ -1210,7 +1203,6 @@ export default function StoryPlayPage() {
                                 session: {
                                     currentPhase: session?.currentPhase,
                                     storyTypeId: session?.storyTypeId,
-                                    storyTypeName: session?.storyTypeName,
                                     arcStepIndex: session?.arcStepIndex,
                                     selectedEndingId: session?.selectedEndingId,
                                     pendingCharacterTraits: session?.pendingCharacterTraits,
@@ -1263,7 +1255,6 @@ export default function StoryPlayPage() {
                             session: {
                                 currentPhase: session?.currentPhase,
                                 storyTypeId: session?.storyTypeId,
-                                storyTypeName: session?.storyTypeName,
                                 arcStepIndex: session?.arcStepIndex,
                                 selectedEndingId: session?.selectedEndingId,
                                 pendingCharacterTraits: session?.pendingCharacterTraits,

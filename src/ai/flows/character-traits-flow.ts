@@ -51,7 +51,7 @@ export const characterTraitsFlow = ai.defineFlow(
             const character = characterDoc.data() as Character;
             debug.characterExists = true;
             debug.characterName = character.displayName;
-            debug.characterRole = character.role;
+            debug.characterType = character.type;
 
 
             // 3. Load last 10 messages for context and build messages array
@@ -87,8 +87,8 @@ Your job is to:
 
 CONTEXT:
 Character Name: ${character.displayName}
-Character Kind: ${character.role}
-Existing Traits: ${character.traits?.join(', ') || 'none'}
+Character Type: ${character.type}
+Existing Likes: ${character.likes?.join(', ') || 'none'}
 
 Output your response as a single JSON object with this exact structure:
 {

@@ -52,7 +52,7 @@ export async function startWarmupStory(input: StartWarmupStoryInput): Promise<St
     const childRef = firestore.collection('children').doc(childId);
 
     let childProfile: ChildProfile;
-    let childEstimatedLevel: number;
+    const childEstimatedLevel = 2; // Default level for all children
 
     try {
         const childDoc = await childRef.get();
@@ -66,26 +66,15 @@ export async function startWarmupStory(input: StartWarmupStoryInput): Promise<St
                 createdAt,
                 likes: [],
                 dislikes: [],
-                estimatedLevel: 2,
-                favouriteGenres: ["funny", "magical"],
-                favouriteCharacterTypes: ["self", "pet"],
-                preferredStoryLength: "short",
-                helpPreference: "more_scaffolding"
             };
             await childRef.set(newChildProfile);
             childProfile = newChildProfile;
-            childEstimatedLevel = newChildProfile.estimatedLevel ?? 2;
         } else {
             childProfile = childDoc.data() as ChildProfile;
-            childEstimatedLevel = typeof childProfile.estimatedLevel === 'number' ? childProfile.estimatedLevel : 2;
         }
 
-        // Determine level band
-        let chosenLevelBand: string;
-        if (childEstimatedLevel <= 2) chosenLevelBand = "low";
-        else if (childEstimatedLevel === 3) chosenLevelBand = "medium";
-        else if (childEstimatedLevel >= 4) chosenLevelBand = "high";
-        else chosenLevelBand = "low"; // Default case
+        // Default level band for new children (age-based determination could be added in future)
+        const chosenLevelBand = "low";
 
         // Create new story session
         const storySessionsRef = firestore.collection('storySessions');

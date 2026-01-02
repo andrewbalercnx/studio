@@ -207,13 +207,13 @@ function buildActorBlock(
 }
 
 /**
- * Build character description for image prompts (legacy format for backwards compatibility)
+ * Build character description for image prompts
  */
 function buildCharacterDetails(characters: Character[]): string {
   return characters.map(c => {
-    const traits = c.traits ? ` who is ${c.traits.join(', ')}` : '';
-    const visualNotes = c.visualNotes ? Object.values(c.visualNotes).filter(Boolean).join(', ') : '';
-    return `${c.displayName} (${c.role}${traits})${visualNotes ? `, wearing ${visualNotes}` : ''}`;
+    const likes = c.likes?.length ? ` who likes ${c.likes.join(', ')}` : '';
+    const description = c.description ? ` (${c.description})` : '';
+    return `${c.displayName} (${c.type}${likes})${description}`;
   }).join('; ');
 }
 

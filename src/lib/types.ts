@@ -129,7 +129,6 @@ export type StorySession = {
     promptConfigId?: string;
     promptConfigLevelBand?: string;
     storyTypeId?: string;
-    storyTypeName?: string;
     storyPhaseId?: string;
     endingPhaseId?: string;
     arcStepIndex?: number;
@@ -947,14 +946,6 @@ export type PromptConfig = {
     }
 };
 
-// Legacy type for migration purposes
-export type ChildPreferences = {
-    favoriteColors?: string[];
-    favoriteFoods?: string[];
-    favoriteGames?: string[];
-    favoriteSubjects?: string[];
-};
-
 export type ChildProfile = {
     id: string;
     displayName: string;
@@ -988,25 +979,9 @@ export type ChildProfile = {
     // Can be an ElevenLabs preset voice ID or a parent's cloned voice ID
     preferredVoiceId?: string;
 
-    // Whether speech mode is enabled for interactive story creation
-    // When true, all text and options will be read aloud using TTS
-    speechModeEnabled?: boolean;
-
     // Whether to automatically read stories aloud when viewing in the story reader
     // Persists the "Read to Me" preference for this child
     autoReadAloud?: boolean;
-
-    // Legacy: Preferred speech model for browser's Web Speech API
-    // Uses browser's Web Speech API voice name (e.g., 'Google US English', 'Microsoft Zira')
-    preferredSpeechModel?: string;
-
-    // Legacy fields for backwards compatibility with existing flows
-    estimatedLevel?: number;
-    favouriteGenres?: string[];
-    favouriteCharacterTypes?: string[];
-    preferredStoryLength?: 'short' | 'medium' | 'long';
-    helpPreference?: 'more_scaffolding' | 'less_scaffolding';
-    preferences?: ChildPreferences;
 
     // Soft delete - set when parent "deletes" (hides) the profile
     // Only admins can permanently delete or restore
@@ -1144,20 +1119,6 @@ export type Character = {
     isParentGenerated?: boolean; // true = created by parent, false/undefined = AI-generated during story
     usageCount?: number; // Number of times this character has been used in stories
     lastUsedAt?: any; // Timestamp of when character was last used in a story
-
-    // Legacy fields for backwards compatibility with existing flows
-    sessionId?: string;
-    role?: string; // Legacy: use 'type' instead
-    traits?: string[]; // Legacy: use 'likes' instead
-    visualNotes?: {
-        hair?: string;
-        clothing?: string;
-        specialItem?: string;
-    };
-    realPersonRef?: {
-        kind: 'self' | 'family' | 'friend' | 'pet' | 'toy' | 'other';
-        label: string;
-    };
 
     // Soft delete - set when parent "deletes" (hides) the character
     // Only admins can permanently delete or restore

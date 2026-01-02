@@ -6,8 +6,8 @@ import type { Character, ChildProfile } from '@/lib/types';
 type EntityMap = Map<string, { displayName: string; document: Character | ChildProfile }>;
 
 function buildCharacterDescription(character: Character): string {
-    const traits = character.traits?.length ? `, is ${character.traits.join(', ')}` : '';
-    return `[${character.displayName}, a ${character.role}${traits}]`;
+    const likes = character.likes?.length ? `, who likes ${character.likes.join(', ')}` : '';
+    return `[${character.displayName}, a ${character.type}${likes}]`;
 }
 
 async function fetchEntities(ids: string[]): Promise<EntityMap> {

@@ -80,7 +80,7 @@ type CompileDiagnostics = {
 
 function buildImagePrompt(text: string, child?: ChildProfile | null, storyTitle?: string | null) {
   const summary = text.length > 160 ? `${text.slice(0, 157)}…` : text;
-  
+
   // Base prompt
   let prompt = `Scene: ${summary}.`;
 
@@ -88,16 +88,11 @@ function buildImagePrompt(text: string, child?: ChildProfile | null, storyTitle?
   if (child?.displayName) {
     prompt += ` The main character should resemble the child.`;
   }
-  
-  // Add style hints
-  const colorHint = child?.preferences?.favoriteColors?.length
-    ? ` Use a palette inspired by ${child.preferences.favoriteColors.slice(0, 2).join(' and ')}.`
-    : '';
-  const gameHint = child?.preferences?.favoriteGames?.length
-    ? ` The scene should have the playful energy of ${child.preferences.favoriteGames[0]}.`
-    : '';
-  
-  prompt += `${colorHint}${gameHint}`;
+
+  // Add style hints based on child's likes
+  if (child?.likes?.length) {
+    prompt += ` Incorporate themes of: ${child.likes.slice(0, 3).join(', ')}.`;
+  }
 
   return prompt.trim();
 }
@@ -144,15 +139,9 @@ function matchesChildAge(storyType: StoryType, age: number | null): boolean {
 }
 
 function buildPreferenceKeywords(child?: ChildProfile | null): string[] {
-    if (!child?.preferences) return [];
-    const values = [
-        ...(child.preferences.favoriteColors ?? []),
-        ...(child.preferences.favoriteFoods ?? []),
-        ...(child.preferences.favoriteGames ?? []),
-        ...(child.preferences.favoriteSubjects ?? []),
-        ...(child.favouriteGenres ?? []),
-        ...(child.favouriteCharacterTypes ?? []),
-    ];
+    if (!child) return [];
+    // Use likes array for preference-based keyword building
+    const values = child.likes ?? [];
     return values.map((value) => value.toLowerCase());
 }
 
@@ -501,7 +490,6 @@ export default function StorySessionPage() {
                 : storyType.name;
             await updateDoc(sessionRef, {
                 storyTypeId: storyType.id,
-                storyTypeName: storyType.name,
                 storyPhaseId: storyType.defaultPhaseId || 'story_beat_phase_v1',
                 endingPhaseId: storyType.endingPhaseId || 'ending_phase_v1',
                 arcStepIndex: 0,

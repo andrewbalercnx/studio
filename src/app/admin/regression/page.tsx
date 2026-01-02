@@ -1084,7 +1084,6 @@ export default function AdminRegressionPage() {
             status: 'in_progress',
             currentPhase: 'story',
             storyTypeId,
-            storyTypeName: storyType.name,
             storyPhaseId: storyType.defaultPhaseId,
             endingPhaseId: storyType.endingPhaseId,
             arcStepIndex: 0,
