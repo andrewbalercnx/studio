@@ -253,13 +253,23 @@ INSTRUCTIONS:
         const modelName2 = 'googleai/gemini-2.5-pro';
         try {
           // Using output parameter for structured schema validation
-          llmResponse = await ai.generate({
-            model: modelName2,
-            system: questionGenSystemPrompt,
-            messages: previousMessages,
-            output: { schema: WizardQuestionGenOutputSchema },
-            config: { temperature: 0.8 },
-          });
+          // When no previous messages, use prompt instead of messages to avoid Genkit issues with empty arrays
+          if (previousMessages.length > 0) {
+            llmResponse = await ai.generate({
+              model: modelName2,
+              system: questionGenSystemPrompt,
+              messages: previousMessages,
+              output: { schema: WizardQuestionGenOutputSchema },
+              config: { temperature: 0.8 },
+            });
+          } else {
+            llmResponse = await ai.generate({
+              model: modelName2,
+              prompt: questionGenSystemPrompt,
+              output: { schema: WizardQuestionGenOutputSchema },
+              config: { temperature: 0.8 },
+            });
+          }
           await logAIFlow({ flowName: `${flowName}:askQuestion`, sessionId, parentId: child.ownerParentUid, prompt: questionGenSystemPrompt, response: llmResponse, startTime: startTime2, modelName: modelName2 });
         } catch (e: any) {
           await logAIFlow({ flowName: `${flowName}:askQuestion`, sessionId, parentId: child.ownerParentUid, prompt: questionGenSystemPrompt, error: e, startTime: startTime2, modelName: modelName2 });

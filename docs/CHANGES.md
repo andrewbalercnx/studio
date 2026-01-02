@@ -18,6 +18,21 @@
 
 ### 2026-01-02
 
+#### `dd0a7cb` - Fix story wizard "Cannot read properties of undefined" error
+
+**Type**: Bug Fix
+
+**Summary**: Fixed the story wizard failing with "Cannot read properties of undefined (reading 'content')" when starting a new wizard session with no previous answers.
+
+**Root Cause**: When the story wizard was called with an empty `answers` array (the initial call), it passed an empty `messages` array to Genkit's `ai.generate()`. The Genkit library has issues processing empty message arrays with the `system` parameter, causing internal errors.
+
+**Fix**: Added a conditional check - when there are no previous messages, use `prompt` parameter instead of `messages` with `system`. This matches the pattern used in `story-beat-flow.ts`.
+
+**Files Modified**:
+- `src/ai/flows/story-wizard-flow.ts` - Added conditional for empty messages array
+
+---
+
 #### `2dfbea3` - Add email configuration admin page
 
 **Type**: Feature
