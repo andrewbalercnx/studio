@@ -3,7 +3,8 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Copy, LoaderCircle, Plus, User, Pencil, X, Sparkles, Image as ImageIcon, Volume2, Trash2 } from 'lucide-react';
+import { LoaderCircle, Plus, User, Pencil, X, Sparkles, Image as ImageIcon, Volume2, Trash2 } from 'lucide-react';
+import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useFirestore } from '@/firebase';
 import { collection, doc, onSnapshot, setDoc, serverTimestamp, query, where, writeBatch, updateDoc, deleteField, getDoc } from 'firebase/firestore';
@@ -661,10 +662,6 @@ export default function ManageChildrenPage() {
         ...(error ? { firestoreErrorChildren: error } : {})
     };
 
-    const handleCopyDiagnostics = () => {
-        navigator.clipboard.writeText(`Page: parent-children\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`);
-        toast({ title: 'Copied to clipboard!' });
-    };
 
     const getDisplayDate = (date: any) => {
         if (!date) return '';
@@ -832,17 +829,7 @@ export default function ManageChildrenPage() {
                     </CardContent>
                 </Card>
 
-                <Card className="mt-8">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <CardTitle>Diagnostics</CardTitle>
-                        <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}><Copy className="h-4 w-4" /></Button>
-                    </CardHeader>
-                    <CardContent>
-                        <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
-                            <code>{JSON.stringify(diagnostics, null, 2)}</code>
-                        </pre>
-                    </CardContent>
-                </Card>
+                <DiagnosticsPanel pageName="parent-children" data={diagnostics} className="mt-8" />
             </div>
         </>
     );

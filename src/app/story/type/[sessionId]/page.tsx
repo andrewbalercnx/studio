@@ -10,7 +10,8 @@ import { useDocument, useCollection } from '@/lib/firestore-hooks';
 import type { StorySession, StoryType, ChildProfile } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, CheckCircle, Copy } from 'lucide-react';
+import { LoaderCircle, CheckCircle } from 'lucide-react';
+import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -169,11 +170,6 @@ export default function StoryTypeSelectionPage() {
         error: sessionError?.message || typesError?.message || null,
     };
 
-    const handleCopyDiagnostics = () => {
-        const textToCopy = `Page: story-type-select\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
-        navigator.clipboard.writeText(textToCopy);
-        toast({ title: 'Copied to clipboard!' });
-    };
 
     const renderContent = () => {
         if (userLoading || sessionLoading || typesLoading) {
@@ -248,19 +244,7 @@ export default function StoryTypeSelectionPage() {
             <Card className="w-full max-w-4xl">
                {renderContent()}
             </Card>
-            <Card className="w-full max-w-4xl">
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Diagnostics</CardTitle>
-                    <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}>
-                        <Copy className="h-4 w-4" />
-                    </Button>
-                </CardHeader>
-                <CardContent>
-                    <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
-                        <code>{JSON.stringify(diagnostics, null, 2)}</code>
-                    </pre>
-                </CardContent>
-            </Card>
+            <DiagnosticsPanel pageName="story-type-select" data={diagnostics} className="w-full max-w-4xl" />
         </div>
     );
 }

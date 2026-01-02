@@ -7,7 +7,8 @@ import { useFirestore } from '@/firebase';
 import { collection, query, orderBy, where } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
 import type { StorySession, Story } from '@/lib/types';
-import { LoaderCircle, BookOpen, Copy, Lock } from 'lucide-react';
+import { LoaderCircle, BookOpen, Lock } from 'lucide-react';
+import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -199,10 +200,6 @@ export default function MyStoriesPage() {
     }) ?? [],
   }), [activeChildId, stories, storyBooks]);
 
-  const handleCopyDiagnostics = () => {
-    const textToCopy = `Page: stories\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
-    navigator.clipboard.writeText(textToCopy);
-  };
 
   if (userLoading || (storiesLoading && !stories)) {
     return (
@@ -289,22 +286,7 @@ export default function MyStoriesPage() {
          </div>
       )}
     </div>
-    <Card className="mx-auto mt-10 max-w-4xl">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>Diagnostics</CardTitle>
-          <CardDescription>Includes storybook page generation status.</CardDescription>
-        </div>
-        <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics} title="Copy diagnostics">
-          <Copy className="h-4 w-4" />
-        </Button>
-      </CardHeader>
-      <CardContent>
-        <pre className="max-h-64 overflow-auto rounded bg-muted/50 p-4 text-xs">
-          <code>{JSON.stringify(diagnostics, null, 2)}</code>
-        </pre>
-      </CardContent>
-    </Card>
+    <DiagnosticsPanel pageName="stories" data={diagnostics} className="mx-auto mt-10 max-w-4xl" />
     </>
   );
 }

@@ -6,7 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, CheckCircle, RefreshCw, Sparkles, Star, Bot, Settings, Copy } from 'lucide-react';
+import { LoaderCircle, CheckCircle, RefreshCw, Sparkles, Star, Bot, Settings } from 'lucide-react';
+import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
 import { doc, collection, addDoc, serverTimestamp, query, orderBy, updateDoc, writeBatch, getDocs, limit, arrayUnion, DocumentReference, getDoc, increment, where } from 'firebase/firestore';
@@ -1180,110 +1181,52 @@ export default function StoryPlayPage() {
                 )}
             </div>
 
-            <Card className="w-full max-w-4xl mt-8">
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Diagnostics</CardTitle>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                            const diagnostics = {
-                                _version: 'v2-actors-tracking',
-                                sessionId,
-                                session: {
-                                    currentPhase: session?.currentPhase,
-                                    storyTypeId: session?.storyTypeId,
-                                    arcStepIndex: session?.arcStepIndex,
-                                    selectedEndingId: session?.selectedEndingId,
-                                    pendingCharacterTraits: session?.pendingCharacterTraits,
-                                    status: session?.status,
-                                    actors: session?.actors || [],
-                                },
-                                latestAssistantMessage: {
-                                    kind: latestAssistantMessage?.kind,
-                                    text: latestAssistantMessage?.text?.substring(0, 100),
-                                    optionsCount: latestAssistantMessage?.options?.length,
-                                },
-                                state: {
-                                    isProcessing,
-                                    showStoryTypePicker: !session?.storyTypeId && curatedStoryTypes.length > 0,
-                                    introducingCharacter: !!introducingCharacter,
-                                },
-                                audio: {
-                                    isSpeechModeEnabled,
-                                    isSpeaking,
-                                    isTTSLoading,
-                                    childHasPreferredVoice: !!childProfile?.preferredVoiceId,
-                                    childAutoReadAloud: !!childProfile?.autoReadAloud,
-                                    backgroundMusicUrl: backgroundMusicUrl || null,
-                                    backgroundMusicLoaded: backgroundMusic.isLoaded,
-                                    backgroundMusicPlaying: backgroundMusic.isPlaying,
-                                    activeStoryTypeId: activeStoryType?.id || null,
-                                    activeStoryTypeHasMusic: !!activeStoryType?.backgroundMusic?.audioUrl,
-                                },
-                                debug: {
-                                    lastPrompt: (session as any)?.debug?.lastPrompt || 'Not available',
-                                    lastResponse: (session as any)?.debug?.lastResponse || 'Not available',
-                                    lastFlowDebug: (session as any)?.debug?.lastFlowDebug || 'Not available',
-                                    lastExtractedActorIds: (session as any)?.debug?.lastExtractedActorIds || [],
-                                    lastStoryContinuationPreview: (session as any)?.debug?.lastStoryContinuationPreview || 'Not available',
-                                },
-                            };
-                            const textToCopy = `Page: story-play\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
-                            navigator.clipboard.writeText(textToCopy);
-                            toast({ title: 'Diagnostics copied to clipboard' });
-                        }}
-                    >
-                        <Copy className="h-4 w-4" />
-                    </Button>
-                </CardHeader>
-                <CardContent>
-                    <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm max-h-[600px]">
-                        <code>{JSON.stringify({
-                            _version: 'v2-actors-tracking',
-                            sessionId,
-                            session: {
-                                currentPhase: session?.currentPhase,
-                                storyTypeId: session?.storyTypeId,
-                                arcStepIndex: session?.arcStepIndex,
-                                selectedEndingId: session?.selectedEndingId,
-                                pendingCharacterTraits: session?.pendingCharacterTraits,
-                                status: session?.status,
-                                actors: session?.actors || [],
-                            },
-                            latestAssistantMessage: {
-                                kind: latestAssistantMessage?.kind,
-                                text: latestAssistantMessage?.text?.substring(0, 100),
-                                optionsCount: latestAssistantMessage?.options?.length,
-                            },
-                            state: {
-                                isProcessing,
-                                showStoryTypePicker: !session?.storyTypeId && curatedStoryTypes.length > 0,
-                                introducingCharacter: !!introducingCharacter,
-                            },
-                            audio: {
-                                isSpeechModeEnabled,
-                                isSpeaking,
-                                isTTSLoading,
-                                childHasPreferredVoice: !!childProfile?.preferredVoiceId,
-                                childAutoReadAloud: !!childProfile?.autoReadAloud,
-                                backgroundMusicUrl: backgroundMusicUrl || null,
-                                backgroundMusicLoaded: backgroundMusic.isLoaded,
-                                backgroundMusicPlaying: backgroundMusic.isPlaying,
-                                activeStoryTypeId: activeStoryType?.id || null,
-                                activeStoryTypeHasMusic: !!activeStoryType?.backgroundMusic?.audioUrl,
-                            },
-                            debug: {
-                                lastPrompt: (session as any)?.debug?.lastPrompt || 'Not available',
-                                lastResponse: (session as any)?.debug?.lastResponse || 'Not available',
-                                lastFlowDebug: (session as any)?.debug?.lastFlowDebug || 'Not available',
-                                lastExtractedActorIds: (session as any)?.debug?.lastExtractedActorIds || [],
-                                lastStoryContinuationPreview: (session as any)?.debug?.lastStoryContinuationPreview || 'Not available',
-                            },
-                        }, null, 2)}</code>
-                    </pre>
-                </CardContent>
-            </Card>
+            <DiagnosticsPanel
+                pageName="story-play"
+                className="w-full max-w-4xl mt-8"
+                data={{
+                    _version: 'v2-actors-tracking',
+                    sessionId,
+                    session: {
+                        currentPhase: session?.currentPhase,
+                        storyTypeId: session?.storyTypeId,
+                        arcStepIndex: session?.arcStepIndex,
+                        selectedEndingId: session?.selectedEndingId,
+                        pendingCharacterTraits: session?.pendingCharacterTraits,
+                        status: session?.status,
+                        actors: session?.actors || [],
+                    },
+                    latestAssistantMessage: {
+                        kind: latestAssistantMessage?.kind,
+                        text: latestAssistantMessage?.text?.substring(0, 100),
+                        optionsCount: latestAssistantMessage?.options?.length,
+                    },
+                    state: {
+                        isProcessing,
+                        showStoryTypePicker: !session?.storyTypeId && curatedStoryTypes.length > 0,
+                        introducingCharacter: !!introducingCharacter,
+                    },
+                    audio: {
+                        isSpeechModeEnabled,
+                        isSpeaking,
+                        isTTSLoading,
+                        childHasPreferredVoice: !!childProfile?.preferredVoiceId,
+                        childAutoReadAloud: !!childProfile?.autoReadAloud,
+                        backgroundMusicUrl: backgroundMusicUrl || null,
+                        backgroundMusicLoaded: backgroundMusic.isLoaded,
+                        backgroundMusicPlaying: backgroundMusic.isPlaying,
+                        activeStoryTypeId: activeStoryType?.id || null,
+                        activeStoryTypeHasMusic: !!activeStoryType?.backgroundMusic?.audioUrl,
+                    },
+                    debug: {
+                        lastPrompt: (session as any)?.debug?.lastPrompt || 'Not available',
+                        lastResponse: (session as any)?.debug?.lastResponse || 'Not available',
+                        lastFlowDebug: (session as any)?.debug?.lastFlowDebug || 'Not available',
+                        lastExtractedActorIds: (session as any)?.debug?.lastExtractedActorIds || [],
+                        lastStoryContinuationPreview: (session as any)?.debug?.lastStoryContinuationPreview || 'Not available',
+                    },
+                }}
+            />
         </div>
     );
 }

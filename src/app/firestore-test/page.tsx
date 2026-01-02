@@ -24,7 +24,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { LoaderCircle, Copy, Trash2, Shield, User as UserIcon, Pen } from 'lucide-react';
+import { LoaderCircle, Trash2, Shield, User as UserIcon, Pen } from 'lucide-react';
+import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 
@@ -601,22 +602,7 @@ export default function FirestoreTestPage() {
         </CardContent>
       </Card>
       
-      <Card className="mt-8">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Diagnostics</CardTitle>
-          <Button variant="ghost" size="icon" onClick={() => {
-              navigator.clipboard.writeText(JSON.stringify(diagnostics, null, 2));
-              toast({ title: 'Copied to clipboard!' });
-          }}>
-            <Copy className="h-4 w-4" />
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm max-h-96">
-            <code>{JSON.stringify(diagnostics, null, 2)}</code>
-          </pre>
-        </CardContent>
-      </Card>
+      <DiagnosticsPanel pageName="firestore-test" data={diagnostics} className="mt-8" />
     </div>
   );
 }

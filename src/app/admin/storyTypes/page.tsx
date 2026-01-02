@@ -3,7 +3,8 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Copy, LoaderCircle, ChevronDown, ChevronUp, Trash2, Plus, GripVertical, Pencil, X, Check, Music, Play, Square, CheckCircle } from 'lucide-react';
+import { LoaderCircle, ChevronDown, ChevronUp, Trash2, Plus, GripVertical, Pencil, X, Check, Music, Play, Square, CheckCircle } from 'lucide-react';
+import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFirestore, useAuth } from '@/firebase';
@@ -1711,11 +1712,6 @@ export default function AdminStoryTypesPage() {
     ...(error ? { firestoreError: error } : {})
   };
 
-  const handleCopyDiagnostics = () => {
-    const textToCopy = `Page: admin-storyTypes\n\nDiagnostics\n${JSON.stringify(diagnostics, null, 2)}`;
-    navigator.clipboard.writeText(textToCopy);
-    toast({ title: 'Copied to clipboard!' });
-  };
 
   const renderContent = () => {
     if (authLoading || loading) {
@@ -1782,19 +1778,7 @@ export default function AdminStoryTypesPage() {
         </CardContent>
       </Card>
 
-      <Card className="mt-8">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Diagnostics</CardTitle>
-          <Button variant="ghost" size="icon" onClick={handleCopyDiagnostics}>
-            <Copy className="h-4 w-4" />
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-            <code>{JSON.stringify(diagnostics, null, 2)}</code>
-          </pre>
-        </CardContent>
-      </Card>
+      <DiagnosticsPanel pageName="admin-storyTypes" data={diagnostics} className="mt-8" />
 
       <CreateStoryTypeDialog
         open={createDialogOpen}
