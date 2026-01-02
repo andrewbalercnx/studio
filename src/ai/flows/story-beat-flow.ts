@@ -304,11 +304,16 @@ ${generateStoryBeatOutputDescription()}
             }));
 
             try {
-                if (debug.usedNewPromptSystem && conversationMessages.length > 0) {
+                // Check if the last message is from the user (required for messages array)
+                const lastMessage = conversationMessages[conversationMessages.length - 1];
+                const lastMessageIsFromUser = lastMessage && lastMessage.role === 'user';
+
+                if (debug.usedNewPromptSystem && conversationMessages.length > 0 && lastMessageIsFromUser) {
                     // NEW SYSTEM: Use messages array for conversation history
                     // The system prompt contains role, context, and output requirements
                     // The messages array contains the actual conversation history
                     // Using output parameter for structured schema validation
+                    // NOTE: Gemini API requires the last message to be from the user
                     llmResponse = await ai.generate({
                         model: modelName,
                         system: finalPrompt,

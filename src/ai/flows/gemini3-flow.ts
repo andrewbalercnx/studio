@@ -20,20 +20,22 @@ type Gemini3DebugInfo = {
     details: Record<string, any>;
 };
 
-// Zod schema for the expected JSON output from the model
+// Simplified Zod schema for Gemini output (to avoid "maximum nesting depth" API errors)
+// Character introduction fields moved to a simpler structure
+const Gemini3OptionSchema = z.object({
+  id: z.string().describe("A single uppercase letter, e.g., 'A', 'B', 'C', 'D'."),
+  text: z.string().describe("A short, child-friendly choice."),
+  introducesCharacter: z.boolean().optional().describe("Set to true if this option introduces a new character."),
+  newCharacterName: z.string().optional().describe("If introducesCharacter is true, the character's proper name (e.g., 'Nutsy', 'Captain Sparkle')."),
+  newCharacterLabel: z.string().optional().describe("If introducesCharacter is true, a descriptive phrase (e.g., 'a friendly squirrel who loves acorns')."),
+  newCharacterType: z.string().optional().describe("If introducesCharacter is true, one of: Family, Friend, Pet, Toy, Other."),
+});
+
 const Gemini3OutputSchema = z.object({
-  question: z.string().describe("The next question or story continuation that Gemini wants to present to the child. Empty string when story is complete."),
-  options: z.array(z.object({
-    id: z.string().describe("A single uppercase letter, e.g., 'A', 'B', 'C', 'D'."),
-    text: z.string().describe("A short, child-friendly choice."),
-    introducesCharacter: z.boolean().optional().describe("Set to true if this option introduces a new character."),
-    newCharacterName: z.string().optional().nullable().describe("If introducesCharacter is true, the character's proper name (e.g., 'Nutsy', 'Captain Sparkle')."),
-    newCharacterLabel: z.string().optional().nullable().describe("If introducesCharacter is true, a descriptive phrase (e.g., 'a friendly squirrel who loves acorns')."),
-    newCharacterType: z.enum(['Family', 'Friend', 'Pet', 'Toy', 'Other']).optional().nullable().describe("If introducesCharacter is true, the type of character."),
-    existingCharacterId: z.string().optional().nullable().describe("If this choice is about an existing character, provide their ID."),
-  })).min(0).max(4).describe("An array of 0-4 choices. Provide 3-4 during story development. Empty array when story is complete."),
+  question: z.string().describe("The next question or story continuation. Empty string when story is complete."),
+  options: z.array(Gemini3OptionSchema).describe("2-4 choices during story development. Empty array when story is complete."),
   isStoryComplete: z.boolean().optional().describe("Set to true if the story has reached a natural conclusion."),
-  finalStory: z.string().optional().nullable().describe("If isStoryComplete is true, the complete story text with all placeholders ($$characterId$$ or $$childId$$)."),
+  finalStory: z.string().optional().describe("If isStoryComplete is true, the complete story text with placeholders."),
 });
 
 export const gemini3Flow = ai.defineFlow(

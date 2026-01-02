@@ -901,7 +901,9 @@ export default function StoryPlayPage() {
     // Get the latest beat_options message separately to display the choices
     const latestBeatOptions = recentMessages?.find(m => m.sender === 'assistant' && m.kind === 'beat_options');
     // Show story type picker if no story type is set and we have story types available OR if no messages exist yet
-    const showStoryTypePicker = !session.storyTypeId && (curatedStoryTypes.length > 0 || (!latestAssistantMessage && storyTypes && storyTypes.length > 0));
+    // BUT NOT for gemini3/gemini4 modes which have their own flow and don't need story types
+    const isGeminiMode = session.storyMode === 'gemini3' || session.storyMode === 'gemini4';
+    const showStoryTypePicker = !isGeminiMode && !session.storyTypeId && (curatedStoryTypes.length > 0 || (!latestAssistantMessage && storyTypes && storyTypes.length > 0));
 
     // When speech mode is enabled, keep showing the avatar animation while TTS is loading
     // This syncs the text reveal with the audio playback

@@ -18,6 +18,36 @@
 
 ### 2026-01-02
 
+#### `a78b05a` - Fix multiple story generation flow issues
+
+**Type**: Bug Fix
+
+**Summary**: Fixed three issues preventing Gemini3 and Guided Story modes from working correctly.
+
+**Issues Fixed**:
+
+1. **Story type picker shown incorrectly for Gemini3/Gemini4 modes**
+   - Gemini3 and Gemini4 modes have their own flows and don't need story types
+   - But the play page was showing "Pick your kind of story" which then routed to storyBeatFlow
+   - Fixed by excluding Gemini modes from the `showStoryTypePicker` condition
+
+2. **Gemini3 "maximum nesting depth" schema error**
+   - The Gemini3 output schema was too complex with nested objects, optional+nullable fields, and z.enum
+   - Gemini API has limits on schema nesting depth
+   - Simplified the schema by: separating the option schema, removing `.nullable()`, using `z.string()` instead of `z.enum` for characterType
+
+3. **storyBeatFlow "user role" error**
+   - Error: "Please ensure that single turn requests end with a user role"
+   - When using the `messages` array with Genkit, Gemini API requires the last message to be from the user
+   - Added check for last message role before using messages array; falls back to legacy system when last message is from model
+
+**Files Modified**:
+- `src/app/story/play/[sessionId]/page.tsx` - Added `isGeminiMode` check to `showStoryTypePicker`
+- `src/ai/flows/gemini3-flow.ts` - Simplified `Gemini3OutputSchema` to avoid nesting depth limits
+- `src/ai/flows/story-beat-flow.ts` - Added `lastMessageIsFromUser` check before using messages array
+
+---
+
 #### `dd0a7cb` - Fix story wizard "Cannot read properties of undefined" error
 
 **Type**: Bug Fix
