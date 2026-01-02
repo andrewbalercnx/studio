@@ -18,7 +18,7 @@
 
 ### 2026-01-02
 
-#### `[pending]` - Migrate wizard page to StoryBrowser
+#### `3c5632e` - Migrate wizard page to StoryBrowser
 
 **Type**: Refactor
 
