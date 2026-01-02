@@ -19,6 +19,15 @@ const DIALOG_WIDTH = 448;
 const MARGIN = 24;
 const HEADER_HEIGHT = 56;
 
+// Detect Chrome browser (includes Edge Chromium, but not Firefox or Safari)
+function isChromeBrowser(): boolean {
+  if (typeof window === 'undefined') return false;
+  const ua = navigator.userAgent;
+  // Chrome includes "Chrome" but not "Edg" (Edge) - though Edge Chromium has same rendering
+  // We check for Chrome specifically and exclude Firefox/Safari
+  return /Chrome/.test(ua) && !/Firefox/.test(ua);
+}
+
 function getPositionFromSetting(
   setting: HelpWizardPosition,
   dialogHeight: number = 300 // Default estimate, will be updated after render
@@ -77,8 +86,14 @@ export function HelpWizard() {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
+  const [isChrome, setIsChrome] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const offsetRef = useRef({ x: 0, y: 0 });
+
+  // Detect Chrome on mount
+  useEffect(() => {
+    setIsChrome(isChromeBrowser());
+  }, []);
 
   const currentPage = useMemo(() => {
     if (!wizard || !activeWizard || !wizard.pages) return null;
@@ -285,18 +300,34 @@ export function HelpWizard() {
 
   return (
     <>
-      {/* Highlight overlay - uses box-shadow to create spotlight effect */}
+      {/* Highlight overlay - Chrome uses red border, others use ring with spotlight */}
       {highlightRect && (
-        <div
-          className="pointer-events-none fixed z-40 rounded-lg ring-4 ring-primary ring-offset-2 ring-offset-background"
-          style={{
-            top: highlightRect.top - 4,
-            left: highlightRect.left - 4,
-            width: highlightRect.width + 8,
-            height: highlightRect.height + 8,
-            boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
-          }}
-        />
+        isChrome ? (
+          // Chrome-compatible: simple red border without box-shadow spotlight
+          <div
+            className="pointer-events-none fixed z-40 rounded-lg"
+            style={{
+              top: highlightRect.top - 6,
+              left: highlightRect.left - 6,
+              width: highlightRect.width + 12,
+              height: highlightRect.height + 12,
+              border: '4px solid #dc2626', // red-600
+              backgroundColor: 'transparent',
+            }}
+          />
+        ) : (
+          // Other browsers: ring with spotlight effect
+          <div
+            className="pointer-events-none fixed z-40 rounded-lg ring-4 ring-primary ring-offset-2 ring-offset-background"
+            style={{
+              top: highlightRect.top - 4,
+              left: highlightRect.left - 4,
+              width: highlightRect.width + 8,
+              height: highlightRect.height + 8,
+              boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
+            }}
+          />
+        )
       )}
       <Dialog open={true} onOpenChange={(isOpen) => !isOpen && handleClose()} modal={false}>
        <DialogContent
