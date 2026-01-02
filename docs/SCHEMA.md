@@ -61,7 +61,7 @@ Child profiles owned by parents.
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | No | Last update time |
 | `namePronunciation` | string | No | Phonetic pronunciation for TTS |
-| `preferredVoiceId` | string | No | Preferred TTS voice ID |
+| `preferredVoiceId` | string | No | Preferred TTS voice ID (default: Alice `Xb7hH8MSUJpSbSDYk0k2`) |
 | `autoReadAloud` | boolean | No | Enable TTS for stories (story creation & reader) |
 | `deletedAt` | timestamp | No | Soft delete timestamp |
 | `deletedBy` | string | No | UID of user who deleted |

@@ -10,7 +10,8 @@
       "dislikes": ["scary things"],
       "description": "A demo child profile for help wizard tutorials",
       "avatarUrl": null,
-      "photos": []
+      "photos": [],
+      "preferredVoiceId": "Xb7hH8MSUJpSbSDYk0k2"
     }
   ],
   "characters": [

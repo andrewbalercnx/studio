@@ -22,6 +22,7 @@ import { useUploadFile } from '@/firebase/storage/use-upload-file';
 import { LoaderCircle, Sparkles, Upload, User as UserIcon, X, Volume2, Square } from 'lucide-react';
 import Image from 'next/image';
 import type { ChildProfile, Character, Pronouns } from '@/lib/types';
+import { DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 
 const PRONOUN_OPTIONS: { value: Pronouns; label: string }[] = [
   { value: 'he/him', label: 'He/Him' },
@@ -490,6 +491,7 @@ export function EntityEditor({
             id: docId,
             photos: [],
             avatarUrl: `https://picsum.photos/seed/${displayName.trim()}/200/200`,
+            preferredVoiceId: DEFAULT_TTS_VOICE, // Set default TTS voice for new children
             createdAt: serverTimestamp(),
           });
         }
