@@ -57,9 +57,162 @@ export const storyCompileFlow = ai.defineFlow(
             const session = sessionDoc.data() as StorySession;
             const { childId, storyTypeId, parentUid, mainCharacterId, storyMode, gemini4FinalStory, gemini3FinalStory } = session;
 
-            // For gemini4/gemini3 modes, the story is already complete - skip AI compilation
+            // For gemini4/gemini3/wizard modes, the story is already complete - skip AI compilation
             const isGeminiMode = storyMode === 'gemini4' || storyMode === 'gemini3';
+            const isWizardMode = storyMode === 'wizard';
             const geminiFinalStory = gemini4FinalStory || gemini3FinalStory;
+
+            // Handle wizard mode - story was already created by the wizard flow
+            if (isWizardMode) {
+                debug.details.mode = 'wizard';
+                debug.details.childId = childId;
+                debug.details.parentUid = parentUid;
+
+                // Load the existing story document created by wizard flow
+                const storyRef = firestore.collection('stories').doc(sessionId);
+                const existingStorySnap = await storyRef.get();
+
+                if (!existingStorySnap.exists) {
+                    throw new Error('Wizard story document not found');
+                }
+
+                const existingStory = existingStorySnap.data() as Story;
+                const storyText = existingStory.storyText || '';
+
+                // Load the output type for metadata (optional)
+                let storyOutputType: StoryOutputType | null = null;
+                if (storyOutputTypeId) {
+                    const storyOutputTypeRef = firestore.collection('storyOutputTypes').doc(storyOutputTypeId);
+                    const storyOutputTypeDoc = await storyOutputTypeRef.get();
+                    if (storyOutputTypeDoc.exists) {
+                        storyOutputType = storyOutputTypeDoc.data() as StoryOutputType;
+                    }
+                }
+
+                // Extract actors - since wizard flow resolves placeholders before saving,
+                // we rely on session.actors tracked during story creation
+                // The childId is always included as the main character
+                const sessionActors = session.actors || [];
+                const actorSet = new Set([childId, ...sessionActors]);
+                const actors = [childId, ...Array.from(actorSet).filter(id => id !== childId)];
+
+                const paragraphCount = storyText.split(/\n\n+/).filter(p => p.trim()).length;
+
+                // Initialize run trace
+                await initializeRunTrace({
+                    sessionId,
+                    parentUid,
+                    childId,
+                    storyTypeId: storyTypeId || undefined,
+                });
+
+                // Generate synopsis for the wizard story
+                let synopsis = existingStory.synopsis || '';
+                if (!synopsis) {
+                    const synopsisStartTime = Date.now();
+                    const synopsisModelName = 'googleai/gemini-2.5-flash';
+                    const synopsisPrompt = `Write a brief 1-2 sentence summary of this children's story suitable for a parent to read. Should capture the main adventure or theme.\n\nSTORY:\n${storyText}\n\nSYNOPSIS:`;
+                    try {
+                        const synopsisResponse = await ai.generate({
+                            model: synopsisModelName,
+                            prompt: synopsisPrompt,
+                            config: { temperature: 0.3, maxOutputTokens: 150 },
+                        });
+                        synopsis = synopsisResponse.text?.trim() || '';
+
+                        await logAICallToTrace({
+                            sessionId,
+                            flowName: 'storyCompileFlow:synopsis',
+                            modelName: synopsisModelName,
+                            temperature: 0.3,
+                            maxOutputTokens: 150,
+                            systemPrompt: synopsisPrompt,
+                            response: synopsisResponse,
+                            startTime: synopsisStartTime,
+                        });
+                    } catch (err: any) {
+                        console.error('[storyCompileFlow] Failed to generate synopsis for wizard story:', err);
+                        synopsis = 'A magical adventure story.';
+                        await logAICallToTrace({
+                            sessionId,
+                            flowName: 'storyCompileFlow:synopsis',
+                            modelName: synopsisModelName,
+                            temperature: 0.3,
+                            maxOutputTokens: 150,
+                            systemPrompt: synopsisPrompt,
+                            error: err,
+                            startTime: synopsisStartTime,
+                        });
+                    }
+                }
+
+                // Mark run trace as completed
+                await completeRunTrace(sessionId);
+
+                // Update session
+                const sessionUpdate: Record<string, any> = {
+                    currentPhase: 'final',
+                    status: 'completed',
+                    updatedAt: FieldValue.serverTimestamp(),
+                };
+                if (storyOutputTypeId) {
+                    sessionUpdate.storyOutputTypeId = storyOutputTypeId;
+                }
+                await sessionRef.update(sessionUpdate);
+
+                // Update Story document with actors, synopsis, and generation statuses
+                const now = FieldValue.serverTimestamp();
+                const storyPayload: Partial<Story> = {
+                    synopsis,
+                    actors,
+                    metadata: {
+                        ...existingStory.metadata,
+                        paragraphs: paragraphCount,
+                        ...(storyOutputTypeId && { storyOutputTypeId }),
+                        ...(storyOutputType?.name && { storyOutputTypeName: storyOutputType.name }),
+                        ...(storyOutputType?.aiHints?.style && { artStyleHint: storyOutputType.aiHints.style }),
+                    },
+                    // Set initial generation statuses for background tasks
+                    titleGeneration: { status: 'pending' },
+                    synopsisGeneration: { status: 'ready' },
+                    actorAvatarGeneration: { status: 'pending' },
+                    updatedAt: now,
+                };
+
+                await storyRef.update(storyPayload);
+
+                // Update character usage statistics
+                await updateCharacterUsage(actors, childId);
+
+                await logServerSessionEvent({
+                    firestore,
+                    sessionId,
+                    event: 'compile.completed',
+                    status: 'completed',
+                    source: 'server',
+                    attributes: {
+                        storyMode,
+                        storyOutputTypeId,
+                        storyId: storyRef.id,
+                        storyLength: storyText.length,
+                    },
+                });
+
+                return {
+                    ok: true,
+                    sessionId,
+                    storyText,
+                    synopsis,
+                    metadata: { paragraphs: paragraphCount },
+                    storyId: storyRef.id,
+                    debug: process.env.NODE_ENV === 'development' ? {
+                        ...debug,
+                        storyLength: storyText.length,
+                        synopsisLength: synopsis.length,
+                        paragraphs: paragraphCount,
+                    } : undefined,
+                };
+            }
 
             if (isGeminiMode && geminiFinalStory) {
                 debug.details.mode = 'gemini_direct';

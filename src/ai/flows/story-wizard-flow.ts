@@ -8,7 +8,7 @@ import { z } from 'genkit';
 import type { MessageData } from 'genkit';
 import type { ChildProfile, Character, Story, StoryWizardAnswer, StoryWizardChoice, StoryWizardInput, StoryWizardOutput } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
-import { replacePlaceholdersInText } from '@/lib/resolve-placeholders.server';
+import { replacePlaceholdersInText, type EntityMap } from '@/lib/resolve-placeholders.server';
 import { buildStoryContext } from '@/lib/story-context-builder';
 import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
 
@@ -191,7 +191,18 @@ INSTRUCTIONS:
             parsed = validation.data;
           }
 
-          const entityMap = new Map(contextData.characters.map(c => [c.id, { displayName: c.displayName, document: c }]));
+          // Build entity map including the main child and all characters
+          const entityMap: EntityMap = new Map();
+          // Add characters
+          contextData.characters.forEach(c => {
+            entityMap.set(c.id, { displayName: c.displayName, document: c });
+          });
+          // Add the main child to the entity map so $$childId$$ placeholders resolve
+          entityMap.set(childId, { displayName: child.displayName, document: child });
+          // Add siblings if available
+          contextData.siblings?.forEach(sibling => {
+            entityMap.set(sibling.id, { displayName: sibling.displayName, document: sibling });
+          });
           const resolvedStoryText = await replacePlaceholdersInText(parsed.storyText, entityMap);
 
           // Create the Story document

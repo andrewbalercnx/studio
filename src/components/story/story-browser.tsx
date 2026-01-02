@@ -374,8 +374,11 @@ export function StoryBrowser({
       // Handle story complete
       if (result.isStoryComplete) {
         setFinalStory(result.finalStoryResolved || result.finalStory || null);
-        // Auto-compile the story
-        await autoCompileStory();
+        setBrowserState('complete');
+        // Show the final story for a few seconds before auto-compiling
+        setTimeout(async () => {
+          await autoCompileStory();
+        }, 5000);
         return;
       }
 
