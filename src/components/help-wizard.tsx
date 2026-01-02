@@ -301,11 +301,12 @@ export function HelpWizard() {
   return (
     <>
       {/* Highlight overlay - Chrome uses red border, others use ring with spotlight */}
+      {/* z-[55] to stay above most dialogs (z-50) but below the wizard dialog (z-[60]) */}
       {highlightRect && (
         isChrome ? (
           // Chrome-compatible: simple red border without box-shadow spotlight
           <div
-            className="pointer-events-none fixed z-40 rounded-lg"
+            className="pointer-events-none fixed z-[55] rounded-lg"
             style={{
               top: highlightRect.top - 6,
               left: highlightRect.left - 6,
@@ -318,7 +319,7 @@ export function HelpWizard() {
         ) : (
           // Other browsers: ring with spotlight effect
           <div
-            className="pointer-events-none fixed z-40 rounded-lg ring-4 ring-primary ring-offset-2 ring-offset-background"
+            className="pointer-events-none fixed z-[55] rounded-lg ring-4 ring-primary ring-offset-2 ring-offset-background"
             style={{
               top: highlightRect.top - 4,
               left: highlightRect.left - 4,
@@ -332,7 +333,7 @@ export function HelpWizard() {
       <Dialog open={true} onOpenChange={(isOpen) => !isOpen && handleClose()} modal={false}>
        <DialogContent
         ref={dialogRef}
-        className="sm:max-w-md cursor-grab"
+        className="sm:max-w-md cursor-grab z-[60]"
         onMouseDown={onMouseDown}
         style={{
           position: 'fixed',
@@ -341,6 +342,8 @@ export function HelpWizard() {
           transform: 'none', // Override shadcn centering
         }}
         onInteractOutside={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
         hideOverlay={true}
       >
         <DialogHeader>
