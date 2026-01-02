@@ -112,6 +112,9 @@ type ScenarioStoryCompileResult = {
     lastPageKind?: string | null;
     interiorPlacementsAlternate?: boolean | null;
     imageLogs?: string[] | null;
+    // Text samples from pages (first content page)
+    sampleBodyText?: string | null;      // Unresolved text with $$id$$ placeholders
+    sampleDisplayText?: string | null;   // Resolved text with names
     error?: string;
 } | null;
 
@@ -145,6 +148,9 @@ type ScenarioStorybookE2EResult = {
     finalized?: boolean;
     printableReady?: boolean;
     orderId?: string | null;
+    // Text samples from pages (first content page)
+    sampleBodyText?: string | null;      // Unresolved text with $$id$$ placeholders
+    sampleDisplayText?: string | null;   // Resolved text with names
     error?: string;
 } | null;
 
@@ -1023,6 +1029,13 @@ export default function AdminRegressionPage() {
             throw new Error('Text page text placement failed to alternate top/bottom.');
         }
 
+        // Capture text samples from first content page for display
+        const firstContentPage = textPages[0];
+        if (firstContentPage) {
+            storyCompileScenarioSummary.sampleBodyText = firstContentPage.bodyText?.slice(0, 200) ?? null;
+            storyCompileScenarioSummary.sampleDisplayText = firstContentPage.displayText?.slice(0, 200) ?? null;
+        }
+
         storyCompileScenarioSummary.pagesCount = pagesSnapshot.size;
         storyCompileScenarioSummary.firstPageKind = firstPageKind;
         storyCompileScenarioSummary.lastPageKind = lastPageKind;
@@ -1193,6 +1206,16 @@ export default function AdminRegressionPage() {
         if (pagesSnapshot.empty) {
             throw new Error('No storybook pages created in E2E scenario.');
         }
+
+        // Capture text samples from first content page for display
+        const e2ePageDocs = pagesSnapshot.docs.map(docSnap => docSnap.data() as StoryBookPage);
+        const e2eTextPages = e2ePageDocs.filter((page) => page?.kind === 'text');
+        const e2eFirstContentPage = e2eTextPages[0];
+        if (e2eFirstContentPage) {
+            storybookE2EScenarioSummary.sampleBodyText = e2eFirstContentPage.bodyText?.slice(0, 200) ?? null;
+            storybookE2EScenarioSummary.sampleDisplayText = e2eFirstContentPage.displayText?.slice(0, 200) ?? null;
+        }
+
         const imagesResponse = await fetch('/api/storybookV2/images', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
