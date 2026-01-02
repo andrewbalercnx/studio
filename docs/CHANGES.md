@@ -18,7 +18,7 @@
 
 ### 2026-01-02
 
-#### `PENDING` - Add preferred flag to image styles
+#### `065d663` - Add preferred flag to image styles
 
 **Type**: Feature
 
