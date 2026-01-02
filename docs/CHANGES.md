@@ -18,7 +18,7 @@
 
 ### 2026-01-02
 
-#### `pending` - Add pronunciation test button to EntityEditor
+#### `7f60d7b` - Add pronunciation test button to EntityEditor
 
 **Type**: Feature
 
