@@ -18,6 +18,17 @@
 
 ### 2026-01-02
 
+#### `258f1b6` - Remove help-child from parent's children list
+
+**Type**: Bug fix
+
+**Summary**: The demo "help-child" document was being fetched and displayed to parents on their /parent/children page. This was intended for wizard demonstrations but was incorrectly showing the demo child to all parents.
+
+**Files Modified**:
+- `src/app/parent/children/page.tsx` - Removed fetchHelpChild logic and getDoc import
+
+---
+
 #### `63fc311` - Schema cleanup: Remove deprecated fields
 
 **Type**: Cleanup
