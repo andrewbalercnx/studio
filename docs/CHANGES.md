@@ -18,6 +18,45 @@
 
 ### 2026-01-02
 
+#### `c367dc0` - Add ending flow integration to StoryBrowser
+
+**Type**: Feature
+
+**Summary**: StoryBrowser now properly handles story completion by calling the ending API when the arc completes, displaying ending choices, and auto-compiling when the user selects an ending.
+
+**Changes**:
+
+1. **Ending Flow Integration**:
+   - Added `callEndingAPI()` function to call `/api/storyEnding`
+   - When arc reaches last step, calls ending API instead of beat API
+   - Stores ending options in Firestore messages collection
+   - Displays ending choices with `isEndingPhase: true`
+
+2. **Ending Selection**:
+   - When user selects an ending option, saves `selectedEndingId` and `selectedEndingText` to session
+   - Triggers auto-compile after ending selection
+   - Redirects to completion path after compile
+
+3. **Additional Diagnostics**:
+   - Added `generatorError` to diagnostics panel
+   - Added `firestoreReady` flag to verify Firestore connection
+
+**Files Modified**:
+- `src/components/story/story-browser.tsx`
+
+---
+
+#### `6cb2ceb` - Add storyGenerators to Firestore rules (v18)
+
+**Type**: Bugfix
+
+**Summary**: The `storyGenerators` collection was missing from security rules, causing "Generator not found" errors.
+
+**Files Modified**:
+- `firestore.rules`
+
+---
+
 #### `31a19ee` - Fix StoryBrowser arc progression and add diagnostics
 
 **Type**: Bugfix
