@@ -1,5 +1,14 @@
 
 import type {NextConfig} from 'next';
+import { execSync } from 'child_process';
+
+// Get git commit SHA at build time
+let gitCommitSha = 'unknown';
+try {
+  gitCommitSha = execSync('git rev-parse --short HEAD').toString().trim();
+} catch {
+  // Ignore errors (e.g., not a git repo)
+}
 
 // Only ignore TypeScript errors in development/preview environments
 // Production builds should fail on type errors to catch issues early
@@ -7,6 +16,9 @@ const shouldIgnoreTypeErrors = process.env.NODE_ENV !== 'production' ||
   process.env.IGNORE_BUILD_ERRORS === 'true';
 
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_GIT_COMMIT_SHA: gitCommitSha,
+  },
   // Enable standalone output for Docker deployment
   output: 'standalone',
   typescript: {

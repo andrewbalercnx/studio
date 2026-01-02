@@ -576,7 +576,7 @@ export default function AdminDashboardPage() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             Admin Dashboard
-            <span className="text-xs font-mono text-muted-foreground">v2025.01.02a</span>
+            <span className="text-xs font-mono text-muted-foreground">{process.env.NEXT_PUBLIC_GIT_COMMIT_SHA || 'dev'}</span>
           </CardTitle>
           <CardDescription>
             Administrative tools and configuration for Story Guide
