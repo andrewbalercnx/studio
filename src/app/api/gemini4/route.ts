@@ -2,10 +2,17 @@ import { NextResponse } from 'next/server';
 import { gemini4Flow } from '@/ai/flows/gemini4-flow';
 import { gemini4CreateCharacterFlow } from '@/ai/flows/create-story-character-flow';
 import { createLogger, generateRequestId, createTimeoutController } from '@/lib/server-logger';
+import type { StoryGeneratorResponse, StoryGeneratorResponseOption } from '@/lib/types';
 
 // Request timeout for AI flows (2 minutes)
 const AI_FLOW_TIMEOUT_MS = 120000;
 
+/**
+ * Gemini4 Story API endpoint.
+ *
+ * This API wraps the gemini4Flow and normalizes its output to the
+ * standard StoryGeneratorResponse format for StoryBrowser compatibility.
+ */
 export async function POST(request: Request) {
   const requestId = generateRequestId();
   const logger = createLogger({ route: '/api/gemini4', method: 'POST', requestId });
@@ -17,7 +24,14 @@ export async function POST(request: Request) {
 
     if (!sessionId) {
       logger.warn('Missing sessionId in request');
-      return NextResponse.json({ ok: false, errorMessage: 'Missing sessionId' }, { status: 400 });
+      const errorResponse: StoryGeneratorResponse = {
+        ok: false,
+        sessionId: '',
+        question: '',
+        options: [],
+        errorMessage: 'Missing sessionId',
+      };
+      return NextResponse.json(errorResponse, { status: 400 });
     }
 
     // Create abort controller for timeout
@@ -75,33 +89,62 @@ export async function POST(request: Request) {
         logger.warn('Flow completed after timeout was triggered', { sessionId, durationMs });
       }
 
-      if (result.ok) {
-        logger.info('gemini4Flow completed successfully', { sessionId, durationMs });
-        return NextResponse.json(result, { status: 200 });
-      } else {
+      if (!result.ok) {
         logger.error('gemini4Flow returned error', new Error(result.errorMessage ?? 'Unknown error'), { sessionId, durationMs });
-        return NextResponse.json(
-          {
-            ok: false,
-            errorMessage: result.errorMessage ?? 'Unknown error in gemini4Flow',
-            debug: result.debug ?? null,
-          },
-          { status: 500 }
-        );
+        const errorResponse: StoryGeneratorResponse = {
+          ok: false,
+          sessionId,
+          question: '',
+          options: [],
+          errorMessage: result.errorMessage ?? 'Unknown error in gemini4Flow',
+          debug: result.debug ?? undefined,
+        };
+        return NextResponse.json(errorResponse, { status: 500 });
       }
+
+      logger.info('gemini4Flow completed successfully', { sessionId, durationMs });
+
+      // Normalize options to StoryGeneratorResponseOption format
+      // Merge options with their resolved counterparts
+      const normalizedOptions: StoryGeneratorResponseOption[] = (result.options || []).map((opt: any, idx: number) => ({
+        id: opt.id || String.fromCharCode(65 + idx), // A, B, C, D
+        text: opt.text,
+        textResolved: result.optionsResolved?.[idx]?.text,
+        introducesCharacter: opt.introducesCharacter,
+        newCharacterName: opt.newCharacterName,
+        newCharacterLabel: opt.newCharacterLabel,
+        newCharacterType: opt.newCharacterType,
+        existingCharacterId: opt.existingCharacterId,
+        isMoreOption: opt.isMoreOption,
+      }));
+
+      // Build the normalized response
+      const response: StoryGeneratorResponse = {
+        ok: true,
+        sessionId,
+        question: result.question,
+        questionResolved: result.questionResolved,
+        options: normalizedOptions,
+        isStoryComplete: result.isStoryComplete || false,
+        finalStory: result.finalStory || undefined,
+        finalStoryResolved: result.finalStoryResolved || undefined,
+        debug: result.debug,
+      };
+
+      return NextResponse.json(response, { status: 200 });
     } finally {
       cleanup();
     }
   } catch (e: any) {
     const errorMessage = e.message || 'An unexpected error occurred in the API route.';
     logger.error('Unhandled exception in route', e);
-    return NextResponse.json(
-      {
-        ok: false,
-        errorMessage: `API /gemini4 route error: ${errorMessage}`,
-        requestId,
-      },
-      { status: 500 }
-    );
+    const errorResponse: StoryGeneratorResponse = {
+      ok: false,
+      sessionId: '',
+      question: '',
+      options: [],
+      errorMessage: `API /gemini4 route error: ${errorMessage}`,
+    };
+    return NextResponse.json(errorResponse, { status: 500 });
   }
 }

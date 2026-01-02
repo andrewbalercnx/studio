@@ -214,28 +214,107 @@ Generate warmup phase response.
 
 ### POST `/api/storyBeat`
 
-Generate story beat options.
+Generate story beat with continuation and options. Uses the standard `StoryGeneratorResponse` format for StoryBrowser compatibility.
 
 **Request Body**:
 ```json
 {
   "sessionId": "session-id",
-  "childId": "child-id",
-  "selectedOptionId": "opt1",
+  "selectedOptionId": "A",
   "moreOptions": false
 }
 ```
 
-**Response**: `200 OK`
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sessionId` | string | Yes | Story session ID |
+| `selectedOptionId` | string | No | Option ID from previous beat |
+| `moreOptions` | boolean | No | Request alternative options |
+
+**Response**: `200 OK` (StoryGeneratorResponse format)
 ```json
 {
   "ok": true,
-  "text": "The brave hero entered the forest...",
+  "sessionId": "session-id",
+  "headerText": "The brave hero entered the forest...",
+  "headerTextResolved": "Emma entered the magical forest...",
+  "question": "What happens next?",
+  "questionResolved": "What happens next?",
   "options": [
-    {"id": "beat1", "text": "Follow the mysterious path"},
-    {"id": "beat2", "text": "Climb the tall tree"}
+    {"id": "A", "text": "Follow the mysterious path", "textResolved": "Follow the mysterious path"},
+    {"id": "B", "text": "Climb the tall tree", "textResolved": "Climb the tall tree"}
   ],
-  "arcStepIndex": 2
+  "isStoryComplete": false
+}
+```
+
+---
+
+### POST `/api/gemini3`
+
+Generate Gemini 3 free-form story questions. Uses the standard `StoryGeneratorResponse` format for StoryBrowser compatibility.
+
+**Request Body**:
+```json
+{
+  "sessionId": "session-id"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sessionId` | string | Yes | Story session ID |
+
+**Response**: `200 OK` (StoryGeneratorResponse format)
+```json
+{
+  "ok": true,
+  "sessionId": "session-id",
+  "question": "What kind of adventure would $$childId$$ like?",
+  "questionResolved": "What kind of adventure would Emma like?",
+  "options": [
+    {"id": "A", "text": "A magical journey", "textResolved": "A magical journey"},
+    {"id": "B", "text": "A space adventure", "textResolved": "A space adventure"}
+  ],
+  "isStoryComplete": false
+}
+```
+
+---
+
+### POST `/api/gemini4`
+
+Generate Gemini 4 structured story questions with "Tell me more" support. Uses the standard `StoryGeneratorResponse` format for StoryBrowser compatibility.
+
+**Request Body**:
+```json
+{
+  "sessionId": "session-id",
+  "selectedOptionId": "A",
+  "userMessage": "I chose the magical journey"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sessionId` | string | Yes | Story session ID |
+| `selectedOptionId` | string | No | Option ID from previous question |
+| `userMessage` | string | No | Child's response text |
+
+**Response**: `200 OK` (StoryGeneratorResponse format)
+```json
+{
+  "ok": true,
+  "sessionId": "session-id",
+  "question": "Where would you like to go?",
+  "questionResolved": "Where would you like to go?",
+  "options": [
+    {"id": "A", "text": "A magical forest", "isMoreOption": false},
+    {"id": "B", "text": "A distant planet", "isMoreOption": false},
+    {"id": "C", "text": "An underwater kingdom", "isMoreOption": false},
+    {"id": "M", "text": "Tell me more", "isMoreOption": true}
+  ],
+  "isStoryComplete": false
 }
 ```
 

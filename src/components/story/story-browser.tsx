@@ -1,23 +1,26 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
-import { doc, collection, query, where, updateDoc, serverTimestamp, addDoc, getDoc } from 'firebase/firestore';
+import { doc, collection, query, where, updateDoc, serverTimestamp, addDoc, getDoc, writeBatch, arrayUnion, orderBy, limit, getDocs } from 'firebase/firestore';
 import { useDocument, useCollection } from '@/lib/firestore-hooks';
 import { useToast } from '@/hooks/use-toast';
 import { useStoryTTS } from '@/hooks/use-story-tts';
 import { useBackgroundMusic } from '@/hooks/use-background-music';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { LoaderCircle, Settings, RefreshCw, Sparkles, Star, CheckCircle } from 'lucide-react';
+import { LoaderCircle, Settings, RefreshCw, Sparkles, Star, CheckCircle, Bot } from 'lucide-react';
 import Link from 'next/link';
 
 import { ChoiceButton, type ChoiceWithEntities } from './choice-button';
 import { CharacterIntroductionCard } from './character-introduction-card';
 import { ChildAvatarAnimation } from '@/components/child/child-avatar-animation';
 import { SpeechModeToggle } from '@/components/child/speech-mode-toggle';
+import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 
 import type {
   StoryGenerator,
@@ -25,6 +28,7 @@ import type {
   StoryGeneratorResponseOption,
   StorySession,
   StoryType,
+  StoryOutputType,
   ChildProfile,
   Character,
   Choice,
@@ -40,8 +44,21 @@ type BrowserState =
   | 'generating'        // Calling API
   | 'question'          // Displaying question/options
   | 'character_intro'   // Introducing new character
+  | 'ending'            // Ending phase (beat mode)
+  | 'compiling'         // Auto-compiling story
   | 'complete'          // Story complete
   | 'error';            // Error state
+
+// Helper to extract $$id$$ placeholders from text
+function extractActorIdsFromText(text: string): string[] {
+  const regex = /\$\$([a-zA-Z0-9_-]+)\$\$/g;
+  const ids = new Set<string>();
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    ids.add(match[1]);
+  }
+  return Array.from(ids);
+}
 
 interface CharacterIntroState {
   characterId: string;
@@ -59,6 +76,8 @@ interface StoryBrowserProps {
   onStoryComplete?: (storyId: string) => void;
   onError?: (error: string) => void;
   showSettingsLink?: boolean;
+  /** Where to navigate after story completion. If not provided, uses onStoryComplete callback only */
+  completionRedirectPath?: string;
 }
 
 // ============================================================================
@@ -73,8 +92,10 @@ export function StoryBrowser({
   onStoryComplete,
   onError,
   showSettingsLink = true,
+  completionRedirectPath,
 }: StoryBrowserProps) {
   const firestore = useFirestore();
+  const router = useRouter();
   const { user } = useUser();
   const { toast } = useToast();
 
@@ -82,12 +103,15 @@ export function StoryBrowser({
   // State
   // ---------------------------------------------------------------------------
   const [browserState, setBrowserState] = useState<BrowserState>('loading');
+  const [headerText, setHeaderText] = useState<string>('');        // Story continuation (beat mode)
   const [currentQuestion, setCurrentQuestion] = useState<string>('');
   const [currentOptions, setCurrentOptions] = useState<StoryGeneratorResponseOption[]>([]);
   const [finalStory, setFinalStory] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [characterIntro, setCharacterIntro] = useState<CharacterIntroState | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isEndingPhase, setIsEndingPhase] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<Record<string, any>>({});
 
   // Track spoken content to avoid re-speaking
   const lastSpokenContentRef = useRef<string>('');
@@ -115,6 +139,19 @@ export function StoryBrowser({
   const { data: fetchedStoryTypes } = useCollection<StoryType>(storyTypesQuery);
   const storyTypes = propStoryTypes || fetchedStoryTypes;
 
+  // Story output types for auto-compile
+  const storyOutputTypesQuery = useMemo(
+    () => (firestore ? query(collection(firestore, 'storyOutputTypes'), where('status', '==', 'live')) : null),
+    [firestore]
+  );
+  const { data: storyOutputTypes } = useCollection<StoryOutputType>(storyOutputTypesQuery);
+
+  // Get active story type for gradient/styling
+  const activeStoryType = useMemo(() => {
+    if (!storyTypes || !session?.storyTypeId) return null;
+    return storyTypes.find((type) => type.id === session.storyTypeId) ?? null;
+  }, [storyTypes, session?.storyTypeId]);
+
   // Character for intro screen (live updates)
   const characterRef = useMemo(
     () => (firestore && characterIntro?.characterId ? doc(firestore, 'characters', characterIntro.characterId) : null),
@@ -136,7 +173,8 @@ export function StoryBrowser({
     onError: (error) => toast({ title: 'Speech error', description: error, variant: 'destructive' }),
   });
 
-  const backgroundMusicUrl = generator?.backgroundMusic?.audioUrl;
+  // Background music - prefer story type's music, fallback to generator's
+  const backgroundMusicUrl = activeStoryType?.backgroundMusic?.audioUrl || generator?.backgroundMusic?.audioUrl;
   const backgroundMusic = useBackgroundMusic({
     audioUrl: backgroundMusicUrl ?? null,
     isSpeaking,
@@ -161,17 +199,18 @@ export function StoryBrowser({
   // Auto-speak when content changes
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    if (!isSpeechModeEnabled || browserState !== 'question') return;
+    if (!isSpeechModeEnabled || (browserState !== 'question' && browserState !== 'ending')) return;
 
-    const contentKey = `${currentQuestion}|${currentOptions.map(o => o.textResolved || o.text).join('|')}`;
-    if (contentKey !== lastSpokenContentRef.current && currentQuestion) {
+    const contentKey = `${headerText}|${currentQuestion}|${currentOptions.map(o => o.textResolved || o.text).join('|')}`;
+    if (contentKey !== lastSpokenContentRef.current && (currentQuestion || headerText)) {
       lastSpokenContentRef.current = contentKey;
       speakStoryContent({
-        questionText: currentQuestion,
+        headerText: headerText || undefined,
+        questionText: currentQuestion || undefined,
         options: currentOptions.map(o => ({ text: o.textResolved || o.text })),
       });
     }
-  }, [currentQuestion, currentOptions, browserState, isSpeechModeEnabled, speakStoryContent]);
+  }, [headerText, currentQuestion, currentOptions, browserState, isSpeechModeEnabled, speakStoryContent]);
 
   // ---------------------------------------------------------------------------
   // Initialize browser state
@@ -199,10 +238,47 @@ export function StoryBrowser({
   }, [generator, generatorLoading, session?.storyTypeId]);
 
   // ---------------------------------------------------------------------------
+  // Auto-compile story when complete
+  // ---------------------------------------------------------------------------
+  const autoCompileStory = useCallback(async () => {
+    if (!user || !firestore || !storyOutputTypes?.length) return;
+
+    const storyOutputTypeId = storyOutputTypes[0].id;
+    setBrowserState('compiling');
+
+    try {
+      const response = await fetch('/api/storyCompile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, storyOutputTypeId }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        console.error('[StoryBrowser] Auto-compile failed:', result?.errorMessage);
+        toast({ title: 'Story saved with issues', description: 'Your story was created but may need manual compilation.', variant: 'destructive' });
+      } else {
+        toast({ title: 'Story saved!', description: 'Your story is ready to view.' });
+      }
+    } catch (e: any) {
+      console.error('[StoryBrowser] Auto-compile error:', e);
+      toast({ title: 'Story saved with issues', description: e.message, variant: 'destructive' });
+    }
+
+    // Navigate if redirect path provided
+    if (completionRedirectPath) {
+      router.push(completionRedirectPath);
+    } else {
+      setBrowserState('complete');
+      onStoryComplete?.(sessionId);
+    }
+  }, [user, firestore, sessionId, storyOutputTypes, toast, completionRedirectPath, router, onStoryComplete]);
+
+  // ---------------------------------------------------------------------------
   // API Call
   // ---------------------------------------------------------------------------
-  const callGeneratorAPI = useCallback(async (selectedOptionId?: string) => {
-    if (!generator || !user || !firestore) return;
+  const callGeneratorAPI = useCallback(async (selectedOptionId?: string, userMessage?: string) => {
+    if (!generator || !user || !firestore || !sessionRef) return;
 
     setBrowserState('generating');
     stopSpeech();
@@ -217,6 +293,7 @@ export function StoryBrowser({
         body: JSON.stringify({
           sessionId,
           selectedOptionId,
+          userMessage,
         }),
       });
 
@@ -230,18 +307,91 @@ export function StoryBrowser({
         throw new Error(result.errorMessage || 'Unknown error');
       }
 
+      // Store debug info
+      setDebugInfo(result.debug || {});
+
+      // Extract actor IDs from response
+      const textToScan = [
+        result.headerText || '',
+        result.question || '',
+        result.finalStory || '',
+        ...(result.options?.map(o => o.text) || []),
+      ].join(' ');
+      const newActorIds = extractActorIdsFromText(textToScan);
+
+      // Store messages in Firestore (mirror what the original page does)
+      const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
+      const batch = writeBatch(firestore);
+
+      if (result.isStoryComplete && result.finalStory) {
+        // Final story message
+        batch.set(doc(messagesRef), {
+          sender: 'assistant',
+          text: result.finalStory,
+          textResolved: result.finalStoryResolved,
+          kind: `${generatorId}_final_story`,
+          createdAt: serverTimestamp(),
+        });
+      } else if (result.headerText) {
+        // Beat mode: separate continuation and options messages
+        batch.set(doc(messagesRef), {
+          sender: 'assistant',
+          text: result.headerText,
+          textResolved: result.headerTextResolved,
+          kind: 'beat_continuation',
+          createdAt: serverTimestamp(),
+        });
+        batch.set(doc(messagesRef), {
+          sender: 'assistant',
+          text: result.question,
+          textResolved: result.questionResolved,
+          kind: result.isEndingPhase ? 'ending_options' : 'beat_options',
+          options: result.options,
+          createdAt: serverTimestamp(),
+        });
+      } else if (result.question) {
+        // Standard question message
+        batch.set(doc(messagesRef), {
+          sender: 'assistant',
+          text: result.question,
+          textResolved: result.questionResolved,
+          kind: `${generatorId}_question`,
+          options: result.options,
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      // Update session with new actor IDs
+      if (newActorIds.length > 0) {
+        batch.update(sessionRef, {
+          actors: arrayUnion(...newActorIds),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+
       // Handle story complete
       if (result.isStoryComplete) {
         setFinalStory(result.finalStoryResolved || result.finalStory || null);
-        setBrowserState('complete');
-        onStoryComplete?.(sessionId);
+        // Auto-compile the story
+        await autoCompileStory();
         return;
       }
 
-      // Display question and options
+      // Handle ending phase
+      if (result.isEndingPhase) {
+        setIsEndingPhase(true);
+        setBrowserState('ending');
+      } else {
+        setIsEndingPhase(false);
+        setBrowserState('question');
+      }
+
+      // Display content
+      setHeaderText(result.headerTextResolved || result.headerText || '');
       setCurrentQuestion(result.questionResolved || result.question);
       setCurrentOptions(result.options);
-      setBrowserState('question');
 
     } catch (e: any) {
       console.error('[StoryBrowser] API error:', e);
@@ -249,18 +399,31 @@ export function StoryBrowser({
       setBrowserState('error');
       onError?.(e.message);
     }
-  }, [generator, user, firestore, sessionId, stopSpeech, onStoryComplete, onError]);
+  }, [generator, user, firestore, sessionId, sessionRef, stopSpeech, generatorId, autoCompileStory, onError]);
 
   // ---------------------------------------------------------------------------
   // Option Selection
   // ---------------------------------------------------------------------------
   const handleSelectOption = useCallback(async (option: StoryGeneratorResponseOption) => {
-    if (!generator || !firestore || !user) return;
+    if (!generator || !firestore || !user || !session) return;
+
+    // Store the child's choice in Firestore
+    const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
+    await addDoc(messagesRef, {
+      sender: 'child',
+      text: option.text,
+      kind: isEndingPhase ? 'child_ending_choice' : 'child_choice',
+      selectedOptionId: option.id,
+      createdAt: serverTimestamp(),
+    });
 
     // Check if this option introduces a character
     if (option.introducesCharacter && generator.capabilities.supportsCharacterIntroduction) {
       // Create the character first
       try {
+        const storyTypeContext = activeStoryType?.name || 'adventure';
+        const storyContext = `A ${storyTypeContext} story about ${childProfile?.displayName || 'a child'}.`;
+
         const response = await fetch('/api/characters/create', {
           method: 'POST',
           headers: {
@@ -269,22 +432,38 @@ export function StoryBrowser({
           },
           body: JSON.stringify({
             sessionId,
-            name: option.newCharacterName || 'New Friend',
-            label: option.newCharacterLabel || 'A new friend',
-            type: option.newCharacterType || 'Friend',
+            parentUid: session.parentUid,
+            childId: session.childId,
+            characterLabel: option.newCharacterLabel || 'A new friend',
+            characterName: option.newCharacterName || 'New Friend',
+            characterType: option.newCharacterType || 'Friend',
+            storyContext,
+            generateAvatar: true,
           }),
         });
 
-        if (!response.ok) {
-          throw new Error('Failed to create character');
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+          throw new Error(result.errorMessage || 'Failed to create character');
         }
 
-        const { characterId } = await response.json();
+        // Trigger async avatar generation
+        if (result.characterId) {
+          fetch('/api/generateCharacterAvatar', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${await user.getIdToken()}`,
+            },
+            body: JSON.stringify({ characterId: result.characterId }),
+          }).catch(err => console.error('Avatar generation failed:', err));
+        }
 
         // Show character introduction
         setCharacterIntro({
-          characterId,
-          characterName: option.newCharacterName || 'New Friend',
+          characterId: result.characterId,
+          characterName: option.newCharacterName || result.character?.displayName || 'New Friend',
           characterLabel: option.newCharacterLabel || 'A new friend',
           characterType: option.newCharacterType || 'Friend',
           pendingOption: {
@@ -305,9 +484,15 @@ export function StoryBrowser({
       }
     }
 
+    // Handle "Tell me more" option for gemini4
+    if (option.isMoreOption) {
+      await callGeneratorAPI(option.id, "Tell me more about this. Can you explain it differently or give me more options?");
+      return;
+    }
+
     // Call API with selected option
-    await callGeneratorAPI(option.id);
-  }, [generator, firestore, user, sessionId, callGeneratorAPI, toast]);
+    await callGeneratorAPI(option.id, option.text);
+  }, [generator, firestore, user, session, sessionId, isEndingPhase, activeStoryType, childProfile, callGeneratorAPI, toast]);
 
   // ---------------------------------------------------------------------------
   // Continue after character introduction
@@ -316,8 +501,9 @@ export function StoryBrowser({
     if (!characterIntro) return;
 
     // Continue with the pending option
-    await callGeneratorAPI(characterIntro.pendingOption.id);
+    const option = characterIntro.pendingOption;
     setCharacterIntro(null);
+    await callGeneratorAPI(option.id, option.text);
   }, [characterIntro, callGeneratorAPI]);
 
   // ---------------------------------------------------------------------------
@@ -477,19 +663,32 @@ export function StoryBrowser({
         )}
 
         {/* Question Display */}
-        {browserState === 'question' && !showAvatarAnimation && (
+        {(browserState === 'question' || browserState === 'ending') && !showAvatarAnimation && (
           <div className="space-y-6 w-full">
-            {/* Question */}
-            <Card className={`w-full bg-gradient-to-br ${gradient} ${darkGradient}`}>
-              <CardContent className="pt-6">
+            {/* Header Text (story continuation for beat mode) */}
+            {headerText && (
+              <Card className={`w-full bg-gradient-to-br ${gradient} ${darkGradient}`}>
+                <CardContent className="pt-6">
+                  <p className="text-lg leading-relaxed whitespace-pre-wrap">{headerText}</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Question prompt with avatar */}
+            {currentQuestion && (
+              <div className="flex flex-col items-center gap-2">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src="/icons/magical-book.svg" alt="Story Guide" />
+                  <AvatarFallback><Bot /></AvatarFallback>
+                </Avatar>
                 <p className="text-xl font-medium leading-relaxed">{currentQuestion}</p>
-              </CardContent>
-            </Card>
+              </div>
+            )}
 
             {/* Options */}
             <div className="grid grid-cols-1 gap-3">
               {currentOptions.map((option, idx) => {
-                const optionLabel = String.fromCharCode(65 + idx); // A, B, C, D
+                const optionLabel = option.isMoreOption ? undefined : String.fromCharCode(65 + idx); // A, B, C, D
                 const choiceWithEntities: ChoiceWithEntities = {
                   id: option.id,
                   text: option.textResolved || option.text,
@@ -505,14 +704,23 @@ export function StoryBrowser({
                     choice={choiceWithEntities}
                     onClick={() => handleSelectOption(option)}
                     optionLabel={optionLabel}
-                    disabled={browserState !== 'question'}
+                    disabled={browserState !== 'question' && browserState !== 'ending'}
+                    variant={option.isMoreOption ? 'outline' : 'secondary'}
+                    className={option.isMoreOption ? 'border-dashed' : ''}
+                    icon={isEndingPhase ? (
+                      <Star className="w-4 h-4 mr-2 text-amber-400 flex-shrink-0" />
+                    ) : option.isMoreOption ? (
+                      <RefreshCw className="w-4 h-4 mr-2 text-muted-foreground flex-shrink-0" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-2 text-purple-500 flex-shrink-0" />
+                    )}
                   />
                 );
               })}
             </div>
 
             {/* More Options Button */}
-            {generator?.capabilities.supportsMoreOptions && (
+            {generator?.capabilities.supportsMoreOptions && !isEndingPhase && (
               <div className="flex justify-center">
                 <Button
                   variant="outline"
@@ -529,6 +737,14 @@ export function StoryBrowser({
                 </Button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Compiling State */}
+        {browserState === 'compiling' && (
+          <div className="flex flex-col items-center justify-center gap-4">
+            <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
+            <p className="text-muted-foreground animate-pulse">Saving your story...</p>
           </div>
         )}
 
@@ -550,6 +766,28 @@ export function StoryBrowser({
           </Card>
         )}
       </div>
+
+      {/* Diagnostics Panel */}
+      <DiagnosticsPanel
+        pageName="story-browser"
+        className="w-full max-w-4xl mt-8"
+        data={{
+          sessionId,
+          generatorId,
+          browserState,
+          isEndingPhase,
+          headerTextLength: headerText?.length || 0,
+          currentQuestionLength: currentQuestion?.length || 0,
+          optionsCount: currentOptions.length,
+          audio: {
+            isSpeechModeEnabled,
+            isSpeaking,
+            isTTSLoading,
+            backgroundMusicPlaying: backgroundMusic.isPlaying,
+          },
+          debug: debugInfo,
+        }}
+      />
     </div>
   );
 }

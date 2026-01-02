@@ -1675,6 +1675,7 @@ export type StoryGeneratorResponseOption = {
   newCharacterLabel?: string;
   newCharacterType?: string;
   existingCharacterId?: string;
+  isMoreOption?: boolean;                // True for "Tell me more" option (gemini4)
 };
 
 export type StoryGeneratorResponse = {
@@ -1682,7 +1683,9 @@ export type StoryGeneratorResponse = {
   sessionId: string;
 
   // Content
-  question: string;                      // With $$placeholders$$
+  headerText?: string;                   // Story continuation (beat mode) - with $$placeholders$$
+  headerTextResolved?: string;           // Resolved for display
+  question: string;                      // The question/prompt - with $$placeholders$$
   questionResolved?: string;             // Resolved for display
   options: StoryGeneratorResponseOption[];
 
@@ -1690,6 +1693,9 @@ export type StoryGeneratorResponse = {
   isStoryComplete?: boolean;
   finalStory?: string;                   // With $$placeholders$$
   finalStoryResolved?: string;           // Resolved for display
+
+  // Ending options (beat mode ending flow)
+  isEndingPhase?: boolean;
 
   // Debug/Error
   debug?: Record<string, any>;

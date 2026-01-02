@@ -18,6 +18,53 @@
 
 ### 2026-01-02
 
+#### `1986cab` - Unify story play pages with StoryBrowser
+
+**Type**: Refactor
+
+**Summary**: All story generator APIs now return a standard `StoryGeneratorResponse` format, and both the parent-facing `/story/play` and new kids PWA `/kids/play` routes use the unified `StoryBrowser` component.
+
+**Changes**:
+
+1. **Normalized API Routes**:
+   - `/api/storyBeat` - Now returns `StoryGeneratorResponse` with `headerText` for story continuation
+   - `/api/gemini3` - Now returns `StoryGeneratorResponse` with merged option text
+   - `/api/gemini4` - Now returns `StoryGeneratorResponse` with `isMoreOption` support
+
+2. **Extended Types** (`src/lib/types.ts`):
+   - Added `headerText`, `headerTextResolved` to `StoryGeneratorResponse` for beat mode
+   - Added `isMoreOption` to `StoryGeneratorResponseOption` for gemini4 "Tell me more"
+
+3. **Enhanced StoryBrowser** (`src/components/story/story-browser.tsx`):
+   - Added `headerText` display for story continuation (beat mode)
+   - Added ending phase handling
+   - Added auto-compile on story completion
+   - Added message storage in Firestore
+   - Added actor ID extraction and tracking
+   - Added completion redirect support
+
+4. **Simplified Play Page** (`src/app/story/play/[sessionId]/page.tsx`):
+   - Reduced from ~1200 lines to ~95 lines
+   - Now uses `<StoryBrowser />` for all story modes (beat, gemini3, gemini4)
+
+5. **New Kids PWA Play Page** (`src/app/kids/play/[sessionId]/page.tsx`):
+   - New route for interactive story creation in kids PWA
+   - Uses StoryBrowser with kids-specific settings (no settings link)
+   - Enforces child session ownership
+
+**Files Modified**:
+- `src/lib/types.ts` - Extended StoryGeneratorResponse types
+- `src/app/api/storyBeat/route.ts` - Normalized to StoryGeneratorResponse
+- `src/app/api/gemini3/route.ts` - Normalized to StoryGeneratorResponse
+- `src/app/api/gemini4/route.ts` - Normalized to StoryGeneratorResponse
+- `src/components/story/story-browser.tsx` - Enhanced for all modes
+- `src/app/story/play/[sessionId]/page.tsx` - Simplified to use StoryBrowser
+
+**Files Created**:
+- `src/app/kids/play/[sessionId]/page.tsx` - New kids PWA play page
+
+---
+
 #### `3c5632e` - Migrate wizard page to StoryBrowser
 
 **Type**: Refactor
