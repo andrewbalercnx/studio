@@ -18,6 +18,25 @@
 
 ### 2026-01-02
 
+#### `08e8eab` - Fix placeholder resolution in wizard API response
+
+**Type**: Bug Fix
+
+**Summary**: The Story Wizard API was returning questions and choices with unresolved `$$childId$$` placeholders, causing raw placeholder text to display instead of the child's name.
+
+**Changes**:
+
+1. **Placeholder Resolution**:
+   - Import `resolveEntitiesInText` and `replacePlaceholdersInText` from server utilities
+   - Extract all entity IDs from question and choice texts
+   - Resolve placeholders before returning response
+   - Set `questionResolved` and `textResolved` fields with resolved text
+
+**Files Modified**:
+- `src/app/api/storyWizard/route.ts`
+
+---
+
 #### `c367dc0` - Add ending flow integration to StoryBrowser
 
 **Type**: Feature
