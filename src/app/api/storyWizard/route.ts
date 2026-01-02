@@ -4,6 +4,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { requireAuthenticatedUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
 import { storyWizardFlow } from '@/ai/flows/story-wizard-flow';
+import { resolveEntitiesInText, replacePlaceholdersInText } from '@/lib/resolve-placeholders.server';
 import type { StorySession, StoryWizardAnswer, StoryGeneratorResponse, StoryGeneratorResponseOption } from '@/lib/types';
 
 /**
@@ -112,12 +113,20 @@ export async function POST(request: Request) {
         ok: true;
       };
 
-      // Convert choices to StoryGeneratorResponseOption format
-      const options: StoryGeneratorResponseOption[] = askingResult.choices.map((choice, idx) => ({
-        id: String.fromCharCode(65 + idx), // A, B, C, D
-        text: choice.text,
-        introducesCharacter: false,
-      }));
+      // Resolve placeholders in question and choices
+      const allText = [askingResult.question, ...askingResult.choices.map(c => c.text)].join(' ');
+      const entityMap = await resolveEntitiesInText(allText);
+      const questionResolved = await replacePlaceholdersInText(askingResult.question, entityMap);
+
+      // Convert choices to StoryGeneratorResponseOption format with resolved text
+      const options: StoryGeneratorResponseOption[] = await Promise.all(
+        askingResult.choices.map(async (choice, idx) => ({
+          id: String.fromCharCode(65 + idx), // A, B, C, D
+          text: choice.text,
+          textResolved: await replacePlaceholdersInText(choice.text, entityMap),
+          introducesCharacter: false,
+        }))
+      );
 
       // Store state for the next call
       await sessionRef.update({
@@ -131,7 +140,7 @@ export async function POST(request: Request) {
         ok: true,
         sessionId,
         question: askingResult.question,
-        questionResolved: askingResult.question,
+        questionResolved,
         options,
         isStoryComplete: false,
       };
