@@ -18,6 +18,53 @@
 
 ### 2026-01-02
 
+#### `53da81c` - Add Story Browser architecture foundation
+
+**Type**: Feature (Foundation)
+
+**Summary**: Added the foundation for a unified "Story Browser" component that will provide consistent UI across all story generation modes (wizard, gemini3, gemini4, beat).
+
+**Concept**: The StoryBrowser treats story generators as pluggable backends that advertise their capabilities. The browser adapts its UI based on what each generator supports (e.g., "More options" button only shown if generator supports it).
+
+**Changes**:
+
+1. **New Types** (`src/lib/types.ts`):
+   - `StoryGenerator` - Generator configuration with capabilities and styling
+   - `StoryGeneratorCapabilities` - What features a generator supports
+   - `StoryGeneratorStyling` - UI customization (gradient, icon, loading message)
+   - `StoryGeneratorResponse` - Standard API response format for all generators
+
+2. **New Collection** (`storyGenerators`):
+   - Firestore collection for generator configurations
+   - Documents define capabilities, API endpoint, and styling
+   - Enables adding new generators without code changes
+
+3. **New Component** (`src/components/story/story-browser.tsx`):
+   - Self-contained component for all story interaction
+   - Handles: TTS, placeholder resolution, A/B/C labels, background music
+   - Internal state machine: loading → story_type → generating → question → character_intro → complete
+   - Adapts UI based on generator capabilities
+
+4. **Seed API** (`/api/admin/story-generators/seed`):
+   - Seeds default generator configurations (wizard, gemini3, gemini4, beat)
+   - Admin-only endpoint
+
+**Next Steps** (in subsequent commits):
+- Migrate `/story/wizard/[sessionId]` to use StoryBrowser
+- Migrate `/story/play/[sessionId]` to use StoryBrowser
+- Create `/kids/play/[sessionId]` using StoryBrowser
+
+**Files Created**:
+- `src/components/story/story-browser.tsx`
+- `src/app/api/admin/story-generators/seed/route.ts`
+
+**Files Modified**:
+- `src/lib/types.ts` - Added StoryGenerator types
+- `src/components/story/index.ts` - Export StoryBrowser
+- `docs/SCHEMA.md` - Document storyGenerators collection
+
+---
+
 #### `a78b05a` - Fix multiple story generation flow issues
 
 **Type**: Bug Fix

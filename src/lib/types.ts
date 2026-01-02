@@ -1607,3 +1607,89 @@ export const DEFAULT_EMAIL_CONFIG: EmailConfig = {
     },
   },
 };
+
+// ============================================================================
+// Story Generator Types
+// ============================================================================
+
+/**
+ * Capabilities that a story generator advertises to the StoryBrowser.
+ * The browser adapts its UI based on these capabilities.
+ */
+export type StoryGeneratorCapabilities = {
+  minChoices: number;                    // Minimum choices per question (e.g., 2)
+  maxChoices: number;                    // Maximum choices per question (e.g., 4)
+  supportsMoreOptions: boolean;          // Can request additional choices
+  supportsCharacterIntroduction: boolean; // Can introduce new characters mid-story
+  supportsFinalStory: boolean;           // Generates a final compiled story
+  requiresStoryType: boolean;            // Needs story type selection first
+};
+
+/**
+ * Styling configuration for a story generator.
+ * Used by StoryBrowser to customize the appearance per generator.
+ */
+export type StoryGeneratorStyling = {
+  gradient: string;                      // Tailwind gradient classes (e.g., 'from-purple-50 to-pink-50')
+  darkGradient?: string;                 // Dark mode gradient (e.g., 'dark:from-purple-950 dark:to-pink-950')
+  icon?: string;                         // Icon name (lucide) or URL
+  loadingMessage: string;                // Message shown during generation
+};
+
+/**
+ * A story generator configuration document.
+ * Stored in Firestore collection: storyGenerators
+ */
+export type StoryGenerator = {
+  id: string;                            // e.g., 'wizard', 'gemini3', 'gemini4', 'beat'
+  name: string;                          // Display name
+  description: string;                   // For admin UI
+  status: 'live' | 'draft' | 'archived';
+
+  capabilities: StoryGeneratorCapabilities;
+  apiEndpoint: string;                   // e.g., '/api/storyWizard', '/api/gemini3'
+  styling: StoryGeneratorStyling;
+
+  // Background music (optional)
+  backgroundMusic?: {
+    audioUrl: string;
+  };
+
+  // Metadata
+  createdAt?: any;
+  updatedAt?: any;
+};
+
+/**
+ * Standard response format for all story generators.
+ * All generator APIs must return this shape.
+ */
+export type StoryGeneratorResponseOption = {
+  id: string;
+  text: string;                          // With $$placeholders$$
+  textResolved?: string;                 // Resolved for display
+  introducesCharacter?: boolean;
+  newCharacterName?: string;
+  newCharacterLabel?: string;
+  newCharacterType?: string;
+  existingCharacterId?: string;
+};
+
+export type StoryGeneratorResponse = {
+  ok: boolean;
+  sessionId: string;
+
+  // Content
+  question: string;                      // With $$placeholders$$
+  questionResolved?: string;             // Resolved for display
+  options: StoryGeneratorResponseOption[];
+
+  // State
+  isStoryComplete?: boolean;
+  finalStory?: string;                   // With $$placeholders$$
+  finalStoryResolved?: string;           // Resolved for display
+
+  // Debug/Error
+  debug?: Record<string, any>;
+  errorMessage?: string;
+};

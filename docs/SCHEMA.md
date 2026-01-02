@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-02 (removed deprecated fields from ChildProfile, Character, StorySession, ChatMessage)
+> **Last Updated**: 2026-01-02 (added storyGenerators collection for StoryBrowser)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -387,6 +387,37 @@ Story format types (Adventure, Mystery, etc.).
 | `updatedAt` | timestamp | No | Last update time |
 
 **Security**: Read/write by writers and admins.
+
+---
+
+### `storyGenerators`
+
+Story generator configurations. Defines capabilities and API endpoints for each story generation mode (wizard, gemini3, gemini4, beat). The `StoryBrowser` component uses these documents to adapt its UI to each generator's capabilities.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Document ID (e.g., 'wizard', 'gemini3', 'gemini4', 'beat') |
+| `name` | string | Yes | Display name (e.g., 'Story Wizard') |
+| `description` | string | Yes | Description for admin UI |
+| `status` | 'live' \| 'draft' \| 'archived' | Yes | Generator status |
+| `capabilities.minChoices` | number | Yes | Minimum choices per question |
+| `capabilities.maxChoices` | number | Yes | Maximum choices per question |
+| `capabilities.supportsMoreOptions` | boolean | Yes | Can request additional choices |
+| `capabilities.supportsCharacterIntroduction` | boolean | Yes | Can introduce new characters |
+| `capabilities.supportsFinalStory` | boolean | Yes | Generates final compiled story |
+| `capabilities.requiresStoryType` | boolean | Yes | Needs story type selection first |
+| `apiEndpoint` | string | Yes | API route path (e.g., '/api/storyWizard') |
+| `styling.gradient` | string | Yes | Tailwind gradient classes |
+| `styling.darkGradient` | string | No | Dark mode gradient classes |
+| `styling.icon` | string | No | Lucide icon name or URL |
+| `styling.loadingMessage` | string | Yes | Message shown during generation |
+| `backgroundMusic.audioUrl` | string | No | Background music URL |
+| `createdAt` | timestamp | No | Creation time |
+| `updatedAt` | timestamp | No | Last update time |
+
+**Standard API Response Format**: All generators must return `StoryGeneratorResponse` (see `src/lib/types.ts`).
+
+**Security**: Read by all authenticated users; write by admins only.
 
 ---
 
