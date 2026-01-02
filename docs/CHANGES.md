@@ -18,7 +18,7 @@
 
 ### 2026-01-02
 
-#### `pending` - Schema cleanup: Remove deprecated fields
+#### `63fc311` - Schema cleanup: Remove deprecated fields
 
 **Type**: Cleanup
 
