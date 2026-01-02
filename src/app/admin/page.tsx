@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LoaderCircle, PenTool, Database, FlaskConical, Settings, Users, BookOpen, Palette, Printer, Bug, Trash2, MessageSquare, Sparkles, Plus, Edit, ExternalLink, ShieldCheck, Upload, Mail } from 'lucide-react';
+import { LoaderCircle, PenTool, Database, FlaskConical, Settings, Users, BookOpen, Palette, Printer, Bug, Trash2, MessageSquare, Sparkles, Plus, Edit, ExternalLink, ShieldCheck, Upload, Mail, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useDiagnostics } from '@/hooks/use-diagnostics';
 import { Switch } from '@/components/ui/switch';
@@ -403,15 +403,16 @@ export default function AdminDashboardPage() {
               </div>
               <div>
                 <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" /> Kids PWA
+                  <Sparkles className="h-4 w-4" /> Story Generators
                 </h4>
                 <div className="flex flex-wrap gap-2">
                   <Button asChild variant="outline" size="sm">
                     <Link href="/admin/kids-flows">Story Flow Selection</Link>
                   </Button>
+                  <SeedStoryGeneratorsButton />
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Configure which story generation flows are available in the Kids PWA.
+                  Configure story generation flows and seed generator configurations.
                 </p>
               </div>
               <div>
@@ -1394,5 +1395,68 @@ function StoryOutputsPanel() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// Seed Story Generators Button
+function SeedStoryGeneratorsButton() {
+  const { user } = useUser();
+  const { toast } = useToast();
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  const handleSeed = async () => {
+    if (!user) {
+      toast({ title: 'Error', description: 'You must be signed in', variant: 'destructive' });
+      return;
+    }
+
+    setIsSeeding(true);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch('/api/admin/story-generators/seed', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const result = await response.json();
+
+      if (result.ok) {
+        toast({
+          title: 'Story Generators Seeded',
+          description: result.message,
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: result.errorMessage || 'Failed to seed generators',
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to seed generators',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSeeding(false);
+    }
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleSeed}
+      disabled={isSeeding}
+    >
+      {isSeeding ? (
+        <><LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> Seeding...</>
+      ) : (
+        <><Wand2 className="mr-2 h-4 w-4" /> Seed Generators</>
+      )}
+    </Button>
   );
 }
