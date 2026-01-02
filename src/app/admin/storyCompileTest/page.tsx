@@ -21,7 +21,8 @@ type StoryCompileApiResponse = {
     ok: boolean;
     sessionId?: string;
     errorMessage?: string;
-    storyText?: string;
+    storyText?: string;         // Resolved text with names
+    rawStoryText?: string;      // Text with $$id$$ placeholders
     synopsis?: string;
     metadata?: {
         paragraphs?: number;
@@ -156,13 +157,23 @@ export default function AdminStoryCompileTestPage() {
                 {lastResponse?.ok && lastResponse.storyText && (
                     <CardContent className="space-y-4">
                         <div>
-                            <h3 className="font-semibold">Compiled Story Text</h3>
+                            <h3 className="font-semibold">Resolved Story Text <Badge variant="outline" className="ml-2">names shown</Badge></h3>
                             <Textarea
                                 readOnly
                                 value={lastResponse.storyText}
                                 className="h-64 mt-2 font-mono text-sm bg-muted"
                             />
                         </div>
+                        {lastResponse.rawStoryText && (
+                            <div>
+                                <h3 className="font-semibold">Raw Story Text <Badge variant="outline" className="ml-2">$$id$$ placeholders</Badge></h3>
+                                <Textarea
+                                    readOnly
+                                    value={lastResponse.rawStoryText}
+                                    className="h-64 mt-2 font-mono text-sm bg-muted"
+                                />
+                            </div>
+                        )}
                         {lastResponse.synopsis && (
                             <div>
                                 <h3 className="font-semibold">Synopsis</h3>

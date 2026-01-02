@@ -19,7 +19,8 @@ import type { Story, StoryOutputType as StoryOutputTypeT } from '@/lib/types';
 
 type PaginationFlowPage = {
     pageNumber: number;
-    bodyText: string;
+    bodyText: string;          // Text with $$id$$ placeholders
+    displayText?: string;      // Resolved text with names
     entityIds: string[];
     imageDescription?: string;
 };
@@ -256,8 +257,27 @@ export default function AdminPaginationTestPage() {
                                             </span>
                                         )}
                                     </div>
-                                    <div className="text-sm bg-muted p-3 rounded">
-                                        {page.bodyText}
+                                    <div className="space-y-2">
+                                        <div>
+                                            <div className="text-xs text-muted-foreground mb-1 flex items-center gap-2">
+                                                <span className="font-medium">Resolved Text</span>
+                                                <Badge variant="outline" className="text-[10px]">names shown</Badge>
+                                            </div>
+                                            <div className="text-sm bg-muted p-3 rounded">
+                                                {page.displayText || page.bodyText}
+                                            </div>
+                                        </div>
+                                        {page.displayText && page.bodyText !== page.displayText && (
+                                            <div>
+                                                <div className="text-xs text-muted-foreground mb-1 flex items-center gap-2">
+                                                    <span className="font-medium">Raw Text</span>
+                                                    <Badge variant="outline" className="text-[10px]">$$id$$ placeholders</Badge>
+                                                </div>
+                                                <div className="text-sm bg-muted/50 p-3 rounded font-mono text-xs">
+                                                    {page.bodyText}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                     {page.imageDescription && (
                                         <div className="text-xs text-muted-foreground">

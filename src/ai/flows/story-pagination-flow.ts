@@ -26,6 +26,7 @@ import {
     buildPageCountInstruction,
     type ResolvedPageConstraints,
 } from '@/lib/print-constraints';
+import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
 
 // Schema for the AI's paginated output
 // Note: We use permissive string validation here to avoid schema errors.
@@ -328,15 +329,21 @@ Generate the paginated output now.`;
             debug.details.filteredOutPages = pages.length - validPages.length;
             debug.stage = 'done';
 
+            // Resolve placeholders for displayText
+            const pagesWithDisplayText = await Promise.all(
+                validPages.map(async (page: { pageNumber: number; text: string; actors: string[]; imageDescription?: string }) => ({
+                    pageNumber: page.pageNumber,
+                    bodyText: page.text, // Raw text with $$id$$ placeholders
+                    displayText: await replacePlaceholdersWithDescriptions(page.text), // Resolved text with names
+                    entityIds: page.actors,
+                    imageDescription: page.imageDescription || undefined,
+                }))
+            );
+
             return {
                 ok: true,
                 storyId,
-                pages: validPages.map((page: { pageNumber: number; text: string; actors: string[]; imageDescription?: string }) => ({
-                    pageNumber: page.pageNumber,
-                    bodyText: page.text,
-                    entityIds: page.actors,
-                    imageDescription: page.imageDescription || undefined,
-                })),
+                pages: pagesWithDisplayText,
                 stats: {
                     pageCount: validPages.length,
                     targetPageCount,

@@ -199,6 +199,7 @@ export const storyCompileFlow = ai.defineFlow(
                     ok: true,
                     sessionId,
                     storyText: resolvedStoryText,
+                    rawStoryText: geminiFinalStory, // Text with $$id$$ placeholders
                     synopsis,
                     metadata: { paragraphs: paragraphCount },
                     storyId: storyRef.id,
@@ -240,17 +241,18 @@ export const storyCompileFlow = ai.defineFlow(
                 throw new Error(textCompileResult.errorMessage || 'storyTextCompileFlow failed');
             }
 
-            const storyText = textCompileResult.storyText;
+            const rawStoryText = textCompileResult.storyText; // Text with $$id$$ placeholders
+            const resolvedStoryText = await replacePlaceholdersWithDescriptions(rawStoryText);
             const synopsis = textCompileResult.synopsis || 'A magical adventure story.';
             const finalActorIds = textCompileResult.actors || [childId];
 
             debug.stage = 'ai_generate_result';
-            debug.details.storyTextLength = storyText?.length;
+            debug.details.storyTextLength = resolvedStoryText?.length;
             debug.details.synopsisLength = synopsis?.length;
             debug.details.finalActorIds = finalActorIds;
 
             // Calculate paragraph count
-            const paragraphCount = storyText.split(/\n\n+/).filter((p: string) => p.trim()).length;
+            const paragraphCount = resolvedStoryText.split(/\n\n+/).filter((p: string) => p.trim()).length;
             const metadata = { paragraphs: paragraphCount };
 
             // --- Phase State Correction ---
@@ -277,7 +279,7 @@ export const storyCompileFlow = ai.defineFlow(
                 storySessionId: sessionId,
                 childId,
                 parentUid,
-                storyText,
+                storyText: resolvedStoryText,
                 synopsis, // Generated alongside story text
                 metadata: {
                     ...(metadata || {}),
@@ -310,14 +312,15 @@ export const storyCompileFlow = ai.defineFlow(
                     storyTypeId,
                     storyOutputTypeId,
                     storyId: storyRef.id,
-                    storyLength: storyText.length,
+                    storyLength: resolvedStoryText.length,
                 },
             });
 
             return {
                 ok: true,
                 sessionId,
-                storyText,
+                storyText: resolvedStoryText,
+                rawStoryText, // Text with $$id$$ placeholders
                 synopsis,
                 metadata,
                 storyId: storyRef.id,
@@ -325,7 +328,7 @@ export const storyCompileFlow = ai.defineFlow(
                 actors: finalActorIds,
                 debug: process.env.NODE_ENV === 'development' ? {
                     ...debug,
-                    storyLength: storyText.length,
+                    storyLength: resolvedStoryText.length,
                     synopsisLength: synopsis.length,
                     paragraphs: metadata?.paragraphs,
                 } : undefined,
