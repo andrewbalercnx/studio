@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
-import { doc, collection, query, where, updateDoc, serverTimestamp, addDoc, getDoc, writeBatch, arrayUnion, orderBy, limit, getDocs } from 'firebase/firestore';
+import { doc, collection, query, where, updateDoc, serverTimestamp, addDoc, getDoc, writeBatch, arrayUnion, orderBy, limit as firestoreLimit, getDocs, increment } from 'firebase/firestore';
 import { useDocument, useCollection } from '@/lib/firestore-hooks';
 import { useToast } from '@/hooks/use-toast';
 import { useStoryTTS } from '@/hooks/use-story-tts';
@@ -490,9 +490,52 @@ export function StoryBrowser({
       return;
     }
 
+    // Increment arc step before calling API (unless in ending phase)
+    if (!isEndingPhase && sessionRef) {
+      // Get arc steps from active story type or fetch from Firestore
+      let arcSteps = activeStoryType?.arcTemplate?.steps;
+      if (!arcSteps && session.storyTypeId) {
+        const storyTypeRef = doc(firestore, 'storyTypes', session.storyTypeId);
+        const storyTypeDoc = await getDoc(storyTypeRef);
+        if (storyTypeDoc.exists()) {
+          const storyType = storyTypeDoc.data() as StoryType;
+          arcSteps = storyType.arcTemplate?.steps;
+        }
+      }
+
+      const stepsArray = arcSteps ?? [];
+      const totalSteps = stepsArray.length;
+      const currentIndex = session.arcStepIndex ?? 0;
+      let nextIndex = currentIndex + 1;
+      const maxIndex = totalSteps > 0 ? totalSteps - 1 : 0;
+      let reachedEnd = false;
+
+      if (totalSteps > 0) {
+        if (nextIndex > maxIndex) {
+          reachedEnd = true;
+          nextIndex = maxIndex;
+        }
+      } else {
+        // No arc steps defined, treat as reached end
+        reachedEnd = true;
+      }
+
+      // Update session with new arc step index
+      await updateDoc(sessionRef, {
+        arcStepIndex: nextIndex,
+        updatedAt: serverTimestamp(),
+      });
+
+      // If we've reached the end of the arc, transition to ending phase
+      if (reachedEnd) {
+        setIsEndingPhase(true);
+        console.log('[StoryBrowser] Arc completed, entering ending phase');
+      }
+    }
+
     // Call API with selected option
     await callGeneratorAPI(option.id, option.text);
-  }, [generator, firestore, user, session, sessionId, isEndingPhase, activeStoryType, childProfile, callGeneratorAPI, toast]);
+  }, [generator, firestore, user, session, sessionId, sessionRef, isEndingPhase, activeStoryType, childProfile, callGeneratorAPI, toast]);
 
   // ---------------------------------------------------------------------------
   // Continue after character introduction
@@ -776,15 +819,40 @@ export function StoryBrowser({
           generatorId,
           browserState,
           isEndingPhase,
+          errorMessage: errorMessage || undefined,
+          // Generator info
+          generator: generator ? {
+            name: generator.name,
+            apiEndpoint: generator.apiEndpoint,
+            requiresStoryType: generator.capabilities?.requiresStoryType,
+            supportsCharacterIntroduction: generator.capabilities?.supportsCharacterIntroduction,
+          } : null,
+          generatorLoading,
+          // Session info
+          session: session ? {
+            storyTypeId: session.storyTypeId || null,
+            arcStepIndex: session.arcStepIndex ?? 0,
+            currentPhase: session.currentPhase || null,
+            storyMode: session.storyMode || null,
+          } : null,
+          // Story type info
+          activeStoryType: activeStoryType ? {
+            id: activeStoryType.id,
+            name: activeStoryType.name,
+            arcStepsCount: activeStoryType.arcTemplate?.steps?.length ?? 0,
+          } : null,
+          // Content state
           headerTextLength: headerText?.length || 0,
           currentQuestionLength: currentQuestion?.length || 0,
           optionsCount: currentOptions.length,
+          // Audio state
           audio: {
             isSpeechModeEnabled,
             isSpeaking,
             isTTSLoading,
             backgroundMusicPlaying: backgroundMusic.isPlaying,
           },
+          // API debug info
           debug: debugInfo,
         }}
       />
