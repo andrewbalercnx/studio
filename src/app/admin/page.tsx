@@ -574,7 +574,10 @@ export default function AdminDashboardPage() {
     <div className="container mx-auto p-4 sm:p-6 md:p-8">
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Admin Dashboard</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            Admin Dashboard
+            <span className="text-xs font-mono text-muted-foreground">v2025.01.02a</span>
+          </CardTitle>
           <CardDescription>
             Administrative tools and configuration for Story Guide
           </CardDescription>
