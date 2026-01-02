@@ -467,8 +467,17 @@ Art style configurations for image generation.
 | `stylePrompt` | string | Yes | Image generation prompt |
 | `sampleDescription` | string | Yes | Sample image description |
 | `sampleImageUrl` | string | No | Sample image URL |
+| `exampleImages` | array | No | Example images for AI style reference |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
+
+**exampleImages array item structure:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | UUID for deletion |
+| `url` | string | Firebase Storage URL |
+| `storagePath` | string | Storage path for deletion |
+| `uploadedAt` | timestamp | Upload time |
 
 **Security**: Admin only for writes; authenticated users can read.
 

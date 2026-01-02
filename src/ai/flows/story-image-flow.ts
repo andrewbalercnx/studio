@@ -5,7 +5,7 @@ import {ai} from '@/ai/genkit';
 import {initFirebaseAdminApp} from '@/firebase/admin/app';
 import {getFirestore, FieldValue} from 'firebase-admin/firestore';
 import {getStoryBucket, deleteStorageObject} from '@/firebase/admin/storage';
-import type {ChildProfile, Story, StoryOutputPage, Character} from '@/lib/types';
+import type {ChildProfile, Story, StoryOutputPage, Character, ImageStyle} from '@/lib/types';
 import {randomUUID} from 'crypto';
 import {z} from 'genkit';
 import imageSize from 'image-size';
@@ -38,6 +38,7 @@ const StoryImageFlowInput = z.object({
   targetWidthPx: z.any().optional(),
   targetHeightPx: z.any().optional(),
   imageStylePrompt: z.string().optional(),   // Art style prompt (from StoryBookOutput)
+  imageStyleId: z.string().optional(),       // ID to load example images from imageStyles collection
   // Aspect ratio for the generated image (e.g., "3:4", "4:3", "1:1", "4:5")
   // Gemini 2.5 Flash Image supports: 21:9, 16:9, 4:3, 3:2, 1:1, 9:16, 3:4, 2:3, 5:4, 4:5
   aspectRatio: z.string().optional(),
@@ -676,6 +677,7 @@ type CreateImageParams = {
   childAge?: string;           // Age of the main child (e.g., "3 years old")
   mainChildId?: string;        // ID of the main child
   referencePhotos: string[];   // URLs of reference photos
+  styleExampleImages?: string[]; // URLs of example images for art style reference
   targetWidthPx?: number;
   targetHeightPx?: number;
   aspectRatio?: string;
@@ -689,6 +691,7 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     childAge,
     mainChildId,
     referencePhotos,
+    styleExampleImages,
     targetWidthPx,
     targetHeightPx,
     aspectRatio,
@@ -697,6 +700,16 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
   if (MOCK_IMAGES) {
     return buildMockSvg(sceneText, targetWidthPx, targetHeightPx);
   }
+
+  // Fetch style example images first (these go before reference photos)
+  const styleExampleParts = styleExampleImages && styleExampleImages.length > 0
+    ? (await Promise.all(
+        styleExampleImages.map(async (url) => {
+          const dataUri = await fetchImageAsDataUri(url);
+          return dataUri ? { media: { url: dataUri } } : null;
+        })
+      )).filter((part): part is { media: { url: string } } => part !== null)
+    : [];
 
   const imageParts = (await Promise.all(
     referencePhotos.map(async (url) => {
@@ -722,15 +735,19 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     structuredPrompt += `Create an image for a child's storybook.\n\n`;
   }
 
-  // 2. Art style
-  structuredPrompt += `Art Style: ${artStyle}\n\n`;
+  // 2. Art style (with reference to example images if provided)
+  if (styleExampleParts.length > 0) {
+    structuredPrompt += `Art Style: ${artStyle}\n\nIMPORTANT: Use the first ${styleExampleParts.length} image(s) provided as visual style reference. Match their artistic style, color palette, line weight, and overall aesthetic closely.\n\n`;
+  } else {
+    structuredPrompt += `Art Style: ${artStyle}\n\n`;
+  }
 
   // 3. Scene description with $$Id$$ placeholders intact
   structuredPrompt += `Scene: ${sceneText}\n\n`;
 
   // 4. Structured actor data
   if (actorsJson && actorsJson.length > 0) {
-    structuredPrompt += `Characters in this scene (use the images provided for visual reference):\n${actorsJson}\n`;
+    structuredPrompt += `Characters in this scene (use the character reference images for visual reference):\n${actorsJson}\n`;
   }
 
   // 5. Dimension hints
@@ -741,13 +758,16 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
   const simplifiedPromptText = `Art Style: ${artStyle}\n\nScene: ${sceneText}${dimensionHint}`.trim();  // No actor details
   const minimalPromptText = `Art Style: ${artStyle}\n\nScene: ${sceneText}`.trim();  // Bare minimum
 
+  // Style examples go first, then character reference photos, then text
   const fullPromptParts: any[] = [
+    ...styleExampleParts,
     ...imageParts,
     { text: fullPromptText },
   ];
 
+  // Simplified still includes style examples for consistency
   const simplifiedPromptParts: any[] = [
-    // Retry without reference photos which might cause issues
+    ...styleExampleParts,
     { text: simplifiedPromptText },
   ];
 
@@ -756,7 +776,7 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
   ];
 
   console.log('[story-image-flow] Generating image with model:', DEFAULT_IMAGE_MODEL);
-  console.log('[story-image-flow] Prompt parts count:', fullPromptParts.length, 'Image parts:', imageParts.length);
+  console.log('[story-image-flow] Prompt parts count:', fullPromptParts.length, 'Style examples:', styleExampleParts.length, 'Character refs:', imageParts.length);
   if (actorsJson) {
     console.log('[story-image-flow] Actors JSON length:', actorsJson.length);
   }
@@ -916,8 +936,8 @@ export const storyImageFlow = ai.defineFlow(
     inputSchema: StoryImageFlowInput,
     outputSchema: StoryImageFlowOutput,
   },
-  async ({storyId, pageId, regressionTag, forceRegenerate, storybookId, targetWidthPx, targetHeightPx, imageStylePrompt, aspectRatio}) => {
-    console.log(`[storyImageFlow] Called with storyId=${storyId}, pageId=${pageId}, storybookId=${storybookId || 'undefined'}, aspectRatio=${aspectRatio || 'auto'}`);
+  async ({storyId, pageId, regressionTag, forceRegenerate, storybookId, targetWidthPx, targetHeightPx, imageStylePrompt, imageStyleId, aspectRatio}) => {
+    console.log(`[storyImageFlow] Called with storyId=${storyId}, pageId=${pageId}, storybookId=${storybookId || 'undefined'}, imageStyleId=${imageStyleId || 'undefined'}, aspectRatio=${aspectRatio || 'auto'}`);
     const logs: string[] = [];
     await initFirebaseAdminApp();
     const firestore = getFirestore();
@@ -1026,6 +1046,25 @@ export const storyImageFlow = ai.defineFlow(
           ?? storyData.metadata?.artStyleHint
           ?? "a gentle, vibrant watercolor style";
 
+        // Load example images from imageStyles collection if imageStyleId is provided
+        let styleExampleImages: string[] = [];
+        if (imageStyleId) {
+          try {
+            const styleSnap = await firestore.collection('imageStyles').doc(imageStyleId).get();
+            if (styleSnap.exists) {
+              const styleData = styleSnap.data() as ImageStyle;
+              if (styleData.exampleImages && styleData.exampleImages.length > 0) {
+                styleExampleImages = styleData.exampleImages.map(img => img.url);
+                logs.push(`[styleExamples] Loaded ${styleExampleImages.length} example images from style ${imageStyleId}`);
+              }
+            } else {
+              logs.push(`[styleExamples] Style ${imageStyleId} not found`);
+            }
+          } catch (styleError: any) {
+            logs.push(`[styleExamples] Failed to load style ${imageStyleId}: ${styleError?.message ?? styleError}`);
+          }
+        }
+
         // Log target dimensions and aspect ratio if provided
         if (targetWidthPx && targetHeightPx) {
           logs.push(`[dimensions] Target: ${targetWidthPx}x${targetHeightPx}px`);
@@ -1045,6 +1084,7 @@ export const storyImageFlow = ai.defineFlow(
           childAge,
           mainChildId: storyData.childId,
           referencePhotos,
+          styleExampleImages,
           targetWidthPx,
           targetHeightPx,
           aspectRatio,

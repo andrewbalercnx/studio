@@ -1,16 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
-import { ImageStyle } from '@/lib/types';
+import { ImageStyle, ImageStyleExampleImage } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { User } from 'firebase/auth';
 
 export default function ImageStylesAdminPage() {
     const firestore = useFirestore();
@@ -223,6 +224,7 @@ export default function ImageStylesAdminPage() {
                             style={selectedStyle}
                             onClose={() => setIsEditModalOpen(false)}
                             firestore={firestore}
+                            user={user}
                         />
                     </DialogContent>
                 </Dialog>
@@ -231,20 +233,28 @@ export default function ImageStylesAdminPage() {
     );
 }
 
-function ImageStyleEditor({ style, onClose, firestore }: { style: ImageStyle; onClose: () => void; firestore: any }) {
+const MAX_EXAMPLE_IMAGES = 5;
+
+function ImageStyleEditor({ style, onClose, firestore, user }: { style: ImageStyle; onClose: () => void; firestore: any; user: User | null }) {
     const [formData, setFormData] = useState(style);
     const [isSaving, setIsSaving] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const [urlInput, setUrlInput] = useState('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const exampleImages = formData.exampleImages ?? [];
+    const canAddMore = exampleImages.length < MAX_EXAMPLE_IMAGES;
 
     const handleSave = async () => {
         if (!firestore) return;
 
         setIsSaving(true);
         try {
-            const { id, createdAt, updatedAt, ...data } = formData;
+            const { id, createdAt, updatedAt, exampleImages: _, ...data } = formData;
             const now = new Date();
 
             if (id) {
-                // Update existing
+                // Update existing (don't update exampleImages - managed separately)
                 await import('firebase/firestore').then(({ doc, updateDoc }) =>
                     updateDoc(doc(firestore, 'imageStyles', id), {
                         ...data,
@@ -271,8 +281,123 @@ function ImageStyleEditor({ style, onClose, firestore }: { style: ImageStyle; on
         }
     };
 
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !user || !style.id) return;
+
+        setIsUploading(true);
+        try {
+            // Convert file to data URL
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+
+            const token = await user.getIdToken();
+            const response = await fetch('/api/imageStyles/uploadExampleImage', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    imageStyleId: style.id,
+                    dataUrl,
+                }),
+            });
+
+            const result = await response.json();
+            if (result.ok) {
+                // Update local state with new image
+                setFormData({
+                    ...formData,
+                    exampleImages: [...exampleImages, result.exampleImage],
+                });
+            } else {
+                alert(`Error: ${result.errorMessage}`);
+            }
+        } catch (error: any) {
+            alert(`Error uploading: ${error.message}`);
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    };
+
+    const handleUrlUpload = async () => {
+        if (!urlInput.trim() || !user || !style.id) return;
+
+        setIsUploading(true);
+        try {
+            const token = await user.getIdToken();
+            const response = await fetch('/api/imageStyles/uploadExampleImage', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    imageStyleId: style.id,
+                    sourceUrl: urlInput.trim(),
+                }),
+            });
+
+            const result = await response.json();
+            if (result.ok) {
+                setFormData({
+                    ...formData,
+                    exampleImages: [...exampleImages, result.exampleImage],
+                });
+                setUrlInput('');
+            } else {
+                alert(`Error: ${result.errorMessage}`);
+            }
+        } catch (error: any) {
+            alert(`Error uploading: ${error.message}`);
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleDeleteImage = async (imageId: string) => {
+        if (!user || !style.id) return;
+
+        if (!confirm('Delete this example image?')) return;
+
+        try {
+            const token = await user.getIdToken();
+            const response = await fetch('/api/imageStyles/deleteExampleImage', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    imageStyleId: style.id,
+                    exampleImageId: imageId,
+                }),
+            });
+
+            const result = await response.json();
+            if (result.ok) {
+                setFormData({
+                    ...formData,
+                    exampleImages: exampleImages.filter((img) => img.id !== imageId),
+                });
+            } else {
+                alert(`Error: ${result.errorMessage}`);
+            }
+        } catch (error: any) {
+            alert(`Error deleting: ${error.message}`);
+        }
+    };
+
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
             <div>
                 <Label htmlFor="title">Title</Label>
                 <Input
@@ -355,7 +480,98 @@ function ImageStyleEditor({ style, onClose, firestore }: { style: ImageStyle; on
                 />
             </div>
 
-            <div className="flex justify-end gap-2 pt-4">
+            {/* Example Images Section - only show for existing styles */}
+            {style.id && (
+                <div className="border-t pt-4">
+                    <Label className="text-base font-semibold">Example Images for AI Reference</Label>
+                    <p className="text-sm text-muted-foreground mb-3">
+                        Upload up to {MAX_EXAMPLE_IMAGES} example images. These will be used as visual references by the AI when generating story illustrations.
+                    </p>
+
+                    {/* Existing images */}
+                    {exampleImages.length > 0 && (
+                        <div className="grid grid-cols-5 gap-2 mb-4">
+                            {exampleImages.map((img) => (
+                                <div key={img.id} className="relative group">
+                                    <img
+                                        src={img.url}
+                                        alt="Example"
+                                        className="w-full h-20 object-cover rounded border"
+                                    />
+                                    <button
+                                        onClick={() => handleDeleteImage(img.id)}
+                                        className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-5 h-5 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Delete"
+                                    >
+                                        X
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Upload controls */}
+                    {canAddMore && (
+                        <div className="space-y-3">
+                            <div className="flex gap-2">
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleFileUpload}
+                                    disabled={isUploading}
+                                    className="hidden"
+                                    id="example-image-upload"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={isUploading}
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    {isUploading ? 'Uploading...' : 'Upload File'}
+                                </Button>
+                            </div>
+                            <div className="flex gap-2">
+                                <Input
+                                    value={urlInput}
+                                    onChange={(e) => setUrlInput(e.target.value)}
+                                    placeholder="Or paste image URL..."
+                                    disabled={isUploading}
+                                    className="flex-1"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={isUploading || !urlInput.trim()}
+                                    onClick={handleUrlUpload}
+                                >
+                                    Add URL
+                                </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                {exampleImages.length} of {MAX_EXAMPLE_IMAGES} images used
+                            </p>
+                        </div>
+                    )}
+
+                    {!canAddMore && (
+                        <p className="text-sm text-muted-foreground">
+                            Maximum of {MAX_EXAMPLE_IMAGES} example images reached. Delete one to add more.
+                        </p>
+                    )}
+                </div>
+            )}
+
+            {!style.id && (
+                <p className="text-sm text-muted-foreground italic">
+                    Save this style first to add example images.
+                </p>
+            )}
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
                 <Button variant="outline" onClick={onClose}>
                     Cancel
                 </Button>

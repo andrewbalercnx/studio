@@ -258,6 +258,7 @@ export async function POST(request: Request) {
           forceRegenerate,
           storybookId,
           imageStylePrompt: imageStylePrompt || storybookData?.imageStylePrompt || undefined,
+          imageStyleId: storybookData?.imageStyleId || undefined,
           aspectRatio: pageAspectRatio,
           targetWidthPx: pageTargetWidthPx,
           targetHeightPx: pageTargetHeightPx,

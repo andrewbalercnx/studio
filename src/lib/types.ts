@@ -1444,6 +1444,13 @@ export type PrintLayout = {
   }>;
 };
 
+export type ImageStyleExampleImage = {
+  id: string;           // UUID for deletion
+  url: string;          // Firebase Storage URL
+  storagePath: string;  // Path for deletion
+  uploadedAt: any;      // Timestamp
+};
+
 export type ImageStyle = {
   id: string;
   title: string;
@@ -1454,6 +1461,7 @@ export type ImageStyle = {
   stylePrompt: string;
   sampleDescription: string;
   sampleImageUrl?: string | null;
+  exampleImages?: ImageStyleExampleImage[]; // Reference images for AI generation
   createdAt: any;
   updatedAt: any;
 };

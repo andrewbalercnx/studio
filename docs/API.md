@@ -1649,6 +1649,73 @@ Generate sample image for style.
 
 ---
 
+### POST `/api/imageStyles/uploadExampleImage`
+
+Upload an example image for AI style reference. Accepts either a base64 data URL or a source URL to fetch.
+
+**Authentication**: Admin only
+
+**Request Body**:
+```json
+{
+  "imageStyleId": "style-id",
+  "dataUrl": "data:image/png;base64,..." // OR
+  "sourceUrl": "https://example.com/image.jpg"
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "exampleImage": {
+    "id": "uuid",
+    "url": "https://firebasestorage.googleapis.com/...",
+    "storagePath": "imageStyles/style-id/examples/uuid.png",
+    "uploadedAt": "2024-01-01T00:00:00.000Z"
+  },
+  "totalImages": 3
+}
+```
+
+**Errors**:
+- `400` - Missing imageStyleId, invalid image, or max 5 images reached
+- `403` - Admin access required
+- `404` - Image style not found
+- `413` - Image exceeds 8MB limit
+
+---
+
+### POST `/api/imageStyles/deleteExampleImage`
+
+Delete an example image from a style.
+
+**Authentication**: Admin only
+
+**Request Body**:
+```json
+{
+  "imageStyleId": "style-id",
+  "exampleImageId": "uuid"
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "deletedImageId": "uuid",
+  "remainingImages": 2
+}
+```
+
+**Errors**:
+- `400` - Missing parameters
+- `403` - Admin access required
+- `404` - Image style or example image not found
+
+---
+
 ## User Routes
 
 ### GET `/api/user/shipping-address`

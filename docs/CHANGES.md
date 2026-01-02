@@ -16,6 +16,36 @@
 
 ## Changes
 
+### 2026-01-02
+
+#### `pending` - Add example images to ImageStyle for AI reference
+
+**Type**: Feature
+
+**Summary**: Added the ability to upload example images to ImageStyles that are passed to the AI image generation model as visual references. This improves consistency of generated images by giving the AI concrete examples of the desired art style.
+
+**Changes**:
+- Added `exampleImages` array field to ImageStyle type with id, url, storagePath, uploadedAt
+- Created POST `/api/imageStyles/uploadExampleImage` - upload via file or URL
+- Created POST `/api/imageStyles/deleteExampleImage` - remove example images
+- Updated admin image-styles page with example images management UI
+- Updated story-image-flow to load and pass example images to Gemini
+- Example images appear before character photos in the prompt
+- Prompt instructs AI to match style, color palette, and aesthetic
+- Gracefully handles styles without example images (empty array)
+
+**Files Modified**:
+- `src/lib/types.ts` - Added ImageStyleExampleImage type
+- `src/app/api/imageStyles/uploadExampleImage/route.ts` - New
+- `src/app/api/imageStyles/deleteExampleImage/route.ts` - New
+- `src/app/admin/image-styles/page.tsx` - Added example images UI
+- `src/ai/flows/story-image-flow.ts` - Load and use example images
+- `src/app/api/storybookV2/images/route.ts` - Pass imageStyleId to flow
+- `docs/SCHEMA.md` - Updated imageStyles schema
+- `docs/API.md` - Documented new endpoints
+
+---
+
 ### 2026-01-01
 
 #### `3a2131e` - Add blankPages and spine fields to PrintProduct
