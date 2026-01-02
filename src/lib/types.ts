@@ -1516,3 +1516,94 @@ export const DEFAULT_KIDS_FLOW_CONFIG: KidsFlowConfig = {
   gemini3Enabled: true,
   gemini4Enabled: true,
 };
+
+// Email template type keys - corresponds to the different email types
+export type EmailTemplateType =
+  | 'orderSubmitted'
+  | 'orderStatusChanged'
+  | 'orderApproved'
+  | 'orderRejected'
+  | 'orderCancelled'
+  | 'testEmail';
+
+// Individual email template configuration
+export type EmailTemplate = {
+  enabled: boolean;        // Whether this email type is active
+  subject: string;         // Subject line (can include {{orderId}}, {{status}} placeholders)
+  heading: string;         // Main heading in the email body
+  bodyText: string;        // Intro paragraph text
+  buttonText: string;      // Call-to-action button text
+  buttonUrl?: string;      // Optional custom button URL (defaults to admin order page)
+};
+
+// Email configuration stored in systemConfig/email
+export type EmailConfig = {
+  // Sender settings
+  senderEmail: string;     // The 'from' email address (must be valid in M365 tenant)
+  senderName?: string;     // Optional display name for sender
+
+  // Branding
+  footerText: string;      // Footer text shown at bottom of all emails
+  brandColor?: string;     // Primary button/accent color (hex, e.g., '#2563eb')
+
+  // Per-template configuration
+  templates: {
+    [key in EmailTemplateType]: EmailTemplate;
+  };
+
+  // Metadata
+  updatedAt?: any;
+  updatedBy?: string;
+};
+
+// Default email configuration
+export const DEFAULT_EMAIL_CONFIG: EmailConfig = {
+  senderEmail: 'andrew.bale@rcnx.io',
+  senderName: 'StoryPic Kids',
+  footerText: 'This is an automated message from StoryPic Kids.',
+  brandColor: '#2563eb',
+  templates: {
+    orderSubmitted: {
+      enabled: true,
+      subject: 'New Print Order: {{orderId}}',
+      heading: 'New Print Order Submitted',
+      bodyText: 'A new print order has been submitted and requires review.',
+      buttonText: 'View Order in Admin',
+    },
+    orderStatusChanged: {
+      enabled: true,
+      subject: 'Print Order Status: {{orderId}} - {{status}}',
+      heading: 'Print Order Status Changed',
+      bodyText: 'An order status has been updated.',
+      buttonText: 'View Order in Admin',
+    },
+    orderApproved: {
+      enabled: true,
+      subject: 'Print Order Approved: {{orderId}}',
+      heading: 'Print Order Approved',
+      bodyText: 'An order has been approved and submitted to the printer.',
+      buttonText: 'View Order in Admin',
+    },
+    orderRejected: {
+      enabled: true,
+      subject: 'Print Order Rejected: {{orderId}}',
+      heading: 'Print Order Rejected',
+      bodyText: 'An order has been rejected.',
+      buttonText: 'View Order in Admin',
+    },
+    orderCancelled: {
+      enabled: true,
+      subject: 'Print Order Cancelled: {{orderId}}',
+      heading: 'Print Order Cancelled',
+      bodyText: 'An order has been cancelled.',
+      buttonText: 'View Order in Admin',
+    },
+    testEmail: {
+      enabled: true,
+      subject: 'Test Email from StoryPic Kids',
+      heading: 'Test Email',
+      bodyText: 'This is a test email to verify your email configuration is working correctly.',
+      buttonText: 'Open Admin Dashboard',
+    },
+  },
+};

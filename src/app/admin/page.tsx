@@ -414,6 +414,19 @@ export default function AdminDashboardPage() {
                   Configure which story generation flows are available in the Kids PWA.
                 </p>
               </div>
+              <div>
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <Mail className="h-4 w-4" /> Email
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/admin/email-config">Email Configuration</Link>
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Configure sender address, branding, and email templates for notifications.
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { sendEmail } from '@/lib/email/send-email';
+import { testEmailTemplate } from '@/lib/email/templates';
 
 /**
  * POST /api/admin/test-email
@@ -46,57 +47,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const timestamp = new Date().toLocaleString('en-GB', {
-      timeZone: 'Europe/London',
-      dateStyle: 'full',
-      timeStyle: 'long'
-    });
+    // Get the test email template (uses configurable content from Firestore)
+    const email = await testEmailTemplate(recipientEmail);
 
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    h2 { color: #1a1a1a; margin-bottom: 16px; }
-    .success-box { background: #d1fae5; border-radius: 8px; padding: 16px; margin: 16px 0; border-left: 4px solid #10b981; }
-    .details { background: #f9fafb; border-radius: 8px; padding: 16px; margin: 16px 0; }
-    .details p { margin: 8px 0; font-size: 14px; }
-    .label { color: #666; }
-    .value { font-weight: 500; font-family: monospace; }
-    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h2>Test Email from StoryPic Kids</h2>
-
-    <div class="success-box">
-      <strong>Email is working correctly!</strong>
-      <p>Your Microsoft Graph configuration is valid and emails can be sent successfully.</p>
-    </div>
-
-    <div class="details">
-      <p><span class="label">Sent at:</span> <span class="value">${timestamp}</span></p>
-      <p><span class="label">Sent by:</span> <span class="value">${user.email}</span></p>
-      <p><span class="label">Method:</span> <span class="value">Microsoft Graph API</span></p>
-    </div>
-
-    <div class="footer">
-      <p>This is a test email from the StoryPic Kids admin panel.</p>
-    </div>
-  </div>
-</body>
-</html>
-`;
+    if (!email) {
+      return NextResponse.json(
+        { ok: false, error: 'Test email template is disabled in email configuration' },
+        { status: 400 }
+      );
+    }
 
     await sendEmail({
       to: recipientEmail,
-      subject: 'StoryPic Kids - Test Email',
-      html,
+      subject: email.subject,
+      html: email.html,
     });
 
     console.log(`[test-email] Test email sent to ${recipientEmail} by ${user.email}`);

@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-01
+> **Last Updated**: 2026-01-02
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -1049,6 +1049,8 @@ Upload an image for a story output type.
 
 Send a test email to verify Microsoft Graph configuration. Admin only.
 
+Uses the configurable test email template from `systemConfig/email`. The sender address and email content are pulled from the email configuration.
+
 **Request Body** (optional):
 ```json
 {
@@ -1067,14 +1069,9 @@ If `email` is not provided, sends to the authenticated admin's email.
 }
 ```
 
-**Error Response**: `503 Service Unavailable`
-```json
-{
-  "ok": false,
-  "error": "Microsoft Graph not configured. Set AZURE_TENANT_ID, AZURE_CLIENT_ID, and AZURE_CLIENT_SECRET environment variables.",
-  "configured": false
-}
-```
+**Error Responses**:
+- `400` - Test email template is disabled in configuration
+- `503` - Microsoft Graph not configured (missing environment variables)
 
 ---
 

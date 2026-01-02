@@ -40,11 +40,12 @@ export async function notifyOrderSubmitted(
   firestore: FirebaseFirestore.Firestore,
   order: PrintOrder
 ): Promise<void> {
-  await notifyAdmins(
-    firestore,
-    `New Print Order: ${order.id}`,
-    orderSubmittedTemplate(order)
-  );
+  const email = await orderSubmittedTemplate(order);
+  if (!email) {
+    console.log('[Email] Order submitted notification disabled, skipping');
+    return;
+  }
+  await notifyAdmins(firestore, email.subject, email.html);
 }
 
 /**
@@ -56,11 +57,12 @@ export async function notifyOrderStatusChanged(
   oldStatus: string,
   newStatus: string
 ): Promise<void> {
-  await notifyAdmins(
-    firestore,
-    `Print Order Status: ${order.id} - ${newStatus.replace(/_/g, ' ')}`,
-    orderStatusChangedTemplate(order, oldStatus, newStatus)
-  );
+  const email = await orderStatusChangedTemplate(order, oldStatus, newStatus);
+  if (!email) {
+    console.log('[Email] Order status changed notification disabled, skipping');
+    return;
+  }
+  await notifyAdmins(firestore, email.subject, email.html);
 }
 
 /**
@@ -70,11 +72,12 @@ export async function notifyOrderApproved(
   firestore: FirebaseFirestore.Firestore,
   order: PrintOrder
 ): Promise<void> {
-  await notifyAdmins(
-    firestore,
-    `Print Order Approved: ${order.id}`,
-    orderApprovedTemplate(order)
-  );
+  const email = await orderApprovedTemplate(order);
+  if (!email) {
+    console.log('[Email] Order approved notification disabled, skipping');
+    return;
+  }
+  await notifyAdmins(firestore, email.subject, email.html);
 }
 
 /**
@@ -85,11 +88,12 @@ export async function notifyOrderRejected(
   order: PrintOrder,
   reason?: string
 ): Promise<void> {
-  await notifyAdmins(
-    firestore,
-    `Print Order Rejected: ${order.id}`,
-    orderRejectedTemplate(order, reason)
-  );
+  const email = await orderRejectedTemplate(order, reason);
+  if (!email) {
+    console.log('[Email] Order rejected notification disabled, skipping');
+    return;
+  }
+  await notifyAdmins(firestore, email.subject, email.html);
 }
 
 /**
@@ -100,9 +104,10 @@ export async function notifyOrderCancelled(
   order: PrintOrder,
   reason?: string
 ): Promise<void> {
-  await notifyAdmins(
-    firestore,
-    `Print Order Cancelled: ${order.id}`,
-    orderCancelledTemplate(order, reason)
-  );
+  const email = await orderCancelledTemplate(order, reason);
+  if (!email) {
+    console.log('[Email] Order cancelled notification disabled, skipping');
+    return;
+  }
+  await notifyAdmins(firestore, email.subject, email.html);
 }

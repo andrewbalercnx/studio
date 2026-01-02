@@ -530,6 +530,29 @@ System-wide configuration documents.
 | `updatedAt` | timestamp | No | Last update time |
 | `updatedBy` | string | No | Email of last updater |
 
+#### `systemConfig/email`
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `senderEmail` | string | Yes | From email address (must be valid in M365 tenant) |
+| `senderName` | string | No | Display name for sender |
+| `footerText` | string | Yes | Footer text for all emails |
+| `brandColor` | string | No | Hex color for buttons/accents (e.g., '#2563eb') |
+| `templates` | object | Yes | Per-template configuration (see EmailTemplate) |
+| `updatedAt` | timestamp | No | Last update time |
+| `updatedBy` | string | No | Email of last updater |
+
+**EmailTemplate structure** (one per template type):
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | boolean | Yes | Whether this email type is active |
+| `subject` | string | Yes | Subject line (supports {{orderId}}, {{status}} placeholders) |
+| `heading` | string | Yes | Main heading in email body |
+| `bodyText` | string | Yes | Intro paragraph text |
+| `buttonText` | string | Yes | Call-to-action button text |
+| `buttonUrl` | string | No | Custom button URL (defaults to admin order page) |
+
+Template types: `orderSubmitted`, `orderStatusChanged`, `orderApproved`, `orderRejected`, `orderCancelled`, `testEmail`
+
 **Security**: Admin only.
 
 ---

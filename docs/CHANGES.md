@@ -18,6 +18,43 @@
 
 ### 2026-01-02
 
+#### `pending` - Add email configuration admin page
+
+**Type**: Feature
+
+**Summary**: Added a full email configuration system that allows admins to configure the sender email address and customize the content of all system emails from the admin dashboard.
+
+**Features**:
+- Configurable sender email address (stored in Firestore instead of hardcoded)
+- Customizable email templates for all notification types:
+  - Order submitted
+  - Order status changed
+  - Order approved
+  - Order rejected
+  - Order cancelled
+  - Test email
+- Per-template settings: subject, heading, body text, button text, button URL
+- Enable/disable toggle for each email type
+- Brand color picker for email buttons
+- Customizable footer text
+- 1-minute cache for email config to reduce Firestore reads
+- New admin page at `/admin/email-config` with tabbed interface
+
+**Files Created**:
+- `src/app/admin/email-config/page.tsx` - Email configuration admin page
+
+**Files Modified**:
+- `src/lib/types.ts` - Added EmailConfig, EmailTemplate, EmailTemplateType types and DEFAULT_EMAIL_CONFIG
+- `src/lib/email/send-email.ts` - Now reads sender from Firestore config with caching
+- `src/lib/email/templates.ts` - Refactored to use configurable templates from Firestore
+- `src/lib/email/notify-admins.ts` - Updated to handle async templates that may return null
+- `src/app/api/admin/test-email/route.ts` - Now uses configurable test email template
+- `src/app/admin/page.tsx` - Added link to email configuration page
+- `docs/SCHEMA.md` - Added systemConfig/email documentation
+- `docs/API.md` - Updated test-email route documentation
+
+---
+
 #### `065d663` - Add preferred flag to image styles
 
 **Type**: Feature
