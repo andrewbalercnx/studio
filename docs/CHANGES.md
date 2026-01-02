@@ -18,6 +18,40 @@
 
 ### 2026-01-02
 
+#### `bc4cd31` - Fix wizard flow placeholder resolution and story compilation
+
+**Type**: Bug Fix
+
+**Summary**: Fixed three issues with the wizard story flow: unresolved placeholders in final story, immediate redirect after completion, and missing cast avatar generation.
+
+**Changes**:
+
+1. **Placeholder Resolution in Wizard Flow**:
+   - The entity map only included characters, not the main child
+   - Added childId, mainChild, and siblings to the entity map using EntityMap type
+   - Now `$$childId$$` placeholders resolve correctly to the child's name
+
+2. **Final Story Display Duration**:
+   - Story was immediately redirecting after completion (no time to read)
+   - Added 5-second delay to show final story before auto-compile
+   - Set browserState to 'complete' to display the story first
+
+3. **Wizard Mode Story Compilation**:
+   - storyCompileFlow didn't handle wizard mode (requiresStoryType: false)
+   - Added dedicated wizard mode handler that:
+     - Loads existing story created by wizard flow
+     - Extracts actors from session (childId always included)
+     - Generates synopsis if not present
+     - Sets up actors, generation statuses (actorAvatarGeneration: pending)
+     - Returns storyId to trigger background tasks (avatar, title, audio)
+
+**Files Modified**:
+- `src/ai/flows/story-wizard-flow.ts` - Include child/siblings in entity map
+- `src/ai/flows/story-compile-flow.ts` - Add wizard mode handling
+- `src/components/story/story-browser.tsx` - Add delay before redirect
+
+---
+
 #### `08e8eab` - Fix placeholder resolution in wizard API response
 
 **Type**: Bug Fix
