@@ -18,7 +18,7 @@
 
 ### 2026-01-02
 
-#### `pending` - Add example images to ImageStyle for AI reference
+#### `ac0c581` - Add example images to ImageStyle for AI reference
 
 **Type**: Feature
 
