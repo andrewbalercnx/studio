@@ -18,6 +18,24 @@
 
 ### 2026-01-02
 
+#### `pending` - Add pronunciation test button to EntityEditor
+
+**Type**: Feature
+
+**Summary**: Parents can now test how the AI will pronounce a child's or character's name by clicking a speaker button next to the pronunciation field.
+
+**Changes**:
+- Added speaker button (Volume2 icon) next to the pronunciation input field
+- Button uses the child's preferred TTS voice if set
+- Tests pronunciation text if entered, otherwise falls back to display name
+- Shows loading spinner while generating, stop button while playing
+- Works for both children and character entities in EntityEditor
+
+**Files Modified**:
+- `src/components/shared/EntityEditor.tsx` - Added pronunciation test functionality
+
+---
+
 #### `ac0c581` - Add example images to ImageStyle for AI reference
 
 **Type**: Feature

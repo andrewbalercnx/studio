@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp, collection as firestoreCollection } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase/auth/use-user';
 import { useUploadFile } from '@/firebase/storage/use-upload-file';
-import { LoaderCircle, Sparkles, Upload, User as UserIcon, X } from 'lucide-react';
+import { LoaderCircle, Sparkles, Upload, User as UserIcon, X, Volume2, Square } from 'lucide-react';
 import Image from 'next/image';
 import type { ChildProfile, Character, Pronouns } from '@/lib/types';
 
@@ -92,6 +92,11 @@ export function EntityEditor({
   // Child-specific fields
   const [namePronunciation, setNamePronunciation] = useState<string>('');
 
+  // Pronunciation test state
+  const [isTestingPronunciation, setIsTestingPronunciation] = useState(false);
+  const [isPlayingPronunciation, setIsPlayingPronunciation] = useState(false);
+  const pronunciationAudioRef = useRef<HTMLAudioElement | null>(null);
+
   // Avatar generation state
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
   const [generatedAvatar, setGeneratedAvatar] = useState<string | null>(null);
@@ -144,6 +149,112 @@ export function EntityEditor({
       }
     }
   }, [entity, isCharacter]);
+
+  // Stop pronunciation audio playback
+  const stopPronunciationPlayback = useCallback(() => {
+    if (pronunciationAudioRef.current) {
+      pronunciationAudioRef.current.pause();
+      pronunciationAudioRef.current.currentTime = 0;
+      pronunciationAudioRef.current = null;
+    }
+    setIsPlayingPronunciation(false);
+  }, []);
+
+  // Test pronunciation with TTS
+  const handleTestPronunciation = useCallback(async () => {
+    // If already playing, stop
+    if (isPlayingPronunciation) {
+      stopPronunciationPlayback();
+      return;
+    }
+
+    // Need text to test - use pronunciation if set, otherwise displayName
+    const textToSpeak = namePronunciation.trim() || displayName.trim();
+    if (!textToSpeak) {
+      toast({
+        title: 'Nothing to test',
+        description: 'Enter a name or pronunciation first',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!user) {
+      toast({
+        title: 'Not authenticated',
+        description: 'Please sign in to test pronunciation',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsTestingPronunciation(true);
+
+    try {
+      const idToken = await user.getIdToken();
+
+      // Get the voice ID from the child entity if available
+      const voiceId = !isCharacter && entity
+        ? (entity as ChildProfile).preferredVoiceId
+        : undefined;
+
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          text: textToSpeak,
+          voiceId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.ok) {
+        throw new Error(data.errorMessage || 'Failed to generate speech');
+      }
+
+      // Create audio from base64
+      const audioBlob = new Blob(
+        [Uint8Array.from(atob(data.audioData), c => c.charCodeAt(0))],
+        { type: data.mimeType }
+      );
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      pronunciationAudioRef.current = audio;
+
+      audio.onended = () => {
+        setIsPlayingPronunciation(false);
+        URL.revokeObjectURL(audioUrl);
+        pronunciationAudioRef.current = null;
+      };
+
+      audio.onerror = () => {
+        setIsPlayingPronunciation(false);
+        URL.revokeObjectURL(audioUrl);
+        pronunciationAudioRef.current = null;
+        toast({
+          title: 'Playback error',
+          description: 'Could not play the audio',
+          variant: 'destructive',
+        });
+      };
+
+      setIsPlayingPronunciation(true);
+      await audio.play();
+    } catch (error: any) {
+      console.error('Error testing pronunciation:', error);
+      toast({
+        title: 'Test failed',
+        description: error.message || 'Could not generate speech',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsTestingPronunciation(false);
+    }
+  }, [isPlayingPronunciation, stopPronunciationPlayback, namePronunciation, displayName, user, isCharacter, entity, toast]);
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!user || !entity?.id) return;
@@ -445,12 +556,31 @@ export function EntityEditor({
       {/* Name Pronunciation for TTS - available for both children and characters */}
       <div className="space-y-2">
         <Label htmlFor="namePronunciation">Name Pronunciation (optional)</Label>
-        <Input
-          id="namePronunciation"
-          value={namePronunciation}
-          onChange={(e) => setNamePronunciation(e.target.value)}
-          placeholder="e.g., SEE-oh-ban for Siobhan"
-        />
+        <div className="flex gap-2">
+          <Input
+            id="namePronunciation"
+            value={namePronunciation}
+            onChange={(e) => setNamePronunciation(e.target.value)}
+            placeholder="e.g., SEE-oh-ban for Siobhan"
+            className="flex-1"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={handleTestPronunciation}
+            disabled={isTestingPronunciation || (!namePronunciation.trim() && !displayName.trim())}
+            title={isPlayingPronunciation ? 'Stop' : 'Test pronunciation'}
+          >
+            {isTestingPronunciation ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : isPlayingPronunciation ? (
+              <Square className="h-4 w-4" />
+            ) : (
+              <Volume2 className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
         <p className="text-xs text-muted-foreground">
           How to pronounce the name for AI voice narration. Use phonetic spelling (e.g., &quot;SEE-oh-ban&quot; for Siobhan, &quot;SHIV-on&quot; for Siobhán).
         </p>
