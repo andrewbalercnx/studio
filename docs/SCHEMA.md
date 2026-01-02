@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-01 (added printProductId, pageConstraints to printLayouts; pdfGenerationWarnings to printStoryBooks)
+> **Last Updated**: 2026-01-02 (removed deprecated fields from ChildProfile, Character, StorySession, ChatMessage)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -62,7 +62,6 @@ Child profiles owned by parents.
 | `updatedAt` | timestamp | No | Last update time |
 | `namePronunciation` | string | No | Phonetic pronunciation for TTS |
 | `preferredVoiceId` | string | No | Preferred TTS voice ID |
-| `speechModeEnabled` | boolean | No | **Deprecated**: Use `autoReadAloud` instead |
 | `autoReadAloud` | boolean | No | Enable TTS for stories (story creation & reader) |
 | `deletedAt` | timestamp | No | Soft delete timestamp |
 | `deletedBy` | string | No | UID of user who deleted |
@@ -117,9 +116,7 @@ Interactive story creation sessions.
 | `currentStepIndex` | number | Yes | Current step in flow |
 | `storyTitle` | string | No | Story title |
 | `storyVibe` | string | No | Story mood/vibe |
-| `finalStoryText` | string | No | Compiled story text |
 | `storyTypeId` | string | No | Selected story type |
-| `storyTypeName` | string | No | Story type name |
 | `arcStepIndex` | number | No | Current arc step |
 | `mainCharacterId` | string | No | Main character ID |
 | `supportingCharacterIds` | string[] | No | Supporting character IDs |
@@ -624,10 +621,10 @@ In-app help wizard configurations.
 {
   id: string;
   sender: 'child' | 'assistant' | 'system';
-  text: string;
+  text: string;  // May contain $$id$$ placeholders - resolve with useResolvePlaceholders hook
   createdAt: any;
   kind?: string; // Message type
-  options?: Choice[]; // Available choices
+  options?: Choice[];  // May contain $$id$$ placeholders
   selectedOptionId?: string; // Selected choice
 }
 ```
@@ -697,4 +694,5 @@ In-app help wizard configurations.
 
 | Date | Changes |
 |------|---------|
+| 2026-01-02 | Removed deprecated fields: ChildProfile.speechModeEnabled, StorySession.finalStoryText, StorySession.storyTypeName, ChatMessage.textResolved/optionsResolved |
 | 2025-12-29 | Initial documentation created |

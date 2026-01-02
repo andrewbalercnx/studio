@@ -121,7 +121,6 @@ export type StorySession = {
     currentStepIndex: number;
     storyTitle?: string;
     storyVibe?: string;
-    finalStoryText?: string;
     createdAt: any; // Allow for server timestamp or Date
     updatedAt: any; // Allow for server timestamp or Date
     promptConfigId?: string;

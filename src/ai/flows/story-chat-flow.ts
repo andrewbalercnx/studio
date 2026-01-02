@@ -50,7 +50,6 @@ const StorySessionSchema = z.object({
     storyVibe: z.string().optional(),
     characters: z.array(CharacterSchema),
     beats: z.array(StoryBeatSchema),
-    finalStoryText: z.string().optional(),
     createdAt: z.string().datetime().describe('The ISO 8601 date string of when the session was created.'),
     updatedAt: z.string().datetime().describe('The ISO 8601 date string of when the session was last updated.'),
     messages: z.array(ChatMessageSchema),

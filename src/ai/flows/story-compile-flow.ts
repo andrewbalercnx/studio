@@ -140,7 +140,6 @@ export const storyCompileFlow = ai.defineFlow(
                 const sessionUpdate: Record<string, any> = {
                     currentPhase: 'final',
                     status: 'completed',
-                    finalStoryText: resolvedStoryText,
                     updatedAt: FieldValue.serverTimestamp(),
                 };
                 if (storyOutputTypeId) {
@@ -258,7 +257,6 @@ export const storyCompileFlow = ai.defineFlow(
             const sessionUpdateStandard: Record<string, any> = {
                 currentPhase: 'final',
                 status: 'completed',
-                finalStoryText: storyText,
                 updatedAt: FieldValue.serverTimestamp(),
             };
             if (storyOutputTypeId) {

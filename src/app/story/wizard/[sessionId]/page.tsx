@@ -55,7 +55,6 @@ export default function StoryWizardPage() {
             status: 'completed',
             storyTitle: result.title || session?.storyTitle || 'A Magical Story',
             storyVibe: result.vibe || session?.storyVibe,
-            finalStoryText: result.storyText,
             updatedAt: serverTimestamp(),
           });
         }

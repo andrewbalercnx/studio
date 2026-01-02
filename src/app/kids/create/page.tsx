@@ -349,7 +349,6 @@ export default function KidsCreateStoryPage() {
               status: 'completed',
               storyTitle: result.title || 'A Magical Story',
               storyVibe: result.vibe || '',
-              finalStoryText: result.storyText,
               updatedAt: serverTimestamp(),
             },
             { merge: true }

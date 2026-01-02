@@ -37,7 +37,6 @@
       "currentStepIndex": 0,
       "storyTitle": "Demo Adventure",
       "storyVibe": "happy",
-      "finalStoryText": "Once upon a time, Demo Child went on an amazing adventure with their best friend Fluffy. They discovered a magical garden full of colorful butterflies. The end.",
       "storyMode": "gemini4",
       "actors": ["help-child", "help-character"]
     }

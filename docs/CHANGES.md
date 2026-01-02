@@ -18,6 +18,41 @@
 
 ### 2026-01-02
 
+#### `pending` - Schema cleanup: Remove deprecated fields
+
+**Type**: Cleanup
+
+**Summary**: Removed deprecated and redundant fields from the schema to simplify the data model. Pre-resolved text fields are no longer stored; consumers now resolve placeholders dynamically.
+
+**Fields Removed**:
+- **ChildProfile**: `speechModeEnabled` (use `autoReadAloud`), `estimatedLevel`, `favouriteGenres`, `favouriteCharacterTypes`, `preferredStoryLength`, `helpPreference`, `preferences` object
+- **Character**: `role` (use `type`), `traits` (use `likes`), `sessionId`, `visualNotes`, `realPersonRef`
+- **StorySession**: `storyTypeName` (lookup from storyTypeId), `finalStoryText` (use Story.storyText)
+- **ChatMessage**: `textResolved`, `optionsResolved` (resolve dynamically with `useResolvePlaceholders` hook)
+
+**Files Modified**:
+- `src/lib/types.ts` - Removed deprecated type fields
+- `src/lib/resolve-placeholders.ts` - Updated to use `type`/`likes` instead of `role`/`traits`
+- `src/lib/child-preferences.ts` - Updated to use new field names
+- `src/ai/flows/story-compile-flow.ts` - Stopped writing `finalStoryText`
+- `src/ai/flows/story-image-flow.ts` - Updated character description building
+- `src/ai/flows/story-page-flow.ts` - Updated character description building
+- `src/ai/flows/character-traits-flow.ts` - Updated to use `type`/`likes`
+- `src/ai/flows/start-story-flow.ts` - Removed legacy field initialization
+- `src/ai/flows/story-chat-flow.ts` - Removed `finalStoryText` from schema
+- `src/app/story/play/[sessionId]/page.tsx` - Stopped writing resolved text fields
+- `src/app/story/wizard/[sessionId]/page.tsx` - Stopped writing `finalStoryText`
+- `src/app/kids/create/page.tsx` - Stopped writing `finalStoryText`
+- `src/app/admin/characters/page.tsx` - Removed legacy "Ask traits" button
+- `src/data/help-sample-data.json` - Removed `finalStoryText`
+- `docs/SCHEMA.md` - Updated documentation
+
+**Migration Notes**:
+- Existing stored data continues to work (fallback pattern: `msg.textResolved || msg.text`)
+- Future enhancement: Update all reader components to use `useResolvePlaceholders` hook
+
+---
+
 #### `7f60d7b` - Add pronunciation test button to EntityEditor
 
 **Type**: Feature
