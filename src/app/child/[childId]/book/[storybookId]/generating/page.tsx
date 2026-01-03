@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/hooks/use-app-context';
 import { ChildAvatarAnimation } from '@/components/child/child-avatar-animation';
+import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 
 // Calculate overall progress percentage (0-100)
 function calculateOverallProgress(storybook: StoryBookOutput): number {
@@ -474,6 +475,36 @@ export default function BookGeneratingPage({
             </Button>
           </div>
         )}
+
+        {/* Diagnostics Panel */}
+        <DiagnosticsPanel
+          pageName="book-generating"
+          className="w-full mt-8"
+          data={{
+            childId,
+            storybookId,
+            storyId,
+            progress,
+            isComplete,
+            hasError,
+            isRateLimited,
+            errorMessage: errorMessage || undefined,
+            retryAt: retryAt ? formatRetryTime(retryAt) : undefined,
+            storybook: storybook ? {
+              storyOutputTypeId: storybook.storyOutputTypeId || null,
+              imageStyleId: storybook.imageStyleId || null,
+              printLayoutId: storybook.printLayoutId || null,
+              imageWidthPx: storybook.imageWidthPx || null,
+              imageHeightPx: storybook.imageHeightPx || null,
+              pageGeneration: storybook.pageGeneration || null,
+              imageGeneration: storybook.imageGeneration || null,
+            } : null,
+            story: story ? {
+              title: story.metadata?.title || null,
+              childId: story.childId || null,
+            } : null,
+          }}
+        />
       </div>
     </div>
   );

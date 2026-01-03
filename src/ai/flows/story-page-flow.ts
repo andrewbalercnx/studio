@@ -434,7 +434,10 @@ export const storyPageFlow = ai.defineFlow(
       // Load all actors referenced in the story for image prompts
       // Actors can be in either the characters collection OR the children collection (siblings)
       // Note: Actor IDs might be document IDs OR display names (legacy data)
-      const otherActorIds = allActorIds.filter(id => id !== story.childId);
+      // Filter out empty/invalid IDs to prevent Firestore "documentPath" errors
+      const otherActorIds = allActorIds
+        .filter(id => id !== story.childId)
+        .filter(id => id && typeof id === 'string' && id.trim().length > 0);
 
       // Build a map of all actors (characters and siblings)
       const actorMap = new Map<string, Character | ChildProfile>();

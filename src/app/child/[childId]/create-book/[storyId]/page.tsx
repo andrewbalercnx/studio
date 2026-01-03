@@ -81,12 +81,12 @@ export default function CreateBookPage({
   const { data: story, loading: storyLoading } = useDocument<Story>(storyRef);
 
   // Pre-populate storyOutputTypeId from story metadata if available
+  // But always show the output type selection step so the user can choose
   const storyMetadataOutputTypeId = story?.metadata?.storyOutputTypeId as string | undefined;
   useEffect(() => {
     if (storyMetadataOutputTypeId && !storyOutputTypeId) {
       setStoryOutputTypeId(storyMetadataOutputTypeId);
-      // If there was a pre-selected output type, go directly to step 2
-      setCurrentStep('image-style');
+      // Don't skip to step 2 - let the user confirm or change the output type selection
     }
   }, [storyMetadataOutputTypeId, storyOutputTypeId]);
 
