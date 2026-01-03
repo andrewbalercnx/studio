@@ -1,5 +1,4 @@
-
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { storyCompileFlow } from '@/ai/flows/story-compile-flow';
 import { storyAudioFlow } from '@/ai/flows/story-audio-flow';
 import { storyTitleFlow } from '@/ai/flows/story-title-flow';
@@ -46,26 +45,50 @@ export async function POST(request: Request) {
             if (result.ok && result.storyId) {
                 logger.info('storyCompileFlow completed successfully', { sessionId, storyId: result.storyId, durationMs });
 
-                // Trigger background generation tasks in parallel:
+                // Trigger background generation tasks in parallel using after()
+                // This ensures tasks complete even after the response is sent
                 // - storyCompileFlow already generated: storyText + synopsis
                 // - Now run in parallel: storyTitleFlow + storyActorAvatarFlow + storyAudioFlow
                 // Note: storyTitleFlow now reads the already-generated synopsis
 
                 const storyId = result.storyId;
 
-                // Audio narration (independent)
-                storyAudioFlow({ storyId }).catch((err) => {
-                    logger.error('Background audio generation failed', err, { storyId });
-                });
+                // Use after() to ensure background tasks complete on serverless
+                after(async () => {
+                    logger.info('Starting background generation tasks', { storyId });
 
-                // Composite actor avatar (independent)
-                storyActorAvatarFlow({ storyId }).catch((err) => {
-                    logger.error('Background actor avatar generation failed', err, { storyId });
-                });
+                    // Run all tasks in parallel
+                    const results = await Promise.allSettled([
+                        // Audio narration (independent)
+                        storyAudioFlow({ storyId }),
+                        // Composite actor avatar (independent)
+                        storyActorAvatarFlow({ storyId }),
+                        // Title generation (reads existing synopsis from compile)
+                        storyTitleFlow({ storyId }),
+                    ]);
 
-                // Title generation (reads existing synopsis from compile)
-                storyTitleFlow({ storyId }).catch((err) => {
-                    logger.error('Background title generation failed', err, { storyId });
+                    // Log results
+                    const [audioResult, avatarResult, titleResult] = results;
+
+                    if (audioResult.status === 'rejected') {
+                        logger.error('Background audio generation failed', audioResult.reason, { storyId });
+                    } else {
+                        logger.info('Background audio generation completed', { storyId, ok: audioResult.value?.ok });
+                    }
+
+                    if (avatarResult.status === 'rejected') {
+                        logger.error('Background actor avatar generation failed', avatarResult.reason, { storyId });
+                    } else {
+                        logger.info('Background actor avatar generation completed', { storyId, ok: avatarResult.value?.ok });
+                    }
+
+                    if (titleResult.status === 'rejected') {
+                        logger.error('Background title generation failed', titleResult.reason, { storyId });
+                    } else {
+                        logger.info('Background title generation completed', { storyId, ok: titleResult.value?.ok });
+                    }
+
+                    logger.info('All background generation tasks completed', { storyId });
                 });
 
                 return NextResponse.json(result, { status: 200 });
