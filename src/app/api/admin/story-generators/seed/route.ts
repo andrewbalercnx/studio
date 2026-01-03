@@ -6,6 +6,118 @@ import { AuthError } from '@/lib/auth-error';
 import type { StoryGenerator } from '@/lib/types';
 
 /**
+ * Default prompts for each generator.
+ * These are the same prompts that are hardcoded in the flow files as fallbacks.
+ * Pre-populating them in the seed makes them visible and editable in the admin UI.
+ */
+const DEFAULT_WIZARD_PROMPTS = {
+  questionGeneration: `You are a friendly Story Wizard who helps a young child create a story by asking simple multiple-choice questions.
+
+CHILD'S PROFILE:
+{{ageDescription}}
+
+CONTEXT:
+{{context}}
+
+INSTRUCTIONS:
+1. Based on the conversation above (if any), devise the *next* simple, fun question to ask the child. Questions should guide the story's theme, setting, or a simple plot point.
+2. Create 2 to 4 short, imaginative choices for the child to pick from.
+3. Keep questions and choices very simple (a few words).
+4. You MUST output a valid JSON object with the following structure, and nothing else:
+   {
+     "question": "The next simple question for the child",
+     "choices": [
+       { "text": "Choice one" },
+       { "text": "Choice two" }
+     ]
+   }`,
+  storyGeneration: `You are a master storyteller for young children. Your task is to write a complete, short story based on a child's choices from the conversation above.
+
+CHILD'S PROFILE:
+{{ageDescription}}
+
+CONTEXT:
+{{context}}
+
+INSTRUCTIONS:
+1. Write a complete, gentle, and engaging story of about 5-7 paragraphs.
+2. The story MUST use the character placeholders (e.g., $$character-id$$) instead of their names. The main character (the child) is $$CHILD_ID_PLACEHOLDER$$.
+3. The story should be simple and easy for a young child to understand.
+4. Conclude the story with a happy and reassuring ending.
+5. You MUST output a valid JSON object with the following structure, and nothing else:
+   {
+     "title": "A suitable title for the story",
+     "vibe": "A one-word vibe for the story (e.g., funny, magical, adventure)",
+     "storyText": "The full story text, using $$document-id$$ for characters."
+   }`,
+};
+
+const DEFAULT_GEMINI3_PROMPTS = {
+  systemPrompt: `{{systemMessage}}
+
+=== GEMINI 3 MODE ===
+You have complete creative freedom to craft an amazing story through conversation.
+Ask creative questions, build the story based on answers, and guide toward a satisfying conclusion.
+{{temperatureGuidance}}
+
+=== CURRENT SESSION ===
+Child's inspirations: {{childPreferenceSummary}}
+
+{{sessionContext}}
+
+=== OUTPUT FORMAT ===
+When CONTINUING: { "question": "...", "options": [...], "isStoryComplete": false, "finalStory": null }
+When ENDING: { "question": "", "options": [], "isStoryComplete": true, "finalStory": "complete story (5-7 paragraphs)" }`,
+};
+
+const DEFAULT_GEMINI4_PROMPTS = {
+  systemPrompt: `{{systemMessage}}
+
+=== GEMINI 4 MODE ===
+Guide the child through a structured story creation with focused questions.
+Provide 4 options: A, B, C (story choices) and M ("Tell me more").
+{{phaseGuidance}}
+
+=== CURRENT SESSION ===
+Child's inspirations: {{childPreferenceSummary}}
+
+=== OUTPUT FORMAT ===
+{
+  "question": "...",
+  "options": [{ "id": "A", "text": "...", "isMoreOption": false, "introducesCharacter": false, "newCharacterName": "", "newCharacterLabel": "", "newCharacterType": "", "existingCharacterId": "" }],
+  "isStoryComplete": false,
+  "finalStory": "",
+  "questionPhase": "opening|setting|characters|conflict|resolution|complete"
+}
+
+When story complete: question="", options=[], isStoryComplete=true, finalStory="full story with $$id$$ placeholders"`,
+  phase_opening: `**OPENING QUESTION (Phase 1/{{maxQuestions}})**
+Ask an exciting opening question to understand what kind of adventure the child wants.
+Focus on: What does $$childId$$ want to do today? Where do they want to go?
+Include options that reference existing characters if available.`,
+  phase_setting: `**SETTING QUESTION (Phase 2/{{maxQuestions}})**
+Build on their first choice. Establish where the story takes place.
+Focus on: Describe the setting with sensory details. What does $$childId$$ see, hear, smell?`,
+  phase_characters: `**CHARACTER QUESTION (Phase 3/{{maxQuestions}})**
+Introduce or involve characters in the story.
+Focus on: Who does $$childId$$ meet? Consider siblings and existing characters.
+Options should involve known characters or introduce new ones.`,
+  phase_conflict: `**PROBLEM/CONFLICT QUESTION (Phase 4/{{maxQuestions}})**
+Introduce a challenge or exciting situation.
+Focus on: What problem arises? What needs to be solved or discovered?`,
+  phase_action: `**ACTION QUESTION (Phase 5/{{maxQuestions}})**
+The child takes action to address the challenge.
+Focus on: How does $$childId$$ respond? What do they decide to do?`,
+  phase_resolution: `**RESOLUTION QUESTION (Final Phase)**
+Time to wrap up the story with a satisfying conclusion.
+Focus on: How does the adventure end? What did $$childId$$ learn or accomplish?
+After this response, you should complete the story.`,
+  phase_development: `**DEVELOPMENT QUESTION (Phase {{phase}}/{{maxQuestions}})**
+Continue developing the story based on their choices.
+Build tension or add interesting developments.`,
+};
+
+/**
  * Default story generator configurations.
  * These define the capabilities and styling for each story generation mode.
  */
@@ -30,6 +142,7 @@ const defaultGenerators: Omit<StoryGenerator, 'createdAt' | 'updatedAt'>[] = [
       icon: 'Sparkles',
       loadingMessage: 'The wizard is creating your adventure...',
     },
+    prompts: DEFAULT_WIZARD_PROMPTS,
   },
   {
     id: 'gemini3',
@@ -51,6 +164,7 @@ const defaultGenerators: Omit<StoryGenerator, 'createdAt' | 'updatedAt'>[] = [
       icon: 'Sparkles',
       loadingMessage: 'Gemini is crafting your story...',
     },
+    prompts: DEFAULT_GEMINI3_PROMPTS,
   },
   {
     id: 'gemini4',
@@ -72,6 +186,7 @@ const defaultGenerators: Omit<StoryGenerator, 'createdAt' | 'updatedAt'>[] = [
       icon: 'Sparkles',
       loadingMessage: 'Creating the next chapter...',
     },
+    prompts: DEFAULT_GEMINI4_PROMPTS,
   },
   {
     id: 'beat',
@@ -93,6 +208,7 @@ const defaultGenerators: Omit<StoryGenerator, 'createdAt' | 'updatedAt'>[] = [
       icon: 'Sparkles',
       loadingMessage: 'Creating the next story beat...',
     },
+    // Note: beat generator uses storyType prompts, not generator-level prompts
   },
 ];
 
@@ -121,14 +237,18 @@ export async function POST(request: Request) {
       const existingDoc = await docRef.get();
 
       if (existingDoc.exists) {
-        // Update existing document (preserve createdAt, backgroundMusic, and prompts)
+        // Update existing document (preserve createdAt, backgroundMusic, and user-configured prompts)
         // Use set with merge to ensure nested objects like capabilities are fully replaced
         const existingData = existingDoc.data();
+        // For prompts: if user has customized them, keep their version; otherwise use defaults
+        const promptsToUse = existingData?.prompts && Object.keys(existingData.prompts).length > 0
+          ? existingData.prompts
+          : generator.prompts;
         batch.set(docRef, {
           ...generator,
           // Preserve user-configured fields (only include if they exist to avoid undefined values)
           ...(existingData?.backgroundMusic && { backgroundMusic: existingData.backgroundMusic }),
-          ...(existingData?.prompts && { prompts: existingData.prompts }),
+          ...(promptsToUse && { prompts: promptsToUse }),
           ...(existingData?.createdAt && { createdAt: existingData.createdAt }),
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: false }); // Replace entire document to ensure capabilities is updated
