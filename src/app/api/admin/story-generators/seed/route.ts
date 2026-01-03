@@ -121,11 +121,17 @@ export async function POST(request: Request) {
       const existingDoc = await docRef.get();
 
       if (existingDoc.exists) {
-        // Update existing document (preserve createdAt)
-        batch.update(docRef, {
+        // Update existing document (preserve createdAt, backgroundMusic, and prompts)
+        // Use set with merge to ensure nested objects like capabilities are fully replaced
+        const existingData = existingDoc.data();
+        batch.set(docRef, {
           ...generator,
+          // Preserve user-configured fields
+          backgroundMusic: existingData?.backgroundMusic,
+          prompts: existingData?.prompts,
+          createdAt: existingData?.createdAt,
           updatedAt: FieldValue.serverTimestamp(),
-        });
+        }, { merge: false }); // Replace entire document to ensure capabilities is updated
         results.push({ id: generator.id, action: 'updated' });
       } else {
         // Create new document
