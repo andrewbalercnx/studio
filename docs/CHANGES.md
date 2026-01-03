@@ -18,7 +18,7 @@
 
 ### 2026-01-03
 
-#### `pending` - Enhanced storybook sharing with immersive viewer
+#### `3a06d54` - Enhanced storybook sharing with immersive viewer
 
 **Type**: Feature
 
