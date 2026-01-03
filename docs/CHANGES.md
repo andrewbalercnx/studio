@@ -18,6 +18,31 @@
 
 ### 2026-01-03
 
+#### `bcc66fb` - Add story generators admin page with music and prompts
+
+**Type**: Feature
+
+**Summary**: Added admin UI for configuring story generators (wizard, gemini3, gemini4) with background music generation and custom AI prompt editing.
+
+**Details**:
+- Extended `StoryGenerator` type with `backgroundMusic` and `prompts` fields
+- Created `/api/music/generate-generator` API for generator music generation
+- Updated wizard, gemini3, and gemini4 flows to read prompts from Firestore with fallback to hardcoded defaults
+- Created `/admin/storyGenerators` page for managing generators
+- Admin can generate background music for each generator (same as story types)
+- Admin can view and edit all AI prompts with changes taking effect immediately
+
+**Modified files**:
+- `src/lib/types.ts` - Extended StoryGenerator type
+- `src/app/api/music/generate-generator/route.ts` - New API
+- `src/ai/flows/story-wizard-flow.ts` - Added Firestore prompt loading
+- `src/ai/flows/gemini3-flow.ts` - Added Firestore prompt loading
+- `src/ai/flows/gemini4-flow.ts` - Added Firestore prompt loading
+- `src/app/admin/storyGenerators/page.tsx` - New admin page
+- `docs/SCHEMA.md` - Updated with new fields
+
+---
+
 #### `5d01911` - Fix documentPath error in image generation
 
 **Type**: Bug Fix

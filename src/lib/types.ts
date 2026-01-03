@@ -1639,6 +1639,28 @@ export type StoryGeneratorStyling = {
 };
 
 /**
+ * Background music generation status for story generators.
+ */
+export type StoryGeneratorMusicGeneration = {
+  status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
+  lastRunAt?: any;
+  lastCompletedAt?: any;
+  lastErrorMessage?: string | null;
+};
+
+/**
+ * Background music configuration for story generators.
+ * Matches the pattern used by storyTypes.
+ */
+export type StoryGeneratorBackgroundMusic = {
+  prompt?: string;                       // AI prompt for music generation
+  audioUrl?: string | null;              // Firebase Storage URL
+  storagePath?: string;                  // Storage path for management
+  durationMs?: number;                   // Duration in milliseconds
+  generation?: StoryGeneratorMusicGeneration;
+};
+
+/**
  * A story generator configuration document.
  * Stored in Firestore collection: storyGenerators
  */
@@ -1652,10 +1674,12 @@ export type StoryGenerator = {
   apiEndpoint: string;                   // e.g., '/api/storyWizard', '/api/gemini3'
   styling: StoryGeneratorStyling;
 
-  // Background music (optional)
-  backgroundMusic?: {
-    audioUrl: string;
-  };
+  // Background music (optional, extended config)
+  backgroundMusic?: StoryGeneratorBackgroundMusic;
+
+  // AI Prompts (editable in Firestore, keyed by purpose)
+  // Keys are generator-specific, e.g., 'questionGeneration', 'storyGeneration', 'phaseOpening'
+  prompts?: Record<string, string>;
 
   // Metadata
   createdAt?: any;

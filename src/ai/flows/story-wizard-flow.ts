@@ -6,11 +6,88 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { z } from 'genkit';
 import type { MessageData } from 'genkit';
-import type { ChildProfile, Character, Story, StoryWizardAnswer, StoryWizardChoice, StoryWizardInput, StoryWizardOutput } from '@/lib/types';
+import type { ChildProfile, Character, Story, StoryWizardAnswer, StoryWizardChoice, StoryWizardInput, StoryWizardOutput, StoryGenerator } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { replacePlaceholdersInText, type EntityMap } from '@/lib/resolve-placeholders.server';
 import { buildStoryContext } from '@/lib/story-context-builder';
 import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
+
+// Default prompts - used when no custom prompt is set in Firestore
+const DEFAULT_QUESTION_GEN_PROMPT = `You are a friendly Story Wizard who helps a young child create a story by asking simple multiple-choice questions.
+
+CHILD'S PROFILE:
+{{ageDescription}}
+
+CONTEXT:
+{{context}}
+
+INSTRUCTIONS:
+1. Based on the conversation above (if any), devise the *next* simple, fun question to ask the child. Questions should guide the story's theme, setting, or a simple plot point.
+2. Create 2 to 4 short, imaginative choices for the child to pick from.
+3. Keep questions and choices very simple (a few words).
+4. You MUST output a valid JSON object with the following structure, and nothing else:
+   {
+     "question": "The next simple question for the child",
+     "choices": [
+       { "text": "Choice one" },
+       { "text": "Choice two" }
+     ]
+   }`;
+
+const DEFAULT_STORY_GEN_PROMPT = `You are a master storyteller for young children. Your task is to write a complete, short story based on a child's choices from the conversation above.
+
+CHILD'S PROFILE:
+{{ageDescription}}
+
+CONTEXT:
+{{context}}
+
+INSTRUCTIONS:
+1. Write a complete, gentle, and engaging story of about 5-7 paragraphs.
+2. The story MUST use the character placeholders (e.g., $$character-id$$) instead of their names. The main character (the child) is $$CHILD_ID_PLACEHOLDER$$.
+3. The story should be simple and easy for a young child to understand.
+4. Conclude the story with a happy and reassuring ending.
+5. You MUST output a valid JSON object with the following structure, and nothing else:
+   {
+     "title": "A suitable title for the story",
+     "vibe": "A one-word vibe for the story (e.g., funny, magical, adventure)",
+     "storyText": "The full story text, using $$document-id$$ for characters."
+   }`;
+
+/**
+ * Fills in template variables in a prompt string
+ * Variables use {{variableName}} syntax
+ */
+function fillPromptTemplate(template: string, vars: Record<string, string>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(vars)) {
+    // Use a simple string replace approach to avoid regex issues
+    const placeholder = '{{' + key + '}}';
+    while (result.includes(placeholder)) {
+      result = result.replace(placeholder, value);
+    }
+  }
+  // Special handling for CHILD_ID_PLACEHOLDER in story generation
+  if (vars['childId']) {
+    result = result.replace(/\$\$CHILD_ID_PLACEHOLDER\$\$/g, `$$${vars['childId']}$$`);
+  }
+  return result;
+}
+
+/**
+ * Load generator config from Firestore
+ */
+async function loadGeneratorConfig(firestore: FirebaseFirestore.Firestore): Promise<StoryGenerator | null> {
+  try {
+    const generatorDoc = await firestore.collection('storyGenerators').doc('wizard').get();
+    if (generatorDoc.exists) {
+      return { id: generatorDoc.id, ...generatorDoc.data() } as StoryGenerator;
+    }
+  } catch (e) {
+    console.warn('[storyWizardFlow] Failed to load generator config, using defaults:', e);
+  }
+  return null;
+}
 
 
 // Helper to get child's age in years
@@ -121,11 +198,19 @@ const storyWizardFlowInternal = ai.defineFlow(
 
       const childAge = contextData.childAge;
       const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
-      
+
       const MAX_QUESTIONS = 4;
 
       // Fetch global prompt prefix once for this flow
       const globalPrefix = await getGlobalPrefix();
+
+      // Load generator config for custom prompts
+      const generator = await loadGeneratorConfig(firestore);
+      const templateVars = {
+        ageDescription,
+        context: contextFormatted.fullContext,
+        childId,
+      };
 
       if (answers.length >= MAX_QUESTIONS) {
         // 3. All questions answered, generate the final story
@@ -135,25 +220,9 @@ const storyWizardFlowInternal = ai.defineFlow(
           { role: 'user' as const, content: [{ text: a.answer }] },
         ]);
 
-        const baseStoryGenSystemPrompt = `You are a master storyteller for young children. Your task is to write a complete, short story based on a child's choices from the conversation above.
-
-CHILD'S PROFILE:
-${ageDescription}
-
-CONTEXT:
-${contextFormatted.fullContext}
-
-INSTRUCTIONS:
-1. Write a complete, gentle, and engaging story of about 5-7 paragraphs.
-2. The story MUST use the character placeholders (e.g., $$character-id$$) instead of their names. The main character (the child) is $$${childId}$$.
-3. The story should be simple and easy for a young child to understand.
-4. Conclude the story with a happy and reassuring ending.
-5. You MUST output a valid JSON object with the following structure, and nothing else:
-   {
-     "title": "A suitable title for the story",
-     "vibe": "A one-word vibe for the story (e.g., funny, magical, adventure)",
-     "storyText": "The full story text, using $$document-id$$ for characters."
-   }`;
+        // Use custom prompt from Firestore if available, otherwise use default
+        const storyGenPromptTemplate = generator?.prompts?.storyGeneration || DEFAULT_STORY_GEN_PROMPT;
+        const baseStoryGenSystemPrompt = fillPromptTemplate(storyGenPromptTemplate, templateVars);
         const storyGenSystemPrompt = globalPrefix ? `${globalPrefix}\n\n${baseStoryGenSystemPrompt}` : baseStoryGenSystemPrompt;
 
         let llmResponse;
@@ -237,26 +306,9 @@ INSTRUCTIONS:
           { role: 'user' as const, content: [{ text: a.answer }] },
         ]);
 
-        const baseQuestionGenSystemPrompt = `You are a friendly Story Wizard who helps a young child create a story by asking simple multiple-choice questions.
-
-CHILD'S PROFILE:
-${ageDescription}
-
-CONTEXT:
-${contextFormatted.fullContext}
-
-INSTRUCTIONS:
-1. Based on the conversation above (if any), devise the *next* simple, fun question to ask the child. Questions should guide the story's theme, setting, or a simple plot point.
-2. Create 2 to 4 short, imaginative choices for the child to pick from.
-3. Keep questions and choices very simple (a few words).
-4. You MUST output a valid JSON object with the following structure, and nothing else:
-   {
-     "question": "The next simple question for the child",
-     "choices": [
-       { "text": "Choice one" },
-       { "text": "Choice two" }
-     ]
-   }`;
+        // Use custom prompt from Firestore if available, otherwise use default
+        const questionGenPromptTemplate = generator?.prompts?.questionGeneration || DEFAULT_QUESTION_GEN_PROMPT;
+        const baseQuestionGenSystemPrompt = fillPromptTemplate(questionGenPromptTemplate, templateVars);
         const questionGenSystemPrompt = globalPrefix ? `${globalPrefix}\n\n${baseQuestionGenSystemPrompt}` : baseQuestionGenSystemPrompt;
 
         let llmResponse;

@@ -7,13 +7,60 @@
 import { ai } from '@/ai/genkit';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
-import type { StorySession, ChatMessage, Character, ChildProfile } from '@/lib/types';
+import type { StorySession, ChatMessage, Character, ChildProfile, StoryGenerator } from '@/lib/types';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { FieldValue } from 'firebase-admin/firestore';
 import { resolveEntitiesInText, replacePlaceholdersInText, extractEntityMetadataFromText } from '@/lib/resolve-placeholders.server';
 import { buildStoryContext } from '@/lib/story-context-builder';
 import { buildStorySystemMessage } from '@/lib/build-story-system-message';
+
+// Default prompts - used when no custom prompt is set in Firestore
+const DEFAULT_SYSTEM_PROMPT = `{{systemMessage}}
+
+=== GEMINI 3 MODE ===
+You have complete creative freedom to craft an amazing story through conversation.
+Ask creative questions, build the story based on answers, and guide toward a satisfying conclusion.
+{{temperatureGuidance}}
+
+=== CURRENT SESSION ===
+Child's inspirations: {{childPreferenceSummary}}
+
+{{sessionContext}}
+
+=== OUTPUT FORMAT ===
+When CONTINUING: { "question": "...", "options": [...], "isStoryComplete": false, "finalStory": null }
+When ENDING: { "question": "", "options": [], "isStoryComplete": true, "finalStory": "complete story (5-7 paragraphs)" }`;
+
+/**
+ * Fills in template variables in a prompt string
+ * Variables use {{variableName}} syntax
+ */
+function fillPromptTemplate(template: string, vars: Record<string, string>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(vars)) {
+    const placeholder = '{{' + key + '}}';
+    while (result.includes(placeholder)) {
+      result = result.replace(placeholder, value);
+    }
+  }
+  return result;
+}
+
+/**
+ * Load generator config from Firestore
+ */
+async function loadGeneratorConfig(firestore: FirebaseFirestore.Firestore): Promise<StoryGenerator | null> {
+  try {
+    const generatorDoc = await firestore.collection('storyGenerators').doc('gemini3').get();
+    if (generatorDoc.exists) {
+      return { id: generatorDoc.id, ...generatorDoc.data() } as StoryGenerator;
+    }
+  } catch (e) {
+    console.warn('[gemini3Flow] Failed to load generator config, using defaults:', e);
+  }
+  return null;
+}
 
 type Gemini3DebugInfo = {
     stage: 'loading_session' | 'loading_context' | 'loading_child' | 'loading_characters' | 'loading_messages' | 'ai_generate' | 'extract_output' | 'json_parse' | 'json_validate' | 'unknown';
@@ -123,23 +170,21 @@ export const gemini3Flow = ai.defineFlow(
             // Build unified system message
             const systemMessage = buildStorySystemMessage(contextFormatted, childAge, 'story_beat');
 
-            const systemPrompt = `${systemMessage}
+            // Build session context (starting or continuing)
+            const sessionContext = isFirstMessage
+                ? `=== STARTING THE STORY ===\nWelcome the child warmly and ask an exciting opening question!`
+                : `=== CONVERSATION SO FAR ===\n${conversationHistory}${conversationInstruction}`;
 
-=== GEMINI 3 MODE ===
-You have complete creative freedom to craft an amazing story through conversation.
-Ask creative questions, build the story based on answers, and guide toward a satisfying conclusion.
-${temperatureGuidance}
-
-=== CURRENT SESSION ===
-Child's inspirations: ${childPreferenceSummary}
-
-${isFirstMessage ? `=== STARTING THE STORY ===
-Welcome the child warmly and ask an exciting opening question!` : `=== CONVERSATION SO FAR ===
-${conversationHistory}${conversationInstruction}`}
-
-=== OUTPUT FORMAT ===
-When CONTINUING: { "question": "...", "options": [...], "isStoryComplete": false, "finalStory": null }
-When ENDING: { "question": "", "options": [], "isStoryComplete": true, "finalStory": "complete story (5-7 paragraphs)" }`;
+            // Load generator config for custom prompts
+            const generator = await loadGeneratorConfig(firestore);
+            const promptTemplate = generator?.prompts?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+            const templateVars = {
+                systemMessage,
+                temperatureGuidance,
+                childPreferenceSummary,
+                sessionContext,
+            };
+            const systemPrompt = fillPromptTemplate(promptTemplate, templateVars);
 
             // 6. Call Gemini AI with structured output
             debug.stage = 'ai_generate';

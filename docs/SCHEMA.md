@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-02 (added storyGenerators collection for StoryBrowser)
+> **Last Updated**: 2026-01-03 (added backgroundMusic and prompts to storyGenerators)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -414,9 +414,22 @@ Story generator configurations. Defines capabilities and API endpoints for each 
 | `styling.darkGradient` | string | No | Dark mode gradient classes |
 | `styling.icon` | string | No | Lucide icon name or URL |
 | `styling.loadingMessage` | string | Yes | Message shown during generation |
-| `backgroundMusic.audioUrl` | string | No | Background music URL |
+| `backgroundMusic.prompt` | string | No | AI prompt for music generation |
+| `backgroundMusic.audioUrl` | string | No | Firebase Storage URL for music |
+| `backgroundMusic.storagePath` | string | No | Storage path for file management |
+| `backgroundMusic.durationMs` | number | No | Music duration in milliseconds |
+| `backgroundMusic.generation.status` | 'idle' \| 'generating' \| 'ready' \| 'error' | No | Music generation status |
+| `backgroundMusic.generation.lastRunAt` | timestamp | No | Last generation attempt |
+| `backgroundMusic.generation.lastCompletedAt` | timestamp | No | Last successful generation |
+| `backgroundMusic.generation.lastErrorMessage` | string | No | Error message if failed |
+| `prompts` | Record<string, string> | No | Custom AI prompts (keys vary by generator) |
 | `createdAt` | timestamp | No | Creation time |
 | `updatedAt` | timestamp | No | Last update time |
+
+**Prompts Keys by Generator**:
+- **wizard**: `questionGeneration`, `storyGeneration`
+- **gemini3**: `systemPrompt`
+- **gemini4**: `systemPrompt`, `phase_opening`, `phase_setting`, `phase_characters`, `phase_conflict`, `phase_action`, `phase_resolution`, `phase_development`
 
 **Standard API Response Format**: All generators must return `StoryGeneratorResponse` (see `src/lib/types.ts`).
 

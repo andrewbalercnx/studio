@@ -8,7 +8,7 @@
 import { ai, aiBeta } from '@/ai/genkit';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
-import type { StorySession, ChatMessage, Character, ChildProfile } from '@/lib/types';
+import type { StorySession, ChatMessage, Character, ChildProfile, StoryGenerator } from '@/lib/types';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -16,6 +16,86 @@ import { resolveEntitiesInText, replacePlaceholdersInText, extractEntityMetadata
 import { buildStoryContext } from '@/lib/story-context-builder';
 import { buildStorySystemMessage } from '@/lib/build-story-system-message';
 import type { MessageData } from 'genkit';
+
+// Default prompts - used when no custom prompt is set in Firestore
+const DEFAULT_SYSTEM_PROMPT = `{{systemMessage}}
+
+=== GEMINI 4 MODE ===
+Guide the child through a structured story creation with focused questions.
+Provide 4 options: A, B, C (story choices) and M ("Tell me more").
+{{phaseGuidance}}
+
+=== CURRENT SESSION ===
+Child's inspirations: {{childPreferenceSummary}}
+
+=== OUTPUT FORMAT ===
+{
+  "question": "...",
+  "options": [{ "id": "A", "text": "...", "isMoreOption": false, "introducesCharacter": false, "newCharacterName": "", "newCharacterLabel": "", "newCharacterType": "", "existingCharacterId": "" }],
+  "isStoryComplete": false,
+  "finalStory": "",
+  "questionPhase": "opening|setting|characters|conflict|resolution|complete"
+}
+
+When story complete: question="", options=[], isStoryComplete=true, finalStory="full story with $$id$$ placeholders"`;
+
+// Default phase prompts
+const DEFAULT_PHASE_PROMPTS: Record<string, string> = {
+  opening: `**OPENING QUESTION (Phase 1/{{maxQuestions}})**
+Ask an exciting opening question to understand what kind of adventure the child wants.
+Focus on: What does $$childId$$ want to do today? Where do they want to go?
+Include options that reference existing characters if available.`,
+  setting: `**SETTING QUESTION (Phase 2/{{maxQuestions}})**
+Build on their first choice. Establish where the story takes place.
+Focus on: Describe the setting with sensory details. What does $$childId$$ see, hear, smell?`,
+  characters: `**CHARACTER QUESTION (Phase 3/{{maxQuestions}})**
+Introduce or involve characters in the story.
+Focus on: Who does $$childId$$ meet? Consider siblings and existing characters.
+Options should involve known characters or introduce new ones.`,
+  conflict: `**PROBLEM/CONFLICT QUESTION (Phase 4/{{maxQuestions}})**
+Introduce a challenge or exciting situation.
+Focus on: What problem arises? What needs to be solved or discovered?`,
+  action: `**ACTION QUESTION (Phase 5/{{maxQuestions}})**
+The child takes action to address the challenge.
+Focus on: How does $$childId$$ respond? What do they decide to do?`,
+  resolution: `**RESOLUTION QUESTION (Final Phase)**
+Time to wrap up the story with a satisfying conclusion.
+Focus on: How does the adventure end? What did $$childId$$ learn or accomplish?
+After this response, you should complete the story.`,
+  development: `**DEVELOPMENT QUESTION (Phase {{phase}}/{{maxQuestions}})**
+Continue developing the story based on their choices.
+Build tension or add interesting developments.`,
+};
+
+/**
+ * Fills in template variables in a prompt string
+ * Variables use {{variableName}} syntax
+ */
+function fillPromptTemplate(template: string, vars: Record<string, string | number>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(vars)) {
+    const placeholder = '{{' + key + '}}';
+    while (result.includes(placeholder)) {
+      result = result.replace(placeholder, String(value));
+    }
+  }
+  return result;
+}
+
+/**
+ * Load generator config from Firestore
+ */
+async function loadGeneratorConfig(firestore: FirebaseFirestore.Firestore): Promise<StoryGenerator | null> {
+  try {
+    const generatorDoc = await firestore.collection('storyGenerators').doc('gemini4').get();
+    if (generatorDoc.exists) {
+      return { id: generatorDoc.id, ...generatorDoc.data() } as StoryGenerator;
+    }
+  } catch (e) {
+    console.warn('[gemini4Flow] Failed to load generator config, using defaults:', e);
+  }
+  return null;
+}
 
 // Note: createStoryCharacterFlow and gemini4CreateCharacterFlow are now imported directly
 // from '@/ai/flows/create-story-character-flow' - re-exports removed due to 'use server' constraints
@@ -49,41 +129,35 @@ type Gemini4DebugInfo = {
 };
 
 // Build question sequence guidance based on how many questions have been asked
-function getQuestionPhaseGuidance(questionCount: number, childAge: number | null): string {
+function getQuestionPhaseGuidance(
+  questionCount: number,
+  childAge: number | null,
+  generator: StoryGenerator | null
+): string {
   const maxQuestions = childAge && childAge <= 5 ? 6 : 8;
   const phase = questionCount;
+  const phaseVars = { maxQuestions, phase: phase + 1 };
+
+  // Get prompt template from generator or use defaults
+  const getPhasePrompt = (phaseName: string) => {
+    const template = generator?.prompts?.[`phase_${phaseName}`] || DEFAULT_PHASE_PROMPTS[phaseName];
+    return fillPromptTemplate(template, phaseVars);
+  };
 
   if (phase === 0) {
-    return `**OPENING QUESTION (Phase 1/${maxQuestions})**
-Ask an exciting opening question to understand what kind of adventure the child wants.
-Focus on: What does $$childId$$ want to do today? Where do they want to go?
-Include options that reference existing characters if available.`;
+    return getPhasePrompt('opening');
   } else if (phase === 1) {
-    return `**SETTING QUESTION (Phase 2/${maxQuestions})**
-Build on their first choice. Establish where the story takes place.
-Focus on: Describe the setting with sensory details. What does $$childId$$ see, hear, smell?`;
+    return getPhasePrompt('setting');
   } else if (phase === 2) {
-    return `**CHARACTER QUESTION (Phase 3/${maxQuestions})**
-Introduce or involve characters in the story.
-Focus on: Who does $$childId$$ meet? Consider siblings and existing characters.
-Options should involve known characters or introduce new ones.`;
+    return getPhasePrompt('characters');
   } else if (phase === 3) {
-    return `**PROBLEM/CONFLICT QUESTION (Phase 4/${maxQuestions})**
-Introduce a challenge or exciting situation.
-Focus on: What problem arises? What needs to be solved or discovered?`;
+    return getPhasePrompt('conflict');
   } else if (phase === 4) {
-    return `**ACTION QUESTION (Phase 5/${maxQuestions})**
-The child takes action to address the challenge.
-Focus on: How does $$childId$$ respond? What do they decide to do?`;
+    return getPhasePrompt('action');
   } else if (phase >= maxQuestions - 1) {
-    return `**RESOLUTION QUESTION (Final Phase)**
-Time to wrap up the story with a satisfying conclusion.
-Focus on: How does the adventure end? What did $$childId$$ learn or accomplish?
-After this response, you should complete the story.`;
+    return getPhasePrompt('resolution');
   } else {
-    return `**DEVELOPMENT QUESTION (Phase ${phase + 1}/${maxQuestions})**
-Continue developing the story based on their choices.
-Build tension or add interesting developments.`;
+    return getPhasePrompt('development');
   }
 }
 
@@ -157,30 +231,21 @@ export const gemini4Flow = ai.defineFlow(
         m => m.sender === 'assistant' && m.kind === 'gemini4_question'
       ).length;
 
+      // Load generator config for custom prompts
+      const generator = await loadGeneratorConfig(firestore);
+
       // Build the unified system prompt
       const systemMessage = buildStorySystemMessage(contextFormatted, childAge, 'story_beat');
-      const phaseGuidance = getQuestionPhaseGuidance(questionCount, childAge);
+      const phaseGuidance = getQuestionPhaseGuidance(questionCount, childAge, generator);
 
-      const systemPrompt = `${systemMessage}
-
-=== GEMINI 4 MODE ===
-Guide the child through a structured story creation with focused questions.
-Provide 4 options: A, B, C (story choices) and M ("Tell me more").
-${phaseGuidance}
-
-=== CURRENT SESSION ===
-Child's inspirations: ${childPreferenceSummary}
-
-=== OUTPUT FORMAT ===
-{
-  "question": "...",
-  "options": [{ "id": "A", "text": "...", "isMoreOption": false, "introducesCharacter": false, "newCharacterName": "", "newCharacterLabel": "", "newCharacterType": "", "existingCharacterId": "" }],
-  "isStoryComplete": false,
-  "finalStory": "",
-  "questionPhase": "opening|setting|characters|conflict|resolution|complete"
-}
-
-When story complete: question="", options=[], isStoryComplete=true, finalStory="full story with $$id$$ placeholders"`;
+      // Use custom prompt from Firestore if available, otherwise use default
+      const promptTemplate = generator?.prompts?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+      const templateVars = {
+        systemMessage,
+        phaseGuidance,
+        childPreferenceSummary,
+      };
+      const systemPrompt = fillPromptTemplate(promptTemplate, templateVars);
 
       // 4. Create chat session and send message
       debug.stage = 'sending_message';
