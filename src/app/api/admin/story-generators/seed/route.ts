@@ -126,10 +126,10 @@ export async function POST(request: Request) {
         const existingData = existingDoc.data();
         batch.set(docRef, {
           ...generator,
-          // Preserve user-configured fields
-          backgroundMusic: existingData?.backgroundMusic,
-          prompts: existingData?.prompts,
-          createdAt: existingData?.createdAt,
+          // Preserve user-configured fields (only include if they exist to avoid undefined values)
+          ...(existingData?.backgroundMusic && { backgroundMusic: existingData.backgroundMusic }),
+          ...(existingData?.prompts && { prompts: existingData.prompts }),
+          ...(existingData?.createdAt && { createdAt: existingData.createdAt }),
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: false }); // Replace entire document to ensure capabilities is updated
         results.push({ id: generator.id, action: 'updated' });
