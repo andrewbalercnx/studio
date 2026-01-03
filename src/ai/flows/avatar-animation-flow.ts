@@ -422,7 +422,7 @@ Output a smooth, looping video suitable for a profile animation.`;
 
 Output the generated image directly. Do not describe what you would create - actually generate and output the image.`;
 
-      const fallbackModelName = 'googleai/gemini-2.0-flash-exp';
+      const fallbackModelName = 'googleai/gemini-2.5-flash-image-preview';
       console.log('[avatarAnimationFlow] Using fallback model:', fallbackModelName);
 
       // Retry logic - sometimes the model returns text instead of an image
