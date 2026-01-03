@@ -342,3 +342,90 @@ export async function testEmailTemplate(recipientEmail: string): Promise<{ subje
     html: content,
   };
 }
+
+/**
+ * Maintenance error details for error notification emails.
+ */
+export type MaintenanceErrorDetails = {
+  flowName: string;         // Name of the flow/process that errored (e.g., 'storyImageFlow')
+  errorType: string;        // Type of error (e.g., 'ImageGenerationFailed', 'RateLimited')
+  errorMessage: string;     // Full error message
+  pagePath: string;         // URL path where the error occurred (e.g., '/child/abc123/book/xyz/generating')
+  diagnostics?: Record<string, any>; // Diagnostic data from the page
+  timestamp?: Date;         // When the error occurred
+  userId?: string;          // User who encountered the error (if known)
+  attemptNumber?: number;   // Retry attempt number (if applicable)
+  maxAttempts?: number;     // Max retry attempts (if applicable)
+};
+
+/**
+ * Email template for maintenance/error notifications.
+ * Sent to users with maintenanceUser flag set to true.
+ */
+export async function maintenanceErrorTemplate(
+  details: MaintenanceErrorDetails
+): Promise<{ subject: string; html: string } | null> {
+  const config = await getEmailConfig();
+  const template = config.templates.maintenanceError;
+
+  if (!template.enabled) {
+    return null;
+  }
+
+  const adminUrl = `${getBaseUrl()}/admin`;
+  const values = {
+    flowName: details.flowName,
+    errorType: details.errorType,
+  };
+
+  // Build error details section
+  const timestamp = details.timestamp || new Date();
+  const retryInfo = details.attemptNumber && details.maxAttempts
+    ? `<p><span class="label">Attempt:</span> <span class="value">${details.attemptNumber} of ${details.maxAttempts}</span></p>`
+    : '';
+
+  const errorDetails = `
+    <div class="order-details" style="background: #fef2f2; border: 1px solid #fecaca;">
+      <p><span class="label">Flow:</span> <span class="value">${details.flowName}</span></p>
+      <p><span class="label">Error Type:</span> <span class="status status-rejected">${details.errorType}</span></p>
+      <p><span class="label">Page:</span> <span class="value">${details.pagePath}</span></p>
+      <p><span class="label">Time:</span> <span class="value">${timestamp.toISOString()}</span></p>
+      ${details.userId ? `<p><span class="label">User:</span> <span class="value">${details.userId}</span></p>` : ''}
+      ${retryInfo}
+    </div>
+    <div class="order-details" style="margin-top: 16px;">
+      <p><span class="label">Error Message:</span></p>
+      <pre style="background: #f3f4f6; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(details.errorMessage)}</pre>
+    </div>
+    ${details.diagnostics ? `
+    <div class="order-details" style="margin-top: 16px;">
+      <p><span class="label">Diagnostics:</span></p>
+      <pre style="background: #f3f4f6; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 11px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;">${escapeHtml(JSON.stringify(details.diagnostics, null, 2))}</pre>
+    </div>
+    ` : ''}
+  `;
+
+  const content = emailWrapper(`
+    <h2>${template.heading}</h2>
+    <p>${template.bodyText}</p>
+    ${errorDetails}
+    <a href="${template.buttonUrl || adminUrl}" class="btn">${template.buttonText}</a>
+  `, config);
+
+  return {
+    subject: replacePlaceholders(template.subject, values),
+    html: content,
+  };
+}
+
+/**
+ * Escape HTML special characters to prevent XSS in emails.
+ */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}

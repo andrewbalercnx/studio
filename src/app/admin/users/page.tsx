@@ -3,7 +3,7 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, Shield, ShieldOff, BrainCircuit, Pencil, User as UserIcon, RefreshCw, Target, Bell, BellOff } from 'lucide-react';
+import { LoaderCircle, Shield, ShieldOff, BrainCircuit, Pencil, User as UserIcon, RefreshCw, Target, Bell, BellOff, Wrench } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFirestore, useAuth } from '@/firebase';
@@ -153,6 +153,22 @@ export default function AdminUsersPage() {
     }
   };
 
+  const toggleMaintenanceUser = async (user: UserProfile) => {
+    if (!firestore) return;
+    const userRef = doc(firestore, 'users', user.id);
+    const newValue = !user.maintenanceUser;
+    try {
+      await updateDoc(userRef, { maintenanceUser: newValue });
+      toast({
+        title: 'Success',
+        description: `${user.email} will ${newValue ? 'now receive' : 'no longer receive'} maintenance error notifications.`
+      });
+    } catch (e: any) {
+      console.error('Error updating maintenance setting:', e);
+      toast({ title: 'Error updating maintenance setting', description: e.message, variant: 'destructive' });
+    }
+  };
+
   const renderUsersTable = () => (
     <Table>
       <TableHeader>
@@ -208,6 +224,15 @@ export default function AdminUsersPage() {
               >
                 {user.notifiedUser ? <Bell className="mr-1 h-4 w-4" /> : <BellOff className="mr-1 h-4 w-4" />}
                 {user.notifiedUser ? 'Notify On' : 'Notify Off'}
+              </Button>
+              <Button
+                variant={user.maintenanceUser ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => toggleMaintenanceUser(user)}
+                title={user.maintenanceUser ? 'Receiving maintenance error notifications' : 'Not receiving maintenance notifications'}
+              >
+                <Wrench className="mr-1 h-4 w-4" />
+                {user.maintenanceUser ? 'Maint On' : 'Maint Off'}
               </Button>
             </TableCell>
           </TableRow>

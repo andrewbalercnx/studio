@@ -35,3 +35,39 @@ export async function getNotifiedEmails(
     .map(u => u.email)
     .filter((email): email is string => !!email);
 }
+
+/**
+ * Get all users who should receive maintenance/error notifications.
+ * Uses Firebase Admin SDK (server-side only).
+ */
+export async function getMaintenanceUsers(
+  firestore: FirebaseFirestore.Firestore
+): Promise<UserProfile[]> {
+  try {
+    const snapshot = await firestore
+      .collection('users')
+      .where('maintenanceUser', '==', true)
+      .get();
+
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    } as UserProfile));
+  } catch (error: any) {
+    console.error('[Email] Failed to get maintenance users:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Get email addresses for all maintenance users.
+ * Filters out any users without email addresses.
+ */
+export async function getMaintenanceEmails(
+  firestore: FirebaseFirestore.Firestore
+): Promise<string[]> {
+  const users = await getMaintenanceUsers(firestore);
+  return users
+    .map(u => u.email)
+    .filter((email): email is string => !!email);
+}

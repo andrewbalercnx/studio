@@ -52,6 +52,11 @@ const TEMPLATE_LABELS: Record<EmailTemplateType, { title: string; description: s
     description: 'Sent when testing email configuration',
     placeholders: 'None',
   },
+  maintenanceError: {
+    title: 'Maintenance Error',
+    description: 'Sent to maintenance users when system errors occur',
+    placeholders: '{{flowName}}, {{errorType}}',
+  },
 };
 
 const TEMPLATE_TYPES: EmailTemplateType[] = [
@@ -61,6 +66,7 @@ const TEMPLATE_TYPES: EmailTemplateType[] = [
   'orderRejected',
   'orderCancelled',
   'testEmail',
+  'maintenanceError',
 ];
 
 export default function EmailConfigPage() {
