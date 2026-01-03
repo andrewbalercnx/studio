@@ -18,7 +18,7 @@
 
 ### 2026-01-03
 
-#### `PENDING` - Improve error messages when Gemini returns no image
+#### `bc110b4` - Improve error messages when Gemini returns no image
 
 **Type**: Enhancement
 
