@@ -18,6 +18,23 @@
 
 ### 2026-01-03
 
+#### `PENDING` - Improve error messages when Gemini returns no image
+
+**Type**: Enhancement
+
+**Summary**: Better error messages when image generation completes but produces no image (usually due to content filtering).
+
+**Details**:
+- When Gemini's finish reason indicates safety blocking, show a clear message
+- Log the finishReason and finishMessage for debugging
+- Suggests actionable fixes: simplify scene, modify art style, etc.
+- Handles cases where model returns text explanation instead of image
+
+**Modified files**:
+- `src/ai/flows/story-image-flow.ts`
+
+---
+
 #### `b9433d3` - Improve error display in storybook viewer page
 
 **Type**: Enhancement

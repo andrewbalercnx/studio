@@ -916,13 +916,39 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
   const media = generation.media;
   if (!media?.url) {
     // Log what we got from the generation
+    const finishReason = generation.finishReason;
+    const finishMessage = generation.finishMessage;
+    const textResponse = generation.text?.substring(0, 200);
+
     console.error('[story-image-flow] No media.url in generation:', {
       hasMedia: !!media,
       mediaKeys: media ? Object.keys(media) : [],
       generationKeys: Object.keys(generation),
-      text: generation.text?.substring(0, 100),
+      finishReason,
+      finishMessage,
+      text: textResponse,
     });
-    throw new Error('Image model returned no media payload.');
+
+    // Provide a more helpful error message based on the finish reason
+    // Note: finishReason types from Genkit may not cover all Gemini-specific reasons,
+    // so we cast to string for comparison
+    let errorMessage = 'Image model returned no media payload.';
+    const reason = String(finishReason || '');
+
+    if (reason === 'blocked' || reason === 'safety' || reason.includes('SAFETY')) {
+      errorMessage = 'Image was blocked by content safety filters. Try simplifying the scene description or removing potentially sensitive content.';
+    } else if (reason === 'recitation' || reason.includes('RECITATION')) {
+      errorMessage = 'Image was blocked due to copyright/recitation concerns. Try modifying the art style or scene description.';
+    } else if (reason === 'other' || reason === 'unknown') {
+      errorMessage = `Image generation completed but no image was produced. Reason: ${finishMessage || 'unknown'}. Try regenerating.`;
+    } else if (textResponse) {
+      // Sometimes the model returns text explaining why it couldn't generate an image
+      errorMessage = `Image not generated. Model response: "${textResponse}"`;
+    } else {
+      errorMessage = `Image generation returned no image (finishReason: ${reason || 'none'}). The scene may have triggered content filters.`;
+    }
+
+    throw new Error(errorMessage);
   }
 
   console.log('[story-image-flow] Parsing media URL:', {
