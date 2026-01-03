@@ -55,7 +55,7 @@ const defaultGenerators: Omit<StoryGenerator, 'createdAt' | 'updatedAt'>[] = [
   {
     id: 'gemini4',
     name: 'Guided Story',
-    description: 'Structured story generation with story type selection and guided progression.',
+    description: 'AI-guided story creation with structured phases (opening, setting, characters, conflict, resolution).',
     status: 'live',
     capabilities: {
       minChoices: 2,
@@ -63,7 +63,7 @@ const defaultGenerators: Omit<StoryGenerator, 'createdAt' | 'updatedAt'>[] = [
       supportsMoreOptions: true,
       supportsCharacterIntroduction: true,
       supportsFinalStory: true,
-      requiresStoryType: true,
+      requiresStoryType: false, // Uses internal phase system, not story types
     },
     apiEndpoint: '/api/gemini4',
     styling: {
