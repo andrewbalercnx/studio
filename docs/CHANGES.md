@@ -18,6 +18,23 @@
 
 ### 2026-01-03
 
+#### `2bcf1b9` - Fix gemini4 generator to skip story type selection
+
+**Type**: Bug Fix
+
+**Summary**: The Guided Story (gemini4) flow was showing story type selection but didn't actually use it. Changed `requiresStoryType` to `false`.
+
+**Details**:
+- The gemini4 flow uses its own internal phase system (opening, setting, characters, conflict, resolution)
+- It doesn't use story types from the storyTypes collection
+- Now skips story type selection and goes directly to the story
+- **Action Required**: Re-run the seed API at `/api/admin/story-generators/seed` or manually update `storyGenerators/gemini4` in Firestore
+
+**Files Modified**:
+- `src/app/api/admin/story-generators/seed/route.ts`
+
+---
+
 #### `455558b` - Fix wizard flow and TTS autoplay issues
 
 **Type**: Bug Fix
