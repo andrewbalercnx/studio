@@ -87,13 +87,18 @@ async function generatePageAudio(
   bucket: any,
   entityMap?: EntityMap
 ): Promise<{ audioUrl: string; metadata: any } | null> {
-  // Get the base text to narrate - prefer displayText (resolved placeholders) over bodyText
-  let textToNarrate = page.displayText || page.bodyText || page.title;
+  // For TTS, we ALWAYS want to resolve bodyText with pronunciation hints
+  // This ensures names like "Siobhan" are pronounced correctly as "shiv-AWN"
+  // We use bodyText (with placeholders) rather than displayText (already resolved without pronunciation)
+  let textToNarrate: string | undefined;
 
-  // If we have bodyText with placeholders, resolve them for TTS
-  // This uses namePronunciation when available for correct name pronunciation
-  if (!textToNarrate && page.bodyText && entityMap) {
+  // Priority: bodyText resolved with TTS pronunciation > displayText > title
+  if (page.bodyText && entityMap) {
     textToNarrate = await replacePlaceholdersForTTS(page.bodyText, entityMap);
+  } else if (page.displayText) {
+    textToNarrate = page.displayText;
+  } else if (page.title) {
+    textToNarrate = page.title;
   }
 
   if (!textToNarrate || textToNarrate.trim().length === 0) {

@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { useAppContext } from '@/hooks/use-app-context';
 import { ChildAvatarAnimation } from '@/components/child/child-avatar-animation';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
+import { RefreshCw } from 'lucide-react';
 
 // Calculate overall progress percentage (0-100)
 function calculateOverallProgress(storybook: StoryBookOutput): number {
@@ -106,6 +107,7 @@ export default function BookGeneratingPage({
   const hasTriggeredPages = useRef(false);
   const hasTriggeredImages = useRef(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // Load storybook (only when authenticated and auth token is ready)
   // We wait for idTokenResult to ensure Firebase auth is fully synced with Firestore
@@ -228,6 +230,58 @@ export default function BookGeneratingPage({
       router.push(`/child/${childId}/books`);
     }
   }, [storybook?.imageGeneration?.status, childId, router, toast]);
+
+  // Retry failed image generation
+  const handleRetryImages = async () => {
+    if (!storybook || isRetrying) return;
+
+    setIsRetrying(true);
+    hasTriggeredImages.current = true;
+
+    try {
+      const res = await fetch('/api/storybookV2/images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storyId,
+          storybookId,
+          imageStylePrompt: storybook.imageStylePrompt,
+          ...(storybook.imageWidthPx != null && { targetWidthPx: storybook.imageWidthPx }),
+          ...(storybook.imageHeightPx != null && { targetHeightPx: storybook.imageHeightPx }),
+        }),
+      });
+
+      const result = await res.json();
+
+      if (result.ok) {
+        toast({
+          title: 'Retry Successful',
+          description: 'All images are now complete!',
+        });
+      } else if (result.status === 'ready') {
+        toast({
+          title: 'Book Complete!',
+          description: 'Your storybook is ready to read!',
+        });
+      } else {
+        toast({
+          title: 'Some Images Still Failed',
+          description: result.errorMessage || 'Please try again later.',
+          variant: 'destructive',
+        });
+        hasTriggeredImages.current = false;
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Retry Failed',
+        description: err.message || 'Please try again later.',
+        variant: 'destructive',
+      });
+      hasTriggeredImages.current = false;
+    } finally {
+      setIsRetrying(false);
+    }
+  };
 
   if (userLoading || storybookLoading) {
     return (
@@ -457,7 +511,28 @@ export default function BookGeneratingPage({
 
         {/* Error Actions */}
         {hasError && (
-          <div className="flex gap-4 justify-center">
+          <div className="flex flex-col gap-4 items-center">
+            <Button
+              onClick={handleRetryImages}
+              disabled={isRetrying}
+              size="lg"
+              className="min-w-[200px]"
+            >
+              {isRetrying ? (
+                <>
+                  <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                  Retrying...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Try Again
+                </>
+              )}
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              {storybook?.imageGeneration?.pagesReady || 0} of {storybook?.imageGeneration?.pagesTotal || 0} images complete
+            </p>
             <Button asChild variant="outline">
               <Link href={`/child/${childId}/stories`}>
                 <ArrowLeft className="mr-2 h-4 w-4" />

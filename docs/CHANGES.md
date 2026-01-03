@@ -18,6 +18,24 @@
 
 ### 2026-01-03
 
+#### `PENDING` - Add retry button for failed image generation and fix TTS pronunciation
+
+**Type**: Bug Fix / Enhancement
+
+**Summary**: Added "Try Again" button on book generating page when image generation fails, and fixed TTS narration to use pronunciation hints for character names.
+
+**Details**:
+- **Retry Button**: When image generation fails (e.g., "One or more pages failed to render"), a "Try Again" button now appears. This calls the existing `/api/storybookV2/images` endpoint which only regenerates pages without `imageStatus === 'ready'`.
+- **TTS Pronunciation Fix**: The `storyPageAudioFlow` was using `displayText` (already resolved without pronunciation) instead of `bodyText` with pronunciation hints. Now always resolves `bodyText` with `replacePlaceholdersForTTS()` which uses `namePronunciation` field for correct pronunciation of names like "Siobhan" → "shiv-AWN".
+- **Client-side Placeholder Resolution**: Added fallback placeholder resolution in `ImmersivePlayer` using `useResolvePlaceholdersMultiple` hook for pages that may not have `displayText` pre-resolved.
+
+**Modified files**:
+- `src/app/child/[childId]/book/[storybookId]/generating/page.tsx` - Added retry button and handler
+- `src/ai/flows/story-page-audio-flow.ts` - Fixed TTS to always use pronunciation hints
+- `src/components/book-reader/immersive-player.tsx` - Added client-side placeholder resolution fallback
+
+---
+
 #### `086400b` - Add editable name and description fields to story generators admin page
 
 **Type**: Enhancement
