@@ -3,13 +3,14 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, ChevronDown, ChevronUp, Music, Play, Square, CheckCircle, RefreshCw } from 'lucide-react';
+import { LoaderCircle, ChevronDown, ChevronUp, Music, Play, Square, CheckCircle, RefreshCw, Pencil } from 'lucide-react';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { useEffect, useState, useRef } from 'react';
 import { useFirestore, useAuth } from '@/firebase';
 import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { StoryGenerator } from '@/lib/types';
@@ -36,8 +37,8 @@ const PROMPT_DESCRIPTIONS: Record<string, Record<string, string>> = {
   },
 };
 
-// Generator display info
-const GENERATOR_INFO: Record<string, { name: string; description: string }> = {
+// Default fallback info (used if generator data is missing)
+const DEFAULT_GENERATOR_INFO: Record<string, { name: string; description: string }> = {
   wizard: {
     name: 'Story Wizard',
     description: 'A 4-question wizard that gathers story preferences before generating a complete story',
@@ -323,18 +324,124 @@ function PromptsEditor({
   );
 }
 
+// General Info Editor Component
+function GeneralInfoEditor({
+  generator,
+  onSave,
+}: {
+  generator: StoryGenerator;
+  onSave: (data: { name: string; description: string }) => Promise<void>;
+}) {
+  const { toast } = useToast();
+  const defaultInfo = DEFAULT_GENERATOR_INFO[generator.id] || { name: generator.id, description: '' };
+  const [name, setName] = useState(generator.name || defaultInfo.name);
+  const [description, setDescription] = useState(generator.description || defaultInfo.description);
+  const [saving, setSaving] = useState(false);
+
+  const hasChanges = name !== (generator.name || defaultInfo.name) ||
+    description !== (generator.description || defaultInfo.description);
+
+  // Update local state when generator prop changes
+  useEffect(() => {
+    setName(generator.name || defaultInfo.name);
+    setDescription(generator.description || defaultInfo.description);
+  }, [generator.name, generator.description, defaultInfo.name, defaultInfo.description]);
+
+  const handleSave = async () => {
+    if (!name.trim()) {
+      toast({ title: 'Error', description: 'Name is required', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave({ name: name.trim(), description: description.trim() });
+      toast({ title: 'Saved', description: 'Generator info updated successfully' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Edit the display name and description shown throughout the app.
+      </p>
+
+      <div className="space-y-2">
+        <Label htmlFor="generatorName">Display Name</Label>
+        <Input
+          id="generatorName"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Enter generator name..."
+        />
+        <p className="text-xs text-muted-foreground">
+          This name is shown to users when selecting a story creation mode.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="generatorDescription">Description</Label>
+        <Textarea
+          id="generatorDescription"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Enter description..."
+          rows={2}
+        />
+        <p className="text-xs text-muted-foreground">
+          A brief description of what this generator does.
+        </p>
+      </div>
+
+      <div className="space-y-4 pt-4 border-t text-sm">
+        <div>
+          <Label className="text-muted-foreground">ID</Label>
+          <p className="font-mono">{generator.id}</p>
+        </div>
+        <div>
+          <Label className="text-muted-foreground">API Endpoint</Label>
+          <p className="font-mono">{generator.apiEndpoint}</p>
+        </div>
+        {generator.styling && (
+          <div>
+            <Label className="text-muted-foreground">Styling</Label>
+            <p>Gradient: {generator.styling.gradient}</p>
+            <p>Loading: {generator.styling.loadingMessage}</p>
+          </div>
+        )}
+      </div>
+
+      {hasChanges && (
+        <div className="pt-4">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <LoaderCircle className="h-4 w-4 animate-spin mr-2" /> : null}
+            Save Changes
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Generator Card Component
 function GeneratorCard({
   generator,
   onUpdateMusic,
   onUpdatePrompts,
+  onUpdateInfo,
 }: {
   generator: StoryGenerator;
   onUpdateMusic: (generatorId: string, prompt: string) => Promise<void>;
   onUpdatePrompts: (generatorId: string, prompts: Record<string, string>) => Promise<void>;
+  onUpdateInfo: (generatorId: string, data: { name: string; description: string }) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const info = GENERATOR_INFO[generator.id] || { name: generator.name, description: generator.description };
+  const defaultInfo = DEFAULT_GENERATOR_INFO[generator.id] || { name: generator.id, description: '' };
+  const displayName = generator.name || defaultInfo.name;
+  const displayDescription = generator.description || defaultInfo.description;
   const hasMusic = !!generator.backgroundMusic?.audioUrl;
   const hasPrompts = Object.keys(generator.prompts || {}).length > 0;
   const isConfigurable = generator.id !== 'beat'; // beat uses storyTypes
@@ -348,7 +455,7 @@ function GeneratorCard({
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-lg flex items-center gap-2">
-              {info.name}
+              {displayName}
               <span className={`text-xs px-2 py-0.5 rounded ${
                 generator.status === 'live' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
               }`}>
@@ -365,7 +472,7 @@ function GeneratorCard({
                 </span>
               )}
             </CardTitle>
-            <CardDescription>{info.description}</CardDescription>
+            <CardDescription>{displayDescription}</CardDescription>
           </div>
           <Button variant="ghost" size="icon">
             {expanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
@@ -376,14 +483,23 @@ function GeneratorCard({
       {expanded && (
         <CardContent className="border-t pt-4">
           {isConfigurable ? (
-            <Tabs defaultValue="music">
+            <Tabs defaultValue="info">
               <TabsList className="mb-4">
+                <TabsTrigger value="info" className="flex items-center gap-1">
+                  <Pencil className="h-4 w-4" /> General
+                </TabsTrigger>
                 <TabsTrigger value="music" className="flex items-center gap-1">
                   <Music className="h-4 w-4" /> Music
                 </TabsTrigger>
                 <TabsTrigger value="prompts">Prompts</TabsTrigger>
-                <TabsTrigger value="info">Info</TabsTrigger>
               </TabsList>
+
+              <TabsContent value="info">
+                <GeneralInfoEditor
+                  generator={generator}
+                  onSave={(data) => onUpdateInfo(generator.id, data)}
+                />
+              </TabsContent>
 
               <TabsContent value="music">
                 <BackgroundMusicEditor
@@ -398,34 +514,20 @@ function GeneratorCard({
                   onSave={(prompts) => onUpdatePrompts(generator.id, prompts)}
                 />
               </TabsContent>
-
-              <TabsContent value="info">
-                <div className="space-y-4 text-sm">
-                  <div>
-                    <Label className="text-muted-foreground">ID</Label>
-                    <p className="font-mono">{generator.id}</p>
-                  </div>
-                  <div>
-                    <Label className="text-muted-foreground">API Endpoint</Label>
-                    <p className="font-mono">{generator.apiEndpoint}</p>
-                  </div>
-                  {generator.styling && (
-                    <div>
-                      <Label className="text-muted-foreground">Styling</Label>
-                      <p>Gradient: {generator.styling.gradient}</p>
-                      <p>Loading: {generator.styling.loadingMessage}</p>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
             </Tabs>
           ) : (
-            <div className="text-sm text-muted-foreground">
-              <p>The Story Beats generator uses <strong>Story Types</strong> for configuration.</p>
-              <p className="mt-2">
-                Each story type has its own prompts, arc steps, and background music.
-                Visit the <a href="/admin/storyTypes" className="text-primary underline">Story Types</a> page to configure them.
-              </p>
+            <div className="space-y-4">
+              <GeneralInfoEditor
+                generator={generator}
+                onSave={(data) => onUpdateInfo(generator.id, data)}
+              />
+              <div className="text-sm text-muted-foreground border-t pt-4 mt-4">
+                <p>The Story Beats generator uses <strong>Story Types</strong> for prompts and music configuration.</p>
+                <p className="mt-2">
+                  Each story type has its own prompts, arc steps, and background music.
+                  Visit the <a href="/admin/storyTypes" className="text-primary underline">Story Types</a> page to configure them.
+                </p>
+              </div>
             </div>
           )}
         </CardContent>
@@ -513,6 +615,15 @@ export default function AdminStoryGeneratorsPage() {
     });
   };
 
+  const handleUpdateInfo = async (generatorId: string, data: { name: string; description: string }) => {
+    if (!firestore) return;
+    const docRef = doc(firestore, 'storyGenerators', generatorId);
+    await updateDoc(docRef, {
+      name: data.name,
+      description: data.description,
+    });
+  };
+
   const diagnostics = {
     page: 'admin-storyGenerators',
     auth: {
@@ -568,6 +679,7 @@ export default function AdminStoryGeneratorsPage() {
             generator={gen}
             onUpdateMusic={handleUpdateMusic}
             onUpdatePrompts={handleUpdatePrompts}
+            onUpdateInfo={handleUpdateInfo}
           />
         ))}
       </div>
