@@ -9,6 +9,7 @@ import { useFirestore } from '@/firebase';
 import { doc, setDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase/auth/use-user';
+import { DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 
 export default function AdminCreateDataPage() {
   const { isAuthenticated, isAdmin, loading: authLoading } = useAdminStatus();
@@ -26,6 +27,8 @@ export default function AdminCreateDataPage() {
       id: childId,
       ownerParentUid: user.uid,
       displayName: 'Sample Child',
+      preferredVoiceId: DEFAULT_TTS_VOICE, // Alice (British)
+      autoReadAloud: true, // Enable "Read to Me" by default
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };

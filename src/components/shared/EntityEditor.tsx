@@ -491,7 +491,8 @@ export function EntityEditor({
             id: docId,
             photos: [],
             avatarUrl: `https://picsum.photos/seed/${displayName.trim()}/200/200`,
-            preferredVoiceId: DEFAULT_TTS_VOICE, // Set default TTS voice for new children
+            preferredVoiceId: DEFAULT_TTS_VOICE, // Set default TTS voice (Alice) for new children
+            autoReadAloud: true, // Enable "Read to Me" by default
             createdAt: serverTimestamp(),
           });
         }
