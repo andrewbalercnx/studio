@@ -32,6 +32,7 @@ User profiles with authentication and role information.
 | `canShowWizardTargets` | boolean | No | Allow wizard target overlays |
 | `hasCompletedStartupWizard` | boolean | No | True after user has seen default startup wizard |
 | `notifiedUser` | boolean | No | Receives admin notifications for print orders |
+| `maintenanceUser` | boolean | No | Receives maintenance/error notification emails |
 
 **Subcollections**:
 - `voices/{voiceId}` - Parent's cloned voices for TTS (see `ParentVoice` type)
@@ -567,6 +568,14 @@ System-wide configuration documents.
 | `updatedAt` | timestamp | No | Last update time |
 | `updatedBy` | string | No | Email of last updater |
 
+#### `systemConfig/imagePrompt`
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `imagePrompt` | string | Yes | Global prompt prepended to all image generation requests |
+| `enabled` | boolean | Yes | When true, use custom prompt; when false, no global prefix |
+| `updatedAt` | timestamp | No | Last update time |
+| `updatedBy` | string | No | Email of last updater |
+
 #### `systemConfig/kids-flows`
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -598,7 +607,9 @@ System-wide configuration documents.
 | `buttonText` | string | Yes | Call-to-action button text |
 | `buttonUrl` | string | No | Custom button URL (defaults to admin order page) |
 
-Template types: `orderSubmitted`, `orderStatusChanged`, `orderApproved`, `orderRejected`, `orderCancelled`, `testEmail`
+Template types: `orderSubmitted`, `orderStatusChanged`, `orderApproved`, `orderRejected`, `orderCancelled`, `testEmail`, `maintenanceError`
+
+**maintenanceError placeholders**: `{{flowName}}`, `{{errorType}}`
 
 **Security**: Admin only.
 

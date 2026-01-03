@@ -62,6 +62,7 @@ export type UserProfile = {
   canShowWizardTargets?: boolean; // Allow this user to toggle wizard target overlays
   hasCompletedStartupWizard?: boolean; // True once user has seen the default startup wizard
   notifiedUser?: boolean; // Receives admin notifications for print orders
+  maintenanceUser?: boolean; // Receives maintenance/error notification emails
 };
 
 // Parent's cloned voice for TTS (stored in Firestore: users/{parentUid}/voices/{voiceId})
@@ -1436,6 +1437,7 @@ export type DiagnosticsConfig = {
   enableAIFlowLogging: boolean;      // AI flow detailed logging
   showApiDocumentation: boolean;     // Expose API docs at /api-documentation
   enableMixamWebhookLogging: boolean; // Debug logging for Mixam webhooks
+  showReportIssueButton: boolean;    // Show "Report Issue" button in header
   updatedAt?: any;
   updatedBy?: string;
 };
@@ -1448,6 +1450,7 @@ export const DEFAULT_DIAGNOSTICS_CONFIG: DiagnosticsConfig = {
   enableAIFlowLogging: true,
   showApiDocumentation: false,
   enableMixamWebhookLogging: true, // Default on while testing
+  showReportIssueButton: false,
 };
 
 // Global prompt configuration - prepended to all AI prompts
@@ -1502,6 +1505,26 @@ export const DEFAULT_PAGINATION_PROMPT_CONFIG: PaginationPromptConfig = {
   enabled: true, // Enabled by default since the prompt is required
 };
 
+// Image prompt configuration - global prefix for all image generation prompts
+export type ImagePromptConfig = {
+  imagePrompt: string;
+  enabled: boolean;
+  updatedAt?: any;
+  updatedBy?: string;
+};
+
+// Default image generation prompt - prepended to all image generation requests
+export const DEFAULT_IMAGE_PROMPT = `Create an illustration for a children's picture book. The image should be:
+- Age-appropriate and gentle for young children (ages 3-7)
+- Warm, inviting, and emotionally positive
+- Free from scary, violent, or intense imagery
+- Colorful and engaging with soft lighting`;
+
+export const DEFAULT_IMAGE_PROMPT_CONFIG: ImagePromptConfig = {
+  imagePrompt: DEFAULT_IMAGE_PROMPT,
+  enabled: false, // Disabled by default, uses hardcoded prompt in flow
+};
+
 // Kids flow configuration - controls which story flows are available in /kids endpoint
 export type KidsFlowConfig = {
   wizardEnabled: boolean;
@@ -1526,7 +1549,8 @@ export type EmailTemplateType =
   | 'orderApproved'
   | 'orderRejected'
   | 'orderCancelled'
-  | 'testEmail';
+  | 'testEmail'
+  | 'maintenanceError';
 
 // Individual email template configuration
 export type EmailTemplate = {
@@ -1606,6 +1630,13 @@ export const DEFAULT_EMAIL_CONFIG: EmailConfig = {
       heading: 'Test Email',
       bodyText: 'This is a test email to verify your email configuration is working correctly.',
       buttonText: 'Open Admin Dashboard',
+    },
+    maintenanceError: {
+      enabled: true,
+      subject: 'Error: {{flowName}} - {{errorType}}',
+      heading: 'System Error Occurred',
+      bodyText: 'An error occurred during processing that requires attention.',
+      buttonText: 'View Admin Dashboard',
     },
   },
 };

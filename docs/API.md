@@ -1450,6 +1450,49 @@ Update pagination prompt configuration.
 
 ---
 
+### GET `/api/admin/system-config/image-prompt`
+
+Get image prompt configuration for global image generation settings.
+
+**Auth**: Admin only
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "config": {
+    "imagePrompt": "Create an illustration for a children's picture book...",
+    "enabled": false
+  }
+}
+```
+
+---
+
+### PUT `/api/admin/system-config/image-prompt`
+
+Update image prompt configuration. When enabled, this prompt is prepended to all image generation requests.
+
+**Auth**: Admin only
+
+**Request Body**:
+```json
+{
+  "imagePrompt": "Your custom image generation prompt...",
+  "enabled": true
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "message": "Image prompt configuration updated successfully"
+}
+```
+
+---
+
 ### GET `/api/admin/system-config/kids-flows`
 
 Get kids flow configuration.

@@ -11,6 +11,8 @@ import {z} from 'genkit';
 import imageSize from 'image-size';
 import { Gaxios, GaxiosError } from 'gaxios';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { notifyMaintenanceError } from '@/lib/email/notify-admins';
+import { getGlobalImagePrompt } from '@/lib/image-prompt-config.server';
 // New actor utilities - available for future use alongside existing fetchEntityReferenceData
 import {
   getActorsDetailsWithImageData,
@@ -712,6 +714,9 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     return buildMockSvg(sceneText, targetWidthPx, targetHeightPx);
   }
 
+  // Fetch global image prompt configuration
+  const globalImagePrompt = await getGlobalImagePrompt();
+
   // Fetch style example images first (these go before reference photos)
   const styleExampleParts = styleExampleImages && styleExampleImages.length > 0
     ? (await Promise.all(
@@ -738,6 +743,11 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
 
   // Build the structured prompt in the new format
   let structuredPrompt = '';
+
+  // 0. Global image prompt (if configured)
+  if (globalImagePrompt) {
+    structuredPrompt += `${globalImagePrompt}\n\n`;
+  }
 
   // 1. Target audience
   if (mainChildId && childAge) {
@@ -1292,6 +1302,73 @@ export const storyImageFlow = ai.defineFlow(
         logs.push(`[warn] Failed to record error state: ${(updateError as Error)?.message}`);
       }
       logs.push(`[error] ${message}`);
+
+      // Gather extended diagnostics for maintenance notification
+      let extendedDiagnostics: Record<string, any> = {
+        // Core identifiers
+        storyId,
+        pageId,
+        storybookId: storybookId || null,
+
+        // Configuration
+        imageStyleId: imageStyleId || null,
+        imageStylePrompt: imageStylePrompt ? imageStylePrompt.substring(0, 100) + '...' : null,
+        aspectRatio: aspectRatio || null,
+        targetDimensions: targetWidthPx && targetHeightPx ? `${targetWidthPx}x${targetHeightPx}px` : null,
+
+        // Model info
+        model: DEFAULT_IMAGE_MODEL,
+        mockImagesEnabled: MOCK_IMAGES,
+
+        // Logs for debugging
+        logs,
+      };
+
+      // Try to fetch additional context for the notification
+      try {
+        const storySnap = await storyRef.get();
+        if (storySnap.exists) {
+          const storyData = storySnap.data() as Story;
+          extendedDiagnostics.story = {
+            title: storyData.metadata?.title || null,
+            childId: storyData.childId || null,
+            parentUid: storyData.parentUid || null,
+            storySessionId: storyData.storySessionId || null,
+          };
+        }
+
+        const pageSnap = await pageRef.get();
+        if (pageSnap.exists) {
+          const page = pageSnap.data() as StoryOutputPage;
+          extendedDiagnostics.page = {
+            kind: page.kind || null,
+            pageNumber: page.pageNumber || null,
+            entityIds: page.entityIds || [],
+            imagePromptPreview: page.imagePrompt ? page.imagePrompt.substring(0, 150) + '...' : null,
+            imageDescription: page.imageDescription ? page.imageDescription.substring(0, 150) + '...' : null,
+            hasBodyText: !!page.bodyText,
+          };
+        }
+      } catch (contextError) {
+        logs.push(`[warn] Failed to gather extended diagnostics: ${(contextError as Error)?.message}`);
+      }
+
+      // Send maintenance error notification email
+      try {
+        await notifyMaintenanceError(firestore, {
+          flowName: 'storyImageFlow',
+          errorType: 'ImageGenerationFailed',
+          errorMessage: message,
+          pagePath: `/storybook/${storybookId || storyId}?storyId=${storyId}`,
+          diagnostics: extendedDiagnostics,
+          timestamp: new Date(),
+        });
+        logs.push('[email] Maintenance error notification sent');
+      } catch (emailError: any) {
+        // Don't fail the flow if email fails - just log it
+        logs.push(`[warn] Failed to send maintenance notification: ${emailError?.message ?? emailError}`);
+      }
+
       return {
         ok: false as const,
         storyId,

@@ -394,11 +394,14 @@ export default function AdminDashboardPage() {
                     <Link href="/admin/pagination-prompt">Pagination Prompt</Link>
                   </Button>
                   <Button asChild variant="outline" size="sm">
+                    <Link href="/admin/image-prompt">Image Prompt</Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm">
                     <Link href="/admin/prompts">Prompt Configs</Link>
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Configure prompts for AI story generation: global prefix, story compilation, pagination, and per-flow configs.
+                  Configure prompts for AI story generation: global prefix, story compilation, pagination, image generation, and per-flow configs.
                 </p>
               </div>
               <div>

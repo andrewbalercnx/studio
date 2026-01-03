@@ -18,6 +18,65 @@
 
 ### 2026-01-03
 
+#### `PENDING` - Add global image prompt configuration
+
+**Type**: Feature
+
+**Summary**: Added configurable global image prompt that is prepended to all image generation requests. Allows setting consistent guidelines for image style, safety, and appropriateness across all storybook illustrations.
+
+**Changes**:
+- Added `ImagePromptConfig` type to types.ts
+- Created `image-prompt-config.server.ts` with caching
+- Created `/api/admin/system-config/image-prompt` API route
+- Created `/admin/image-prompt` admin page
+- Updated `story-image-flow.ts` to use global image prompt
+- Added link to admin page under AI Prompts section
+
+**Files Created**:
+- `src/lib/image-prompt-config.server.ts`
+- `src/app/api/admin/system-config/image-prompt/route.ts`
+- `src/app/admin/image-prompt/page.tsx`
+
+**Files Modified**:
+- `src/lib/types.ts`
+- `src/ai/flows/story-image-flow.ts`
+- `src/app/admin/page.tsx`
+- `docs/SCHEMA.md`
+- `docs/API.md`
+
+---
+
+#### `PENDING` - Add maintenance error email notifications
+
+**Type**: Feature
+
+**Summary**: Production-ready error notification system. When AI flows fail, maintenance users receive detailed email notifications with error context and diagnostics.
+
+**Details**:
+- Added `maintenanceUser` flag to UserProfile (users/{uid})
+- Added `maintenanceError` email template type with {{flowName}} and {{errorType}} placeholders
+- Created `maintenanceErrorTemplate()` builder with error details, page path, and diagnostics JSON
+- Created `notifyMaintenanceError()` and `getMaintenanceEmails()` functions
+- Added "Maint On/Off" toggle to Admin → Users page
+- Added maintenanceError template to Admin → Email Config page
+- storyImageFlow now sends notification emails on failures with extended diagnostics:
+  - Story context (title, childId, parentUid, sessionId)
+  - Page context (kind, pageNumber, entityIds, imagePrompt preview)
+  - Configuration (model, dimensions, aspect ratio, style)
+  - Full logs for debugging
+
+**Modified files**:
+- `src/lib/types.ts` - Added maintenanceUser to UserProfile, maintenanceError to EmailTemplateType
+- `src/lib/email/templates.ts` - Added MaintenanceErrorDetails type and maintenanceErrorTemplate()
+- `src/lib/email/notify-admins.ts` - Added notifyMaintenanceError() function
+- `src/lib/email/get-notified-users.ts` - Added getMaintenanceUsers() and getMaintenanceEmails()
+- `src/app/admin/users/page.tsx` - Added maintenance user toggle button
+- `src/app/admin/email-config/page.tsx` - Added maintenanceError template configuration
+- `src/ai/flows/story-image-flow.ts` - Integrated maintenance error notifications
+- `docs/SCHEMA.md` - Documented maintenanceUser field and maintenanceError template
+
+---
+
 #### `a6eea18` - Add retry tracking to AI flow logs and hide generation logs
 
 **Type**: Enhancement
