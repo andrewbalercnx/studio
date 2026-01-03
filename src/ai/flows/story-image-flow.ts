@@ -455,7 +455,13 @@ async function fetchEntityReferenceData(
   const characters: Character[] = [];
   const actorMap = new Map<string, Character | ChildProfile>();
   let childProfile: ChildProfile | undefined;
-  const uniqueIds = [...new Set(entityIds)];
+  // Filter out empty strings to prevent Firestore "documentPath must be non-empty" error
+  const uniqueIds = [...new Set(entityIds)].filter(id => id && id.trim().length > 0);
+
+  // Return early if all IDs were empty/invalid
+  if (uniqueIds.length === 0) {
+    return { photos: [], characters: [], actorMap: new Map() };
+  }
 
   // Fetch in chunks of 10 (Firestore 'in' query limit)
   const chunkSize = 10;
@@ -574,7 +580,13 @@ async function fetchEntityAvatarsOnly(
   }
 
   const avatars: string[] = [];
-  const uniqueIds = [...new Set(entityIds)];
+  // Filter out empty strings to prevent Firestore "documentPath must be non-empty" error
+  const uniqueIds = [...new Set(entityIds)].filter(id => id && id.trim().length > 0);
+
+  // Return early if all IDs were empty/invalid
+  if (uniqueIds.length === 0) {
+    return [];
+  }
 
   // Fetch in chunks of 10 (Firestore 'in' query limit)
   const chunkSize = 10;

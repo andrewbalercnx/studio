@@ -18,6 +18,23 @@
 
 ### 2026-01-03
 
+#### `PENDING` - Fix documentPath error in image generation
+
+**Type**: Bug Fix
+
+**Summary**: Image generation was failing with "documentPath is not a valid resource path" error when entity IDs contained empty strings from the AI pagination response.
+
+**Details**:
+- The AI pagination flow sometimes returns empty strings in the `actors` array
+- When passed to Firestore `where('__name__', 'in', [...])` query, empty strings cause an error
+- Added filtering in `fetchEntityReferenceData` and `fetchEntityAvatarsOnly` to remove empty/whitespace-only IDs
+- Added early return if all IDs are filtered out
+
+**Files Modified**:
+- `src/ai/flows/story-image-flow.ts`
+
+---
+
 #### `5c6f4de` - Fix story completion flow with explicit Continue button
 
 **Type**: Enhancement
