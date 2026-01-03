@@ -13,6 +13,8 @@ interface SpeechModeToggleProps {
   childProfile: ChildProfile;
   /** Optional className for styling */
   className?: string;
+  /** Show text label next to icon (hidden on small screens) */
+  showLabel?: boolean;
 }
 
 /**
@@ -20,7 +22,7 @@ interface SpeechModeToggleProps {
  * Only visible when the child has a preferred TTS voice set.
  * Persists the setting to Firestore.
  */
-export function SpeechModeToggle({ childProfile, className }: SpeechModeToggleProps) {
+export function SpeechModeToggle({ childProfile, className, showLabel }: SpeechModeToggleProps) {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState(false);
@@ -64,10 +66,10 @@ export function SpeechModeToggle({ childProfile, className }: SpeechModeTogglePr
   return (
     <Button
       variant={isEnabled ? 'default' : 'outline'}
-      size="icon"
+      size={showLabel ? 'sm' : 'icon'}
       onClick={handleToggle}
       disabled={isUpdating}
-      className={className}
+      className={showLabel ? `gap-2 ${className || ''}` : className}
       title={isEnabled ? 'Turn off speech mode' : 'Turn on speech mode'}
     >
       {isUpdating ? (
@@ -76,6 +78,11 @@ export function SpeechModeToggle({ childProfile, className }: SpeechModeTogglePr
         <Volume2 className="h-4 w-4" />
       ) : (
         <VolumeX className="h-4 w-4" />
+      )}
+      {showLabel && (
+        <span className="hidden sm:inline">
+          {isEnabled ? 'Read to Me' : 'Read to Me Off'}
+        </span>
       )}
     </Button>
   );

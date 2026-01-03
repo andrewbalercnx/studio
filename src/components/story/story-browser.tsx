@@ -717,36 +717,51 @@ export function StoryBrowser({
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col items-center p-4">
-      {/* Header Controls - positioned to not overlap with navigation */}
-      <div className="fixed top-3 right-4 z-40 flex items-center gap-1 bg-background/80 backdrop-blur-sm rounded-lg p-1 shadow-sm border">
-        {/* Music Toggle */}
-        {backgroundMusicUrl && (
-          <Button
-            variant={musicEnabled ? 'default' : 'ghost'}
-            size="icon"
-            onClick={() => setMusicEnabled(!musicEnabled)}
-            title={musicEnabled ? 'Turn off background music' : 'Turn on background music'}
-            className="h-8 w-8"
-          >
-            {musicEnabled ? <Music className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-          </Button>
-        )}
-        {/* Narration Toggle */}
-        {childProfile?.preferredVoiceId && (
-          <SpeechModeToggle childProfile={childProfile} className="h-8 w-8" />
-        )}
-        {/* Settings Link */}
-        {showSettingsLink && (
-          <Button variant="ghost" size="icon" asChild className="h-8 w-8">
-            <Link href={`/story/session/${sessionId}`} title="Diagnostic View">
-              <Settings className="h-4 w-4" />
-            </Link>
-          </Button>
-        )}
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
+      {/* Story Controls Bar - full width bar below header with page-specific controls */}
+      <div className="sticky top-14 z-40 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-12 max-w-screen-2xl items-center justify-between px-4">
+          {/* Left side - Story info (optional) */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            {generator && (
+              <span className="hidden sm:inline">{generator.name}</span>
+            )}
+          </div>
+
+          {/* Right side - Controls */}
+          <div className="flex items-center gap-2">
+            {/* Music Toggle */}
+            {backgroundMusicUrl && (
+              <Button
+                variant={musicEnabled ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setMusicEnabled(!musicEnabled)}
+                title={musicEnabled ? 'Turn off background music' : 'Turn on background music'}
+                className="gap-2"
+              >
+                {musicEnabled ? <Music className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                <span className="hidden sm:inline">{musicEnabled ? 'Music On' : 'Music Off'}</span>
+              </Button>
+            )}
+            {/* Narration Toggle */}
+            {childProfile?.preferredVoiceId && (
+              <SpeechModeToggle childProfile={childProfile} showLabel />
+            )}
+            {/* Settings Link */}
+            {showSettingsLink && (
+              <Button variant="ghost" size="sm" asChild className="gap-2">
+                <Link href={`/story/session/${sessionId}`} title="Diagnostic View">
+                  <Settings className="h-4 w-4" />
+                  <span className="hidden sm:inline">Settings</span>
+                </Link>
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="flex-grow flex flex-col items-center justify-center w-full max-w-2xl text-center">
+      {/* Main content area */}
+      <div className="flex-grow flex flex-col items-center justify-center w-full max-w-2xl mx-auto text-center p-4">
         {/* Loading/Generating State */}
         {showAvatarAnimation && (
           <div className="flex flex-col items-center justify-center gap-4">
