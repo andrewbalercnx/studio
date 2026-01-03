@@ -18,7 +18,7 @@
 
 ### 2026-01-03
 
-#### `PENDING` - Add retry button for failed image generation and fix TTS pronunciation
+#### `1249e92` - Add retry button for failed image generation and fix TTS pronunciation
 
 **Type**: Bug Fix / Enhancement
 
