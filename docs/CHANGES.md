@@ -16,6 +16,26 @@
 
 ## Changes
 
+### 2026-01-03
+
+#### `49db01e` - Enable "Read to Me" by default for new children
+
+**Type**: Enhancement
+
+**Summary**: New child profiles now have TTS narration enabled by default, so parents don't need to manually configure voice settings.
+
+**Changes**:
+
+- Set `preferredVoiceId` to `DEFAULT_TTS_VOICE` (Alice - British) on new children
+- Set `autoReadAloud` to `true` on new children
+- Updated both EntityEditor and admin create page
+
+**Files Modified**:
+- `src/components/shared/EntityEditor.tsx`
+- `src/app/admin/create/page.tsx`
+
+---
+
 ### 2026-01-02
 
 #### `bc4cd31` - Fix wizard flow placeholder resolution and story compilation
