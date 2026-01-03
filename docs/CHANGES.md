@@ -18,6 +18,26 @@
 
 ### 2026-01-03
 
+#### `41d269e` - Add separate music and narration toggles to story browser
+
+**Type**: Enhancement
+
+**Summary**: Story browser header now has separate toggles for background music and TTS narration, allowing users to control each independently.
+
+**Changes**:
+
+- Added `musicEnabled` state for user music preference
+- Music toggle button with Music/VolumeX icons
+- Narration toggle using existing SpeechModeToggle component
+- Fixed header layout with contained box styling (rounded, backdrop blur)
+- Consistent button sizing (h-8 w-8) to prevent overlap
+- Replaced MusicOff with VolumeX (MusicOff doesn't exist in lucide-react)
+
+**Files Modified**:
+- `src/components/story/story-browser.tsx`
+
+---
+
 #### `49db01e` - Enable "Read to Me" by default for new children
 
 **Type**: Enhancement
