@@ -18,6 +18,23 @@
 
 ### 2026-01-03
 
+#### `086400b` - Add editable name and description fields to story generators admin page
+
+**Type**: Enhancement
+
+**Summary**: Story generator names and descriptions can now be edited in the admin UI and are reflected throughout the app.
+
+**Details**:
+- Added "General" tab with editable name and description fields
+- Changes to generator names are stored in Firestore and displayed throughout the app
+- Falls back to hardcoded defaults if name/description not set in database
+- Also allows editing for the "beat" generator (was previously read-only)
+
+**Modified files**:
+- `src/app/admin/storyGenerators/page.tsx`
+
+---
+
 #### `612e996` - Fix single-dollar placeholder regex to allow hyphens and underscores
 
 **Type**: Bug Fix
