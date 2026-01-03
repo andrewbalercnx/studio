@@ -18,6 +18,32 @@
 
 ### 2026-01-03
 
+#### `02b7c8e` - Fix create-book flow and add diagnostics
+
+**Type**: Bug Fix
+
+**Summary**: Fixed three issues in the storybook creation flow: output type selection being skipped, Firestore "documentPath" errors, and missing diagnostics panel.
+
+**Changes**:
+
+1. **Create-book no longer skips output type selection**
+   - Previously, if story had `metadata.storyOutputTypeId`, it would skip directly to art style selection
+   - Now always shows output type selection, with pre-selection if available
+
+2. **Fix "documentPath" error in page generation**
+   - Empty or invalid actor IDs in `story.actors` could cause Firestore doc() calls to fail
+   - Added filtering to remove empty/invalid IDs before querying
+
+3. **Add DiagnosticsPanel to book generating page**
+   - Shows storybook generation state, page/image generation status, progress info
+
+**Files Modified**:
+- `src/app/child/[childId]/create-book/[storyId]/page.tsx`
+- `src/ai/flows/story-page-flow.ts`
+- `src/app/child/[childId]/book/[storybookId]/generating/page.tsx`
+
+---
+
 #### `41d269e` - Add separate music and narration toggles to story browser
 
 **Type**: Enhancement
