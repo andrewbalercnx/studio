@@ -166,6 +166,15 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
         return;
       }
 
+      // Handle browser autoplay restrictions gracefully
+      // This happens when audio.play() is called without a user gesture
+      if (error.name === 'NotAllowedError') {
+        console.log('[useTTS] Autoplay blocked by browser - user interaction required');
+        // Don't report this as an error to the user - it's expected behavior
+        // The user can tap the TTS toggle or an option to trigger playback with gesture
+        return;
+      }
+
       console.error('[useTTS] Error:', error);
       onError?.(error.message || 'Failed to generate speech');
     }

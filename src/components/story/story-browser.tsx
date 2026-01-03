@@ -582,8 +582,10 @@ export function StoryBrowser({
       return;
     }
 
-    // Increment arc step before calling API
-    if (sessionRef) {
+    // Increment arc step before calling API (only for generators that use story types with arcs)
+    // Generators like 'wizard' that don't require story types handle their own completion
+    // via the isStoryComplete flag in the API response, so we skip arc management for them.
+    if (sessionRef && generator?.capabilities?.requiresStoryType) {
       // Get arc steps from active story type or fetch from Firestore
       let arcSteps = activeStoryType?.arcTemplate?.steps;
       if (!arcSteps && session.storyTypeId) {
@@ -607,10 +609,9 @@ export function StoryBrowser({
           reachedEnd = true;
           nextIndex = maxIndex;
         }
-      } else {
-        // No arc steps defined, treat as reached end
-        reachedEnd = true;
       }
+      // Note: When totalSteps is 0 but requiresStoryType is true, we don't
+      // treat it as "reached end" - we let the API drive the story flow
 
       // Update session with new arc step index
       await updateDoc(sessionRef, {
