@@ -18,6 +18,27 @@
 
 ### 2026-01-03
 
+#### `PENDING` - Fix story completion flow with explicit Continue button
+
+**Type**: Enhancement
+
+**Summary**: Story completion now keeps the final story visible and requires the user to click "Continue to My Stories" to proceed, ensuring they can read their story before being redirected.
+
+**Details**:
+- Removed 5-second auto-compile timeout that was auto-advancing users
+- Added "Continue to My Stories" button on the completion screen
+- Button triggers story compilation which kicks off background tasks:
+  - Audio narration generation (storyAudioFlow)
+  - Cast avatar generation (storyActorAvatarFlow)
+  - Title generation (storyTitleFlow)
+- Standardized across all four story generators (wizard, gemini3, gemini4, beat)
+- All generators use the same StoryBrowser component for consistent behavior
+
+**Files Modified**:
+- `src/components/story/story-browser.tsx`
+
+---
+
 #### `c0d3d9c` - Add full-width story controls bar below header
 
 **Type**: Enhancement

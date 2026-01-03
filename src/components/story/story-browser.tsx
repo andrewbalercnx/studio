@@ -384,10 +384,8 @@ export function StoryBrowser({
       if (result.isStoryComplete) {
         setFinalStory(result.finalStoryResolved || result.finalStory || null);
         setBrowserState('complete');
-        // Show the final story for a few seconds before auto-compiling
-        setTimeout(async () => {
-          await autoCompileStory();
-        }, 5000);
+        // Don't auto-compile - let user read the story and click Continue
+        // The background tasks (narration, cast avatar) will be triggered when they click Continue
         return;
       }
 
@@ -927,8 +925,32 @@ export function StoryBrowser({
               <CardDescription>Your adventure has come to an end.</CardDescription>
             </CardHeader>
             {finalStory && (
-              <CardContent>
+              <CardContent className="space-y-6">
                 <p className="text-lg leading-relaxed whitespace-pre-wrap">{finalStory}</p>
+                <div className="flex justify-center pt-4">
+                  <Button
+                    size="lg"
+                    onClick={autoCompileStory}
+                    className="gap-2"
+                  >
+                    <Sparkles className="h-5 w-5" />
+                    Continue to My Stories
+                  </Button>
+                </div>
+              </CardContent>
+            )}
+            {!finalStory && (
+              <CardContent>
+                <div className="flex justify-center">
+                  <Button
+                    size="lg"
+                    onClick={autoCompileStory}
+                    className="gap-2"
+                  >
+                    <Sparkles className="h-5 w-5" />
+                    Continue to My Stories
+                  </Button>
+                </div>
               </CardContent>
             )}
           </Card>
