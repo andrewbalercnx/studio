@@ -18,6 +18,26 @@
 
 ### 2026-01-03
 
+#### `c0d3d9c` - Add full-width story controls bar below header
+
+**Type**: Enhancement
+
+**Summary**: Replaced floating controls with a proper full-width control bar that sits below the main header, resolving layout overlap issues.
+
+**Details**:
+- Story Controls Bar: sticky at `top-14` (below 56px header), full width
+- Left side: Shows generator name (e.g., "Story Wizard")
+- Right side: Music toggle, Read to Me toggle, Settings link
+- Labels shown on larger screens (`sm:inline`), icons only on mobile
+- Matches header styling with backdrop blur and border
+- Updated `SpeechModeToggle` to support `showLabel` prop
+
+**Files Modified**:
+- `src/components/story/story-browser.tsx`
+- `src/components/child/speech-mode-toggle.tsx`
+
+---
+
 #### `2bcf1b9` - Fix gemini4 generator to skip story type selection
 
 **Type**: Bug Fix
