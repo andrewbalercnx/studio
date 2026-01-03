@@ -407,12 +407,15 @@ export default function AdminDashboardPage() {
                 </h4>
                 <div className="flex flex-wrap gap-2">
                   <Button asChild variant="outline" size="sm">
+                    <Link href="/admin/storyGenerators">Story Generators</Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm">
                     <Link href="/admin/kids-flows">Story Flow Selection</Link>
                   </Button>
                   <SeedStoryGeneratorsButton />
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Configure story generation flows and seed generator configurations.
+                  Configure story generators (prompts, music) and flow selection.
                 </p>
               </div>
               <div>
