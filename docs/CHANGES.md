@@ -18,6 +18,22 @@
 
 ### 2026-01-03
 
+#### `612e996` - Fix single-dollar placeholder regex to allow hyphens and underscores
+
+**Type**: Bug Fix
+
+**Summary**: Single-dollar placeholder pattern was not matching IDs containing hyphens like `$my-first-child-147343$`.
+
+**Details**:
+- The regex `[a-zA-Z0-9]{15,}` only matched alphanumeric characters
+- Firestore document IDs can contain hyphens and underscores
+- Changed all patterns to `[a-zA-Z0-9_-]{15,}` to match IDs like `my-first-child-147343`
+
+**Modified files**:
+- All 9 files containing single-dollar placeholder regex patterns
+
+---
+
 #### `23c4792` - Fix background music restart and add single-dollar placeholder fallback
 
 **Type**: Bug Fix / Enhancement
