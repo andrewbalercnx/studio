@@ -18,6 +18,42 @@
 
 ### 2026-01-03
 
+#### `455558b` - Fix wizard flow and TTS autoplay issues
+
+**Type**: Bug Fix
+
+**Summary**: Fixed two issues: wizard flow calling wrong API after first selection, and TTS showing error toast for browser autoplay restrictions.
+
+**Changes**:
+
+1. **Fix wizard 500 error after first selection**
+   - Story browser was incorrectly calling `/api/storyEnding` for wizard generator
+   - When no arc steps exist (wizard doesn't use story types), it treated this as "reached end"
+   - Now only applies arc step management for generators with `requiresStoryType: true`
+   - Wizard handles its own completion via `isStoryComplete` flag in API response
+
+2. **Handle browser TTS autoplay restrictions**
+   - Browsers block `audio.play()` when not triggered by user gesture
+   - Added `NotAllowedError` handling to suppress the error toast
+   - User can tap any element to enable audio playback after
+
+**Files Modified**:
+- `src/components/story/story-browser.tsx`
+- `src/hooks/use-tts.ts`
+
+---
+
+#### `7524fd9` - Fix home icon to navigate to child dashboard
+
+**Type**: Bug Fix
+
+**Summary**: When logged in as a child, clicking the header logo now navigates to `/child/{childId}` instead of the root path.
+
+**Files Modified**:
+- `src/components/header.tsx`
+
+---
+
 #### `02b7c8e` - Fix create-book flow and add diagnostics
 
 **Type**: Bug Fix
