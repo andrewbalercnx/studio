@@ -18,6 +18,23 @@
 
 ### 2026-01-03
 
+#### `9d13242` - Fix background tasks not completing on story compilation
+
+**Type**: Bug Fix
+
+**Summary**: Background tasks (title generation, actor avatar, audio narration) were not completing on serverless platforms because they were fire-and-forget and could be terminated when the HTTP response was sent.
+
+**Details**:
+- Root cause: Background flows (storyTitleFlow, storyActorAvatarFlow, storyAudioFlow) were triggered without awaiting, and serverless functions terminate after response is sent
+- Solution: Use Next.js `after()` API to ensure background tasks complete even after response
+- Tasks now run in parallel using `Promise.allSettled` with proper result logging
+- This fixes synopsis, title, and cast avatar not being generated after story completion
+
+**Modified files**:
+- `src/app/api/storyCompile/route.ts` - Added after() for background tasks
+
+---
+
 #### `31f432c` - Fix Firestore undefined value error in seed generators
 
 **Type**: Bug Fix
