@@ -18,7 +18,7 @@
 
 ### 2026-01-03
 
-#### `PENDING` - Retry with simpler prompts when Gemini returns no image
+#### `ecf4c46` - Retry with simpler prompts when Gemini returns no image
 
 **Type**: Enhancement
 
