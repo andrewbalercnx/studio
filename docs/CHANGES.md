@@ -18,7 +18,7 @@
 
 ### 2026-01-03
 
-#### `PENDING` - Improve error display in storybook viewer page
+#### `b9433d3` - Improve error display in storybook viewer page
 
 **Type**: Enhancement
 
