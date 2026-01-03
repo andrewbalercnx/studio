@@ -18,7 +18,7 @@
 
 ### 2026-01-03
 
-#### `PENDING` - Add global image prompt configuration
+#### `a52d764` - Add global image prompt configuration
 
 **Type**: Feature
 
