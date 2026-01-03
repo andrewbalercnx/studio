@@ -811,6 +811,7 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
   const MAX_RETRIES = 2;
   const GENERATION_TIMEOUT_MS = 120000; // 2 minute timeout for image generation
   let lastError: Error | null = null;
+  let lastNoMediaReason: string | null = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     // Use progressively simpler prompts on each retry
@@ -853,8 +854,34 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
       generation = await Promise.race([generatePromise, timeoutPromise]);
       console.log('[story-image-flow] Generation completed. Keys:', Object.keys(generation));
       await logAIFlow({ flowName: 'storyImageFlow:createImage', sessionId: null, prompt: currentPromptText, response: generation, startTime, modelName: DEFAULT_IMAGE_MODEL });
-      lastError = null;
-      break; // Success, exit retry loop
+
+      // Check if we got media - if not, treat as retryable error
+      if (!generation.media?.url) {
+        const finishReason = generation.finishReason;
+        const finishMessage = generation.finishMessage;
+        const textResponse = generation.text?.substring(0, 200);
+
+        console.warn(`[story-image-flow] No media in generation (attempt ${attempt + 1}):`, {
+          finishReason,
+          finishMessage,
+          text: textResponse,
+        });
+
+        // Store the reason for the final error message
+        lastNoMediaReason = finishMessage || textResponse || String(finishReason) || 'unknown';
+
+        if (attempt < MAX_RETRIES) {
+          // Continue to next attempt with simpler prompt
+          console.log(`[story-image-flow] No image returned, will retry with simpler prompt`);
+          continue;
+        }
+        // Final attempt - fall through to error handling below
+      } else {
+        // Success - we have media
+        lastError = null;
+        lastNoMediaReason = null;
+        break;
+      }
     } catch (e: any) {
       lastError = e;
       const errorMessage = e?.message || String(e);
@@ -920,7 +947,7 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     const finishMessage = generation.finishMessage;
     const textResponse = generation.text?.substring(0, 200);
 
-    console.error('[story-image-flow] No media.url in generation:', {
+    console.error('[story-image-flow] No media.url in generation after all retries:', {
       hasMedia: !!media,
       mediaKeys: media ? Object.keys(media) : [],
       generationKeys: Object.keys(generation),
@@ -929,23 +956,22 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
       text: textResponse,
     });
 
-    // Provide a more helpful error message based on the finish reason
+    // Provide a more helpful error message
     // Note: finishReason types from Genkit may not cover all Gemini-specific reasons,
     // so we cast to string for comparison
-    let errorMessage = 'Image model returned no media payload.';
     const reason = String(finishReason || '');
 
+    let errorMessage: string;
     if (reason === 'blocked' || reason === 'safety' || reason.includes('SAFETY')) {
-      errorMessage = 'Image was blocked by content safety filters. Try simplifying the scene description or removing potentially sensitive content.';
+      errorMessage = 'Image was blocked by content safety filters after 3 attempts with progressively simpler prompts. The scene description may contain content that cannot be rendered.';
     } else if (reason === 'recitation' || reason.includes('RECITATION')) {
-      errorMessage = 'Image was blocked due to copyright/recitation concerns. Try modifying the art style or scene description.';
-    } else if (reason === 'other' || reason === 'unknown') {
-      errorMessage = `Image generation completed but no image was produced. Reason: ${finishMessage || 'unknown'}. Try regenerating.`;
+      errorMessage = 'Image was blocked due to copyright/recitation concerns. Try using a different art style.';
+    } else if (lastNoMediaReason) {
+      errorMessage = `Image could not be generated after 3 attempts. Last reason: ${lastNoMediaReason}`;
     } else if (textResponse) {
-      // Sometimes the model returns text explaining why it couldn't generate an image
-      errorMessage = `Image not generated. Model response: "${textResponse}"`;
+      errorMessage = `Image not generated after 3 attempts. Model response: "${textResponse}"`;
     } else {
-      errorMessage = `Image generation returned no image (finishReason: ${reason || 'none'}). The scene may have triggered content filters.`;
+      errorMessage = `Image generation failed after 3 attempts with progressively simpler prompts. The scene may contain content that triggers safety filters.`;
     }
 
     throw new Error(errorMessage);

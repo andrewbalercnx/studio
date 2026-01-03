@@ -18,6 +18,24 @@
 
 ### 2026-01-03
 
+#### `PENDING` - Retry with simpler prompts when Gemini returns no image
+
+**Type**: Enhancement
+
+**Summary**: When Gemini returns a successful response but no image (content filtering), automatically retry with progressively simpler prompts.
+
+**Details**:
+- Attempt 1: Full prompt with reference photos, style examples, and actor details
+- Attempt 2: Simplified prompt - just art style and scene, no reference photos
+- Attempt 3: Minimal prompt - bare art style and scene only
+- This gives content-filtered scenes 3 chances with different complexity levels
+- Better final error messages indicating all 3 attempts failed
+
+**Modified files**:
+- `src/ai/flows/story-image-flow.ts`
+
+---
+
 #### `bc110b4` - Improve error messages when Gemini returns no image
 
 **Type**: Enhancement
