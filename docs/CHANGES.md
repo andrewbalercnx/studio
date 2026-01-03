@@ -46,7 +46,33 @@
 
 ---
 
-#### `PENDING` - Add maintenance error email notifications
+#### `ffea343` - Add Report Issue button for all users
+
+**Type**: Feature
+
+**Summary**: When enabled via the "Report Issue Button" toggle in Admin > Diagnostics, a warning icon button appears in the header for all authenticated users. Clicking it opens a dialog where users can describe an issue, which is then emailed to all users with maintenanceUser=true.
+
+**Details**:
+- ReportIssueButton component with dialog and loading states
+- /api/report-issue endpoint using notifyMaintenanceError
+- Toggle in admin diagnostics settings (showReportIssueButton)
+- Automatically includes page path, user info, and browser diagnostics
+- Available to ALL users (parents, writers, admins) when enabled
+
+**Files Created**:
+- `src/app/api/report-issue/route.ts`
+- `src/components/report-issue-button.tsx`
+
+**Files Modified**:
+- `src/app/admin/page.tsx`
+- `src/components/header.tsx`
+- `src/hooks/use-diagnostics.tsx`
+- `docs/SCHEMA.md`
+- `docs/API.md`
+
+---
+
+#### `2a9198b` - Add maintenance error email notifications
 
 **Type**: Feature
 
