@@ -18,6 +18,26 @@
 
 ### 2026-01-03
 
+#### `f7d4d2a` - Fix placeholder resolution for single $ format
+
+**Type**: Bug Fix
+
+**Summary**: Placeholder resolution was failing because the AI model sometimes outputs placeholders with single dollar signs (`$id$`) instead of the correct double dollar sign format (`$$id$$`).
+
+**Details**:
+- The regex `/\$\$([^$]+)\$\$/g` only matched double dollar sign format
+- AI models (particularly Gemini) occasionally output single dollar format despite instructions
+- Added fallback regex `/\$([a-zA-Z0-9]{15,})\$/g` to also match single $ format
+- Minimum 15 chars requirement prevents false positives on currency amounts like $100
+
+**Modified files**:
+- `src/lib/resolve-placeholders.server.ts` - All server-side resolution functions
+- `src/lib/resolve-placeholders.ts` - Client-side resolution functions
+- `src/hooks/use-resolve-placeholders.ts` - React hook for placeholder resolution
+- `src/lib/story-context-builder.ts` - extractActorIdsFromText function
+
+---
+
 #### `9d13242` - Fix background tasks not completing on story compilation
 
 **Type**: Bug Fix
