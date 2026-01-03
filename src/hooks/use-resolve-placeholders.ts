@@ -56,7 +56,7 @@ function replacePlaceholdersInText(text: string, entityMap: EntityMap): string {
     return entityMap.get(id)?.displayName || match;
   });
   // Fallback: also replace single $ format in case AI didn't follow instructions
-  result = result.replace(/\$([a-zA-Z0-9]{15,})\$/g, (match, id) => {
+  result = result.replace(/\$([a-zA-Z0-9_-]{15,})\$/g, (match, id) => {
     return entityMap.get(id)?.displayName || match;
   });
   return result;
@@ -94,7 +94,7 @@ export function useResolvePlaceholders(text: string | null | undefined): {
 
     // Extract IDs from both formats
     const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
-    const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map((match) => match[1]);
+    const singleIds = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)].map((match) => match[1]);
     const ids = [...doubleIds, ...singleIds];
 
     fetchEntitiesWithFirestore(firestore, ids)
@@ -149,7 +149,7 @@ export function useResolvePlaceholdersMultiple(texts: (string | null | undefined
 
     // Extract IDs from both formats
     const doubleIds = [...combinedText.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
-    const singleIds = [...combinedText.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map((match) => match[1]);
+    const singleIds = [...combinedText.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)].map((match) => match[1]);
     const ids = [...doubleIds, ...singleIds];
 
     fetchEntitiesWithFirestore(firestore, ids)

@@ -90,7 +90,7 @@ export async function replacePlaceholdersInText(text: string, entityMap: EntityM
         return entityMap.get(id)?.displayName || match;
     });
     // Fallback: also replace single $ format in case AI didn't follow instructions
-    result = result.replace(/\$([a-zA-Z0-9]{15,})\$/g, (match, id) => {
+    result = result.replace(/\$([a-zA-Z0-9_-]{15,})\$/g, (match, id) => {
         return entityMap.get(id)?.displayName || match;
     });
     return result;
@@ -99,7 +99,7 @@ export async function replacePlaceholdersInText(text: string, entityMap: EntityM
 export async function replacePlaceholdersWithDescriptions(text: string): Promise<string> {
     // Extract IDs from both double $$ and single $ formats
     const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
-    const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map(match => match[1]);
+    const singleIds = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)].map(match => match[1]);
     const ids = [...doubleIds, ...singleIds];
     const entityMap = await fetchEntities(ids);
 
@@ -120,7 +120,7 @@ export async function replacePlaceholdersWithDescriptions(text: string): Promise
         return resolveEntity(id) || match;
     });
     // Fallback: also replace single $ format
-    result = result.replace(/\$([a-zA-Z0-9]{15,})\$/g, (match, id) => {
+    result = result.replace(/\$([a-zA-Z0-9_-]{15,})\$/g, (match, id) => {
         return resolveEntity(id) || match;
     });
     return result;
@@ -130,7 +130,7 @@ export async function replacePlaceholdersWithDescriptions(text: string): Promise
 export async function resolveEntitiesInText(text: string): Promise<EntityMap> {
   // Extract IDs from both double $$ and single $ formats
   const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
-  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map(match => match[1]);
+  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)].map(match => match[1]);
   const ids = [...doubleIds, ...singleIds];
   return fetchEntities(ids);
 }
@@ -142,7 +142,7 @@ export async function resolvePlaceholders(text: string | string[]): Promise<Reco
   const textToProcess = Array.isArray(text) ? text.join(' ') : text;
   // Extract IDs from both double $$ and single $ formats
   const doubleIds = [...textToProcess.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
-  const singleIds = [...textToProcess.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map(match => match[1]);
+  const singleIds = [...textToProcess.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)].map(match => match[1]);
   const ids = [...doubleIds, ...singleIds];
   const uniqueIds = [...new Set(ids)];
 
@@ -170,7 +170,7 @@ export async function getEntitiesInText(text: string, entityMap: EntityMap): Pro
   if (!text) return [];
   // Extract IDs from both double $$ and single $ formats
   const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
-  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map(match => match[1]);
+  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)].map(match => match[1]);
   const ids = [...doubleIds, ...singleIds];
   const uniqueIds = [...new Set(ids)];
   return uniqueIds

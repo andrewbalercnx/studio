@@ -448,7 +448,7 @@ export function extractActorIdsFromText(text: string): string[] {
     ids.add(match[1]);
   }
   // Match single $ format (fallback for AI that didn't follow instructions)
-  const singleRegex = /\$([a-zA-Z0-9]{15,})\$/g;
+  const singleRegex = /\$([a-zA-Z0-9_-]{15,})\$/g;
   while ((match = singleRegex.exec(text)) !== null) {
     ids.add(match[1]);
   }

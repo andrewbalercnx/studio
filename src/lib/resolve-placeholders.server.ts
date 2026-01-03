@@ -87,7 +87,7 @@ export async function replacePlaceholdersWithDescriptions(text: string): Promise
 
   // Extract IDs from both double $$ and single $ formats
   const doubleIds = [...inputText.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
-  const singleIds = [...inputText.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map((match) => match[1]);
+  const singleIds = [...inputText.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)].map((match) => match[1]);
   const ids = [...doubleIds, ...singleIds];
   const entityMap = await fetchEntities(ids);
 
@@ -105,7 +105,7 @@ export async function replacePlaceholdersWithDescriptions(text: string): Promise
     return resolveEntity(id) || match;
   });
   // Then replace single $ format (fallback for AI that didn't follow instructions)
-  result = result.replace(/\$([a-zA-Z0-9]{15,})\$/g, (match, id) => {
+  result = result.replace(/\$([a-zA-Z0-9_-]{15,})\$/g, (match, id) => {
     return resolveEntity(id) || match;
   });
   return result;
@@ -115,7 +115,7 @@ export async function resolveEntitiesInText(text: string): Promise<EntityMap> {
   // Extract IDs from double $$ format (correct)
   const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
   // Also extract IDs from single $ format (fallback for AI that didn't follow instructions)
-  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map((match) => match[1]);
+  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)].map((match) => match[1]);
   const allIds = [...doubleIds, ...singleIds];
   return fetchEntities(allIds);
 }
@@ -128,7 +128,7 @@ export async function replacePlaceholdersInText(text: string, entityMap: EntityM
   });
   // Fallback: also replace single $ format in case AI didn't follow instructions
   // Only replace if the ID looks like a Firestore document ID (alphanumeric)
-  result = result.replace(/\$([a-zA-Z0-9]{15,})\$/g, (match, id) => {
+  result = result.replace(/\$([a-zA-Z0-9_-]{15,})\$/g, (match, id) => {
     return entityMap.get(id)?.displayName || match;
   });
   return result;
@@ -156,7 +156,7 @@ export async function replacePlaceholdersForTTS(text: string, entityMap: EntityM
     return resolveEntity(id) || match;
   });
   // Fallback: also replace single $ format in case AI didn't follow instructions
-  result = result.replace(/\$([a-zA-Z0-9]{15,})\$/g, (match, id) => {
+  result = result.replace(/\$([a-zA-Z0-9_-]{15,})\$/g, (match, id) => {
     return resolveEntity(id) || match;
   });
   return result;
@@ -173,7 +173,7 @@ export async function extractEntityMetadataFromText(text: string, entityMap: Ent
   if (!text) return [];
   // Extract IDs from both double $$ and single $ formats
   const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
-  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map((match) => match[1]);
+  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)].map((match) => match[1]);
   const uniqueIds = [...new Set([...doubleIds, ...singleIds])];
   return uniqueIds
     .map((id) => {
@@ -194,7 +194,7 @@ export async function getEntitiesInText(text: string, entityMap: EntityMap): Pro
   if (!text) return [];
   // Extract IDs from both double $$ and single $ formats
   const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
-  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map((match) => match[1]);
+  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)].map((match) => match[1]);
   const ids = [...doubleIds, ...singleIds];
   const uniqueIds = [...new Set(ids)];
   return uniqueIds

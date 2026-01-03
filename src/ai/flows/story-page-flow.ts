@@ -56,7 +56,7 @@ function extractEntityIds(text: string): string[] {
   doubleMatches.forEach((match) => ids.add(match[1]));
   // Single $ format (fallback for AI that didn't follow instructions)
   // Only match IDs that look like Firestore document IDs (15+ alphanumeric chars)
-  const singleMatches = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)];
+  const singleMatches = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)];
   singleMatches.forEach((match) => ids.add(match[1]));
   return [...ids];
 }
