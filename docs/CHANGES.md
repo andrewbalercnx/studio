@@ -18,7 +18,7 @@
 
 ### 2026-01-03
 
-#### `PENDING` - Fix story completion flow with explicit Continue button
+#### `5c6f4de` - Fix story completion flow with explicit Continue button
 
 **Type**: Enhancement
 
