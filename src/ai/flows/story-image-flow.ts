@@ -816,6 +816,7 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
   const GENERATION_TIMEOUT_MS = 120000; // 2 minute timeout for image generation
   let lastError: Error | null = null;
   let lastNoMediaReason: string | null = null;
+  let retryReason: string | null = null; // Track why we're retrying for logging
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     // Use progressively simpler prompts on each retry
@@ -857,7 +858,17 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
 
       generation = await Promise.race([generatePromise, timeoutPromise]);
       console.log('[story-image-flow] Generation completed. Keys:', Object.keys(generation));
-      await logAIFlow({ flowName: 'storyImageFlow:createImage', sessionId: null, prompt: currentPromptText, response: generation, startTime, modelName: DEFAULT_IMAGE_MODEL });
+      await logAIFlow({
+        flowName: 'storyImageFlow:createImage',
+        sessionId: null,
+        prompt: currentPromptText,
+        response: generation,
+        startTime,
+        modelName: DEFAULT_IMAGE_MODEL,
+        attemptNumber: attempt + 1,
+        maxAttempts: MAX_RETRIES + 1,
+        retryReason: retryReason || undefined,
+      });
 
       // Check if we got media - if not, treat as retryable error
       if (!generation.media?.url) {
@@ -871,8 +882,9 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
           text: textResponse,
         });
 
-        // Store the reason for the final error message
+        // Store the reason for the final error message and for retry logging
         lastNoMediaReason = finishMessage || textResponse || String(finishReason) || 'unknown';
+        retryReason = `No media returned: ${lastNoMediaReason}`;
 
         if (attempt < MAX_RETRIES) {
           // Continue to next attempt with simpler prompt
@@ -890,7 +902,20 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
       lastError = e;
       const errorMessage = e?.message || String(e);
       console.error(`[story-image-flow] Generation failed (attempt ${attempt + 1}):`, errorMessage);
-      await logAIFlow({ flowName: 'storyImageFlow:createImage', sessionId: null, prompt: currentPromptText, error: e, startTime, modelName: DEFAULT_IMAGE_MODEL });
+      await logAIFlow({
+        flowName: 'storyImageFlow:createImage',
+        sessionId: null,
+        prompt: currentPromptText,
+        error: e,
+        startTime,
+        modelName: DEFAULT_IMAGE_MODEL,
+        attemptNumber: attempt + 1,
+        maxAttempts: MAX_RETRIES + 1,
+        retryReason: retryReason || undefined,
+      });
+
+      // Set retry reason for next attempt's log
+      retryReason = `Exception: ${errorMessage.substring(0, 100)}`;
 
       // Check if this is a retryable error
       const isPatternError = errorMessage.includes('did not match the expected pattern');

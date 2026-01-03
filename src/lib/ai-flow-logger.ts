@@ -13,6 +13,12 @@ type LogAIFlowParams = {
   error?: any;
   startTime?: number;
   modelName?: string;
+  /** Retry attempt number (1-based). If > 1, indicates this is a retry. */
+  attemptNumber?: number;
+  /** Total number of attempts that will be made */
+  maxAttempts?: number;
+  /** Reason for retry (if this is a retry attempt) */
+  retryReason?: string;
 };
 
 export async function logAIFlow({
@@ -24,6 +30,9 @@ export async function logAIFlow({
   error,
   startTime,
   modelName,
+  attemptNumber,
+  maxAttempts,
+  retryReason,
 }: LogAIFlowParams) {
   try {
     const firestore = await getServerFirestore();
@@ -34,6 +43,21 @@ export async function logAIFlow({
       prompt,
       createdAt: FieldValue.serverTimestamp(),
     };
+
+    // Add retry information if this is a retry attempt
+    if (attemptNumber !== undefined && attemptNumber > 1) {
+      logData.retry = {
+        attemptNumber,
+        maxAttempts: maxAttempts || null,
+        reason: retryReason || null,
+      };
+    } else if (attemptNumber !== undefined) {
+      // First attempt - just note the attempt number for context
+      logData.attemptNumber = attemptNumber;
+      if (maxAttempts) {
+        logData.maxAttempts = maxAttempts;
+      }
+    }
 
     // Calculate latency if startTime was provided
     if (startTime) {

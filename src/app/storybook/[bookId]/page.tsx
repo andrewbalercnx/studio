@@ -39,6 +39,7 @@ import { getDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { useResolvePlaceholders } from '@/hooks/use-resolve-placeholders';
+import { useDiagnosticsOptional } from '@/hooks/use-diagnostics';
 
 type StatusBadge = {label: string; variant: 'default' | 'secondary' | 'outline'};
 
@@ -89,6 +90,7 @@ export default function StorybookViewerPage() {
   const {user} = useUser();
   const {toast} = useToast();
   const {isParentGuardValidated, showPinModal} = useParentGuard();
+  const diagnostics = useDiagnosticsOptional();
 
   // For legacy model: load Story document directly
   // For new model: load Story for metadata and StoryBookOutput for status
@@ -776,7 +778,7 @@ export default function StorybookViewerPage() {
           <CardContent>{renderViewer()}</CardContent>
           <CardFooter className="flex flex-col gap-3">
             {jobError && <p className="text-sm text-destructive">{jobError}</p>}
-            {jobLogs.length > 0 && (
+            {jobLogs.length > 0 && diagnostics?.showDiagnosticsPanel && (
               <div className="w-full rounded-md bg-muted/40 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Last generation logs</p>
                 <ul className="mt-2 space-y-1 text-xs font-mono">
