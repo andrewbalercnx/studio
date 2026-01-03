@@ -52,11 +52,18 @@ export async function getEmailConfig(): Promise<EmailConfig> {
     const doc = await firestore.doc('systemConfig/email').get();
 
     if (doc.exists) {
-      // Merge with defaults to ensure all fields exist
+      // Deep merge with defaults to ensure all fields exist
+      // This is important for templates - if Firestore has templates,
+      // we need to merge individual templates, not replace the whole object
+      const data = doc.data() as Partial<EmailConfig>;
       cachedEmailConfig = {
         ...DEFAULT_EMAIL_CONFIG,
-        ...doc.data(),
-      } as EmailConfig;
+        ...data,
+        templates: {
+          ...DEFAULT_EMAIL_CONFIG.templates,
+          ...(data.templates || {}),
+        },
+      };
     } else {
       cachedEmailConfig = DEFAULT_EMAIL_CONFIG;
     }
