@@ -18,6 +18,23 @@
 
 ### 2026-01-03
 
+#### `PENDING` - Fix retry order: remove style examples first, keep reference photos
+
+**Type**: Bug Fix
+
+**Summary**: The retry logic was removing reference photos first, but style example images (e.g., Dr. Seuss samples) are more likely to trigger copyright filters.
+
+**Details**:
+- Attempt 1: Full prompt with style examples, reference photos, and actor details
+- Attempt 2: Remove style example images only (likely copyright trigger), keep reference photos and actor details
+- Attempt 3: Minimal prompt - just art style text and scene, no images at all
+- This preserves character consistency (reference photos) while removing the copyrighted style examples
+
+**Modified files**:
+- `src/ai/flows/story-image-flow.ts`
+
+---
+
 #### `ecf4c46` - Retry with simpler prompts when Gemini returns no image
 
 **Type**: Enhancement

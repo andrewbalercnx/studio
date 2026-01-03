@@ -765,23 +765,27 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
   structuredPrompt += dimensionHint;
 
   // Build prompt variants for retry logic - progressively simplify on failure
+  // The style example images are most likely to trigger copyright/recitation filters,
+  // so we remove those first on retry while keeping reference photos and actor details
   const fullPromptText = structuredPrompt.trim();
-  const simplifiedPromptText = `Art Style: ${artStyle}\n\nScene: ${sceneText}${dimensionHint}`.trim();  // No actor details
-  const minimalPromptText = `Art Style: ${artStyle}\n\nScene: ${sceneText}`.trim();  // Bare minimum
+  const noStyleExamplesPromptText = structuredPrompt.trim(); // Same text, just no style images
+  const minimalPromptText = `Art Style: ${artStyle}\n\nScene: ${sceneText}${dimensionHint}`.trim();  // No actor details
 
-  // Style examples go first, then character reference photos, then text
+  // Attempt 1: Full prompt with style examples, reference photos, and actor details
   const fullPromptParts: any[] = [
     ...styleExampleParts,
     ...imageParts,
     { text: fullPromptText },
   ];
 
-  // Simplified still includes style examples for consistency
-  const simplifiedPromptParts: any[] = [
-    ...styleExampleParts,
-    { text: simplifiedPromptText },
+  // Attempt 2: Remove style example images (most likely copyright trigger)
+  // Keep reference photos and actor details for character consistency
+  const noStyleExamplesPromptParts: any[] = [
+    ...imageParts,
+    { text: noStyleExamplesPromptText },
   ];
 
+  // Attempt 3: Minimal - just art style text and scene, no images at all
   const minimalPromptParts: any[] = [
     { text: minimalPromptText },
   ];
@@ -820,15 +824,15 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
 
     if (attempt === 0) {
       currentPromptParts = fullPromptParts;
-      currentPromptText = `${fullPromptText} [with ${imageParts.length} reference photo(s), aspect=${aspectRatio || 'auto'}]`;
+      currentPromptText = `${fullPromptText} [with ${styleExampleParts.length} style example(s), ${imageParts.length} reference photo(s), aspect=${aspectRatio || 'auto'}]`;
     } else if (attempt === 1) {
-      currentPromptParts = simplifiedPromptParts;
-      currentPromptText = `${simplifiedPromptText} [simplified - no reference photos, aspect=${aspectRatio || 'auto'}]`;
-      console.log(`[story-image-flow] Retry ${attempt}: Using simplified prompt without reference photos`);
+      currentPromptParts = noStyleExamplesPromptParts;
+      currentPromptText = `${noStyleExamplesPromptText} [no style examples, ${imageParts.length} reference photo(s), aspect=${aspectRatio || 'auto'}]`;
+      console.log(`[story-image-flow] Retry ${attempt}: Removing style example images (possible copyright trigger)`);
     } else {
       currentPromptParts = minimalPromptParts;
-      currentPromptText = `${minimalPromptText} [minimal prompt, aspect=${aspectRatio || 'auto'}]`;
-      console.log(`[story-image-flow] Retry ${attempt}: Using minimal prompt`);
+      currentPromptText = `${minimalPromptText} [minimal - no images, aspect=${aspectRatio || 'auto'}]`;
+      console.log(`[story-image-flow] Retry ${attempt}: Using minimal prompt with no images`);
     }
 
     const startTime = Date.now();
