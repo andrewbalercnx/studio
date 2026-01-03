@@ -18,6 +18,45 @@
 
 ### 2026-01-03
 
+#### `404f5d0` - Fix first page TTS autoplay blocked and avatar fallback delay
+
+**Type**: Bug Fix
+
+**Summary**: Fixed two issues: TTS audio not playing on first page due to browser autoplay restrictions, and character introduction card showing blank/random avatar while loading.
+
+**Details**:
+- TTS autoplay blocking: Browser blocks audio.play() without user gesture on first page load
+  - Added `hasQueuedAudio` and `resumeQueuedAudio` to useTTS hook to queue blocked audio
+  - Added "Tap to hear the story" button when autoplay is blocked
+  - User can tap to start TTS, subsequent pages play automatically
+- Avatar fallback delay: Radix AvatarFallback has 600ms default delay before showing
+  - Changed default `delayMs` from 600 to 0 to show fallback immediately
+  - Prevents blank/random image flash while avatar loads
+
+**Modified files**:
+- `src/hooks/use-tts.ts` - Added audio queuing for autoplay blocking
+- `src/hooks/use-story-tts.ts` - Exposed new queued audio properties
+- `src/components/story/story-browser.tsx` - Added "Tap to hear" button
+- `src/components/ui/avatar.tsx` - Set fallback delayMs default to 0
+
+---
+
+#### `a490b42` - Fix seed route to properly update nested capabilities
+
+**Type**: Bug Fix
+
+**Summary**: Story generator seed route was not properly updating nested `capabilities` object due to shallow merge behavior.
+
+**Details**:
+- Changed from `batch.update()` to `batch.set()` with `merge: false`
+- Preserves user-configured fields (backgroundMusic, prompts, createdAt)
+- Fixes gemini4 still showing story type selection despite `requiresStoryType: false`
+
+**Modified files**:
+- `src/app/api/admin/story-generators/seed/route.ts`
+
+---
+
 #### `bcc66fb` - Add story generators admin page with music and prompts
 
 **Type**: Feature
