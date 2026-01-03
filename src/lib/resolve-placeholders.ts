@@ -85,32 +85,53 @@ async function fetchEntities(ids: string[]): Promise<EntityMap> {
 
 export async function replacePlaceholdersInText(text: string, entityMap: EntityMap): Promise<string> {
     if (!text) return '';
-    return text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
+    // First, replace double $$ format (the correct format)
+    let result = text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
         return entityMap.get(id)?.displayName || match;
     });
+    // Fallback: also replace single $ format in case AI didn't follow instructions
+    result = result.replace(/\$([a-zA-Z0-9]{15,})\$/g, (match, id) => {
+        return entityMap.get(id)?.displayName || match;
+    });
+    return result;
 }
 
 export async function replacePlaceholdersWithDescriptions(text: string): Promise<string> {
-    const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
+    // Extract IDs from both double $$ and single $ formats
+    const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
+    const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map(match => match[1]);
+    const ids = [...doubleIds, ...singleIds];
     const entityMap = await fetchEntities(ids);
-    
+
     if (!text) return '';
-    return text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
+
+    const resolveEntity = (id: string): string | null => {
         const entity = entityMap.get(id);
-        if (!entity) return match;
-        
+        if (!entity) return null;
         // Check if it's a Character or ChildProfile and format accordingly
         if ('role' in entity.document) { // It's a Character
             return buildCharacterDescription(entity.document as Character);
         }
-        
         return entity.displayName; // Fallback for ChildProfile
+    };
+
+    // First, replace double $$ format
+    let result = text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
+        return resolveEntity(id) || match;
     });
+    // Fallback: also replace single $ format
+    result = result.replace(/\$([a-zA-Z0-9]{15,})\$/g, (match, id) => {
+        return resolveEntity(id) || match;
+    });
+    return result;
 }
 
 
 export async function resolveEntitiesInText(text: string): Promise<EntityMap> {
-  const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
+  // Extract IDs from both double $$ and single $ formats
+  const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
+  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map(match => match[1]);
+  const ids = [...doubleIds, ...singleIds];
   return fetchEntities(ids);
 }
 
@@ -119,9 +140,12 @@ export const resolveEntities = resolveEntitiesInText;
 // New function for client-side usage
 export async function resolvePlaceholders(text: string | string[]): Promise<Record<string, string>> {
   const textToProcess = Array.isArray(text) ? text.join(' ') : text;
-  const ids = [...textToProcess.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
+  // Extract IDs from both double $$ and single $ formats
+  const doubleIds = [...textToProcess.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
+  const singleIds = [...textToProcess.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map(match => match[1]);
+  const ids = [...doubleIds, ...singleIds];
   const uniqueIds = [...new Set(ids)];
-  
+
   if (uniqueIds.length === 0) {
     // If no placeholders, just return the original text mapped to itself
     if (Array.isArray(text)) {
@@ -129,9 +153,9 @@ export async function resolvePlaceholders(text: string | string[]): Promise<Reco
     }
     return {[text]: text};
   }
-  
+
   const entityMap = await fetchEntities(uniqueIds);
-  
+
   const originalTexts = Array.isArray(text) ? text : [text];
   const resolved: Record<string, string> = {};
 
@@ -144,7 +168,10 @@ export async function resolvePlaceholders(text: string | string[]): Promise<Reco
 
 export async function getEntitiesInText(text: string, entityMap: EntityMap): Promise<Character[]> {
   if (!text) return [];
-  const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
+  // Extract IDs from both double $$ and single $ formats
+  const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map(match => match[1]);
+  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map(match => match[1]);
+  const ids = [...doubleIds, ...singleIds];
   const uniqueIds = [...new Set(ids)];
   return uniqueIds
     .map(id => entityMap.get(id)?.document)

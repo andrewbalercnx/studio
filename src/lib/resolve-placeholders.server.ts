@@ -100,15 +100,26 @@ export async function replacePlaceholdersWithDescriptions(text: string): Promise
 }
 
 export async function resolveEntitiesInText(text: string): Promise<EntityMap> {
-  const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
-  return fetchEntities(ids);
+  // Extract IDs from double $$ format (correct)
+  const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
+  // Also extract IDs from single $ format (fallback for AI that didn't follow instructions)
+  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map((match) => match[1]);
+  const allIds = [...doubleIds, ...singleIds];
+  return fetchEntities(allIds);
 }
 
 export async function replacePlaceholdersInText(text: string, entityMap: EntityMap): Promise<string> {
   if (!text) return '';
-  return text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
+  // First, replace double $$ format (the correct format)
+  let result = text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
     return entityMap.get(id)?.displayName || match;
   });
+  // Fallback: also replace single $ format in case AI didn't follow instructions
+  // Only replace if the ID looks like a Firestore document ID (alphanumeric)
+  result = result.replace(/\$([a-zA-Z0-9]{15,})\$/g, (match, id) => {
+    return entityMap.get(id)?.displayName || match;
+  });
+  return result;
 }
 
 /**
@@ -118,15 +129,25 @@ export async function replacePlaceholdersInText(text: string, entityMap: EntityM
  */
 export async function replacePlaceholdersForTTS(text: string, entityMap: EntityMap): Promise<string> {
   if (!text) return '';
-  return text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
-    const entity = entityMap.get(id);
-    if (!entity) return match;
 
+  const resolveEntity = (id: string): string | null => {
+    const entity = entityMap.get(id);
+    if (!entity) return null;
     // Use pronunciation if available, otherwise fall back to displayName
     const doc = entity.document;
     const pronunciation = 'namePronunciation' in doc ? doc.namePronunciation : undefined;
     return pronunciation || entity.displayName;
+  };
+
+  // First, replace double $$ format (the correct format)
+  let result = text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
+    return resolveEntity(id) || match;
   });
+  // Fallback: also replace single $ format in case AI didn't follow instructions
+  result = result.replace(/\$([a-zA-Z0-9]{15,})\$/g, (match, id) => {
+    return resolveEntity(id) || match;
+  });
+  return result;
 }
 
 export type EntityMetadata = {
@@ -138,8 +159,10 @@ export type EntityMetadata = {
 
 export async function extractEntityMetadataFromText(text: string, entityMap: EntityMap): Promise<EntityMetadata[]> {
   if (!text) return [];
-  const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
-  const uniqueIds = [...new Set(ids)];
+  // Extract IDs from both double $$ and single $ formats
+  const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
+  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map((match) => match[1]);
+  const uniqueIds = [...new Set([...doubleIds, ...singleIds])];
   return uniqueIds
     .map((id) => {
       const entity = entityMap.get(id);
@@ -157,7 +180,10 @@ export async function extractEntityMetadataFromText(text: string, entityMap: Ent
 
 export async function getEntitiesInText(text: string, entityMap: EntityMap): Promise<Character[]> {
   if (!text) return [];
-  const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
+  // Extract IDs from both double $$ and single $ formats
+  const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
+  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map((match) => match[1]);
+  const ids = [...doubleIds, ...singleIds];
   const uniqueIds = [...new Set(ids)];
   return uniqueIds
     .map((id) => entityMap.get(id)?.document)

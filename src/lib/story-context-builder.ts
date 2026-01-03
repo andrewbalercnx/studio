@@ -437,13 +437,19 @@ export type ActorDetailsWithImageData = ActorDetailsWithImages & {
 };
 
 /**
- * Extract $$id$$ placeholders from text
+ * Extract $$id$$ placeholders from text (also handles single $ format as fallback)
  */
 export function extractActorIdsFromText(text: string): string[] {
-  const regex = /\$\$([a-zA-Z0-9_-]+)\$\$/g;
   const ids = new Set<string>();
+  // Match double $$ format (correct)
+  const doubleRegex = /\$\$([a-zA-Z0-9_-]+)\$\$/g;
   let match;
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = doubleRegex.exec(text)) !== null) {
+    ids.add(match[1]);
+  }
+  // Match single $ format (fallback for AI that didn't follow instructions)
+  const singleRegex = /\$([a-zA-Z0-9]{15,})\$/g;
+  while ((match = singleRegex.exec(text)) !== null) {
     ids.add(match[1]);
   }
   return Array.from(ids);

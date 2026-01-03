@@ -51,9 +51,15 @@ async function fetchEntitiesWithFirestore(firestore: Firestore, ids: string[]): 
 
 function replacePlaceholdersInText(text: string, entityMap: EntityMap): string {
   if (!text) return '';
-  return text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
+  // First, replace double $$ format (the correct format)
+  let result = text.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
     return entityMap.get(id)?.displayName || match;
   });
+  // Fallback: also replace single $ format in case AI didn't follow instructions
+  result = result.replace(/\$([a-zA-Z0-9]{15,})\$/g, (match, id) => {
+    return entityMap.get(id)?.displayName || match;
+  });
+  return result;
 }
 
 /**
@@ -75,9 +81,10 @@ export function useResolvePlaceholders(text: string | null | undefined): {
       return;
     }
 
-    // Check if there are any placeholders to resolve
-    const hasPlaceholders = /\$\$([^$]+)\$\$/.test(text);
-    if (!hasPlaceholders) {
+    // Check if there are any placeholders to resolve (double $$ or single $ format)
+    const hasDoublePlaceholders = /\$\$([^$]+)\$\$/.test(text);
+    const hasSinglePlaceholders = /\$([a-zA-Z0-9]{15,})\$/.test(text);
+    if (!hasDoublePlaceholders && !hasSinglePlaceholders) {
       setResolvedText(text);
       setIsResolving(false);
       return;
@@ -85,7 +92,10 @@ export function useResolvePlaceholders(text: string | null | undefined): {
 
     setIsResolving(true);
 
-    const ids = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
+    // Extract IDs from both formats
+    const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
+    const singleIds = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map((match) => match[1]);
+    const ids = [...doubleIds, ...singleIds];
 
     fetchEntitiesWithFirestore(firestore, ids)
       .then((entityMap) => {
@@ -126,9 +136,10 @@ export function useResolvePlaceholdersMultiple(texts: (string | null | undefined
 
     // Combine all texts to find all placeholders
     const combinedText = validTexts.join(' ');
-    const hasPlaceholders = /\$\$([^$]+)\$\$/.test(combinedText);
+    const hasDoublePlaceholders = /\$\$([^$]+)\$\$/.test(combinedText);
+    const hasSinglePlaceholders = /\$([a-zA-Z0-9]{15,})\$/.test(combinedText);
 
-    if (!hasPlaceholders) {
+    if (!hasDoublePlaceholders && !hasSinglePlaceholders) {
       setResolvedTexts(texts.map((t) => t || null));
       setIsResolving(false);
       return;
@@ -136,7 +147,10 @@ export function useResolvePlaceholdersMultiple(texts: (string | null | undefined
 
     setIsResolving(true);
 
-    const ids = [...combinedText.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
+    // Extract IDs from both formats
+    const doubleIds = [...combinedText.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
+    const singleIds = [...combinedText.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map((match) => match[1]);
+    const ids = [...doubleIds, ...singleIds];
 
     fetchEntitiesWithFirestore(firestore, ids)
       .then((entityMap) => {
