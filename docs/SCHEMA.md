@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-03 (added backgroundMusic and prompts to storyGenerators)
+> **Last Updated**: 2026-01-03 (added showReportIssueButton and enableMixamWebhookLogging to diagnostics)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -541,6 +541,8 @@ System-wide configuration documents.
 | `enableServerLogging` | boolean | Yes | Enable server-side logs |
 | `enableAIFlowLogging` | boolean | Yes | Enable AI flow logging |
 | `showApiDocumentation` | boolean | Yes | Expose API docs at /api-documentation |
+| `enableMixamWebhookLogging` | boolean | Yes | Enable Mixam webhook debug logging |
+| `showReportIssueButton` | boolean | Yes | Show "Report Issue" button in header for all users |
 | `updatedAt` | timestamp | No | Last update time |
 | `updatedBy` | string | No | Email of last updater |
 

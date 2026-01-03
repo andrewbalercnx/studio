@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-02
+> **Last Updated**: 2026-01-03
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -28,6 +28,7 @@ StoryPic Kids API uses Next.js App Router API routes. All endpoints require auth
 - [Voice Routes](#voice-routes)
 - [Music Routes](#music-routes)
 - [Story Output Types Routes](#story-output-types-routes)
+- [Issue Reporting Routes](#issue-reporting-routes)
 - [Webhook Routes](#webhook-routes)
 
 ---
@@ -1164,6 +1165,39 @@ Upload an image for a story output type.
 - `404` - Story output type not found
 - `413` - Image exceeds maximum size (8MB)
 - `500` - Upload failed
+
+---
+
+## Issue Reporting Routes
+
+### POST `/api/report-issue`
+
+Allow any authenticated parent or admin user to report an issue to maintenance users. This triggers an email notification to all users with `maintenanceUser: true`.
+
+**Request Body**:
+```json
+{
+  "message": "Description of the issue",
+  "pagePath": "/current/page/path",
+  "diagnostics": {
+    "userAgent": "...",
+    "screenSize": "1920x1080",
+    "timestamp": "2025-01-03T12:00:00.000Z"
+  }
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "message": "Issue reported successfully"
+}
+```
+
+**Error Responses**:
+- `400` - Missing required fields (message or pagePath)
+- `401` - Not authenticated
 
 ---
 

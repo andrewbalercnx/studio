@@ -75,6 +75,7 @@ export default function AdminDashboardPage() {
     enableAIFlowLogging,
     showApiDocumentation,
     enableMixamWebhookLogging,
+    showReportIssueButton,
   } = useDiagnostics();
   const { toast } = useToast();
   const { user } = useUser();
@@ -536,6 +537,19 @@ export default function AdminDashboardPage() {
                     id="enableMixamWebhookLogging"
                     checked={enableMixamWebhookLogging}
                     onCheckedChange={(checked) => updateConfig({ enableMixamWebhookLogging: checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="showReportIssueButton">Report Issue Button</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Show a button in the header for all users to report issues to maintenance users
+                    </p>
+                  </div>
+                  <Switch
+                    id="showReportIssueButton"
+                    checked={showReportIssueButton}
+                    onCheckedChange={(checked) => updateConfig({ showReportIssueButton: checked })}
                   />
                 </div>
 

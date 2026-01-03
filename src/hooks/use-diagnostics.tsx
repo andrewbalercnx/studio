@@ -18,6 +18,7 @@ interface DiagnosticsContextType {
   enableAIFlowLogging: boolean;
   showApiDocumentation: boolean;
   enableMixamWebhookLogging: boolean;
+  showReportIssueButton: boolean;
   updateConfig: (updates: Partial<DiagnosticsConfig>) => Promise<void>;
   toggleDiagnosticsPanel: () => Promise<void>;
 }
@@ -85,6 +86,7 @@ export function DiagnosticsProvider({ children }: { children: React.ReactNode })
     enableAIFlowLogging: config.enableAIFlowLogging,
     showApiDocumentation: config.showApiDocumentation,
     enableMixamWebhookLogging: config.enableMixamWebhookLogging,
+    showReportIssueButton: config.showReportIssueButton,
     updateConfig,
     toggleDiagnosticsPanel,
   };

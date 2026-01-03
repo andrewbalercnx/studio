@@ -27,7 +27,9 @@ import { useParentGuard } from '@/hooks/use-parent-guard';
 import { useWizardTargetDiagnosticsOptional } from '@/hooks/use-wizard-target-diagnostics';
 import { usePathRecordingOptional } from '@/hooks/use-path-recording';
 import { useAdminStatus } from '@/hooks/use-admin-status';
+import { useDiagnosticsOptional } from '@/hooks/use-diagnostics';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { ReportIssueButton } from '@/components/report-issue-button';
 import { Input } from '@/components/ui/input';
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -49,6 +51,7 @@ export default function Header() {
   const wizardTargetDiagnostics = useWizardTargetDiagnosticsOptional();
   const pathRecording = usePathRecordingOptional();
   const { canShowWizardTargets } = useAdminStatus();
+  const diagnostics = useDiagnosticsOptional();
   const roleClaims: RoleClaims | null = idTokenResult?.claims ? (idTokenResult.claims as RoleClaims) : null;
   const [liveWizards, setLiveWizards] = useState<HelpWizard[]>([]);
   const [showTitleDialog, setShowTitleDialog] = useState(false);
@@ -182,6 +185,10 @@ export default function Header() {
             </Button>
           )}
           {renderNavLinks()}
+          {/* Report Issue button - visible to all users when enabled */}
+          {diagnostics?.showReportIssueButton && user && (
+            <ReportIssueButton />
+          )}
           {user ? (
              <DropdownMenu>
               <DropdownMenuTrigger asChild>
