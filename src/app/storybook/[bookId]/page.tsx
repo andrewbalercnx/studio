@@ -38,6 +38,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { useResolvePlaceholders } from '@/hooks/use-resolve-placeholders';
 
 type StatusBadge = {label: string; variant: 'default' | 'secondary' | 'outline'};
 
@@ -254,6 +255,12 @@ export default function StorybookViewerPage() {
                                  documentImageStatus === 'running' ? 'running' : 'pending';
   const disableGenerate = isGenerating || documentImageStatus === 'running' || !!storyBook?.isLocked;
   const currentPage = pages && pages.length > 0 ? pages[Math.max(0, Math.min(activeIndex, pages.length - 1))] : null;
+
+  // Resolve placeholders in the current page's text
+  // This handles pages with unresolved $$childId$$ or $$characterId$$ placeholders
+  const rawPageText = currentPage?.displayText || currentPage?.bodyText || null;
+  const { resolvedText: currentPageText } = useResolvePlaceholders(rawPageText);
+
   const isLocked = storyBook?.isLocked ?? false;
   const allImagesReady = calculatedImageStatus === 'ready';
   const finalizationBadge = deriveFinalizationBadge(storyBook, readyCount, totalPages);
@@ -302,10 +309,16 @@ export default function StorybookViewerPage() {
         }),
       });
       const result = await response.json();
-      if (!response.ok || !result?.ok) {
-        throw new Error(result?.errorMessage || 'Failed to generate storybook art.');
-      }
+      // Always capture logs, even on partial success
       setJobLogs(result.logs ?? []);
+
+      if (!response.ok || !result?.ok) {
+        // Show partial success info if some pages completed
+        const partialInfo = result?.ready && result?.total
+          ? ` (${result.ready}/${result.total} images completed)`
+          : '';
+        throw new Error((result?.errorMessage || 'Failed to generate storybook art.') + partialInfo);
+      }
     } catch (error: any) {
       setJobError(error?.message || 'Unexpected error while generating art.');
     } finally {
@@ -628,7 +641,17 @@ export default function StorybookViewerPage() {
               </div>
             </div>
             {currentPage.title && <h3 className="text-2xl font-semibold">{currentPage.title}</h3>}
-            {(currentPage.displayText || currentPage.bodyText) && <p className="text-lg leading-relaxed">{currentPage.displayText || currentPage.bodyText}</p>}
+            {currentPageText && <p className="text-lg leading-relaxed">{currentPageText}</p>}
+            {/* Show error details for failed pages */}
+            {currentPage.imageStatus === 'error' && currentPage.imageMetadata?.lastErrorMessage && (
+              <Alert variant="destructive" className="text-sm">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Image Generation Failed</AlertTitle>
+                <AlertDescription className="font-mono text-xs break-all">
+                  {currentPage.imageMetadata.lastErrorMessage}
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="flex flex-wrap gap-3">
               <Button
                 variant="outline"

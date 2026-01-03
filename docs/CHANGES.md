@@ -18,6 +18,24 @@
 
 ### 2026-01-03
 
+#### `PENDING` - Improve error display in storybook viewer page
+
+**Type**: Enhancement
+
+**Summary**: Show detailed error messages when image generation fails, and always display logs even on partial success.
+
+**Details**:
+- When viewing a failed page, the `imageMetadata.lastErrorMessage` is now displayed in an alert
+- The `triggerImageJob` function now always captures logs (even when some images fail)
+- Error messages now include partial success info (e.g., "20/24 images completed")
+- Helps diagnose why specific pages fail (e.g., content filtering, rate limits)
+- Added client-side placeholder resolution for page text (fixes unresolved `$$childId$$` showing)
+
+**Modified files**:
+- `src/app/storybook/[bookId]/page.tsx`
+
+---
+
 #### `1249e92` - Add retry button for failed image generation and fix TTS pronunciation
 
 **Type**: Bug Fix / Enhancement
