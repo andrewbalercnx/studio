@@ -44,11 +44,21 @@ const FlowPageSchema = z.object({
 
 type FlowPage = z.infer<typeof FlowPageSchema>;
 
+/**
+ * Extract all $$id$$ and $id$ placeholders from text
+ * Supports both double-dollar (correct) and single-dollar (AI fallback) formats
+ */
 function extractEntityIds(text: string): string[] {
   if (!text) return [];
-  const matches = [...text.matchAll(/\$\$([^$]+)\$\$/g)];
-  const ids = matches.map((match) => match[1]);
-  return [...new Set(ids)]; // Return unique IDs
+  const ids = new Set<string>();
+  // Double $$ format (correct format)
+  const doubleMatches = [...text.matchAll(/\$\$([^$]+)\$\$/g)];
+  doubleMatches.forEach((match) => ids.add(match[1]));
+  // Single $ format (fallback for AI that didn't follow instructions)
+  // Only match IDs that look like Firestore document IDs (15+ alphanumeric chars)
+  const singleMatches = [...text.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)];
+  singleMatches.forEach((match) => ids.add(match[1]));
+  return [...ids];
 }
 
 /**

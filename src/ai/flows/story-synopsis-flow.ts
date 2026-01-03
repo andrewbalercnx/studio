@@ -37,13 +37,21 @@ const StorySynopsisFlowOutputSchema = z.object({
 export type StorySynopsisFlowOutput = z.infer<typeof StorySynopsisFlowOutputSchema>;
 
 /**
- * Extract all $$id$$ placeholders from text
+ * Extract all $$id$$ and $id$ placeholders from text
+ * Supports both double-dollar (correct) and single-dollar (AI fallback) formats
  */
 function extractActorIds(text: string): string[] {
-  const regex = /\$\$([a-zA-Z0-9_-]+)\$\$/g;
   const ids = new Set<string>();
+  // Double $$ format (correct format)
+  const doubleRegex = /\$\$([a-zA-Z0-9_-]+)\$\$/g;
   let match;
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = doubleRegex.exec(text)) !== null) {
+    ids.add(match[1]);
+  }
+  // Single $ format (fallback for AI that didn't follow instructions)
+  // Only match IDs that look like Firestore document IDs (15+ alphanumeric chars)
+  const singleRegex = /\$([a-zA-Z0-9]{15,})\$/g;
+  while ((match = singleRegex.exec(text)) !== null) {
     ids.add(match[1]);
   }
   return Array.from(ids);

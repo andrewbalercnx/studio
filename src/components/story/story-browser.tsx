@@ -49,12 +49,22 @@ type BrowserState =
   | 'complete'          // Story complete
   | 'error';            // Error state
 
-// Helper to extract $$id$$ placeholders from text
+/**
+ * Extract all $$id$$ and $id$ placeholders from text
+ * Supports both double-dollar (correct) and single-dollar (AI fallback) formats
+ */
 function extractActorIdsFromText(text: string): string[] {
-  const regex = /\$\$([a-zA-Z0-9_-]+)\$\$/g;
   const ids = new Set<string>();
+  // Double $$ format (correct format)
+  const doubleRegex = /\$\$([a-zA-Z0-9_-]+)\$\$/g;
   let match;
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = doubleRegex.exec(text)) !== null) {
+    ids.add(match[1]);
+  }
+  // Single $ format (fallback for AI that didn't follow instructions)
+  // Only match IDs that look like Firestore document IDs (15+ alphanumeric chars)
+  const singleRegex = /\$([a-zA-Z0-9]{15,})\$/g;
+  while ((match = singleRegex.exec(text)) !== null) {
     ids.add(match[1]);
   }
   return Array.from(ids);
@@ -185,26 +195,40 @@ export function StoryBrowser({
     duckedVolume: 0.1,
   });
 
+  // Track whether music has been started for this session
+  const musicStartedRef = useRef(false);
+
   // Music control based on state and user preference
+  // Music plays continuously once started and loops automatically (set in the hook)
+  // Only stops when story is complete or user disables music
   useEffect(() => {
     // If user disabled music, stop it
     if (!musicEnabled) {
       if (backgroundMusic.isPlaying) {
         backgroundMusic.fadeOut();
       }
+      musicStartedRef.current = false;
       return;
     }
 
-    const hasAvatar = childProfile?.avatarAnimationUrl || childProfile?.avatarUrl;
-    const showingAvatar = browserState === 'generating' || (isSpeechModeEnabled && isTTSLoading);
-    const shouldPlayMusic = (showingAvatar && hasAvatar && backgroundMusicUrl) || (isSpeaking && backgroundMusicUrl);
-
-    if (shouldPlayMusic && backgroundMusic.isLoaded && !backgroundMusic.isPlaying) {
-      backgroundMusic.play();
-    } else if (!shouldPlayMusic && backgroundMusic.isPlaying) {
-      backgroundMusic.fadeOut();
+    // Stop music when story is complete
+    if (browserState === 'complete' || browserState === 'compiling') {
+      if (backgroundMusic.isPlaying) {
+        backgroundMusic.fadeOut();
+      }
+      return;
     }
-  }, [browserState, isTTSLoading, isSpeaking, backgroundMusic, backgroundMusicUrl, childProfile, isSpeechModeEnabled, musicEnabled]);
+
+    // Start music once we begin generating (and keep it playing)
+    // The hook handles looping automatically via audio.loop = true
+    const shouldStartMusic = backgroundMusicUrl && backgroundMusic.isLoaded && !musicStartedRef.current;
+    const isInActiveStoryCreation = browserState !== 'loading' && browserState !== 'story_type' && browserState !== 'error';
+
+    if (shouldStartMusic && isInActiveStoryCreation && !backgroundMusic.isPlaying) {
+      backgroundMusic.play();
+      musicStartedRef.current = true;
+    }
+  }, [browserState, backgroundMusic, backgroundMusicUrl, musicEnabled]);
 
   // ---------------------------------------------------------------------------
   // Auto-speak when content changes

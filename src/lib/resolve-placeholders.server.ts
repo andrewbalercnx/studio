@@ -83,20 +83,32 @@ async function fetchEntities(ids: string[]): Promise<EntityMap> {
 
 export async function replacePlaceholdersWithDescriptions(text: string): Promise<string> {
   const inputText = text || '';
-  const ids = [...inputText.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
+  if (!inputText) return '';
+
+  // Extract IDs from both double $$ and single $ formats
+  const doubleIds = [...inputText.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
+  const singleIds = [...inputText.matchAll(/\$([a-zA-Z0-9]{15,})\$/g)].map((match) => match[1]);
+  const ids = [...doubleIds, ...singleIds];
   const entityMap = await fetchEntities(ids);
 
-  if (!inputText) return '';
-  return inputText.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
+  const resolveEntity = (id: string): string | null => {
     const entity = entityMap.get(id);
-    if (!entity) return match;
-
+    if (!entity) return null;
     if ('role' in entity.document) {
       return buildCharacterDescription(entity.document as Character);
     }
-
     return entity.displayName;
+  };
+
+  // Replace double $$ format first
+  let result = inputText.replace(/\$\$([^$]+)\$\$/g, (match, id) => {
+    return resolveEntity(id) || match;
   });
+  // Then replace single $ format (fallback for AI that didn't follow instructions)
+  result = result.replace(/\$([a-zA-Z0-9]{15,})\$/g, (match, id) => {
+    return resolveEntity(id) || match;
+  });
+  return result;
 }
 
 export async function resolveEntitiesInText(text: string): Promise<EntityMap> {
