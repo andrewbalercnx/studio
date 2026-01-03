@@ -28,6 +28,7 @@ import {
   Link as LinkIcon,
   PackageCheck,
   BookOpen,
+  Shield,
 } from 'lucide-react';
 import {useUser} from '@/firebase/auth/use-user';
 import {useParentGuard} from '@/hooks/use-parent-guard';
@@ -816,6 +817,124 @@ export default function StorybookViewerPage() {
             </div>
           </CardFooter>
         </Card>
+
+        {/* Share Card - only show when finalized */}
+        {isLocked && isNewModel && (
+          <Card className="mx-auto w-full max-w-4xl" data-wiz-target="storybook-share-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Share2 className="h-5 w-5" />
+                Share This Book
+              </CardTitle>
+              <CardDescription>
+                Create a link to share this storybook with friends and family.
+                {finalization?.shareId && ' Anyone with the link can view the book.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Active share link */}
+              {absoluteShareUrl ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={absoluteShareUrl}
+                      className="font-mono text-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        navigator.clipboard.writeText(absoluteShareUrl);
+                        toast({title: 'Link copied', description: 'Share link copied to clipboard.'});
+                      }}
+                      title="Copy link"
+                    >
+                      <LinkIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {/* Share details */}
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    {finalization?.shareRequiresPasscode && (
+                      <Badge variant="outline" className="gap-1">
+                        <Shield className="h-3 w-3" />
+                        Passcode protected
+                      </Badge>
+                    )}
+                    {shareExpiresAt && (
+                      <span>Expires {shareExpiresAt}</span>
+                    )}
+                  </div>
+
+                  {/* Show passcode if just generated */}
+                  {shareSecret && (
+                    <Alert className="bg-primary/5 border-primary/20">
+                      <Shield className="h-4 w-4" />
+                      <AlertTitle>Passcode</AlertTitle>
+                      <AlertDescription className="font-mono text-lg">
+                        {shareSecret}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Revoke button */}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleShareRevoke}
+                    disabled={shareLoading}
+                  >
+                    {shareLoading && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
+                    Revoke Share Link
+                  </Button>
+                </div>
+              ) : (
+                /* Create share link form */
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      id="passcode-toggle"
+                      checked={shareProtectWithCode}
+                      onCheckedChange={setShareProtectWithCode}
+                    />
+                    <label htmlFor="passcode-toggle" className="text-sm font-medium">
+                      Require passcode to view
+                    </label>
+                  </div>
+
+                  {shareProtectWithCode && (
+                    <div className="space-y-2">
+                      <label htmlFor="custom-passcode" className="text-sm text-muted-foreground">
+                        Custom passcode (optional, leave empty for auto-generated)
+                      </label>
+                      <Input
+                        id="custom-passcode"
+                        placeholder="Enter 4+ character passcode"
+                        value={customSharePasscode}
+                        onChange={(e) => setCustomSharePasscode(e.target.value)}
+                        className="max-w-xs"
+                      />
+                    </div>
+                  )}
+
+                  <Button
+                    onClick={handleShareGenerate}
+                    disabled={shareLoading}
+                    data-wiz-target="storybook-create-share"
+                  >
+                    {shareLoading ? (
+                      <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Share2 className="mr-2 h-4 w-4" />
+                    )}
+                    Create Share Link
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <PrintOrderDialog

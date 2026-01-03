@@ -9,6 +9,7 @@ import { randomBytes, createHash } from 'node:crypto';
 
 type ShareActionRequest = {
   bookId: string;
+  storybookId?: string; // For new model: storyId is bookId, storybookId is the subcollection doc
   action?: 'create' | 'revoke';
   expiresInDays?: number;
   protectWithCode?: boolean;
@@ -18,11 +19,24 @@ type ShareActionRequest = {
 
 type ShareViewResponse = {
   ok: true;
-  bookId: string;
+  storyId: string;
+  storybookId?: string;
+  bookId: string; // Deprecated: use storyId instead
   shareId: string;
   finalizationVersion: number;
-  metadata: Record<string, unknown> | null;
-  pages: Array<Record<string, unknown>>;
+  metadata: {
+    bookTitle?: string;
+    childName?: string;
+  } | null;
+  pages: Array<{
+    pageNumber: number;
+    kind: string;
+    title?: string | null;
+    bodyText?: string | null;
+    displayText?: string | null;
+    imageUrl?: string | null;
+    audioUrl?: string | null;
+  }>;
   share: {
     expiresAt?: string | null;
     requiresPasscode: boolean;
@@ -71,6 +85,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as ShareActionRequest;
     const {
       bookId,
+      storybookId,
       action = 'create',
       expiresInDays = 14,
       protectWithCode = false,
@@ -86,33 +101,70 @@ export async function POST(request: Request) {
 
     const user = await requireParentOrAdminUser(request);
     const firestore = getFirestore();
-    const bookRef = firestore.collection('stories').doc(bookId);
-    const bookSnap = await bookRef.get();
-    if (!bookSnap.exists) {
-      return respondError(404, 'Storybook not found');
+
+    // Determine if this is the new model (storybookId provided) or legacy model
+    const isNewModel = !!storybookId;
+    const storyId = bookId; // In new model, bookId is actually storyId
+
+    const storyRef = firestore.collection('stories').doc(storyId);
+    const storySnap = await storyRef.get();
+    if (!storySnap.exists) {
+      return respondError(404, 'Story not found');
     }
-    const bookData = bookSnap.data() as Record<string, any>;
-    const parentUid = bookData?.parentUid;
+    const storyData = storySnap.data() as Record<string, any>;
+    const parentUid = storyData?.parentUid;
     const isPrivileged = user.claims.isAdmin || user.claims.isWriter;
     if (!isPrivileged && parentUid && parentUid !== user.uid) {
       return respondError(403, 'You do not own this storybook.');
     }
-    const currentShareId = bookData?.storybookFinalization?.shareId ?? null;
 
-    if (action === 'revoke') {
-      await revokeExistingShare(firestore, bookId, currentShareId ?? undefined);
-      await bookRef.update({
-        'storybookFinalization.shareId': null,
-        'storybookFinalization.shareLink': null,
-        'storybookFinalization.shareExpiresAt': null,
-        'storybookFinalization.shareRequiresPasscode': false,
-        'storybookFinalization.sharePasscodeHint': null,
-      });
-      return NextResponse.json({ ok: true, action: 'revoke', bookId });
+    // For new model, get the storybook document
+    let storybookRef: FirebaseFirestore.DocumentReference | null = null;
+    let storybookData: Record<string, any> | null = null;
+    let finalization: Record<string, any> | null = null;
+    let currentShareId: string | null = null;
+
+    if (isNewModel) {
+      storybookRef = storyRef.collection('storybooks').doc(storybookId);
+      const storybookSnap = await storybookRef.get();
+      if (!storybookSnap.exists) {
+        return respondError(404, 'Storybook not found');
+      }
+      storybookData = storybookSnap.data() as Record<string, any>;
+      finalization = storybookData?.finalization ?? null;
+      currentShareId = finalization?.shareId ?? null;
+    } else {
+      // Legacy model
+      finalization = storyData?.storybookFinalization ?? null;
+      currentShareId = finalization?.shareId ?? null;
     }
 
-    const finalization = bookData?.storybookFinalization ?? null;
-    if (!bookData?.isLocked || !finalization || finalization.status === 'draft') {
+    if (action === 'revoke') {
+      await revokeExistingShare(firestore, storyId, currentShareId ?? undefined);
+
+      if (isNewModel && storybookRef) {
+        await storybookRef.update({
+          'finalization.shareId': null,
+          'finalization.shareLink': null,
+          'finalization.shareExpiresAt': null,
+          'finalization.shareRequiresPasscode': false,
+          'finalization.sharePasscodeHint': null,
+        });
+      } else {
+        await storyRef.update({
+          'storybookFinalization.shareId': null,
+          'storybookFinalization.shareLink': null,
+          'storybookFinalization.shareExpiresAt': null,
+          'storybookFinalization.shareRequiresPasscode': false,
+          'storybookFinalization.sharePasscodeHint': null,
+        });
+      }
+      return NextResponse.json({ ok: true, action: 'revoke', bookId: storyId, storybookId });
+    }
+
+    // Check finalization status
+    const isLocked = isNewModel ? storybookData?.isLocked : storyData?.isLocked;
+    if (!isLocked || !finalization || finalization.status === 'draft') {
       return respondError(409, 'Finalize the storybook before creating a share link.');
     }
 
@@ -125,6 +177,8 @@ export async function POST(request: Request) {
     const tokenHash = requiresPasscode && passcode && salt ? hashSecret(passcode, salt) : null;
     const shareDoc = {
       id: shareId,
+      storyId,
+      storybookId: storybookId ?? null,
       status: 'active',
       createdAt: FieldValue.serverTimestamp(),
       createdBy: user.uid,
@@ -138,22 +192,37 @@ export async function POST(request: Request) {
       viewCount: 0,
     };
 
-    await revokeExistingShare(firestore, bookId, currentShareId ?? undefined);
-    await bookRef.collection('shareTokens').doc(shareId).set(shareDoc);
+    await revokeExistingShare(firestore, storyId, currentShareId ?? undefined);
+    // Store share token in story's shareTokens subcollection (both models)
+    await storyRef.collection('shareTokens').doc(shareId).set(shareDoc);
     const shareLink = `/storybook/share/${shareId}`;
-    await bookRef.update({
-      'storybookFinalization.shareId': shareId,
-      'storybookFinalization.shareLink': shareLink,
-      'storybookFinalization.shareExpiresAt': expiresDate,
-      'storybookFinalization.shareRequiresPasscode': requiresPasscode,
-      'storybookFinalization.sharePasscodeHint': shareDoc.passcodeHint,
-      'storybookFinalization.shareLastGeneratedAt': FieldValue.serverTimestamp(),
-    });
+
+    // Update the appropriate document with share info
+    if (isNewModel && storybookRef) {
+      await storybookRef.update({
+        'finalization.shareId': shareId,
+        'finalization.shareLink': shareLink,
+        'finalization.shareExpiresAt': expiresDate,
+        'finalization.shareRequiresPasscode': requiresPasscode,
+        'finalization.sharePasscodeHint': shareDoc.passcodeHint,
+        'finalization.shareLastGeneratedAt': FieldValue.serverTimestamp(),
+      });
+    } else {
+      await storyRef.update({
+        'storybookFinalization.shareId': shareId,
+        'storybookFinalization.shareLink': shareLink,
+        'storybookFinalization.shareExpiresAt': expiresDate,
+        'storybookFinalization.shareRequiresPasscode': requiresPasscode,
+        'storybookFinalization.sharePasscodeHint': shareDoc.passcodeHint,
+        'storybookFinalization.shareLastGeneratedAt': FieldValue.serverTimestamp(),
+      });
+    }
 
     return NextResponse.json({
       ok: true,
       action: 'create',
-      bookId,
+      bookId: storyId,
+      storybookId,
       shareId,
       shareLink,
       requiresPasscode,
@@ -180,34 +249,39 @@ export async function GET(request: Request) {
     }
 
     const firestore = getFirestore();
-    const booksSnap = await firestore
-      .collection('stories')
-      .where('storybookFinalization.shareId', '==', shareId)
-      .limit(1)
-      .get();
-    if (booksSnap.empty) {
+
+    // First, try to find the share token directly by querying all shareTokens
+    // The share token contains storyId and storybookId to locate the data
+    const storiesSnap = await firestore.collectionGroup('shareTokens').where('id', '==', shareId).limit(1).get();
+
+    if (storiesSnap.empty) {
       return respondError(404, 'Share link not found');
     }
-    const docSnap = booksSnap.docs[0];
-    const bookData = docSnap.data() as Record<string, any>;
-    const finalization = bookData?.storybookFinalization ?? null;
-    const shareRef = docSnap.ref.collection('shareTokens').doc(shareId);
-    const shareSnap = await shareRef.get();
-    if (!shareSnap.exists) {
-      return respondError(404, 'Share token missing');
-    }
+
+    const shareSnap = storiesSnap.docs[0];
     const shareData = shareSnap.data() as Record<string, any>;
+    const storyId = shareData.storyId ?? shareSnap.ref.parent.parent?.id;
+    const storybookId = shareData.storybookId;
+    const isNewModel = !!storybookId;
+
+    if (!storyId) {
+      return respondError(404, 'Share link not found - missing story reference');
+    }
+
+    // Validate share token status and expiration
     if (shareData.status !== 'active') {
       return respondError(410, 'This share link is no longer active');
     }
     const expiresAt = shareData?.expiresAt?.toDate?.();
     if (expiresAt && expiresAt.getTime() < Date.now()) {
-      await shareRef.update({
+      await shareSnap.ref.update({
         status: 'expired',
         revokedAt: FieldValue.serverTimestamp(),
       });
       return respondError(410, 'This share link has expired');
     }
+
+    // Validate passcode if required
     if (shareData.requiresPasscode) {
       if (!token) {
         return respondError(401, 'Passcode required', {
@@ -221,22 +295,97 @@ export async function GET(request: Request) {
         return respondError(401, 'Invalid passcode', { requiresToken: true });
       }
     }
-    if (!Array.isArray(bookData?.finalizedPages)) {
-      return respondError(409, 'This storybook has not been finalized yet.');
+
+    // Fetch the story and storybook data
+    const storyRef = firestore.collection('stories').doc(storyId);
+    const storySnap = await storyRef.get();
+    if (!storySnap.exists) {
+      return respondError(404, 'Story not found');
+    }
+    const storyData = storySnap.data() as Record<string, any>;
+
+    type PageData = {
+      pageNumber: number;
+      kind: string;
+      title?: string | null;
+      bodyText?: string | null;
+      displayText?: string | null;
+      imageUrl?: string | null;
+      audioUrl?: string | null;
+    };
+    let pages: PageData[] = [];
+    let metadata: { bookTitle?: string; childName?: string } | null = null;
+    let finalizationVersion = 1;
+
+    if (isNewModel) {
+      // New model: fetch from storybook subcollection
+      const storybookRef = storyRef.collection('storybooks').doc(storybookId);
+      const storybookSnap = await storybookRef.get();
+      if (!storybookSnap.exists) {
+        return respondError(404, 'Storybook not found');
+      }
+      const storybookData = storybookSnap.data() as Record<string, any>;
+      const finalization = storybookData?.finalization ?? {};
+      finalizationVersion = finalization?.version ?? 1;
+
+      // Verify the storybook is finalized
+      if (!storybookData?.isLocked) {
+        return respondError(409, 'This storybook has not been finalized yet.');
+      }
+
+      // Fetch pages from subcollection
+      const pagesSnap = await storybookRef.collection('pages').orderBy('pageNumber', 'asc').get();
+      pages = pagesSnap.docs.map((doc) => {
+        const pageData = doc.data();
+        return {
+          pageNumber: pageData.pageNumber,
+          kind: pageData.kind,
+          title: pageData.title ?? null,
+          bodyText: pageData.bodyText ?? null,
+          displayText: pageData.displayText ?? null,
+          imageUrl: pageData.imageUrl ?? null,
+          audioUrl: pageData.audioUrl ?? null,
+        };
+      });
+
+      metadata = {
+        bookTitle: storybookData?.title || storyData?.metadata?.title || null,
+        childName: storyData?.metadata?.childName || null,
+      };
+    } else {
+      // Legacy model: use finalizedPages from story document
+      if (!Array.isArray(storyData?.finalizedPages)) {
+        return respondError(409, 'This storybook has not been finalized yet.');
+      }
+      const finalization = storyData?.storybookFinalization ?? {};
+      finalizationVersion = finalization?.version ?? 1;
+      pages = storyData.finalizedPages.map((page: Record<string, any>) => ({
+        pageNumber: page.pageNumber as number,
+        kind: page.kind as string,
+        title: (page.title as string) ?? null,
+        bodyText: (page.bodyText as string) ?? null,
+        displayText: (page.displayText as string) ?? null,
+        imageUrl: (page.imageUrl as string) ?? null,
+        audioUrl: (page.audioUrl as string) ?? null,
+      }));
+      metadata = storyData?.finalizedMetadata ?? null;
     }
 
-    await shareRef.update({
+    // Update view count
+    await shareSnap.ref.update({
       viewCount: FieldValue.increment(1),
       lastViewedAt: FieldValue.serverTimestamp(),
     });
 
     const response: ShareViewResponse = {
       ok: true,
-      bookId: docSnap.id,
+      storyId,
+      storybookId,
+      bookId: storyId, // Deprecated
       shareId,
-      finalizationVersion: finalization?.version ?? 1,
-      metadata: bookData?.finalizedMetadata ?? null,
-      pages: bookData.finalizedPages ?? [],
+      finalizationVersion,
+      metadata,
+      pages,
       share: {
         expiresAt: expiresAt ? expiresAt.toISOString() : null,
         requiresPasscode: !!shareData.requiresPasscode,

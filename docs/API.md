@@ -599,23 +599,104 @@ Update storybook details.
 
 ### POST `/api/storyBook/share`
 
-Create or manage share link for storybook.
+Create or revoke share link for a finalized storybook.
+
+**Authentication**: Required (parent or admin)
 
 **Request Body**:
 ```json
 {
-  "bookId": "book-id",
-  "action": "create",
-  "expiresInDays": 7,
-  "passcode": "optional-passcode"
+  "bookId": "story-id",
+  "storybookId": "storybook-id",  // For new model only
+  "action": "create",             // "create" or "revoke"
+  "expiresInDays": 14,            // 1-90, default 14
+  "protectWithCode": true,        // Whether to require passcode
+  "passcode": "optional-passcode" // 4+ chars, or auto-generated 6-digit
 }
 ```
 
-**Response**: `200 OK`
+**Response (create)**: `200 OK`
 ```json
 {
-  "shareId": "share-id",
-  "shareLink": "https://app.storypic.com/share/..."
+  "ok": true,
+  "action": "create",
+  "bookId": "story-id",
+  "storybookId": "storybook-id",
+  "shareId": "abc12345",
+  "shareLink": "/storybook/share/abc12345",
+  "requiresPasscode": true,
+  "passcode": "123456",
+  "expiresAt": "2025-01-17T00:00:00.000Z"
+}
+```
+
+**Response (revoke)**: `200 OK`
+```json
+{
+  "ok": true,
+  "action": "revoke",
+  "bookId": "story-id",
+  "storybookId": "storybook-id"
+}
+```
+
+---
+
+### GET `/api/storyBook/share`
+
+View a shared storybook (public endpoint - no authentication required).
+
+**Query Parameters**:
+- `shareId` (required): The share link ID
+- `token` (optional): Passcode if the share is protected
+
+**Response (success)**: `200 OK`
+```json
+{
+  "ok": true,
+  "storyId": "story-id",
+  "storybookId": "storybook-id",
+  "bookId": "story-id",
+  "shareId": "abc12345",
+  "finalizationVersion": 1,
+  "metadata": {
+    "bookTitle": "The Adventure",
+    "childName": "Emma"
+  },
+  "pages": [
+    {
+      "pageNumber": 1,
+      "kind": "cover_front",
+      "title": "The Adventure",
+      "bodyText": null,
+      "displayText": null,
+      "imageUrl": "https://storage.googleapis.com/...",
+      "audioUrl": "https://storage.googleapis.com/..."
+    }
+  ],
+  "share": {
+    "expiresAt": "2025-01-17T00:00:00.000Z",
+    "requiresPasscode": true,
+    "passcodeHint": "56"
+  }
+}
+```
+
+**Response (passcode required)**: `401 Unauthorized`
+```json
+{
+  "ok": false,
+  "errorMessage": "Passcode required",
+  "requiresToken": true,
+  "passcodeHint": "56"
+}
+```
+
+**Response (expired/revoked)**: `410 Gone`
+```json
+{
+  "ok": false,
+  "errorMessage": "This share link has expired"
 }
 ```
 

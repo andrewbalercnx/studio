@@ -18,6 +18,30 @@
 
 ### 2026-01-03
 
+#### `pending` - Enhanced storybook sharing with immersive viewer
+
+**Type**: Feature
+
+**Summary**: Parents can now share finalized storybooks with friends and family via a secure share link. Shared storybooks display in the same immersive full-screen reader that children use, with optional passcode protection and expiration dates.
+
+**Changes**:
+- Updated `/api/storyBook/share` POST to support new storybook model (storybookId parameter)
+- Updated `/api/storyBook/share` GET to read pages from storybook subcollection
+- Replaced basic card grid in `/storybook/share/[shareId]` with ImmersivePlayer component
+- Added welcome screen with cover image and "Tap to read" button
+- Added Share card to storybook viewer page with create/revoke controls
+- Added passcode toggle and custom passcode input
+- Share tokens now store storyId and storybookId for proper data location
+
+**Files Modified**:
+- `src/app/api/storyBook/share/route.ts`
+- `src/app/storybook/share/[shareId]/page.tsx`
+- `src/app/storybook/[bookId]/page.tsx`
+- `docs/API.md`
+- `docs/SCHEMA.md`
+
+---
+
 #### `a52d764` - Add global image prompt configuration
 
 **Type**: Feature

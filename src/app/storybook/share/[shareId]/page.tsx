@@ -1,14 +1,17 @@
 'use client';
 
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useState, useMemo} from 'react';
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
-import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
-import {LoaderCircle, BookOpen, Shield, Image as ImageIcon} from 'lucide-react';
+import {LoaderCircle, BookOpen, Shield, Play} from 'lucide-react';
+import type {StoryOutputPage} from '@/lib/types';
+import {ImmersivePlayer} from '@/components/book-reader/immersive-player';
 
 type ShareViewResponse = {
   ok: true;
+  storyId: string;
+  storybookId?: string;
   bookId: string;
   shareId: string;
   finalizationVersion: number;
@@ -21,7 +24,9 @@ type ShareViewResponse = {
     kind: string;
     title?: string | null;
     bodyText?: string | null;
+    displayText?: string | null;
     imageUrl?: string | null;
+    audioUrl?: string | null;
   }>;
   share: {
     expiresAt?: string | null;
@@ -45,6 +50,7 @@ export default function StorybookSharePage({params, searchParams}: SharePageProp
   const [passcodeHint, setPasscodeHint] = useState<string | null>(null);
   const [passcodeInput, setPasscodeInput] = useState(initialToken ?? '');
   const [submittingPasscode, setSubmittingPasscode] = useState(false);
+  const [showImmersivePlayer, setShowImmersivePlayer] = useState(false);
 
   const fetchShare = async (token?: string | null) => {
     setLoading(true);
@@ -68,8 +74,9 @@ export default function StorybookSharePage({params, searchParams}: SharePageProp
         throw new Error(data?.errorMessage || 'Unable to load storybook.');
       }
       setShareData(data as ShareViewResponse);
-    } catch (err: any) {
-      setError(err?.message ?? 'Unexpected error loading share link.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unexpected error loading share link.';
+      setError(message);
       setShareData(null);
     } finally {
       setLoading(false);
@@ -92,29 +99,52 @@ export default function StorybookSharePage({params, searchParams}: SharePageProp
   const heroTitle = shareData?.metadata?.bookTitle ?? 'Shared Storybook';
   const childName = shareData?.metadata?.childName;
 
-  const shareExpires = useMemo(() => {
-    if (!shareData?.share?.expiresAt) return null;
-    try {
-      return new Date(shareData.share.expiresAt).toLocaleString();
-    } catch {
-      return shareData.share.expiresAt;
-    }
-  }, [shareData]);
+  // Convert API response pages to StoryOutputPage format for ImmersivePlayer
+  const storyPages: StoryOutputPage[] = useMemo(() => {
+    if (!shareData?.pages) return [];
+    return shareData.pages.map((page, index) => ({
+      id: `page-${index}`,
+      pageNumber: page.pageNumber,
+      kind: page.kind as StoryOutputPage['kind'],
+      title: page.title ?? undefined,
+      bodyText: page.bodyText ?? undefined,
+      displayText: page.displayText ?? page.bodyText ?? undefined,
+      imageUrl: page.imageUrl ?? undefined,
+      audioUrl: page.audioUrl ?? undefined,
+      createdAt: null,
+      updatedAt: null,
+    }));
+  }, [shareData?.pages]);
+
+  // Get cover image for the welcome screen
+  const coverImage = storyPages.find(p => p.kind === 'cover_front')?.imageUrl || storyPages[0]?.imageUrl;
+
+  // If showing immersive player, render it fullscreen
+  if (showImmersivePlayer && shareData) {
+    return (
+      <ImmersivePlayer
+        pages={storyPages}
+        bookTitle={heroTitle}
+        onPlayAgain={() => {
+          // Reset to start
+        }}
+        onExit={() => setShowImmersivePlayer(false)}
+      />
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background px-4 py-10">
-      <div className="mx-auto flex max-w-5xl flex-col gap-6">
-        <div className="text-center space-y-2">
-          <p className="text-sm uppercase tracking-wide text-muted-foreground">StoryPic Share</p>
-          <h1 className="text-4xl font-headline">{heroTitle}</h1>
-          {childName && <p className="text-muted-foreground">Made for {childName}</p>}
+    <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
+      {/* Loading state */}
+      {loading && (
+        <div className="flex min-h-screen items-center justify-center">
+          <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
         </div>
+      )}
 
-        {loading ? (
-          <div className="flex min-h-[40vh] items-center justify-center">
-            <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
-          </div>
-        ) : error ? (
+      {/* Error state */}
+      {!loading && error && (
+        <div className="flex min-h-screen items-center justify-center px-4">
           <Card className="mx-auto max-w-md text-center">
             <CardHeader>
               <CardTitle>Link unavailable</CardTitle>
@@ -124,7 +154,12 @@ export default function StorybookSharePage({params, searchParams}: SharePageProp
               <Button onClick={() => fetchShare(passcodeInput || undefined)}>Try again</Button>
             </CardContent>
           </Card>
-        ) : requiresToken ? (
+        </div>
+      )}
+
+      {/* Passcode required state */}
+      {!loading && !error && requiresToken && (
+        <div className="flex min-h-screen items-center justify-center px-4">
           <Card className="mx-auto max-w-md">
             <CardHeader className="space-y-2 text-center">
               <CardTitle className="flex items-center justify-center gap-2">
@@ -132,7 +167,8 @@ export default function StorybookSharePage({params, searchParams}: SharePageProp
                 Passcode Required
               </CardTitle>
               <CardDescription>
-                This family protected their book with a secret code.{passcodeHint ? ` Hint: ends with ${passcodeHint}.` : ''}
+                This family protected their book with a secret code.
+                {passcodeHint ? ` Hint: ends with ${passcodeHint}.` : ''}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -141,6 +177,7 @@ export default function StorybookSharePage({params, searchParams}: SharePageProp
                   placeholder="Enter passcode"
                   value={passcodeInput}
                   onChange={(event) => setPasscodeInput(event.target.value)}
+                  autoFocus
                 />
                 <Button type="submit" disabled={submittingPasscode} className="w-full">
                   {submittingPasscode && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
@@ -149,63 +186,77 @@ export default function StorybookSharePage({params, searchParams}: SharePageProp
               </form>
             </CardContent>
           </Card>
-        ) : shareData ? (
-          <>
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-white/70 px-4 py-3 shadow-sm">
-              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <Badge variant="secondary">Version v{shareData.finalizationVersion}</Badge>
-                {shareData.share.requiresPasscode && (
-                  <Badge variant="outline" className="gap-1">
-                    <Shield className="h-3 w-3" /> Protected
-                  </Badge>
-                )}
-                {shareExpires && <span>Expires {shareExpires}</span>}
+        </div>
+      )}
+
+      {/* Welcome/Cover screen - ready to read */}
+      {!loading && !error && !requiresToken && shareData && (
+        <div className="relative min-h-screen">
+          {/* Background cover image */}
+          {coverImage && (
+            <div
+              className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+              style={{backgroundImage: `url(${coverImage})`}}
+            />
+          )}
+
+          {/* Gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
+
+          {/* Content */}
+          <div className="relative flex min-h-screen flex-col items-center justify-center px-4 py-12">
+            {/* Logo/Brand */}
+            <p className="mb-4 text-sm font-medium uppercase tracking-widest text-white/70">
+              StoryPic Kids
+            </p>
+
+            {/* Title */}
+            <h1 className="mb-2 text-center text-4xl font-headline text-white drop-shadow-lg sm:text-5xl md:text-6xl">
+              {heroTitle}
+            </h1>
+
+            {/* Child name */}
+            {childName && (
+              <p className="mb-8 text-center text-xl text-white/80">
+                A story made for {childName}
+              </p>
+            )}
+
+            {/* Play button */}
+            <button
+              onClick={() => setShowImmersivePlayer(true)}
+              className="group mb-8 flex flex-col items-center gap-4 transition-transform hover:scale-105"
+            >
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white/90 shadow-2xl transition-all group-hover:bg-white group-hover:shadow-primary/30">
+                <Play className="h-12 w-12 text-primary fill-primary ml-1" />
               </div>
-              <Button variant="ghost" size="sm" onClick={() => fetchShare(passcodeInput || undefined)}>
-                Refresh
-              </Button>
-            </div>
+              <span className="text-lg font-medium text-white">Tap to read</span>
+            </button>
 
-            <div className="grid gap-6 md:grid-cols-2">
-              {shareData.pages.map((page) => (
-                <Card key={`${page.pageNumber}-${page.kind}`}>
-                  <CardHeader className="space-y-1">
-                    <CardTitle className="text-lg">{page.title || page.kind.replace(/_/g, ' ')}</CardTitle>
-                    <CardDescription>Page {page.pageNumber}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {page.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={page.imageUrl}
-                        alt={page.title ?? `Page ${page.pageNumber}`}
-                        className="h-56 w-full rounded-lg object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex h-56 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
-                        <ImageIcon className="h-8 w-8" />
-                      </div>
-                    )}
-                    {page.bodyText ? (
-                      <p className="text-sm leading-relaxed">{page.bodyText}</p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No narration on this spread.</p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+            {/* Share info */}
+            <div className="mt-auto flex flex-wrap items-center justify-center gap-4 text-sm text-white/60">
+              {shareData.share.requiresPasscode && (
+                <span className="flex items-center gap-1">
+                  <Shield className="h-4 w-4" />
+                  Protected
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <BookOpen className="h-4 w-4" />
+                {storyPages.length} pages
+              </span>
             </div>
-          </>
-        ) : null}
-
-        {!loading && !error && !requiresToken && !shareData && (
-          <div className="flex min-h-[30vh] flex-col items-center justify-center gap-3 text-center text-muted-foreground">
-            <BookOpen className="h-10 w-10" />
-            <p>Nothing to show yet. Ask the parent to double-check the link.</p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && !error && !requiresToken && !shareData && (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-4 text-center text-muted-foreground">
+          <BookOpen className="h-10 w-10" />
+          <p>Nothing to show yet. Ask the parent to double-check the link.</p>
+        </div>
+      )}
     </div>
   );
 }

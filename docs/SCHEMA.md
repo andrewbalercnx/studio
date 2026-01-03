@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-03 (added showReportIssueButton and enableMixamWebhookLogging to diagnostics)
+> **Last Updated**: 2026-01-03 (added StoryBookShareToken subcollection documentation)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -171,6 +171,33 @@ Compiled story content.
 - `shareTokens/{tokenId}` - Share links (see `StoryBookShareToken`)
 
 **Security**: Parents can CRUD their own stories; admins have full access.
+
+---
+
+### `stories/{storyId}/shareTokens/{tokenId}` (Subcollection)
+
+Share tokens for public storybook viewing.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Share token ID (8-char hex) |
+| `storyId` | string | Yes | Parent story ID |
+| `storybookId` | string | No | Storybook ID (new model only) |
+| `status` | 'active' \| 'revoked' \| 'expired' | Yes | Token status |
+| `createdAt` | timestamp | Yes | Creation time |
+| `createdBy` | string | Yes | UID of creator |
+| `expiresAt` | timestamp | No | Expiration time |
+| `requiresPasscode` | boolean | Yes | Whether passcode is required |
+| `tokenHash` | string | No | SHA256 hash of passcode |
+| `tokenSalt` | string | No | Salt for hash |
+| `passcodeHint` | string | No | Last 2 chars of passcode |
+| `finalizationVersion` | number | Yes | Storybook version when shared |
+| `viewCount` | number | No | Number of views |
+| `lastViewedAt` | timestamp | No | Last view time |
+| `revokedAt` | timestamp | No | Revocation time |
+| `revokedBy` | string | No | UID of revoker |
+
+**Security**: Accessible via public API endpoint with validation; parents can create/revoke for their own stories.
 
 ---
 
