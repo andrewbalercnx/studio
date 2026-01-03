@@ -13,7 +13,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { LoaderCircle, Settings, RefreshCw, Sparkles, Star, CheckCircle, Bot } from 'lucide-react';
+import { LoaderCircle, Settings, RefreshCw, Sparkles, Star, CheckCircle, Bot, Music, VolumeX } from 'lucide-react';
 import Link from 'next/link';
 
 import { ChoiceButton, type ChoiceWithEntities } from './choice-button';
@@ -112,6 +112,7 @@ export function StoryBrowser({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isEndingPhase, setIsEndingPhase] = useState(false);
   const [debugInfo, setDebugInfo] = useState<Record<string, any>>({});
+  const [musicEnabled, setMusicEnabled] = useState(true); // User preference for background music
 
   // Track spoken content to avoid re-speaking
   const lastSpokenContentRef = useRef<string>('');
@@ -182,8 +183,16 @@ export function StoryBrowser({
     duckedVolume: 0.1,
   });
 
-  // Music control based on state
+  // Music control based on state and user preference
   useEffect(() => {
+    // If user disabled music, stop it
+    if (!musicEnabled) {
+      if (backgroundMusic.isPlaying) {
+        backgroundMusic.fadeOut();
+      }
+      return;
+    }
+
     const hasAvatar = childProfile?.avatarAnimationUrl || childProfile?.avatarUrl;
     const showingAvatar = browserState === 'generating' || (isSpeechModeEnabled && isTTSLoading);
     const shouldPlayMusic = (showingAvatar && hasAvatar && backgroundMusicUrl) || (isSpeaking && backgroundMusicUrl);
@@ -193,7 +202,7 @@ export function StoryBrowser({
     } else if (!shouldPlayMusic && backgroundMusic.isPlaying) {
       backgroundMusic.fadeOut();
     }
-  }, [browserState, isTTSLoading, isSpeaking, backgroundMusic, backgroundMusicUrl, childProfile, isSpeechModeEnabled]);
+  }, [browserState, isTTSLoading, isSpeaking, backgroundMusic, backgroundMusicUrl, childProfile, isSpeechModeEnabled, musicEnabled]);
 
   // ---------------------------------------------------------------------------
   // Auto-speak when content changes
@@ -708,11 +717,27 @@ export function StoryBrowser({
   // ---------------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col items-center p-4">
-      {/* Header */}
-      <div className="fixed top-0 right-14 z-50 h-14 flex items-center gap-2">
-        {childProfile && <SpeechModeToggle childProfile={childProfile} />}
+      {/* Header Controls - positioned to not overlap with navigation */}
+      <div className="fixed top-3 right-4 z-40 flex items-center gap-1 bg-background/80 backdrop-blur-sm rounded-lg p-1 shadow-sm border">
+        {/* Music Toggle */}
+        {backgroundMusicUrl && (
+          <Button
+            variant={musicEnabled ? 'default' : 'ghost'}
+            size="icon"
+            onClick={() => setMusicEnabled(!musicEnabled)}
+            title={musicEnabled ? 'Turn off background music' : 'Turn on background music'}
+            className="h-8 w-8"
+          >
+            {musicEnabled ? <Music className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          </Button>
+        )}
+        {/* Narration Toggle */}
+        {childProfile?.preferredVoiceId && (
+          <SpeechModeToggle childProfile={childProfile} className="h-8 w-8" />
+        )}
+        {/* Settings Link */}
         {showSettingsLink && (
-          <Button variant="ghost" size="icon" asChild>
+          <Button variant="ghost" size="icon" asChild className="h-8 w-8">
             <Link href={`/story/session/${sessionId}`} title="Diagnostic View">
               <Settings className="h-4 w-4" />
             </Link>
@@ -936,7 +961,9 @@ export function StoryBrowser({
             isSpeechModeEnabled,
             isSpeaking,
             isTTSLoading,
+            musicEnabled,
             backgroundMusicPlaying: backgroundMusic.isPlaying,
+            backgroundMusicAvailable: !!backgroundMusicUrl,
           },
           // API debug info
           debug: debugInfo,
