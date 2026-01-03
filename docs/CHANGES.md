@@ -18,7 +18,26 @@
 
 ### 2026-01-03
 
-#### `PENDING` - Fix retry order: remove style examples first, keep reference photos
+#### `a6eea18` - Add retry tracking to AI flow logs and hide generation logs
+
+**Type**: Enhancement
+
+**Summary**: AI flow logs now include retry tracking information (attempt number, max attempts, retry reason). Generation logs on storybook viewer are now hidden unless diagnostics panel is enabled.
+
+**Details**:
+- Added `attemptNumber`, `maxAttempts`, `retryReason` parameters to `logAIFlow`
+- story-image-flow logs which attempt is being made and why it's retrying
+- "Last generation logs" on `/storybook/[bookId]` only visible when diagnostics enabled
+- Uses `useDiagnosticsOptional` hook to check `showDiagnosticsPanel` setting
+
+**Modified files**:
+- `src/lib/ai-flow-logger.ts`
+- `src/ai/flows/story-image-flow.ts`
+- `src/app/storybook/[bookId]/page.tsx`
+
+---
+
+#### `6660e57` - Fix retry order: remove style examples first, keep reference photos
 
 **Type**: Bug Fix
 
