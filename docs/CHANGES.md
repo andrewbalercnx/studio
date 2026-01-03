@@ -18,6 +18,21 @@
 
 ### 2026-01-03
 
+#### `31f432c` - Fix Firestore undefined value error in seed generators
+
+**Type**: Bug Fix
+
+**Summary**: Fixed "Cannot use undefined as a Firestore value" error when clicking "Seed Generators" button on admin page.
+
+**Changes**:
+- Changed from direct property assignment to conditional spreads
+- Only includes backgroundMusic, prompts, createdAt if they exist on the document
+
+**Files Modified**:
+- `src/app/api/admin/story-generators/seed/route.ts`
+
+---
+
 #### `404f5d0` - Fix first page TTS autoplay blocked and avatar fallback delay
 
 **Type**: Bug Fix
