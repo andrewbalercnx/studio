@@ -25,6 +25,10 @@ interface UseTTSReturn {
   isSpeaking: boolean;
   /** Whether TTS is loading/generating */
   isLoading: boolean;
+  /** Whether there's queued audio waiting for user gesture */
+  hasQueuedAudio: boolean;
+  /** Resume queued audio (call after user gesture) */
+  resumeQueuedAudio: () => void;
 }
 
 /**
@@ -36,10 +40,12 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
   const { user } = useUser();
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasQueuedAudio, setHasQueuedAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const currentTextRef = useRef<string | null>(null);
   const pendingTextRef = useRef<string | null>(null);
+  const queuedAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const stop = useCallback(() => {
     // Abort any pending request
@@ -55,6 +61,12 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
       audioRef.current = null;
     }
 
+    // Clear queued audio
+    if (queuedAudioRef.current) {
+      queuedAudioRef.current = null;
+      setHasQueuedAudio(false);
+    }
+
     // Clear text tracking
     currentTextRef.current = null;
     pendingTextRef.current = null;
@@ -62,6 +74,31 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
     setIsSpeaking(false);
     setIsLoading(false);
   }, []);
+
+  // Resume queued audio after user gesture
+  const resumeQueuedAudio = useCallback(async () => {
+    if (!queuedAudioRef.current) {
+      console.log('[useTTS] resumeQueuedAudio: no queued audio');
+      return;
+    }
+
+    const audio = queuedAudioRef.current;
+    queuedAudioRef.current = null;
+    setHasQueuedAudio(false);
+
+    try {
+      console.log('[useTTS] Resuming queued audio after user gesture...');
+      setIsSpeaking(true);
+      onStart?.();
+      await audio.play();
+      console.log('[useTTS] Queued audio playback started');
+      audioRef.current = audio;
+    } catch (error: any) {
+      console.error('[useTTS] Failed to resume queued audio:', error);
+      setIsSpeaking(false);
+      // Don't report error - user can try again
+    }
+  }, [onStart]);
 
   const speak = useCallback(async (text: string) => {
     console.log('[useTTS] speak() called:', { hasUser: !!user, textLength: text.length, voiceId, childId });
@@ -169,9 +206,15 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
       // Handle browser autoplay restrictions gracefully
       // This happens when audio.play() is called without a user gesture
       if (error.name === 'NotAllowedError') {
-        console.log('[useTTS] Autoplay blocked by browser - user interaction required');
-        // Don't report this as an error to the user - it's expected behavior
-        // The user can tap the TTS toggle or an option to trigger playback with gesture
+        console.log('[useTTS] Autoplay blocked by browser - queuing audio for user gesture');
+        // Queue the audio so it can be played after a user gesture
+        if (audioRef.current) {
+          queuedAudioRef.current = audioRef.current;
+          audioRef.current = null;
+          setHasQueuedAudio(true);
+          // Keep the text tracking so we know what's queued
+          currentTextRef.current = text;
+        }
         return;
       }
 
@@ -185,5 +228,7 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
     stop,
     isSpeaking,
     isLoading,
+    hasQueuedAudio,
+    resumeQueuedAudio,
   };
 }

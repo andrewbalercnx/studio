@@ -13,7 +13,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { LoaderCircle, Settings, RefreshCw, Sparkles, Star, CheckCircle, Bot, Music, VolumeX } from 'lucide-react';
+import { LoaderCircle, Settings, RefreshCw, Sparkles, Star, CheckCircle, Bot, Music, VolumeX, Volume2 } from 'lucide-react';
 import Link from 'next/link';
 
 import { ChoiceButton, type ChoiceWithEntities } from './choice-button';
@@ -169,6 +169,8 @@ export function StoryBrowser({
     stopSpeech,
     isSpeaking,
     isLoading: isTTSLoading,
+    hasQueuedAudio,
+    resumeQueuedAudio,
   } = useStoryTTS({
     childProfile: childProfile ?? null,
     onError: (error) => toast({ title: 'Speech error', description: error, variant: 'destructive' }),
@@ -848,6 +850,21 @@ export function StoryBrowser({
                   <AvatarFallback><Bot /></AvatarFallback>
                 </Avatar>
                 <p className="text-xl font-medium leading-relaxed">{currentQuestion}</p>
+              </div>
+            )}
+
+            {/* Tap to hear button - shown when autoplay is blocked */}
+            {hasQueuedAudio && isSpeechModeEnabled && (
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="gap-2 animate-pulse border-purple-300 text-purple-700 hover:bg-purple-50"
+                  onClick={resumeQueuedAudio}
+                >
+                  <Volume2 className="w-5 h-5" />
+                  Tap to hear the story
+                </Button>
               </div>
             )}
 

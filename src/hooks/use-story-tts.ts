@@ -21,6 +21,8 @@ interface UseStoryTTSReturn {
   isSpeaking: boolean;
   /** Whether TTS is loading/generating audio */
   isLoading: boolean;
+  /** Whether there's audio queued waiting for user gesture (autoplay blocked) */
+  hasQueuedAudio: boolean;
   /** Speak story content (header text, question, and options) */
   speakStoryContent: (content: {
     headerText?: string;
@@ -29,6 +31,8 @@ interface UseStoryTTSReturn {
   }) => void;
   /** Stop any current speech */
   stopSpeech: () => void;
+  /** Resume queued audio after user gesture */
+  resumeQueuedAudio: () => void;
 }
 
 /**
@@ -170,7 +174,9 @@ export function useStoryTTS(options: UseStoryTTSOptions): UseStoryTTSReturn {
     isSpeechModeEnabled,
     isSpeaking: tts.isSpeaking,
     isLoading: tts.isLoading,
+    hasQueuedAudio: tts.hasQueuedAudio,
     speakStoryContent,
     stopSpeech,
+    resumeQueuedAudio: tts.resumeQueuedAudio,
   };
 }
