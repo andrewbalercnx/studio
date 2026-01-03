@@ -18,7 +18,7 @@
 
 ### 2026-01-03
 
-#### `PENDING` - Fix documentPath error in image generation
+#### `5d01911` - Fix documentPath error in image generation
 
 **Type**: Bug Fix
 
