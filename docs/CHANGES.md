@@ -18,6 +18,36 @@
 
 ### 2026-01-03
 
+#### `23c4792` - Fix background music restart and add single-dollar placeholder fallback
+
+**Type**: Bug Fix / Enhancement
+
+**Summary**: Fixed background music restarting from the beginning when narration starts, and extended single-dollar placeholder fallback to all placeholder extraction functions.
+
+**Details**:
+
+Background music fix:
+- Music was restarting because the effect would call `play()` again when `isSpeaking` became true
+- Changed logic to start music once when story creation begins and keep playing continuously
+- Music now loops automatically (audio.loop = true in the hook)
+- Only stops when story is complete or user manually disables it
+- Added `musicStartedRef` to track whether music has already been started for the session
+
+Placeholder resolution extension:
+- The earlier fix only updated resolution functions, but extraction functions still only handled `$$id$$`
+- Updated all `extractActorIds` and `extractEntityIds` functions to also match `$id$` format
+- Uses 15+ char alphanumeric pattern to avoid matching currency amounts like $100
+
+**Modified files**:
+- `src/components/story/story-browser.tsx` - Music control logic and extractActorIdsFromText
+- `src/ai/flows/story-compile-flow.ts` - extractActorIds function
+- `src/ai/flows/story-page-flow.ts` - extractEntityIds function
+- `src/ai/flows/story-synopsis-flow.ts` - extractActorIds function
+- `src/ai/flows/story-text-compile-flow.ts` - extractActorIds function
+- `src/lib/resolve-placeholders.server.ts` - replacePlaceholdersWithDescriptions function
+
+---
+
 #### `f7d4d2a` - Fix placeholder resolution for single $ format
 
 **Type**: Bug Fix
