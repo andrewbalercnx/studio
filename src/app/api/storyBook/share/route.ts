@@ -6,6 +6,7 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
 import { randomBytes, createHash } from 'node:crypto';
+import { resolveEntitiesInText, replacePlaceholdersInText } from '@/lib/resolve-placeholders.server';
 
 type ShareActionRequest = {
   bookId: string;
@@ -387,6 +388,29 @@ export async function GET(request: Request) {
         audioUrl: (page.audioUrl as string) ?? null,
       }));
       metadata = storyData?.finalizedMetadata ?? null;
+    }
+
+    // Resolve placeholders in page text if displayText is missing or contains $$placeholders$$
+    // This ensures shared storybooks display resolved names, not placeholder IDs
+    const hasUnresolvedPlaceholders = pages.some((p) => {
+      const text = p.displayText || p.bodyText || '';
+      return /\$\$[^$]+\$\$/.test(text) || /\$[a-zA-Z0-9_-]{15,}\$/.test(text);
+    });
+
+    if (hasUnresolvedPlaceholders) {
+      // Collect all text that needs resolution
+      const allText = pages.map((p) => p.displayText || p.bodyText || '').join(' ');
+      const entityMap = await resolveEntitiesInText(allText);
+
+      // Resolve each page's displayText
+      pages = await Promise.all(
+        pages.map(async (p) => {
+          const textToResolve = p.displayText || p.bodyText || '';
+          if (!textToResolve) return p;
+          const resolved = await replacePlaceholdersInText(textToResolve, entityMap);
+          return { ...p, displayText: resolved };
+        })
+      );
     }
 
     // Update view count

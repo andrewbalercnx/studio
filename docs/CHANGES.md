@@ -18,6 +18,17 @@
 
 ### 2026-01-04
 
+#### `0f911e5` - Resolve placeholders server-side in share API
+
+**Type**: Bug Fix
+
+**Summary**: Shared storybooks were displaying unresolved placeholder IDs (like `$$abc123$$`) instead of character/child names. Added server-side placeholder resolution in the share API GET handler to ensure all text is resolved before returning to the client.
+
+**Files Modified**:
+- `src/app/api/storyBook/share/route.ts` - Added placeholder resolution after fetching pages
+
+---
+
 #### `61d4fc0` - Fix ImmersivePlayer crash on public share pages
 
 **Type**: Bug Fix
