@@ -18,6 +18,17 @@
 
 ### 2026-01-04
 
+#### `ad759b3` - Fix share page not reading URL params
+
+**Type**: Bug Fix
+
+**Summary**: The share page was sending `shareId=undefined` to the API because it was using the old Next.js params pattern. Client components need to use `useParams()` and `useSearchParams()` hooks instead of receiving params as props.
+
+**Files Modified**:
+- `src/app/storybook/share/[shareId]/page.tsx`
+
+---
+
 #### `820613c` - Update Git workflow to single-push pattern
 
 **Type**: Process

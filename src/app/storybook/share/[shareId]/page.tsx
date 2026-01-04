@@ -1,6 +1,7 @@
 'use client';
 
 import {useEffect, useState, useMemo} from 'react';
+import {useParams, useSearchParams} from 'next/navigation';
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -35,14 +36,11 @@ type ShareViewResponse = {
   };
 };
 
-type SharePageProps = {
-  params: {shareId: string};
-  searchParams?: Record<string, string | string[] | undefined>;
-};
-
-export default function StorybookSharePage({params, searchParams}: SharePageProps) {
-  const {shareId} = params;
-  const initialToken = typeof searchParams?.token === 'string' ? searchParams.token : '';
+export default function StorybookSharePage() {
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const shareId = params?.shareId as string;
+  const initialToken = searchParams?.get('token') ?? '';
   const [loading, setLoading] = useState(true);
   const [shareData, setShareData] = useState<ShareViewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
