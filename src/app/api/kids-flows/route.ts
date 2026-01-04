@@ -17,6 +17,7 @@ export async function GET() {
         chat: config.chatEnabled,
         gemini3: config.gemini3Enabled,
         gemini4: config.gemini4Enabled,
+        friends: config.friendsEnabled,
       },
     });
 

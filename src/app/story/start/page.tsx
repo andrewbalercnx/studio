@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAppContext } from '@/hooks/use-app-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, MessageCircle, Wand2, Sparkles, BookOpen } from 'lucide-react';
+import { LoaderCircle, MessageCircle, Wand2, Sparkles, BookOpen, Users } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useFirestore } from '@/firebase';
@@ -16,6 +16,7 @@ type FlowsConfig = {
   chat: boolean;
   gemini3: boolean;
   gemini4: boolean;
+  friends: boolean;
 };
 
 // Generator ID to flow key mapping
@@ -24,10 +25,11 @@ const GENERATOR_TO_FLOW: Record<string, keyof FlowsConfig> = {
   chat: 'chat',
   gemini3: 'gemini3',
   gemini4: 'gemini4',
+  friends: 'friends',
 };
 
 // Default generator info (fallback if not in Firestore)
-const DEFAULT_GENERATOR_INFO: Record<string, { name: string; description: string; gradient: string; icon: 'wand' | 'chat' | 'sparkles' | 'book' }> = {
+const DEFAULT_GENERATOR_INFO: Record<string, { name: string; description: string; gradient: string; icon: 'wand' | 'chat' | 'sparkles' | 'book' | 'users' }> = {
   chat: {
     name: 'Create with Chat',
     description: 'Talk with the Story Guide step-by-step to build your tale.',
@@ -52,12 +54,18 @@ const DEFAULT_GENERATOR_INFO: Record<string, { name: string; description: string
     gradient: 'bg-gradient-to-br from-emerald-500 to-teal-500',
     icon: 'book',
   },
+  friends: {
+    name: 'Fun with my friends',
+    description: 'Pick your adventure companions and create a story together!',
+    gradient: 'bg-gradient-to-br from-amber-500 to-orange-500',
+    icon: 'users',
+  },
 };
 
 // Order to display generators
-const GENERATOR_ORDER = ['chat', 'wizard', 'gemini3', 'gemini4'];
+const GENERATOR_ORDER = ['chat', 'wizard', 'gemini3', 'gemini4', 'friends'];
 
-function GeneratorIcon({ type, className }: { type: 'wand' | 'chat' | 'sparkles' | 'book'; className?: string }) {
+function GeneratorIcon({ type, className }: { type: 'wand' | 'chat' | 'sparkles' | 'book' | 'users'; className?: string }) {
   switch (type) {
     case 'wand':
       return <Wand2 className={className} />;
@@ -67,6 +75,8 @@ function GeneratorIcon({ type, className }: { type: 'wand' | 'chat' | 'sparkles'
       return <Sparkles className={className} />;
     case 'book':
       return <BookOpen className={className} />;
+    case 'users':
+      return <Users className={className} />;
   }
 }
 
@@ -89,7 +99,7 @@ export default function StartStoryChoicePage() {
           setEnabledFlows(flowsResult.flows);
         } else {
           // Default to all enabled if API fails
-          setEnabledFlows({ wizard: true, chat: true, gemini3: true, gemini4: true });
+          setEnabledFlows({ wizard: true, chat: true, gemini3: true, gemini4: true, friends: true });
         }
 
         // Fetch generators from Firestore for custom names
@@ -104,7 +114,7 @@ export default function StartStoryChoicePage() {
       } catch (err) {
         console.error('[story/start] Error fetching data:', err);
         // Default to all enabled if API fails
-        setEnabledFlows({ wizard: true, chat: true, gemini3: true, gemini4: true });
+        setEnabledFlows({ wizard: true, chat: true, gemini3: true, gemini4: true, friends: true });
       } finally {
         setLoading(false);
       }
