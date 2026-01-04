@@ -18,6 +18,17 @@
 
 ### 2026-01-04
 
+#### `820613c` - Update Git workflow to single-push pattern
+
+**Type**: Process
+
+**Summary**: Updated CLAUDE.md with improved Git workflow that uses `git commit --amend` to include the commit ID in CHANGES.md before pushing, avoiding two Firebase builds per change.
+
+**Files Modified**:
+- `CLAUDE.md`
+
+---
+
 #### `fae8415` - Fix share link errors and public page layout
 
 **Type**: Bug Fix

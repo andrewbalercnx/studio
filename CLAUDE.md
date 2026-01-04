@@ -140,7 +140,30 @@ This feature is controlled by the `showApiDocumentation` field in `systemConfig/
 
 ## Git Workflow
 
-**Auto-push rule**: Always push to main immediately after a successful commit. Do not wait for user confirmation.
+### Single-Push Commit with CHANGES.md
+
+To avoid triggering two Firebase builds, use this workflow to include the commit ID in CHANGES.md before pushing:
+
+1. **Stage all files** including CHANGES.md (use `pending` as placeholder for commit ID)
+2. **Commit** with a descriptive message
+3. **Get the commit ID** from the commit just made: `git rev-parse --short HEAD`
+4. **Update CHANGES.md** replacing `pending` with the actual commit ID
+5. **Amend the commit** to include the updated CHANGES.md: `git commit --amend --no-edit`
+6. **Push** (single push triggers single build)
+
+Example:
+```bash
+git add .
+git commit -m "Add feature X"
+# Get commit ID (e.g., abc1234)
+git rev-parse --short HEAD
+# Edit CHANGES.md to replace 'pending' with 'abc1234'
+git add docs/CHANGES.md
+git commit --amend --no-edit
+git push
+```
+
+**Auto-push rule**: Always push to main immediately after completing the commit workflow. Do not wait for user confirmation.
 
 ---
 
@@ -199,6 +222,7 @@ gcloud secrets list
 
 | Date | Changes |
 |------|---------|
+| 2026-01-04 | Updated Git Workflow to single-push pattern (amend before push) |
 | 2025-12-29 | Added Git Workflow auto-push rule |
 | 2025-12-29 | Added Allowed Commands section |
 | 2025-12-29 | Added System Design and Change History requirements |
