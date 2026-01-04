@@ -1056,25 +1056,39 @@ export const storyImageFlow = ai.defineFlow(
     logs.push(`[path] Using ${storybookId ? 'new' : 'legacy'} model path: ${pageRef.path}`);
 
     try {
+      logs.push(`[step] Loading story document...`);
       const storySnap = await storyRef.get();
       if (!storySnap.exists) {
         throw new Error(`stories/${storyId} not found.`);
       }
       const storyData = storySnap.data() as Story;
+      logs.push(`[step] Story loaded. childId=${storyData.childId || 'none'}`);
 
       let childProfile: ChildProfile | null = null;
-      if (storyData.childId) {
+      if (storyData.childId && storyData.childId.trim().length > 0) {
+        logs.push(`[step] Loading child profile for ${storyData.childId}...`);
         const childSnap = await firestore.collection('children').doc(storyData.childId).get();
         if (childSnap.exists) {
           childProfile = childSnap.data() as ChildProfile;
+          logs.push(`[step] Child profile loaded: ${childProfile.displayName}`);
+        } else {
+          logs.push(`[step] Child profile not found for ${storyData.childId}`);
         }
       }
 
+      logs.push(`[step] Loading page document...`);
       const pageSnap = await pageRef.get();
       if (!pageSnap.exists) {
         throw new Error(`Page document not found at ${pageRef.path}`);
       }
       const page = pageSnap.data() as StoryOutputPage;
+      logs.push(`[step] Page loaded. entityIds=${JSON.stringify(page.entityIds || [])}`);
+
+      // Log any empty entityIds for debugging
+      const emptyIds = (page.entityIds || []).filter((id: string) => !id || id.trim().length === 0);
+      if (emptyIds.length > 0) {
+        logs.push(`[warning] Page has ${emptyIds.length} empty entityIds`);
+      }
       if (!page.imagePrompt) {
         throw new Error(`Page ${pageId} is missing imagePrompt.`);
       }
@@ -1292,16 +1306,22 @@ export const storyImageFlow = ai.defineFlow(
       };
     } catch (error: any) {
       const message = error?.message ?? 'storyImageFlow failed.';
+      const stack = error?.stack ?? 'No stack trace available';
+      // Log the full stack trace for debugging
+      console.error(`[storyImageFlow] Error for page ${pageId}:`, message);
+      console.error(`[storyImageFlow] Stack trace:`, stack);
       try {
         await pageRef.update({
           imageStatus: 'error',
           'imageMetadata.lastErrorMessage': message,
+          'imageMetadata.errorStack': stack.substring(0, 1000), // Store first 1000 chars of stack
           updatedAt: FieldValue.serverTimestamp(),
         });
       } catch (updateError) {
         logs.push(`[warn] Failed to record error state: ${(updateError as Error)?.message}`);
       }
       logs.push(`[error] ${message}`);
+      logs.push(`[stack] ${stack.substring(0, 500)}`);
 
       // Gather extended diagnostics for maintenance notification
       let extendedDiagnostics: Record<string, any> = {
