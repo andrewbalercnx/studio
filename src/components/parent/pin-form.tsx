@@ -157,7 +157,6 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
         return;
       }
 
-      toast({ title: 'PIN verified!' });
       setPin('');
       onPinVerified();
     } catch (error: any) {
