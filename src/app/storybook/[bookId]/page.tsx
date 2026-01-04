@@ -743,7 +743,7 @@ export default function StorybookViewerPage() {
             )}
             <div className="flex flex-wrap gap-2" data-wiz-target="storybook-actions">
               <Button onClick={() => handleGenerateAll(false)} disabled={disableGenerate} title={isLocked ? 'Unlock to regenerate art.' : undefined} data-wiz-target="storybook-generate-art">
-                {disableGenerate ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
+                {(isGenerating || documentImageStatus === 'running') ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
                 {calculatedImageStatus === 'ready' ? 'Refresh Art' : 'Generate Storybook Art'}
               </Button>
               {errorCount > 0 && (
