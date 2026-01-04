@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-03 (added StoryBookShareToken subcollection documentation)
+> **Last Updated**: 2026-01-04 (added shareLinks collection for share link lookups)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -641,6 +641,22 @@ Template types: `orderSubmitted`, `orderStatusChanged`, `orderApproved`, `orderR
 **maintenanceError placeholders**: `{{flowName}}`, `{{errorType}}`
 
 **Security**: Admin only.
+
+---
+
+### `shareLinks`
+
+Lookup collection for share link → story mapping. Used by the share API to find stories without requiring a collectionGroup query (which would need a Firestore index).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `storyId` | string | Yes | Story document ID |
+| `storybookId` | string | No | Storybook subcollection doc ID (new model only) |
+| `createdAt` | timestamp | Yes | When the share link was created |
+
+**Note**: Document ID is the shareId (8 hex characters).
+
+**Security**: Server-only - no client access. All operations use Firebase Admin SDK.
 
 ---
 

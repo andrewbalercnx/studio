@@ -16,6 +16,31 @@
 
 ## Changes
 
+### 2026-01-04
+
+#### `pending` - Fix share link errors and public page layout
+
+**Type**: Bug Fix
+
+**Summary**: Fixed two issues with public storybook share links:
+1. FAILED_PRECONDITION error - The collectionGroup query on shareTokens required a Firestore index. Replaced with a `shareLinks` lookup collection that maps shareId → storyId.
+2. Header showing authenticated UI - The share page was showing "Switch to Parent" in the header. Added route detection in Providers to hide the header/chrome on public routes.
+
+**Changes**:
+- Created `shareLinks` collection for share link lookups (avoids collectionGroup index)
+- Updated share API POST to write to both shareTokens and shareLinks
+- Updated share API GET to use shareLinks lookup instead of collectionGroup query
+- Added PUBLIC_ROUTES detection in Providers to hide header on public pages
+- Updated Firestore security rules to v19 with shareLinks collection
+
+**Files Modified**:
+- `src/app/api/storyBook/share/route.ts`
+- `src/app/providers.tsx`
+- `firestore.rules`
+- `docs/SCHEMA.md`
+
+---
+
 ### 2026-01-03
 
 #### `3a06d54` - Enhanced storybook sharing with immersive viewer

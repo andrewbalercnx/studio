@@ -195,6 +195,14 @@ export async function POST(request: Request) {
     await revokeExistingShare(firestore, storyId, currentShareId ?? undefined);
     // Store share token in story's shareTokens subcollection (both models)
     await storyRef.collection('shareTokens').doc(shareId).set(shareDoc);
+
+    // Also store a lookup document in shareLinks collection (avoids collectionGroup query)
+    await firestore.collection('shareLinks').doc(shareId).set({
+      storyId,
+      storybookId: storybookId ?? null,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
     const shareLink = `/storybook/share/${shareId}`;
 
     // Update the appropriate document with share info
@@ -250,23 +258,33 @@ export async function GET(request: Request) {
 
     const firestore = getFirestore();
 
-    // First, try to find the share token directly by querying all shareTokens
-    // The share token contains storyId and storybookId to locate the data
-    const storiesSnap = await firestore.collectionGroup('shareTokens').where('id', '==', shareId).limit(1).get();
-
-    if (storiesSnap.empty) {
+    // Look up the share link to get storyId (avoids collectionGroup query which needs index)
+    const shareLinkSnap = await firestore.collection('shareLinks').doc(shareId).get();
+    if (!shareLinkSnap.exists) {
       return respondError(404, 'Share link not found');
     }
-
-    const shareSnap = storiesSnap.docs[0];
-    const shareData = shareSnap.data() as Record<string, any>;
-    const storyId = shareData.storyId ?? shareSnap.ref.parent.parent?.id;
-    const storybookId = shareData.storybookId;
+    const shareLinkData = shareLinkSnap.data() as Record<string, any>;
+    const storyId = shareLinkData?.storyId;
+    const storybookId = shareLinkData?.storybookId;
     const isNewModel = !!storybookId;
 
     if (!storyId) {
       return respondError(404, 'Share link not found - missing story reference');
     }
+
+    // Now fetch the share token from the story's subcollection
+    const shareSnap = await firestore
+      .collection('stories')
+      .doc(storyId)
+      .collection('shareTokens')
+      .doc(shareId)
+      .get();
+
+    if (!shareSnap.exists) {
+      return respondError(404, 'Share link not found');
+    }
+
+    const shareData = shareSnap.data() as Record<string, any>;
 
     // Validate share token status and expiration
     if (shareData.status !== 'active') {

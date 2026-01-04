@@ -1,6 +1,9 @@
-// Rules version: v18 - Added storyGenerators collection for story flow configs
+// Rules version: v19 - Added shareLinks collection for share link lookups (server-only)
 // IMPORTANT: Firebase Admin SDK bypasses these rules entirely.
 // These rules only apply to client-side (browser/mobile) requests.
+//
+// CHANGES IN v19:
+// - Added shareLinks collection for share link lookups (server-side only, no client access)
 //
 // CHANGES IN v18:
 // - Added storyGenerators collection for story flow configurations (read: authenticated, write: admin)
@@ -322,6 +325,13 @@ service cloud.firestore {
     match /systemConfig/{document=**} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
+    }
+
+    // ========== SHARE LINKS ==========
+    // Server-only collection for looking up share link -> story mapping
+    // No client access - all operations use Firebase Admin SDK
+    match /shareLinks/{shareId} {
+      allow read, write: if false;
     }
 
     // ========== DENY ALL OTHER COLLECTIONS ==========
