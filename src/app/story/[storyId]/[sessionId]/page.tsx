@@ -18,12 +18,14 @@ import type { StorySession, ChildProfile, StoryOutputType, StoryGenerator } from
  * /story/friends/[sessionId], etc. routes. It uses the StoryBrowser component
  * which adapts its behavior based on the generator configuration.
  *
- * Route: /story/[generatorId]/[sessionId]
+ * Route: /story/[storyId]/[sessionId]
+ * Note: The first segment still carries the generator ID for compatibility.
  * Example: /story/wizard/abc123, /story/friends/xyz789
  */
 export default function DynamicStoryPage() {
-  const params = useParams<{ generatorId: string; sessionId: string }>();
-  const { generatorId, sessionId } = params;
+  const params = useParams<{ storyId: string; sessionId: string }>();
+  const { storyId, sessionId } = params;
+  const generatorId = storyId; // Path segment represents the generator ID
   const router = useRouter();
   const firestore = useFirestore();
   const { toast } = useToast();
