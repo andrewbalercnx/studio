@@ -117,6 +117,100 @@ Continue developing the story based on their choices.
 Build tension or add interesting developments.`,
 };
 
+const DEFAULT_FRIENDS_PROMPTS = {
+  characterProposal: `You are a friendly story helper for children.
+
+CHILD'S PROFILE:
+{{ageDescription}}
+
+AVAILABLE CHARACTERS FOR THE ADVENTURE:
+{{availableCharacters}}
+
+INSTRUCTIONS:
+1. Select 2-5 characters from the available list who would make for an exciting adventure together.
+2. Always include the main child as a character.
+3. Choose a diverse mix (e.g., include a pet or toy if available, mix family and friends).
+4. Consider what combinations would create interesting story dynamics.
+5. Return your selection as a JSON object.
+
+OUTPUT FORMAT:
+{
+  "proposedCharacterIds": ["id1", "id2", "id3"],
+  "rationale": "A brief explanation of why these characters would have fun together"
+}`,
+  scenarioGeneration: `You are creating adventure scenarios for a children's story.
+
+CHILD'S PROFILE:
+{{ageDescription}}
+
+SELECTED CHARACTERS:
+{{selectedCharacters}}
+
+INSTRUCTIONS:
+1. Create 3-4 adventure scenario options appropriate for the child's age.
+2. Each scenario should be exciting but not scary.
+3. Consider the characters' traits and interests when creating scenarios.
+4. Make scenarios varied (e.g., one outdoors, one magical, one everyday adventure).
+
+OUTPUT FORMAT:
+{
+  "scenarios": [
+    { "id": "A", "title": "Short exciting title", "description": "1-2 sentence description of the adventure" },
+    { "id": "B", "title": "...", "description": "..." }
+  ]
+}`,
+  synopsisGeneration: `You are a children's story writer drafting story ideas.
+
+CHILD'S PROFILE:
+{{ageDescription}}
+
+SELECTED CHARACTERS:
+{{selectedCharacters}}
+
+CHOSEN SCENARIO:
+{{selectedScenario}}
+
+INSTRUCTIONS:
+1. Write 3 brief story synopses based on the chosen scenario.
+2. Each synopsis should be 2-3 sentences that capture the story arc.
+3. Include a beginning, middle (with a small challenge), and happy ending.
+4. Make each synopsis distinctly different while fitting the scenario.
+5. Use the characters naturally in the synopses.
+
+OUTPUT FORMAT:
+{
+  "synopses": [
+    { "id": "A", "title": "Story Title", "summary": "2-3 sentence synopsis..." },
+    { "id": "B", "title": "...", "summary": "..." }
+  ]
+}`,
+  storyGeneration: `You are a master storyteller for young children.
+
+CHILD'S PROFILE:
+{{ageDescription}}
+
+CHARACTERS (use $$id$$ placeholders in your story):
+{{selectedCharacters}}
+
+STORY SYNOPSIS:
+{{selectedSynopsis}}
+
+INSTRUCTIONS:
+1. Write a complete, engaging story of 5-7 paragraphs based on the synopsis.
+2. IMPORTANT: Use $$id$$ placeholders for character names (e.g., $$child-abc123$$).
+3. The story should be simple and age-appropriate.
+4. Include dialogue and action to make it engaging.
+5. End with a happy, satisfying conclusion.
+6. Keep paragraphs short for young readers.
+
+OUTPUT FORMAT:
+{
+  "title": "The Story Title",
+  "vibe": "One-word mood (e.g., magical, funny, adventurous)",
+  "storyText": "The complete story text with $$id$$ placeholders..."
+}`,
+};
+
 /**
  * Default story generator configurations.
  * These define the capabilities and styling for each story generation mode.
@@ -209,6 +303,29 @@ const defaultGenerators: Omit<StoryGenerator, 'createdAt' | 'updatedAt'>[] = [
       loadingMessage: 'Creating the next story beat...',
     },
     // Note: beat generator uses storyType prompts, not generator-level prompts
+  },
+  {
+    id: 'friends',
+    name: 'Fun with my friends',
+    description: 'Create an adventure story featuring your characters and friends. Choose your companions, pick a scenario, and watch your story come to life!',
+    status: 'live',
+    enabledForKids: true,
+    capabilities: {
+      minChoices: 3,
+      maxChoices: 5,
+      supportsMoreOptions: true,
+      supportsCharacterIntroduction: false, // Characters selected upfront
+      supportsFinalStory: true,
+      requiresStoryType: false,
+    },
+    apiEndpoint: '/api/storyFriends',
+    styling: {
+      gradient: 'from-amber-50 to-orange-50',
+      darkGradient: 'dark:from-amber-950 dark:to-orange-950',
+      icon: 'Users',
+      loadingMessage: 'Gathering your friends for an adventure...',
+    },
+    prompts: DEFAULT_FRIENDS_PROMPTS,
   },
 ];
 

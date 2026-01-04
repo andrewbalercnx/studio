@@ -64,12 +64,14 @@ export function ImmersivePlayer({
     };
   }, []);
 
+  // Pause duration for pages without audio (10 seconds)
+  const NO_AUDIO_PAUSE_MS = 10000;
+
   // Play audio for current page
   const playCurrentPageAudio = useCallback(() => {
     if (!currentPage?.audioUrl) {
-      // No audio for this page, auto-advance after a delay based on text length
-      const wordCount = displayText.split(/\s+/).length;
-      const readingTime = Math.max(3000, wordCount * 300); // ~200ms per word, min 3s
+      // No audio for this page, pause for 10 seconds then auto-advance
+      console.log(`[ImmersivePlayer] No audio for page ${currentPageIndex + 1}, pausing for ${NO_AUDIO_PAUSE_MS / 1000}s`);
 
       const timeout = setTimeout(() => {
         if (hasNextPage) {
@@ -77,7 +79,7 @@ export function ImmersivePlayer({
         } else {
           setPlayerState('ended');
         }
-      }, readingTime);
+      }, NO_AUDIO_PAUSE_MS);
 
       return () => clearTimeout(timeout);
     }
@@ -109,18 +111,16 @@ export function ImmersivePlayer({
     };
 
     audio.onerror = () => {
-      console.error('[ImmersivePlayer] Audio failed to load');
+      console.error(`[ImmersivePlayer] Audio failed to load for page ${currentPageIndex + 1}, pausing for ${NO_AUDIO_PAUSE_MS / 1000}s`);
       setIsAudioLoading(false);
-      // Still auto-advance on error
-      const wordCount = displayText.split(/\s+/).length;
-      const readingTime = Math.max(3000, wordCount * 300);
+      // Auto-advance after 10 second pause on error
       setTimeout(() => {
         if (hasNextPage) {
           setCurrentPageIndex(prev => prev + 1);
         } else {
           setPlayerState('ended');
         }
-      }, readingTime);
+      }, NO_AUDIO_PAUSE_MS);
     };
 
     audio.play().catch(err => {
@@ -133,7 +133,7 @@ export function ImmersivePlayer({
     });
 
     return undefined;
-  }, [currentPage?.audioUrl, displayText, hasNextPage]);
+  }, [currentPage?.audioUrl, currentPageIndex, hasNextPage]);
 
   // Handle page changes and auto-play
   useEffect(() => {

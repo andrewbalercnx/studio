@@ -18,6 +18,25 @@
 
 ### 2026-01-04
 
+#### `2a377d2` - Add audio generation controls to storybook viewer
+
+**Type**: Feature
+
+**Summary**: Parents can now see audio status and generate narration for storybook pages directly from the storybook viewer. Also fixed immersive player to pause 10 seconds on pages without audio instead of stopping.
+
+**Changes**:
+- Added audio status badge showing audio ready/total count
+- Added "Generate Narration" button (appears after images are ready)
+- Immersive player now pauses 10 seconds on pages without audio, then continues
+- Fixed pre-existing type error in friends-flow.ts
+
+**Files Modified**:
+- `src/app/storybook/[bookId]/page.tsx` - Audio status and generate button
+- `src/components/book-reader/immersive-player.tsx` - 10s pause on no-audio pages
+- `src/ai/flows/friends-flow.ts` - Fixed EntityMap type error
+
+---
+
 #### `311326c` - Skip pages without images in ImmersivePlayer
 
 **Type**: Enhancement

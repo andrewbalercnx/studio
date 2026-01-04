@@ -35,6 +35,12 @@ const PROMPT_DESCRIPTIONS: Record<string, Record<string, string>> = {
     phase_resolution: 'Resolution phase guidance',
     phase_development: 'Development phase guidance (used for extra questions)',
   },
+  friends: {
+    characterProposal: 'Prompt for AI to propose initial character selection for the adventure',
+    scenarioGeneration: 'Prompt for generating adventure scenario options',
+    synopsisGeneration: 'Prompt for drafting story synopses based on chosen scenario',
+    storyGeneration: 'Prompt for generating the final complete story',
+  },
 };
 
 // Default fallback info (used if generator data is missing)

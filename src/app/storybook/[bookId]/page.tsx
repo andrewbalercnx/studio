@@ -29,6 +29,8 @@ import {
   PackageCheck,
   BookOpen,
   Shield,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import {useUser} from '@/firebase/auth/use-user';
 import {useParentGuard} from '@/hooks/use-parent-guard';
@@ -149,6 +151,8 @@ export default function StorybookViewerPage() {
   const [absoluteShareUrl, setAbsoluteShareUrl] = useState<string | null>(null);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [selectedOutputTypeId, setSelectedOutputTypeId] = useState<string>('');
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [audioJobError, setAudioJobError] = useState<string | null>(null);
 
   // Actor list state
   type ActorInfo = {
@@ -251,6 +255,15 @@ export default function StorybookViewerPage() {
   const errorCount = pagesRequiringImages.filter((page) => page.imageStatus === 'error').length;
   const failedPageIds = pagesRequiringImages.filter((page) => page.imageStatus === 'error').map(p => p.id);
   const totalPages = pagesRequiringImages.length;
+
+  // Audio stats - pages that could have audio (have text content)
+  const pagesWithText = pages?.filter((page) => page.bodyText || page.displayText) ?? [];
+  const audioReadyCount = pagesWithText.filter((page) => page.audioStatus === 'ready' && page.audioUrl).length;
+  const audioErrorCount = pagesWithText.filter((page) => page.audioStatus === 'error').length;
+  const audioGeneratingCount = pagesWithText.filter((page) => page.audioStatus === 'generating').length;
+  const audioPendingCount = pagesWithText.filter((page) => !page.audioStatus || page.audioStatus === 'pending').length;
+  const totalAudioPages = pagesWithText.length;
+  const allAudioReady = totalAudioPages > 0 && audioReadyCount === totalAudioPages;
   const documentImageStatus = storyBook?.imageGeneration?.status ?? 'idle';
   // Calculate true status from actual pages (ignoring the storybook document's cached status)
   const calculatedImageStatus = totalPages > 0 && readyCount === totalPages ? 'ready' :
@@ -490,6 +503,34 @@ export default function StorybookViewerPage() {
     }
   };
 
+  const handleGenerateAudio = async (forceRegenerate = false) => {
+    if (!storyId || !isNewModel) return;
+    setIsGeneratingAudio(true);
+    setAudioJobError(null);
+    try {
+      const response = await authorizedFetch('/api/storyBook/pageAudio', {
+        storyId,
+        storybookId: bookId,
+        forceRegenerate,
+      });
+      if (response) {
+        toast({
+          title: 'Audio generation started',
+          description: 'Narration is being generated for each page. This may take a few minutes.',
+        });
+      }
+    } catch (error: any) {
+      setAudioJobError(error?.message || 'Failed to start audio generation.');
+      toast({
+        title: 'Audio generation failed',
+        description: error?.message ?? 'Unable to generate audio.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeneratingAudio(false);
+    }
+  };
+
   const statusMessage = isLocked
     ? 'This storybook is locked for printing. Unlock it to regenerate pages or art.'
     : calculatedImageStatus === 'running'
@@ -693,7 +734,17 @@ export default function StorybookViewerPage() {
                   {finalizationBadge.label}
                 </Badge>
                 <Badge variant="secondary" className="text-xs">
-                  Pages: {readyCount}/{totalPages}
+                  Images: {readyCount}/{totalPages}
+                </Badge>
+                <Badge variant={allAudioReady ? 'default' : audioGeneratingCount > 0 ? 'secondary' : 'outline'} className="gap-1 text-xs">
+                  {audioGeneratingCount > 0 ? (
+                    <LoaderCircle className="h-3 w-3 animate-spin" />
+                  ) : allAudioReady ? (
+                    <Volume2 className="h-3 w-3" />
+                  ) : (
+                    <VolumeX className="h-3 w-3" />
+                  )}
+                  Audio: {audioReadyCount}/{totalAudioPages}
                 </Badge>
                 {errorCount > 0 && (
                   <Badge variant="destructive" className="gap-1 text-xs">
@@ -766,7 +817,27 @@ export default function StorybookViewerPage() {
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Force Regenerate All
               </Button>
+              {/* Audio generation button */}
+              {allImagesReady && (
+                <Button
+                  variant={allAudioReady ? 'outline' : 'default'}
+                  onClick={() => handleGenerateAudio(allAudioReady)}
+                  disabled={isGeneratingAudio || audioGeneratingCount > 0 || isLocked}
+                  title={isLocked ? 'Unlock to generate audio.' : allAudioReady ? 'Regenerate all audio narration' : 'Generate audio narration for all pages'}
+                  data-wiz-target="storybook-generate-audio"
+                >
+                  {(isGeneratingAudio || audioGeneratingCount > 0) ? (
+                    <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Volume2 className="mr-2 h-4 w-4" />
+                  )}
+                  {allAudioReady ? 'Regenerate Narration' : 'Generate Narration'}
+                </Button>
+              )}
             </div>
+            {audioJobError && (
+              <p className="text-sm text-destructive mt-2">{audioJobError}</p>
+            )}
             <Alert variant={isLocked ? 'default' : allImagesReady ? 'default' : 'destructive'} className={clsx(
                 isLocked ? 'bg-blue-50 border-blue-200 text-blue-900 [&>svg]:text-blue-600' : 
                 allImagesReady ? 'bg-emerald-50 border-emerald-200 text-emerald-900 [&>svg]:text-emerald-600' : 
