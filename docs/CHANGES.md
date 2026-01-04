@@ -18,6 +18,23 @@
 
 ### 2026-01-04
 
+#### `55aaebb` - Additional empty entityId filtering
+
+**Type**: Bug Fix
+
+**Summary**: Extended empty string filtering for entityIds to more locations to prevent Firestore "documentPath must be non-empty" errors during page and image generation.
+
+**Changes**:
+- Added filtering for `allActorIds` in story-page-flow (was previously unfiltered for cover pages)
+- Added filtering for `pageEntityIds` in story-page-flow (AI pagination results could contain empty strings)
+- Added filtering for `selectedIds` in friends-flow (3 locations)
+
+**Files Modified**:
+- `src/ai/flows/story-page-flow.ts` - Filter allActorIds and pageEntityIds
+- `src/ai/flows/friends-flow.ts` - Filter selectedIds in 3 functions
+
+---
+
 #### `610171a` - Add "Fun with my friends" story generator
 
 **Type**: Feature

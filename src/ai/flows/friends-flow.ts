@@ -408,7 +408,9 @@ async function handleScenarioGeneration(
 ): Promise<FriendsFlowOutput> {
   const flowName = 'friendsFlow:scenarioGeneration';
 
-  const selectedIds = session.friendsSelectedCharacterIds || [];
+  const rawSelectedIds = session.friendsSelectedCharacterIds || [];
+  // Filter out empty/invalid IDs to prevent Firestore "documentPath must be non-empty" errors
+  const selectedIds = rawSelectedIds.filter((id: string) => id && typeof id === 'string' && id.trim().length > 0);
 
   // Load selected character details
   const allCharacters: FriendsCharacterOption[] = [];
@@ -518,7 +520,9 @@ async function handleSynopsisGeneration(
 ): Promise<FriendsFlowOutput> {
   const flowName = 'friendsFlow:synopsisGeneration';
 
-  const selectedIds = session.friendsSelectedCharacterIds || [];
+  const rawSelectedIds = session.friendsSelectedCharacterIds || [];
+  // Filter out empty/invalid IDs to prevent Firestore "documentPath must be non-empty" errors
+  const selectedIds = rawSelectedIds.filter((id: string) => id && typeof id === 'string' && id.trim().length > 0);
   const scenarios = session.friendsScenarios || [];
   const selectedScenarioId = session.friendsSelectedScenarioId;
 
@@ -641,7 +645,9 @@ async function handleStoryGeneration(
 ): Promise<FriendsFlowOutput> {
   const flowName = 'friendsFlow:storyGeneration';
 
-  const selectedIds = session.friendsSelectedCharacterIds || [];
+  const rawSelectedIds = session.friendsSelectedCharacterIds || [];
+  // Filter out empty/invalid IDs to prevent Firestore "documentPath must be non-empty" errors
+  const selectedIds = rawSelectedIds.filter((id: string) => id && typeof id === 'string' && id.trim().length > 0);
   const synopses = session.friendsSynopses || [];
   const selectedSynopsisId = session.friendsSelectedSynopsisId;
 

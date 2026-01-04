@@ -436,7 +436,9 @@ export const storyPageFlow = ai.defineFlow(
       const derivedTitle = story.metadata?.title ?? session?.storyTitle ?? (childName ? `${childName}'s Adventure` : 'Storybook Adventure');
 
       // Get all actor IDs from the story (includes child and all characters)
-      const allActorIds = story.actors ?? extractEntityIds(story.storyText);
+      // Filter out empty/invalid IDs to prevent Firestore "documentPath must be non-empty" errors
+      const rawActorIds = story.actors ?? extractEntityIds(story.storyText);
+      const allActorIds = rawActorIds.filter((id: string) => id && typeof id === 'string' && id.trim().length > 0);
       if (story.childId && !allActorIds.includes(story.childId)) {
         allActorIds.unshift(story.childId);
       }
@@ -638,9 +640,11 @@ export const storyPageFlow = ai.defineFlow(
         const text = chunk.join(' ').trim();
         const displayText = await replacePlaceholders(text, entityMap);
         // Use AI-provided entityIds if available, otherwise extract from text
-        const pageEntityIds = usedAIPagination && aiPaginatedEntityIds[index]
+        // Filter out empty/invalid IDs to prevent Firestore errors
+        const rawPageEntityIds = usedAIPagination && aiPaginatedEntityIds[index]
           ? aiPaginatedEntityIds[index]
           : extractEntityIds(text);
+        const pageEntityIds = rawPageEntityIds.filter((id: string) => id && typeof id === 'string' && id.trim().length > 0);
         // Use AI-provided imageDescription if available
         const pageImageDescription = usedAIPagination ? aiImageDescriptions[index] : undefined;
         // Get all actors that appear on this specific page (characters and siblings)
