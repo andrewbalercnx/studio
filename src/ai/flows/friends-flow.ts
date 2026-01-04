@@ -75,6 +75,7 @@ GUIDELINES:
 3. Make scenarios age-appropriate but never boring.
 4. Each scenario should feel like the start of an amazing adventure!
 5. Use the characters creatively - what unique role could each play?
+6. IMPORTANT: Use the characters' actual names in descriptions, NOT placeholder syntax like $$id$$.
 
 OUTPUT FORMAT:
 {
@@ -100,7 +101,8 @@ INSTRUCTIONS:
 2. Each synopsis should be 2-3 sentences that capture the story arc.
 3. Include a beginning, middle (with a small challenge), and happy ending.
 4. Make each synopsis distinctly different while fitting the scenario.
-5. Use the characters naturally in the synopses.
+5. Use the characters' actual names naturally in the synopses.
+6. IMPORTANT: Do NOT use placeholder syntax like $$id$$ - use the real character names.
 
 OUTPUT FORMAT:
 {

@@ -138,7 +138,7 @@ OUTPUT FORMAT:
   "proposedCharacterIds": ["id1", "id2", "id3"],
   "rationale": "A brief explanation of why these characters would have fun together"
 }`,
-  scenarioGeneration: `You are creating adventure scenarios for a children's story.
+  scenarioGeneration: `You are creating WILDLY IMAGINATIVE adventure scenarios for a children's story!
 
 CHILD'S PROFILE:
 {{ageDescription}}
@@ -146,16 +146,33 @@ CHILD'S PROFILE:
 SELECTED CHARACTERS:
 {{selectedCharacters}}
 
-INSTRUCTIONS:
-1. Create 3-4 adventure scenario options appropriate for the child's age.
-2. Each scenario should be exciting but not scary.
-3. Consider the characters' traits and interests when creating scenarios.
-4. Make scenarios varied (e.g., one outdoors, one magical, one everyday adventure).
+YOUR MISSION:
+Create 3-4 absolutely delightful, wonderfully inventive adventure scenarios! Think like a child with boundless imagination - the more creative and unexpected, the better!
+
+INSPIRATION (mix and match, or invent something entirely new!):
+- Shrink down to ant-size and explore the garden as a jungle
+- Discover the toys come alive at night and need help with a problem
+- Find a rainbow bridge to a land made entirely of desserts
+- A friendly dragon asks for help finding its lost treasure
+- Get swept into a painting and explore the world inside
+- Discover the pets can talk and have a secret mission
+- Find a magic door in an unexpected place (closet, tree, puddle)
+- Help the moon gather lost stars that fell to Earth
+- Become superheroes for a day with silly but useful powers
+- Explore an upside-down world where everything is backwards
+
+GUIDELINES:
+1. Be INVENTIVE - surprise and delight! Avoid generic "go to the park" scenarios.
+2. Include a sense of wonder, magic, or whimsy in each option.
+3. Make scenarios age-appropriate but never boring.
+4. Each scenario should feel like the start of an amazing adventure!
+5. Use the characters creatively - what unique role could each play?
+6. IMPORTANT: Use the characters' actual names in descriptions, NOT placeholder syntax like $$id$$.
 
 OUTPUT FORMAT:
 {
   "scenarios": [
-    { "id": "A", "title": "Short exciting title", "description": "1-2 sentence description of the adventure" },
+    { "id": "A", "title": "Catchy, exciting title!", "description": "1-2 sentences capturing the magical premise and what makes it exciting" },
     { "id": "B", "title": "...", "description": "..." }
   ]
 }`,
@@ -175,7 +192,8 @@ INSTRUCTIONS:
 2. Each synopsis should be 2-3 sentences that capture the story arc.
 3. Include a beginning, middle (with a small challenge), and happy ending.
 4. Make each synopsis distinctly different while fitting the scenario.
-5. Use the characters naturally in the synopses.
+5. Use the characters' actual names naturally in the synopses.
+6. IMPORTANT: Do NOT use placeholder syntax like $$id$$ - use the real character names.
 
 OUTPUT FORMAT:
 {
