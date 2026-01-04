@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-04 (added enabledForKids to storyGenerators, documented dynamic story routes)
+> **Last Updated**: 2026-01-04 (added AI model/temperature configuration to storyGenerators)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -459,8 +459,15 @@ Story generator configurations. Defines capabilities and API endpoints for each 
 | `backgroundMusic.generation.lastCompletedAt` | timestamp | No | Last successful generation |
 | `backgroundMusic.generation.lastErrorMessage` | string | No | Error message if failed |
 | `prompts` | Record<string, string> | No | Custom AI prompts (keys vary by generator) |
+| `defaultModel` | AIModelName | No | Default AI model for this generator |
+| `defaultTemperature` | number | No | Default temperature (0.0-2.0) for this generator |
+| `promptConfig` | Record<string, PromptConfig> | No | Per-prompt model and temperature overrides |
+| `promptConfig.[key].model` | AIModelName | No | AI model for this specific prompt |
+| `promptConfig.[key].temperature` | number | No | Temperature for this specific prompt |
 | `createdAt` | timestamp | No | Creation time |
 | `updatedAt` | timestamp | No | Last update time |
+
+**AIModelName Values**: `'googleai/gemini-2.5-pro'`, `'googleai/gemini-2.5-flash'`, `'googleai/gemini-2.0-flash'`
 
 **Prompts Keys by Generator**:
 - **wizard**: `questionGeneration`, `storyGeneration`

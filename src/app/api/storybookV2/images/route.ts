@@ -188,6 +188,17 @@ export async function POST(request: Request) {
       );
     }
 
+    // Log loaded page IDs for debugging
+    const pageIdList = pages.map(p => ({ id: p.id, pageNumber: p.pageNumber, kind: p.kind }));
+    allLogs.push(`[pages] Loaded ${pages.length} pages: ${JSON.stringify(pageIdList)}`);
+
+    // Check for any pages with empty/invalid IDs
+    const invalidPages = pages.filter(p => !p.id || typeof p.id !== 'string' || p.id.trim().length === 0);
+    if (invalidPages.length > 0) {
+      console.error(`[images/route] Found ${invalidPages.length} pages with invalid IDs:`, JSON.stringify(invalidPages));
+      allLogs.push(`[error] Found ${invalidPages.length} pages with invalid IDs`);
+    }
+
     // Default dimensions: 8x8 inches at 300 DPI = 2400x2400 pixels (standard children's book size)
     const DEFAULT_IMAGE_WIDTH_PX = 2400;
     const DEFAULT_IMAGE_HEIGHT_PX = 2400;
@@ -269,6 +280,12 @@ export async function POST(request: Request) {
     // Process skipped pages (mark as ready) and reset pages that need generation
     const prepPromises: Promise<void>[] = [];
     for (const job of pageJobs) {
+      // Validate page ID to prevent "documentPath must be non-empty" errors
+      if (!job.page.id || typeof job.page.id !== 'string' || job.page.id.trim().length === 0) {
+        allLogs.push(`[error] Page has invalid/empty ID: ${JSON.stringify({ id: job.page.id, pageNumber: job.page.pageNumber, kind: job.page.kind })}`);
+        console.error(`[images/route] Page has invalid ID:`, JSON.stringify(job.page));
+        continue; // Skip this page
+      }
       const pageRef = storybookRef.collection('pages').doc(job.page.id);
 
       if (!job.needsGeneration) {

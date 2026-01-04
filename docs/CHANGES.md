@@ -18,6 +18,36 @@
 
 ### 2026-01-04
 
+#### `pending` - Configurable AI model/temperature and inventive scenario prompts
+
+**Type**: Feature
+
+**Summary**: Added ability to configure AI model and temperature per generator and per prompt. Also significantly improved the scenario generation prompt to produce more imaginative adventure ideas.
+
+**Key Features**:
+1. **Configurable AI Settings**: Each generator can now have:
+   - Default model (Gemini 2.5 Pro, Flash, or 2.0 Flash)
+   - Default temperature (0.0-2.0)
+   - Per-prompt model and temperature overrides
+
+2. **Inventive Scenario Prompts**: Rewrote the friends flow scenario prompt to encourage wildly imaginative adventures (shrinking to ant-size, toys coming alive, rainbow bridges to dessert lands, etc.)
+
+3. **Higher Default Temperature for Scenarios**: Increased default scenario generation temperature to 1.2 for more creative variety
+
+**Admin UI**: New "AI Settings" tab in Story Generators admin page allows:
+- Setting generator-wide default model and temperature
+- Overriding model and temperature for each individual prompt
+
+**Files Created/Modified**:
+- `src/lib/types.ts` - Added `AIModelName`, `StoryGeneratorPromptConfig` types, extended `StoryGenerator`
+- `src/ai/flows/friends-flow.ts` - Added `getModelConfig()` helper, improved scenario prompt
+- `src/app/admin/storyGenerators/page.tsx` - Added AISettingsEditor component and AI Settings tab
+
+**Documentation Updated**:
+- `docs/SCHEMA.md` - Added new fields to storyGenerators collection
+
+---
+
 #### `b83dd18` - Fix friends flow option selection and "more synopses"
 
 **Type**: Bug Fix

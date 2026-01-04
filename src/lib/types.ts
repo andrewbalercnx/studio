@@ -1690,6 +1690,23 @@ export type StoryGeneratorStyling = {
 };
 
 /**
+ * Available AI models for story generation.
+ */
+export type AIModelName =
+  | 'googleai/gemini-2.5-pro'
+  | 'googleai/gemini-2.5-flash'
+  | 'googleai/gemini-2.0-flash';
+
+/**
+ * Configuration for a specific prompt within a generator.
+ * Allows per-prompt model and temperature settings.
+ */
+export type StoryGeneratorPromptConfig = {
+  model?: AIModelName;                   // AI model to use (defaults to generator's default)
+  temperature?: number;                  // Temperature 0.0-2.0 (defaults to generator's default)
+};
+
+/**
  * Background music generation status for story generators.
  */
 export type StoryGeneratorMusicGeneration = {
@@ -1734,6 +1751,16 @@ export type StoryGenerator = {
   // AI Prompts (editable in Firestore, keyed by purpose)
   // Keys are generator-specific, e.g., 'questionGeneration', 'storyGeneration', 'phaseOpening'
   prompts?: Record<string, string>;
+
+  // Default AI model for this generator (can be overridden per-prompt)
+  defaultModel?: AIModelName;
+
+  // Default temperature for this generator (can be overridden per-prompt)
+  defaultTemperature?: number;
+
+  // Per-prompt model and temperature configuration
+  // Keys match the prompts keys, e.g., 'scenarioGeneration', 'storyGeneration'
+  promptConfig?: Record<string, StoryGeneratorPromptConfig>;
 
   // Metadata
   createdAt?: any;

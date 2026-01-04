@@ -14,7 +14,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { StoryGenerator } from '@/lib/types';
+import type { StoryGenerator, AIModelName, StoryGeneratorPromptConfig } from '@/lib/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Cpu } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Prompt key descriptions for each generator
@@ -67,6 +69,219 @@ const DEFAULT_GENERATOR_INFO: Record<string, { name: string; description: string
     description: 'Create an adventure story by choosing companions, picking a scenario, and watching your story come to life',
   },
 };
+
+// Available AI models
+const AI_MODELS: { value: AIModelName; label: string; description: string }[] = [
+  { value: 'googleai/gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Most capable, best for complex tasks' },
+  { value: 'googleai/gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Fast and efficient' },
+  { value: 'googleai/gemini-2.0-flash', label: 'Gemini 2.0 Flash', description: 'Previous generation, very fast' },
+];
+
+// AI Settings Editor Component
+function AISettingsEditor({
+  generator,
+  onSave,
+}: {
+  generator: StoryGenerator;
+  onSave: (data: {
+    defaultModel?: AIModelName;
+    defaultTemperature?: number;
+    promptConfig?: Record<string, StoryGeneratorPromptConfig>;
+  }) => Promise<void>;
+}) {
+  const { toast } = useToast();
+  const [defaultModel, setDefaultModel] = useState<AIModelName | undefined>(generator.defaultModel);
+  const [defaultTemperature, setDefaultTemperature] = useState<number | undefined>(generator.defaultTemperature);
+  const [promptConfig, setPromptConfig] = useState<Record<string, StoryGeneratorPromptConfig>>(
+    generator.promptConfig || {}
+  );
+  const [saving, setSaving] = useState(false);
+
+  // Get prompt keys for this generator
+  const promptKeys = Object.keys(PROMPT_DESCRIPTIONS[generator.id] || {});
+
+  // Update local state when generator prop changes
+  useEffect(() => {
+    setDefaultModel(generator.defaultModel);
+    setDefaultTemperature(generator.defaultTemperature);
+    setPromptConfig(generator.promptConfig || {});
+  }, [generator.defaultModel, generator.defaultTemperature, generator.promptConfig]);
+
+  const hasChanges =
+    defaultModel !== generator.defaultModel ||
+    defaultTemperature !== generator.defaultTemperature ||
+    JSON.stringify(promptConfig) !== JSON.stringify(generator.promptConfig || {});
+
+  const handlePromptConfigChange = (
+    promptKey: string,
+    field: 'model' | 'temperature',
+    value: string | number | undefined
+  ) => {
+    setPromptConfig((prev) => {
+      const current = prev[promptKey] || {};
+      if (value === undefined || value === '') {
+        // Remove the field if undefined/empty
+        const { [field]: _, ...rest } = current;
+        if (Object.keys(rest).length === 0) {
+          // Remove the whole key if empty
+          const { [promptKey]: __, ...remaining } = prev;
+          return remaining;
+        }
+        return { ...prev, [promptKey]: rest };
+      }
+      return {
+        ...prev,
+        [promptKey]: {
+          ...current,
+          [field]: value,
+        },
+      };
+    });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave({
+        defaultModel,
+        defaultTemperature,
+        promptConfig: Object.keys(promptConfig).length > 0 ? promptConfig : undefined,
+      });
+      toast({ title: 'Saved', description: 'AI settings updated successfully' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        Configure the AI model and temperature settings for this generator. Per-prompt settings override the defaults.
+      </p>
+
+      {/* Default Settings */}
+      <div className="space-y-4 p-4 rounded-lg border bg-muted/30">
+        <h4 className="font-medium">Default Settings</h4>
+        <p className="text-xs text-muted-foreground">
+          These defaults apply to all prompts unless overridden below.
+        </p>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Default Model</Label>
+            <Select
+              value={defaultModel || ''}
+              onValueChange={(v) => setDefaultModel(v as AIModelName || undefined)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Use system default" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Use system default</SelectItem>
+                {AI_MODELS.map((model) => (
+                  <SelectItem key={model.value} value={model.value}>
+                    {model.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Default Temperature</Label>
+            <Input
+              type="number"
+              min="0"
+              max="2"
+              step="0.1"
+              value={defaultTemperature ?? ''}
+              onChange={(e) => setDefaultTemperature(e.target.value ? parseFloat(e.target.value) : undefined)}
+              placeholder="Use system default"
+            />
+            <p className="text-xs text-muted-foreground">0 = focused, 2 = creative</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Per-Prompt Settings */}
+      {promptKeys.length > 0 && (
+        <div className="space-y-4">
+          <h4 className="font-medium">Per-Prompt Settings</h4>
+          <p className="text-xs text-muted-foreground">
+            Override model and temperature for specific prompts. Leave empty to use defaults.
+          </p>
+
+          <div className="space-y-3">
+            {promptKeys.map((promptKey) => {
+              const description = PROMPT_DESCRIPTIONS[generator.id]?.[promptKey] || promptKey;
+              const config = promptConfig[promptKey] || {};
+
+              return (
+                <div key={promptKey} className="p-3 rounded-lg border bg-card">
+                  <div className="mb-2">
+                    <Label className="text-sm font-medium">{promptKey}</Label>
+                    <p className="text-xs text-muted-foreground">{description}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Model</Label>
+                      <Select
+                        value={config.model || ''}
+                        onValueChange={(v) => handlePromptConfigChange(promptKey, 'model', v || undefined)}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="Use default" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Use default</SelectItem>
+                          {AI_MODELS.map((model) => (
+                            <SelectItem key={model.value} value={model.value}>
+                              {model.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Temperature</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        className="h-8 text-xs"
+                        value={config.temperature ?? ''}
+                        onChange={(e) =>
+                          handlePromptConfigChange(
+                            promptKey,
+                            'temperature',
+                            e.target.value ? parseFloat(e.target.value) : undefined
+                          )
+                        }
+                        placeholder="Use default"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {hasChanges && (
+        <div className="pt-4">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <LoaderCircle className="h-4 w-4 animate-spin mr-2" /> : null}
+            Save AI Settings
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Background Music Editor Component
 function BackgroundMusicEditor({
@@ -460,11 +675,13 @@ function GeneratorCard({
   onUpdateMusic,
   onUpdatePrompts,
   onUpdateInfo,
+  onUpdateAISettings,
 }: {
   generator: StoryGenerator;
   onUpdateMusic: (generatorId: string, prompt: string) => Promise<void>;
   onUpdatePrompts: (generatorId: string, prompts: Record<string, string>) => Promise<void>;
   onUpdateInfo: (generatorId: string, data: { name: string; description: string; enabledForKids?: boolean }) => Promise<void>;
+  onUpdateAISettings: (generatorId: string, data: { defaultModel?: AIModelName; defaultTemperature?: number; promptConfig?: Record<string, StoryGeneratorPromptConfig> }) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const defaultInfo = DEFAULT_GENERATOR_INFO[generator.id] || { name: generator.id, description: '' };
@@ -520,6 +737,9 @@ function GeneratorCard({
                   <Music className="h-4 w-4" /> Music
                 </TabsTrigger>
                 <TabsTrigger value="prompts">Prompts</TabsTrigger>
+                <TabsTrigger value="ai" className="flex items-center gap-1">
+                  <Cpu className="h-4 w-4" /> AI Settings
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="info">
@@ -540,6 +760,13 @@ function GeneratorCard({
                 <PromptsEditor
                   generator={generator}
                   onSave={(prompts) => onUpdatePrompts(generator.id, prompts)}
+                />
+              </TabsContent>
+
+              <TabsContent value="ai">
+                <AISettingsEditor
+                  generator={generator}
+                  onSave={(data) => onUpdateAISettings(generator.id, data)}
                 />
               </TabsContent>
             </Tabs>
@@ -653,6 +880,19 @@ export default function AdminStoryGeneratorsPage() {
     });
   };
 
+  const handleUpdateAISettings = async (
+    generatorId: string,
+    data: { defaultModel?: AIModelName; defaultTemperature?: number; promptConfig?: Record<string, StoryGeneratorPromptConfig> }
+  ) => {
+    if (!firestore) return;
+    const docRef = doc(firestore, 'storyGenerators', generatorId);
+    await updateDoc(docRef, {
+      ...(data.defaultModel !== undefined && { defaultModel: data.defaultModel }),
+      ...(data.defaultTemperature !== undefined && { defaultTemperature: data.defaultTemperature }),
+      ...(data.promptConfig !== undefined && { promptConfig: data.promptConfig }),
+    });
+  };
+
   const diagnostics = {
     page: 'admin-storyGenerators',
     auth: {
@@ -709,6 +949,7 @@ export default function AdminStoryGeneratorsPage() {
             onUpdateMusic={handleUpdateMusic}
             onUpdatePrompts={handleUpdatePrompts}
             onUpdateInfo={handleUpdateInfo}
+            onUpdateAISettings={handleUpdateAISettings}
           />
         ))}
       </div>

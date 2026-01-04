@@ -14,6 +14,7 @@ import type {
   FriendsScenario,
   FriendsSynopsis,
   FriendsCharacterOption,
+  AIModelName,
 } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { replacePlaceholdersInText, type EntityMap } from '@/lib/resolve-placeholders.server';
@@ -45,7 +46,7 @@ OUTPUT FORMAT:
   "rationale": "A brief explanation of why these characters would have fun together"
 }`;
 
-const DEFAULT_SCENARIO_GENERATION_PROMPT = `You are creating adventure scenarios for a children's story.
+const DEFAULT_SCENARIO_GENERATION_PROMPT = `You are creating WILDLY IMAGINATIVE adventure scenarios for a children's story!
 
 CHILD'S PROFILE:
 {{ageDescription}}
@@ -53,16 +54,32 @@ CHILD'S PROFILE:
 SELECTED CHARACTERS:
 {{selectedCharacters}}
 
-INSTRUCTIONS:
-1. Create 3-4 adventure scenario options appropriate for the child's age.
-2. Each scenario should be exciting but not scary.
-3. Consider the characters' traits and interests when creating scenarios.
-4. Make scenarios varied (e.g., one outdoors, one magical, one everyday adventure).
+YOUR MISSION:
+Create 3-4 absolutely delightful, wonderfully inventive adventure scenarios! Think like a child with boundless imagination - the more creative and unexpected, the better!
+
+INSPIRATION (mix and match, or invent something entirely new!):
+- Shrink down to ant-size and explore the garden as a jungle
+- Discover the toys come alive at night and need help with a problem
+- Find a rainbow bridge to a land made entirely of desserts
+- A friendly dragon asks for help finding its lost treasure
+- Get swept into a painting and explore the world inside
+- Discover the pets can talk and have a secret mission
+- Find a magic door in an unexpected place (closet, tree, puddle)
+- Help the moon gather lost stars that fell to Earth
+- Become superheroes for a day with silly but useful powers
+- Explore an upside-down world where everything is backwards
+
+GUIDELINES:
+1. Be INVENTIVE - surprise and delight! Avoid generic "go to the park" scenarios.
+2. Include a sense of wonder, magic, or whimsy in each option.
+3. Make scenarios age-appropriate but never boring.
+4. Each scenario should feel like the start of an amazing adventure!
+5. Use the characters creatively - what unique role could each play?
 
 OUTPUT FORMAT:
 {
   "scenarios": [
-    { "id": "A", "title": "Short exciting title", "description": "1-2 sentence description of the adventure" },
+    { "id": "A", "title": "Catchy, exciting title!", "description": "1-2 sentences capturing the magical premise and what makes it exciting" },
     { "id": "B", "title": "...", "description": "..." }
   ]
 }`;
@@ -266,6 +283,44 @@ function formatCharacterForStory(char: FriendsCharacterOption): string {
   return `- $$${char.id}$$ (${char.displayName}): ${char.type}`;
 }
 
+/**
+ * Default model and temperatures for friends flow prompts.
+ */
+const DEFAULT_MODEL: AIModelName = 'googleai/gemini-2.5-pro';
+const DEFAULT_TEMPERATURES: Record<string, number> = {
+  characterProposal: 0.8,
+  scenarioGeneration: 1.2,  // Higher for more inventive scenarios
+  synopsisGeneration: 0.9,
+  storyGeneration: 0.7,
+};
+
+/**
+ * Get the AI model and temperature for a specific prompt.
+ * Uses per-prompt config if available, falls back to generator defaults, then hardcoded defaults.
+ */
+function getModelConfig(
+  generator: StoryGenerator | null,
+  promptKey: string
+): { model: AIModelName; temperature: number } {
+  // Per-prompt config takes priority
+  const promptConfig = generator?.promptConfig?.[promptKey];
+
+  // Get model: per-prompt -> generator default -> hardcoded default
+  const model: AIModelName =
+    promptConfig?.model ||
+    generator?.defaultModel ||
+    DEFAULT_MODEL;
+
+  // Get temperature: per-prompt -> generator default -> hardcoded default for this prompt
+  const temperature: number =
+    promptConfig?.temperature ??
+    generator?.defaultTemperature ??
+    DEFAULT_TEMPERATURES[promptKey] ??
+    0.8;
+
+  return { model, temperature };
+}
+
 // ============================================================================
 // Phase Handlers
 // ============================================================================
@@ -345,16 +400,18 @@ async function initializeCharacterSelection(
   });
   const fullPrompt = globalPrefix ? `${globalPrefix}\n\n${basePrompt}` : basePrompt;
 
+  // Get model and temperature config
+  const { model: modelName, temperature } = getModelConfig(generator, 'characterProposal');
+
   // Call AI to propose characters
   const startTime = Date.now();
-  const modelName = 'googleai/gemini-2.5-pro';
 
   try {
     const response = await ai.generate({
       model: modelName,
       prompt: fullPrompt,
       output: { schema: CharacterProposalSchema },
-      config: { temperature: 0.8 },
+      config: { temperature },
     });
 
     await logAIFlow({
@@ -469,15 +526,17 @@ async function handleScenarioGeneration(
   });
   const fullPrompt = globalPrefix ? `${globalPrefix}\n\n${basePrompt}` : basePrompt;
 
+  // Get model and temperature config
+  const { model: modelName, temperature } = getModelConfig(generator, 'scenarioGeneration');
+
   const startTime = Date.now();
-  const modelName = 'googleai/gemini-2.5-pro';
 
   try {
     const response = await ai.generate({
       model: modelName,
       prompt: fullPrompt,
       output: { schema: ScenariosOutputSchema },
-      config: { temperature: 0.9 },
+      config: { temperature },
     });
 
     await logAIFlow({
@@ -595,15 +654,19 @@ async function handleSynopsisGeneration(
   });
   const fullPrompt = globalPrefix ? `${globalPrefix}\n\n${basePrompt}` : basePrompt;
 
+  // Get model and temperature config
+  const { model: modelName, temperature: baseTemperature } = getModelConfig(generator, 'synopsisGeneration');
+  // Boost temperature for "more" requests to increase variety
+  const temperature = isMoreRequest ? Math.min(baseTemperature + 0.2, 2.0) : baseTemperature;
+
   const startTime = Date.now();
-  const modelName = 'googleai/gemini-2.5-pro';
 
   try {
     const response = await ai.generate({
       model: modelName,
       prompt: fullPrompt,
       output: { schema: SynopsesOutputSchema },
-      config: { temperature: isMoreRequest ? 1.0 : 0.9 }, // Higher temp for variety
+      config: { temperature },
     });
 
     await logAIFlow({
@@ -715,15 +778,17 @@ async function handleStoryGeneration(
   });
   const fullPrompt = globalPrefix ? `${globalPrefix}\n\n${basePrompt}` : basePrompt;
 
+  // Get model and temperature config
+  const { model: modelName, temperature } = getModelConfig(generator, 'storyGeneration');
+
   const startTime = Date.now();
-  const modelName = 'googleai/gemini-2.5-pro';
 
   try {
     const response = await ai.generate({
       model: modelName,
       prompt: fullPrompt,
       output: { schema: StoryOutputSchema },
-      config: { temperature: 0.7 },
+      config: { temperature },
     });
 
     await logAIFlow({
