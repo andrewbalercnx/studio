@@ -73,7 +73,7 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json();
-    const { wizardEnabled, chatEnabled, gemini3Enabled, gemini4Enabled } = body;
+    const { wizardEnabled, chatEnabled, gemini3Enabled, gemini4Enabled, friendsEnabled } = body;
 
     if (typeof wizardEnabled !== 'boolean') {
       return NextResponse.json(
@@ -103,6 +103,13 @@ export async function PUT(request: Request) {
       );
     }
 
+    if (typeof friendsEnabled !== 'boolean') {
+      return NextResponse.json(
+        { ok: false, errorMessage: 'friendsEnabled must be a boolean' },
+        { status: 400 }
+      );
+    }
+
     const firestore = getFirestore();
     const docRef = firestore.doc(KIDS_FLOW_DOC_PATH);
 
@@ -111,6 +118,7 @@ export async function PUT(request: Request) {
       chatEnabled,
       gemini3Enabled,
       gemini4Enabled,
+      friendsEnabled,
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: user.email || user.uid,
     }, { merge: true });

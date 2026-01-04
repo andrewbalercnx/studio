@@ -3,7 +3,8 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, ChevronDown, ChevronUp, Music, Play, Square, CheckCircle, RefreshCw, Pencil } from 'lucide-react';
+import { LoaderCircle, ChevronDown, ChevronUp, Music, Play, Square, CheckCircle, RefreshCw, Pencil, Users } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { useEffect, useState, useRef } from 'react';
 import { useFirestore, useAuth } from '@/firebase';
@@ -60,6 +61,10 @@ const DEFAULT_GENERATOR_INFO: Record<string, { name: string; description: string
   beat: {
     name: 'Story Beats',
     description: 'Turn-by-turn story generation with structured narrative beats and arcs (uses storyTypes for configuration)',
+  },
+  friends: {
+    name: 'Fun with my friends',
+    description: 'Create an adventure story by choosing companions, picking a scenario, and watching your story come to life',
   },
 };
 
@@ -336,22 +341,25 @@ function GeneralInfoEditor({
   onSave,
 }: {
   generator: StoryGenerator;
-  onSave: (data: { name: string; description: string }) => Promise<void>;
+  onSave: (data: { name: string; description: string; enabledForKids?: boolean }) => Promise<void>;
 }) {
   const { toast } = useToast();
   const defaultInfo = DEFAULT_GENERATOR_INFO[generator.id] || { name: generator.id, description: '' };
   const [name, setName] = useState(generator.name || defaultInfo.name);
   const [description, setDescription] = useState(generator.description || defaultInfo.description);
+  const [enabledForKids, setEnabledForKids] = useState(generator.enabledForKids ?? true);
   const [saving, setSaving] = useState(false);
 
   const hasChanges = name !== (generator.name || defaultInfo.name) ||
-    description !== (generator.description || defaultInfo.description);
+    description !== (generator.description || defaultInfo.description) ||
+    enabledForKids !== (generator.enabledForKids ?? true);
 
   // Update local state when generator prop changes
   useEffect(() => {
     setName(generator.name || defaultInfo.name);
     setDescription(generator.description || defaultInfo.description);
-  }, [generator.name, generator.description, defaultInfo.name, defaultInfo.description]);
+    setEnabledForKids(generator.enabledForKids ?? true);
+  }, [generator.name, generator.description, generator.enabledForKids, defaultInfo.name, defaultInfo.description]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -360,7 +368,7 @@ function GeneralInfoEditor({
     }
     setSaving(true);
     try {
-      await onSave({ name: name.trim(), description: description.trim() });
+      await onSave({ name: name.trim(), description: description.trim(), enabledForKids });
       toast({ title: 'Saved', description: 'Generator info updated successfully' });
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -400,6 +408,20 @@ function GeneralInfoEditor({
         <p className="text-xs text-muted-foreground">
           A brief description of what this generator does.
         </p>
+      </div>
+
+      <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+        <div className="space-y-0.5">
+          <Label htmlFor="enabledForKids" className="text-base">Enabled for Kids</Label>
+          <p className="text-sm text-muted-foreground">
+            Show this generator as an option in the kids story creation flow
+          </p>
+        </div>
+        <Switch
+          id="enabledForKids"
+          checked={enabledForKids}
+          onCheckedChange={setEnabledForKids}
+        />
       </div>
 
       <div className="space-y-4 pt-4 border-t text-sm">
@@ -442,7 +464,7 @@ function GeneratorCard({
   generator: StoryGenerator;
   onUpdateMusic: (generatorId: string, prompt: string) => Promise<void>;
   onUpdatePrompts: (generatorId: string, prompts: Record<string, string>) => Promise<void>;
-  onUpdateInfo: (generatorId: string, data: { name: string; description: string }) => Promise<void>;
+  onUpdateInfo: (generatorId: string, data: { name: string; description: string; enabledForKids?: boolean }) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const defaultInfo = DEFAULT_GENERATOR_INFO[generator.id] || { name: generator.id, description: '' };
@@ -621,12 +643,13 @@ export default function AdminStoryGeneratorsPage() {
     });
   };
 
-  const handleUpdateInfo = async (generatorId: string, data: { name: string; description: string }) => {
+  const handleUpdateInfo = async (generatorId: string, data: { name: string; description: string; enabledForKids?: boolean }) => {
     if (!firestore) return;
     const docRef = doc(firestore, 'storyGenerators', generatorId);
     await updateDoc(docRef, {
       name: data.name,
       description: data.description,
+      ...(data.enabledForKids !== undefined && { enabledForKids: data.enabledForKids }),
     });
   };
 

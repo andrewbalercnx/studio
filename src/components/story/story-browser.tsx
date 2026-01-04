@@ -32,7 +32,11 @@ import type {
   ChildProfile,
   Character,
   Choice,
+  FriendsCharacterOption,
+  FriendsPhase,
 } from '@/lib/types';
+import { FriendsProposal } from './friends-proposal';
+import { CharacterPicker } from './character-picker';
 
 // ============================================================================
 // Types
@@ -47,6 +51,8 @@ type BrowserState =
   | 'ending'            // Ending phase (beat mode)
   | 'compiling'         // Auto-compiling story
   | 'complete'          // Story complete
+  | 'friends_proposal'  // Friends flow: showing AI-proposed characters
+  | 'friends_picker'    // Friends flow: full character picker
   | 'error';            // Error state
 
 /**
@@ -123,6 +129,11 @@ export function StoryBrowser({
   const [isEndingPhase, setIsEndingPhase] = useState(false);
   const [debugInfo, setDebugInfo] = useState<Record<string, any>>({});
   const [musicEnabled, setMusicEnabled] = useState(true); // User preference for background music
+
+  // Friends flow state
+  const [friendsPhase, setFriendsPhase] = useState<FriendsPhase | null>(null);
+  const [friendsProposedCharacters, setFriendsProposedCharacters] = useState<FriendsCharacterOption[]>([]);
+  const [friendsAvailableCharacters, setFriendsAvailableCharacters] = useState<FriendsCharacterOption[]>([]);
 
   // Track spoken content to avoid re-speaking
   const lastSpokenContentRef = useRef<string>('');
@@ -415,6 +426,22 @@ export function StoryBrowser({
         return;
       }
 
+      // Handle friends flow phases
+      if (result.friendsPhase) {
+        setFriendsPhase(result.friendsPhase);
+
+        if (result.friendsPhase === 'character_selection') {
+          // Store proposed and available characters for the picker UI
+          setFriendsProposedCharacters(result.proposedCharacters || []);
+          setFriendsAvailableCharacters(result.availableCharacters || []);
+          setCurrentQuestion(result.questionResolved || result.question);
+          setBrowserState('friends_proposal');
+          return;
+        }
+        // For scenario_selection and synopsis_selection, use standard question UI
+        // The API already converts these to options format
+      }
+
       // Handle ending phase
       if (result.isEndingPhase) {
         setIsEndingPhase(true);
@@ -436,6 +463,103 @@ export function StoryBrowser({
       onError?.(e.message);
     }
   }, [generator, user, firestore, sessionId, sessionRef, stopSpeech, generatorId, autoCompileStory, onError]);
+
+  // ---------------------------------------------------------------------------
+  // Friends Flow API Helpers
+  // ---------------------------------------------------------------------------
+  const callFriendsAPI = useCallback(async (
+    action?: 'confirm_characters' | 'change_characters' | 'more_synopses',
+    selectedCharacterIds?: string[],
+    selectedOptionId?: string
+  ) => {
+    if (!generator || !user || !firestore || !sessionRef) return;
+
+    setBrowserState('generating');
+    stopSpeech();
+
+    try {
+      const response = await fetch(generator.apiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await user.getIdToken()}`,
+        },
+        body: JSON.stringify({
+          sessionId,
+          action,
+          selectedCharacterIds,
+          selectedOptionId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const result: StoryGeneratorResponse = await response.json();
+
+      if (!result.ok) {
+        throw new Error(result.errorMessage || 'Unknown error');
+      }
+
+      // Store debug info
+      setDebugInfo(result.debug || {});
+
+      // Handle story complete
+      if (result.isStoryComplete) {
+        setFinalStory(result.finalStoryResolved || result.finalStory || null);
+        setBrowserState('complete');
+        return;
+      }
+
+      // Handle friends flow phases
+      if (result.friendsPhase) {
+        setFriendsPhase(result.friendsPhase);
+
+        if (result.friendsPhase === 'character_selection') {
+          setFriendsProposedCharacters(result.proposedCharacters || []);
+          setFriendsAvailableCharacters(result.availableCharacters || []);
+          setCurrentQuestion(result.questionResolved || result.question);
+          setBrowserState('friends_proposal');
+          return;
+        }
+      }
+
+      // Standard question flow for scenario/synopsis selection
+      setHeaderText(result.headerTextResolved || result.headerText || '');
+      setCurrentQuestion(result.questionResolved || result.question);
+      setCurrentOptions(result.options);
+      setBrowserState('question');
+
+    } catch (e: any) {
+      console.error('[StoryBrowser] Friends API error:', e);
+      setErrorMessage(e.message || 'Failed to generate content');
+      setBrowserState('error');
+      onError?.(e.message);
+    }
+  }, [generator, user, firestore, sessionId, sessionRef, stopSpeech, onError]);
+
+  // Handler for accepting proposed characters in friends flow
+  const handleFriendsAccept = useCallback(async () => {
+    // Use the proposed characters (filter to only selected ones)
+    const selectedIds = friendsProposedCharacters.filter(c => c.isSelected).map(c => c.id);
+    await callFriendsAPI('confirm_characters', selectedIds);
+  }, [friendsProposedCharacters, callFriendsAPI]);
+
+  // Handler for opening the full character picker
+  const handleFriendsChangePicker = useCallback(() => {
+    setBrowserState('friends_picker');
+  }, []);
+
+  // Handler for confirming custom character selection
+  const handleFriendsConfirmSelection = useCallback(async (selectedIds: string[]) => {
+    await callFriendsAPI('confirm_characters', selectedIds);
+  }, [callFriendsAPI]);
+
+  // Handler for going back to proposal from picker
+  const handleFriendsBackToProposal = useCallback(() => {
+    setBrowserState('friends_proposal');
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Ending Flow API Call
@@ -840,6 +964,28 @@ export function StoryBrowser({
               ))}
             </CardContent>
           </Card>
+        )}
+
+        {/* Friends Flow: Character Proposal */}
+        {browserState === 'friends_proposal' && (
+          <FriendsProposal
+            proposedCharacters={friendsProposedCharacters}
+            onAccept={handleFriendsAccept}
+            onChangeCharacters={handleFriendsChangePicker}
+            isLoading={false}
+          />
+        )}
+
+        {/* Friends Flow: Full Character Picker */}
+        {browserState === 'friends_picker' && (
+          <CharacterPicker
+            availableCharacters={friendsAvailableCharacters}
+            initialSelection={friendsProposedCharacters.filter(c => c.isSelected).map(c => c.id)}
+            onConfirm={handleFriendsConfirmSelection}
+            onBack={handleFriendsBackToProposal}
+            isLoading={false}
+            mainChildId={childProfile?.id}
+          />
         )}
 
         {/* Character Introduction */}

@@ -18,6 +18,37 @@
 
 ### 2026-01-04
 
+#### `610171a` - Add "Fun with my friends" story generator
+
+**Type**: Feature
+
+**Summary**: New multi-phase story generator that creates adventure stories featuring the child's characters and friends. The flow guides children through 4 phases: (1) character selection with AI-proposed companions, (2) scenario selection from adventure options, (3) synopsis selection with "more" option, and (4) full story generation.
+
+**Key Features**:
+- Two-step character selection UX: Simple avatar display first ("Let's go!" to accept), "Give me other friends" to expand to full picker
+- Siblings included as selectable characters alongside Family, Friend, Pet, Toy types
+- "More synopses" replaces previous options instead of adding to them
+- No minimum character requirement - solo adventures allowed
+- Configurable AI prompts via admin Story Generators page
+
+**Files Created**:
+- `src/ai/flows/friends-flow.ts` - Multi-phase AI flow
+- `src/app/api/storyFriends/route.ts` - API route
+- `src/components/story/friends-proposal.tsx` - Simple avatar proposal UI
+- `src/components/story/character-picker.tsx` - Full character grid picker
+
+**Files Modified**:
+- `src/lib/types.ts` - Added FriendsPhase, FriendsScenario, FriendsSynopsis types, extended StorySession
+- `src/app/api/admin/story-generators/seed/route.ts` - Added friends generator config
+- `src/app/admin/storyGenerators/page.tsx` - Added friends prompts, enabledForKids toggle
+- `src/components/story/story-browser.tsx` - Integrated friends flow with BrowserState handling
+- `src/app/admin/kids-flows/page.tsx` - Added friendsEnabled toggle
+- `src/app/api/admin/system-config/kids-flows/route.ts` - Handle friendsEnabled field
+- `docs/SCHEMA.md` - Documented new types and session fields
+- `docs/API.md` - Documented /api/storyFriends endpoint
+
+---
+
 #### `48b38c6` - Fix Firestore "documentPath must be non-empty" error
 
 **Type**: Bug Fix

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, ArrowLeft, Save, Wand2, Sparkles, BookOpen, MessageCircle } from 'lucide-react';
+import { LoaderCircle, ArrowLeft, Save, Wand2, Sparkles, BookOpen, MessageCircle, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase/auth/use-user';
 import { Switch } from '@/components/ui/switch';
@@ -22,6 +22,7 @@ export default function AdminKidsFlowsPage() {
   const [chatEnabled, setChatEnabled] = useState(true);
   const [gemini3Enabled, setGemini3Enabled] = useState(true);
   const [gemini4Enabled, setGemini4Enabled] = useState(true);
+  const [friendsEnabled, setFriendsEnabled] = useState(true);
 
   // Fetch current config on mount
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function AdminKidsFlowsPage() {
             setChatEnabled(result.config.chatEnabled ?? true);
             setGemini3Enabled(result.config.gemini3Enabled ?? true);
             setGemini4Enabled(result.config.gemini4Enabled ?? true);
+            setFriendsEnabled(result.config.friendsEnabled ?? true);
           }
         }
       } catch (err) {
@@ -62,7 +64,7 @@ export default function AdminKidsFlowsPage() {
     }
 
     // Ensure at least one flow is enabled
-    if (!wizardEnabled && !chatEnabled && !gemini3Enabled && !gemini4Enabled) {
+    if (!wizardEnabled && !chatEnabled && !gemini3Enabled && !gemini4Enabled && !friendsEnabled) {
       toast({
         title: 'Invalid configuration',
         description: 'At least one story flow must be enabled.',
@@ -85,6 +87,7 @@ export default function AdminKidsFlowsPage() {
           chatEnabled,
           gemini3Enabled,
           gemini4Enabled,
+          friendsEnabled,
         }),
       });
 
@@ -209,6 +212,25 @@ export default function AdminKidsFlowsPage() {
           />
         </div>
 
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
+              <Users className="h-5 w-5 text-orange-600" />
+            </div>
+            <div className="space-y-0.5">
+              <Label htmlFor="friendsEnabled" className="text-base font-medium">Fun with my friends</Label>
+              <p className="text-sm text-muted-foreground">
+                Create an adventure story featuring characters and friends
+              </p>
+            </div>
+          </div>
+          <Switch
+            id="friendsEnabled"
+            checked={friendsEnabled}
+            onCheckedChange={setFriendsEnabled}
+          />
+        </div>
+
         <div className="flex justify-end pt-4">
           <Button onClick={handleSave} disabled={saving}>
             {saving ? (
@@ -234,6 +256,7 @@ export default function AdminKidsFlowsPage() {
               chatEnabled && 'Create with Chat',
               gemini3Enabled && 'Creative Adventure',
               gemini4Enabled && 'Guided Story',
+              friendsEnabled && 'Fun with my friends',
             ].filter(Boolean).join(', ') || 'no options (at least one must be enabled)'}
             {' '}when creating a new story.
           </p>

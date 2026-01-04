@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-04 (added shareLinks collection for share link lookups)
+> **Last Updated**: 2026-01-04 (added "Fun with my friends" story generator types and session fields)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -113,7 +113,7 @@ Interactive story creation sessions.
 | `childId` | string | Yes | Child's document ID |
 | `parentUid` | string | Yes | Parent's Firebase UID |
 | `status` | 'in_progress' \| 'completed' | Yes | Session status |
-| `currentPhase` | string | Yes | 'warmup' \| 'story' \| 'ending' \| 'final' \| 'wizard' \| 'gemini3' \| 'gemini4' \| 'completed' |
+| `currentPhase` | string | Yes | 'warmup' \| 'story' \| 'ending' \| 'final' \| 'wizard' \| 'gemini3' \| 'gemini4' \| 'friends' \| 'completed' |
 | `currentStepIndex` | number | Yes | Current step in flow |
 | `storyTitle` | string | No | Story title |
 | `storyVibe` | string | No | Story mood/vibe |
@@ -121,11 +121,18 @@ Interactive story creation sessions.
 | `arcStepIndex` | number | No | Current arc step |
 | `mainCharacterId` | string | No | Main character ID |
 | `supportingCharacterIds` | string[] | No | Supporting character IDs |
-| `storyMode` | 'gemini3' \| 'gemini4' \| 'wizard' \| 'chat' | No | Story generation mode |
+| `storyMode` | 'gemini3' \| 'gemini4' \| 'wizard' \| 'chat' \| 'friends' | No | Story generation mode |
 | `actors` | string[] | No | Actor IDs ($$id$$ placeholders) |
 | `wizardAnswers` | object[] | No | Wizard mode Q&A state (question, answer pairs) |
 | `wizardLastQuestion` | string | No | Wizard mode: last question asked |
 | `wizardLastChoices` | object[] | No | Wizard mode: last choices offered |
+| `friendsPhase` | FriendsPhase | No | Friends mode: current phase |
+| `friendsProposedCharacterIds` | string[] | No | Friends mode: AI-proposed character IDs |
+| `friendsSelectedCharacterIds` | string[] | No | Friends mode: child-confirmed character IDs |
+| `friendsScenarios` | FriendsScenario[] | No | Friends mode: generated scenario options |
+| `friendsSelectedScenarioId` | string | No | Friends mode: selected scenario ID |
+| `friendsSynopses` | FriendsSynopsis[] | No | Friends mode: generated synopsis options |
+| `friendsSelectedSynopsisId` | string | No | Friends mode: selected synopsis ID |
 | `progress` | object | No | Phase completion timestamps |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
@@ -458,6 +465,7 @@ Story generator configurations. Defines capabilities and API endpoints for each 
 - **wizard**: `questionGeneration`, `storyGeneration`
 - **gemini3**: `systemPrompt`
 - **gemini4**: `systemPrompt`, `phase_opening`, `phase_setting`, `phase_characters`, `phase_conflict`, `phase_action`, `phase_resolution`, `phase_development`
+- **friends**: `characterProposal`, `scenarioGeneration`, `synopsisGeneration`, `storyGeneration`
 
 **Standard API Response Format**: All generators must return `StoryGeneratorResponse` (see `src/lib/types.ts`).
 
@@ -612,6 +620,7 @@ System-wide configuration documents.
 | `chatEnabled` | boolean | Yes | Enable chat flow |
 | `gemini3Enabled` | boolean | Yes | Enable Gemini 3 flow |
 | `gemini4Enabled` | boolean | Yes | Enable Gemini 4 flow |
+| `friendsEnabled` | boolean | Yes | Enable "Fun with my friends" flow |
 | `updatedAt` | timestamp | No | Last update time |
 | `updatedBy` | string | No | Email of last updater |
 
@@ -791,6 +800,40 @@ In-app help wizard configurations.
 'bottom-left' | 'bottom-center' | 'bottom-right'
 ```
 
+### `FriendsPhase`
+```typescript
+'character_selection' | 'scenario_selection' | 'synopsis_selection' | 'story_generation' | 'complete'
+```
+
+### `FriendsCharacterOption`
+```typescript
+{
+  id: string;
+  displayName: string;
+  type: 'child' | 'sibling' | 'Family' | 'Friend' | 'Pet' | 'Toy' | 'Other';
+  avatarUrl?: string;
+  isSelected: boolean;
+}
+```
+
+### `FriendsScenario`
+```typescript
+{
+  id: string;
+  title: string;
+  description: string;
+}
+```
+
+### `FriendsSynopsis`
+```typescript
+{
+  id: string;
+  title: string;
+  summary: string;
+}
+```
+
 ---
 
 ## Security Rules Summary
@@ -821,5 +864,6 @@ In-app help wizard configurations.
 
 | Date | Changes |
 |------|---------|
+| 2026-01-04 | Added "Fun with my friends" generator: FriendsPhase, FriendsScenario, FriendsSynopsis types, session fields, friends prompts, friendsEnabled config |
 | 2026-01-02 | Removed deprecated fields: ChildProfile.speechModeEnabled, StorySession.finalStoryText, StorySession.storyTypeName, ChatMessage.textResolved/optionsResolved |
 | 2025-12-29 | Initial documentation created |

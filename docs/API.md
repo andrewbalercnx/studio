@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-03
+> **Last Updated**: 2026-01-04
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -363,6 +363,103 @@ Generate wizard questions and final story. The wizard asks 4 questions to gather
   "isStoryComplete": true,
   "finalStory": "Once upon a time...",
   "finalStoryResolved": "Once upon a time..."
+}
+```
+
+---
+
+### POST `/api/storyFriends`
+
+Multi-phase "Fun with my friends" story generator. Creates adventure stories featuring the child's characters and friends through a guided 4-phase flow.
+
+**Phases**:
+1. `character_selection` - AI proposes adventure companions; child confirms or modifies
+2. `scenario_selection` - Child picks an adventure scenario
+3. `synopsis_selection` - Child picks from 3 story synopses (can request more)
+4. `story_generation` - AI writes the full story
+
+**Request Body**:
+```json
+{
+  "sessionId": "session-id",
+  "selectedOptionId": "scenario-id",
+  "action": "confirm_characters",
+  "selectedCharacterIds": ["char-1", "char-2"]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sessionId` | string | Yes | Story session ID |
+| `selectedOptionId` | string | No | Selected scenario or synopsis ID |
+| `action` | string | No | `confirm_characters`, `change_characters`, or `more_synopses` |
+| `selectedCharacterIds` | string[] | No | Character IDs when modifying selection |
+
+**Response (Character Selection)**: `200 OK`
+```json
+{
+  "ok": true,
+  "sessionId": "session-id",
+  "question": "Here are some friends who'd love to adventure with you!",
+  "questionResolved": "Here are some friends who'd love to adventure with you!",
+  "options": [],
+  "isStoryComplete": false,
+  "friendsPhase": "character_selection",
+  "proposedCharacters": [
+    {"id": "child-id", "displayName": "Emma", "type": "child", "avatarUrl": "...", "isSelected": true},
+    {"id": "char-1", "displayName": "Max", "type": "Pet", "avatarUrl": "...", "isSelected": true}
+  ],
+  "availableCharacters": [...]
+}
+```
+
+**Response (Scenario Selection)**: `200 OK`
+```json
+{
+  "ok": true,
+  "sessionId": "session-id",
+  "question": "What adventure would you like?",
+  "options": [
+    {"id": "scen-1", "text": "The Enchanted Forest: Explore a magical woods..."},
+    {"id": "scen-2", "text": "Space Station Rescue: Help friends on a space station..."}
+  ],
+  "isStoryComplete": false,
+  "friendsPhase": "scenario_selection",
+  "scenarios": [
+    {"id": "scen-1", "title": "The Enchanted Forest", "description": "Explore a magical woods..."},
+    {"id": "scen-2", "title": "Space Station Rescue", "description": "Help friends on a space station..."}
+  ]
+}
+```
+
+**Response (Synopsis Selection)**: `200 OK`
+```json
+{
+  "ok": true,
+  "sessionId": "session-id",
+  "question": "Which story sounds the most fun?",
+  "options": [
+    {"id": "syn-1", "text": "The Lost Treasure: Emma and Max discover a map..."},
+    {"id": "syn-2", "text": "The Magic Key: A mysterious key appears..."},
+    {"id": "MORE", "text": "Show me different stories", "isMoreOption": true}
+  ],
+  "isStoryComplete": false,
+  "friendsPhase": "synopsis_selection",
+  "synopses": [...]
+}
+```
+
+**Response (Story Complete)**: `200 OK`
+```json
+{
+  "ok": true,
+  "sessionId": "session-id",
+  "question": "Your story is complete!",
+  "options": [],
+  "isStoryComplete": true,
+  "finalStory": "Once upon a time, $$childId$$ and $$char-1$$ set off...",
+  "finalStoryResolved": "Once upon a time, Emma and Max set off...",
+  "friendsPhase": "complete"
 }
 ```
 
@@ -2182,6 +2279,7 @@ Rate-limited responses return status `429` with:
 
 | Date | Changes |
 |------|---------|
+| 2026-01-04 | Added /api/storyFriends endpoint for "Fun with my friends" story generator |
 | 2025-12-31 | Added /api/admin/cleanup endpoints for database cleanup |
 | 2025-12-31 | Added storyOutputTypes/uploadImage endpoint |
 | 2025-12-29 | Initial documentation created |
