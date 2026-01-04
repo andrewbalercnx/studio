@@ -77,6 +77,9 @@ const AI_MODELS: { value: AIModelName; label: string; description: string }[] = 
   { value: 'googleai/gemini-2.0-flash', label: 'Gemini 2.0 Flash', description: 'Previous generation, very fast' },
 ];
 
+// Sentinel value for "use default" option (Radix Select doesn't allow empty string values)
+const USE_DEFAULT_VALUE = '__use_default__';
+
 // AI Settings Editor Component
 function AISettingsEditor({
   generator,
@@ -172,14 +175,14 @@ function AISettingsEditor({
           <div className="space-y-2">
             <Label>Default Model</Label>
             <Select
-              value={defaultModel || ''}
-              onValueChange={(v) => setDefaultModel(v as AIModelName || undefined)}
+              value={defaultModel || USE_DEFAULT_VALUE}
+              onValueChange={(v) => setDefaultModel(v === USE_DEFAULT_VALUE ? undefined : v as AIModelName)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Use system default" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Use system default</SelectItem>
+                <SelectItem value={USE_DEFAULT_VALUE}>Use system default</SelectItem>
                 {AI_MODELS.map((model) => (
                   <SelectItem key={model.value} value={model.value}>
                     {model.label}
@@ -228,14 +231,14 @@ function AISettingsEditor({
                     <div className="space-y-1">
                       <Label className="text-xs">Model</Label>
                       <Select
-                        value={config.model || ''}
-                        onValueChange={(v) => handlePromptConfigChange(promptKey, 'model', v || undefined)}
+                        value={config.model || USE_DEFAULT_VALUE}
+                        onValueChange={(v) => handlePromptConfigChange(promptKey, 'model', v === USE_DEFAULT_VALUE ? undefined : v)}
                       >
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue placeholder="Use default" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Use default</SelectItem>
+                          <SelectItem value={USE_DEFAULT_VALUE}>Use default</SelectItem>
                           {AI_MODELS.map((model) => (
                             <SelectItem key={model.value} value={model.value}>
                               {model.label}
