@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useFirestore } from '@/firebase';
+import { useFirebaseSafe } from '@/firebase';
 import { doc, getDoc, Firestore } from 'firebase/firestore';
 import type { Character, ChildProfile } from '@/lib/types';
 
@@ -70,7 +70,8 @@ export function useResolvePlaceholders(text: string | null | undefined): {
   resolvedText: string | null;
   isResolving: boolean;
 } {
-  const firestore = useFirestore();
+  const firebase = useFirebaseSafe();
+  const firestore = firebase?.firestore ?? null;
   const [resolvedText, setResolvedText] = useState<string | null>(null);
   const [isResolving, setIsResolving] = useState(false);
 
@@ -85,6 +86,13 @@ export function useResolvePlaceholders(text: string | null | undefined): {
     const hasDoublePlaceholders = /\$\$([^$]+)\$\$/.test(text);
     const hasSinglePlaceholders = /\$([a-zA-Z0-9]{15,})\$/.test(text);
     if (!hasDoublePlaceholders && !hasSinglePlaceholders) {
+      setResolvedText(text);
+      setIsResolving(false);
+      return;
+    }
+
+    // If no Firebase context (e.g., public share pages), return original text
+    if (!firestore) {
       setResolvedText(text);
       setIsResolving(false);
       return;
@@ -116,12 +124,14 @@ export function useResolvePlaceholders(text: string | null | undefined): {
 
 /**
  * Hook to resolve multiple texts at once.
+ * If Firebase context is not available (e.g., public share pages), returns original texts.
  */
 export function useResolvePlaceholdersMultiple(texts: (string | null | undefined)[]): {
   resolvedTexts: (string | null)[];
   isResolving: boolean;
 } {
-  const firestore = useFirestore();
+  const firebase = useFirebaseSafe();
+  const firestore = firebase?.firestore ?? null;
   const [resolvedTexts, setResolvedTexts] = useState<(string | null)[]>([]);
   const [isResolving, setIsResolving] = useState(false);
 
@@ -140,6 +150,13 @@ export function useResolvePlaceholdersMultiple(texts: (string | null | undefined
     const hasSinglePlaceholders = /\$([a-zA-Z0-9]{15,})\$/.test(combinedText);
 
     if (!hasDoublePlaceholders && !hasSinglePlaceholders) {
+      setResolvedTexts(texts.map((t) => t || null));
+      setIsResolving(false);
+      return;
+    }
+
+    // If no Firebase context (e.g., public share pages), return original texts
+    if (!firestore) {
       setResolvedTexts(texts.map((t) => t || null));
       setIsResolving(false);
       return;

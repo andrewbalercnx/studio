@@ -18,6 +18,18 @@
 
 ### 2026-01-04
 
+#### `61d4fc0` - Fix ImmersivePlayer crash on public share pages
+
+**Type**: Bug Fix
+
+**Summary**: The ImmersivePlayer crashed with "useFirebase must be used within a FirebaseProvider" error on public share pages. Added `useFirebaseSafe()` hook that returns null instead of throwing when Firebase context is unavailable. Updated `useResolvePlaceholders` hooks to gracefully return original texts when Firebase isn't available.
+
+**Files Modified**:
+- `src/firebase/provider.tsx` - Added `useFirebaseSafe()` hook
+- `src/hooks/use-resolve-placeholders.ts` - Updated to use safe hook and handle missing context
+
+---
+
 #### `f44baa4` - Auto-focus PIN input in parent PIN dialog
 
 **Type**: Bug Fix

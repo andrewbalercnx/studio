@@ -38,6 +38,11 @@ export function useFirebase() {
   return context;
 }
 
+// Safe version that returns null instead of throwing
+export function useFirebaseSafe(): FirebaseContextValue | null {
+  return useContext(FirebaseContext);
+}
+
 export function useFirebaseApp() {
   return useFirebase().firebaseApp;
 }
