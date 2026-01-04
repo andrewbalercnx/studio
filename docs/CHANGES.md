@@ -18,6 +18,17 @@
 
 ### 2026-01-04
 
+#### `f44baa4` - Auto-focus PIN input in parent PIN dialog
+
+**Type**: Bug Fix
+
+**Summary**: The PIN input field in the parent PIN dialog now auto-focuses when the dialog opens. The `autoFocus` attribute doesn't work reliably in dialogs due to animation timing, so added a `useEffect` with a short delay to focus the input after mount.
+
+**Files Modified**:
+- `src/components/parent/pin-form.tsx`
+
+---
+
 #### `ad759b3` - Fix share page not reading URL params
 
 **Type**: Bug Fix

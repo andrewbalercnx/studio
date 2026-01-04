@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -33,6 +33,22 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
   const { toast } = useToast();
 
   const hasPinSetup = !!userProfile?.pinHash;
+  const pinInputRef = useRef<HTMLInputElement>(null);
+  const newPinInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus the PIN input after dialog opens (autoFocus doesn't work reliably in dialogs)
+  useEffect(() => {
+    if (!isFetchingProfile) {
+      const timer = setTimeout(() => {
+        if (hasPinSetup) {
+          pinInputRef.current?.focus();
+        } else {
+          newPinInputRef.current?.focus();
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isFetchingProfile, hasPinSetup]);
 
   useEffect(() => {
     if (!user || !firestore) {
@@ -180,6 +196,7 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
             <div className="space-y-2">
               <Label htmlFor="new-pin">New PIN</Label>
               <Input
+                ref={newPinInputRef}
                 id="new-pin"
                 type="password"
                 inputMode="numeric"
@@ -191,7 +208,6 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
                 className="text-center tracking-[1rem]"
                 autoComplete="one-time-code"
                 disabled={isSettingPin}
-                autoFocus
               />
             </div>
             <div className="space-y-2">
@@ -235,6 +251,7 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
       </DialogHeader>
       <div className="py-4">
         <Input
+          ref={pinInputRef}
           type="password"
           inputMode="numeric"
           pattern="[0-9]*"
@@ -246,7 +263,6 @@ export function PinForm({ onPinVerified, onOpenChange }: { onPinVerified: () => 
           className="text-center text-2xl tracking-[1rem]"
           autoComplete="one-time-code"
           disabled={isVerifying}
-          autoFocus
         />
       </div>
       <DialogFooter>
