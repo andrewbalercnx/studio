@@ -18,6 +18,17 @@
 
 ### 2026-01-04
 
+#### `311326c` - Skip pages without images in ImmersivePlayer
+
+**Type**: Enhancement
+
+**Summary**: The ImmersivePlayer now filters out pages that don't have images (like title pages and blank pages). Only pages with actual images are shown in the immersive reading experience.
+
+**Files Modified**:
+- `src/components/book-reader/immersive-player.tsx` - Filter pages to only show those with images
+
+---
+
 #### `0f911e5` - Resolve placeholders server-side in share API
 
 **Type**: Bug Fix

@@ -22,6 +22,12 @@ export function ImmersivePlayer({
   onPlayAgain,
   onExit,
 }: ImmersivePlayerProps) {
+  // Filter to only pages with images (skip title_page, blank, etc.)
+  const displayablePages = useMemo(
+    () => pages.filter((p) => p.imageUrl),
+    [pages]
+  );
+
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [playerState, setPlayerState] = useState<PlayerState>('waiting_for_interaction');
   const [isAudioLoading, setIsAudioLoading] = useState(false);
@@ -29,16 +35,16 @@ export function ImmersivePlayer({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const currentPage = pages[currentPageIndex];
-  const totalPages = pages.length;
+  const currentPage = displayablePages[currentPageIndex];
+  const totalPages = displayablePages.length;
   const hasNextPage = currentPageIndex < totalPages - 1;
 
   // Collect all page texts that may need placeholder resolution
   // This resolves placeholders client-side as a fallback for pages that weren't
   // processed with the newer storyPageFlow that pre-resolves displayText
   const pageTexts = useMemo(
-    () => pages.map((p) => p.displayText || p.bodyText || p.title || null),
-    [pages]
+    () => displayablePages.map((p) => p.displayText || p.bodyText || p.title || null),
+    [displayablePages]
   );
   const { resolvedTexts } = useResolvePlaceholdersMultiple(pageTexts);
 
@@ -345,7 +351,7 @@ export function ImmersivePlayer({
 
       {/* Progress dots */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
-        {pages.map((_, idx) => (
+        {displayablePages.map((_, idx) => (
           <div
             key={idx}
             className={clsx(
