@@ -18,6 +18,25 @@
 
 ### 2026-01-04
 
+#### `b83dd18` - Fix friends flow option selection and "more synopses"
+
+**Type**: Bug Fix
+
+**Summary**: Fixed two issues with the friends flow in StoryBrowser:
+1. Clicking "Show me different stories" (more synopses) was calling the wrong API, causing a 500 error
+2. Selecting a scenario or synopsis option was calling the generic generator API instead of the friends API
+
+**Root Cause**: The `handleSelectOption` function was using `callGeneratorAPI` for all options, but the friends flow requires `callFriendsAPI` which passes `selectedOptionId` and `action` parameters that the `/api/storyFriends` endpoint expects.
+
+**Changes**:
+- When in friends `synopsis_selection` phase and clicking `isMoreOption`, call `callFriendsAPI('more_synopses')`
+- When in friends `scenario_selection` or `synopsis_selection` phase, call `callFriendsAPI(undefined, undefined, option.id)` for regular options
+
+**Files Modified**:
+- `src/components/story/story-browser.tsx` - Route friends flow options to correct API handler
+
+---
+
 #### `acf34ff` - Data-driven story generator routing
 
 **Type**: Refactor

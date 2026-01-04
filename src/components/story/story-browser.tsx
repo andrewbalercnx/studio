@@ -708,8 +708,14 @@ export function StoryBrowser({
       }
     }
 
-    // Handle "Tell me more" option for gemini4
+    // Handle "Tell me more" / "Show me different stories" option
     if (option.isMoreOption) {
+      // For friends flow synopsis phase, use the more_synopses action
+      if (friendsPhase === 'synopsis_selection') {
+        await callFriendsAPI('more_synopses');
+        return;
+      }
+      // For other generators (gemini4), use the standard approach
       await callGeneratorAPI(option.id, "Tell me more about this. Can you explain it differently or give me more options?");
       return;
     }
@@ -775,9 +781,15 @@ export function StoryBrowser({
       }
     }
 
+    // For friends flow scenario/synopsis selection, use the friends API
+    if (friendsPhase === 'scenario_selection' || friendsPhase === 'synopsis_selection') {
+      await callFriendsAPI(undefined, undefined, option.id);
+      return;
+    }
+
     // Call API with selected option
     await callGeneratorAPI(option.id, option.text);
-  }, [generator, firestore, user, session, sessionId, sessionRef, isEndingPhase, activeStoryType, childProfile, callGeneratorAPI, callEndingAPI, autoCompileStory, toast]);
+  }, [generator, firestore, user, session, sessionId, sessionRef, isEndingPhase, activeStoryType, childProfile, callGeneratorAPI, callFriendsAPI, friendsPhase, callEndingAPI, autoCompileStory, toast]);
 
   // ---------------------------------------------------------------------------
   // Continue after character introduction
