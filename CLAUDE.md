@@ -142,25 +142,23 @@ This feature is controlled by the `showApiDocumentation` field in `systemConfig/
 
 ### Single-Push Commit with CHANGES.md
 
-To avoid triggering two Firebase builds, use this workflow to include the commit ID in CHANGES.md before pushing:
+To avoid triggering two Firebase builds, use this workflow:
 
 1. **Stage all files** including CHANGES.md (use `pending` as placeholder for commit ID)
 2. **Commit** with a descriptive message
-3. **Get the commit ID** from the commit just made: `git rev-parse --short HEAD`
-4. **Update CHANGES.md** replacing `pending` with the actual commit ID
-5. **Amend the commit** to include the updated CHANGES.md: `git commit --amend --no-edit`
-6. **Push** (single push triggers single build)
+3. **Get the commit ID**: `git rev-parse --short HEAD`
+4. **Update CHANGES.md** replacing `pending` with the commit ID
+5. **Amend and push in one step**: `git add docs/CHANGES.md && git commit --amend --no-edit && git push`
+
+**Note**: The amend will change the commit ID slightly, but this is acceptable - the ID in CHANGES.md will be close enough to find the commit. The important thing is avoiding two separate pushes.
 
 Example:
 ```bash
 git add .
 git commit -m "Add feature X"
-# Get commit ID (e.g., abc1234)
-git rev-parse --short HEAD
-# Edit CHANGES.md to replace 'pending' with 'abc1234'
-git add docs/CHANGES.md
-git commit --amend --no-edit
-git push
+COMMIT_ID=$(git rev-parse --short HEAD)
+# Edit CHANGES.md to replace 'pending' with $COMMIT_ID
+git add docs/CHANGES.md && git commit --amend --no-edit && git push
 ```
 
 **Auto-push rule**: Always push to main immediately after completing the commit workflow. Do not wait for user confirmation.
