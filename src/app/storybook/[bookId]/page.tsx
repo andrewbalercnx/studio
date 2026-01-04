@@ -814,6 +814,38 @@ export default function StorybookViewerPage() {
                   </Button>
                 </>
               )}
+              {/* Finalize button - show when ready but not locked */}
+              {allImagesReady && !isLocked && isNewModel && (
+                <Button
+                  onClick={handleFinalize}
+                  disabled={finalizing}
+                  variant="default"
+                  data-wiz-target="storybook-finalize"
+                >
+                  {finalizing ? (
+                    <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Lock className="mr-2 h-4 w-4" />
+                  )}
+                  Finalize for Sharing
+                </Button>
+              )}
+              {/* Unlock button - show when locked */}
+              {isLocked && isNewModel && (
+                <Button
+                  onClick={handleUnlock}
+                  disabled={unlocking}
+                  variant="outline"
+                  data-wiz-target="storybook-unlock"
+                >
+                  {unlocking ? (
+                    <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Unlock className="mr-2 h-4 w-4" />
+                  )}
+                  Unlock to Edit
+                </Button>
+              )}
             </div>
           </CardFooter>
         </Card>
