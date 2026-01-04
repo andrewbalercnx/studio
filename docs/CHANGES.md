@@ -18,7 +18,7 @@
 
 ### 2026-01-04
 
-#### `pending` - Fix share link errors and public page layout
+#### `fae8415` - Fix share link errors and public page layout
 
 **Type**: Bug Fix
 
