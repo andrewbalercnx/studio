@@ -330,7 +330,11 @@ export async function POST(request: Request) {
           const flowResult = await storyImageFlow(job.flowInput!);
           return { pageId: job.page.id, flowResult };
         } catch (flowError: any) {
+          const errorStack = flowError?.stack || 'No stack trace';
+          console.error(`[images/route] storyImageFlow exception for ${job.page.id}:`, flowError?.message);
+          console.error(`[images/route] Stack:`, errorStack);
           allLogs.push(`[error] ${job.page.id} threw exception: ${flowError?.message || flowError}`);
+          allLogs.push(`[stack] ${errorStack.substring(0, 300)}`);
           return {
             pageId: job.page.id,
             flowResult: {
@@ -339,7 +343,7 @@ export async function POST(request: Request) {
               pageId: job.page.id,
               imageStatus: 'error' as const,
               errorMessage: flowError?.message || 'Unknown error in storyImageFlow',
-              logs: [`Exception: ${flowError?.message || flowError}`],
+              logs: [`Exception: ${flowError?.message || flowError}`, `Stack: ${errorStack.substring(0, 500)}`],
             },
           };
         }
