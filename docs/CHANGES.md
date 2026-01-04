@@ -18,6 +18,22 @@
 
 ### 2026-01-04
 
+#### `48b38c6` - Fix Firestore "documentPath must be non-empty" error
+
+**Type**: Bug Fix
+
+**Summary**: Fixed Firestore error caused by empty strings in actor ID arrays. When story.actors contained empty strings, calls to `.doc()` would fail with "Value for argument 'documentPath' is not a valid resource path".
+
+**Changes**:
+- Added filtering for empty/invalid actor IDs in storybook viewer page
+- Added filtering for empty/invalid actor IDs in story-synopsis-flow
+
+**Files Modified**:
+- `src/app/storybook/[bookId]/page.tsx` - Filter empty actor IDs before Firestore calls
+- `src/ai/flows/story-synopsis-flow.ts` - Filter empty actor IDs before Firestore calls
+
+---
+
 #### `2a377d2` - Add audio generation controls to storybook viewer
 
 **Type**: Feature

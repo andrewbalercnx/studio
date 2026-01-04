@@ -100,8 +100,10 @@ export const storySynopsisFlow = ai.defineFlow(
       const childDoc = await childRef.get();
       const mainChild = childDoc.exists ? (childDoc.data() as ChildProfile) : null;
 
-      // Get other actor IDs (excluding main child)
-      const otherActorIds = actorIds.filter(id => id !== story.childId);
+      // Get other actor IDs (excluding main child and filtering out empty/invalid IDs)
+      const otherActorIds = actorIds
+        .filter(id => id !== story.childId)
+        .filter(id => id && typeof id === 'string' && id.trim().length > 0);
 
       // Load from both children (siblings) and characters collections
       const [childDocs, characterDocs] = await Promise.all([

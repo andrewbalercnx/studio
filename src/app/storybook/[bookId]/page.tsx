@@ -193,7 +193,8 @@ export default function StorybookViewerPage() {
       }
 
       setActorsLoading(true);
-      const actorIds = story.actors;
+      // Filter out empty/invalid IDs to prevent Firestore "documentPath must be non-empty" errors
+      const actorIds = story.actors.filter((id: string) => id && typeof id === 'string' && id.trim().length > 0);
       const loadedActors: ActorInfo[] = [];
 
       for (const actorId of actorIds) {
