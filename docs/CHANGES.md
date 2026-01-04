@@ -18,7 +18,7 @@
 
 ### 2026-01-04
 
-#### `pending` - Configurable AI model/temperature and inventive scenario prompts
+#### `97a28c9` - Configurable AI model/temperature and inventive scenario prompts
 
 **Type**: Feature
 
