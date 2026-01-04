@@ -3,143 +3,104 @@
 import { useEffect, useState } from 'react';
 import { useAppContext } from '@/hooks/use-app-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, MessageCircle, Wand2, Sparkles, BookOpen, Users } from 'lucide-react';
+import { LoaderCircle, MessageCircle, Wand2, Sparkles, BookOpen, Users, Star } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useFirestore } from '@/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import type { StoryGenerator } from '@/lib/types';
 
-// Flow configuration from API
-type FlowsConfig = {
-  wizard: boolean;
-  chat: boolean;
-  gemini3: boolean;
-  gemini4: boolean;
-  friends: boolean;
+/**
+ * Icon mapping from generator styling.icon string to Lucide component.
+ * Add new icons here when creating generators with new icon types.
+ */
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  Wand2: Wand2,
+  wand: Wand2,
+  MessageCircle: MessageCircle,
+  chat: MessageCircle,
+  Sparkles: Sparkles,
+  sparkles: Sparkles,
+  BookOpen: BookOpen,
+  book: BookOpen,
+  Users: Users,
+  users: Users,
+  Star: Star,
+  star: Star,
 };
 
-// Generator ID to flow key mapping
-const GENERATOR_TO_FLOW: Record<string, keyof FlowsConfig> = {
-  wizard: 'wizard',
-  chat: 'chat',
-  gemini3: 'gemini3',
-  gemini4: 'gemini4',
-  friends: 'friends',
-};
+/**
+ * Default icon to use if generator's icon is not in ICON_MAP
+ */
+const DefaultIcon = Sparkles;
 
-// Default generator info (fallback if not in Firestore)
-const DEFAULT_GENERATOR_INFO: Record<string, { name: string; description: string; gradient: string; icon: 'wand' | 'chat' | 'sparkles' | 'book' | 'users' }> = {
-  chat: {
-    name: 'Create with Chat',
-    description: 'Talk with the Story Guide step-by-step to build your tale.',
-    gradient: 'bg-accent',
-    icon: 'chat',
-  },
-  wizard: {
-    name: 'Magic Story Wizard',
-    description: 'Answer a few questions and let the AI create a full story for you!',
-    gradient: 'bg-primary',
-    icon: 'wand',
-  },
-  gemini3: {
-    name: 'Creative Adventure',
-    description: 'Let Gemini lead the way with creative questions to craft your unique adventure!',
-    gradient: 'bg-gradient-to-br from-purple-500 to-pink-500',
-    icon: 'sparkles',
-  },
-  gemini4: {
-    name: 'Guided Story',
-    description: 'Answer age-appropriate questions with 3 choices + "tell me more" to build your story!',
-    gradient: 'bg-gradient-to-br from-emerald-500 to-teal-500',
-    icon: 'book',
-  },
-  friends: {
-    name: 'Fun with my friends',
-    description: 'Pick your adventure companions and create a story together!',
-    gradient: 'bg-gradient-to-br from-amber-500 to-orange-500',
-    icon: 'users',
-  },
-};
+/**
+ * Preferred display order for generators.
+ * Generators not in this list will appear at the end in alphabetical order.
+ */
+const PREFERRED_ORDER = ['chat', 'wizard', 'gemini3', 'gemini4', 'friends'];
 
-// Order to display generators
-const GENERATOR_ORDER = ['chat', 'wizard', 'gemini3', 'gemini4', 'friends'];
-
-function GeneratorIcon({ type, className }: { type: 'wand' | 'chat' | 'sparkles' | 'book' | 'users'; className?: string }) {
-  switch (type) {
-    case 'wand':
-      return <Wand2 className={className} />;
-    case 'chat':
-      return <MessageCircle className={className} />;
-    case 'sparkles':
-      return <Sparkles className={className} />;
-    case 'book':
-      return <BookOpen className={className} />;
-    case 'users':
-      return <Users className={className} />;
-  }
+function GeneratorIcon({ iconName, className }: { iconName?: string; className?: string }) {
+  const IconComponent = iconName ? ICON_MAP[iconName] || DefaultIcon : DefaultIcon;
+  return <IconComponent className={className} />;
 }
 
 export default function StartStoryChoicePage() {
   const { activeChildProfile, activeChildProfileLoading } = useAppContext();
   const firestore = useFirestore();
 
-  const [enabledFlows, setEnabledFlows] = useState<FlowsConfig | null>(null);
-  const [generators, setGenerators] = useState<Map<string, StoryGenerator>>(new Map());
+  const [generators, setGenerators] = useState<StoryGenerator[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch enabled flows and generator data
+  // Fetch generators that are live and enabled for kids
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch flows config
-        const flowsResponse = await fetch('/api/kids-flows');
-        const flowsResult = await flowsResponse.json();
-        if (flowsResult.ok && flowsResult.flows) {
-          setEnabledFlows(flowsResult.flows);
-        } else {
-          // Default to all enabled if API fails
-          setEnabledFlows({ wizard: true, chat: true, gemini3: true, gemini4: true, friends: true });
-        }
+    const fetchGenerators = async () => {
+      if (!firestore) {
+        setLoading(false);
+        return;
+      }
 
-        // Fetch generators from Firestore for custom names
-        if (firestore) {
-          const snapshot = await getDocs(collection(firestore, 'storyGenerators'));
-          const generatorMap = new Map<string, StoryGenerator>();
-          snapshot.forEach((doc) => {
-            generatorMap.set(doc.id, { ...doc.data(), id: doc.id } as StoryGenerator);
-          });
-          setGenerators(generatorMap);
-        }
+      try {
+        // Query for live generators that are enabled for kids
+        const generatorsQuery = query(
+          collection(firestore, 'storyGenerators'),
+          where('status', '==', 'live'),
+          where('enabledForKids', '==', true)
+        );
+        const snapshot = await getDocs(generatorsQuery);
+
+        const generatorList: StoryGenerator[] = [];
+        snapshot.forEach((doc) => {
+          generatorList.push({ ...doc.data(), id: doc.id } as StoryGenerator);
+        });
+
+        // Sort by preferred order, then alphabetically for unlisted generators
+        generatorList.sort((a, b) => {
+          const aIndex = PREFERRED_ORDER.indexOf(a.id);
+          const bIndex = PREFERRED_ORDER.indexOf(b.id);
+
+          // Both in preferred order: sort by order
+          if (aIndex !== -1 && bIndex !== -1) {
+            return aIndex - bIndex;
+          }
+          // Only a in preferred order: a comes first
+          if (aIndex !== -1) return -1;
+          // Only b in preferred order: b comes first
+          if (bIndex !== -1) return 1;
+          // Neither in preferred order: alphabetical by name
+          return a.name.localeCompare(b.name);
+        });
+
+        setGenerators(generatorList);
       } catch (err) {
-        console.error('[story/start] Error fetching data:', err);
-        // Default to all enabled if API fails
-        setEnabledFlows({ wizard: true, chat: true, gemini3: true, gemini4: true, friends: true });
+        console.error('[story/start] Error fetching generators:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    fetchGenerators();
   }, [firestore]);
-
-  // Get generator info (from Firestore or fallback to defaults)
-  const getGeneratorInfo = (id: string) => {
-    const generator = generators.get(id);
-    const defaults = DEFAULT_GENERATOR_INFO[id] || {
-      name: id,
-      description: '',
-      gradient: 'bg-gray-500',
-      icon: 'sparkles' as const
-    };
-
-    return {
-      name: generator?.name || defaults.name,
-      description: generator?.description || defaults.description,
-      gradient: generator?.styling?.gradient || defaults.gradient,
-      icon: defaults.icon, // Icons are fixed based on generator type
-    };
-  };
 
   if (activeChildProfileLoading || loading) {
     return (
@@ -169,16 +130,10 @@ export default function StartStoryChoicePage() {
     );
   }
 
-  // Filter generators based on enabled flows
-  const enabledGenerators = GENERATOR_ORDER.filter((id) => {
-    const flowKey = GENERATOR_TO_FLOW[id];
-    return flowKey && enabledFlows?.[flowKey];
-  });
-
-  // Dynamic grid columns based on number of enabled generators
-  const gridCols = enabledGenerators.length <= 2
+  // Dynamic grid columns based on number of generators
+  const gridCols = generators.length <= 2
     ? 'md:grid-cols-2'
-    : enabledGenerators.length === 3
+    : generators.length === 3
       ? 'md:grid-cols-3'
       : 'md:grid-cols-2 lg:grid-cols-4';
 
@@ -191,27 +146,37 @@ export default function StartStoryChoicePage() {
         </p>
       </div>
       <div className={`grid grid-cols-1 gap-8 ${gridCols}`}>
-        {enabledGenerators.map((id) => {
-          const info = getGeneratorInfo(id);
-          const textColorClass = info.gradient.includes('bg-accent')
+        {generators.map((generator) => {
+          const gradient = generator.styling?.gradient || 'bg-gray-500';
+          const iconName = generator.styling?.icon;
+
+          // Determine text color based on gradient
+          const textColorClass = gradient.includes('bg-accent')
             ? 'text-accent-foreground'
-            : info.gradient.includes('bg-primary')
+            : gradient.includes('bg-primary')
               ? 'text-primary-foreground'
               : 'text-white';
 
           return (
-            <Link key={id} href={`/story/start/${id}`}>
+            <Link key={generator.id} href={`/story/start/${generator.id}`}>
               <div className="flex cursor-pointer flex-col items-center gap-4 rounded-full border-4 border-transparent p-8 text-center transition-all hover:border-primary/50 hover:bg-primary/10">
-                <div className={`flex h-32 w-32 items-center justify-center rounded-full ${info.gradient} ${textColorClass}`}>
-                  <GeneratorIcon type={info.icon} className="h-16 w-16" />
+                <div className={`flex h-32 w-32 items-center justify-center rounded-full ${gradient} ${textColorClass}`}>
+                  <GeneratorIcon iconName={iconName} className="h-16 w-16" />
                 </div>
-                <h2 className="text-2xl font-semibold">{info.name}</h2>
-                <p className="max-w-xs text-muted-foreground">{info.description}</p>
+                <h2 className="text-2xl font-semibold">{generator.name}</h2>
+                <p className="max-w-xs text-muted-foreground">{generator.description}</p>
               </div>
             </Link>
           );
         })}
       </div>
+
+      {generators.length === 0 && (
+        <div className="text-center text-muted-foreground">
+          <p>No story generators are currently available.</p>
+          <p className="text-sm mt-2">Please check with your administrator.</p>
+        </div>
+      )}
     </div>
   );
 }

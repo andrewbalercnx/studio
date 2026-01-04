@@ -250,7 +250,19 @@ async function loadGeneratorConfig(
   return null;
 }
 
-function formatCharacterForPrompt(char: FriendsCharacterOption): string {
+/**
+ * Format character for display in user-facing scenarios/synopses.
+ * Uses display name only (no placeholders) since these are selection options.
+ */
+function formatCharacterForDisplay(char: FriendsCharacterOption): string {
+  return `- ${char.displayName}: ${char.type}`;
+}
+
+/**
+ * Format character for story generation prompt.
+ * Uses $$id$$ placeholders so the final story has resolvable placeholders.
+ */
+function formatCharacterForStory(char: FriendsCharacterOption): string {
   return `- $$${char.id}$$ (${char.displayName}): ${char.type}`;
 }
 
@@ -447,7 +459,8 @@ async function handleScenarioGeneration(
   const childAge = getChildAgeYears(child);
   const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
 
-  const selectedCharsText = allCharacters.map(formatCharacterForPrompt).join('\n');
+  // Use display names (not placeholders) for scenario generation since these are user-facing selections
+  const selectedCharsText = allCharacters.map(formatCharacterForDisplay).join('\n');
 
   const promptTemplate = generator?.prompts?.scenarioGeneration || DEFAULT_SCENARIO_GENERATION_PROMPT;
   const basePrompt = fillPromptTemplate(promptTemplate, {
@@ -564,7 +577,8 @@ async function handleSynopsisGeneration(
   const childAge = getChildAgeYears(child);
   const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
 
-  const selectedCharsText = allCharacters.map(formatCharacterForPrompt).join('\n');
+  // Use display names (not placeholders) for synopsis generation since these are user-facing selections
+  const selectedCharsText = allCharacters.map(formatCharacterForDisplay).join('\n');
   const scenarioText = `${selectedScenario.title}: ${selectedScenario.description}`;
 
   let promptTemplate = generator?.prompts?.synopsisGeneration || DEFAULT_SYNOPSIS_GENERATION_PROMPT;
@@ -689,9 +703,8 @@ async function handleStoryGeneration(
   const childAge = getChildAgeYears(child);
   const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
 
-  const selectedCharsText = allCharacters
-    .map((c) => `- $$${c.id}$$ (${c.displayName}): ${c.type}`)
-    .join('\n');
+  // Use placeholder format for story generation - these get resolved after the story is generated
+  const selectedCharsText = allCharacters.map(formatCharacterForStory).join('\n');
   const synopsisText = `${selectedSynopsis.title}: ${selectedSynopsis.summary}`;
 
   const promptTemplate = generator?.prompts?.storyGeneration || DEFAULT_STORY_GENERATION_PROMPT;

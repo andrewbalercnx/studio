@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-04 (added "Fun with my friends" story generator types and session fields)
+> **Last Updated**: 2026-01-04 (added enabledForKids to storyGenerators, documented dynamic story routes)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -430,7 +430,7 @@ Story format types (Adventure, Mystery, etc.).
 
 ### `storyGenerators`
 
-Story generator configurations. Defines capabilities and API endpoints for each story generation mode (wizard, gemini3, gemini4, beat). The `StoryBrowser` component uses these documents to adapt its UI to each generator's capabilities.
+Story generator configurations. Defines capabilities and API endpoints for each story generation mode (wizard, gemini3, gemini4, beat, friends). The `StoryBrowser` component uses these documents to adapt its UI to each generator's capabilities. The `/story/start` page queries this collection to display available generators (filtered by `status='live'` and `enabledForKids=true`).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -438,6 +438,7 @@ Story generator configurations. Defines capabilities and API endpoints for each 
 | `name` | string | Yes | Display name (e.g., 'Story Wizard') |
 | `description` | string | Yes | Description for admin UI |
 | `status` | 'live' \| 'draft' \| 'archived' | Yes | Generator status |
+| `enabledForKids` | boolean | No | Show this generator in kids story creation flow (default: true) |
 | `capabilities.minChoices` | number | Yes | Minimum choices per question |
 | `capabilities.maxChoices` | number | Yes | Maximum choices per question |
 | `capabilities.supportsMoreOptions` | boolean | Yes | Can request additional choices |

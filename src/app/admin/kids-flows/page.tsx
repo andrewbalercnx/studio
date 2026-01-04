@@ -10,6 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase/auth/use-user';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertTriangle } from 'lucide-react';
 
 export default function AdminKidsFlowsPage() {
   const { isAuthenticated, isAdmin, loading: authLoading, error: authError } = useAdminStatus();
@@ -136,6 +138,17 @@ export default function AdminKidsFlowsPage() {
 
     return (
       <div className="space-y-6">
+        <Alert variant="destructive" className="border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Deprecated Page</AlertTitle>
+          <AlertDescription>
+            This page is being replaced. Please use the{' '}
+            <a href="/admin/storyGenerators" className="underline font-medium">Story Generators</a>{' '}
+            admin page instead. Each generator now has an &quot;Enabled for Kids&quot; toggle in its General tab.
+            This page will be removed in a future update.
+          </AlertDescription>
+        </Alert>
+
         <div className="flex items-center justify-between p-4 border rounded-lg">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">

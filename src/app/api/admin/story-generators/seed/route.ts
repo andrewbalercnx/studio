@@ -221,6 +221,7 @@ const defaultGenerators: Omit<StoryGenerator, 'createdAt' | 'updatedAt'>[] = [
     name: 'Story Wizard',
     description: 'A 4-question wizard that gathers story preferences before generating a complete story.',
     status: 'live',
+    enabledForKids: true,
     capabilities: {
       minChoices: 2,
       maxChoices: 4,
@@ -243,6 +244,7 @@ const defaultGenerators: Omit<StoryGenerator, 'createdAt' | 'updatedAt'>[] = [
     name: 'Gemini Free',
     description: 'Open-ended creative story generation with full AI freedom.',
     status: 'live',
+    enabledForKids: true,
     capabilities: {
       minChoices: 2,
       maxChoices: 4,
@@ -265,6 +267,7 @@ const defaultGenerators: Omit<StoryGenerator, 'createdAt' | 'updatedAt'>[] = [
     name: 'Guided Story',
     description: 'AI-guided story creation with structured phases (opening, setting, characters, conflict, resolution).',
     status: 'live',
+    enabledForKids: true,
     capabilities: {
       minChoices: 2,
       maxChoices: 4,

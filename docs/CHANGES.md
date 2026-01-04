@@ -18,6 +18,36 @@
 
 ### 2026-01-04
 
+#### `acf34ff` - Data-driven story generator routing
+
+**Type**: Refactor
+
+**Summary**: Replaced hardcoded generator routes with a data-driven approach. The `/story/start` page now queries the `storyGenerators` collection for available generators, and new dynamic routes handle any generator without requiring code changes. Adding a new generator now only requires: (1) adding to the storyGenerators collection (via seed or admin), (2) creating the AI flow and API route.
+
+**Key Changes**:
+- `/story/start` page now queries Firestore for generators with `status='live'` AND `enabledForKids=true`
+- Created dynamic `/story/start/[generatorId]` route to start any generator session
+- Created dynamic `/story/[generatorId]/[sessionId]` route to run any generator
+- Added `enabledForKids` field to all generator seed configs (wizard, gemini3, gemini4, friends)
+- Added deprecation notice to `/admin/kids-flows` page (replaced by generator-level enabledForKids toggle)
+- "Enabled for Kids" toggle already exists in Story Generators admin page (General tab)
+- Fixed: Friends flow scenario/synopsis options now show resolved character names instead of `$$id$$` placeholders
+
+**Files Created**:
+- `src/app/story/start/[generatorId]/page.tsx` - Dynamic start route for any generator
+- `src/app/story/[generatorId]/[sessionId]/page.tsx` - Dynamic story session route
+
+**Files Modified**:
+- `src/app/story/start/page.tsx` - Refactored to query storyGenerators collection
+- `src/app/api/admin/story-generators/seed/route.ts` - Added enabledForKids to wizard, gemini3, gemini4
+- `src/app/admin/kids-flows/page.tsx` - Added deprecation warning
+- `src/ai/flows/friends-flow.ts` - Use display names for scenario/synopsis prompts, placeholders only for final story
+
+**Documentation Updated**:
+- `docs/SCHEMA.md` - Added enabledForKids field to storyGenerators, updated description
+
+---
+
 #### `55aaebb` - Additional empty entityId filtering
 
 **Type**: Bug Fix
