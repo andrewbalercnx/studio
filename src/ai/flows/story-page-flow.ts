@@ -393,11 +393,13 @@ export const storyPageFlow = ai.defineFlow(
     outputSchema: StoryPageFlowOutput,
   },
   async ({ storyId, storyOutputTypeId: inputStoryOutputTypeId }) => {
-    let diagnostics: StoryPageFlowDiagnostics = { stage: 'init', details: { storyId } };
+    // Include git commit SHA in all diagnostics for version tracking
+    const gitCommitSha = process.env.NEXT_PUBLIC_GIT_COMMIT_SHA || 'unknown';
+    let diagnostics: StoryPageFlowDiagnostics = { stage: 'init', details: { storyId, gitCommitSha } };
 
     try {
       const firestore = await getServerFirestore();
-      diagnostics = { stage: 'loading', details: { storyId } };
+      diagnostics = { stage: 'loading', details: { storyId, gitCommitSha } };
 
       const storyRef = firestore.collection('stories').doc(storyId);
       const storySnap = await storyRef.get();
@@ -533,7 +535,7 @@ export const storyPageFlow = ai.defineFlow(
       diagnostics = {
         stage: 'chunking',
         details: {
-          ...diagnostics.details,
+          gitCommitSha,
           storyTextLength: story.storyText.length,
           hasChildProfile: !!child,
           hasSession: !!session,
@@ -769,6 +771,7 @@ export const storyPageFlow = ai.defineFlow(
       diagnostics = {
         stage: 'error',
         details: {
+          gitCommitSha,
           message: error?.message ?? String(error),
         },
       };

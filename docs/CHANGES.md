@@ -18,6 +18,21 @@
 
 ### 2026-01-05
 
+#### `8ce294e` - Add git commit SHA to page generation diagnostics
+
+**Type**: Enhancement
+
+**Summary**: Added git commit SHA to all diagnostic outputs in story-page-flow, so when viewing diagnostics you can see which version of the code generated them.
+
+**Changes**:
+- Added `gitCommitSha` field to all diagnostic stages (init, loading, chunking, building_pages, done, error)
+- Uses `NEXT_PUBLIC_GIT_COMMIT_SHA` environment variable set at build time
+
+**Files Modified**:
+- `src/ai/flows/story-page-flow.ts` - Added gitCommitSha to all diagnostics
+
+---
+
 #### `47e4714` - Fix conflicting prompt instructions causing placeholder leakage
 
 **Type**: Bug Fix
