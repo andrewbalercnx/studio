@@ -151,7 +151,14 @@ export async function POST(request: Request) {
       .collection('storybooks')
       .doc(storybookId);
 
-    const storybookSnap = await storybookRef.get();
+    let storybookSnap;
+    try {
+      storybookSnap = await storybookRef.get();
+    } catch (e: any) {
+      const errMsg = `Failed to get storybook at stories/${storyId}/storybooks/${storybookId}: ${e?.message || e}`;
+      logger.error(errMsg, e);
+      return NextResponse.json({ ok: false, errorMessage: errMsg, requestId }, { status: 500 });
+    }
     if (!storybookSnap.exists) {
       return NextResponse.json(
         { ok: false, errorMessage: `Storybook not found at stories/${storyId}/storybooks/${storybookId}` },
@@ -181,16 +188,32 @@ export async function POST(request: Request) {
     let printLayout: PrintLayout | null = null;
     const rawPrintLayoutId = storybookData?.printLayoutId;
     const printLayoutId = isValidDocumentId(rawPrintLayoutId) ? rawPrintLayoutId : DEFAULT_PRINT_LAYOUT_ID;
-    const layoutDoc = await firestore.collection('printLayouts').doc(printLayoutId).get();
-    if (layoutDoc.exists) {
+    let layoutDoc;
+    try {
+      layoutDoc = await firestore.collection('printLayouts').doc(printLayoutId).get();
+    } catch (e: any) {
+      const errMsg = `Failed to get print layout "${printLayoutId}": ${e?.message || e}`;
+      logger.error(errMsg, e);
+      allLogs.push(`[error] ${errMsg}`);
+      // Don't fail - just continue without layout
+      layoutDoc = null;
+    }
+    if (layoutDoc?.exists) {
       printLayout = { id: layoutDoc.id, ...layoutDoc.data() } as PrintLayout;
       allLogs.push(`[layout] Loaded print layout: ${printLayoutId}${!storybookData?.printLayoutId ? ' (default)' : ''}`);
-    } else {
+    } else if (layoutDoc) {
       allLogs.push(`[layout] Warning: Print layout ${printLayoutId} not found, dimensions may be missing`);
     }
 
     // Load pages
-    const pages = await loadPages(firestore, storyId, storybookId, pageId);
+    let pages: PageWithId[];
+    try {
+      pages = await loadPages(firestore, storyId, storybookId, pageId);
+    } catch (e: any) {
+      const errMsg = `Failed to load pages for storybook ${storybookId}: ${e?.message || e}`;
+      logger.error(errMsg, e);
+      return NextResponse.json({ ok: false, errorMessage: errMsg, requestId }, { status: 500 });
+    }
     if (pages.length === 0) {
       return NextResponse.json(
         { ok: false, errorMessage: 'No pages available for this storybook.' },

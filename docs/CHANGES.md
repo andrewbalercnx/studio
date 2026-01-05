@@ -18,6 +18,22 @@
 
 ### 2026-01-05
 
+#### `0d2cc6f` - Add detailed error wrapping to images API route
+
+**Type**: Debugging
+
+**Summary**: Added try-catch wrappers around Firestore operations in the images API route to provide clearer error messages identifying exactly where "documentPath must be non-empty" errors occur.
+
+**Changes**:
+- Wrap storybook fetch in try-catch with descriptive error
+- Wrap print layout fetch in try-catch (non-fatal)
+- Wrap loadPages in try-catch with descriptive error
+
+**Files Modified**:
+- `src/app/api/storybookV2/images/route.ts`
+
+---
+
 #### `3c61194` - Add upfront validation for document IDs in image flow
 
 **Type**: Enhancement / Debugging
