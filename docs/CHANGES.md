@@ -18,6 +18,24 @@
 
 ### 2026-01-05
 
+#### `5ab5e8e` - Fix unresolved placeholders in Friends flow scenarios/synopses
+
+**Type**: Bug Fix
+
+**Summary**: Fixed Friends flow showing raw `$$id$$` placeholders in scenario and synopsis options instead of resolved character names. Added placeholder resolution to both scenario and synopsis generation outputs.
+
+**Root Cause**: The AI prompts instruct it to use plain names, but the AI sometimes still outputs `$$id$$` placeholder format. These placeholders weren't being resolved before returning to the client, causing the UI to display raw placeholders like `$$ezra-11t82b$$`.
+
+**Changes**:
+1. **handleScenarioGeneration**: Build entity map from loaded characters and resolve placeholders in scenario titles and descriptions before returning
+2. **handleSynopsisGeneration**: Build entity map from loaded characters and resolve placeholders in synopsis titles and summaries before returning
+3. Session now stores resolved text, ensuring consistent display even on page refresh
+
+**Files Modified**:
+- `src/ai/flows/friends-flow.ts` - Added placeholder resolution for scenarios and synopses
+
+---
+
 #### `72e1630` - Add story mode badges and fix AI Voice consistency
 
 **Type**: Enhancement
@@ -1986,7 +2004,7 @@ Admin Print Order Page:
 
 ---
 
-#### `pending` - Auto-start default help wizard for new users
+#### `5ab5e8e` - Auto-start default help wizard for new users
 
 **Type**: Feature
 
@@ -2051,7 +2069,7 @@ Admin Print Order Page:
 
 ---
 
-#### `pending` - Add writer and admin help wizard guides
+#### `5ab5e8e` - Add writer and admin help wizard guides
 
 **Type**: Feature
 
@@ -2462,7 +2480,7 @@ Both wizards use the `help-*` sample data for demonstrations and include wizard 
 
 ---
 
-#### `pending` - Add background music generation for story creation
+#### `5ab5e8e` - Add background music generation for story creation
 
 **Type**: Feature
 
@@ -2491,7 +2509,7 @@ Both wizards use the `help-*` sample data for demonstrations and include wizard 
 
 ---
 
-#### `pending` - Unify TTS preference to use autoReadAloud
+#### `5ab5e8e` - Unify TTS preference to use autoReadAloud
 
 **Type**: Enhancement
 
@@ -2567,7 +2585,7 @@ After deployment, run: `firebase apphosting:secrets:grantaccess`
 
 ### 2025-12-29
 
-#### `pending` - Use name pronunciation for TTS
+#### `5ab5e8e` - Use name pronunciation for TTS
 
 **Type**: Enhancement
 
@@ -2590,7 +2608,7 @@ After deployment, run: `firebase apphosting:secrets:grantaccess`
 
 ---
 
-#### `pending` - Add images to storyOutputTypes and two-step book creation flow
+#### `5ab5e8e` - Add images to storyOutputTypes and two-step book creation flow
 
 **Type**: Feature
 
@@ -2624,7 +2642,7 @@ After deployment, run: `firebase apphosting:secrets:grantaccess`
 
 ---
 
-#### `pending` - Use storyOutputType's printLayoutId for image dimensions
+#### `5ab5e8e` - Use storyOutputType's printLayoutId for image dimensions
 
 **Type**: Feature Change
 

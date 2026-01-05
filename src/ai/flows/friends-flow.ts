@@ -555,10 +555,25 @@ async function handleScenarioGeneration(
       throw new Error('Failed to parse AI response');
     }
 
-    // Update session
+    // Build entity map for placeholder resolution (in case AI still outputs placeholders despite instructions)
+    const entityMap: EntityMap = new Map();
+    for (const char of allCharacters) {
+      entityMap.set(char.id, { displayName: char.displayName, document: char as unknown as Character });
+    }
+
+    // Resolve any placeholders in scenario titles and descriptions
+    const resolvedScenarios: FriendsScenario[] = await Promise.all(
+      parsed.scenarios.map(async (scenario) => ({
+        ...scenario,
+        title: await replacePlaceholdersInText(scenario.title, entityMap),
+        description: await replacePlaceholdersInText(scenario.description, entityMap),
+      }))
+    );
+
+    // Update session with resolved scenarios
     await firestore.collection('storySessions').doc(session.id).update({
       friendsPhase: 'scenario_selection',
-      friendsScenarios: parsed.scenarios,
+      friendsScenarios: resolvedScenarios,
       updatedAt: FieldValue.serverTimestamp(),
     });
 
@@ -566,7 +581,7 @@ async function handleScenarioGeneration(
       state: 'scenario_selection',
       phase: 'scenario_selection',
       question: 'What kind of adventure should we have?',
-      scenarios: parsed.scenarios,
+      scenarios: resolvedScenarios,
       ok: true,
     };
   } catch (e: any) {
@@ -685,10 +700,25 @@ async function handleSynopsisGeneration(
       throw new Error('Failed to parse AI response');
     }
 
+    // Build entity map for placeholder resolution (in case AI still outputs placeholders despite instructions)
+    const entityMap: EntityMap = new Map();
+    for (const char of allCharacters) {
+      entityMap.set(char.id, { displayName: char.displayName, document: char as unknown as Character });
+    }
+
+    // Resolve any placeholders in synopsis titles and summaries
+    const resolvedSynopses: FriendsSynopsis[] = await Promise.all(
+      parsed.synopses.map(async (synopsis) => ({
+        ...synopsis,
+        title: await replacePlaceholdersInText(synopsis.title, entityMap),
+        summary: await replacePlaceholdersInText(synopsis.summary, entityMap),
+      }))
+    );
+
     // Update session - replace synopses (not append)
     await firestore.collection('storySessions').doc(session.id).update({
       friendsPhase: 'synopsis_selection',
-      friendsSynopses: parsed.synopses,
+      friendsSynopses: resolvedSynopses,
       friendsSelectedSynopsisId: null, // Clear previous selection
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -697,7 +727,7 @@ async function handleSynopsisGeneration(
       state: 'synopsis_selection',
       phase: 'synopsis_selection',
       question: 'Which story sounds the most fun?',
-      synopses: parsed.synopses,
+      synopses: resolvedSynopses,
       ok: true,
     };
   } catch (e: any) {
