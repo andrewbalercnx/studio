@@ -8,6 +8,14 @@ import { getFirestore, FieldValue, Firestore } from 'firebase-admin/firestore';
 import { mapPageKindToLayoutType, calculateImageDimensionsForPageType, getAspectRatioForPageType } from '@/lib/print-layout-utils';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
 
+/**
+ * Validate that a value is a valid Firestore document ID.
+ * Returns true if the value is a non-empty string.
+ */
+function isValidDocumentId(id: unknown): id is string {
+  return typeof id === 'string' && id.trim().length > 0;
+}
+
 // Allow up to 5 minutes for image generation (can take a while with many pages)
 export const maxDuration = 300;
 
@@ -169,8 +177,10 @@ export async function POST(request: Request) {
 
     // Load the print layout for page-type-aware image dimensions
     // Fall back to DEFAULT_PRINT_LAYOUT_ID if storybook doesn't have one set
+    // Use isValidDocumentId to ensure we have a valid string (not null, undefined, or empty)
     let printLayout: PrintLayout | null = null;
-    const printLayoutId = storybookData?.printLayoutId || DEFAULT_PRINT_LAYOUT_ID;
+    const rawPrintLayoutId = storybookData?.printLayoutId;
+    const printLayoutId = isValidDocumentId(rawPrintLayoutId) ? rawPrintLayoutId : DEFAULT_PRINT_LAYOUT_ID;
     const layoutDoc = await firestore.collection('printLayouts').doc(printLayoutId).get();
     if (layoutDoc.exists) {
       printLayout = { id: layoutDoc.id, ...layoutDoc.data() } as PrintLayout;
@@ -281,7 +291,7 @@ export async function POST(request: Request) {
     const prepPromises: Promise<void>[] = [];
     for (const job of pageJobs) {
       // Validate page ID to prevent "documentPath must be non-empty" errors
-      if (!job.page.id || typeof job.page.id !== 'string' || job.page.id.trim().length === 0) {
+      if (!isValidDocumentId(job.page.id)) {
         allLogs.push(`[error] Page has invalid/empty ID: ${JSON.stringify({ id: job.page.id, pageNumber: job.page.pageNumber, kind: job.page.kind })}`);
         console.error(`[images/route] Page has invalid ID:`, JSON.stringify(job.page));
         continue; // Skip this page
@@ -372,7 +382,6 @@ export async function POST(request: Request) {
 
     // Collect results and logs, detect rate limit errors
     let hasRateLimitError = false;
-    let rateLimitErrorMessage = '';
 
     for (const { pageId, flowResult } of imageResults) {
       if (flowResult.logs) {
@@ -383,7 +392,6 @@ export async function POST(request: Request) {
         // Check if this is a rate limit error
         if (flowResult.errorMessage && isRateLimitError(flowResult.errorMessage)) {
           hasRateLimitError = true;
-          rateLimitErrorMessage = flowResult.errorMessage;
         }
       } else {
         allLogs.push(`[ready] ${pageId} imageUrl=${flowResult.imageUrl?.substring(0, 100)}...`);

@@ -16,6 +16,41 @@
 
 ## Changes
 
+### 2026-01-05
+
+#### `b4d0abc` - Fix image generation failing with invalid document path
+
+**Type**: Bug Fix
+
+**Summary**: Fixed image generation failing with "documentPath must be non-empty string" error. The root cause was the Fun with Friends flow saving resolved story text (with actual names) instead of unresolved text (with $$id$$ placeholders), which prevented entity extraction during page generation.
+
+**Root Cause Analysis**:
+The diagnostics showed `actorCount: 5` but `resolvedEntities: 0`. This happened because:
+1. The AI generated story text with `$$childId$$` placeholders
+2. The friends-flow resolved these to actual names before saving
+3. When page generation ran, it found no `$$id$$` patterns to extract entityIds from
+4. Image generation then had no way to identify which actors were on each page
+
+**Changes**:
+1. **Fixed friends-flow.ts**: Now saves unresolved storyText (with $$id$$ placeholders) so page generation can extract entityIds per page
+
+2. **Added isValidDocumentId helper**: Added type-safe validation helper to both:
+   - `src/app/api/storybookV2/images/route.ts`
+   - `src/ai/flows/story-image-flow.ts`
+
+3. **Hardened Firestore document ID validation**:
+   - printLayoutId lookup now properly validates before use
+   - childId lookup uses the new helper
+   - imageStyleId lookup uses the new helper
+   - Page ID validation uses the new helper for consistency
+
+**Files Modified**:
+- `src/ai/flows/friends-flow.ts` - Save unresolved storyText
+- `src/app/api/storybookV2/images/route.ts` - Added isValidDocumentId, improved validation
+- `src/ai/flows/story-image-flow.ts` - Added isValidDocumentId, improved validation
+
+---
+
 ### 2026-01-04
 
 #### `97a28c9` - Configurable AI model/temperature and inventive scenario prompts

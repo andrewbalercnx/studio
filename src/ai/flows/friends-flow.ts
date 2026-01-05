@@ -814,15 +814,18 @@ async function handleStoryGeneration(
       entityMap.set(char.id, { displayName: char.displayName, document: char as unknown as Character });
     }
 
+    // Resolve placeholders for display purposes
     const resolvedStoryText = await replacePlaceholdersInText(parsed.storyText, entityMap);
 
     // Create the Story document
+    // IMPORTANT: Save the UNRESOLVED storyText (with $$id$$ placeholders) so that
+    // image generation can use entityIds for each page. The resolved text is for display only.
     const storyRef = firestore.collection('stories').doc(session.id);
     const storyPayload: Story = {
       storySessionId: session.id,
       childId: session.childId,
       parentUid: child.ownerParentUid,
-      storyText: resolvedStoryText,
+      storyText: parsed.storyText, // Unresolved - keeps $$id$$ placeholders for page generation
       status: 'text_ready',
       metadata: {
         title: parsed.title,

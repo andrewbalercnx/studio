@@ -19,6 +19,14 @@ import {
   type ActorDetailsWithImageData,
 } from '@/lib/story-context-builder';
 
+/**
+ * Validate that a value is a valid Firestore document ID.
+ * Returns true if the value is a non-empty string.
+ */
+function isValidDocumentId(id: unknown): id is string {
+  return typeof id === 'string' && id.trim().length > 0;
+}
+
 const DEFAULT_IMAGE_MODEL = process.env.STORYBOOK_IMAGE_MODEL ?? 'googleai/gemini-2.5-flash-image-preview';
 const MOCK_IMAGES = process.env.MOCK_STORYBOOK_IMAGES === 'true';
 
@@ -1065,7 +1073,7 @@ export const storyImageFlow = ai.defineFlow(
       logs.push(`[step] Story loaded. childId=${storyData.childId || 'none'}`);
 
       let childProfile: ChildProfile | null = null;
-      if (storyData.childId && storyData.childId.trim().length > 0) {
+      if (isValidDocumentId(storyData.childId)) {
         logs.push(`[step] Loading child profile for ${storyData.childId}...`);
         const childSnap = await firestore.collection('children').doc(storyData.childId).get();
         if (childSnap.exists) {
@@ -1164,7 +1172,7 @@ export const storyImageFlow = ai.defineFlow(
 
         // Load example images from imageStyles collection if imageStyleId is provided
         let styleExampleImages: string[] = [];
-        if (imageStyleId) {
+        if (isValidDocumentId(imageStyleId)) {
           try {
             const styleSnap = await firestore.collection('imageStyles').doc(imageStyleId).get();
             if (styleSnap.exists) {
