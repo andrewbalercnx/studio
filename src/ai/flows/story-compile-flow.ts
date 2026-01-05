@@ -173,6 +173,7 @@ export const storyCompileFlow = ai.defineFlow(
                 const storyPayload: Partial<Story> = {
                     synopsis,
                     actors,
+                    storyMode: storyMode || 'wizard', // Copy from session
                     metadata: {
                         ...existingStory.metadata,
                         paragraphs: paragraphCount,
@@ -321,6 +322,7 @@ export const storyCompileFlow = ai.defineFlow(
                     childId,
                     parentUid,
                     storyText: resolvedStoryText,
+                    storyMode, // Copy from session (gemini3 or gemini4)
                     synopsis, // Generated for Gemini mode
                     metadata: {
                         paragraphs: paragraphCount,
@@ -441,6 +443,7 @@ export const storyCompileFlow = ai.defineFlow(
                 childId,
                 parentUid,
                 storyText: resolvedStoryText,
+                storyMode: storyMode || 'chat', // Copy from session (default to chat for standard flow)
                 synopsis, // Generated alongside story text
                 metadata: {
                     ...(metadata || {}),

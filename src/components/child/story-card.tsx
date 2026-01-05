@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Users,
   BookOpen,
+  Sparkles,
 } from 'lucide-react';
 import { ChildAvatarAnimation } from '@/components/child/child-avatar-animation';
 
@@ -58,9 +59,23 @@ export function StoryCard({
     : new Date();
 
   const audioStatus = story.audioGeneration?.status;
-  const hasAiAudio = audioStatus === 'ready' && story.audioUrl;
+  // Show AI Voice badge if we have audio URL OR status is ready (for consistency)
+  const hasAiAudio = story.audioUrl || audioStatus === 'ready';
   const audioFailed = audioStatus === 'error';
   const noAudio = !audioStatus || audioStatus === 'idle';
+
+  // Get display label for the story mode/generator
+  const getStoryModeLabel = (mode?: string): string | null => {
+    switch (mode) {
+      case 'wizard': return 'Quick Story';
+      case 'gemini3': return 'Adventure';
+      case 'gemini4': return 'Deep Story';
+      case 'friends': return 'Friends';
+      case 'chat': return 'Classic';
+      default: return null;
+    }
+  };
+  const storyModeLabel = getStoryModeLabel(story.storyMode);
 
   // Title generation status
   const titleStatus = story.titleGeneration?.status;
@@ -171,6 +186,12 @@ export function StoryCard({
         )}
         <CardDescription className="flex items-center gap-2 flex-wrap">
           <span>Created {formatDistanceToNow(createdAt, { addSuffix: true })}</span>
+          {storyModeLabel && (
+            <span className="inline-flex items-center text-xs text-purple-600 dark:text-purple-400">
+              <Sparkles className="h-3 w-3 mr-1" />
+              {storyModeLabel}
+            </span>
+          )}
           {hasAiAudio && (
             <span className="inline-flex items-center text-xs text-green-600 dark:text-green-400">
               <Mic className="h-3 w-3 mr-1" />

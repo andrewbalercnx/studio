@@ -18,6 +18,36 @@
 
 ### 2026-01-05
 
+#### `72e1630` - Add story mode badges and fix AI Voice consistency
+
+**Type**: Enhancement
+
+**Summary**: Added visual badges to story cards showing which AI flow generated each story, and fixed inconsistent "AI Voice" badge display.
+
+**Changes**:
+1. **Added storyMode field to Story type**: Stories now store which AI flow generated them (wizard, gemini3, gemini4, chat, friends) for display purposes
+
+2. **Updated story-compile-flow**: Copies storyMode from StorySession to Story document at compile time
+
+3. **Fixed AI Voice badge**: Now shows consistently when audioUrl exists OR status is ready (was requiring both conditions)
+
+4. **Added AI flow badge**: Story cards now display which generator created the story with labels:
+   - wizard → "Quick Story"
+   - gemini3 → "Adventure"
+   - gemini4 → "Deep Story"
+   - friends → "Friends"
+   - chat → "Classic"
+
+**Files Modified**:
+- `src/lib/types.ts` - Added storyMode field to Story type
+- `src/ai/flows/story-compile-flow.ts` - Copy storyMode from session to story
+- `src/components/child/story-card.tsx` - Fixed audio badge, added flow badge
+- `docs/SCHEMA.md` - Documented new storyMode field
+
+**Note**: Existing stories won't have the storyMode field, so the badge will only appear on newly created stories.
+
+---
+
 #### `b4d0abc` - Fix image generation failing with invalid document path
 
 **Type**: Bug Fix

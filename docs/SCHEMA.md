@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-04 (added AI model/temperature configuration to storyGenerators)
+> **Last Updated**: 2026-01-05 (added storyMode field to stories collection)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -156,6 +156,7 @@ Compiled story content.
 | `childId` | string | Yes | Child's document ID |
 | `parentUid` | string | Yes | Parent's Firebase UID |
 | `storyText` | string | Yes | Full story text |
+| `storyMode` | 'gemini3' \| 'gemini4' \| 'wizard' \| 'chat' \| 'friends' | No | AI flow that generated the story |
 | `metadata` | object | No | Title, vibe, paragraphs, characterIds, etc. |
 | `status` | 'text_ready' \| 'images_pending' | No | Story status |
 | `titleGeneration` | object | No | Title generation status |

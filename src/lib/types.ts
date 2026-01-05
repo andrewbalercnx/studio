@@ -291,6 +291,8 @@ export type Story = {
   childId: string;
   parentUid: string;
   storyText: string;
+  // Which AI flow/generator created this story (copied from session at compile time)
+  storyMode?: 'gemini3' | 'gemini4' | 'wizard' | 'chat' | 'friends';
   metadata?: {
     title?: string;
     vibe?: string;
