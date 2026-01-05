@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-04
+> **Last Updated**: 2026-01-05
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -1227,6 +1227,102 @@ Generate text-to-speech audio.
   "audioUrl": "https://..."
 }
 ```
+
+---
+
+### GET `/api/voices/clone`
+
+List all cloned voices for the authenticated parent.
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "voices": [
+    {
+      "id": "voice-id",
+      "parentUid": "user-uid",
+      "name": "Mum",
+      "elevenLabsVoiceId": "voice-id",
+      "sampleAudioUrl": "https://...",
+      "createdAt": "2025-01-05T12:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### POST `/api/voices/clone`
+
+Create a new cloned voice from uploaded audio using ElevenLabs Instant Voice Cloning.
+
+**Request Body**: `multipart/form-data`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Display name for the voice (e.g., "Mum", "Dad") |
+| `audio` | File | Yes | Audio recording (max 10MB, recommended: 1-2 minutes) |
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "voice": {
+    "id": "voice-id",
+    "parentUid": "user-uid",
+    "name": "Mum",
+    "elevenLabsVoiceId": "voice-id",
+    "sampleAudioUrl": "https://...",
+    "createdAt": "2025-01-05T12:00:00Z"
+  }
+}
+```
+
+**Error Responses**:
+- `400` - Missing name or audio file, or file too large
+- `429` - Voice cloning limit reached
+- `503` - Voice service not configured (missing API key)
+- `500` - Voice creation failed
+
+**Notes**:
+- Audio sample is stored in Firebase Storage at `users/{uid}/voice-samples/{voiceId}.webm`
+- Voice metadata is stored in Firestore at `users/{uid}/voices/{voiceId}`
+- Background noise removal is enabled by default
+
+---
+
+### DELETE `/api/voices/clone`
+
+Delete a cloned voice.
+
+**Request Body**:
+```json
+{
+  "voiceId": "voice-id"
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "childrenUpdated": 2
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `childrenUpdated` | number | Number of children whose voice preference was reset to default |
+
+**Error Responses**:
+- `400` - Missing voiceId
+- `404` - Voice not found
+- `503` - Voice service not configured
+
+**Notes**:
+- Deletes voice from ElevenLabs, Firebase Storage, and Firestore
+- Children using the deleted voice are automatically switched to the default voice
 
 ---
 

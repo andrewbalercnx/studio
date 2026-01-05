@@ -18,30 +18,33 @@
 
 ### 2026-01-05
 
-#### `pending` - Add configurable voice recording script for family voice cloning
+#### `6958b56` - Add voice cloning API and configurable recording script
 
 **Type**: Feature
 
-**Summary**: Parents creating a family voice clone now see a script to read aloud. The script is designed to capture varied speech patterns (narrative, conversational, descriptive tones) for better voice clone quality. Admins can customize the script via the admin dashboard.
+**Summary**: Implemented the missing `/api/voices/clone` API for creating family voice clones with ElevenLabs Instant Voice Cloning. Parents can now record their voice and create a custom narrator voice for their children's stories. Also added a configurable recording script that admins can customize.
 
 **Changes**:
-- Added `VoiceConfig` type with `voiceRecordingText` field
-- Created API route `/api/admin/system-config/voice` for GET/PUT
-- Created admin page `/admin/voice-config` with script editor
-- Updated VoiceSelector component to fetch and display the script
-- Script shows in a scrollable area with "Show Full Script" toggle
-- Default script includes varied tones: neutral, inquisitive, narrative, descriptive, conversational
+- Created `/api/voices/clone` API route with GET (list), POST (create), DELETE operations
+- Uses ElevenLabs IVC (Instant Voice Cloning) API to create voice clones
+- Audio samples stored in Firebase Storage at `users/{uid}/voice-samples/`
+- Voice metadata stored in Firestore at `users/{uid}/voices/{voiceId}`
+- Automatic cleanup: deleting a voice removes it from ElevenLabs, Storage, and Firestore
+- Children using a deleted voice are automatically switched to the default voice
+- Added configurable voice recording script via `/admin/voice-config`
+- Recording script displayed in a proper scrollable pane (fixed height with ScrollArea)
 
 **Files Created**:
+- `src/app/api/voices/clone/route.ts` - Voice cloning API (GET/POST/DELETE)
 - `src/app/api/admin/system-config/voice/route.ts` - API for voice config
 - `src/app/admin/voice-config/page.tsx` - Admin UI for editing script
 
 **Files Modified**:
 - `src/lib/types.ts` - Added VoiceConfig type and default recording text
-- `src/components/parent/VoiceSelector.tsx` - Display recording script
+- `src/components/parent/VoiceSelector.tsx` - Simplified recording script display with proper ScrollArea
 - `src/app/admin/page.tsx` - Added Voice section with link to config
 - `docs/SCHEMA.md` - Added systemConfig/voice documentation
-- `docs/API.md` - Added voice config endpoints
+- `docs/API.md` - Added voice clone and config endpoints
 
 ---
 

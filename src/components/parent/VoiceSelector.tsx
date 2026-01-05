@@ -8,7 +8,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Volume2, Loader2, Check, Star, Mic, MicOff, Trash2, Plus, User, ChevronDown, ChevronUp } from 'lucide-react';
+import { Volume2, Loader2, Check, Star, Mic, MicOff, Trash2, Plus, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase/auth/use-user';
 import type { ChildProfile, ParentVoice } from '@/lib/types';
@@ -42,7 +42,6 @@ export function VoiceSelector({ child, onVoiceSelect, onAutoReadAloudChange }: V
   const [creatingVoice, setCreatingVoice] = useState(false);
   const [deletingVoice, setDeletingVoice] = useState<string | null>(null);
   const [voiceRecordingText, setVoiceRecordingText] = useState<string>(DEFAULT_VOICE_RECORDING_TEXT);
-  const [showFullScript, setShowFullScript] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -512,38 +511,12 @@ export function VoiceSelector({ child, onVoiceSelect, onAutoReadAloudChange }: V
 
             {/* Recording Script */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Recording Script</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowFullScript(!showFullScript)}
-                  className="text-xs"
-                >
-                  {showFullScript ? (
-                    <>
-                      <ChevronUp className="h-3 w-3 mr-1" />
-                      Show Less
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="h-3 w-3 mr-1" />
-                      Show Full Script
-                    </>
-                  )}
-                </Button>
-              </div>
-              <div className={`rounded-md border bg-muted/50 p-3 ${showFullScript ? '' : 'max-h-48 overflow-hidden relative'}`}>
-                <ScrollArea className={showFullScript ? 'h-64' : ''}>
-                  <div className="text-sm whitespace-pre-wrap pr-4">
-                    {voiceRecordingText}
-                  </div>
-                </ScrollArea>
-                {!showFullScript && (
-                  <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-muted/80 to-transparent pointer-events-none" />
-                )}
-              </div>
+              <Label>Recording Script</Label>
+              <ScrollArea className="h-64 rounded-md border bg-muted/50 p-3">
+                <div className="text-sm whitespace-pre-wrap pr-4">
+                  {voiceRecordingText}
+                </div>
+              </ScrollArea>
               <p className="text-xs text-muted-foreground">
                 Read naturally with varied pacing and emotion as suggested in brackets. Recording 1-2 minutes creates the best results.
               </p>
@@ -594,7 +567,6 @@ export function VoiceSelector({ child, onVoiceSelect, onAutoReadAloudChange }: V
                   setShowRecorder(false);
                   setRecordedBlob(null);
                   setNewVoiceName('');
-                  setShowFullScript(false);
                 }}
                 disabled={creatingVoice}
               >
