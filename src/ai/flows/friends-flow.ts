@@ -556,9 +556,18 @@ async function handleScenarioGeneration(
     }
 
     // Build entity map for placeholder resolution (in case AI still outputs placeholders despite instructions)
+    // Map BOTH document ID and displayName as keys, so we can resolve both $$abc123$$ and $$Dad$$ formats
     const entityMap: EntityMap = new Map();
     for (const char of allCharacters) {
-      entityMap.set(char.id, { displayName: char.displayName, document: char as unknown as Character });
+      const entityValue = { displayName: char.displayName, document: char as unknown as Character };
+      entityMap.set(char.id, entityValue);
+      // Also map by displayName for malformed placeholders like $$Dad$$
+      entityMap.set(char.displayName, entityValue);
+    }
+    // Also map "childId" literal since AI sometimes outputs $$childId$$ instead of the actual ID
+    const mainChild = allCharacters.find(c => c.type === 'child');
+    if (mainChild) {
+      entityMap.set('childId', { displayName: mainChild.displayName, document: mainChild as unknown as Character });
     }
 
     // Resolve any placeholders in scenario titles and descriptions
@@ -701,9 +710,18 @@ async function handleSynopsisGeneration(
     }
 
     // Build entity map for placeholder resolution (in case AI still outputs placeholders despite instructions)
+    // Map BOTH document ID and displayName as keys, so we can resolve both $$abc123$$ and $$Dad$$ formats
     const entityMap: EntityMap = new Map();
     for (const char of allCharacters) {
-      entityMap.set(char.id, { displayName: char.displayName, document: char as unknown as Character });
+      const entityValue = { displayName: char.displayName, document: char as unknown as Character };
+      entityMap.set(char.id, entityValue);
+      // Also map by displayName for malformed placeholders like $$Dad$$
+      entityMap.set(char.displayName, entityValue);
+    }
+    // Also map "childId" literal since AI sometimes outputs $$childId$$ instead of the actual ID
+    const mainChild = allCharacters.find(c => c.type === 'child');
+    if (mainChild) {
+      entityMap.set('childId', { displayName: mainChild.displayName, document: mainChild as unknown as Character });
     }
 
     // Resolve any placeholders in synopsis titles and summaries

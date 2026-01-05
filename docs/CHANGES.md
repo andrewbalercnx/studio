@@ -18,7 +18,25 @@
 
 ### 2026-01-05
 
-#### `79a0912` - Fix "documentPath must be non-empty string" errors and improve diagnostics
+#### `b793bab` - Fix malformed placeholder resolution in Friends flow
+
+**Type**: Bug Fix
+
+**Summary**: Fixed scenario and synopsis text still showing `$$Dad$$` and `$$childId$$` placeholders instead of resolved character names.
+
+**Root Cause**: The entityMap used for placeholder resolution was keyed only by document ID (`abc123`), but when the AI outputs `$$Dad$$`, we were trying to look up "Dad" which didn't exist in the map.
+
+**Changes**:
+- **handleScenarioGeneration**: Build entityMap with BOTH document ID and displayName as keys
+- **handleSynopsisGeneration**: Same fix - dual-key entityMap
+- Added special handling for literal `$$childId$$` placeholder
+
+**Files Modified**:
+- `src/ai/flows/friends-flow.ts` - Fixed entityMap construction for both scenario and synopsis generation
+
+---
+
+#### `de05c67` - Fix "documentPath must be non-empty string" errors and improve diagnostics
 
 **Type**: Bug Fix + Enhancement
 
