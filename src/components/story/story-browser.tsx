@@ -305,6 +305,10 @@ export function StoryBrowser({
         toast({ title: 'Story saved with issues', description: 'Your story was created but may need manual compilation.', variant: 'destructive' });
       } else {
         toast({ title: 'Story saved!', description: 'Your story is ready to view.' });
+        // Set the compiled story text so it displays in the completion UI
+        if (result.storyText) {
+          setFinalStory(result.storyText);
+        }
       }
     } catch (e: any) {
       console.error('[StoryBrowser] Auto-compile error:', e);

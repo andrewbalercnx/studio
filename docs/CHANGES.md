@@ -18,6 +18,23 @@
 
 ### 2026-01-05
 
+#### `bb0b097` - Fix Story Beat showing blank completion page
+
+**Type**: Bug Fix
+
+**Summary**: The Story Beat generator was showing a blank "Your story is complete" page instead of displaying the compiled story text like other generators do.
+
+**Root Cause**: The `autoCompileStory` function in StoryBrowser called the `/api/storyCompile` endpoint but never captured the `storyText` from the response to display in the completion UI. Other generators (Friends, Wizard) return `finalStory` in their API response which gets set directly, but Story Beat uses auto-compilation which didn't populate the `finalStory` state.
+
+**Changes**:
+- Updated `autoCompileStory` in story-browser.tsx to set `finalStory` from the compile response
+- Now when compilation succeeds, the completed story text displays in the completion card
+
+**Files Modified**:
+- `src/components/story/story-browser.tsx` - Set finalStory from storyCompile result
+
+---
+
 #### `6958b56` - Add voice cloning API and configurable recording script
 
 **Type**: Feature
