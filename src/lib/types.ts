@@ -1739,6 +1739,7 @@ export type StoryGenerator = {
   name: string;                          // Display name
   description: string;                   // For admin UI
   status: 'live' | 'draft' | 'archived';
+  order?: number;                        // Display order on story creation pages (lower = first)
 
   capabilities: StoryGeneratorCapabilities;
   apiEndpoint: string;                   // e.g., '/api/storyWizard', '/api/gemini3'

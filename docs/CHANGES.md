@@ -18,6 +18,27 @@
 
 ### 2026-01-05
 
+#### `cda6f8d` - Add order field to StoryGenerator for display ordering
+
+**Type**: Feature
+
+**Summary**: Story generators now have an `order` field that controls their display order on story creation pages. Lower numbers appear first.
+
+**Changes**:
+- Added `order` field to StoryGenerator type (optional, default 0)
+- Updated admin storyGenerators page with order input field
+- Admin list now sorts by order, then name
+- Updated /story/start page to sort by order instead of hardcoded PREFERRED_ORDER array
+- Updated SCHEMA.md documentation
+
+**Files Modified**:
+- `src/lib/types.ts` - Added order field
+- `src/app/admin/storyGenerators/page.tsx` - Added order editor and sorting
+- `src/app/story/start/page.tsx` - Updated sorting logic
+- `docs/SCHEMA.md` - Added order field documentation
+
+---
+
 #### `0d2cc6f` - Add detailed error wrapping to images API route
 
 **Type**: Debugging

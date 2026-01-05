@@ -559,25 +559,28 @@ function GeneralInfoEditor({
   onSave,
 }: {
   generator: StoryGenerator;
-  onSave: (data: { name: string; description: string; enabledForKids?: boolean }) => Promise<void>;
+  onSave: (data: { name: string; description: string; enabledForKids?: boolean; order?: number }) => Promise<void>;
 }) {
   const { toast } = useToast();
   const defaultInfo = DEFAULT_GENERATOR_INFO[generator.id] || { name: generator.id, description: '' };
   const [name, setName] = useState(generator.name || defaultInfo.name);
   const [description, setDescription] = useState(generator.description || defaultInfo.description);
   const [enabledForKids, setEnabledForKids] = useState(generator.enabledForKids ?? true);
+  const [order, setOrder] = useState<number | undefined>(generator.order);
   const [saving, setSaving] = useState(false);
 
   const hasChanges = name !== (generator.name || defaultInfo.name) ||
     description !== (generator.description || defaultInfo.description) ||
-    enabledForKids !== (generator.enabledForKids ?? true);
+    enabledForKids !== (generator.enabledForKids ?? true) ||
+    order !== generator.order;
 
   // Update local state when generator prop changes
   useEffect(() => {
     setName(generator.name || defaultInfo.name);
     setDescription(generator.description || defaultInfo.description);
     setEnabledForKids(generator.enabledForKids ?? true);
-  }, [generator.name, generator.description, generator.enabledForKids, defaultInfo.name, defaultInfo.description]);
+    setOrder(generator.order);
+  }, [generator.name, generator.description, generator.enabledForKids, generator.order, defaultInfo.name, defaultInfo.description]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -586,7 +589,7 @@ function GeneralInfoEditor({
     }
     setSaving(true);
     try {
-      await onSave({ name: name.trim(), description: description.trim(), enabledForKids });
+      await onSave({ name: name.trim(), description: description.trim(), enabledForKids, order });
       toast({ title: 'Saved', description: 'Generator info updated successfully' });
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -625,6 +628,21 @@ function GeneralInfoEditor({
         />
         <p className="text-xs text-muted-foreground">
           A brief description of what this generator does.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="generatorOrder">Display Order</Label>
+        <Input
+          id="generatorOrder"
+          type="number"
+          value={order ?? ''}
+          onChange={(e) => setOrder(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+          placeholder="0"
+          className="w-32"
+        />
+        <p className="text-xs text-muted-foreground">
+          Lower numbers appear first on story creation pages. Default is 0.
         </p>
       </div>
 
@@ -683,7 +701,7 @@ function GeneratorCard({
   generator: StoryGenerator;
   onUpdateMusic: (generatorId: string, prompt: string) => Promise<void>;
   onUpdatePrompts: (generatorId: string, prompts: Record<string, string>) => Promise<void>;
-  onUpdateInfo: (generatorId: string, data: { name: string; description: string; enabledForKids?: boolean }) => Promise<void>;
+  onUpdateInfo: (generatorId: string, data: { name: string; description: string; enabledForKids?: boolean; order?: number }) => Promise<void>;
   onUpdateAISettings: (generatorId: string, data: { defaultModel?: AIModelName; defaultTemperature?: number; promptConfig?: Record<string, StoryGeneratorPromptConfig> }) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -817,8 +835,13 @@ export default function AdminStoryGeneratorsPage() {
     const unsubscribe = onSnapshot(generatorsRef,
       (snapshot) => {
         const genList = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as StoryGenerator));
-        // Sort by name
-        genList.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+        // Sort by order (lower first), then by name
+        genList.sort((a, b) => {
+          const orderA = a.order ?? 0;
+          const orderB = b.order ?? 0;
+          if (orderA !== orderB) return orderA - orderB;
+          return (a.name || a.id).localeCompare(b.name || b.id);
+        });
         setGenerators(genList);
         setLoading(false);
         setError(null);
@@ -873,13 +896,14 @@ export default function AdminStoryGeneratorsPage() {
     });
   };
 
-  const handleUpdateInfo = async (generatorId: string, data: { name: string; description: string; enabledForKids?: boolean }) => {
+  const handleUpdateInfo = async (generatorId: string, data: { name: string; description: string; enabledForKids?: boolean; order?: number }) => {
     if (!firestore) return;
     const docRef = doc(firestore, 'storyGenerators', generatorId);
     await updateDoc(docRef, {
       name: data.name,
       description: data.description,
       ...(data.enabledForKids !== undefined && { enabledForKids: data.enabledForKids }),
+      ...(data.order !== undefined && { order: data.order }),
     });
   };
 

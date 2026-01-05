@@ -439,6 +439,7 @@ Story generator configurations. Defines capabilities and API endpoints for each 
 | `name` | string | Yes | Display name (e.g., 'Story Wizard') |
 | `description` | string | Yes | Description for admin UI |
 | `status` | 'live' \| 'draft' \| 'archived' | Yes | Generator status |
+| `order` | number | No | Display order on story creation pages (lower = first, default: 0) |
 | `enabledForKids` | boolean | No | Show this generator in kids story creation flow (default: true) |
 | `capabilities.minChoices` | number | Yes | Minimum choices per question |
 | `capabilities.maxChoices` | number | Yes | Maximum choices per question |

@@ -34,11 +34,6 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
  */
 const DefaultIcon = Sparkles;
 
-/**
- * Preferred display order for generators.
- * Generators not in this list will appear at the end in alphabetical order.
- */
-const PREFERRED_ORDER = ['chat', 'wizard', 'gemini3', 'gemini4', 'friends'];
 
 function GeneratorIcon({ iconName, className }: { iconName?: string; className?: string }) {
   const IconComponent = iconName ? ICON_MAP[iconName] || DefaultIcon : DefaultIcon;
@@ -74,20 +69,11 @@ export default function StartStoryChoicePage() {
           generatorList.push({ ...doc.data(), id: doc.id } as StoryGenerator);
         });
 
-        // Sort by preferred order, then alphabetically for unlisted generators
+        // Sort by order field (lower first), then alphabetically by name
         generatorList.sort((a, b) => {
-          const aIndex = PREFERRED_ORDER.indexOf(a.id);
-          const bIndex = PREFERRED_ORDER.indexOf(b.id);
-
-          // Both in preferred order: sort by order
-          if (aIndex !== -1 && bIndex !== -1) {
-            return aIndex - bIndex;
-          }
-          // Only a in preferred order: a comes first
-          if (aIndex !== -1) return -1;
-          // Only b in preferred order: b comes first
-          if (bIndex !== -1) return 1;
-          // Neither in preferred order: alphabetical by name
+          const orderA = a.order ?? 0;
+          const orderB = b.order ?? 0;
+          if (orderA !== orderB) return orderA - orderB;
           return a.name.localeCompare(b.name);
         });
 
