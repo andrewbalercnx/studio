@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-05 (added storyMode field to stories collection)
+> **Last Updated**: 2026-01-05 (added systemConfig/voice for voice recording script)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -660,6 +660,15 @@ Template types: `orderSubmitted`, `orderStatusChanged`, `orderApproved`, `orderR
 **maintenanceError placeholders**: `{{flowName}}`, `{{errorType}}`
 
 **Security**: Admin only.
+
+#### `systemConfig/voice`
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `voiceRecordingText` | string | Yes | Script text displayed to parents when recording a family voice clone |
+| `updatedAt` | timestamp | No | Last update time |
+| `updatedBy` | string | No | Email of last updater |
+
+**Security**: Read by authenticated users; write by admin only.
 
 ---
 

@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LoaderCircle, PenTool, Database, FlaskConical, Settings, Users, BookOpen, Palette, Printer, Bug, Trash2, MessageSquare, Sparkles, Plus, Edit, ExternalLink, ShieldCheck, Upload, Mail, Wand2 } from 'lucide-react';
+import { LoaderCircle, PenTool, Database, FlaskConical, Settings, Users, BookOpen, Palette, Printer, Bug, Trash2, MessageSquare, Sparkles, Plus, Edit, ExternalLink, ShieldCheck, Upload, Mail, Wand2, Mic } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useDiagnostics } from '@/hooks/use-diagnostics';
 import { Switch } from '@/components/ui/switch';
@@ -433,6 +433,19 @@ export default function AdminDashboardPage() {
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Configure sender address, branding, and email templates for notifications.
+                </p>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <Mic className="h-4 w-4" /> Voice
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/admin/voice-config">Voice Recording Script</Link>
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Configure the text parents read when creating a family voice clone.
                 </p>
               </div>
             </div>

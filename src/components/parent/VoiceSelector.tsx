@@ -7,10 +7,12 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { Volume2, Loader2, Check, Star, Mic, MicOff, Trash2, Plus, User } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Volume2, Loader2, Check, Star, Mic, MicOff, Trash2, Plus, User, ChevronDown, ChevronUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase/auth/use-user';
 import type { ChildProfile, ParentVoice } from '@/lib/types';
+import { DEFAULT_VOICE_RECORDING_TEXT } from '@/lib/types';
 import { ELEVENLABS_BRITISH_VOICES, ELEVENLABS_OTHER_VOICES, ELEVENLABS_TTS_VOICES, DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 
 type VoiceSelectorProps = {
@@ -39,6 +41,8 @@ export function VoiceSelector({ child, onVoiceSelect, onAutoReadAloudChange }: V
   const [newVoiceName, setNewVoiceName] = useState('');
   const [creatingVoice, setCreatingVoice] = useState(false);
   const [deletingVoice, setDeletingVoice] = useState<string | null>(null);
+  const [voiceRecordingText, setVoiceRecordingText] = useState<string>(DEFAULT_VOICE_RECORDING_TEXT);
+  const [showFullScript, setShowFullScript] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -64,6 +68,29 @@ export function VoiceSelector({ child, onVoiceSelect, onAutoReadAloudChange }: V
     }
 
     loadParentVoices();
+  }, [user]);
+
+  // Load voice recording text config
+  useEffect(() => {
+    async function loadVoiceConfig() {
+      if (!user) return;
+
+      try {
+        const idToken = await user.getIdToken();
+        const response = await fetch('/api/admin/system-config/voice', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        const result = await response.json();
+        if (result.ok && result.config?.voiceRecordingText) {
+          setVoiceRecordingText(result.config.voiceRecordingText);
+        }
+      } catch (error) {
+        console.error('[VoiceSelector] Failed to load voice config:', error);
+        // Keep using default text
+      }
+    }
+
+    loadVoiceConfig();
   }, [user]);
 
   // Stop any currently playing audio
@@ -468,7 +495,7 @@ export function VoiceSelector({ child, onVoiceSelect, onAutoReadAloudChange }: V
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Record New Voice</CardTitle>
             <CardDescription>
-              Record 1-2 minutes of clear speech to create a custom voice clone.
+              Read the script below aloud in a clear, natural voice. The varied styles help create a better voice clone.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -481,6 +508,45 @@ export function VoiceSelector({ child, onVoiceSelect, onAutoReadAloudChange }: V
                 onChange={(e) => setNewVoiceName(e.target.value)}
                 disabled={creatingVoice}
               />
+            </div>
+
+            {/* Recording Script */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Recording Script</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowFullScript(!showFullScript)}
+                  className="text-xs"
+                >
+                  {showFullScript ? (
+                    <>
+                      <ChevronUp className="h-3 w-3 mr-1" />
+                      Show Less
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-3 w-3 mr-1" />
+                      Show Full Script
+                    </>
+                  )}
+                </Button>
+              </div>
+              <div className={`rounded-md border bg-muted/50 p-3 ${showFullScript ? '' : 'max-h-48 overflow-hidden relative'}`}>
+                <ScrollArea className={showFullScript ? 'h-64' : ''}>
+                  <div className="text-sm whitespace-pre-wrap pr-4">
+                    {voiceRecordingText}
+                  </div>
+                </ScrollArea>
+                {!showFullScript && (
+                  <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-muted/80 to-transparent pointer-events-none" />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Read naturally with varied pacing and emotion as suggested in brackets. Recording 1-2 minutes creates the best results.
+              </p>
             </div>
 
             <div className="flex items-center gap-4">
@@ -528,6 +594,7 @@ export function VoiceSelector({ child, onVoiceSelect, onAutoReadAloudChange }: V
                   setShowRecorder(false);
                   setRecordedBlob(null);
                   setNewVoiceName('');
+                  setShowFullScript(false);
                 }}
                 disabled={creatingVoice}
               >

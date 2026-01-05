@@ -1564,6 +1564,40 @@ export const DEFAULT_KIDS_FLOW_CONFIG: KidsFlowConfig = {
   friendsEnabled: true,
 };
 
+// Voice configuration - settings for voice cloning and TTS features
+export type VoiceConfig = {
+  // Text displayed for users to read when recording a family voice clone
+  voiceRecordingText: string;
+  updatedAt?: any;
+  updatedBy?: string;
+};
+
+// Default voice recording script - designed to capture varied speaking patterns
+export const DEFAULT_VOICE_RECORDING_TEXT = `Voice Clone Training Script
+(Read in a clear, consistent, and natural speaking voice. Try to include varied pacing and emotional tone in different sections, as indicated by the suggested styles in brackets.)
+
+[Neutral Introduction]
+Hello. My name is [Your Name], and I am recording this text to provide a sample for a high-quality artificial intelligence voice clone. The goal is to create a realistic digital replica of my speaking patterns, tone, and overall vocal characteristics. This process requires a clear, quiet audio recording to capture all the essential details of my voice.
+
+[Inquisitive and Engaging Tone]
+Have you ever stopped to consider the incredible complexity of human speech? From the subtle variations in pitch and volume to the rhythm and flow of a simple sentence, our voices are truly unique. Every single person possesses a distinct acoustic fingerprint that AI models are now learning to replicate with astonishing accuracy. It's a fascinating blend of art and science, pushing the boundaries of what we thought was possible in digital communication. This ability to capture nuances brings a new dimension to how we interact with technology every day.
+
+[Narrative/Storytelling Tone]
+Imagine a scenario where an old sailor, weathered by a thousand storms, recounts his tales to a rapt audience. The sea salt in his voice, the long pauses for dramatic effect, the sudden bursts of excitement as he describes a near-miss with a leviathan of the deep. These are the elements that make storytelling so powerful and immersive. The AI is learning these very dynamics, not just the words themselves, but the life breathed into them through performance and expression.
+
+[Descriptive and Detailed Tone]
+The autumn air was crisp, carrying the scent of fallen leaves and distant woodsmoke. A lone raven soared across the deep crimson and gold sky, its wings casting a fleeting shadow over the ancient stone bridge below. The river, a silver ribbon winding through the valley, reflected the changing light of the fading afternoon. This picturesque landscape, a symphony of natural colors and textures, offers a peaceful moment of reflection amidst the hustle and bustle of modern life.
+
+[Light-Hearted/Conversational Tone]
+You won't believe what happened when I tried to bake a simple apple pie last weekend! Let's just say my kitchen turned into a chaotic scene from a slapstick comedy. Flour covered every surface, the apples had somehow rolled under the fridge, and I ended up ordering a pizza instead. Sometimes, the best-laid plans just go wonderfully awry, and you have to find the humor in the chaos.
+
+[Concluding Remarks]
+It's been a pleasure sharing this script with you today. The future of audio creation holds boundless opportunities, from accessibility tools to creative content generation. I look forward to hearing the result of this voice cloning process. Thank you for listening.`;
+
+export const DEFAULT_VOICE_CONFIG: VoiceConfig = {
+  voiceRecordingText: DEFAULT_VOICE_RECORDING_TEXT,
+};
+
 // Email template type keys - corresponds to the different email types
 export type EmailTemplateType =
   | 'orderSubmitted'

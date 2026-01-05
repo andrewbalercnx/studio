@@ -1734,6 +1734,47 @@ Update kids flow configuration.
 
 ---
 
+### GET `/api/admin/system-config/voice`
+
+Fetch voice configuration (recording script text).
+
+**Required Role**: Parent (authenticated)
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "config": {
+    "voiceRecordingText": "Voice Clone Training Script..."
+  }
+}
+```
+
+---
+
+### PUT `/api/admin/system-config/voice`
+
+Update voice configuration.
+
+**Required Role**: Admin
+
+**Request Body**:
+```json
+{
+  "voiceRecordingText": "Custom script text..."
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "message": "Voice configuration updated successfully"
+}
+```
+
+---
+
 ### POST `/api/admin/system-config/seed`
 
 Seed default system configuration.

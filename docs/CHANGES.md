@@ -18,7 +18,34 @@
 
 ### 2026-01-05
 
-#### `613a847` - Display story generator name on story cards
+#### `pending` - Add configurable voice recording script for family voice cloning
+
+**Type**: Feature
+
+**Summary**: Parents creating a family voice clone now see a script to read aloud. The script is designed to capture varied speech patterns (narrative, conversational, descriptive tones) for better voice clone quality. Admins can customize the script via the admin dashboard.
+
+**Changes**:
+- Added `VoiceConfig` type with `voiceRecordingText` field
+- Created API route `/api/admin/system-config/voice` for GET/PUT
+- Created admin page `/admin/voice-config` with script editor
+- Updated VoiceSelector component to fetch and display the script
+- Script shows in a scrollable area with "Show Full Script" toggle
+- Default script includes varied tones: neutral, inquisitive, narrative, descriptive, conversational
+
+**Files Created**:
+- `src/app/api/admin/system-config/voice/route.ts` - API for voice config
+- `src/app/admin/voice-config/page.tsx` - Admin UI for editing script
+
+**Files Modified**:
+- `src/lib/types.ts` - Added VoiceConfig type and default recording text
+- `src/components/parent/VoiceSelector.tsx` - Display recording script
+- `src/app/admin/page.tsx` - Added Voice section with link to config
+- `docs/SCHEMA.md` - Added systemConfig/voice documentation
+- `docs/API.md` - Added voice config endpoints
+
+---
+
+#### `54033b0` - Display story generator name on story cards
 
 **Type**: Feature
 
