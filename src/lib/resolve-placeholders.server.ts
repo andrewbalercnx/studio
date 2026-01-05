@@ -15,7 +15,10 @@ async function fetchEntities(ids: string[]): Promise<EntityMap> {
   const entityMap: EntityMap = new Map();
   if (ids.length === 0) return entityMap;
 
-  const uniqueIds = [...new Set(ids)];
+  // Filter out empty/invalid IDs to prevent Firestore "documentPath must be non-empty" error
+  const uniqueIds = [...new Set(ids)].filter(id => id && typeof id === 'string' && id.trim().length > 0);
+  if (uniqueIds.length === 0) return entityMap;
+
   const chunkSize = 10;
 
   // First, try to find by document ID in characters collection
@@ -112,11 +115,13 @@ export async function replacePlaceholdersWithDescriptions(text: string): Promise
 }
 
 export async function resolveEntitiesInText(text: string): Promise<EntityMap> {
+  if (!text) return new Map();
   // Extract IDs from double $$ format (correct)
   const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
   // Also extract IDs from single $ format (fallback for AI that didn't follow instructions)
   const singleIds = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)].map((match) => match[1]);
-  const allIds = [...doubleIds, ...singleIds];
+  // Filter out empty/invalid IDs before fetching
+  const allIds = [...doubleIds, ...singleIds].filter(id => id && id.trim().length > 0);
   return fetchEntities(allIds);
 }
 

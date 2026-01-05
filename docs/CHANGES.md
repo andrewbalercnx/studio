@@ -18,6 +18,23 @@
 
 ### 2026-01-05
 
+#### `15c5676` - Fix "documentPath must be non-empty string" error in placeholder resolution
+
+**Type**: Bug Fix
+
+**Summary**: Fixed Firestore error that occurred when empty entity IDs were passed to placeholder resolution functions during image/audio generation.
+
+**Root Cause**: The `fetchEntities` function in `resolve-placeholders.server.ts` didn't filter out empty or invalid entity IDs before querying Firestore. When an empty string was passed to `firestore.collection().where('__name__', 'in', [...])`, it caused the "documentPath must be non-empty string" error.
+
+**Changes**:
+1. **fetchEntities**: Added filtering to remove empty/invalid IDs from the array before Firestore queries
+2. **resolveEntitiesInText**: Added early return for empty text and filtering of extracted IDs
+
+**Files Modified**:
+- `src/lib/resolve-placeholders.server.ts` - Added defensive filtering for empty entity IDs
+
+---
+
 #### `5ab5e8e` - Fix unresolved placeholders in Friends flow scenarios/synopses
 
 **Type**: Bug Fix
