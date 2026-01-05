@@ -142,8 +142,8 @@ export type StorySession = {
     selectedEndingId?: string;
     selectedEndingText?: string;
     storyOutputTypeId?: string;
-    // Gemini story modes
-    storyMode?: 'gemini3' | 'gemini4' | 'wizard' | 'chat' | 'friends';
+    // Story generator ID - identifies which generator/flow created this story
+    storyMode?: string;
     gemini3FinalStory?: string;
     gemini4FinalStory?: string;
     // Wizard mode: tracks Q&A answers across API calls
@@ -292,7 +292,7 @@ export type Story = {
   parentUid: string;
   storyText: string;
   // Which AI flow/generator created this story (copied from session at compile time)
-  storyMode?: 'gemini3' | 'gemini4' | 'wizard' | 'chat' | 'friends';
+  storyMode?: string;
   metadata?: {
     title?: string;
     vibe?: string;

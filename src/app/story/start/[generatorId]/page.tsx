@@ -106,11 +106,8 @@ export default function DynamicStartStoryPage() {
             id: storySessionId,
           };
 
-          // Generator-specific additions
-          // The 'friends' generator needs storyMode set
-          if (generatorId === 'friends') {
-            newSessionData.storyMode = 'friends';
-          }
+          // Store the generator ID as storyMode so we can display it on story cards
+          newSessionData.storyMode = generatorId;
 
           const batch = writeBatch(firestore);
           batch.set(storySessionRef, newSessionData);

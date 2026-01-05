@@ -32,6 +32,8 @@ type StoryCardProps = {
   childAvatarAnimationUrl?: string | null;
   /** Child's static avatar URL (fallback) */
   childAvatarUrl?: string | null;
+  /** Display name for the story generator (from storyGenerators collection) */
+  storyModeName?: string | null;
   onReadAloud: (story: Story) => void;
   onGenerateAudio: (storyId: string, forceRegenerate: boolean) => void;
   onGenerateActorAvatar?: (storyId: string, forceRegenerate: boolean) => void;
@@ -46,6 +48,7 @@ export function StoryCard({
   isActorAvatarGeneratingExternal,
   childAvatarAnimationUrl,
   childAvatarUrl,
+  storyModeName,
   onReadAloud,
   onGenerateAudio,
   onGenerateActorAvatar,
@@ -65,7 +68,9 @@ export function StoryCard({
   const noAudio = !audioStatus || audioStatus === 'idle';
 
   // Get display label for the story mode/generator
+  // Use the passed-in generator name, or fall back to legacy hardcoded labels
   const getStoryModeLabel = (mode?: string): string | null => {
+    // Legacy mappings for stories created before dynamic generators
     switch (mode) {
       case 'wizard': return 'Quick Story';
       case 'gemini3': return 'Adventure';
@@ -75,7 +80,8 @@ export function StoryCard({
       default: return null;
     }
   };
-  const storyModeLabel = getStoryModeLabel(story.storyMode);
+  // Prefer passed-in generator name, fall back to legacy lookup
+  const storyModeLabel = storyModeName || getStoryModeLabel(story.storyMode);
 
   // Title generation status
   const titleStatus = story.titleGeneration?.status;

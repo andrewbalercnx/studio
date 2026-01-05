@@ -3,9 +3,9 @@
 import { use, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
-import { collection, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, doc, updateDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
-import type { Story } from '@/lib/types';
+import type { Story, StoryGenerator } from '@/lib/types';
 import { useAppContext } from '@/hooks/use-app-context';
 import { LoaderCircle, BookOpen, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -35,6 +35,8 @@ export default function MyStoriesPage({ params }: { params: Promise<{ childId: s
   const [generatingActorAvatarForStoryId, setGeneratingActorAvatarForStoryId] = useState<string | null>(null);
   // Audio element ref for AI-generated audio
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Generator name lookup (storyMode ID -> display name)
+  const [generatorNames, setGeneratorNames] = useState<Record<string, string>>({});
 
   // Sync route childId with app context
   useEffect(() => {
@@ -56,6 +58,25 @@ export default function MyStoriesPage({ params }: { params: Promise<{ childId: s
   }, [firestore, activeChildId, user, userLoading, idTokenResult]);
 
   const { data: storiesRaw, loading: storiesLoading } = useCollection<Story>(storiesQuery);
+
+  // Fetch all story generators to get display names
+  useEffect(() => {
+    if (!firestore) return;
+    const fetchGenerators = async () => {
+      try {
+        const snapshot = await getDocs(collection(firestore, 'storyGenerators'));
+        const names: Record<string, string> = {};
+        snapshot.forEach((doc) => {
+          const gen = doc.data() as StoryGenerator;
+          names[doc.id] = gen.name;
+        });
+        setGeneratorNames(names);
+      } catch (err) {
+        console.error('[stories] Error fetching generators:', err);
+      }
+    };
+    fetchGenerators();
+  }, [firestore]);
 
   // Filter and sort stories client-side
   const stories = useMemo(() => {
@@ -361,6 +382,7 @@ export default function MyStoriesPage({ params }: { params: Promise<{ childId: s
                   isActorAvatarGeneratingExternal={isActorAvatarGeneratingExt}
                   childAvatarAnimationUrl={activeChildProfile?.avatarAnimationUrl}
                   childAvatarUrl={activeChildProfile?.avatarUrl}
+                  storyModeName={story.storyMode ? generatorNames[story.storyMode] : undefined}
                   onReadAloud={handleReadAloud}
                   onGenerateAudio={handleGenerateAudio}
                   onGenerateActorAvatar={handleGenerateActorAvatar}

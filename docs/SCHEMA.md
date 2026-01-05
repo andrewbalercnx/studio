@@ -121,7 +121,7 @@ Interactive story creation sessions.
 | `arcStepIndex` | number | No | Current arc step |
 | `mainCharacterId` | string | No | Main character ID |
 | `supportingCharacterIds` | string[] | No | Supporting character IDs |
-| `storyMode` | 'gemini3' \| 'gemini4' \| 'wizard' \| 'chat' \| 'friends' | No | Story generation mode |
+| `storyMode` | string | No | Story generator ID (e.g., 'wizard', 'friends', or dynamic generator IDs) |
 | `actors` | string[] | No | Actor IDs ($$id$$ placeholders) |
 | `wizardAnswers` | object[] | No | Wizard mode Q&A state (question, answer pairs) |
 | `wizardLastQuestion` | string | No | Wizard mode: last question asked |
@@ -156,7 +156,7 @@ Compiled story content.
 | `childId` | string | Yes | Child's document ID |
 | `parentUid` | string | Yes | Parent's Firebase UID |
 | `storyText` | string | Yes | Full story text |
-| `storyMode` | 'gemini3' \| 'gemini4' \| 'wizard' \| 'chat' \| 'friends' | No | AI flow that generated the story |
+| `storyMode` | string | No | Story generator ID that created this story (copied from session) |
 | `metadata` | object | No | Title, vibe, paragraphs, characterIds, etc. |
 | `status` | 'text_ready' \| 'images_pending' | No | Story status |
 | `titleGeneration` | object | No | Title generation status |

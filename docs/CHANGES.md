@@ -18,6 +18,29 @@
 
 ### 2026-01-05
 
+#### `613a847` - Display story generator name on story cards
+
+**Type**: Feature
+
+**Summary**: Story cards now display the name of the generator used to create each story. This works for both legacy stories (with hardcoded mode names) and new stories created with dynamic generators.
+
+**Changes**:
+- Changed `storyMode` type from union to `string` for dynamic generator support
+- Updated dynamic start page to set `storyMode` to the generator ID for all generators
+- Added `storyModeName` prop to StoryCard component
+- Stories page now fetches generator names and passes them to StoryCard
+- StoryCard prefers passed-in generator name, falls back to legacy hardcoded labels
+- Updated SCHEMA.md with new storyMode documentation
+
+**Files Modified**:
+- `src/lib/types.ts` - Changed storyMode to string type
+- `src/app/story/start/[generatorId]/page.tsx` - Set storyMode for all generators
+- `src/components/child/story-card.tsx` - Added storyModeName prop
+- `src/app/child/[childId]/stories/page.tsx` - Fetch generators and pass names
+- `docs/SCHEMA.md` - Updated storyMode field documentation
+
+---
+
 #### `cda6f8d` - Add order field to StoryGenerator for display ordering
 
 **Type**: Feature
