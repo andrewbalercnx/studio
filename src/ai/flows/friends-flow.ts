@@ -473,8 +473,7 @@ async function handleScenarioGeneration(
   firestore: FirebaseFirestore.Firestore,
   session: StorySession,
   child: ChildProfile,
-  generator: StoryGenerator | null,
-  globalPrefix: string
+  generator: StoryGenerator | null
 ): Promise<FriendsFlowOutput> {
   const flowName = 'friendsFlow:scenarioGeneration';
 
@@ -525,7 +524,12 @@ async function handleScenarioGeneration(
     ageDescription,
     selectedCharacters: selectedCharsText,
   });
-  const fullPrompt = globalPrefix ? `${globalPrefix}\n\n${basePrompt}` : basePrompt;
+  // NOTE: We intentionally do NOT prepend globalPrefix here.
+  // The globalPrefix instructs AI to use $$id$$ placeholders, but scenarios are
+  // user-facing text that should use plain character names. The scenario prompt
+  // already instructs the AI to use real names, and prepending globalPrefix
+  // would create conflicting instructions.
+  const fullPrompt = basePrompt;
 
   // Get model and temperature config
   const { model: modelName, temperature } = getModelConfig(generator, 'scenarioGeneration');
@@ -612,7 +616,6 @@ async function handleSynopsisGeneration(
   session: StorySession,
   child: ChildProfile,
   generator: StoryGenerator | null,
-  globalPrefix: string,
   isMoreRequest: boolean = false
 ): Promise<FriendsFlowOutput> {
   const flowName = 'friendsFlow:synopsisGeneration';
@@ -677,7 +680,12 @@ async function handleSynopsisGeneration(
     selectedCharacters: selectedCharsText,
     selectedScenario: scenarioText,
   });
-  const fullPrompt = globalPrefix ? `${globalPrefix}\n\n${basePrompt}` : basePrompt;
+  // NOTE: We intentionally do NOT prepend globalPrefix here.
+  // The globalPrefix instructs AI to use $$id$$ placeholders, but synopses are
+  // user-facing text that should use plain character names. The synopsis prompt
+  // already instructs the AI to use real names, and prepending globalPrefix
+  // would create conflicting instructions.
+  const fullPrompt = basePrompt;
 
   // Get model and temperature config
   const { model: modelName, temperature: baseTemperature } = getModelConfig(generator, 'synopsisGeneration');
@@ -989,7 +997,7 @@ const friendsFlowInternal = ai.defineFlow(
           session.friendsSelectedCharacterIds = selectedIds;
 
           // Move to scenario generation
-          return handleScenarioGeneration(firestore, session, child, generator, globalPrefix);
+          return handleScenarioGeneration(firestore, session, child, generator);
         }
 
         // Initial request - propose characters
@@ -1006,7 +1014,7 @@ const friendsFlowInternal = ai.defineFlow(
           });
           session.friendsSelectedScenarioId = input.selectedOptionId;
 
-          return handleSynopsisGeneration(firestore, session, child, generator, globalPrefix);
+          return handleSynopsisGeneration(firestore, session, child, generator);
         }
 
         // Re-fetch scenarios
@@ -1023,7 +1031,7 @@ const friendsFlowInternal = ai.defineFlow(
       if (currentPhase === 'synopsis_selection') {
         // Handle "more synopses" request
         if (input.action === 'more_synopses') {
-          return handleSynopsisGeneration(firestore, session, child, generator, globalPrefix, true);
+          return handleSynopsisGeneration(firestore, session, child, generator, true);
         }
 
         if (input.selectedOptionId) {

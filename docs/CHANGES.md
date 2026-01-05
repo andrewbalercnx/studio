@@ -18,6 +18,27 @@
 
 ### 2026-01-05
 
+#### `47e4714` - Fix conflicting prompt instructions causing placeholder leakage
+
+**Type**: Bug Fix
+
+**Summary**: Fixed scenarios and synopses still showing `$Dad$`, `$childId$` placeholder syntax because the global system prompt was overriding the scenario-specific instructions.
+
+**Root Cause**: The `globalPrefix` (from systemConfig) instructs the AI to "use $$id$$ placeholders for ALL character references". This prefix was being prepended to ALL prompt types, including scenario and synopsis generation. However, those prompts explicitly say "use real names, no placeholders". The AI was following the globalPrefix instead of the prompt-specific instruction, causing placeholder syntax to leak into user-facing text.
+
+**Solution**: Don't prepend `globalPrefix` for scenario and synopsis generation. The globalPrefix is only needed for story generation where we want `$$id$$` placeholders for later processing.
+
+**Changes**:
+- **handleScenarioGeneration**: Removed globalPrefix prepending, added explanatory comment
+- **handleSynopsisGeneration**: Removed globalPrefix prepending, added explanatory comment
+- Removed unused `globalPrefix` parameter from both functions
+- **handleStoryGeneration**: Still uses globalPrefix (correctly) since story text needs placeholders
+
+**Files Modified**:
+- `src/ai/flows/friends-flow.ts` - Removed globalPrefix from scenario/synopsis prompts
+
+---
+
 #### `b793bab` - Fix malformed placeholder resolution in Friends flow
 
 **Type**: Bug Fix
