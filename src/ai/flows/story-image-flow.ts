@@ -1049,6 +1049,45 @@ export const storyImageFlow = ai.defineFlow(
   async ({storyId, pageId, regressionTag, forceRegenerate, storybookId, targetWidthPx, targetHeightPx, imageStylePrompt, imageStyleId, aspectRatio}) => {
     console.log(`[storyImageFlow] Called with storyId=${storyId}, pageId=${pageId}, storybookId=${storybookId || 'undefined'}, imageStyleId=${imageStyleId || 'undefined'}, aspectRatio=${aspectRatio || 'auto'}`);
     const logs: string[] = [];
+
+    // Validate required document IDs upfront to give clear error messages
+    if (!isValidDocumentId(storyId)) {
+      const errorMsg = `Invalid storyId: "${storyId}" (must be non-empty string)`;
+      console.error(`[storyImageFlow] ${errorMsg}`);
+      return {
+        ok: false as const,
+        storyId: storyId || 'unknown',
+        pageId: pageId || 'unknown',
+        imageStatus: 'error' as const,
+        errorMessage: errorMsg,
+        logs: [errorMsg],
+      };
+    }
+    if (!isValidDocumentId(pageId)) {
+      const errorMsg = `Invalid pageId: "${pageId}" (must be non-empty string)`;
+      console.error(`[storyImageFlow] ${errorMsg}`);
+      return {
+        ok: false as const,
+        storyId,
+        pageId: pageId || 'unknown',
+        imageStatus: 'error' as const,
+        errorMessage: errorMsg,
+        logs: [errorMsg],
+      };
+    }
+    if (storybookId !== undefined && !isValidDocumentId(storybookId)) {
+      const errorMsg = `Invalid storybookId: "${storybookId}" (if provided, must be non-empty string)`;
+      console.error(`[storyImageFlow] ${errorMsg}`);
+      return {
+        ok: false as const,
+        storyId,
+        pageId,
+        imageStatus: 'error' as const,
+        errorMessage: errorMsg,
+        logs: [errorMsg],
+      };
+    }
+
     await initFirebaseAdminApp();
     const firestore = getFirestore();
     const storyRef = firestore.collection('stories').doc(storyId);

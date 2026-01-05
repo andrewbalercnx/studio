@@ -18,6 +18,22 @@
 
 ### 2026-01-05
 
+#### `3c61194` - Add upfront validation for document IDs in image flow
+
+**Type**: Enhancement / Debugging
+
+**Summary**: Added early validation of storyId, pageId, and storybookId at the start of storyImageFlow to catch invalid/empty IDs before any Firestore calls, providing clearer error messages to help diagnose "documentPath must be non-empty string" errors.
+
+**Changes**:
+- Validate all document IDs before initializing Firestore
+- Return descriptive error messages identifying which specific ID is invalid
+- Helps diagnose where empty IDs originate from
+
+**Files Modified**:
+- `src/ai/flows/story-image-flow.ts` - Added upfront ID validation
+
+---
+
 #### `3c4433e` - Fix unresolved placeholders in story synopsis
 
 **Type**: Bug Fix
