@@ -374,21 +374,20 @@ export async function POST(request: Request) {
       const existingDoc = await docRef.get();
 
       if (existingDoc.exists) {
-        // Update existing document (preserve createdAt, backgroundMusic, and user-configured prompts)
-        // Use set with merge to ensure nested objects like capabilities are fully replaced
+        // Update existing document (preserve createdAt, backgroundMusic, AI settings)
+        // Use set with merge:false to ensure nested objects like capabilities are fully replaced
+        // IMPORTANT: Always use the new prompts from the seed to ensure prompt updates are applied
         const existingData = existingDoc.data();
-        // For prompts: if user has customized them, keep their version; otherwise use defaults
-        const promptsToUse = existingData?.prompts && Object.keys(existingData.prompts).length > 0
-          ? existingData.prompts
-          : generator.prompts;
         batch.set(docRef, {
           ...generator,
           // Preserve user-configured fields (only include if they exist to avoid undefined values)
           ...(existingData?.backgroundMusic && { backgroundMusic: existingData.backgroundMusic }),
-          ...(promptsToUse && { prompts: promptsToUse }),
+          ...(existingData?.defaultModel && { defaultModel: existingData.defaultModel }),
+          ...(existingData?.defaultTemperature !== undefined && { defaultTemperature: existingData.defaultTemperature }),
+          ...(existingData?.promptConfig && { promptConfig: existingData.promptConfig }),
           ...(existingData?.createdAt && { createdAt: existingData.createdAt }),
           updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: false }); // Replace entire document to ensure capabilities is updated
+        }, { merge: false }); // Replace entire document to ensure capabilities and prompts are updated
         results.push({ id: generator.id, action: 'updated' });
       } else {
         // Create new document
