@@ -90,15 +90,24 @@ export const storySynopsisFlow = ai.defineFlow(
       // Extract all actor IDs from the story text
       const actorIds = extractActorIds(story.storyText);
 
-      // Make sure the child is included as an actor
-      if (!actorIds.includes(story.childId)) {
+      // Validate childId before using it in Firestore calls
+      const hasValidChildId = story.childId && typeof story.childId === 'string' && story.childId.trim().length > 0;
+      if (!hasValidChildId) {
+        console.warn(`[storySynopsisFlow] Story ${storyId} has invalid/missing childId: "${story.childId}"`);
+      }
+
+      // Make sure the child is included as an actor (only if valid)
+      if (hasValidChildId && !actorIds.includes(story.childId)) {
         actorIds.unshift(story.childId);
       }
 
-      // Load main child profile
-      const childRef = firestore.collection('children').doc(story.childId);
-      const childDoc = await childRef.get();
-      const mainChild = childDoc.exists ? (childDoc.data() as ChildProfile) : null;
+      // Load main child profile (only if we have a valid childId)
+      let mainChild: ChildProfile | null = null;
+      if (hasValidChildId) {
+        const childRef = firestore.collection('children').doc(story.childId);
+        const childDoc = await childRef.get();
+        mainChild = childDoc.exists ? (childDoc.data() as ChildProfile) : null;
+      }
 
       // Get other actor IDs (excluding main child and filtering out empty/invalid IDs)
       const otherActorIds = actorIds

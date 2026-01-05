@@ -951,7 +951,9 @@ const friendsFlowInternal = ai.defineFlow(
         // Handle character confirmation
         if (input.action === 'confirm_characters') {
           // Use provided selection or the proposed selection
-          const selectedIds = input.selectedCharacterIds || session.friendsProposedCharacterIds || [];
+          // Filter out empty/invalid IDs to prevent Firestore "documentPath must be non-empty" errors
+          const rawSelectedIds = input.selectedCharacterIds || session.friendsProposedCharacterIds || [];
+          const selectedIds = rawSelectedIds.filter((id: string) => id && typeof id === 'string' && id.trim().length > 0);
 
           // Ensure main child is always included
           if (!selectedIds.includes(input.childId)) {

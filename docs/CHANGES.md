@@ -18,20 +18,42 @@
 
 ### 2026-01-05
 
-#### `15c5676` - Fix "documentPath must be non-empty string" error in placeholder resolution
+#### `79a0912` - Fix "documentPath must be non-empty string" errors and improve diagnostics
 
-**Type**: Bug Fix
+**Type**: Bug Fix + Enhancement
 
-**Summary**: Fixed Firestore error that occurred when empty entity IDs were passed to placeholder resolution functions during image/audio generation.
+**Summary**: Comprehensive fix for Firestore "documentPath must be non-empty string" errors across story generation flows, plus improved diagnostics to help debug entity resolution issues.
 
-**Root Cause**: The `fetchEntities` function in `resolve-placeholders.server.ts` didn't filter out empty or invalid entity IDs before querying Firestore. When an empty string was passed to `firestore.collection().where('__name__', 'in', [...])`, it caused the "documentPath must be non-empty string" error.
+**Root Cause**: Multiple places in the codebase were passing entity IDs to Firestore without validating them first. This could happen when:
+1. Empty strings in arrays were passed to `where('__name__', 'in', [...])` queries
+2. `story.childId` was empty/undefined and used directly with `doc(childId)`
+3. User-provided character selections weren't filtered before saving to Firestore
 
 **Changes**:
-1. **fetchEntities**: Added filtering to remove empty/invalid IDs from the array before Firestore queries
-2. **resolveEntitiesInText**: Added early return for empty text and filtering of extracted IDs
+1. **resolve-placeholders.server.ts**:
+   - `fetchEntities`: Filter out empty/invalid IDs before Firestore queries
+   - `resolveEntitiesInText`: Early return for empty text, filter extracted IDs
+
+2. **story-synopsis-flow.ts**:
+   - Validate `story.childId` before using in Firestore calls
+   - Add warning log when childId is invalid/missing
+   - Conditionally load child profile only if childId is valid
+
+3. **friends-flow.ts**:
+   - Filter user-provided `selectedCharacterIds` in confirm_characters action
+   - Prevents empty strings from being saved to session.actors
+
+4. **story-page-flow.ts** (diagnostics):
+   - Added `storyActors` - raw actors array from story document
+   - Added `allActorIds` - filtered actor IDs being used
+   - Added `resolvedEntityList` - list of resolved entities with their IDs and displayNames
+   - Helps identify malformed placeholders and empty ID issues
 
 **Files Modified**:
-- `src/lib/resolve-placeholders.server.ts` - Added defensive filtering for empty entity IDs
+- `src/lib/resolve-placeholders.server.ts` - Added defensive filtering
+- `src/ai/flows/story-synopsis-flow.ts` - Added childId validation
+- `src/ai/flows/friends-flow.ts` - Added character ID filtering
+- `src/ai/flows/story-page-flow.ts` - Enhanced diagnostics
 
 ---
 

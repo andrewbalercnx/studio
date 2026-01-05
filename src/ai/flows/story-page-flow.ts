@@ -524,6 +524,12 @@ export const storyPageFlow = ai.defineFlow(
       const entityMap = await resolveEntitiesInText(combinedTextForResolution);
       diagnostics.details.resolvedEntities = entityMap.size;
 
+      // Build resolved entities list for diagnostics
+      const resolvedEntityList = Array.from(entityMap.entries()).map(([id, entity]) => ({
+        id,
+        displayName: entity.displayName,
+      }));
+
       diagnostics = {
         stage: 'chunking',
         details: {
@@ -535,6 +541,10 @@ export const storyPageFlow = ai.defineFlow(
           characterCount: allCharacters.length,
           storyOutputTypeId: storyOutputTypeId ?? null,
           targetContentPages,
+          // Include actual arrays for debugging empty ID issues
+          storyActors: story.actors ?? null,
+          allActorIds,
+          resolvedEntityList,
         },
       };
 
