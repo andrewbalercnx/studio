@@ -19,6 +19,7 @@ import {
   characterToActorInfo,
   buildActorListForPrompt,
 } from '@/lib/story-context-builder';
+import { type EntityMap, replacePlaceholdersInText } from '@/lib/resolve-placeholders.server';
 
 const StorySynopsisFlowInputSchema = z.object({
   storyId: z.string(),
@@ -211,7 +212,30 @@ OUTPUT: Return ONLY the synopsis text (no quotes, no labels, just the synopsis).
         throw e;
       }
 
-      const synopsis = llmResponse.text?.trim() || 'A wonderful adventure awaits!';
+      const rawSynopsis = llmResponse.text?.trim() || 'A wonderful adventure awaits!';
+
+      // Build entity map for placeholder resolution
+      // Map both document ID and displayName as keys (for malformed placeholders like $$Dad$$)
+      const entityMap: EntityMap = new Map();
+      for (const actor of actors) {
+        const entityValue = {
+          displayName: actor.displayName,
+          document: actor as unknown as Character | ChildProfile,
+        };
+        entityMap.set(actor.id, entityValue);
+        // Also map by displayName for malformed placeholders
+        entityMap.set(actor.displayName, entityValue);
+      }
+      // Also map "childId" literal since AI sometimes outputs $$childId$$ instead of the actual ID
+      if (mainChild) {
+        entityMap.set('childId', {
+          displayName: mainChild.displayName,
+          document: mainChild,
+        });
+      }
+
+      // Resolve placeholders so the synopsis displays plain names
+      const synopsis = await replacePlaceholdersInText(rawSynopsis, entityMap);
 
       // Update story with generated synopsis and actors list
       await storyRef.update({
