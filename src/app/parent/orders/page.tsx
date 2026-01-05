@@ -6,14 +6,43 @@ import {useUser} from '@/firebase/auth/use-user';
 import {useFirestore} from '@/firebase';
 import {collection, query, where} from 'firebase/firestore';
 import {useCollection} from '@/lib/firestore-hooks';
-import type {PrintOrder} from '@/lib/types';
+import type {PrintOrder, MixamOrderStatus} from '@/lib/types';
 import {Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle} from '@/components/ui/card';
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
+import {Tabs, TabsList, TabsTrigger} from '@/components/ui/tabs';
 import {LoaderCircle, PackageCheck, Mail, MapPin, DollarSign, XCircle} from 'lucide-react';
 import Link from 'next/link';
 import {format} from 'date-fns';
 import {useToast} from '@/hooks/use-toast';
+
+type StatusFilter = 'all' | 'pending' | 'in_progress' | 'completed' | 'cancelled';
+
+// Map fulfillment statuses to filter categories
+function getStatusCategory(status: MixamOrderStatus): StatusFilter {
+  switch (status) {
+    case 'draft':
+    case 'validating':
+    case 'validation_failed':
+    case 'ready_to_submit':
+    case 'awaiting_approval':
+      return 'pending';
+    case 'approved':
+    case 'submitting':
+    case 'submitted':
+    case 'confirmed':
+    case 'in_production':
+      return 'in_progress';
+    case 'shipped':
+    case 'delivered':
+      return 'completed';
+    case 'cancelled':
+    case 'failed':
+      return 'cancelled';
+    default:
+      return 'all';
+  }
+}
 
 /**
  * Format a date in a friendly format like "12th December 2025"
@@ -32,6 +61,7 @@ export default function ParentOrdersPage() {
   const firestore = useFirestore();
   const {toast} = useToast();
   const [markingOrderId, setMarkingOrderId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   // Query for orders using parentUid
   // Note: We don't use orderBy here to avoid needing composite indexes.
@@ -47,7 +77,7 @@ export default function ParentOrdersPage() {
   const {data: rawOrders, loading: ordersLoading} = useCollection<PrintOrder>(ordersQuery);
 
   // Sort orders by createdAt descending
-  const orders = useMemo(() => {
+  const allOrders = useMemo(() => {
     if (!rawOrders) return null;
     return [...rawOrders].sort((a, b) => {
       const aTime = a.createdAt?.toMillis?.() || 0;
@@ -55,6 +85,24 @@ export default function ParentOrdersPage() {
       return bTime - aTime;
     });
   }, [rawOrders]);
+
+  // Filter orders by status category
+  const orders = useMemo(() => {
+    if (!allOrders) return null;
+    if (statusFilter === 'all') return allOrders;
+    return allOrders.filter(order => getStatusCategory(order.fulfillmentStatus) === statusFilter);
+  }, [allOrders, statusFilter]);
+
+  // Count orders by category for tab badges
+  const orderCounts = useMemo(() => {
+    if (!allOrders) return { all: 0, pending: 0, in_progress: 0, completed: 0, cancelled: 0 };
+    return allOrders.reduce((acc, order) => {
+      acc.all++;
+      const category = getStatusCategory(order.fulfillmentStatus);
+      acc[category]++;
+      return acc;
+    }, { all: 0, pending: 0, in_progress: 0, completed: 0, cancelled: 0 } as Record<StatusFilter, number>);
+  }, [allOrders]);
 
   const handleMarkPaid = async (orderId: string) => {
     if (!user) return;
@@ -116,6 +164,27 @@ export default function ParentOrdersPage() {
           <Link href="/stories">Back to Stories</Link>
         </Button>
       </div>
+
+      {/* Status Filter Tabs */}
+      <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="all" className="gap-2">
+            All {orderCounts.all > 0 && <Badge variant="secondary" className="ml-1">{orderCounts.all}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="pending" className="gap-2">
+            Pending {orderCounts.pending > 0 && <Badge variant="secondary" className="ml-1">{orderCounts.pending}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="in_progress" className="gap-2">
+            In Progress {orderCounts.in_progress > 0 && <Badge variant="secondary" className="ml-1">{orderCounts.in_progress}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="completed" className="gap-2">
+            Completed {orderCounts.completed > 0 && <Badge variant="secondary" className="ml-1">{orderCounts.completed}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="cancelled" className="gap-2">
+            Cancelled {orderCounts.cancelled > 0 && <Badge variant="secondary" className="ml-1">{orderCounts.cancelled}</Badge>}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {orders && orders.length > 0 ? (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -218,7 +287,11 @@ export default function ParentOrdersPage() {
         <Card className="text-center py-10">
           <CardContent>
             <PackageCheck className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
-            <p className="text-muted-foreground">No print orders yet. Finalize a book and request copies to see them here.</p>
+            <p className="text-muted-foreground">
+              {statusFilter === 'all'
+                ? 'No print orders yet. Finalize a book and request copies to see them here.'
+                : `No ${statusFilter === 'in_progress' ? 'in progress' : statusFilter} orders.`}
+            </p>
           </CardContent>
         </Card>
       )}

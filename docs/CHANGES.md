@@ -18,6 +18,27 @@
 
 ### 2026-01-05
 
+#### `a2e549d` - Add status filter tabs to parent print orders page
+
+**Type**: Enhancement
+
+**Summary**: The parent's Print Orders page (/parent/orders) now groups orders by status using filter tabs, matching the admin print orders page functionality.
+
+**Changes**:
+- Added status filter tabs: All, Pending, In Progress, Completed, Cancelled
+- Each tab shows a count badge with the number of orders in that category
+- Orders are grouped by fulfillment status into categories:
+  - Pending: draft, validating, validation_failed, ready_to_submit, awaiting_approval
+  - In Progress: approved, submitting, submitted, confirmed, in_production
+  - Completed: shipped, delivered
+  - Cancelled: cancelled, failed
+- Empty state message is now filter-aware
+
+**Files Modified**:
+- `src/app/parent/orders/page.tsx` - Added tabs, filtering, and counts
+
+---
+
 #### `bb0b097` - Fix Story Beat showing blank completion page
 
 **Type**: Bug Fix
