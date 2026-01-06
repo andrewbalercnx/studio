@@ -440,6 +440,8 @@ ${generateStoryBeatOutputDescription()}
                                 storyContinuationResolved: resolvedStoryContinuation,
                                 options: manualOutput.options,
                                 optionsResolved: resolvedOptions,
+                                // Progress: arc step completion (0.0 to ~0.9, leaving room for ending)
+                                progress: arcSteps.length > 1 ? (safeArcStepIndex + 1) / (arcSteps.length + 1) : 0.5,
                                 debug: {
                                     storySoFarLength: storySoFar.length,
                                     messagesCount: conversationMessages.length,
@@ -526,6 +528,8 @@ ${generateStoryBeatOutputDescription()}
                 storyContinuationResolved: resolvedStoryContinuation, // Resolved for display
                 options: structuredOutput.options, // Original with placeholders
                 optionsResolved: resolvedOptions, // Resolved for display
+                // Progress: arc step completion (0.0 to ~0.9, leaving room for ending)
+                progress: arcSteps.length > 1 ? (safeArcStepIndex + 1) / (arcSteps.length + 1) : 0.5,
                 debug: {
                     storySoFarLength: storySoFar.length,
                     messagesCount: conversationMessages.length,

@@ -21,6 +21,7 @@ import { CharacterIntroductionCard } from './character-introduction-card';
 import { ChildAvatarAnimation } from '@/components/child/child-avatar-animation';
 import { SpeechModeToggle } from '@/components/child/speech-mode-toggle';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
+import { TestTubeIndicator } from './progress-indicators';
 
 import type {
   StoryGenerator,
@@ -129,6 +130,7 @@ export function StoryBrowser({
   const [isEndingPhase, setIsEndingPhase] = useState(false);
   const [debugInfo, setDebugInfo] = useState<Record<string, any>>({});
   const [musicEnabled, setMusicEnabled] = useState(true); // User preference for background music
+  const [storyProgress, setStoryProgress] = useState(0); // Story progress (0-1) from API responses
 
   // Friends flow state
   const [friendsPhase, setFriendsPhase] = useState<FriendsPhase | null>(null);
@@ -357,8 +359,11 @@ export function StoryBrowser({
         throw new Error(result.errorMessage || 'Unknown error');
       }
 
-      // Store debug info
+      // Store debug info and progress
       setDebugInfo(result.debug || {});
+      if (typeof result.progress === 'number') {
+        setStoryProgress(result.progress);
+      }
 
       // Extract actor IDs from response
       const textToScan = [
@@ -506,12 +511,16 @@ export function StoryBrowser({
         throw new Error(result.errorMessage || 'Unknown error');
       }
 
-      // Store debug info
+      // Store debug info and progress
       setDebugInfo(result.debug || {});
+      if (typeof result.progress === 'number') {
+        setStoryProgress(result.progress);
+      }
 
       // Handle story complete
       if (result.isStoryComplete) {
         setFinalStory(result.finalStoryResolved || result.finalStory || null);
+        setStoryProgress(1.0);
         setBrowserState('complete');
         return;
       }
@@ -594,8 +603,9 @@ export function StoryBrowser({
         throw new Error(result.errorMessage || 'Failed to generate endings');
       }
 
-      // Store debug info
+      // Store debug info and update progress to near-complete (ending phase)
       setDebugInfo(result.debug || {});
+      setStoryProgress(0.9); // Ending phase = 90% complete
 
       // Store ending options message in Firestore
       const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
@@ -880,8 +890,30 @@ export function StoryBrowser({
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+  // Determine if we should show progress indicator
+  // Show during active story creation (generating, question, ending phases)
+  const showProgressIndicator = storyProgress > 0 &&
+    browserState !== 'loading' &&
+    browserState !== 'story_type' &&
+    browserState !== 'error' &&
+    browserState !== 'complete' &&
+    browserState !== 'compiling';
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
+      {/* Progress Indicator - fixed on right side */}
+      {showProgressIndicator && (
+        <div className="fixed right-4 top-1/2 -translate-y-1/2 z-30 hidden sm:block">
+          <TestTubeIndicator
+            progress={storyProgress}
+            size="md"
+            liquidColor="#8B5CF6"
+            glowColor="#C4B5FD"
+            showBubbles={browserState === 'generating'}
+          />
+        </div>
+      )}
+
       {/* Story Controls Bar - full width bar below header with page-specific controls */}
       <div className="sticky top-14 z-40 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-12 max-w-screen-2xl items-center justify-between px-4">
@@ -1206,6 +1238,9 @@ export function StoryBrowser({
             backgroundMusicPlaying: backgroundMusic.isPlaying,
             backgroundMusicAvailable: !!backgroundMusicUrl,
           },
+          // Progress
+          storyProgress,
+          showProgressIndicator,
           // API debug info
           debug: debugInfo,
         }}

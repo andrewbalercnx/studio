@@ -346,6 +346,11 @@ export const gemini4Flow = ai.defineFlow(
         });
       }
 
+      // Calculate progress based on question count and completion
+      // Uses maxQuestions (6 for young kids, 8 for older) as denominator
+      const maxQuestions = childAge && childAge <= 5 ? 6 : 8;
+      const progress = result.isStoryComplete ? 1.0 : Math.min(0.9, (questionCount + 1) / maxQuestions);
+
       return {
         ok: true,
         sessionId,
@@ -358,6 +363,7 @@ export const gemini4Flow = ai.defineFlow(
         finalStoryResolved: resolvedFinalStory,
         questionPhase: result.questionPhase || 'opening',
         questionNumber: questionCount + 1,
+        progress,
         debug: {
           ...debug,
           systemPrompt: systemPrompt.slice(0, 500) + '...',

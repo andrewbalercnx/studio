@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-06
+> **Last Updated**: 2026-01-06 (added progress field to StoryGeneratorResponse)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -186,6 +186,29 @@ Generate character trait suggestions using AI.
 
 ## Story Session Routes
 
+All story generation endpoints return a `StoryGeneratorResponse` object with the following common fields:
+
+### StoryGeneratorResponse Format
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ok` | boolean | Success status |
+| `sessionId` | string | Story session ID |
+| `headerText` | string? | Story continuation (beat mode) - with $$placeholders$$ |
+| `headerTextResolved` | string? | Story continuation resolved for display |
+| `question` | string | Current question/prompt - with $$placeholders$$ |
+| `questionResolved` | string? | Question resolved for display |
+| `options` | array | Available choices |
+| `isStoryComplete` | boolean? | True when story is finished |
+| `finalStory` | string? | Complete story text when finished |
+| `progress` | number? | Story progress (0.0-1.0), monotonically increasing |
+| `debug` | object? | Debug information (dev only) |
+| `errorMessage` | string? | Error description when ok=false |
+
+**Progress Field**: The `progress` value (0.0 to 1.0) estimates how far through the story generation we are. This is used to display visual progress indicators to children. Progress is monotonically increasing - it never decreases during a story session.
+
+---
+
 ### POST `/api/warmupReply`
 
 Generate warmup phase response.
@@ -245,7 +268,8 @@ Generate story beat with continuation and options. Uses the standard `StoryGener
     {"id": "A", "text": "Follow the mysterious path", "textResolved": "Follow the mysterious path"},
     {"id": "B", "text": "Climb the tall tree", "textResolved": "Climb the tall tree"}
   ],
-  "isStoryComplete": false
+  "isStoryComplete": false,
+  "progress": 0.4
 }
 ```
 
@@ -277,7 +301,8 @@ Generate Gemini 3 free-form story questions. Uses the standard `StoryGeneratorRe
     {"id": "A", "text": "A magical journey", "textResolved": "A magical journey"},
     {"id": "B", "text": "A space adventure", "textResolved": "A space adventure"}
   ],
-  "isStoryComplete": false
+  "isStoryComplete": false,
+  "progress": 0.25
 }
 ```
 
@@ -315,7 +340,8 @@ Generate Gemini 4 structured story questions with "Tell me more" support. Uses t
     {"id": "C", "text": "An underwater kingdom", "isMoreOption": false},
     {"id": "M", "text": "Tell me more", "isMoreOption": true}
   ],
-  "isStoryComplete": false
+  "isStoryComplete": false,
+  "progress": 0.25
 }
 ```
 
@@ -349,7 +375,8 @@ Generate wizard questions and final story. The wizard asks 4 questions to gather
     {"id": "A", "text": "A magical journey", "introducesCharacter": false},
     {"id": "B", "text": "A space adventure", "introducesCharacter": false}
   ],
-  "isStoryComplete": false
+  "isStoryComplete": false,
+  "progress": 0.4
 }
 ```
 

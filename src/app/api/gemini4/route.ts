@@ -128,6 +128,7 @@ export async function POST(request: Request) {
         isStoryComplete: result.isStoryComplete || false,
         finalStory: result.finalStory || undefined,
         finalStoryResolved: result.finalStoryResolved || undefined,
+        progress: result.progress,
         debug: result.debug,
       };
 

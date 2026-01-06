@@ -260,6 +260,10 @@ export const gemini3Flow = ai.defineFlow(
                 });
             }
 
+            // Calculate progress based on message count and completion
+            // Uses storyTemperature (0-1) as base, 1.0 when complete
+            const progress = result.isStoryComplete ? 1.0 : Math.min(0.9, storyTemperature);
+
             return {
                 ok: true,
                 sessionId,
@@ -271,6 +275,7 @@ export const gemini3Flow = ai.defineFlow(
                 isStoryComplete: result.isStoryComplete || false,
                 finalStory: result.finalStory || null, // Original with placeholders
                 finalStoryResolved: resolvedFinalStory, // Resolved for display
+                progress,
                 debug: {
                     ...debug,
                     fullPrompt: systemPrompt, // Include full prompt for diagnostics

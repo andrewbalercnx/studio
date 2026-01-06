@@ -82,6 +82,8 @@ export async function POST(request: Request) {
     }
 
     // Convert flow output to StoryGeneratorResponse format
+    // Progress values for friends flow:
+    // character_selection = 0.25, scenario_selection = 0.50, synopsis_selection = 0.75, complete = 1.0
     if (result.state === 'character_selection') {
       const response: StoryGeneratorResponse = {
         ok: true,
@@ -93,6 +95,7 @@ export async function POST(request: Request) {
         friendsPhase: 'character_selection',
         proposedCharacters: result.proposedCharacters,
         availableCharacters: result.availableCharacters,
+        progress: 0.25,
       };
       return NextResponse.json(response);
     }
@@ -114,6 +117,7 @@ export async function POST(request: Request) {
         isStoryComplete: false,
         friendsPhase: 'scenario_selection',
         scenarios: result.scenarios,
+        progress: 0.5,
       };
       return NextResponse.json(response);
     }
@@ -143,6 +147,7 @@ export async function POST(request: Request) {
         isStoryComplete: false,
         friendsPhase: 'synopsis_selection',
         synopses: result.synopses,
+        progress: 0.75,
       };
       return NextResponse.json(response);
     }
@@ -158,6 +163,7 @@ export async function POST(request: Request) {
         finalStory: result.storyText,
         finalStoryResolved: result.storyText,
         friendsPhase: 'complete',
+        progress: 1.0,
       };
       return NextResponse.json(response);
     }

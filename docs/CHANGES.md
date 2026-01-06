@@ -18,6 +18,50 @@
 
 ### 2026-01-06
 
+#### `0b4b21c` - Add story progress indicator
+
+**Type**: Feature
+
+**Summary**: Story generators now return a `progress` value (0.0 to 1.0) with each response, and the UI displays a test tube progress indicator that fills with glowing liquid as the story progresses.
+
+**Changes**:
+1. Added `progress` field to `StoryGeneratorResponse` type
+2. All story generator flows now calculate and return progress:
+   - `storyBeat`: Based on arc step completion (arcStepIndex / totalSteps)
+   - `gemini3`: Based on message count / target messages (storyTemperature)
+   - `gemini4`: Based on question count / maxQuestions (6 for young kids, 8 for older)
+   - `storyWizard`: Based on answered questions (0-0.8) with 1.0 when complete
+   - `storyFriends`: Based on phase (character=0.25, scenario=0.5, synopsis=0.75, complete=1.0)
+3. Created `TestTubeIndicator` component with:
+   - SVG test tube with cork and glass effects
+   - Glowing liquid that fills from bottom to top
+   - Animated bubbles during generation
+   - Smooth transitions between progress states
+   - Three size variants (sm, md, lg)
+4. Integrated progress indicator into `StoryBrowser`:
+   - Fixed position on right side of screen (hidden on mobile)
+   - Shows during active story creation phases
+   - Bubbles animate only during generation
+
+**Files Created**:
+- `src/components/story/progress-indicators/test-tube-indicator.tsx`
+- `src/components/story/progress-indicators/index.ts`
+
+**Files Modified**:
+- `src/lib/types.ts` - Added progress field to StoryGeneratorResponse
+- `src/ai/flows/story-beat-flow.ts` - Added progress calculation
+- `src/ai/flows/gemini3-flow.ts` - Added progress calculation
+- `src/ai/flows/gemini4-flow.ts` - Added progress calculation
+- `src/app/api/storyBeat/route.ts` - Pass through progress field
+- `src/app/api/gemini3/route.ts` - Pass through progress field
+- `src/app/api/gemini4/route.ts` - Pass through progress field
+- `src/app/api/storyWizard/route.ts` - Calculate and return progress
+- `src/app/api/storyFriends/route.ts` - Return progress for each phase
+- `src/components/story/story-browser.tsx` - Added progress state and indicator
+- `docs/API.md` - Documented StoryGeneratorResponse progress field
+
+---
+
 #### `938fd47` - Update /kids book reader to use ImmersivePlayer
 
 **Type**: Enhancement

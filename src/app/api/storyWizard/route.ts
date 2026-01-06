@@ -136,6 +136,11 @@ export async function POST(request: Request) {
         updatedAt: FieldValue.serverTimestamp(),
       });
 
+      // Calculate progress: wizard asks 4 questions, then generates story
+      // Each answered question = 20% progress, leaving 20% for story generation
+      const answeredCount = askingResult.answers.length;
+      const progress = Math.min(0.8, answeredCount * 0.2);
+
       const response: StoryGeneratorResponse = {
         ok: true,
         sessionId,
@@ -143,6 +148,7 @@ export async function POST(request: Request) {
         questionResolved,
         options,
         isStoryComplete: false,
+        progress,
       };
 
       return NextResponse.json(response);
@@ -175,6 +181,7 @@ export async function POST(request: Request) {
         isStoryComplete: true,
         finalStory: finishedResult.storyText,
         finalStoryResolved: finishedResult.storyText,
+        progress: 1.0,
       };
 
       return NextResponse.json(response);

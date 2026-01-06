@@ -62,6 +62,8 @@ export async function POST(request: Request) {
             questionResolved: 'What happens next?',
             options: normalizedOptions,
             isStoryComplete: false,
+            // Progress from the flow (based on arc step completion)
+            progress: result.progress,
             debug: result.debug,
         };
 

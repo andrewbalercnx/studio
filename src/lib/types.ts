@@ -1836,6 +1836,11 @@ export type StoryGeneratorResponse = {
   finalStory?: string;                   // With $$placeholders$$
   finalStoryResolved?: string;           // Resolved for display
 
+  // Progress indicator (0.0 to 1.0)
+  // Monotonically increasing estimate of how far through story generation we are.
+  // 0.0 = just started, 1.0 = complete
+  progress?: number;
+
   // Ending options (beat mode ending flow)
   isEndingPhase?: boolean;
 
