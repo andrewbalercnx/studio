@@ -3,15 +3,19 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { StoryOutputPage } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { RotateCcw, BookOpen, Loader2, Play } from 'lucide-react';
+import { RotateCcw, BookOpen, Loader2, Play, Volume2, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
 import { useResolvePlaceholdersMultiple } from '@/hooks/use-resolve-placeholders';
+
+export type ReadMode = 'listen' | 'read';
 
 export type ImmersivePlayerProps = {
   pages: StoryOutputPage[];
   bookTitle?: string;
+  defaultReadMode?: ReadMode;
   onPlayAgain?: () => void;
   onExit?: () => void;
+  onReadModeChange?: (mode: ReadMode) => void;
 };
 
 type PlayerState = 'waiting_for_interaction' | 'playing' | 'paused' | 'ended';
@@ -19,8 +23,10 @@ type PlayerState = 'waiting_for_interaction' | 'playing' | 'paused' | 'ended';
 export function ImmersivePlayer({
   pages,
   bookTitle,
+  defaultReadMode,
   onPlayAgain,
   onExit,
+  onReadModeChange,
 }: ImmersivePlayerProps) {
   // Filter to only pages with images (skip title_page, blank, etc.)
   const displayablePages = useMemo(
@@ -30,10 +36,9 @@ export function ImmersivePlayer({
 
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [playerState, setPlayerState] = useState<PlayerState>('waiting_for_interaction');
+  const [readMode, setReadMode] = useState<ReadMode | null>(defaultReadMode ?? null);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
-  const [showControls, setShowControls] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const currentPage = displayablePages[currentPageIndex];
   const totalPages = displayablePages.length;
@@ -57,9 +62,6 @@ export function ImmersivePlayer({
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
-      }
-      if (controlsTimeoutRef.current) {
-        clearTimeout(controlsTimeoutRef.current);
       }
     };
   }, []);
@@ -135,45 +137,61 @@ export function ImmersivePlayer({
     return undefined;
   }, [currentPage?.audioUrl, currentPageIndex, hasNextPage]);
 
-  // Handle page changes and auto-play
+  // Handle page changes and auto-play (only in 'listen' mode)
   useEffect(() => {
-    if (playerState !== 'playing') return;
+    if (playerState !== 'playing' || readMode !== 'listen') return;
 
     const cleanup = playCurrentPageAudio();
     return cleanup;
-  }, [currentPageIndex, playerState, playCurrentPageAudio]);
+  }, [currentPageIndex, playerState, readMode, playCurrentPageAudio]);
 
-  // Handle starting playback (requires user interaction for audio)
-  const handleStartPlayback = useCallback(() => {
+  // Handle starting playback with a specific mode
+  const handleStartWithMode = useCallback((mode: ReadMode) => {
+    setReadMode(mode);
     setPlayerState('playing');
-  }, []);
+    onReadModeChange?.(mode);
+  }, [onReadModeChange]);
 
-  // Handle tap/click to pause/resume
+  // Navigation for "Read Myself" mode
+  const goToNextPage = useCallback(() => {
+    if (hasNextPage) {
+      setCurrentPageIndex(prev => prev + 1);
+    } else {
+      setPlayerState('ended');
+    }
+  }, [hasNextPage]);
+
+  const goToPreviousPage = useCallback(() => {
+    if (currentPageIndex > 0) {
+      setCurrentPageIndex(prev => prev - 1);
+    }
+  }, [currentPageIndex]);
+
+  // Handle tap/click - different behavior for listen vs read mode
   const handleScreenTap = useCallback(() => {
     if (playerState === 'ended' || playerState === 'waiting_for_interaction') return;
 
+    if (readMode === 'read') {
+      // In read mode, tap advances to next page (like pressing any key)
+      goToNextPage();
+      return;
+    }
+
+    // Listen mode - pause/resume behavior
     if (playerState === 'playing') {
       // Pause
       if (audioRef.current) {
         audioRef.current.pause();
       }
       setPlayerState('paused');
-      setShowControls(true);
     } else {
       // Resume
       if (audioRef.current) {
         audioRef.current.play().catch(() => {});
       }
       setPlayerState('playing');
-      // Hide controls after a delay
-      if (controlsTimeoutRef.current) {
-        clearTimeout(controlsTimeoutRef.current);
-      }
-      controlsTimeoutRef.current = setTimeout(() => {
-        setShowControls(false);
-      }, 2000);
     }
-  }, [playerState]);
+  }, [playerState, readMode, goToNextPage]);
 
   // Handle play again
   const handlePlayAgain = useCallback(() => {
@@ -195,13 +213,42 @@ export function ImmersivePlayer({
     }
   }, [onExit]);
 
-  // Render start screen - requires user tap to enable audio playback
+  // Keyboard navigation for "Read Myself" mode
+  useEffect(() => {
+    if (readMode !== 'read' || playerState !== 'playing') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent default for navigation keys
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Escape'].includes(e.key)) {
+        e.preventDefault();
+      }
+
+      // Left arrow or Up arrow goes to previous page
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        goToPreviousPage();
+        return;
+      }
+
+      // Escape exits
+      if (e.key === 'Escape') {
+        handleExit();
+        return;
+      }
+
+      // Any other key advances to next page
+      goToNextPage();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [readMode, playerState, goToNextPage, goToPreviousPage, handleExit]);
+
+  // Render start screen - show reading mode options
   if (playerState === 'waiting_for_interaction') {
     return (
       <div
-        className="fixed inset-0 bg-black cursor-pointer select-none"
+        className="fixed inset-0 bg-black select-none"
         style={{ zIndex: 9999 }}
-        onClick={handleStartPlayback}
       >
         {/* Background image - show cover */}
         {currentPage?.imageUrl && (
@@ -214,21 +261,46 @@ export function ImmersivePlayer({
         )}
 
         {/* Slight overlay for contrast */}
-        <div className="absolute inset-0 bg-black/30" />
+        <div className="absolute inset-0 bg-black/40" />
 
-        {/* Center play button */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
-          <div className="bg-white/90 rounded-full p-8 shadow-2xl">
-            <Play className="h-20 w-20 text-primary fill-primary" />
+        {/* Title and reading mode options */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-8 p-6">
+          {bookTitle && (
+            <h1 className="text-3xl sm:text-4xl font-headline text-white drop-shadow-lg text-center">
+              {bookTitle}
+            </h1>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* Read to Me button */}
+            <Button
+              size="lg"
+              className="min-w-[180px] h-auto py-4 px-6 text-lg bg-primary hover:bg-primary/90 shadow-2xl"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStartWithMode('listen');
+              }}
+            >
+              <Volume2 className="mr-3 h-6 w-6" />
+              Read to Me
+            </Button>
+
+            {/* Read Myself button */}
+            <Button
+              size="lg"
+              variant="secondary"
+              className="min-w-[180px] h-auto py-4 px-6 text-lg bg-white/90 hover:bg-white text-foreground shadow-2xl"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStartWithMode('read');
+              }}
+            >
+              <Eye className="mr-3 h-6 w-6" />
+              Read Myself
+            </Button>
           </div>
-          <div className="text-center space-y-2">
-            {bookTitle && (
-              <h1 className="text-3xl sm:text-4xl font-headline text-white drop-shadow-lg">
-                {bookTitle}
-              </h1>
-            )}
-            <p className="text-white/80 text-lg">Tap to start</p>
-          </div>
+
+          <p className="text-white/60 text-sm">Choose how you want to enjoy the story</p>
         </div>
       </div>
     );
@@ -291,8 +363,8 @@ export function ImmersivePlayer({
       {/* Gradient overlay for text readability - only covers bottom portion */}
       <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
 
-      {/* Loading indicator */}
-      {isAudioLoading && (
+      {/* Loading indicator - only in listen mode */}
+      {readMode === 'listen' && isAudioLoading && (
         <div className="absolute top-4 right-4">
           <Loader2 className="h-6 w-6 animate-spin text-white/70" />
         </div>
@@ -303,8 +375,55 @@ export function ImmersivePlayer({
         {currentPageIndex + 1} / {totalPages}
       </div>
 
-      {/* Paused overlay with controls */}
-      {playerState === 'paused' && (
+      {/* Exit button - top right (in read mode) */}
+      {readMode === 'read' && (
+        <button
+          className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white/80 hover:text-white rounded-full p-2 transition-colors"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleExit();
+          }}
+          aria-label="Exit"
+        >
+          <BookOpen className="h-5 w-5" />
+        </button>
+      )}
+
+      {/* Navigation buttons for "Read Myself" mode */}
+      {readMode === 'read' && (
+        <>
+          {/* Previous page button - left side */}
+          {currentPageIndex > 0 && (
+            <button
+              className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white/70 hover:text-white rounded-full p-3 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                goToPreviousPage();
+              }}
+              aria-label="Previous page"
+            >
+              <ChevronLeft className="h-8 w-8" />
+            </button>
+          )}
+
+          {/* Next page button - right side */}
+          {hasNextPage && (
+            <button
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white/70 hover:text-white rounded-full p-3 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                goToNextPage();
+              }}
+              aria-label="Next page"
+            >
+              <ChevronRight className="h-8 w-8" />
+            </button>
+          )}
+        </>
+      )}
+
+      {/* Paused overlay with controls - only in listen mode */}
+      {readMode === 'listen' && playerState === 'paused' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-8 bg-black/40">
           {/* Continue play button */}
           <div className="bg-white/90 rounded-full p-6 shadow-2xl">
@@ -369,7 +488,12 @@ export function ImmersivePlayer({
       {/* Tap hint - show briefly on first load */}
       {playerState === 'playing' && currentPageIndex === 0 && (
         <div className="absolute bottom-20 left-1/2 -translate-x-1/2 animate-pulse">
-          <p className="text-white/50 text-sm">Tap anywhere to pause</p>
+          <p className="text-white/50 text-sm">
+            {readMode === 'read'
+              ? 'Tap or press any key to turn the page'
+              : 'Tap anywhere to pause'
+            }
+          </p>
         </div>
       )}
     </div>

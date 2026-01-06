@@ -16,6 +16,33 @@
 
 ## Changes
 
+### 2026-01-06
+
+#### `74f7409` - Add "Read Myself" mode to storybook player
+
+**Type**: Feature
+
+**Summary**: Children can now choose between "Read to Me" (narrated audio) or "Read Myself" (self-paced reading) when opening a completed storybook.
+
+**Changes**:
+- Start screen now shows two buttons: "Read to Me" and "Read Myself"
+- "Read to Me" mode: Audio narration with auto-advance (existing behavior)
+- "Read Myself" mode:
+  - No audio playback
+  - Previous/Next navigation buttons on screen edges
+  - Keyboard navigation: any key advances to next page
+  - Left arrow / Up arrow goes to previous page
+  - Escape key exits to books list
+  - Tapping anywhere on the screen advances to next page
+- Added `ReadMode` type exported from book-reader components
+- ImmersivePlayer now accepts `defaultReadMode` and `onReadModeChange` props
+
+**Files Modified**:
+- `src/components/book-reader/immersive-player.tsx` - Added read mode selection and navigation
+- `src/components/book-reader/index.ts` - Export ReadMode type
+
+---
+
 ### 2026-01-05
 
 #### `a2e549d` - Add status filter tabs to parent print orders page
