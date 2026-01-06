@@ -3,7 +3,8 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, Shield, ShieldOff, BrainCircuit, Pencil, User as UserIcon, RefreshCw, Target, Bell, BellOff, Wrench } from 'lucide-react';
+import { LoaderCircle, Shield, ShieldOff, BrainCircuit, Pencil, User as UserIcon, RefreshCw, Target, Bell, BellOff, Wrench, Eye } from 'lucide-react';
+import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFirestore, useAuth } from '@/firebase';
@@ -234,6 +235,14 @@ export default function AdminUsersPage() {
                 <Wrench className="mr-1 h-4 w-4" />
                 {user.maintenanceUser ? 'Maint On' : 'Maint Off'}
               </Button>
+              {user.roles?.isParent && (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/admin/view-as-parent/${user.id}`}>
+                    <Eye className="mr-1 h-4 w-4" />
+                    View As Parent
+                  </Link>
+                </Button>
+              )}
             </TableCell>
           </TableRow>
         ))}
