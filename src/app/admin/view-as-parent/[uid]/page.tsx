@@ -29,12 +29,23 @@ import type { UserProfile, ChildProfile, Character, Story, PrintOrder } from '@/
 import { format } from 'date-fns';
 
 function formatFriendlyDate(date: Date): string {
+  if (!date || isNaN(date.getTime())) return '';
   const day = date.getDate();
   const suffix = (day === 1 || day === 21 || day === 31) ? 'st'
     : (day === 2 || day === 22) ? 'nd'
     : (day === 3 || day === 23) ? 'rd'
     : 'th';
   return `${day}${suffix} ${format(date, 'MMMM yyyy')}`;
+}
+
+function safeToDate(value: any): Date | null {
+  if (!value) return null;
+  if (value.toDate && typeof value.toDate === 'function') {
+    return value.toDate();
+  }
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d;
 }
 
 function getDisplayDate(date: any): string {
@@ -244,7 +255,7 @@ function StoriesTab({ stories, children, loading }: { stories: Story[] | null; c
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">{story.metadata?.title || 'Untitled Story'}</CardTitle>
                     <CardDescription>
-                      {story.createdAt && formatFriendlyDate(story.createdAt.toDate?.() || new Date(story.createdAt))}
+                      {safeToDate(story.createdAt) && formatFriendlyDate(safeToDate(story.createdAt)!)}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -319,7 +330,7 @@ function OrdersTab({ orders, loading }: { orders: PrintOrder[] | null; loading: 
               </Badge>
             </div>
             <CardDescription>
-              {order.createdAt && formatFriendlyDate(order.createdAt.toDate?.() || new Date(order.createdAt))}
+              {safeToDate(order.createdAt) && formatFriendlyDate(safeToDate(order.createdAt)!)}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
