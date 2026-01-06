@@ -657,7 +657,10 @@ System-wide configuration documents.
 
 Template types: `orderSubmitted`, `orderStatusChanged`, `orderApproved`, `orderRejected`, `orderCancelled`, `testEmail`, `maintenanceError`
 
-**maintenanceError placeholders**: `{{flowName}}`, `{{errorType}}`
+**maintenanceError placeholders**: `{{flowName}}`, `{{errorType}}`, `{{errorMessage}}`, `{{errorMessageSnippet}}`
+
+- `{{errorMessage}}` - The full error message
+- `{{errorMessageSnippet}}` - First 5 words of the error message followed by ellipsis (e.g., "Failed to generate image for...")
 
 **Security**: Admin only.
 

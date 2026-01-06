@@ -373,9 +373,18 @@ export async function maintenanceErrorTemplate(
   }
 
   const adminUrl = `${getBaseUrl()}/admin`;
+
+  // Create error message snippet (first 5 words + ellipsis)
+  const errorWords = details.errorMessage.trim().split(/\s+/);
+  const errorMessageSnippet = errorWords.length > 5
+    ? errorWords.slice(0, 5).join(' ') + '...'
+    : details.errorMessage;
+
   const values = {
     flowName: details.flowName,
     errorType: details.errorType,
+    errorMessage: details.errorMessage,
+    errorMessageSnippet,
   };
 
   // Build error details section

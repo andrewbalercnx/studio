@@ -18,6 +18,22 @@
 
 ### 2026-01-06
 
+#### `63de692` - Add errorMessage placeholders to maintenance email template
+
+**Type**: Enhancement
+
+**Summary**: Added `{{errorMessage}}` and `{{errorMessageSnippet}}` placeholders to the maintenance error email template for use in subject lines or body text.
+
+**Changes**:
+- `{{errorMessage}}` - The full error message
+- `{{errorMessageSnippet}}` - First 5 words followed by ellipsis (e.g., "Failed to generate image for...")
+
+**Files Modified**:
+- `src/lib/email/templates.ts` - Added errorMessage and errorMessageSnippet to template values
+- `docs/SCHEMA.md` - Documented new placeholders
+
+---
+
 #### `0b4b21c` - Add story progress indicator
 
 **Type**: Feature
