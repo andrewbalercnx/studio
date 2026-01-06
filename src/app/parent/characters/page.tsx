@@ -181,6 +181,11 @@ export default function ManageCharactersPage() {
     return characters.filter(char => !char.deletedAt);
   }, [characters]);
 
+  // Filter out deleted children (for dropdown in character form)
+  const visibleChildren = useMemo(() => {
+    return children.filter(child => !child.deletedAt);
+  }, [children]);
+
   const renderContent = () => {
     if (userLoading || loading) {
       return (
@@ -272,7 +277,7 @@ export default function ManageCharactersPage() {
             <DialogHeader>
               <DialogTitle>{editingCharacter ? 'Edit Character' : 'Create New Character'}</DialogTitle>
             </DialogHeader>
-            {user && <CharacterForm parentUid={user.uid} onSave={() => setIsFormOpen(false)} character={editingCharacter} children={children} />}
+            {user && <CharacterForm parentUid={user.uid} onSave={() => setIsFormOpen(false)} character={editingCharacter} children={visibleChildren} />}
           </DialogContent>
         </Dialog>
 

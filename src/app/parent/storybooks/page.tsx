@@ -385,15 +385,20 @@ export default function ParentStorybooksPage() {
   }, [firestore, user, userLoading, idTokenResult]);
   const { data: imageStyles } = useCollection<ImageStyle>(imageStylesQuery);
 
+  // Filter out deleted children
+  const visibleChildren = useMemo(() => {
+    return (children || []).filter(child => !child.deletedAt);
+  }, [children]);
+
   // Load storybooks for all children
   useEffect(() => {
     const loadStorybooks = async () => {
-      if (!firestore || !children || childrenLoading) return;
+      if (!firestore || !visibleChildren.length || childrenLoading) return;
 
       setLoading(true);
       const results: ChildWithStorybooks[] = [];
 
-      for (const child of children) {
+      for (const child of visibleChildren) {
         const storybooks: StorybookWithMeta[] = [];
 
         // Query stories for this child
@@ -562,7 +567,7 @@ export default function ParentStorybooksPage() {
     };
 
     loadStorybooks();
-  }, [firestore, children, childrenLoading]);
+  }, [firestore, visibleChildren, childrenLoading]);
 
   // Handle regenerate audio
   const handleRegenerateAudio = useCallback(
