@@ -56,6 +56,11 @@ export default function ParentOverviewPage() {
 
   const { data: children, loading: childrenLoading, error: childrenError } = useCollection<ChildProfile>(childrenQuery);
 
+  // Filter out deleted children
+  const visibleChildren = useMemo(() => {
+    return (children || []).filter(child => !child.deletedAt);
+  }, [children]);
+
   const renderContent = () => {
     if (childrenLoading) {
       return (
@@ -74,7 +79,7 @@ export default function ParentOverviewPage() {
       );
     }
 
-    if (!children || children.length === 0) {
+    if (visibleChildren.length === 0) {
       return (
         <div className="text-center py-8">
           <p className="text-muted-foreground mb-4">No children profiles found.</p>
@@ -87,7 +92,7 @@ export default function ParentOverviewPage() {
 
     return (
       <div className="flex flex-wrap items-center justify-center gap-8">
-        {children.map(child => (
+        {visibleChildren.map(child => (
           <ChildIcon key={child.id} profile={child} />
         ))}
       </div>
