@@ -18,7 +18,28 @@
 
 ### 2026-01-06
 
-#### `b8c0a91` - Fix /kids endpoint parity with /child routes
+#### `938fd47` - Update /kids book reader to use ImmersivePlayer
+
+**Type**: Enhancement
+
+**Summary**: The /kids/read page now uses the shared ImmersivePlayer component, bringing it to feature parity with the main storybook reader. Also added manual navigation buttons to both read modes in ImmersivePlayer.
+
+**Changes**:
+- Rewrote `/kids/read/[bookId]` to use `ImmersivePlayer` instead of custom implementation
+- Kids now see the same "Read to Me" / "Read Myself" mode selection as the main app
+- Added manual navigation buttons (prev/next) to ImmersivePlayer for both modes
+  - In "Read to Me" mode: buttons stop current audio before navigating
+  - In "Read Myself" mode: buttons work as before
+- Added exit button (BookOpen icon) visible in both modes
+- Navigation buttons are semi-transparent circles on left/right sides of screen
+
+**Files Modified**:
+- `src/app/kids/read/[bookId]/page.tsx` - Simplified to use ImmersivePlayer
+- `src/components/book-reader/immersive-player.tsx` - Added navigation buttons for both modes
+
+---
+
+#### `0d16972` - Fix /kids endpoint parity with /child routes
 
 **Type**: Bug Fix / Security
 

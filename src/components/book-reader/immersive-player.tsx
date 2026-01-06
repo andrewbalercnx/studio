@@ -375,52 +375,58 @@ export function ImmersivePlayer({
         {currentPageIndex + 1} / {totalPages}
       </div>
 
-      {/* Exit button - top right (in read mode) */}
-      {readMode === 'read' && (
-        <button
-          className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white/80 hover:text-white rounded-full p-2 transition-colors"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleExit();
-          }}
-          aria-label="Exit"
-        >
-          <BookOpen className="h-5 w-5" />
-        </button>
-      )}
+      {/* Exit button - top right (available in both modes) */}
+      <button
+        className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white/80 hover:text-white rounded-full p-2 transition-colors"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleExit();
+        }}
+        aria-label="Exit"
+      >
+        <BookOpen className="h-5 w-5" />
+      </button>
 
-      {/* Navigation buttons for "Read Myself" mode */}
-      {readMode === 'read' && (
-        <>
-          {/* Previous page button - left side */}
-          {currentPageIndex > 0 && (
-            <button
-              className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white/70 hover:text-white rounded-full p-3 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
-                goToPreviousPage();
-              }}
-              aria-label="Previous page"
-            >
-              <ChevronLeft className="h-8 w-8" />
-            </button>
-          )}
+      {/* Navigation buttons - available in both modes for manual navigation */}
+      <>
+        {/* Previous page button - left side */}
+        {currentPageIndex > 0 && (
+          <button
+            className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white/70 hover:text-white rounded-full p-3 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              // In listen mode, stop current audio before navigating
+              if (readMode === 'listen' && audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+              }
+              goToPreviousPage();
+            }}
+            aria-label="Previous page"
+          >
+            <ChevronLeft className="h-8 w-8" />
+          </button>
+        )}
 
-          {/* Next page button - right side */}
-          {hasNextPage && (
-            <button
-              className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white/70 hover:text-white rounded-full p-3 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
-                goToNextPage();
-              }}
-              aria-label="Next page"
-            >
-              <ChevronRight className="h-8 w-8" />
-            </button>
-          )}
-        </>
-      )}
+        {/* Next page button - right side */}
+        {hasNextPage && (
+          <button
+            className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white/70 hover:text-white rounded-full p-3 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              // In listen mode, stop current audio before navigating
+              if (readMode === 'listen' && audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+              }
+              goToNextPage();
+            }}
+            aria-label="Next page"
+          >
+            <ChevronRight className="h-8 w-8" />
+          </button>
+        )}
+      </>
 
       {/* Paused overlay with controls - only in listen mode */}
       {readMode === 'listen' && playerState === 'paused' && (
