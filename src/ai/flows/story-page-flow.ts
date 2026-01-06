@@ -78,23 +78,6 @@ function formatFriendlyDate(date: Date = new Date()): string {
   return `${months[date.getMonth()]} ${day}${suffix}, ${date.getFullYear()}`;
 }
 
-/**
- * Calculate child's age in years from date of birth
- */
-function getChildAgeYears(child?: ChildProfile | null): number | null {
-  if (!child?.dateOfBirth) return null;
-  let dob: Date | null = null;
-  if (typeof (child.dateOfBirth as any).toDate === 'function') {
-    dob = (child.dateOfBirth as any).toDate();
-  } else {
-    const parsed = new Date(child.dateOfBirth as any);
-    dob = isNaN(parsed.getTime()) ? null : parsed;
-  }
-  if (!dob) return null;
-  const diff = Date.now() - dob.getTime();
-  if (diff <= 0) return null;
-  return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
-}
 
 function splitSentences(storyText: string): string[] {
   if (!storyText || typeof storyText !== 'string') return [];
@@ -179,64 +162,17 @@ function chunkSentences(sentences: string[], targetPageCount = 0): string[][] {
   return chunks;
 }
 
-/**
- * Build a detailed actor block for image prompts
- * Includes description, pronouns, likes, dislikes, and reference image URLs
- */
-function buildActorBlock(
-  actor: Character | ChildProfile,
-  actorId: string
-): string {
-  const lines: string[] = [];
-  lines.push(`$$${actorId}$$:`);
-
-  if (actor.description) {
-    lines.push(`- Description: ${actor.description}`);
-  }
-
-  lines.push(`- Pronouns: ${actor.pronouns ?? 'they/them'}`);
-
-  if (actor.likes?.length) {
-    lines.push(`- Likes: ${actor.likes.join(', ')}`);
-  }
-
-  if (actor.dislikes?.length) {
-    lines.push(`- Dislikes: ${actor.dislikes.join(', ')}`);
-  }
-
-  // Reference images (avatar and photos)
-  const imageUrls: string[] = [];
-  if (actor.avatarUrl) imageUrls.push(actor.avatarUrl);
-  if (actor.photos?.length) imageUrls.push(...actor.photos);
-
-  if (imageUrls.length) {
-    lines.push(`- Reference images: ${imageUrls.join(', ')}`);
-  }
-
-  return lines.join('\n');
-}
-
-/**
- * Build character description for image prompts
- */
-function buildCharacterDetails(characters: Character[]): string {
-  return characters.map(c => {
-    const likes = c.likes?.length ? ` who likes ${c.likes.join(', ')}` : '';
-    const description = c.description ? ` (${c.description})` : '';
-    return `${c.displayName} (${c.type}${likes})${description}`;
-  }).join('; ');
-}
 
 /**
  * Build image prompt for a content page (uses page text and actors on that page)
- * New structured format with full actor details
- * Actors can be Characters (pets, friends, etc.) or ChildProfiles (siblings)
+ * Note: Actor details are added by story-image-flow.ts via buildActorsJson,
+ * so this function only provides the scene description context.
  *
  * @param text - The page text (used as fallback if no imageDescription)
  * @param child - The main child profile
  * @param storyTitle - The story title
- * @param actorsOnPage - Characters and siblings appearing on this page
- * @param pageEntityIds - Entity IDs mentioned on this page
+ * @param actorsOnPage - Characters and siblings appearing on this page (unused, kept for signature compatibility)
+ * @param pageEntityIds - Entity IDs mentioned on this page (unused, kept for signature compatibility)
  * @param imageDescription - AI-generated image description (preferred over text)
  */
 function buildImagePrompt(
@@ -247,114 +183,44 @@ function buildImagePrompt(
   pageEntityIds: string[] = [],
   imageDescription?: string
 ): string {
-  const childAge = child ? getChildAgeYears(child) : null;
-  const childAgeText = childAge ? `${childAge} years old` : 'a young child';
-
   // Use imageDescription if available (from AI pagination), otherwise fall back to page text
   const sceneDescription = imageDescription || text;
-  let prompt = `Create an image, with no text, that describes this scene: ${sceneDescription}\n\n`;
 
-  if (child) {
-    prompt += `The story is being created for $$${child.id}$$, age ${childAgeText}.\n\n`;
-  }
-
-  prompt += `The scene contains the following characters:\n\n`;
-
-  // Add main child as first actor if in this page's entity list
-  if (child && pageEntityIds.includes(child.id)) {
-    prompt += buildActorBlock(child, child.id) + '\n\n';
-  }
-
-  // Add all other actors on this page (characters and siblings)
-  for (const actor of actorsOnPage) {
-    if (actor.id && actor.id !== child?.id) {
-      prompt += buildActorBlock(actor, actor.id) + '\n\n';
-    }
-  }
-
-  return prompt.trim();
+  // Return just the scene description - actor details are added by story-image-flow.ts
+  return sceneDescription;
 }
 
 /**
- * Build image prompt for the front cover (uses synopsis and ALL actors)
- * New structured format with full actor details
- * Actors can be Characters (pets, friends, etc.) or ChildProfiles (siblings)
+ * Build image prompt for the front cover (uses synopsis)
+ * Note: Actor details are added by story-image-flow.ts via buildActorsJson,
+ * so this function only provides the scene description context.
  */
 function buildFrontCoverImagePrompt(
   synopsis: string | null | undefined,
   storyTitle: string,
-  child?: ChildProfile | null,
-  allActors: (Character | ChildProfile)[] = []
+  _child?: ChildProfile | null,
+  _allActors: (Character | ChildProfile)[] = []
 ): string {
   const synopsisText = synopsis && synopsis.length > 0
     ? synopsis
     : `A magical children's storybook adventure`;
 
-  const childAge = child ? getChildAgeYears(child) : null;
-  const childAgeText = childAge ? `${childAge} years old` : 'a young child';
-
-  let prompt = `Create a book cover illustration for "${storyTitle}", with no text or words in the image.\n\n`;
-  prompt += `Synopsis: ${synopsisText}\n\n`;
-
-  if (child) {
-    prompt += `The story is being created for $$${child.id}$$, age ${childAgeText}.\n\n`;
-  }
-
-  prompt += `The cover should feature the following characters:\n\n`;
-
-  // Add main child as first actor
-  if (child) {
-    prompt += buildActorBlock(child, child.id) + '\n\n';
-  }
-
-  // Add all other actors (characters and siblings)
-  for (const actor of allActors) {
-    if (actor.id && actor.id !== child?.id) {
-      prompt += buildActorBlock(actor, actor.id) + '\n\n';
-    }
-  }
-
-  prompt += `Style: Whimsical, inviting children's book cover.`;
-
-  return prompt.trim();
+  // Return scene description - actor details are added by story-image-flow.ts
+  return `Create a book cover illustration for "${storyTitle}", with no text or words in the image.\n\nSynopsis: ${synopsisText}\n\nStyle: Whimsical, inviting children's book cover.`;
 }
 
 /**
- * Build image prompt for the back cover (uses ONLY the actors/avatars, no synopsis)
- * The back cover should show all characters celebrating together
- * New structured format with full actor details
- * Actors can be Characters (pets, friends, etc.) or ChildProfiles (siblings)
+ * Build image prompt for the back cover
+ * Note: Actor details are added by story-image-flow.ts via buildActorsJson,
+ * so this function only provides the scene description context.
  */
 function buildBackCoverImagePrompt(
-  storyTitle: string,
-  child?: ChildProfile | null,
-  allActors: (Character | ChildProfile)[] = []
+  _storyTitle: string,
+  _child?: ChildProfile | null,
+  _allActors: (Character | ChildProfile)[] = []
 ): string {
-  const childAge = child ? getChildAgeYears(child) : null;
-  const childAgeText = childAge ? `${childAge} years old` : 'a young child';
-
-  let prompt = `Create an image for the back cover of a storybook, with no text or words in the image.\n\n`;
-  prompt += `Show the characters celebrating together in a joyful scene.\n\n`;
-
-  if (child) {
-    prompt += `The story is being created for $$${child.id}$$, age ${childAgeText}.\n\n`;
-  }
-
-  prompt += `The scene contains the following characters:\n\n`;
-
-  // Add main child as first actor
-  if (child) {
-    prompt += buildActorBlock(child, child.id) + '\n\n';
-  }
-
-  // Add all other actors (characters and siblings)
-  for (const actor of allActors) {
-    if (actor.id && actor.id !== child?.id) {
-      prompt += buildActorBlock(actor, actor.id) + '\n\n';
-    }
-  }
-
-  return prompt.trim();
+  // Return scene description - actor details are added by story-image-flow.ts
+  return `Create an image for the back cover of a storybook, with no text or words in the image.\n\nShow the characters celebrating together in a joyful scene.`;
 }
 
 

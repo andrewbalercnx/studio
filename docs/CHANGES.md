@@ -18,6 +18,22 @@
 
 ### 2026-01-06
 
+#### `c2e8c73` - Fix duplicate actor information in image prompts
+
+**Type**: Bug fix
+
+**Summary**: Image prompts for covers were including actor details twice - once from the prompt builder functions in `story-page-flow.ts` and again from the structured JSON builder in `story-image-flow.ts`.
+
+**Changes**:
+- Simplified `buildImagePrompt`, `buildFrontCoverImagePrompt`, and `buildBackCoverImagePrompt` to only return scene descriptions
+- Actor details are now added exclusively by `story-image-flow.ts` via `buildActorsJson` for all page types
+- Removed unused helper functions: `buildActorBlock`, `buildCharacterDetails`, `getChildAgeYears`
+
+**Files Modified**:
+- `src/ai/flows/story-page-flow.ts` - Simplified prompt builders, removed duplicate actor info
+
+---
+
 #### `63de692` - Add errorMessage placeholders to maintenance email template
 
 **Type**: Enhancement
