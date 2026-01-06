@@ -235,6 +235,18 @@ export default function KidsReadBookPage({ params }: { params: Promise<{ bookId:
     );
   }
 
+  // Security check: Verify story belongs to the current locked child
+  if (story.childId !== childId) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-amber-50 to-orange-50 gap-4">
+        <p className="text-amber-800">This book belongs to someone else.</p>
+        <Button asChild>
+          <Link href="/kids/books">Go to My Books</Link>
+        </Button>
+      </div>
+    );
+  }
+
   const displayText = currentPage?.displayText || currentPage?.bodyText || '';
   const title = currentPage?.kind === 'cover_front' ? currentPage?.title : null;
 

@@ -6,10 +6,10 @@ import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, writeBatch } from 'firebase/firestore';
 import { useKidsPWA } from '../layout';
-import type { ChildProfile, StoryWizardChoice, StoryWizardOutput, StoryWizardAnswer } from '@/lib/types';
+import type { ChildProfile, StoryWizardChoice, StoryWizardOutput, StoryWizardAnswer, StoryGenerator } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, ArrowLeft, Wand2, Sparkles, BookOpen, MessageCircle } from 'lucide-react';
+import { LoaderCircle, ArrowLeft, Wand2, Sparkles, BookOpen, MessageCircle, Users, Star } from 'lucide-react';
 import Link from 'next/link';
 import { storyWizardFlow } from '@/ai/flows/story-wizard-flow';
 import { useToast } from '@/hooks/use-toast';
@@ -28,16 +28,26 @@ type ChoiceWithEntities = StoryWizardChoice & {
   entities?: EntityMetadata[];
 };
 
-// Flow type definition
-type StoryFlowType = 'wizard' | 'chat' | 'gemini3' | 'gemini4';
-
-// Flow configuration from API
-type FlowsConfig = {
-  wizard: boolean;
-  chat: boolean;
-  gemini3: boolean;
-  gemini4: boolean;
+/**
+ * Icon mapping from generator styling.icon string to Lucide component.
+ * Add new icons here when creating generators with new icon types.
+ */
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  Wand2: Wand2,
+  wand: Wand2,
+  MessageCircle: MessageCircle,
+  chat: MessageCircle,
+  Sparkles: Sparkles,
+  sparkles: Sparkles,
+  BookOpen: BookOpen,
+  book: BookOpen,
+  Users: Users,
+  users: Users,
+  Star: Star,
+  star: Star,
 };
+
+const DefaultIcon = Sparkles;
 
 // Component for rendering a choice button with entity avatars
 function ChoiceButton({
@@ -81,22 +91,25 @@ function ChoiceButton({
   );
 }
 
-// Flow selection card component
-function FlowCard({
-  title,
-  description,
-  icon,
-  gradient,
+// Helper to get icon component from generator styling
+function GeneratorIcon({ iconName, className }: { iconName?: string; className?: string }) {
+  const IconComponent = iconName ? ICON_MAP[iconName] || DefaultIcon : DefaultIcon;
+  return <IconComponent className={className} />;
+}
+
+// Flow selection card component for a generator
+function GeneratorCard({
+  generator,
   onClick,
   disabled,
 }: {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  gradient: string;
+  generator: StoryGenerator;
   onClick: () => void;
   disabled?: boolean;
 }) {
+  // Extract gradient from styling, with fallback
+  const gradient = generator.styling?.gradient || 'bg-gradient-to-br from-amber-400 to-orange-500';
+
   return (
     <button
       onClick={onClick}
@@ -105,11 +118,11 @@ function FlowCard({
     >
       <div className="flex items-center gap-4">
         <div className={`flex-shrink-0 w-16 h-16 rounded-2xl ${gradient} flex items-center justify-center shadow-lg`}>
-          {icon}
+          <GeneratorIcon iconName={generator.styling?.icon} className="h-8 w-8 text-white" />
         </div>
         <div className="flex-1">
-          <h3 className="text-xl font-bold text-gray-900">{title}</h3>
-          <p className="text-gray-600 text-sm mt-1">{description}</p>
+          <h3 className="text-xl font-bold text-gray-900">{generator.name}</h3>
+          <p className="text-gray-600 text-sm mt-1">{generator.description}</p>
         </div>
       </div>
     </button>
@@ -123,10 +136,10 @@ export default function KidsCreateStoryPage() {
   const { childId, childProfile, isLocked } = useKidsPWA();
   const { toast } = useToast();
 
-  // Flow selection state
-  const [selectedFlow, setSelectedFlow] = useState<StoryFlowType | null>(null);
-  const [enabledFlows, setEnabledFlows] = useState<FlowsConfig | null>(null);
-  const [flowsLoading, setFlowsLoading] = useState(true);
+  // Generator selection state - now uses StoryGenerator from the collection
+  const [selectedGenerator, setSelectedGenerator] = useState<StoryGenerator | null>(null);
+  const [generators, setGenerators] = useState<StoryGenerator[]>([]);
+  const [generatorsLoading, setGeneratorsLoading] = useState(true);
 
   // Wizard-specific state
   const [isInitializing, setIsInitializing] = useState(false);
@@ -136,44 +149,43 @@ export default function KidsCreateStoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentAnswers, setCurrentAnswers] = useState<StoryWizardAnswer[]>([]);
 
-  // Fetch enabled flows on mount
+  // Fetch generators from storyGenerators collection (filtered by status=live and enabledForKids=true)
   useEffect(() => {
-    const fetchFlows = async () => {
+    const fetchGenerators = async () => {
       try {
-        const response = await fetch('/api/kids-flows');
+        const response = await fetch('/api/kids-generators');
         const result = await response.json();
-        if (result.ok && result.flows) {
-          setEnabledFlows(result.flows);
+        if (result.ok && result.generators) {
+          setGenerators(result.generators);
 
-          // Auto-select if only one flow is enabled
-          const enabled = Object.entries(result.flows).filter(([_, v]) => v) as [StoryFlowType, boolean][];
-          if (enabled.length === 1) {
-            setSelectedFlow(enabled[0][0]);
+          // Auto-select if only one generator is available
+          if (result.generators.length === 1) {
+            setSelectedGenerator(result.generators[0]);
           }
         } else {
-          // Default to all enabled if API fails
-          setEnabledFlows({ wizard: true, chat: true, gemini3: true, gemini4: true });
+          console.error('[KidsCreate] API returned error:', result.errorMessage);
+          setGenerators([]);
         }
       } catch (err) {
-        console.error('[KidsCreate] Error fetching flows:', err);
-        // Default to all enabled if API fails
-        setEnabledFlows({ wizard: true, chat: true, gemini3: true, gemini4: true });
+        console.error('[KidsCreate] Error fetching generators:', err);
+        setGenerators([]);
       } finally {
-        setFlowsLoading(false);
+        setGeneratorsLoading(false);
       }
     };
 
-    fetchFlows();
+    fetchGenerators();
   }, []);
 
-  // Handle flow selection
-  const handleSelectFlow = useCallback(async (flow: StoryFlowType) => {
+  // Handle generator selection
+  const handleSelectGenerator = useCallback(async (generator: StoryGenerator) => {
     if (!user || !firestore || !childId) return;
 
-    setSelectedFlow(flow);
+    setSelectedGenerator(generator);
 
-    if (flow === 'chat' || flow === 'gemini3' || flow === 'gemini4') {
-      // For chat and gemini flows, create session and redirect to /story/play
+    // Wizard generator has special handling (stays on page for Q&A flow)
+    // All other generators redirect to /story/play
+    if (generator.id !== 'wizard') {
       setIsProcessing(true);
       try {
         // Verify child profile
@@ -187,12 +199,12 @@ export default function KidsCreateStoryPage() {
           throw new Error('Permission denied');
         }
 
-        // Create story session with selected flow mode
+        // Create story session with selected generator
         const storySessionRef = doc(collection(firestore, 'storySessions'));
         const newSessionId = storySessionRef.id;
 
-        // Chat flow uses currentPhase: 'story' (no storyMode), others use their flow name
-        const newSessionData = flow === 'chat' ? {
+        // Chat flow uses currentPhase: 'story' (legacy), others use their generator id
+        const newSessionData = generator.id === 'chat' ? {
           childId: childId,
           parentUid: user.uid,
           status: 'in_progress' as const,
@@ -206,8 +218,8 @@ export default function KidsCreateStoryPage() {
           childId: childId,
           parentUid: user.uid,
           status: 'in_progress' as const,
-          currentPhase: flow,
-          storyMode: flow,
+          currentPhase: generator.id,
+          storyMode: generator.id,
           storyTitle: '',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -225,18 +237,18 @@ export default function KidsCreateStoryPage() {
         // Redirect to play page which handles all these flows
         router.push(`/story/play/${newSessionId}`);
       } catch (err: any) {
-        console.error('[KidsCreate] Error starting flow:', err);
+        console.error('[KidsCreate] Error starting generator:', err);
         setError(err.message || 'Something went wrong');
-        setSelectedFlow(null);
+        setSelectedGenerator(null);
         setIsProcessing(false);
       }
     }
-    // For wizard flow, the existing useEffect will handle initialization
+    // For wizard generator, the existing useEffect will handle initialization
   }, [user, firestore, childId, router]);
 
-  // Create story session and start wizard (only when wizard is selected)
+  // Create story session and start wizard (only when wizard generator is selected)
   useEffect(() => {
-    if (userLoading || !user || !firestore || !childId || selectedFlow !== 'wizard') return;
+    if (userLoading || !user || !firestore || !childId || selectedGenerator?.id !== 'wizard') return;
     if (sessionId) return; // Already initialized
 
     const initializeWizard = async () => {
@@ -309,7 +321,7 @@ export default function KidsCreateStoryPage() {
     };
 
     initializeWizard();
-  }, [userLoading, user, firestore, childId, selectedFlow, sessionId]);
+  }, [userLoading, user, firestore, childId, selectedGenerator, sessionId]);
 
   // Handle choice selection (wizard flow)
   const handleSelectChoice = useCallback(async (choice: StoryWizardChoice) => {
@@ -377,8 +389,8 @@ export default function KidsCreateStoryPage() {
     }
   }, [userLoading, user, isLocked, childId, router]);
 
-  // Loading flows
-  if (userLoading || flowsLoading) {
+  // Loading generators
+  if (userLoading || generatorsLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 gap-4">
         <LoaderCircle className="h-12 w-12 animate-spin text-amber-500" />
@@ -389,10 +401,8 @@ export default function KidsCreateStoryPage() {
     );
   }
 
-  // Flow selection screen
-  if (!selectedFlow && enabledFlows) {
-    const hasMultipleFlows = Object.values(enabledFlows).filter(Boolean).length > 1;
-
+  // Generator selection screen - display generators from storyGenerators collection
+  if (!selectedGenerator && generators.length > 0) {
     return (
       <div className="min-h-screen flex flex-col">
         {/* Header */}
@@ -429,48 +439,34 @@ export default function KidsCreateStoryPage() {
             </div>
 
             <div className="space-y-4">
-              {enabledFlows.wizard && (
-                <FlowCard
-                  title="Magic Story Wizard"
-                  description="Answer a few fun questions!"
-                  icon={<Wand2 className="h-8 w-8 text-white" />}
-                  gradient="bg-gradient-to-br from-amber-400 to-orange-500"
-                  onClick={() => handleSelectFlow('wizard')}
+              {generators.map((generator) => (
+                <GeneratorCard
+                  key={generator.id}
+                  generator={generator}
+                  onClick={() => handleSelectGenerator(generator)}
                 />
-              )}
-
-              {enabledFlows.chat && (
-                <FlowCard
-                  title="Create with Chat"
-                  description="Talk with the Story Guide!"
-                  icon={<MessageCircle className="h-8 w-8 text-white" />}
-                  gradient="bg-gradient-to-br from-blue-500 to-indigo-500"
-                  onClick={() => handleSelectFlow('chat')}
-                />
-              )}
-
-              {enabledFlows.gemini3 && (
-                <FlowCard
-                  title="Creative Adventure"
-                  description="Let your imagination run wild!"
-                  icon={<Sparkles className="h-8 w-8 text-white" />}
-                  gradient="bg-gradient-to-br from-purple-500 to-pink-500"
-                  onClick={() => handleSelectFlow('gemini3')}
-                />
-              )}
-
-              {enabledFlows.gemini4 && (
-                <FlowCard
-                  title="Guided Story"
-                  description="Choose your path step by step!"
-                  icon={<BookOpen className="h-8 w-8 text-white" />}
-                  gradient="bg-gradient-to-br from-emerald-500 to-teal-500"
-                  onClick={() => handleSelectFlow('gemini4')}
-                />
-              )}
+              ))}
             </div>
           </div>
         </main>
+      </div>
+    );
+  }
+
+  // No generators available - show friendly message
+  if (!selectedGenerator && generators.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 gap-4">
+        <div className="text-5xl mb-4">😢</div>
+        <h1 className="text-2xl font-bold text-amber-900 text-center">
+          No story adventures available right now
+        </h1>
+        <p className="text-amber-700 text-center">
+          Please ask a grown-up to check the settings.
+        </p>
+        <Link href="/kids">
+          <Button className="mt-4">Go Back Home</Button>
+        </Link>
       </div>
     );
   }
@@ -506,7 +502,7 @@ export default function KidsCreateStoryPage() {
               className="w-full"
               onClick={() => {
                 setError(null);
-                setSelectedFlow(null);
+                setSelectedGenerator(null);
                 setSessionId(null);
               }}
             >
@@ -525,8 +521,9 @@ export default function KidsCreateStoryPage() {
     );
   }
 
-  // Processing state (between questions or starting gemini flow)
+  // Processing state (between questions or starting generator)
   if (isProcessing) {
+    const loadingMessage = selectedGenerator?.styling?.loadingMessage || 'Starting your adventure...';
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 gap-6">
         <div className="relative">
@@ -534,10 +531,10 @@ export default function KidsCreateStoryPage() {
         </div>
         <div className="text-center space-y-2">
           <p className="text-xl text-amber-800 font-medium">
-            {selectedFlow === 'wizard' ? 'The wizard is thinking...' : 'Starting your adventure...'}
+            {selectedGenerator?.id === 'wizard' ? 'The wizard is thinking...' : loadingMessage}
           </p>
           <p className="text-amber-600">
-            {selectedFlow === 'wizard' ? 'Creating the next part of your adventure!' : 'Get ready for something amazing!'}
+            {selectedGenerator?.id === 'wizard' ? 'Creating the next part of your adventure!' : 'Get ready for something amazing!'}
           </p>
         </div>
       </div>
@@ -545,7 +542,7 @@ export default function KidsCreateStoryPage() {
   }
 
   // Wizard question display
-  if (selectedFlow === 'wizard' && wizardState?.state === 'asking' && wizardState.question) {
+  if (selectedGenerator?.id === 'wizard' && wizardState?.state === 'asking' && wizardState.question) {
     return (
       <div className="min-h-screen flex flex-col">
         {/* Header with child avatar */}

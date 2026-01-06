@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-05
+> **Last Updated**: 2026-01-06
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -637,6 +637,8 @@ Generate story using Gemini 4 flow.
 
 Get available story flows configuration.
 
+> **DEPRECATED**: Use `/api/kids-generators` instead, which fetches from the `storyGenerators` collection.
+
 **Response**: `200 OK`
 ```json
 {
@@ -644,6 +646,47 @@ Get available story flows configuration.
   "chatEnabled": true,
   "gemini3Enabled": true,
   "gemini4Enabled": true
+}
+```
+
+---
+
+### GET `/api/kids-generators`
+
+Get story generators that are enabled for kids. This endpoint fetches from the `storyGenerators` collection, filtering to include only generators where `status === 'live'` and `enabledForKids === true`.
+
+**Authentication**: None required (public endpoint)
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "generators": [
+    {
+      "id": "wizard",
+      "name": "Magic Story Wizard",
+      "description": "Answer questions to create your story!",
+      "status": "live",
+      "order": 1,
+      "enabledForKids": true,
+      "styling": {
+        "gradient": "bg-gradient-to-br from-amber-400 to-orange-500",
+        "icon": "Wand2",
+        "loadingMessage": "Creating your adventure..."
+      },
+      "capabilities": {...},
+      "apiEndpoint": "/api/storyWizard"
+    }
+  ]
+}
+```
+
+**Error Response**: `500 Internal Server Error`
+```json
+{
+  "ok": false,
+  "errorMessage": "Error message",
+  "generators": []
 }
 ```
 

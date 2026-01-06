@@ -18,6 +18,39 @@
 
 ### 2026-01-06
 
+#### `b8c0a91` - Fix /kids endpoint parity with /child routes
+
+**Type**: Bug Fix / Security
+
+**Summary**: The /kids PWA routes were not properly filtering and displaying story generators, and had a security gap in story ownership verification.
+
+**Issues Fixed**:
+1. `/kids/create` was fetching from hardcoded `systemConfig/kidsFlows` instead of the `storyGenerators` collection
+2. `/kids/read/[bookId]` was missing the child ownership verification that `/child/[childId]/story/[storyId]/read` has
+3. Story generators on /kids weren't respecting `status`, `enabledForKids`, or `order` fields
+
+**Changes**:
+- Created `/api/kids-generators` endpoint to fetch story generators from `storyGenerators` collection
+  - Filters: `status === 'live'` AND `enabledForKids === true`
+  - Sorts by `order` field then by name
+- Rewrote `/kids/create` page to use the new API endpoint
+  - Dynamically displays generator cards with name, description, icon, and gradient from the database
+  - Removes hardcoded flow types (wizard, chat, gemini3, gemini4)
+- Added story ownership security check to `/kids/read/[bookId]` page
+  - Verifies `story.childId === childId` before displaying content
+- Updated API.md with new endpoint documentation
+- Marked `/api/kids-flows` as deprecated in docs
+
+**Files Created**:
+- `src/app/api/kids-generators/route.ts`
+
+**Files Modified**:
+- `src/app/kids/create/page.tsx`
+- `src/app/kids/read/[bookId]/page.tsx`
+- `docs/API.md`
+
+---
+
 #### `74f7409` - Add "Read Myself" mode to storybook player
 
 **Type**: Feature
