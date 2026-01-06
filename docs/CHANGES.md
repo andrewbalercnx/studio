@@ -18,6 +18,21 @@
 
 ### 2026-01-06
 
+#### `72f29f8` - Use generated sample as style example fallback
+
+**Type**: Enhancement
+
+**Summary**: When an image style has no manually uploaded example images, the generated sample image (`sampleImageUrl`) is now used as a style reference for image generation.
+
+**Changes**:
+- Added fallback in `story-image-flow.ts` to use `sampleImageUrl` when `exampleImages` array is empty
+- Priority order: manually uploaded exampleImages > generated sampleImageUrl
+
+**Files Modified**:
+- `src/ai/flows/story-image-flow.ts` - Added sampleImageUrl fallback for style examples
+
+---
+
 #### `c2e8c73` - Fix duplicate actor information in image prompts
 
 **Type**: Bug fix

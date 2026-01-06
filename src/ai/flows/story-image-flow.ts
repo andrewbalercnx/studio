@@ -1210,6 +1210,7 @@ export const storyImageFlow = ai.defineFlow(
           ?? "a gentle, vibrant watercolor style";
 
         // Load example images from imageStyles collection if imageStyleId is provided
+        // Priority: manually uploaded exampleImages > generated sampleImageUrl
         let styleExampleImages: string[] = [];
         if (isValidDocumentId(imageStyleId)) {
           try {
@@ -1217,8 +1218,15 @@ export const storyImageFlow = ai.defineFlow(
             if (styleSnap.exists) {
               const styleData = styleSnap.data() as ImageStyle;
               if (styleData.exampleImages && styleData.exampleImages.length > 0) {
+                // Use manually uploaded example images
                 styleExampleImages = styleData.exampleImages.map(img => img.url);
                 logs.push(`[styleExamples] Loaded ${styleExampleImages.length} example images from style ${imageStyleId}`);
+              } else if (styleData.sampleImageUrl) {
+                // Fall back to the generated sample image
+                styleExampleImages = [styleData.sampleImageUrl];
+                logs.push(`[styleExamples] Using generated sample image as style reference for ${imageStyleId}`);
+              } else {
+                logs.push(`[styleExamples] Style ${imageStyleId} has no example or sample images`);
               }
             } else {
               logs.push(`[styleExamples] Style ${imageStyleId} not found`);
