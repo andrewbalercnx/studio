@@ -52,6 +52,8 @@ const StoryImageFlowInput = z.object({
   // Aspect ratio for the generated image (e.g., "3:4", "4:3", "1:1", "4:5")
   // Gemini 2.5 Flash Image supports: 21:9, 16:9, 4:3, 3:2, 1:1, 9:16, 3:4, 2:3, 5:4, 4:5
   aspectRatio: z.string().optional(),
+  // Additional instructions from the user to guide image regeneration
+  additionalPrompt: z.string().optional(),
 });
 
 const StoryImageFlowOutput = z.object({
@@ -702,6 +704,7 @@ type CreateImageParams = {
   targetWidthPx?: number;
   targetHeightPx?: number;
   aspectRatio?: string;
+  additionalPrompt?: string;   // Additional user instructions for image generation
 };
 
 async function createImage(params: CreateImageParams): Promise<GenerateImageResult> {
@@ -716,6 +719,7 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     targetWidthPx,
     targetHeightPx,
     aspectRatio,
+    additionalPrompt,
   } = params;
 
   if (MOCK_IMAGES) {
@@ -773,6 +777,11 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
 
   // 3. Scene description with $$Id$$ placeholders intact
   structuredPrompt += `Scene: ${sceneText}\n\n`;
+
+  // 3b. Additional user instructions (if provided)
+  if (additionalPrompt && additionalPrompt.trim()) {
+    structuredPrompt += `Additional instructions: ${additionalPrompt.trim()}\n\n`;
+  }
 
   // 4. Structured actor data
   if (actorsJson && actorsJson.length > 0) {
@@ -1046,7 +1055,7 @@ export const storyImageFlow = ai.defineFlow(
     inputSchema: StoryImageFlowInput,
     outputSchema: StoryImageFlowOutput,
   },
-  async ({storyId, pageId, regressionTag, forceRegenerate, storybookId, targetWidthPx, targetHeightPx, imageStylePrompt, imageStyleId, aspectRatio}) => {
+  async ({storyId, pageId, regressionTag, forceRegenerate, storybookId, targetWidthPx, targetHeightPx, imageStylePrompt, imageStyleId, aspectRatio, additionalPrompt}) => {
     console.log(`[storyImageFlow] Called with storyId=${storyId}, pageId=${pageId}, storybookId=${storybookId || 'undefined'}, imageStyleId=${imageStyleId || 'undefined'}, aspectRatio=${aspectRatio || 'auto'}`);
     const logs: string[] = [];
 
@@ -1259,6 +1268,7 @@ export const storyImageFlow = ai.defineFlow(
           targetWidthPx,
           targetHeightPx,
           aspectRatio,
+          additionalPrompt,
         });
       } catch (generationError: any) {
         const fallbackAllowed = MOCK_IMAGES || !!regressionTag || process.env.STORYBOOK_IMAGE_FALLBACK === 'true';

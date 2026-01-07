@@ -31,12 +31,15 @@ import {
   Shield,
   Volume2,
   VolumeX,
+  Sparkles,
 } from 'lucide-react';
 import {useUser} from '@/firebase/auth/use-user';
 import {useParentGuard} from '@/hooks/use-parent-guard';
 import {useToast} from '@/hooks/use-toast';
 import {PrintOrderDialog} from '@/components/storybook/print-order-dialog';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -153,6 +156,11 @@ export default function StorybookViewerPage() {
   const [selectedOutputTypeId, setSelectedOutputTypeId] = useState<string>('');
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [audioJobError, setAudioJobError] = useState<string | null>(null);
+
+  // Regenerate dialog state
+  const [regenerateDialogOpen, setRegenerateDialogOpen] = useState(false);
+  const [regeneratePageId, setRegeneratePageId] = useState<string | null>(null);
+  const [additionalPrompt, setAdditionalPrompt] = useState('');
 
   // Actor list state
   type ActorInfo = {
@@ -311,7 +319,7 @@ export default function StorybookViewerPage() {
     return data;
   };
 
-  const triggerImageJob = async (payload: {pageId?: string; forceRegenerate?: boolean} = {}) => {
+  const triggerImageJob = async (payload: {pageId?: string; forceRegenerate?: boolean; additionalPrompt?: string} = {}) => {
     if (!storyId || !isNewModel) return;
     setIsGenerating(true);
     setJobError(null);
@@ -375,9 +383,26 @@ export default function StorybookViewerPage() {
 
 
   const handleGenerateAll = (forceRegenerate = false) => triggerImageJob({forceRegenerate});
+
+  // Open the regenerate dialog for a specific page
   const handleRegeneratePage = (pageId: string | undefined) => {
     if (!pageId) return;
-    triggerImageJob({pageId, forceRegenerate: true});
+    setRegeneratePageId(pageId);
+    setAdditionalPrompt('');
+    setRegenerateDialogOpen(true);
+  };
+
+  // Actually regenerate with optional additional prompt
+  const handleConfirmRegenerate = () => {
+    if (!regeneratePageId) return;
+    setRegenerateDialogOpen(false);
+    triggerImageJob({
+      pageId: regeneratePageId,
+      forceRegenerate: true,
+      additionalPrompt: additionalPrompt.trim() || undefined,
+    });
+    setRegeneratePageId(null);
+    setAdditionalPrompt('');
   };
 
   const handleRegenerateFailedPages = async () => {
@@ -1050,6 +1075,50 @@ export default function StorybookViewerPage() {
           toast({title: 'Order submitted', description: 'Check Parent → Orders for status.'});
         }}
       />
+
+      {/* Regenerate Image Dialog */}
+      <Dialog open={regenerateDialogOpen} onOpenChange={setRegenerateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" />
+              Regenerate Image
+            </DialogTitle>
+            <DialogDescription>
+              The image will be regenerated. You can optionally add instructions to guide the AI.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="additional-prompt">Additional instructions (optional)</Label>
+              <Textarea
+                id="additional-prompt"
+                placeholder="e.g., Make the background more colorful, show the character smiling, add a rainbow..."
+                value={additionalPrompt}
+                onChange={(e) => setAdditionalPrompt(e.target.value)}
+                rows={3}
+                className="resize-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                These instructions will be added to the image prompt to help refine the result.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRegenerateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmRegenerate} disabled={isGenerating}>
+              {isGenerating ? (
+                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Regenerate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
     </div>
   );

@@ -18,6 +18,26 @@
 
 ### 2026-01-07
 
+#### `f0f5510` - Add additional prompt option for image regeneration
+
+**Type**: Feature
+
+**Summary**: Parents can now add optional instructions when regenerating a storybook page image. When clicking "Regenerate this page" in the storybook viewer, a dialog appears allowing the user to provide additional guidance to the AI (e.g., "make the background more colorful", "show the character smiling").
+
+**Changes**:
+- Added `additionalPrompt` field to story-image-flow input schema
+- Added `additionalPrompt` parameter to `/api/storybookV2/images` API route
+- Created regenerate dialog in storybook viewer with textarea for instructions
+- Additional prompt is appended to the scene description in the AI prompt
+
+**Files Modified**:
+- `src/ai/flows/story-image-flow.ts`
+- `src/app/api/storybookV2/images/route.ts`
+- `src/app/storybook/[bookId]/page.tsx`
+- `docs/API.md`
+
+---
+
 #### `bd8efbf` - Fix storyCompile error for friends story mode
 
 **Type**: Bug Fix

@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-06 (added progress field to StoryGeneratorResponse)
+> **Last Updated**: 2026-01-07 (added additionalPrompt to storybookV2/images)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -991,16 +991,31 @@ Generate images for storybook pages.
 {
   "storyId": "story-id",
   "storybookId": "storybook-id",
-  "imageStyleId": "watercolor"
+  "pageId": "optional-page-id",
+  "forceRegenerate": false,
+  "imageStylePrompt": "optional art style override",
+  "additionalPrompt": "optional user instructions for image generation"
 }
 ```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| storyId | string | Yes | The story document ID |
+| storybookId | string | Yes | The storybook document ID |
+| pageId | string | No | If provided, only regenerate this specific page |
+| forceRegenerate | boolean | No | Force regeneration even if image exists |
+| imageStylePrompt | string | No | Override the art style prompt |
+| additionalPrompt | string | No | Additional user instructions appended to the image prompt (only used with pageId) |
 
 **Response**: `200 OK`
 ```json
 {
   "ok": true,
-  "pagesReady": 12,
-  "pagesTotal": 12
+  "status": "ready",
+  "ready": 12,
+  "total": 12,
+  "rateLimited": false,
+  "logs": []
 }
 ```
 

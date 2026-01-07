@@ -28,6 +28,8 @@ type ImageJobRequest = {
   imageStylePrompt?: string;
   targetWidthPx?: number;
   targetHeightPx?: number;
+  // Additional user instructions for image regeneration
+  additionalPrompt?: string;
 };
 
 type PageWithId = StoryOutputPage & { id: string };
@@ -124,6 +126,7 @@ export async function POST(request: Request) {
       imageStylePrompt,
       targetWidthPx,
       targetHeightPx,
+      additionalPrompt,
     } = body;
 
     storyIdFromRequest = storyId;
@@ -306,6 +309,8 @@ export async function POST(request: Request) {
           aspectRatio: pageAspectRatio,
           targetWidthPx: pageTargetWidthPx,
           targetHeightPx: pageTargetHeightPx,
+          // Only pass additionalPrompt for single-page regeneration
+          additionalPrompt: pageId ? additionalPrompt : undefined,
         },
       });
     }
