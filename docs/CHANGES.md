@@ -18,6 +18,40 @@
 
 ### 2026-01-07
 
+#### `f8656fd` - Add API client packages for mobile development
+
+**Type**: Architecture / Infrastructure
+
+**Summary**: Created shared packages to support future mobile client development. This implements Phase A (PWA Separation) of the mobile client development plan, establishing the foundation for Android and iOS apps.
+
+**Changes**:
+- Created `@storypic/shared-types` package with TypeScript types for API contracts
+- Created `@storypic/api-client` package with typed HTTP client for child-facing features
+- Added npm workspaces configuration to root package.json
+- Created `ApiClientProvider` React context for injecting API client
+- Integrated API client into kids PWA layout
+- Updated `next.config.ts` with `transpilePackages` for workspace packages
+- Updated `turbopack.root` configuration to resolve workspace correctly
+
+**Files Created**:
+- `packages/shared-types/package.json`
+- `packages/shared-types/tsconfig.json`
+- `packages/shared-types/src/index.ts`
+- `packages/api-client/package.json`
+- `packages/api-client/tsconfig.json`
+- `packages/api-client/src/index.ts`
+- `packages/api-client/src/client.ts`
+- `src/contexts/api-client-context.tsx`
+
+**Files Modified**:
+- `package.json` (added workspaces)
+- `next.config.ts` (added transpilePackages, turbopack.root)
+- `src/app/kids/layout.tsx` (added ApiClientProvider)
+- `docs/SYSTEM_DESIGN.md`
+- `docs/API.md`
+
+---
+
 #### `f0f5510` - Add additional prompt option for image regeneration
 
 **Type**: Feature

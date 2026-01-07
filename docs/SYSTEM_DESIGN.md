@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2025-12-29
+> **Last Updated**: 2026-01-07
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -295,23 +295,47 @@ Storybook → PrintStoryBook → PDF Generation → Mixam Order
 ## Directory Structure
 
 ```
-src/
-├── app/                    # Next.js App Router
-│   ├── api/               # API route handlers
-│   ├── admin/             # Admin dashboard pages
-│   ├── parent/            # Parent-facing pages
-│   ├── story/             # Story creation pages
-│   └── storybook/         # Storybook viewing pages
-├── components/            # React components
-│   ├── ui/               # Base UI components (shadcn)
-│   └── admin/            # Admin-specific components
-├── hooks/                 # Custom React hooks
-├── lib/                   # Shared utilities
-│   ├── types.ts          # TypeScript type definitions
-│   ├── genkit/           # AI flow definitions
-│   └── firestore-hooks.ts # Firestore React hooks
-└── firebase/             # Firebase client setup
+/
+├── packages/                    # Shared packages (npm workspaces)
+│   ├── shared-types/           # TypeScript types for API contracts
+│   │   └── src/index.ts        # Child-facing type definitions
+│   └── api-client/             # Typed API client for child features
+│       └── src/client.ts       # StoryPicClient class
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── api/               # API route handlers
+│   │   ├── admin/             # Admin dashboard pages
+│   │   ├── parent/            # Parent-facing pages
+│   │   ├── kids/              # Kids PWA pages
+│   │   ├── story/             # Story creation pages
+│   │   └── storybook/         # Storybook viewing pages
+│   ├── components/            # React components
+│   │   ├── ui/               # Base UI components (shadcn)
+│   │   └── admin/            # Admin-specific components
+│   ├── contexts/              # React contexts
+│   │   └── api-client-context.tsx  # API client provider
+│   ├── hooks/                 # Custom React hooks
+│   ├── lib/                   # Shared utilities
+│   │   ├── types.ts          # Full TypeScript type definitions
+│   │   ├── genkit/           # AI flow definitions
+│   │   └── firestore-hooks.ts # Firestore React hooks
+│   └── firebase/             # Firebase client setup
+└── mobile/                    # (Future) Expo React Native app
 ```
+
+### Workspace Packages
+
+The project uses npm workspaces to share code between the web app and future mobile clients:
+
+**@storypic/shared-types**: TypeScript type definitions for API contracts
+- Child-facing types only (ChildProfile, Story, StoryBookOutput, etc.)
+- API request/response types
+- Used by both web app and API client
+
+**@storypic/api-client**: Typed HTTP client for child-facing features
+- `StoryPicClient` class with methods for story creation, storybook generation
+- Used via `ApiClientProvider` context in React components
+- Designed for reuse in mobile apps
 
 ---
 
@@ -320,10 +344,14 @@ src/
 | Purpose | Location |
 |---------|----------|
 | Type definitions | `src/lib/types.ts` |
+| API contract types | `packages/shared-types/src/index.ts` |
+| API client | `packages/api-client/src/client.ts` |
+| API client context | `src/contexts/api-client-context.tsx` |
 | Firestore rules | `firestore.rules` |
-| AI flows | `src/lib/genkit/*.ts` |
+| AI flows | `src/ai/flows/*.ts` |
 | API routes | `src/app/api/*/route.ts` |
 | Admin dashboard | `src/app/admin/page.tsx` |
+| Kids PWA layout | `src/app/kids/layout.tsx` |
 | Diagnostics hook | `src/hooks/use-diagnostics.tsx` |
 
 ---
@@ -331,14 +359,24 @@ src/
 ## Future Considerations
 
 ### Planned Enhancements
+- **Mobile Clients**: Expo React Native apps for Android and iOS using the API client
 - Payment integration for print orders
 - Multi-language support
 - Collaborative story creation (multiple children)
+
+### Mobile Client Architecture
+The `/packages` workspace structure prepares for mobile development:
+1. `@storypic/shared-types` - Shared types used by all clients
+2. `@storypic/api-client` - HTTP client for child-facing API calls
+3. `/mobile` (future) - Expo React Native app sharing the API client
+
+Mobile scope is strictly child-facing: story creation, story reading, storybook generation, storybook viewing. No parent management or print ordering in mobile.
 
 ### Technical Debt
 - Legacy `storyBooks` collection migration to new nested structure
 - Some prompt configs still use old field names
 - Test coverage for AI flows needs expansion
+- Gradual migration of direct fetch calls in components to use API client
 
 ---
 

@@ -21,6 +21,12 @@ const nextConfig: NextConfig = {
   },
   // Enable standalone output for Docker deployment
   output: 'standalone',
+  // Transpile workspace packages so they work with Next.js bundler
+  transpilePackages: ['@storypic/api-client', '@storypic/shared-types'],
+  // Configure Turbopack to use correct workspace root (silences lockfile warning)
+  turbopack: {
+    root: '.',
+  },
   typescript: {
     // In production, type errors will fail the build unless IGNORE_BUILD_ERRORS is set
     ignoreBuildErrors: shouldIgnoreTypeErrors,

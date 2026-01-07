@@ -7,6 +7,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import type { ChildProfile } from '@/lib/types';
 import { LoaderCircle } from 'lucide-react';
 import { PWAInstallPrompt, ServiceWorkerRegistration } from '@/components/pwa';
+import { ApiClientProvider } from '@/contexts/api-client-context';
 
 // PWA-specific context for kids mode
 interface KidsPWAContextType {
@@ -125,11 +126,13 @@ export default function KidsLayout({ children }: { children: React.ReactNode }) 
         unlock,
       }}
     >
-      <ServiceWorkerRegistration />
-      <div className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-50">
-        {children}
-        <PWAInstallPrompt />
-      </div>
+      <ApiClientProvider>
+        <ServiceWorkerRegistration />
+        <div className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-50">
+          {children}
+          <PWAInstallPrompt />
+        </div>
+      </ApiClientProvider>
     </KidsPWAContext.Provider>
   );
 }

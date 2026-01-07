@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-07 (added additionalPrompt to storybookV2/images)
+> **Last Updated**: 2026-01-07 (added API client documentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -12,6 +12,56 @@ StoryPic Kids API uses Next.js App Router API routes. All endpoints require auth
 **Base URL**: `/api`
 
 **Authentication**: Firebase ID token in `Authorization: Bearer <token>` header.
+
+---
+
+## API Client Library
+
+For child-facing functionality, use the typed API client (`@storypic/api-client`) instead of direct fetch calls.
+
+### Installation
+
+The API client is available as a workspace package:
+
+```typescript
+import { StoryPicClient } from '@storypic/api-client';
+```
+
+### React Integration
+
+Use the `ApiClientProvider` context in React components:
+
+```typescript
+import { useApiClient, useRequiredApiClient } from '@/contexts/api-client-context';
+
+// Returns null if user not authenticated
+const client = useApiClient();
+
+// Throws if user not authenticated (use in components that require auth)
+const client = useRequiredApiClient();
+```
+
+### Client Methods
+
+The `StoryPicClient` provides typed methods for child-facing operations:
+
+**Story Creation:**
+- `sendWizardChoice(sessionId, optionId)` - Wizard generator
+- `sendBeatChoice(sessionId, optionId, moreOptions)` - Beat generator
+- `sendFriendsAction(sessionId, optionId, action, characterIds)` - Friends generator
+- `sendGemini3Choice(sessionId, optionId, userMessage)` - Gemini3 generator
+- `sendGemini4Choice(sessionId, optionId, userMessage)` - Gemini4 generator
+- `compileStory(sessionId)` - Compile story
+
+**Storybook Generation:**
+- `generatePages(storyId, storybookId, storyOutputTypeId)` - Generate pages
+- `generateImages(storyId, storybookId, imageStyleId)` - Generate images
+
+**Discovery:**
+- `getGenerators()` - Get available story generators
+
+**TTS:**
+- `speak(text, voiceId, childId)` - Generate text-to-speech audio
 
 ---
 
