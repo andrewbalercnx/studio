@@ -25,7 +25,7 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const FIREBASE_API_KEY = 'AIzaSyC4DdQYxNpPMNWN1xCZxZlrxCLNwIX3O2A'; // From your Firebase config
+const FIREBASE_API_KEY = 'AIzaSyBnmgkx6nfE8hgOqdcgeErOs0SzXVAnXmI'; // From Firebase config
 const TOKEN_STORAGE_KEY = 'storypic_auth_token';
 const USER_STORAGE_KEY = 'storypic_auth_user';
 const REFRESH_TOKEN_KEY = 'storypic_refresh_token';
