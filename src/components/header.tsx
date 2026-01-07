@@ -22,7 +22,7 @@ import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
 import { useAuth, useFirestore } from '@/firebase';
 import { Badge } from './ui/badge';
-import { Shield, Pen, User as UserIcon, HelpCircle, BookOpen, Target, Circle, CircleDot } from 'lucide-react';
+import { Shield, Pen, User as UserIcon, HelpCircle, BookOpen, Target, Circle, CircleDot, Download } from 'lucide-react';
 import { useParentGuard } from '@/hooks/use-parent-guard';
 import { useWizardTargetDiagnosticsOptional } from '@/hooks/use-wizard-target-diagnostics';
 import { usePathRecordingOptional } from '@/hooks/use-path-recording';
@@ -232,6 +232,10 @@ export default function Header() {
                 )}
                 <DropdownMenuItem onClick={() => router.push('/parent/settings')}>
                   Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/install')}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Install App
                 </DropdownMenuItem>
                 {liveWizards.length > 0 && (
                   <>

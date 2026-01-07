@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "StoryPic Kids",
+    "slug": "storypic-kids",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "storypic",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FEF3C7"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.storypic.kids"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FEF3C7"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.storypic.kids"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

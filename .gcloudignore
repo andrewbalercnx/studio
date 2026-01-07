@@ -1,0 +1,54 @@
+# .gcloudignore - Files to exclude from Firebase App Hosting / Cloud Build uploads
+# Note: Firebase App Hosting may or may not respect this file
+
+# Dependencies and build output (rebuilt during build)
+node_modules/
+.next/
+out/
+
+# Git
+.git/
+.gitignore
+
+# IDE/OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Documentation (not needed at runtime)
+# IMPORTANT: Keep docs/backend.json - it's imported by src/app/admin/database/page.tsx
+docs/architecture/
+docs/testing/
+docs/*.md
+docs/*.log
+*.md
+
+# Scripts not needed at build/runtime
+# IMPORTANT: Keep scripts/postinstall-fixes.mjs - runs during npm ci
+scripts/cleanup-regression-data.mjs
+scripts/generate-pwa-icons.js
+scripts/generate-favicon-ico.mjs
+scripts/generate-icons.mjs
+
+# Firebase rules (deployed separately via Firebase CLI)
+firestore.rules
+storage.rules
+
+# Local/development files
+.env*
+serviceAccount.json
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Docker files (not used by Firebase App Hosting)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+cloudbuild.yaml
+
+# Testing
+coverage/
+.nyc_output/

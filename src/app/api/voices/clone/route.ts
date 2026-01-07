@@ -65,7 +65,8 @@ export async function POST(request: Request) {
     await initFirebaseAdminApp();
 
     // Parse FormData
-    const formData = await request.formData();
+    // Note: request.formData() returns the web FormData type which has .get()
+    const formData = await request.formData() as unknown as globalThis.FormData;
     const name = formData.get('name') as string;
     const audioFile = formData.get('audio') as File;
 

@@ -1,18 +1,21 @@
-# Dependencies
-node_modules
+# .dockerignore - Files to exclude from Docker build context
+# This reduces build context size and speeds up Docker builds
+
+# Dependencies (reinstalled during build)
+node_modules/
 npm-debug.log*
 
-# Next.js build output
-.next
-out
+# Next.js build output (rebuilt during build)
+.next/
+out/
 
 # Testing
-coverage
-.nyc_output
+coverage/
+.nyc_output/
 
 # IDE
-.idea
-.vscode
+.idea/
+.vscode/
 *.swp
 *.swo
 
@@ -25,24 +28,44 @@ Thumbs.db
 .env.local
 .env.development
 .env.production
+.env.*
 
 # Git
-.git
+.git/
 .gitignore
 
-# Docker
+# Docker (not needed inside container)
 Dockerfile
 .dockerignore
 docker-compose*.yml
+cloudbuild.yaml
 
 # Documentation
-README.md
-docs/**/*.md
-# Keep docs/backend.json as it's imported by the app
+# IMPORTANT: Keep docs/backend.json - imported by src/app/admin/database/page.tsx
+docs/architecture/
+docs/testing/
+docs/CHANGES.md
+docs/SCHEMA.md
+docs/API.md
+docs/SYSTEM_DESIGN.md
+docs/*.log
+*.md
+LICENSE
+
+# Scripts not needed at runtime
+# IMPORTANT: Keep scripts/postinstall-fixes.mjs - runs during npm ci
+scripts/cleanup-regression-data.mjs
+scripts/generate-pwa-icons.js
+scripts/generate-favicon-ico.mjs
+scripts/generate-icons.mjs
+
+# Firebase rules (deployed separately via Firebase CLI)
+firestore.rules
+storage.rules
 
 # Service account (use Cloud Run's default credentials instead)
 serviceAccount.json
 
-# Misc
-*.md
-LICENSE
+# Build artifacts
+tsconfig.tsbuildinfo
+*.tsbuildinfo
