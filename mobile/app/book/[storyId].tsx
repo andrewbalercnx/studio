@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -36,6 +36,24 @@ export default function BookReaderScreen() {
   const [currentPage, setCurrentPage] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [autoPlay, setAutoPlay] = useState(false);
+
+  // Refs to access current state in callbacks
+  const currentPageRef = useRef(currentPage);
+  const pagesRef = useRef(pages);
+  const autoPlayRef = useRef(autoPlay);
+
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
+
+  useEffect(() => {
+    pagesRef.current = pages;
+  }, [pages]);
+
+  useEffect(() => {
+    autoPlayRef.current = autoPlay;
+  }, [autoPlay]);
 
   useEffect(() => {
     loadPages();
@@ -71,20 +89,16 @@ export default function BookReaderScreen() {
     }
   };
 
-  const handlePlayAudio = async () => {
-    const page = pages[currentPage];
+  // Play audio for a specific page index
+  const playPageAudio = useCallback(async (pageIndex: number) => {
+    const page = pagesRef.current[pageIndex];
     if (!page?.audioUrl) return;
-
-    if (isPlaying && sound) {
-      await sound.pauseAsync();
-      setIsPlaying(false);
-      return;
-    }
 
     try {
       // Stop and unload previous sound
       if (sound) {
         await sound.unloadAsync();
+        setSound(null);
       }
 
       const { sound: newSound } = await Audio.Sound.createAsync(
@@ -93,6 +107,22 @@ export default function BookReaderScreen() {
         (status) => {
           if (status.isLoaded && status.didJustFinish) {
             setIsPlaying(false);
+            // Auto-advance to next page if autoPlay is enabled
+            if (autoPlayRef.current) {
+              const nextPageIndex = currentPageRef.current + 1;
+              if (nextPageIndex < pagesRef.current.length) {
+                // Advance to next page and play its audio
+                setCurrentPage(nextPageIndex);
+                flatListRef.current?.scrollToIndex({ index: nextPageIndex, animated: true });
+                // Play next page audio after a short delay
+                setTimeout(() => {
+                  playPageAudio(nextPageIndex);
+                }, 500);
+              } else {
+                // Reached end of book, disable autoPlay
+                setAutoPlay(false);
+              }
+            }
           }
         }
       );
@@ -101,16 +131,33 @@ export default function BookReaderScreen() {
     } catch (e) {
       console.error('Error playing audio:', e);
     }
+  }, [sound]);
+
+  const handlePlayAudio = async () => {
+    const page = pages[currentPage];
+    if (!page?.audioUrl) return;
+
+    if (isPlaying && sound) {
+      await sound.pauseAsync();
+      setIsPlaying(false);
+      setAutoPlay(false); // Stop auto-play if user pauses
+      return;
+    }
+
+    // Enable auto-play when user starts playing
+    setAutoPlay(true);
+    playPageAudio(currentPage);
   };
 
   const goToPage = (index: number) => {
     if (index < 0 || index >= pages.length) return;
 
-    // Stop audio when changing pages
+    // Stop audio and auto-play when manually changing pages
     if (sound) {
       sound.stopAsync();
       setIsPlaying(false);
     }
+    setAutoPlay(false);
 
     setCurrentPage(index);
     flatListRef.current?.scrollToIndex({ index, animated: true });
@@ -210,6 +257,7 @@ export default function BookReaderScreen() {
               sound.stopAsync();
               setIsPlaying(false);
             }
+            setAutoPlay(false); // Stop auto-play when user swipes
           }
         }}
         getItemLayout={(_, index) => ({
