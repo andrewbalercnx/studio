@@ -21,6 +21,7 @@ interface StorybookPage {
   bodyText?: string;
   imageUrl?: string;
   audioUrl?: string;
+  kind?: string; // 'text' | 'cover_front' | 'cover_back' | 'title_page' | 'blank' | 'image'
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -79,9 +80,12 @@ export default function BookReaderScreen() {
         return;
       }
 
-      // Sort by page number
-      pagesData.sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0));
-      setPages(pagesData);
+      // Sort by page number and filter out blank/title pages (they're for print, not reading)
+      const readablePages = pagesData
+        .sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0))
+        .filter((p) => p.kind !== 'blank' && p.kind !== 'title_page');
+
+      setPages(readablePages);
     } catch (e) {
       console.error('Error loading pages:', e);
     } finally {
@@ -89,10 +93,33 @@ export default function BookReaderScreen() {
     }
   };
 
+  // Find the next page with audio starting from a given index
+  const findNextPageWithAudio = (startIndex: number): number => {
+    for (let i = startIndex; i < pagesRef.current.length; i++) {
+      if (pagesRef.current[i]?.audioUrl) {
+        return i;
+      }
+    }
+    return -1; // No more pages with audio
+  };
+
   // Play audio for a specific page index
   const playPageAudio = useCallback(async (pageIndex: number) => {
     const page = pagesRef.current[pageIndex];
-    if (!page?.audioUrl) return;
+    if (!page?.audioUrl) {
+      // If this page has no audio but autoPlay is on, try to find and go to next page with audio
+      if (autoPlayRef.current) {
+        const nextPageIndex = findNextPageWithAudio(pageIndex + 1);
+        if (nextPageIndex !== -1) {
+          setCurrentPage(nextPageIndex);
+          flatListRef.current?.scrollToIndex({ index: nextPageIndex, animated: true });
+          setTimeout(() => playPageAudio(nextPageIndex), 500);
+        } else {
+          setAutoPlay(false);
+        }
+      }
+      return;
+    }
 
     try {
       // Stop and unload previous sound
@@ -107,11 +134,11 @@ export default function BookReaderScreen() {
         (status) => {
           if (status.isLoaded && status.didJustFinish) {
             setIsPlaying(false);
-            // Auto-advance to next page if autoPlay is enabled
+            // Auto-advance to next page with audio if autoPlay is enabled
             if (autoPlayRef.current) {
-              const nextPageIndex = currentPageRef.current + 1;
-              if (nextPageIndex < pagesRef.current.length) {
-                // Advance to next page and play its audio
+              const nextPageIndex = findNextPageWithAudio(currentPageRef.current + 1);
+              if (nextPageIndex !== -1) {
+                // Advance to next page with audio
                 setCurrentPage(nextPageIndex);
                 flatListRef.current?.scrollToIndex({ index: nextPageIndex, animated: true });
                 // Play next page audio after a short delay
@@ -119,7 +146,7 @@ export default function BookReaderScreen() {
                   playPageAudio(nextPageIndex);
                 }, 500);
               } else {
-                // Reached end of book, disable autoPlay
+                // No more pages with audio, disable autoPlay
                 setAutoPlay(false);
               }
             }
