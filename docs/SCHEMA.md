@@ -58,6 +58,8 @@ Child profiles owned by parents.
 | `likes` | string[] | Yes | Positive preferences |
 | `dislikes` | string[] | Yes | Negative preferences |
 | `description` | string | No | Child description |
+| `imageDescription` | string | No | AI-generated physical appearance description (internal) |
+| `imageDescriptionGeneration` | object | No | Generation status: `{ status, lastRunAt, lastCompletedAt, lastErrorMessage }` |
 | `ownerParentUid` | string | Yes | Parent's Firebase UID |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | No | Last update time |
@@ -89,6 +91,8 @@ Story characters with traits, owned by parents.
 | `likes` | string[] | Yes | Character likes |
 | `dislikes` | string[] | Yes | Character dislikes |
 | `description` | string | No | Character description |
+| `imageDescription` | string | No | AI-generated physical appearance description (internal) |
+| `imageDescriptionGeneration` | object | No | Generation status: `{ status, lastRunAt, lastCompletedAt, lastErrorMessage }` |
 | `ownerParentUid` | string | Yes | Parent's Firebase UID |
 | `childId` | string | No | Optional child-specific (blank = family-wide) |
 | `createdAt` | timestamp | Yes | Creation time |

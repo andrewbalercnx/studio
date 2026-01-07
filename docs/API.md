@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-07 (added API client documentation)
+> **Last Updated**: 2026-01-07 (added image description API and side effects)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -152,7 +152,7 @@ Verify parent PIN.
 
 ### POST `/api/children/photos`
 
-Upload photos for a child profile.
+Upload photos for a child profile. Triggers image description generation in background.
 
 **Request Body**: `multipart/form-data`
 - `childId` (string, required) - Child document ID
@@ -164,6 +164,8 @@ Upload photos for a child profile.
   "urls": ["https://storage.googleapis.com/..."]
 }
 ```
+
+**Side Effects**: Triggers `imageDescriptionFlow` to generate a text description of the child's physical appearance from the photos.
 
 ---
 
@@ -196,7 +198,7 @@ Create a character from a child profile or parent input.
 
 ### POST `/api/characters/photos`
 
-Upload photos for a character.
+Upload photos for a character. Triggers image description generation in background.
 
 **Request Body**: `multipart/form-data`
 - `characterId` (string, required) - Character document ID
@@ -208,6 +210,32 @@ Upload photos for a character.
   "urls": ["https://storage.googleapis.com/..."]
 }
 ```
+
+**Side Effects**: Triggers `imageDescriptionFlow` to generate a text description of the character's physical appearance from the photos.
+
+---
+
+### POST `/api/regenerate-image-description`
+
+Manually trigger regeneration of the image description for a child or character. Useful after photo changes.
+
+**Request Body**:
+```json
+{
+  "entityId": "child-or-character-id",
+  "entityType": "child" | "character"
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "status": "pending"
+}
+```
+
+**Authorization**: Parents can regenerate for their own entities; admins can regenerate for any entity.
 
 ---
 

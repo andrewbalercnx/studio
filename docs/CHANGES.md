@@ -18,6 +18,38 @@
 
 ### 2026-01-07
 
+#### `c206f28` - Add imageDescription auto-generation for child/character photos
+
+**Type**: Feature
+
+**Summary**: When photos are uploaded to a child or character profile, an AI flow now automatically generates a text description of their physical appearance (hair color, eye color, skin tone, distinctive features). This `imageDescription` field is used in storybook image generation prompts as a text-based fallback when photos cannot be used directly (e.g., too many images trigger copyright filters).
+
+**Changes**:
+- Added `imageDescription` and `imageDescriptionGeneration` fields to ChildProfile and Character types
+- Created `imageDescriptionFlow` Genkit flow that analyzes photos and generates appearance descriptions
+- Avatar generation flows now trigger image description generation in background
+- Photo upload APIs trigger image description generation on every upload
+- Added `/api/regenerate-image-description` endpoint for manual regeneration
+- EntityEditor now calls regenerate API when photos are removed
+- Story image flow now includes `imageDescription` in actor data for prompts
+
+**Files Created**:
+- `src/ai/flows/image-description-flow.ts`
+- `src/app/api/regenerate-image-description/route.ts`
+
+**Files Modified**:
+- `src/lib/types.ts` (added imageDescription fields to ChildProfile and Character)
+- `src/ai/flows/avatar-flow.ts` (trigger imageDescriptionFlow)
+- `src/ai/flows/character-avatar-flow.ts` (trigger imageDescriptionFlow)
+- `src/app/api/children/photos/route.ts` (trigger on upload)
+- `src/app/api/characters/photos/route.ts` (trigger on upload)
+- `src/components/shared/EntityEditor.tsx` (call regenerate on photo removal)
+- `src/ai/flows/story-image-flow.ts` (include imageDescription in ActorData)
+- `docs/SCHEMA.md` (document new fields)
+- `docs/API.md` (document new endpoint)
+
+---
+
 #### `f8656fd` - Add API client packages for mobile development
 
 **Type**: Architecture / Infrastructure

@@ -314,6 +314,7 @@ type ActorData = {
   displayName: string;
   characterType?: string; // For characters: Pet, Friend, etc.
   description?: string;
+  imageDescription?: string; // AI-generated physical appearance description
   pronouns?: string;
   likes?: string[];
   dislikes?: string[];
@@ -337,6 +338,7 @@ function buildActorData(entity: Character | ChildProfile, entityId: string, isMa
     displayName: entity.displayName,
     characterType: isCharacter ? (entity as Character).type : undefined,
     description: entity.description,
+    imageDescription: entity.imageDescription,
     pronouns: entity.pronouns,
     likes: entity.likes,
     dislikes: entity.dislikes,
@@ -415,6 +417,11 @@ function buildActorBlock(
 
   if (actor.description) {
     lines.push(`- Description: ${actor.description}`);
+  }
+
+  // AI-generated physical appearance description (from photos)
+  if (actor.imageDescription) {
+    lines.push(`- Appearance: ${actor.imageDescription}`);
   }
 
   lines.push(`- Pronouns: ${actor.pronouns ?? 'they/them'}`);

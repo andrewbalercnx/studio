@@ -16,6 +16,7 @@ import { getStoryBucket } from '@/firebase/admin/storage';
 import { randomUUID } from 'crypto';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { avatarAnimationFlow } from './avatar-animation-flow';
+import { imageDescriptionFlow } from './image-description-flow';
 
 const AvatarFlowInputSchema = z.object({
   childId: z.string(),
@@ -235,6 +236,11 @@ export const avatarFlow = ai.defineFlow(
     // Trigger avatar animation generation in background (fire-and-forget)
     avatarAnimationFlow({ childId, avatarUrl: imageUrl }).catch((err) => {
       console.error('[avatarFlow] Background animation generation failed:', err);
+    });
+
+    // Trigger image description generation in background (fire-and-forget)
+    imageDescriptionFlow({ entityId: childId, entityType: 'child' }).catch((err) => {
+      console.error('[avatarFlow] Background image description generation failed:', err);
     });
 
     return { imageUrl };

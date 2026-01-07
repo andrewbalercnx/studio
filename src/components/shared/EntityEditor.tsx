@@ -302,7 +302,7 @@ export function EntityEditor({
   };
 
   const handleRemovePhoto = async (photoUrl: string) => {
-    if (!entity?.id || !firestore) return;
+    if (!entity?.id || !firestore || !user) return;
 
     try {
       const newPhotos = photos.filter(p => p !== photoUrl);
@@ -312,6 +312,22 @@ export function EntityEditor({
       const docRef = doc(firestore, collectionName, entity.id);
       await updateDoc(docRef, { photos: newPhotos });
       toast({ title: 'Photo removed' });
+
+      // Trigger image description regeneration in background
+      const idToken = await user.getIdToken();
+      fetch('/api/regenerate-image-description', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          entityId: entity.id,
+          entityType: isCharacter ? 'character' : 'child',
+        }),
+      }).catch((err) => {
+        console.error('Error triggering image description regeneration:', err);
+      });
     } catch (err: any) {
       console.error('Error removing photo:', err);
       toast({ title: 'Error removing photo', description: err.message, variant: 'destructive' });

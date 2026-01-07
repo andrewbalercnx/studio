@@ -15,6 +15,7 @@ import { randomUUID } from 'crypto';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { Gaxios, GaxiosError } from 'gaxios';
 import { avatarAnimationFlow } from './avatar-animation-flow';
+import { imageDescriptionFlow } from './image-description-flow';
 
 const CharacterAvatarFlowInputSchema = z.object({
   characterId: z.string(),
@@ -235,6 +236,11 @@ export const characterAvatarFlow = ai.defineFlow(
     // Trigger avatar animation generation in background (fire-and-forget)
     avatarAnimationFlow({ characterId, avatarUrl: imageUrl }).catch((err) => {
       console.error('[characterAvatarFlow] Background animation generation failed:', err);
+    });
+
+    // Trigger image description generation in background (fire-and-forget)
+    imageDescriptionFlow({ entityId: characterId, entityType: 'character' }).catch((err) => {
+      console.error('[characterAvatarFlow] Background image description generation failed:', err);
     });
 
     return { imageUrl };

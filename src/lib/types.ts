@@ -984,6 +984,15 @@ export type ChildProfile = {
     likes: string[]; // Replaces all preference subcategories
     dislikes: string[]; // New field for negative preferences
     description?: string;
+    // AI-generated description of physical appearance from photos (for image generation prompts)
+    // Internal field - not exposed to parents
+    imageDescription?: string;
+    imageDescriptionGeneration?: {
+        status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
+        lastRunAt?: any;
+        lastCompletedAt?: any;
+        lastErrorMessage?: string | null;
+    };
     ownerParentUid: string;
     createdAt: any;
     updatedAt?: any;
@@ -1130,6 +1139,15 @@ export type Character = {
     likes: string[]; // New field (replaces traits)
     dislikes: string[]; // New field for negative preferences
     description?: string;
+    // AI-generated description of physical appearance from photos (for image generation prompts)
+    // Internal field - not exposed to parents
+    imageDescription?: string;
+    imageDescriptionGeneration?: {
+        status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
+        lastRunAt?: any;
+        lastCompletedAt?: any;
+        lastErrorMessage?: string | null;
+    };
     ownerParentUid: string;
     childId?: string; // Optional: blank = family-wide, set = child-specific
     createdAt: Timestamp;

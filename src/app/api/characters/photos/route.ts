@@ -1,10 +1,11 @@
 import {NextResponse} from 'next/server';
 import {randomUUID} from 'node:crypto';
-import {getFirestore} from 'firebase-admin/firestore';
+import {getFirestore, FieldValue} from 'firebase-admin/firestore';
 import {requireParentOrAdminUser} from '@/lib/server-auth';
 import {AuthError} from '@/lib/auth-error';
 import {getStoryBucket} from '@/firebase/admin/storage';
 import {initFirebaseAdminApp} from '@/firebase/admin/app';
+import {imageDescriptionFlow} from '@/ai/flows/image-description-flow';
 
 type UploadPhotoRequest = {
   characterId: string;
@@ -118,6 +119,17 @@ export async function POST(request: Request) {
     const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(
       objectPath,
     )}?alt=media&token=${downloadToken}`;
+
+    // Trigger image description generation in background
+    // Set status to pending before triggering
+    await characterRef.update({
+      'imageDescriptionGeneration.status': 'pending',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    imageDescriptionFlow({ entityId: characterId, entityType: 'character' }).catch((err) => {
+      console.error('[api/characters/photos] Background image description generation failed:', err);
+    });
 
     return NextResponse.json({
       ok: true,
