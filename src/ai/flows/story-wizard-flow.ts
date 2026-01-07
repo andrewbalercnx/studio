@@ -356,7 +356,26 @@ const storyWizardFlowInternal = ai.defineFlow(
             parsed = validation.data;
           }
 
-          return { state: 'asking' as const, ok: true as const, answers, question: parsed.question, choices: parsed.choices };
+          // Build entity map for resolving placeholders in question and choices
+          const entityMap: EntityMap = new Map();
+          contextData.characters.forEach(c => {
+            entityMap.set(c.id, { displayName: c.displayName, document: c });
+          });
+          entityMap.set(childId, { displayName: child.displayName, document: child });
+          contextData.siblings?.forEach(sibling => {
+            entityMap.set(sibling.id, { displayName: sibling.displayName, document: sibling });
+          });
+
+          // Resolve placeholders in question and choice texts
+          const resolvedQuestion = await replacePlaceholdersInText(parsed.question, entityMap);
+          const resolvedChoices = await Promise.all(
+            parsed.choices.map(async (choice) => ({
+              ...choice,
+              text: await replacePlaceholdersInText(choice.text, entityMap),
+            }))
+          );
+
+          return { state: 'asking' as const, ok: true as const, answers, question: resolvedQuestion, choices: resolvedChoices };
         } catch (e) {
           console.error("Failed to parse question generation JSON:", llmResponse.text, e);
           return { state: 'error' as const, ok: false as const, error: 'The wizard got stuck thinking of a question. Please try again.' };
