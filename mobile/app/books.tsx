@@ -112,7 +112,7 @@ export default function BooksScreen() {
     return (
       <TouchableOpacity
         style={styles.bookCard}
-        onPress={() => router.push(`/read/${storyId}?storybookId=${storybookId}`)}
+        onPress={() => router.push(`/story/${storyId}?storybookId=${storybookId}`)}
       >
         {/* Thumbnail */}
         <View style={styles.thumbnailContainer}>

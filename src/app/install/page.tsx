@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Smartphone, Monitor, Download, Share, PlusSquare, CheckCircle2 } from 'lucide-react';
+import { Smartphone, Monitor, Download, Share, PlusSquare, CheckCircle2, Github } from 'lucide-react';
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
@@ -190,6 +190,17 @@ export default function InstallPage() {
               <li>• Full native app experience</li>
               <li>• Manual updates required</li>
             </ul>
+            <div className="pt-2 border-t">
+              <a
+                href="https://github.com/andrewbalercnx/studio/commit/5b46756"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Github className="h-3 w-3" />
+                <span className="font-mono">5b46756</span>
+              </a>
+            </div>
           </CardContent>
         </Card>
       </div>

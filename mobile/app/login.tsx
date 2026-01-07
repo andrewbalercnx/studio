@@ -67,6 +67,8 @@ export default function LoginScreen() {
               autoCapitalize="none"
               keyboardType="email-address"
               autoComplete="email"
+              textContentType="emailAddress"
+              importantForAutofill="yes"
               editable={!isLoading}
             />
           </View>
@@ -81,6 +83,8 @@ export default function LoginScreen() {
               onChangeText={setPassword}
               secureTextEntry
               autoComplete="password"
+              textContentType="password"
+              importantForAutofill="yes"
               editable={!isLoading}
             />
           </View>

@@ -55,15 +55,18 @@ class MobileApiClient {
   // ============================================
 
   async getGenerators(): Promise<any[]> {
-    return this.request('/api/kids-generators');
+    const response = await this.request<{ ok: boolean; generators: any[] }>('/api/kids-generators');
+    return response.generators || [];
   }
 
   async getOutputTypes(): Promise<any[]> {
-    return this.request('/api/storyOutputTypes');
+    const response = await this.request<{ ok: boolean; outputTypes: any[] }>('/api/storyOutputTypes');
+    return response.outputTypes || [];
   }
 
   async getImageStyles(): Promise<any[]> {
-    return this.request('/api/imageStyles');
+    const response = await this.request<{ ok: boolean; imageStyles: any[] }>('/api/imageStyles');
+    return response.imageStyles || [];
   }
 
   // ============================================
