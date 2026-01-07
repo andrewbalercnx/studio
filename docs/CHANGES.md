@@ -18,6 +18,23 @@
 
 ### 2026-01-07
 
+#### `bd8efbf` - Fix storyCompile error for friends story mode
+
+**Type**: Bug Fix
+
+**Summary**: Stories created with "Fun with Friends" were failing to compile with the error "Session is missing childId, storyTypeId, or parentUid" because the storyCompileFlow didn't handle `storyMode: 'friends'`.
+
+**Root Cause**: The friends flow creates sessions with `storyMode: 'friends'` but no `storyTypeId`. The storyCompileFlow had handlers for `wizard`, `gemini3`, and `gemini4` modes, but fell through to the standard compilation path for `friends` mode, which requires `storyTypeId`.
+
+**Changes**:
+- Added `isFriendsMode` check to storyCompileFlow
+- Friends mode handler mirrors wizard mode: loads existing story document, resolves placeholders, generates synopsis if missing, updates story with generation statuses for background tasks
+
+**Files Modified**:
+- `src/ai/flows/story-compile-flow.ts`
+
+---
+
 #### `4579a27` - Add delete photo button to child photo management
 
 **Type**: Feature
