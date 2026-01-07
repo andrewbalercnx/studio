@@ -38,15 +38,18 @@ export async function GET(
 
     const storybooks = storybooksSnapshot.docs
       .filter(doc => !doc.data().deletedAt)
-      .map(doc => ({
-        id: doc.id,
-        storyId,
-        ...doc.data(),
-      }))
+      .map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          storyId,
+          ...data,
+        };
+      })
       // Sort by createdAt descending (most recent first) - done in JS to avoid composite index
       .sort((a, b) => {
-        const aTime = a.createdAt?.seconds || a.createdAt?._seconds || 0;
-        const bTime = b.createdAt?.seconds || b.createdAt?._seconds || 0;
+        const aTime = (a as any).createdAt?.seconds || (a as any).createdAt?._seconds || 0;
+        const bTime = (b as any).createdAt?.seconds || (b as any).createdAt?._seconds || 0;
         return bTime - aTime;
       });
 
