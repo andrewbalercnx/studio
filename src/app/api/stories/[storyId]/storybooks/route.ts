@@ -36,7 +36,7 @@ export async function GET(
       .collection('storybooks')
       .get();
 
-    const storybooks = storybooksSnapshot.docs
+    const rawStorybooks = storybooksSnapshot.docs
       .filter(doc => !doc.data().deletedAt)
       .map(doc => {
         const data = doc.data();
@@ -52,6 +52,39 @@ export async function GET(
         const bTime = (b as any).createdAt?.seconds || (b as any).createdAt?._seconds || 0;
         return bTime - aTime;
       });
+
+    // Fetch first page imageUrl for each storybook as thumbnail
+    const storybooks = await Promise.all(
+      rawStorybooks.map(async (sb: any) => {
+        // If thumbnailUrl already exists, use it
+        if (sb.thumbnailUrl) {
+          return sb;
+        }
+        // Otherwise, fetch the first page to get its imageUrl
+        try {
+          const firstPageSnapshot = await firestore
+            .collection('stories')
+            .doc(storyId)
+            .collection('storybooks')
+            .doc(sb.id)
+            .collection('pages')
+            .orderBy('pageNumber')
+            .limit(1)
+            .get();
+
+          if (!firstPageSnapshot.empty) {
+            const firstPage = firstPageSnapshot.docs[0].data();
+            return {
+              ...sb,
+              thumbnailUrl: firstPage.imageUrl || null,
+            };
+          }
+        } catch (e) {
+          console.error(`Error fetching first page for storybook ${sb.id}:`, e);
+        }
+        return sb;
+      })
+    );
 
     return NextResponse.json(storybooks);
   } catch (error: any) {
