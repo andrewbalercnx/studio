@@ -29,11 +29,12 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Fetch storybooks from subcollection
+    // Fetch storybooks from subcollection, ordered by createdAt descending
     const storybooksSnapshot = await firestore
       .collection('stories')
       .doc(storyId)
       .collection('storybooks')
+      .orderBy('createdAt', 'desc')
       .get();
 
     const storybooks = storybooksSnapshot.docs

@@ -31,10 +31,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Fetch stories for this child
+    // Fetch stories for this child, ordered by createdAt descending
     const storiesSnapshot = await firestore
       .collection('stories')
       .where('childId', '==', childId)
+      .orderBy('createdAt', 'desc')
       .get();
 
     const stories = storiesSnapshot.docs

@@ -28,6 +28,15 @@ interface Story {
   imageGeneration?: { status: string };
 }
 
+interface Storybook {
+  id: string;
+  storyId: string;
+  imageGeneration?: { status: string };
+  thumbnailUrl?: string;
+  imageStyleName?: string;
+  outputTypeName?: string;
+}
+
 export default function StoryScreen() {
   const router = useRouter();
   const { storyId } = useLocalSearchParams<{ storyId: string }>();
@@ -35,6 +44,7 @@ export default function StoryScreen() {
   const apiClient = useApiClient();
 
   const [story, setStory] = useState<Story | null>(null);
+  const [storybooks, setStorybooks] = useState<Storybook[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
@@ -52,8 +62,16 @@ export default function StoryScreen() {
   const loadStory = async () => {
     if (!storyId) return;
     try {
-      const data = await apiClient.getStory(storyId);
-      setStory(data);
+      const [storyData, storybooksData] = await Promise.all([
+        apiClient.getStory(storyId),
+        apiClient.getMyStorybooks(storyId).catch(() => []),
+      ]);
+      setStory(storyData);
+      // Filter to ready storybooks only
+      const readyBooks = storybooksData.filter(
+        (sb: Storybook) => sb.imageGeneration?.status === 'ready'
+      );
+      setStorybooks(readyBooks);
     } catch (e) {
       console.error('Error loading story:', e);
     } finally {
@@ -92,7 +110,10 @@ export default function StoryScreen() {
     }
   };
 
-  const hasBook = story?.imageGeneration?.status === 'ready';
+  // Check for storybooks (new model) or legacy book (on story itself)
+  const hasStorybooks = storybooks.length > 0;
+  const hasLegacyBook = story?.imageGeneration?.status === 'ready';
+  const hasBook = hasStorybooks || hasLegacyBook;
   const hasAudio = story?.audioGeneration?.status === 'ready' && story?.audioUrl;
   const isGenerating = story?.pageGeneration?.status === 'running' ||
                        story?.imageGeneration?.status === 'running';
@@ -165,7 +186,22 @@ export default function StoryScreen() {
 
         {/* Actions */}
         <View style={styles.actionsContainer}>
-          {hasBook ? (
+          {hasStorybooks ? (
+            // Show storybook buttons for new model
+            storybooks.map((sb) => (
+              <TouchableOpacity
+                key={sb.id}
+                style={[styles.actionButton, styles.actionButtonPrimary, { marginBottom: 12 }]}
+                onPress={() => router.push(`/book/${storyId}?storybookId=${sb.id}`)}
+              >
+                <Text style={styles.actionButtonIcon}>📚</Text>
+                <Text style={styles.actionButtonTextPrimary}>
+                  {sb.imageStyleName || sb.outputTypeName || 'Read Picture Book'}
+                </Text>
+              </TouchableOpacity>
+            ))
+          ) : hasLegacyBook ? (
+            // Legacy book on story itself
             <TouchableOpacity
               style={[styles.actionButton, styles.actionButtonPrimary]}
               onPress={() => router.push(`/book/${storyId}`)}
