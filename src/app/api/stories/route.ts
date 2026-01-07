@@ -31,11 +31,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Fetch stories for this child, ordered by createdAt descending
+    // Fetch stories for this child
     const storiesSnapshot = await firestore
       .collection('stories')
       .where('childId', '==', childId)
-      .orderBy('createdAt', 'desc')
       .get();
 
     const stories = storiesSnapshot.docs
@@ -43,7 +42,13 @@ export async function GET(request: NextRequest) {
       .map(doc => ({
         id: doc.id,
         ...doc.data(),
-      }));
+      }))
+      // Sort by createdAt descending (most recent first) - done in JS to avoid composite index
+      .sort((a, b) => {
+        const aTime = a.createdAt?.seconds || a.createdAt?._seconds || 0;
+        const bTime = b.createdAt?.seconds || b.createdAt?._seconds || 0;
+        return bTime - aTime;
+      });
 
     return NextResponse.json(stories);
   } catch (error: any) {
