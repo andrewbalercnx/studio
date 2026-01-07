@@ -456,6 +456,23 @@ function ManagePhotos({ child, onOpenChange }: { child: ChildProfile, onOpenChan
             });
     }
 
+    const handleDeletePhoto = async (photoUrl: string) => {
+        if (!firestore) return;
+
+        try {
+            const newPhotos = optimisticPhotos.filter(p => p !== photoUrl);
+            setOptimisticPhotos(newPhotos);
+
+            const childRef = doc(firestore, 'children', child.id);
+            await updateDoc(childRef, { photos: newPhotos });
+            toast({ title: 'Photo deleted' });
+        } catch (err: any) {
+            // Revert optimistic update on error
+            setOptimisticPhotos(optimisticPhotos);
+            toast({ title: 'Error deleting photo', description: err.message, variant: 'destructive' });
+        }
+    }
+
     return (
         <div className="space-y-6">
             <AvatarGenerator child={child} onAvatarUpdate={handleSetAvatar} />
@@ -470,8 +487,12 @@ function ManagePhotos({ child, onOpenChange }: { child: ChildProfile, onOpenChan
                 {optimisticPhotos.map((photo, index) => (
                     <div key={index} className="relative group">
                         <Image src={photo} alt={`Child photo ${index + 1}`} width={150} height={150} className="rounded-md object-cover aspect-square" />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-2 transition-opacity">
                             <Button size="sm" onClick={() => handleSetAvatar(photo)}>Set as Avatar</Button>
+                            <Button size="sm" variant="destructive" onClick={() => handleDeletePhoto(photo)}>
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Delete
+                            </Button>
                         </div>
                     </div>
                 ))}

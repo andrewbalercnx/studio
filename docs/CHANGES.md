@@ -18,6 +18,22 @@
 
 ### 2026-01-07
 
+#### `4579a27` - Add delete photo button to child photo management
+
+**Type**: Feature
+
+**Summary**: Parents can now delete photos from a child's profile in the Manage Photos dialog.
+
+**Changes**:
+- Added `handleDeletePhoto` function with optimistic updates
+- Added red "Delete" button to photo hover overlay alongside "Set as Avatar"
+- Buttons now stack vertically in the overlay
+
+**Files Modified**:
+- `src/app/parent/children/page.tsx`
+
+---
+
 #### `1565866` - Split admin page into Admin, Writer, and Development
 
 **Type**: Refactor
