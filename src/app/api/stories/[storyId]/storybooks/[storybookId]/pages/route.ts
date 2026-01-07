@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { verifyAuthToken } from '@/lib/auth-utils';
+import {
+  resolveEntitiesInText,
+  replacePlaceholdersInText,
+} from '@/lib/resolve-placeholders.server';
 
 /**
  * GET /api/stories/[storyId]/storybooks/[storybookId]/pages
- * Returns pages for a specific storybook.
+ * Returns pages for a specific storybook with placeholders resolved.
  */
 export async function GET(
   request: NextRequest,
@@ -39,10 +43,26 @@ export async function GET(
       .orderBy('pageNumber')
       .get();
 
-    const pages = pagesSnapshot.docs.map(doc => ({
+    const rawPages = pagesSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
     }));
+
+    // Collect all text that needs placeholder resolution
+    const allText = rawPages.map((p: any) => p.bodyText || p.displayText || '').join(' ');
+    const entityMap = await resolveEntitiesInText(allText);
+
+    // Resolve placeholders in each page
+    const pages = await Promise.all(
+      rawPages.map(async (page: any) => {
+        const bodyText = page.bodyText || '';
+        const displayText = page.displayText || await replacePlaceholdersInText(bodyText, entityMap);
+        return {
+          ...page,
+          displayText,
+        };
+      })
+    );
 
     return NextResponse.json(pages);
   } catch (error: any) {
