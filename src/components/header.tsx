@@ -129,10 +129,17 @@ export default function Header() {
   const renderNavLinks = () => {
     switch (roleMode) {
       case 'admin':
-      case 'writer':
+        // Admins see Admin link in nav
         return (
           <>
-            <Button asChild variant="ghost" data-wiz-target="nav-admin-dashboard"><Link href="/admin">Dashboard</Link></Button>
+            <Button asChild variant="ghost" data-wiz-target="nav-admin-dashboard"><Link href="/admin">Admin</Link></Button>
+          </>
+        );
+      case 'writer':
+        // Writers see Writer link in nav (they don't have access to /admin)
+        return (
+          <>
+            <Button asChild variant="ghost" data-wiz-target="nav-writer-dashboard"><Link href="/writer">Writer</Link></Button>
           </>
         );
       case 'child':
@@ -213,9 +220,14 @@ export default function Header() {
                   {renderRoleBadges()}
                 </div>
                 <DropdownMenuSeparator />
-                {(roleClaims?.isAdmin || roleClaims?.isWriter) && (
+                {roleClaims?.isAdmin && (
                     <DropdownMenuItem onClick={() => router.push('/admin')}>
                     Admin Dashboard
+                    </DropdownMenuItem>
+                )}
+                {(roleClaims?.isAdmin || roleClaims?.isWriter) && (
+                    <DropdownMenuItem onClick={() => router.push('/writer')}>
+                    Writer Dashboard
                     </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={() => router.push('/parent/settings')}>

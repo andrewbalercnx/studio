@@ -16,6 +16,37 @@
 
 ## Changes
 
+### 2026-01-07
+
+#### `1565866` - Split admin page into Admin, Writer, and Development
+
+**Type**: Refactor
+
+**Summary**: Split the monolithic `/admin` page into three separate role-based pages to improve organization and access control.
+
+**Changes**:
+- Created `/writer` page for content creation tools (accessible to Writers and Admins)
+- Created `/admin/dev` page for testing and development tools (Admin only)
+- Refactored `/admin` page to contain only operational/admin items (Admin only)
+- Updated header navigation: Admins see "Admin" link, Writers see "Writer" link
+- Updated dropdown menu: Admins see both Admin and Writer dashboards, Writers see only Writer dashboard
+- Removed redundant items from all pages: Children, Characters, Story Sessions, Parent Settings, Story Flow Selection
+
+**Page Assignments**:
+- **Admin** (`/admin`): Users, Print Orders, Deleted Items, AI Flow Logs, Database Manager, Upload JSON Configs, Email Configuration, Diagnostics & Logging
+- **Writer** (`/writer`): Story Editor (Types, Phases, Prompts, Outputs), Output Configuration (Image Styles, Print Layouts, Print Products), AI Prompts, Story Generators, Voice Config, Help Wizards
+- **Development** (`/admin/dev`): AI Flow Tests (Story Beat/Arc/Compile/Pagination), Run Traces, Regression Tests, Firestore Rules Tests, Create Data, Seed Generators
+
+**Files Created**:
+- `src/app/writer/page.tsx` - New Writer dashboard
+- `src/app/admin/dev/page.tsx` - New Development page
+
+**Files Modified**:
+- `src/app/admin/page.tsx` - Refactored to Admin-only items
+- `src/components/header.tsx` - Updated navigation for role-based links
+
+---
+
 ### 2026-01-06
 
 #### `72f29f8` - Use generated sample as style example fallback
