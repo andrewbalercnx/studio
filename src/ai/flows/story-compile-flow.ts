@@ -122,7 +122,15 @@ export const storyCompileFlow = ai.defineFlow(
                 if (!synopsis) {
                     const synopsisStartTime = Date.now();
                     const synopsisModelName = 'googleai/gemini-2.5-flash';
-                    const synopsisPrompt = `Write a brief 1-2 sentence summary of this children's story suitable for a parent to read. Should capture the main adventure or theme.\n\nSTORY:\n${resolvedStoryText}\n\nSYNOPSIS:`;
+                    const synopsisPrompt = `Write a brief 1-2 sentence summary of this children's story suitable for a parent to read. The summary should capture the main adventure or theme.
+
+STORY:
+${resolvedStoryText}
+
+INSTRUCTIONS:
+- Write exactly 1-2 sentences
+- Make it engaging and suitable for a parent to quickly understand what the story is about
+- Do not include any labels or prefixes, just output the summary text directly`;
                     try {
                         const synopsisResponse = await ai.generate({
                             model: synopsisModelName,
@@ -285,7 +293,15 @@ export const storyCompileFlow = ai.defineFlow(
                 if (!synopsis) {
                     const synopsisStartTime = Date.now();
                     const synopsisModelName = 'googleai/gemini-2.5-flash';
-                    const synopsisPrompt = `Write a brief 1-2 sentence summary of this children's story suitable for a parent to read. Should capture the main adventure or theme.\n\nSTORY:\n${resolvedStoryText}\n\nSYNOPSIS:`;
+                    const synopsisPrompt = `Write a brief 1-2 sentence summary of this children's story suitable for a parent to read. The summary should capture the main adventure or theme.
+
+STORY:
+${resolvedStoryText}
+
+INSTRUCTIONS:
+- Write exactly 1-2 sentences
+- Make it engaging and suitable for a parent to quickly understand what the story is about
+- Do not include any labels or prefixes, just output the summary text directly`;
                     try {
                         const synopsisResponse = await ai.generate({
                             model: synopsisModelName,
@@ -431,7 +447,15 @@ export const storyCompileFlow = ai.defineFlow(
                 let synopsis = '';
                 const synopsisStartTime = Date.now();
                 const synopsisModelName = 'googleai/gemini-2.5-flash';
-                const synopsisPrompt = `Write a brief 1-2 sentence summary of this children's story suitable for a parent to read. Should capture the main adventure or theme.\n\nSTORY:\n${resolvedStoryText}\n\nSYNOPSIS:`;
+                const synopsisPrompt = `Write a brief 1-2 sentence summary of this children's story suitable for a parent to read. The summary should capture the main adventure or theme.
+
+STORY:
+${resolvedStoryText}
+
+INSTRUCTIONS:
+- Write exactly 1-2 sentences
+- Make it engaging and suitable for a parent to quickly understand what the story is about
+- Do not include any labels or prefixes, just output the summary text directly`;
                 try {
                     const synopsisResponse = await ai.generate({
                         model: synopsisModelName,
