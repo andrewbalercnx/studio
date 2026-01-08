@@ -52,6 +52,42 @@ The regression test page contains automated tests for API routes and data access
 
 ---
 
+## Architectural Principles
+
+### Server-First Data Processing
+
+**Principle**: All data filtering, sorting, and business logic should be implemented on the server, not the client.
+
+**Rationale**:
+- Client-side filtering requires all clients to be updated when logic changes
+- Server-side logic can be updated once and immediately applies to all clients
+- Clients should be "thin" - responsible for rendering data, not making decisions about how to manipulate it
+- This enables multiple clients (web, mobile, PWA) to share the same logic
+
+**Guidelines**:
+1. **Filtering**: If data needs to be filtered (e.g., only showing "ready" items, excluding "deleted" items), do it in the API route, not the client
+2. **Sorting**: Sort data in the API route before returning it to clients
+3. **Computed fields**: Add computed/derived fields (e.g., `hasBook`, `isReady`) to the API response rather than computing them client-side
+4. **Status logic**: Business logic determining states/statuses should be in API routes
+
+**Example - Bad (client-side filtering)**:
+```typescript
+// In client code
+const readyBooks = storybooks.filter(sb => sb.imageGeneration?.status === 'ready');
+```
+
+**Example - Good (server-side filtering)**:
+```typescript
+// In API route
+const rawStorybooks = storybooksSnapshot.docs
+  .filter(doc => doc.data().imageGeneration?.status === 'ready')
+  .map(doc => ({ id: doc.id, ...doc.data() }));
+```
+
+**Technical Debt Note**: The PWA kids routes (`/kids/*`) currently use direct Firestore queries from the client rather than API endpoints. These should be refactored to use the same API endpoints as the mobile app to maintain consistency.
+
+---
+
 ## Workflow
 
 ### Before Starting Major Work
@@ -220,6 +256,7 @@ gcloud secrets list
 
 | Date | Changes |
 |------|---------|
+| 2026-01-08 | Added Architectural Principles section with Server-First Data Processing rule |
 | 2026-01-04 | Updated Git Workflow to single-push pattern (amend before push) |
 | 2025-12-29 | Added Git Workflow auto-push rule |
 | 2025-12-29 | Added Allowed Commands section |

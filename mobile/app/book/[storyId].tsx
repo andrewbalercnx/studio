@@ -80,12 +80,8 @@ export default function BookReaderScreen() {
         return;
       }
 
-      // Sort by page number and filter out blank/title pages (they're for print, not reading)
-      const readablePages = pagesData
-        .sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0))
-        .filter((p) => p.kind !== 'blank' && p.kind !== 'title_page');
-
-      setPages(readablePages);
+      // Server returns pages sorted by pageNumber with blank/title pages already filtered
+      setPages(pagesData);
     } catch (e) {
       console.error('Error loading pages:', e);
     } finally {

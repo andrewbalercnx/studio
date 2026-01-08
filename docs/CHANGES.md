@@ -16,6 +16,33 @@
 
 ## Changes
 
+### 2026-01-08
+
+#### `ea39e67` - Implement server-first data processing architecture
+
+**Type**: Architecture
+
+**Summary**: Implemented server-first data processing principle to ensure clients are thin and only responsible for rendering data. All filtering, sorting, and business logic is now done on the server side. This allows backend changes to apply to all clients (mobile, PWA) without requiring client updates.
+
+**Changes**:
+- **Storybooks API** (`/api/stories/[storyId]/storybooks`): Now filters to only return storybooks with `imageGeneration.status === 'ready'` by default. Added `?includeAll=true` query param to override.
+- **Pages API** (`/api/stories/[storyId]/storybooks/[storybookId]/pages`): Now filters out blank and title_page pages server-side (these are for print only, not reading).
+- **Mobile app**: Removed client-side filtering for storybooks and pages - now trusts server to return correct data.
+- **CLAUDE.md**: Added new "Architectural Principles" section documenting the server-first data processing rule with guidelines and examples.
+- **API.md**: Documented the new API endpoints with server-side filtering behavior.
+
+**Technical Debt Note**: The PWA kids routes (`/kids/*`) still use direct Firestore queries from the client. These should be refactored to use API endpoints like the mobile app.
+
+**Files Modified**:
+- `src/app/api/stories/[storyId]/storybooks/route.ts` (added ready status filtering)
+- `src/app/api/stories/[storyId]/storybooks/[storybookId]/pages/route.ts` (added blank/title_page filtering)
+- `mobile/app/story/[storyId].tsx` (removed client-side filtering)
+- `mobile/app/book/[storyId].tsx` (removed client-side filtering)
+- `CLAUDE.md` (added Architectural Principles section)
+- `docs/API.md` (documented new API endpoints)
+
+---
+
 ### 2026-01-07
 
 #### `c206f28` - Add imageDescription auto-generation for child/character photos

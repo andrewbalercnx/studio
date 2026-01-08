@@ -6,6 +6,11 @@ import { verifyAuthToken } from '@/lib/auth-utils';
 /**
  * GET /api/stories/[storyId]/storybooks
  * Returns storybooks for a specific story.
+ *
+ * By default, only returns storybooks with imageGeneration.status === 'ready'.
+ * Pass ?includeAll=true to include storybooks in other states.
+ *
+ * Storybooks are returned sorted by createdAt descending (most recent first).
  */
 export async function GET(
   request: NextRequest,
@@ -36,8 +41,19 @@ export async function GET(
       .collection('storybooks')
       .get();
 
+    // Check for includeAll query param
+    const { searchParams } = new URL(request.url);
+    const includeAll = searchParams.get('includeAll') === 'true';
+
     const rawStorybooks = storybooksSnapshot.docs
-      .filter(doc => !doc.data().deletedAt)
+      .filter(doc => {
+        const data = doc.data();
+        // Always filter out deleted storybooks
+        if (data.deletedAt) return false;
+        // Unless includeAll is true, only return ready storybooks
+        if (!includeAll && data.imageGeneration?.status !== 'ready') return false;
+        return true;
+      })
       .map(doc => {
         const data = doc.data();
         return {

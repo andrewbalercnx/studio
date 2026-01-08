@@ -67,11 +67,8 @@ export default function StoryScreen() {
         apiClient.getMyStorybooks(storyId).catch(() => []),
       ]);
       setStory(storyData);
-      // Filter to ready storybooks only
-      const readyBooks = storybooksData.filter(
-        (sb: Storybook) => sb.imageGeneration?.status === 'ready'
-      );
-      setStorybooks(readyBooks);
+      // Server returns only ready storybooks by default
+      setStorybooks(storybooksData);
     } catch (e) {
       console.error('Error loading story:', e);
     } finally {

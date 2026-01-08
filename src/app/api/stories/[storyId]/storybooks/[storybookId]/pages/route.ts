@@ -10,6 +10,12 @@ import {
 /**
  * GET /api/stories/[storyId]/storybooks/[storybookId]/pages
  * Returns pages for a specific storybook with placeholders resolved.
+ *
+ * Pages are filtered server-side to exclude non-readable pages:
+ * - 'blank' pages (decorative/print alignment)
+ * - 'title_page' pages (title/credit pages)
+ *
+ * Pages are returned sorted by pageNumber ascending.
  */
 export async function GET(
   request: NextRequest,
@@ -43,18 +49,21 @@ export async function GET(
       .orderBy('pageNumber')
       .get();
 
-    const rawPages = pagesSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    // Filter out non-readable pages (blank, title_page) - these are for print only
+    const readablePages = pagesSnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      .filter((page: any) => page.kind !== 'blank' && page.kind !== 'title_page');
 
     // Collect all text that needs placeholder resolution
-    const allText = rawPages.map((p: any) => p.bodyText || p.displayText || '').join(' ');
+    const allText = readablePages.map((p: any) => p.bodyText || p.displayText || '').join(' ');
     const entityMap = await resolveEntitiesInText(allText);
 
     // Resolve placeholders in each page
     const pages = await Promise.all(
-      rawPages.map(async (page: any) => {
+      readablePages.map(async (page: any) => {
         const bodyText = page.bodyText || '';
         const displayText = page.displayText || await replacePlaceholdersInText(bodyText, entityMap);
         return {

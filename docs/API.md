@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-07 (added image description API and side effects)
+> **Last Updated**: 2026-01-08 (documented server-side filtering for storybooks and pages APIs)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -1121,6 +1121,68 @@ Finalize storybook for printing.
   }
 }
 ```
+
+---
+
+### GET `/api/stories/[storyId]/storybooks`
+
+Get storybooks for a specific story.
+
+**Path Parameters**:
+- `storyId` (string, required) - Story document ID
+
+**Query Parameters**:
+- `includeAll` (boolean, optional) - If `true`, includes all storybooks regardless of status. Default: `false` (only returns storybooks with `imageGeneration.status === 'ready'`)
+
+**Response**: `200 OK`
+```json
+[
+  {
+    "id": "storybook-id",
+    "storyId": "story-id",
+    "storyOutputTypeId": "picture_book",
+    "imageStyleId": "watercolor",
+    "imageGeneration": { "status": "ready" },
+    "thumbnailUrl": "https://storage.googleapis.com/...",
+    "createdAt": { "seconds": 1704672000, "_seconds": 1704672000 }
+  }
+]
+```
+
+**Notes**:
+- Server-side filtering: By default only returns storybooks with `imageGeneration.status === 'ready'`. Use `?includeAll=true` to get all storybooks.
+- Server-side sorting: Results sorted by `createdAt` descending (most recent first)
+- Thumbnails: If `thumbnailUrl` not set, fetches first page's `imageUrl` automatically
+
+---
+
+### GET `/api/stories/[storyId]/storybooks/[storybookId]/pages`
+
+Get pages for a specific storybook with placeholders resolved.
+
+**Path Parameters**:
+- `storyId` (string, required) - Story document ID
+- `storybookId` (string, required) - Storybook document ID
+
+**Response**: `200 OK`
+```json
+[
+  {
+    "id": "page-id",
+    "pageNumber": 0,
+    "kind": "cover_front",
+    "bodyText": "Original text with $$childId$$ placeholders",
+    "displayText": "Resolved text with actual names",
+    "imageUrl": "https://storage.googleapis.com/...",
+    "imageStatus": "ready"
+  }
+]
+```
+
+**Notes**:
+- Server-side filtering: Pages with `kind === 'blank'` or `kind === 'title_page'` are excluded (these are for print only)
+- Server-side sorting: Results sorted by `pageNumber` ascending
+- Placeholder resolution: `displayText` field contains resolved placeholders (child/character names)
 
 ---
 
