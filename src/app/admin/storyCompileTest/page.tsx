@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useFirestore } from '@/firebase';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import type { StorySession } from '@/lib/types';
@@ -27,7 +28,19 @@ type StoryCompileApiResponse = {
     metadata?: {
         paragraphs?: number;
     };
-    debug?: any;
+    actors?: string[];
+    debug?: {
+        stage?: string;
+        details?: {
+            draftStoryLength?: number;
+            beatContinuationCount?: number;
+            promptLength?: number;
+            usedAdminPrompt?: boolean;
+            storyLength?: number;
+            synopsisLength?: number;
+            [key: string]: any;
+        };
+    };
 };
 
 type SessionOption = {
@@ -93,6 +106,8 @@ export default function AdminStoryCompileTestPage() {
     const [loading, setLoading] = useState(false);
     const [lastResponse, setLastResponse] = useState<StoryCompileApiResponse | null>(null);
     const [lastError, setLastError] = useState<string | null>(null);
+    const [showDebug, setShowDebug] = useState(false);
+    const [showRawText, setShowRawText] = useState(false);
 
     // Session list state
     const [sessions, setSessions] = useState<SessionOption[]>([]);
@@ -207,6 +222,7 @@ export default function AdminStoryCompileTestPage() {
                 </CardHeader>
                 {lastResponse?.ok && lastResponse.storyText && (
                     <CardContent className="space-y-4">
+                        {/* Resolved Story Text */}
                         <div>
                             <h3 className="font-semibold">Resolved Story Text <Badge variant="outline" className="ml-2">names shown</Badge></h3>
                             <Textarea
@@ -215,16 +231,32 @@ export default function AdminStoryCompileTestPage() {
                                 className="h-64 mt-2 font-mono text-sm bg-muted"
                             />
                         </div>
-                        {lastResponse.rawStoryText && (
-                            <div>
-                                <h3 className="font-semibold">Raw Story Text <Badge variant="outline" className="ml-2">$$id$$ placeholders</Badge></h3>
-                                <Textarea
-                                    readOnly
-                                    value={lastResponse.rawStoryText}
-                                    className="h-64 mt-2 font-mono text-sm bg-muted"
-                                />
-                            </div>
-                        )}
+
+                        {/* Raw Story Text - Collapsible */}
+                        <Collapsible open={showRawText} onOpenChange={setShowRawText}>
+                            <CollapsibleTrigger asChild>
+                                <Button variant="ghost" size="sm" className="flex items-center gap-1 p-0 h-auto">
+                                    {showRawText ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                    <span className="font-semibold">Raw Story Text</span>
+                                    <Badge variant="outline" className="ml-2">$$id$$ placeholders</Badge>
+                                </Button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                                {lastResponse.rawStoryText ? (
+                                    <Textarea
+                                        readOnly
+                                        value={lastResponse.rawStoryText}
+                                        className="h-64 mt-2 font-mono text-sm bg-muted"
+                                    />
+                                ) : (
+                                    <p className="text-sm text-muted-foreground mt-2 italic">
+                                        No raw text available (some story modes like wizard/friends resolve placeholders before compile)
+                                    </p>
+                                )}
+                            </CollapsibleContent>
+                        </Collapsible>
+
+                        {/* Synopsis */}
                         {lastResponse.synopsis && (
                             <div>
                                 <h3 className="font-semibold">Synopsis</h3>
@@ -233,17 +265,83 @@ export default function AdminStoryCompileTestPage() {
                                 </p>
                             </div>
                         )}
-                         <div>
-                            <h3 className="font-semibold">Metadata</h3>
-                            <p className="p-2 bg-muted rounded-md text-sm">
-                                Paragraphs: {lastResponse.metadata?.paragraphs ?? 'N/A'}
-                            </p>
+
+                        {/* Metadata & Actors */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <h3 className="font-semibold">Metadata</h3>
+                                <div className="p-2 bg-muted rounded-md text-sm">
+                                    <p>Paragraphs: {lastResponse.metadata?.paragraphs ?? 'N/A'}</p>
+                                </div>
+                            </div>
+                            {lastResponse.actors && lastResponse.actors.length > 0 && (
+                                <div>
+                                    <h3 className="font-semibold">Actors</h3>
+                                    <div className="p-2 bg-muted rounded-md text-sm">
+                                        <p className="font-mono text-xs break-all">
+                                            {lastResponse.actors.join(', ')}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
+
+                        {/* Debug Info - Collapsible */}
+                        {lastResponse.debug && (
+                            <Collapsible open={showDebug} onOpenChange={setShowDebug}>
+                                <CollapsibleTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="flex items-center gap-1 p-0 h-auto">
+                                        {showDebug ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                        <span className="font-semibold">AI Flow Debug Info</span>
+                                    </Button>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                    <div className="mt-2 space-y-3">
+                                        {/* Quick Stats */}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                            {lastResponse.debug.details?.draftStoryLength !== undefined && (
+                                                <div className="p-2 bg-muted rounded text-xs">
+                                                    <span className="text-muted-foreground">Draft Length:</span>
+                                                    <span className="ml-1 font-mono">{lastResponse.debug.details.draftStoryLength}</span>
+                                                </div>
+                                            )}
+                                            {lastResponse.debug.details?.beatContinuationCount !== undefined && (
+                                                <div className="p-2 bg-muted rounded text-xs">
+                                                    <span className="text-muted-foreground">Beat Msgs:</span>
+                                                    <span className="ml-1 font-mono">{lastResponse.debug.details.beatContinuationCount}</span>
+                                                </div>
+                                            )}
+                                            {lastResponse.debug.details?.promptLength !== undefined && (
+                                                <div className="p-2 bg-muted rounded text-xs">
+                                                    <span className="text-muted-foreground">Prompt Length:</span>
+                                                    <span className="ml-1 font-mono">{lastResponse.debug.details.promptLength}</span>
+                                                </div>
+                                            )}
+                                            {lastResponse.debug.details?.usedAdminPrompt !== undefined && (
+                                                <div className="p-2 bg-muted rounded text-xs">
+                                                    <span className="text-muted-foreground">Admin Prompt:</span>
+                                                    <span className="ml-1">{lastResponse.debug.details.usedAdminPrompt ? 'Yes' : 'No'}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* Full Debug JSON */}
+                                        <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-xs max-h-64 overflow-y-auto">
+                                            <code>{JSON.stringify(lastResponse.debug, null, 2)}</code>
+                                        </pre>
+                                    </div>
+                                </CollapsibleContent>
+                            </Collapsible>
+                        )}
                     </CardContent>
                 )}
-                 {lastError && (
+                {lastError && (
                     <CardContent>
                         <p className="text-destructive">{lastError}</p>
+                        {lastResponse?.debug && (
+                            <pre className="mt-4 bg-muted p-4 rounded-lg overflow-x-auto text-xs">
+                                <code>{JSON.stringify(lastResponse.debug, null, 2)}</code>
+                            </pre>
+                        )}
                     </CardContent>
                 )}
             </Card>

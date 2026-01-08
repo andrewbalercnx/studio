@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useFirestore } from '@/firebase';
 import { collection, query, orderBy, limit, onSnapshot, where } from 'firebase/firestore';
 import type { Story, StoryOutputType as StoryOutputTypeT } from '@/lib/types';
@@ -32,11 +33,35 @@ type PaginationFlowResult = {
     stats?: {
         pageCount: number;
         targetPageCount: number;
+        resolvedConstraints?: {
+            minPages: number;
+            maxPages: number;
+            pageMultiple: number;
+            source: string;
+        };
     };
     errorMessage?: string;
     debug?: {
         stage: string;
-        details: Record<string, unknown>;
+        details: {
+            storyLength?: number;
+            targetPageCount?: number;
+            actorCount?: number;
+            outputTypeName?: string;
+            promptLength?: number;
+            prompt?: string;
+            hasOutputTypePaginationPrompt?: boolean;
+            outputTypePaginationPrompt?: string | null;
+            durationMs?: number;
+            generatedPageCount?: number;
+            resolvedConstraints?: {
+                minPages: number;
+                maxPages: number;
+                pageMultiple: number;
+                source: string;
+            };
+            [key: string]: unknown;
+        };
     };
 };
 
@@ -68,6 +93,7 @@ export default function AdminPaginationTestPage() {
     const [lastResponse, setLastResponse] = useState<PaginationFlowResult | null>(null);
     const [lastError, setLastError] = useState<string | null>(null);
     const [showDebug, setShowDebug] = useState(false);
+    const [showAIPrompt, setShowAIPrompt] = useState(false);
 
     // Stories list state
     const [stories, setStories] = useState<StoryOption[]>([]);
@@ -246,66 +272,117 @@ export default function AdminPaginationTestPage() {
                 </CardHeader>
                 {lastResponse?.ok && lastResponse.pages && (
                     <CardContent className="space-y-4">
-                        <div className="grid gap-4">
-                            {lastResponse.pages.map((page, index) => (
-                                <div key={index} className="border rounded-lg p-4 space-y-2">
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="outline">Page {page.pageNumber}</Badge>
-                                        {page.entityIds?.length > 0 && (
-                                            <span className="text-xs text-muted-foreground">
-                                                Actors: {page.entityIds.join(', ')}
-                                            </span>
-                                        )}
+                        {/* AI Flow Stats */}
+                        {lastResponse.debug?.details && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-3 bg-muted/50 rounded-lg">
+                                {lastResponse.debug.details.storyLength !== undefined && (
+                                    <div className="text-xs">
+                                        <span className="text-muted-foreground">Story Length:</span>
+                                        <span className="ml-1 font-mono">{lastResponse.debug.details.storyLength}</span>
                                     </div>
-                                    <div className="space-y-2">
-                                        <div>
-                                            <div className="text-xs text-muted-foreground mb-1 flex items-center gap-2">
-                                                <span className="font-medium">Resolved Text</span>
-                                                <Badge variant="outline" className="text-[10px]">names shown</Badge>
-                                            </div>
-                                            <div className="text-sm bg-muted p-3 rounded">
-                                                {page.displayText || page.bodyText}
-                                            </div>
+                                )}
+                                {lastResponse.debug.details.promptLength !== undefined && (
+                                    <div className="text-xs">
+                                        <span className="text-muted-foreground">Prompt Length:</span>
+                                        <span className="ml-1 font-mono">{lastResponse.debug.details.promptLength}</span>
+                                    </div>
+                                )}
+                                {lastResponse.debug.details.durationMs !== undefined && (
+                                    <div className="text-xs">
+                                        <span className="text-muted-foreground">Duration:</span>
+                                        <span className="ml-1 font-mono">{lastResponse.debug.details.durationMs}ms</span>
+                                    </div>
+                                )}
+                                {lastResponse.debug.details.hasOutputTypePaginationPrompt !== undefined && (
+                                    <div className="text-xs">
+                                        <span className="text-muted-foreground">Custom Prompt:</span>
+                                        <span className="ml-1">{lastResponse.debug.details.hasOutputTypePaginationPrompt ? 'Yes' : 'No'}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* AI Prompt - Collapsible */}
+                        {lastResponse.debug?.details?.prompt && (
+                            <Collapsible open={showAIPrompt} onOpenChange={setShowAIPrompt}>
+                                <CollapsibleTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="flex items-center gap-1 p-0 h-auto">
+                                        {showAIPrompt ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                        <span className="font-semibold">AI Prompt</span>
+                                        <Badge variant="outline" className="ml-2">input to model</Badge>
+                                    </Button>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                    <Textarea
+                                        readOnly
+                                        value={lastResponse.debug.details.prompt}
+                                        className="h-96 mt-2 font-mono text-xs bg-muted"
+                                    />
+                                </CollapsibleContent>
+                            </Collapsible>
+                        )}
+
+                        {/* Generated Pages */}
+                        <div>
+                            <h3 className="font-semibold mb-3">Generated Pages</h3>
+                            <div className="grid gap-4">
+                                {lastResponse.pages.map((page, index) => (
+                                    <div key={index} className="border rounded-lg p-4 space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant="outline">Page {page.pageNumber}</Badge>
+                                            {page.entityIds?.length > 0 && (
+                                                <span className="text-xs text-muted-foreground">
+                                                    Actors: {page.entityIds.join(', ')}
+                                                </span>
+                                            )}
                                         </div>
-                                        {page.displayText && page.bodyText !== page.displayText && (
+                                        <div className="space-y-2">
                                             <div>
                                                 <div className="text-xs text-muted-foreground mb-1 flex items-center gap-2">
-                                                    <span className="font-medium">Raw Text</span>
-                                                    <Badge variant="outline" className="text-[10px]">$$id$$ placeholders</Badge>
+                                                    <span className="font-medium">Resolved Text</span>
+                                                    <Badge variant="outline" className="text-[10px]">names shown</Badge>
                                                 </div>
-                                                <div className="text-sm bg-muted/50 p-3 rounded font-mono text-xs">
-                                                    {page.bodyText}
+                                                <div className="text-sm bg-muted p-3 rounded">
+                                                    {page.displayText || page.bodyText}
                                                 </div>
+                                            </div>
+                                            {page.displayText && page.bodyText !== page.displayText && (
+                                                <div>
+                                                    <div className="text-xs text-muted-foreground mb-1 flex items-center gap-2">
+                                                        <span className="font-medium">Raw Text</span>
+                                                        <Badge variant="outline" className="text-[10px]">$$id$$ placeholders</Badge>
+                                                    </div>
+                                                    <div className="text-sm bg-muted/50 p-3 rounded font-mono text-xs">
+                                                        {page.bodyText}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {page.imageDescription && (
+                                            <div className="text-xs text-muted-foreground">
+                                                <span className="font-medium">Image:</span> {page.imageDescription}
                                             </div>
                                         )}
                                     </div>
-                                    {page.imageDescription && (
-                                        <div className="text-xs text-muted-foreground">
-                                            <span className="font-medium">Image:</span> {page.imageDescription}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
 
                         {/* Debug Section */}
                         {lastResponse.debug && (
-                            <div className="border-t pt-4">
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setShowDebug(!showDebug)}
-                                    className="flex items-center gap-1"
-                                >
-                                    {showDebug ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                                    Debug Info
-                                </Button>
-                                {showDebug && (
-                                    <pre className="mt-2 bg-muted p-4 rounded-lg overflow-x-auto text-xs">
-                                        <code>{JSON.stringify(lastResponse.debug, null, 2)}</code>
+                            <Collapsible open={showDebug} onOpenChange={setShowDebug}>
+                                <CollapsibleTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="flex items-center gap-1 p-0 h-auto">
+                                        {showDebug ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                        <span className="font-semibold">Full Debug Info</span>
+                                    </Button>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                    <pre className="mt-2 bg-muted p-4 rounded-lg overflow-x-auto text-xs max-h-64 overflow-y-auto">
+                                        <code>{JSON.stringify({ ...lastResponse.debug, details: { ...lastResponse.debug.details, prompt: '[truncated]' } }, null, 2)}</code>
                                     </pre>
-                                )}
-                            </div>
+                                </CollapsibleContent>
+                            </Collapsible>
                         )}
                     </CardContent>
                 )}
