@@ -79,10 +79,15 @@ export declare class StoryPicClient {
     compileStory(sessionId: string): Promise<StoryCompileResponse>;
     /**
      * Create a new storybook output for a story.
-     * Note: Storybook creation is currently done client-side via Firestore.
-     * TODO: Add server endpoint for storybook creation.
+     * The server handles print layout lookup and image dimension calculation.
+     *
+     * @param storyId - The story to create a storybook for
+     * @param outputTypeId - The story output type (e.g., "picture-book", "poem")
+     * @param styleId - The image style ID
+     * @param imageStylePrompt - The style prompt for image generation
+     * @returns The ID of the created storybook
      */
-    createStorybook(storyId: string, outputTypeId: string, styleId: string): Promise<StoryBookOutput>;
+    createStorybook(storyId: string, outputTypeId: string, styleId: string, imageStylePrompt: string): Promise<string>;
     /**
      * Generate pages for a storybook (pagination).
      */

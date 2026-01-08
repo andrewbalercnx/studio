@@ -145,11 +145,18 @@ class MobileApiClient {
     outputTypeId: string,
     styleId: string,
     imageStylePrompt: string
-  ): Promise<any> {
-    return this.request(`/api/storybookV2/create`, {
-      method: 'POST',
-      body: JSON.stringify({ storyId, outputTypeId, styleId, imageStylePrompt }),
-    });
+  ): Promise<string> {
+    const response = await this.request<{ ok: boolean; storybookId: string; errorMessage?: string }>(
+      `/api/storybookV2/create`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ storyId, outputTypeId, styleId, imageStylePrompt }),
+      }
+    );
+    if (!response.ok || !response.storybookId) {
+      throw new Error(response.errorMessage || 'Failed to create storybook');
+    }
+    return response.storybookId;
   }
 
   async generatePages(storyId: string, storybookId: string): Promise<any> {

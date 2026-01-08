@@ -18,6 +18,34 @@
 
 ### 2026-01-08
 
+#### `e774269` - Add server-side storybook creation API
+
+**Type**: Feature
+
+**Summary**: Added new API endpoint for creating StoryBookOutput documents server-side. This moves print layout lookup and image dimension calculation from client to server, ensuring consistent behavior across PWA and mobile app.
+
+**Changes**:
+- **New API endpoint**: `POST /api/storybookV2/create`
+  - Validates ownership (story belongs to authenticated user)
+  - Looks up print layout dimensions from the output type
+  - Creates StoryBookOutput document with proper initialization
+  - Returns `{ ok: true, storybookId: string }`
+- **Updated PWA**: `/kids/create/[sessionId]/style` now uses API client instead of direct Firestore writes
+- **Updated API client** (`@storypic/api-client`):
+  - Added `createStorybook(storyId, outputTypeId, styleId, imageStylePrompt)` method
+- **Updated mobile app**: Updated `createStorybook` method to properly parse response
+- **Updated shared-types**: Added `StorybookCreateRequest` and `StorybookCreateResponse` types
+
+**Files Modified**:
+- `src/app/api/storybookV2/create/route.ts` (new)
+- `src/app/kids/create/[sessionId]/style/page.tsx`
+- `packages/api-client/src/client.ts`
+- `packages/shared-types/src/index.ts`
+- `mobile/src/contexts/ApiClientContext.tsx`
+- `docs/API.md`
+
+---
+
 #### `e99e7fd` - Refactor PWA kids routes to use API endpoints
 
 **Type**: Refactoring

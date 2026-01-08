@@ -1045,6 +1045,36 @@ Generate composite avatar from story actors.
 
 ---
 
+### POST `/api/storybookV2/create`
+
+Create a new StoryBookOutput document for a story. The server handles print layout lookup and image dimension calculation.
+
+**Request Body**:
+```json
+{
+  "storyId": "story-id",
+  "outputTypeId": "picture_book",
+  "styleId": "watercolor",
+  "imageStylePrompt": "watercolor illustration with soft colors..."
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "storybookId": "new-storybook-id"
+}
+```
+
+**Errors**:
+- `400 Bad Request`: Missing required fields
+- `401 Unauthorized`: Missing or invalid token
+- `403 Forbidden`: Story doesn't belong to user
+- `404 Not Found`: Story or output type not found
+
+---
+
 ### POST `/api/storybookV2/pages`
 
 Generate storybook pages from story.

@@ -4,11 +4,11 @@ import { use, useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
-import { collection, query, doc, addDoc, getDoc, serverTimestamp, where } from 'firebase/firestore';
-import { useCollection, useDocument } from '@/lib/firestore-hooks';
+import { doc } from 'firebase/firestore';
+import { useDocument } from '@/lib/firestore-hooks';
 import { useKidsPWA } from '../../../layout';
-import type { ImageStyle, StorySession, Story, StoryOutputType, ChildProfile, StoryBookOutput, PrintLayout } from '@/lib/types';
-import { calculateImageDimensions } from '@/lib/print-layout-utils';
+import { useRequiredApiClient } from '@/contexts/api-client-context';
+import type { ImageStyle, StorySession, Story, StoryOutputType, ChildProfile } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoaderCircle, ArrowLeft, Check, Palette, Book } from 'lucide-react';
@@ -54,11 +54,17 @@ export default function KidsStyleSelectionPage({ params }: { params: Promise<{ s
   const firestore = useFirestore();
   const { childId, childProfile, isLocked } = useKidsPWA();
   const { toast } = useToast();
+  const apiClient = useRequiredApiClient();
 
   const [step, setStep] = useState<SelectionStep>('book-type');
   const [selectedOutputTypeId, setSelectedOutputTypeId] = useState<string | null>(null);
   const [selectedStyleId, setSelectedStyleId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // State for API-fetched data
+  const [outputTypes, setOutputTypes] = useState<StoryOutputType[]>([]);
+  const [imageStylesRaw, setImageStylesRaw] = useState<ImageStyle[]>([]);
+  const [apiLoading, setApiLoading] = useState(true);
 
   // Load session
   const sessionRef = useMemo(
@@ -77,19 +83,28 @@ export default function KidsStyleSelectionPage({ params }: { params: Promise<{ s
   // Calculate child's age
   const childAge = useMemo(() => getChildAgeYears(childProfile), [childProfile]);
 
-  // Load available output types
-  const outputTypesQuery = useMemo(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'storyOutputTypes'), where('status', '==', 'live'));
-  }, [firestore]);
-  const { data: outputTypes, loading: outputTypesLoading } = useCollection<StoryOutputType>(outputTypesQuery);
+  // Load output types and image styles via API
+  useEffect(() => {
+    if (!apiClient) return;
 
-  // Load available image styles
-  const imageStylesQuery = useMemo(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'imageStyles'));
-  }, [firestore]);
-  const { data: imageStylesRaw, loading: imageStylesLoading } = useCollection<ImageStyle>(imageStylesQuery);
+    setApiLoading(true);
+    Promise.all([apiClient.getOutputTypes(), apiClient.getImageStyles()])
+      .then(([ot, is]) => {
+        // Filter output types to only show 'live' status
+        // Cast to local types (API types don't include timestamp fields)
+        setOutputTypes(ot.filter((t) => t.status === 'live') as unknown as StoryOutputType[]);
+        setImageStylesRaw(is as unknown as ImageStyle[]);
+      })
+      .catch((err) => {
+        console.error('[KidsStyle] Error loading output types/styles:', err);
+        toast({
+          title: 'Error',
+          description: 'Failed to load book options',
+          variant: 'destructive',
+        });
+      })
+      .finally(() => setApiLoading(false));
+  }, [apiClient, toast]);
 
   // Sort image styles: preferred first, then alphabetically by title
   const imageStyles = useMemo(() => {
@@ -125,54 +140,22 @@ export default function KidsStyleSelectionPage({ params }: { params: Promise<{ s
 
   // Handle style selection and start generation
   const handleSelectStyle = async (imageStyle: ImageStyle) => {
-    if (!firestore || !story || !selectedOutputTypeId || isSubmitting) return;
+    if (!apiClient || !story || !selectedOutputTypeId || isSubmitting) return;
 
     setSelectedStyleId(imageStyle.id);
     setIsSubmitting(true);
 
     try {
-      // Get the selected output type to check for default print layout
+      // Get the selected output type for display name
       const outputType = outputTypes?.find((t) => t.id === selectedOutputTypeId);
-      const printLayoutId = outputType?.defaultPrintLayoutId || undefined;
 
-      // Default dimensions: 8x8 inches at 300 DPI = 2400x2400 pixels (unconstrained square)
-      const DEFAULT_IMAGE_WIDTH_PX = 2400;
-      const DEFAULT_IMAGE_HEIGHT_PX = 2400;
-
-      let imageWidthPx: number = DEFAULT_IMAGE_WIDTH_PX;
-      let imageHeightPx: number = DEFAULT_IMAGE_HEIGHT_PX;
-
-      // Only calculate dimensions from layout if a print layout is specified
-      if (printLayoutId) {
-        const layoutDoc = await getDoc(doc(firestore, 'printLayouts', printLayoutId));
-        const layout = layoutDoc.exists() ? (layoutDoc.data() as PrintLayout) : null;
-        if (layout) {
-          const dimensions = calculateImageDimensions(layout);
-          imageWidthPx = dimensions.widthPx;
-          imageHeightPx = dimensions.heightPx;
-        }
-      }
-
-      // Create StoryBookOutput document in the new model
-      const storybooksRef = collection(firestore, 'stories', sessionId, 'storybooks');
-      const newStorybook: Omit<StoryBookOutput, 'id'> = {
-        storyId: sessionId,
-        childId: childId!,
-        parentUid: story.parentUid,
-        storyOutputTypeId: selectedOutputTypeId,
-        imageStyleId: imageStyle.id,
-        imageStylePrompt: imageStyle.stylePrompt,
-        printLayoutId: printLayoutId || null,
-        imageWidthPx,
-        imageHeightPx,
-        pageGeneration: { status: 'idle' },
-        imageGeneration: { status: 'idle' },
-        title: story.metadata?.title,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
-      const docRef = await addDoc(storybooksRef, newStorybook);
+      // Create storybook via API - server handles print layout lookup and dimension calculation
+      const storybookId = await apiClient.createStorybook(
+        sessionId,
+        selectedOutputTypeId,
+        imageStyle.id,
+        imageStyle.stylePrompt
+      );
 
       toast({
         title: 'Creating Your Book!',
@@ -180,7 +163,7 @@ export default function KidsStyleSelectionPage({ params }: { params: Promise<{ s
       });
 
       // Redirect to generating page with storybookId
-      router.push(`/kids/create/${sessionId}/generating?storybookId=${docRef.id}`);
+      router.push(`/kids/create/${sessionId}/generating?storybookId=${storybookId}`);
     } catch (err: any) {
       console.error('[KidsStyle] Error creating storybook:', err);
       toast({
@@ -194,7 +177,7 @@ export default function KidsStyleSelectionPage({ params }: { params: Promise<{ s
   };
 
   // Loading state
-  if (userLoading || sessionLoading || storyLoading || outputTypesLoading || imageStylesLoading) {
+  if (userLoading || sessionLoading || storyLoading || apiLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoaderCircle className="h-12 w-12 animate-spin text-amber-500" />

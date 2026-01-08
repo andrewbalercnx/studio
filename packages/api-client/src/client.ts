@@ -17,6 +17,8 @@ import type {
   StoryGeneratorResponse,
   StoryCompileResponse,
   KidsGeneratorsResponse,
+  StorybookCreateRequest,
+  StorybookCreateResponse,
   StorybookPagesResponse,
   StorybookImagesResponse,
   TTSResponse,
@@ -270,16 +272,26 @@ export class StoryPicClient {
 
   /**
    * Create a new storybook output for a story.
-   * Note: Storybook creation is currently done client-side via Firestore.
-   * TODO: Add server endpoint for storybook creation.
+   * The server handles print layout lookup and image dimension calculation.
+   *
+   * @param storyId - The story to create a storybook for
+   * @param outputTypeId - The story output type (e.g., "picture-book", "poem")
+   * @param styleId - The image style ID
+   * @param imageStylePrompt - The style prompt for image generation
+   * @returns The ID of the created storybook
    */
   async createStorybook(
     storyId: string,
     outputTypeId: string,
-    styleId: string
-  ): Promise<StoryBookOutput> {
-    // For now, throw not implemented - storybooks created client-side
-    throw new StoryPicApiError('Not implemented - create storybook via Firestore', 501);
+    styleId: string,
+    imageStylePrompt: string
+  ): Promise<string> {
+    const body: StorybookCreateRequest = { storyId, outputTypeId, styleId, imageStylePrompt };
+    const response = await this.post<StorybookCreateResponse>('/storybookV2/create', body);
+    if (!response.ok || !response.storybookId) {
+      throw new StoryPicApiError(response.errorMessage || 'Failed to create storybook', 500);
+    }
+    return response.storybookId;
   }
 
   /**

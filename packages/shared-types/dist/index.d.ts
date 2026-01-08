@@ -469,6 +469,19 @@ export type StoryBeatRequest = {
 export type StoryCompileRequest = {
     sessionId: string;
 };
+/** Request body for storybook create endpoint */
+export type StorybookCreateRequest = {
+    storyId: string;
+    outputTypeId: string;
+    styleId: string;
+    imageStylePrompt: string;
+};
+/** Response from storybook create endpoint */
+export type StorybookCreateResponse = {
+    ok: boolean;
+    storybookId?: string;
+    errorMessage?: string;
+};
 /** Request body for storybook pages endpoint */
 export type StorybookPagesRequest = {
     storyId: string;
