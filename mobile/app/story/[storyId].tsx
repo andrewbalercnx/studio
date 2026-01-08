@@ -187,13 +187,25 @@ export default function StoryScreen() {
           {hasStorybooks && storybooks.map((sb) => (
             <TouchableOpacity
               key={sb.id}
-              style={[styles.actionButton, styles.actionButtonPrimary, { marginBottom: 12 }]}
+              style={[styles.storybookButton, { marginBottom: 12 }]}
               onPress={() => router.push(`/book/${storyId}?storybookId=${sb.id}`)}
             >
-              <Text style={styles.actionButtonIcon}>📚</Text>
-              <Text style={styles.actionButtonTextPrimary}>
-                {sb.imageStyleName || sb.outputTypeName || 'Read Picture Book'}
-              </Text>
+              {sb.thumbnailUrl ? (
+                <Image source={{ uri: sb.thumbnailUrl }} style={styles.storybookThumbnail} />
+              ) : (
+                <View style={styles.storybookThumbnailPlaceholder}>
+                  <Text style={styles.storybookThumbnailPlaceholderText}>📚</Text>
+                </View>
+              )}
+              <View style={styles.storybookButtonContent}>
+                <Text style={styles.storybookButtonTitle}>
+                  {sb.imageStyleName || 'Picture Book'}
+                </Text>
+                {sb.outputTypeName && (
+                  <Text style={styles.storybookButtonSubtitle}>{sb.outputTypeName}</Text>
+                )}
+              </View>
+              <Text style={styles.storybookButtonArrow}>›</Text>
             </TouchableOpacity>
           ))}
 
@@ -426,5 +438,53 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#92400E',
     marginLeft: 12,
+  },
+  storybookButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10B981',
+    borderRadius: 16,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  storybookThumbnail: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  storybookThumbnailPlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storybookThumbnailPlaceholderText: {
+    fontSize: 24,
+  },
+  storybookButtonContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  storybookButtonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  storybookButtonSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
+  },
+  storybookButtonArrow: {
+    fontSize: 24,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginLeft: 8,
   },
 });
