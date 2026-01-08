@@ -11,6 +11,8 @@ import { useDiagnostics } from '@/hooks/use-diagnostics';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { ElevenLabsApiVersion } from '@/lib/types';
 import { useUser } from '@/firebase/auth/use-user';
 
 export default function AdminDashboardPage() {
@@ -26,6 +28,7 @@ export default function AdminDashboardPage() {
     showApiDocumentation,
     enableMixamWebhookLogging,
     showReportIssueButton,
+    elevenLabsApiVersion,
   } = useDiagnostics();
   const { toast } = useToast();
   const { user } = useUser();
@@ -302,6 +305,30 @@ export default function AdminDashboardPage() {
                     checked={showReportIssueButton}
                     onCheckedChange={(checked) => updateConfig({ showReportIssueButton: checked })}
                   />
+                </div>
+
+                {/* ElevenLabs API Version */}
+                <div className="pt-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="elevenLabsApiVersion">ElevenLabs API Version</Label>
+                      <p className="text-xs text-muted-foreground">
+                        TTS model version: v2 (stable, real-time) or v3 (expressive, pre-generated)
+                      </p>
+                    </div>
+                    <Select
+                      value={elevenLabsApiVersion}
+                      onValueChange={(value: ElevenLabsApiVersion) => updateConfig({ elevenLabsApiVersion: value })}
+                    >
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue placeholder="Select version" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="v2">v2 (Multilingual)</SelectItem>
+                        <SelectItem value="v3">v3 (Expressive)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 {/* Test Email Button */}

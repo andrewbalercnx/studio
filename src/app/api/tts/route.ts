@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
-import { ELEVENLABS_TTS_VOICES, ELEVENLABS_MODEL, DEFAULT_TTS_VOICE } from '@/lib/tts-config';
+import { ELEVENLABS_TTS_VOICES, DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { resolveEntitiesInText, replacePlaceholdersForTTS } from '@/lib/resolve-placeholders.server';
+import { getElevenLabsModelId } from '@/lib/get-elevenlabs-config.server';
 
 // Valid preset voice IDs from shared config
 const VALID_PRESET_VOICE_IDS = ELEVENLABS_TTS_VOICES.map(v => v.id);
@@ -144,6 +145,9 @@ export async function POST(request: Request) {
       apiKey,
     });
 
+    // Get model ID from system config (v2 or v3)
+    const modelId = await getElevenLabsModelId();
+
     // Generate audio
     // Note: eleven_multilingual_v2 auto-detects language and doesn't support languageCode parameter
     // Use longer timeout and retries for reliability on Cloud Run
@@ -151,7 +155,7 @@ export async function POST(request: Request) {
       finalVoiceId,
       {
         text: textForTTS,
-        modelId: ELEVENLABS_MODEL,
+        modelId,
       },
       {
         timeoutInSeconds: 60,

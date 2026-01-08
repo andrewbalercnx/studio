@@ -11,13 +11,14 @@ import { getStoryBucket } from '@/firebase/admin/storage';
 import { randomUUID } from 'crypto';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import type { Story, ChildProfile, StoryOutputPage } from '@/lib/types';
-import { DEFAULT_TTS_VOICE, ELEVENLABS_MODEL } from '@/lib/tts-config';
+import { DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 import {
   resolveEntitiesInText,
   replacePlaceholdersForTTS,
   type EntityMap,
 } from '@/lib/resolve-placeholders.server';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { getElevenLabsModelId } from '@/lib/get-elevenlabs-config.server';
 
 export type PageAudioFlowInput = {
   storyId: string;
@@ -83,6 +84,7 @@ async function generatePageAudio(
   storyId: string,
   parentUid: string | null,
   voiceId: string,
+  modelId: string,
   elevenlabs: ElevenLabsClient,
   bucket: any,
   entityMap?: EntityMap
@@ -118,7 +120,7 @@ async function generatePageAudio(
       voiceId,
       {
         text: textToNarrate,
-        modelId: ELEVENLABS_MODEL,
+        modelId,
       },
       {
         timeoutInSeconds: 120,
@@ -134,10 +136,10 @@ async function generatePageAudio(
       prompt: textToNarrate,
       response: {
         text: `[Audio generated for page ${page.pageNumber}]`,
-        model: ELEVENLABS_MODEL,
+        model: modelId,
       },
       startTime,
-      modelName: ELEVENLABS_MODEL,
+      modelName: modelId,
     });
   } catch (e: any) {
     await logAIFlow({
@@ -147,7 +149,7 @@ async function generatePageAudio(
       prompt: textToNarrate,
       error: e,
       startTime,
-      modelName: ELEVENLABS_MODEL,
+      modelName: modelId,
     });
     throw e;
   }
@@ -172,7 +174,7 @@ async function generatePageAudio(
         storyId,
         pageNumber: String(page.pageNumber),
         voiceId: voiceId,
-        model: ELEVENLABS_MODEL,
+        model: modelId,
         firebaseStorageDownloadTokens: downloadToken,
       },
     },
@@ -310,7 +312,10 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
       apiKey,
     });
     const bucket = await getStoryBucket();
-    console.log(`[page-audio-flow] ElevenLabs client and storage bucket ready`);
+
+    // Get model ID from system config (v2 or v3)
+    const modelId = await getElevenLabsModelId();
+    console.log(`[page-audio-flow] ElevenLabs client and storage bucket ready, using model: ${modelId}`);
 
     const results: PageAudioResult[] = [];
     let pagesProcessed = 0;
@@ -359,6 +364,7 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
           storyId,
           story.parentUid || null,
           voiceId,
+          modelId,
           elevenlabs,
           bucket,
           entityMap
@@ -372,7 +378,7 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
             audioMetadata: {
               ...result.metadata,
               generatedAt: FieldValue.serverTimestamp(),
-              model: ELEVENLABS_MODEL,
+              model: modelId,
             },
             updatedAt: FieldValue.serverTimestamp(),
           });

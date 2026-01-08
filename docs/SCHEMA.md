@@ -592,6 +592,7 @@ System-wide configuration documents.
 | `showApiDocumentation` | boolean | Yes | Expose API docs at /api-documentation |
 | `enableMixamWebhookLogging` | boolean | Yes | Enable Mixam webhook debug logging |
 | `showReportIssueButton` | boolean | Yes | Show "Report Issue" button in header for all users |
+| `elevenLabsApiVersion` | 'v2' \| 'v3' | Yes | ElevenLabs TTS model version. v2=eleven_multilingual_v2 (stable), v3=eleven_v3 (expressive). Default: v3 |
 | `updatedAt` | timestamp | No | Last update time |
 | `updatedBy` | string | No | Email of last updater |
 

@@ -18,6 +18,40 @@
 
 ### 2026-01-08
 
+#### `8e98d04` - Add ElevenLabs API version selection
+
+**Type**: Feature
+
+**Summary**: Added ability to switch between ElevenLabs TTS model versions (v2 and v3) from the admin diagnostics page. V3 is the new expressive model with enhanced emotional range; v2 is the stable multilingual model.
+
+**Changes**:
+- Added `elevenLabsApiVersion` field to `DiagnosticsConfig` type (`'v2'` or `'v3'`)
+- Default set to `v3` (eleven_v3 - latest expressive model)
+- Added dropdown selector in Admin Dashboard > Diagnostics & Logging
+- Created `src/lib/get-elevenlabs-config.server.ts` helper for server-side config access
+- Updated all TTS routes and AI flows to use dynamic model selection:
+  - `src/app/api/tts/route.ts`
+  - `src/app/api/voices/preview/route.ts`
+  - `src/ai/flows/story-audio-flow.ts`
+  - `src/ai/flows/story-page-audio-flow.ts`
+- Updated `src/lib/tts-config.ts` with `ELEVENLABS_MODELS` constant and `getElevenLabsModel()` helper
+
+**Files modified**:
+- `src/lib/types.ts`
+- `src/lib/tts-config.ts`
+- `src/hooks/use-diagnostics.tsx`
+- `src/app/admin/page.tsx`
+- `src/app/api/tts/route.ts`
+- `src/app/api/voices/preview/route.ts`
+- `src/ai/flows/story-audio-flow.ts`
+- `src/ai/flows/story-page-audio-flow.ts`
+- `docs/SCHEMA.md`
+
+**Files created**:
+- `src/lib/get-elevenlabs-config.server.ts`
+
+---
+
 #### `e774269` - Add server-side storybook creation API
 
 **Type**: Feature

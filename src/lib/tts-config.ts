@@ -49,8 +49,22 @@ export type GeminiVoiceId = ElevenLabsVoiceId; // Backwards compatibility
 // Default voice - Alice is clear and engaging with a British accent
 export const DEFAULT_TTS_VOICE = 'Xb7hH8MSUJpSbSDYk0k2'; // Alice (British)
 
-// ElevenLabs model to use - multilingual_v2 auto-detects language from text
-export const ELEVENLABS_MODEL = 'eleven_multilingual_v2';
+// ElevenLabs model IDs by version
+// v2: eleven_multilingual_v2 - Stable, good for real-time TTS, auto-detects language
+// v3: eleven_v3 - Latest model with enhanced expressiveness, better for pre-generated content
+export const ELEVENLABS_MODELS = {
+  v2: 'eleven_multilingual_v2',
+  v3: 'eleven_v3',
+} as const;
+
+// Default model (legacy constant for backwards compatibility)
+export const ELEVENLABS_MODEL = ELEVENLABS_MODELS.v2;
+
+// Helper to get model ID from version string
+import type { ElevenLabsApiVersion } from '@/lib/types';
+export function getElevenLabsModel(version: ElevenLabsApiVersion): string {
+  return ELEVENLABS_MODELS[version];
+}
 
 export type StoryAudioFlowInput = {
   storyId: string;

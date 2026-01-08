@@ -1466,6 +1466,11 @@ export type ImageStyle = {
   updatedAt: any;
 };
 
+// ElevenLabs API version selection
+// v2: eleven_multilingual_v2 - Current stable version, good for real-time TTS
+// v3: eleven_v3 - Latest model with enhanced expressiveness, better for pre-generated content
+export type ElevenLabsApiVersion = 'v2' | 'v3';
+
 // System configuration for diagnostics and logging
 export type DiagnosticsConfig = {
   id?: string;
@@ -1476,6 +1481,7 @@ export type DiagnosticsConfig = {
   showApiDocumentation: boolean;     // Expose API docs at /api-documentation
   enableMixamWebhookLogging: boolean; // Debug logging for Mixam webhooks
   showReportIssueButton: boolean;    // Show "Report Issue" button in header
+  elevenLabsApiVersion: ElevenLabsApiVersion; // ElevenLabs TTS model version
   updatedAt?: any;
   updatedBy?: string;
 };
@@ -1489,6 +1495,7 @@ export const DEFAULT_DIAGNOSTICS_CONFIG: DiagnosticsConfig = {
   showApiDocumentation: false,
   enableMixamWebhookLogging: true, // Default on while testing
   showReportIssueButton: false,
+  elevenLabsApiVersion: 'v3', // Default to latest v3 model (most expressive)
 };
 
 // Global prompt configuration - prepended to all AI prompts

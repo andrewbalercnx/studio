@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
-import { ELEVENLABS_TTS_VOICES, ELEVENLABS_MODEL } from '@/lib/tts-config';
+import { ELEVENLABS_TTS_VOICES } from '@/lib/tts-config';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getElevenLabsModelId } from '@/lib/get-elevenlabs-config.server';
 
 // Sample text for voice preview - short and engaging
 const PREVIEW_TEXT = "Once upon a time, in a magical forest filled with wonder, there lived a brave little adventurer who loved to explore.";
@@ -89,6 +90,9 @@ export async function POST(request: Request) {
       apiKey,
     });
 
+    // Get model ID from system config (v2 or v3)
+    const modelId = await getElevenLabsModelId();
+
     // Generate audio preview
     // Note: eleven_multilingual_v2 auto-detects language and doesn't support languageCode parameter
     // Use timeout and retries for reliability
@@ -96,7 +100,7 @@ export async function POST(request: Request) {
       voiceName,
       {
         text: PREVIEW_TEXT,
-        modelId: ELEVENLABS_MODEL,
+        modelId,
       },
       {
         timeoutInSeconds: 30,

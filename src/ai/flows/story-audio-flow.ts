@@ -11,9 +11,10 @@ import { getStoryBucket } from '@/firebase/admin/storage';
 import { randomUUID } from 'crypto';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import type { Story, ChildProfile } from '@/lib/types';
-import { DEFAULT_TTS_VOICE, ELEVENLABS_MODEL } from '@/lib/tts-config';
+import { DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 import type { StoryAudioFlowInput, StoryAudioFlowOutput } from '@/lib/tts-config';
 import { resolveEntitiesInText, replacePlaceholdersForTTS } from '@/lib/resolve-placeholders.server';
+import { getElevenLabsModelId } from '@/lib/get-elevenlabs-config.server';
 
 /**
  * Calculate child's age from date of birth
@@ -109,7 +110,9 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    console.log(`[story-audio-flow] Calling ElevenLabs TTS with voice: ${voiceId}, model: ${ELEVENLABS_MODEL}`);
+    // Get model ID from system config (v2 or v3)
+    const modelId = await getElevenLabsModelId();
+    console.log(`[story-audio-flow] Calling ElevenLabs TTS with voice: ${voiceId}, model: ${modelId}`);
 
     // Check for API key before initializing client
     const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -140,7 +143,7 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
       voiceId,
       {
         text: textForTTS,
-        modelId: ELEVENLABS_MODEL,
+        modelId,
       },
       {
         timeoutInSeconds: 120,
@@ -171,7 +174,7 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
           storyId,
           parentUid: story.parentUid,
           voiceId: voiceId,
-          model: ELEVENLABS_MODEL,
+          model: modelId,
           firebaseStorageDownloadTokens: downloadToken,
         },
       },
@@ -200,7 +203,7 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
       audioMetadata: {
         ...audioMetadata,
         generatedAt: FieldValue.serverTimestamp(),
-        model: ELEVENLABS_MODEL,
+        model: modelId,
       },
       'audioGeneration.status': 'ready',
       'audioGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
