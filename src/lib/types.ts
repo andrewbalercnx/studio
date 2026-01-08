@@ -182,6 +182,8 @@ export type StorySession = {
     friendsSelectedSynopsisId?: string;
     // Last API response state for UI restoration
     friendsLastQuestion?: string;
+    // AI's rationale for the character selection (passed to scenario/synopsis generation)
+    friendsCharacterRationale?: string;
 };
 
 export type StoryStatus = 'text_ready' | 'images_pending';

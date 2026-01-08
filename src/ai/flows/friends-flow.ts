@@ -51,8 +51,11 @@ const DEFAULT_SCENARIO_GENERATION_PROMPT = `You are creating WILDLY IMAGINATIVE 
 CHILD'S PROFILE:
 {{ageDescription}}
 
-SELECTED CHARACTERS:
+SELECTED CHARACTERS (use $$id$$ placeholders when referencing them):
 {{selectedCharacters}}
+
+WHY THESE CHARACTERS WERE CHOSEN:
+{{characterRationale}}
 
 YOUR MISSION:
 Create 3-4 absolutely delightful, wonderfully inventive adventure scenarios! Think like a child with boundless imagination - the more creative and unexpected, the better!
@@ -74,8 +77,10 @@ GUIDELINES:
 2. Include a sense of wonder, magic, or whimsy in each option.
 3. Make scenarios age-appropriate but never boring.
 4. Each scenario should feel like the start of an amazing adventure!
-5. Use the characters creatively - what unique role could each play?
-6. CRITICAL: Write using the characters' real names exactly as shown above. Do NOT use any special formatting, codes, or placeholders - just plain names like "Emma", "Dad", "Fluffy".
+5. Use each character's unique traits creatively - consider their likes, personality, and type when assigning roles.
+6. CRITICAL: Use $$id$$ placeholders for ALL character references. Never use display names directly.
+   - Correct: "$$abc123$$ discovers a magical garden"
+   - Wrong: "Emma discovers a magical garden"
 
 OUTPUT FORMAT:
 {
@@ -90,8 +95,11 @@ const DEFAULT_SYNOPSIS_GENERATION_PROMPT = `You are a children's story writer dr
 CHILD'S PROFILE:
 {{ageDescription}}
 
-SELECTED CHARACTERS:
+SELECTED CHARACTERS (use $$id$$ placeholders when referencing them):
 {{selectedCharacters}}
+
+WHY THESE CHARACTERS WERE CHOSEN:
+{{characterRationale}}
 
 CHOSEN SCENARIO:
 {{selectedScenario}}
@@ -101,7 +109,10 @@ INSTRUCTIONS:
 2. Each synopsis should be 2-3 sentences that capture the story arc.
 3. Include a beginning, middle (with a small challenge), and happy ending.
 4. Make each synopsis distinctly different while fitting the scenario.
-5. CRITICAL: Write using the characters' real names exactly as shown above. Do NOT use any special formatting, codes, or placeholders - just plain names like "Emma", "Dad", "Fluffy".
+5. Use each character's unique traits - consider their personality, likes, and type.
+6. CRITICAL: Use $$id$$ placeholders for ALL character references. Never use display names directly.
+   - Correct: "$$abc123$$ discovers a magical garden"
+   - Wrong: "Emma discovers a magical garden"
 
 OUTPUT FORMAT:
 {
@@ -269,11 +280,53 @@ async function loadGeneratorConfig(
 }
 
 /**
- * Format character for display in user-facing scenarios/synopses.
- * Uses display name only (no placeholders) since these are selection options.
+ * Extended character info with full details for prompt generation.
+ * Loaded from Firestore when we need descriptions/likes/dislikes.
  */
-function formatCharacterForDisplay(char: FriendsCharacterOption): string {
-  return `- ${char.displayName}: ${char.type}`;
+type CharacterWithDetails = FriendsCharacterOption & {
+  pronouns?: string;
+  description?: string;
+  likes?: string[];
+  dislikes?: string[];
+};
+
+/**
+ * Format character with full details for AI prompts.
+ * Uses $$id$$ placeholders and includes description, pronouns, likes/dislikes.
+ */
+function formatCharacterWithDetails(char: CharacterWithDetails, isMainChild: boolean): string {
+  const parts: string[] = [];
+
+  // Role label
+  if (isMainChild) {
+    parts.push(`$$${char.id}$$ (${char.displayName}) - the main child character`);
+  } else if (char.type === 'sibling') {
+    parts.push(`$$${char.id}$$ (${char.displayName}) - a sibling`);
+  } else {
+    parts.push(`$$${char.id}$$ (${char.displayName}) - ${char.type}`);
+  }
+
+  // Pronouns
+  if (char.pronouns) {
+    parts.push(`Uses ${char.pronouns} pronouns`);
+  }
+
+  // Description
+  if (char.description) {
+    parts.push(char.description);
+  }
+
+  // Likes
+  if (char.likes && char.likes.length > 0) {
+    parts.push(`Likes: ${char.likes.join(', ')}`);
+  }
+
+  // Dislikes
+  if (char.dislikes && char.dislikes.length > 0) {
+    parts.push(`Dislikes: ${char.dislikes.join(', ')}`);
+  }
+
+  return parts.join('. ') + '.';
 }
 
 /**
@@ -440,10 +493,11 @@ async function initializeCharacterSelection(
       isSelected: proposedIds.has(c.id),
     }));
 
-    // Update session
+    // Update session with proposed characters and rationale
     await firestore.collection('storySessions').doc(session.id).update({
       friendsPhase: 'character_selection',
       friendsProposedCharacterIds: Array.from(proposedIds),
+      friendsCharacterRationale: parsed.rationale,
       updatedAt: FieldValue.serverTimestamp(),
     });
 
@@ -481,8 +535,8 @@ async function handleScenarioGeneration(
   // Filter out empty/invalid IDs to prevent Firestore "documentPath must be non-empty" errors
   const selectedIds = rawSelectedIds.filter((id: string) => id && typeof id === 'string' && id.trim().length > 0);
 
-  // Load selected character details
-  const allCharacters: FriendsCharacterOption[] = [];
+  // Load selected character details WITH full info (pronouns, description, likes, dislikes)
+  const allCharacters: CharacterWithDetails[] = [];
 
   for (const id of selectedIds) {
     // Try children first
@@ -495,6 +549,10 @@ async function handleScenarioGeneration(
         type: id === session.childId ? 'child' : 'sibling',
         avatarUrl: data.avatarUrl,
         isSelected: true,
+        pronouns: data.pronouns,
+        description: data.description,
+        likes: data.likes,
+        dislikes: data.dislikes,
       });
       continue;
     }
@@ -509,6 +567,10 @@ async function handleScenarioGeneration(
         type: data.type,
         avatarUrl: data.avatarUrl,
         isSelected: true,
+        pronouns: data.pronouns,
+        description: data.description,
+        likes: data.likes,
+        dislikes: data.dislikes,
       });
     }
   }
@@ -516,19 +578,23 @@ async function handleScenarioGeneration(
   const childAge = getChildAgeYears(child);
   const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
 
-  // Use display names (not placeholders) for scenario generation since these are user-facing selections
-  const selectedCharsText = allCharacters.map(formatCharacterForDisplay).join('\n');
+  // Use detailed character format with $$id$$ placeholders and full descriptions
+  const selectedCharsText = allCharacters
+    .map((char, index) => `${index + 1}. ${formatCharacterWithDetails(char, char.id === session.childId)}`)
+    .join('\n\n');
+
+  // Get the character rationale from the session (set during character selection)
+  const characterRationale = session.friendsCharacterRationale || 'These characters were selected for an exciting adventure together.';
 
   const promptTemplate = generator?.prompts?.scenarioGeneration || DEFAULT_SCENARIO_GENERATION_PROMPT;
   const basePrompt = fillPromptTemplate(promptTemplate, {
     ageDescription,
     selectedCharacters: selectedCharsText,
+    characterRationale,
   });
   // NOTE: We intentionally do NOT prepend globalPrefix here.
-  // The globalPrefix instructs AI to use $$id$$ placeholders, but scenarios are
-  // user-facing text that should use plain character names. The scenario prompt
-  // already instructs the AI to use real names, and prepending globalPrefix
-  // would create conflicting instructions.
+  // The scenario prompt already instructs the AI to use $$id$$ placeholders,
+  // and post-processing will resolve them for display.
   const fullPrompt = basePrompt;
 
   // Get model and temperature config
@@ -631,8 +697,8 @@ async function handleSynopsisGeneration(
     return { state: 'error', error: 'No scenario selected', ok: false };
   }
 
-  // Load selected character details
-  const allCharacters: FriendsCharacterOption[] = [];
+  // Load selected character details WITH full info (pronouns, description, likes, dislikes)
+  const allCharacters: CharacterWithDetails[] = [];
 
   for (const id of selectedIds) {
     const childDoc = await firestore.collection('children').doc(id).get();
@@ -644,6 +710,10 @@ async function handleSynopsisGeneration(
         type: id === session.childId ? 'child' : 'sibling',
         avatarUrl: data.avatarUrl,
         isSelected: true,
+        pronouns: data.pronouns,
+        description: data.description,
+        likes: data.likes,
+        dislikes: data.dislikes,
       });
       continue;
     }
@@ -657,6 +727,10 @@ async function handleSynopsisGeneration(
         type: data.type,
         avatarUrl: data.avatarUrl,
         isSelected: true,
+        pronouns: data.pronouns,
+        description: data.description,
+        likes: data.likes,
+        dislikes: data.dislikes,
       });
     }
   }
@@ -664,9 +738,14 @@ async function handleSynopsisGeneration(
   const childAge = getChildAgeYears(child);
   const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
 
-  // Use display names (not placeholders) for synopsis generation since these are user-facing selections
-  const selectedCharsText = allCharacters.map(formatCharacterForDisplay).join('\n');
+  // Use detailed character format with $$id$$ placeholders and full descriptions
+  const selectedCharsText = allCharacters
+    .map((char, index) => `${index + 1}. ${formatCharacterWithDetails(char, char.id === session.childId)}`)
+    .join('\n\n');
   const scenarioText = `${selectedScenario.title}: ${selectedScenario.description}`;
+
+  // Get the character rationale from the session (set during character selection)
+  const characterRationale = session.friendsCharacterRationale || 'These characters were selected for an exciting adventure together.';
 
   let promptTemplate = generator?.prompts?.synopsisGeneration || DEFAULT_SYNOPSIS_GENERATION_PROMPT;
 
@@ -679,12 +758,11 @@ async function handleSynopsisGeneration(
     ageDescription,
     selectedCharacters: selectedCharsText,
     selectedScenario: scenarioText,
+    characterRationale,
   });
   // NOTE: We intentionally do NOT prepend globalPrefix here.
-  // The globalPrefix instructs AI to use $$id$$ placeholders, but synopses are
-  // user-facing text that should use plain character names. The synopsis prompt
-  // already instructs the AI to use real names, and prepending globalPrefix
-  // would create conflicting instructions.
+  // The synopsis prompt already instructs the AI to use $$id$$ placeholders,
+  // and post-processing will resolve them for display.
   const fullPrompt = basePrompt;
 
   // Get model and temperature config
