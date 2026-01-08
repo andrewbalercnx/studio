@@ -13,6 +13,7 @@ import type { StorySession, StoryOutputType, Story } from '@/lib/types';
 import { logServerSessionEvent } from '@/lib/session-events.server';
 import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
 import { initializeRunTrace, logAICallToTrace, completeRunTrace } from '@/lib/ai-run-trace';
+import { logAIFlow } from '@/lib/ai-flow-logger';
 import { storyTextCompileFlow } from './story-text-compile-flow';
 import { updateCharacterUsage } from '@/lib/character-usage';
 
@@ -130,6 +131,7 @@ export const storyCompileFlow = ai.defineFlow(
                         });
                         synopsis = synopsisResponse.text?.trim() || '';
 
+                        await logAIFlow({ flowName: 'storyCompileFlow:synopsis:friends', sessionId, parentId: parentUid, prompt: synopsisPrompt, response: synopsisResponse, startTime: synopsisStartTime, modelName: synopsisModelName });
                         await logAICallToTrace({
                             sessionId,
                             flowName: 'storyCompileFlow:synopsis',
@@ -143,6 +145,7 @@ export const storyCompileFlow = ai.defineFlow(
                     } catch (err: any) {
                         console.error('[storyCompileFlow] Failed to generate synopsis for friends story:', err);
                         synopsis = 'A magical adventure story.';
+                        await logAIFlow({ flowName: 'storyCompileFlow:synopsis:friends', sessionId, parentId: parentUid, prompt: synopsisPrompt, error: err, startTime: synopsisStartTime, modelName: synopsisModelName });
                         await logAICallToTrace({
                             sessionId,
                             flowName: 'storyCompileFlow:synopsis',
@@ -214,6 +217,7 @@ export const storyCompileFlow = ai.defineFlow(
                     ok: true,
                     sessionId,
                     storyText: resolvedStoryText,
+                    rawStoryText: storyText, // Unresolved text with $$id$$ placeholders
                     synopsis,
                     metadata: { paragraphs: paragraphCount },
                     storyId: storyRef.id,
@@ -241,7 +245,11 @@ export const storyCompileFlow = ai.defineFlow(
                 }
 
                 const existingStory = existingStorySnap.data() as Story;
-                const storyText = existingStory.storyText || '';
+                // The wizard flow now stores unresolved text with $$id$$ placeholders
+                const rawStoryText = existingStory.storyText || '';
+
+                // Resolve placeholders for display
+                const resolvedStoryText = await replacePlaceholdersWithDescriptions(rawStoryText);
 
                 // Load the output type for metadata (optional)
                 let storyOutputType: StoryOutputType | null = null;
@@ -253,14 +261,13 @@ export const storyCompileFlow = ai.defineFlow(
                     }
                 }
 
-                // Extract actors - since wizard flow resolves placeholders before saving,
-                // we rely on session.actors tracked during story creation
-                // The childId is always included as the main character
+                // Extract actors from the raw story text (contains $$id$$ placeholders)
+                const textActorIds = extractActorIds(rawStoryText);
                 const sessionActors = session.actors || [];
-                const actorSet = new Set([childId, ...sessionActors]);
+                const actorSet = new Set([childId, ...sessionActors, ...textActorIds]);
                 const actors = [childId, ...Array.from(actorSet).filter(id => id !== childId)];
 
-                const paragraphCount = storyText.split(/\n\n+/).filter(p => p.trim()).length;
+                const paragraphCount = resolvedStoryText.split(/\n\n+/).filter(p => p.trim()).length;
 
                 // Initialize run trace
                 await initializeRunTrace({
@@ -270,12 +277,12 @@ export const storyCompileFlow = ai.defineFlow(
                     storyTypeId: storyTypeId || undefined,
                 });
 
-                // Generate synopsis for the wizard story
+                // Generate synopsis for the wizard story (use resolved text for AI to understand context)
                 let synopsis = existingStory.synopsis || '';
                 if (!synopsis) {
                     const synopsisStartTime = Date.now();
                     const synopsisModelName = 'googleai/gemini-2.5-flash';
-                    const synopsisPrompt = `Write a brief 1-2 sentence summary of this children's story suitable for a parent to read. Should capture the main adventure or theme.\n\nSTORY:\n${storyText}\n\nSYNOPSIS:`;
+                    const synopsisPrompt = `Write a brief 1-2 sentence summary of this children's story suitable for a parent to read. Should capture the main adventure or theme.\n\nSTORY:\n${resolvedStoryText}\n\nSYNOPSIS:`;
                     try {
                         const synopsisResponse = await ai.generate({
                             model: synopsisModelName,
@@ -284,6 +291,7 @@ export const storyCompileFlow = ai.defineFlow(
                         });
                         synopsis = synopsisResponse.text?.trim() || '';
 
+                        await logAIFlow({ flowName: 'storyCompileFlow:synopsis:wizard', sessionId, parentId: parentUid, prompt: synopsisPrompt, response: synopsisResponse, startTime: synopsisStartTime, modelName: synopsisModelName });
                         await logAICallToTrace({
                             sessionId,
                             flowName: 'storyCompileFlow:synopsis',
@@ -297,6 +305,7 @@ export const storyCompileFlow = ai.defineFlow(
                     } catch (err: any) {
                         console.error('[storyCompileFlow] Failed to generate synopsis for wizard story:', err);
                         synopsis = 'A magical adventure story.';
+                        await logAIFlow({ flowName: 'storyCompileFlow:synopsis:wizard', sessionId, parentId: parentUid, prompt: synopsisPrompt, error: err, startTime: synopsisStartTime, modelName: synopsisModelName });
                         await logAICallToTrace({
                             sessionId,
                             flowName: 'storyCompileFlow:synopsis',
@@ -359,20 +368,22 @@ export const storyCompileFlow = ai.defineFlow(
                         storyMode,
                         storyOutputTypeId,
                         storyId: storyRef.id,
-                        storyLength: storyText.length,
+                        storyLength: resolvedStoryText.length,
                     },
                 });
 
                 return {
                     ok: true,
                     sessionId,
-                    storyText,
+                    storyText: resolvedStoryText,
+                    rawStoryText, // Unresolved text with $$id$$ placeholders
                     synopsis,
                     metadata: { paragraphs: paragraphCount },
                     storyId: storyRef.id,
                     debug: process.env.NODE_ENV === 'development' ? {
                         ...debug,
-                        storyLength: storyText.length,
+                        storyLength: resolvedStoryText.length,
+                        rawStoryLength: rawStoryText.length,
                         synopsisLength: synopsis.length,
                         paragraphs: paragraphCount,
                     } : undefined,
@@ -426,6 +437,7 @@ export const storyCompileFlow = ai.defineFlow(
                     });
                     synopsis = synopsisResponse.text?.trim() || '';
 
+                    await logAIFlow({ flowName: 'storyCompileFlow:synopsis:gemini', sessionId, parentId: parentUid, prompt: synopsisPrompt, response: synopsisResponse, startTime: synopsisStartTime, modelName: synopsisModelName });
                     await logAICallToTrace({
                         sessionId,
                         flowName: 'storyCompileFlow:synopsis',
@@ -439,6 +451,7 @@ export const storyCompileFlow = ai.defineFlow(
                 } catch (err: any) {
                     console.error('[storyCompileFlow] Failed to generate synopsis for Gemini story:', err);
                     synopsis = 'A magical adventure story.';
+                    await logAIFlow({ flowName: 'storyCompileFlow:synopsis:gemini', sessionId, parentId: parentUid, prompt: synopsisPrompt, error: err, startTime: synopsisStartTime, modelName: synopsisModelName });
                     await logAICallToTrace({
                         sessionId,
                         flowName: 'storyCompileFlow:synopsis',

@@ -261,6 +261,8 @@ const storyWizardFlowInternal = ai.defineFlow(
           }
 
           // Build entity map including the main child and all characters
+          // This is used for resolving text returned to the client (for display)
+          // but the story document should store the unresolved text with $$id$$ placeholders
           const entityMap: EntityMap = new Map();
           // Add characters
           contextData.characters.forEach(c => {
@@ -272,15 +274,17 @@ const storyWizardFlowInternal = ai.defineFlow(
           contextData.siblings?.forEach(sibling => {
             entityMap.set(sibling.id, { displayName: sibling.displayName, document: sibling });
           });
+          // Resolve text for display in the client response only
           const resolvedStoryText = await replacePlaceholdersInText(parsed.storyText, entityMap);
 
-          // Create the Story document
+          // Create the Story document - store UNRESOLVED text with $$id$$ placeholders
+          // This allows the compile and pagination flows to work with placeholders
           const storyRef = firestore.collection('stories').doc(sessionId);
           const storyPayload: Story = {
             storySessionId: sessionId,
             childId,
             parentUid: child.ownerParentUid,
-            storyText: resolvedStoryText, // Use the resolved text
+            storyText: parsed.storyText, // Store unresolved text with $$id$$ placeholders
             status: 'text_ready',
             metadata: {
               title: parsed.title,
@@ -293,6 +297,7 @@ const storyWizardFlowInternal = ai.defineFlow(
           };
           await storyRef.set(storyPayload, { merge: true });
 
+          // Return resolved text to the client for immediate display
           return { state: 'finished' as const, ok: true as const, title: parsed.title, vibe: parsed.vibe, storyText: resolvedStoryText, storyId: storyRef.id };
         } catch (e) {
           console.error("Failed to parse story generation JSON:", llmResponse.text, e);
