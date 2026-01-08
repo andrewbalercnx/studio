@@ -252,10 +252,39 @@ gcloud secrets list
 
 ---
 
+## Mobile App (APK) Updates
+
+When building a new Android APK for the mobile app:
+
+1. **Build with EAS**: `cd mobile && eas build --platform android --profile preview`
+2. **Download the APK** from the EAS build URL
+3. **Replace the APK**: Copy to `public/downloads/storypic-kids.apk`
+4. **Update the install page**: Update the commit ID in `src/app/install/page.tsx`
+5. **Commit and push** the updated APK and install page
+
+**Required steps**:
+```bash
+# After successful EAS build, get the APK URL
+eas build:view <BUILD_ID> | grep "Application Archive URL"
+
+# Download and replace
+curl -L -o public/downloads/storypic-kids.apk "<APK_URL>"
+
+# Update install page commit reference, then commit
+git add public/downloads/storypic-kids.apk src/app/install/page.tsx
+git commit -m "Update Android APK with <description>"
+git push
+```
+
+**Important**: The `/install` page serves the APK from `/downloads/storypic-kids.apk`. Always update this file when building a new APK.
+
+---
+
 ## Version History
 
 | Date | Changes |
 |------|---------|
+| 2026-01-08 | Added Mobile App (APK) Updates section |
 | 2026-01-08 | Added Architectural Principles section with Server-First Data Processing rule |
 | 2026-01-04 | Updated Git Workflow to single-push pattern (amend before push) |
 | 2025-12-29 | Added Git Workflow auto-push rule |
