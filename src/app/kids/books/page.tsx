@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { useKidsPWA } from '../layout';
 import { useRequiredApiClient } from '@/contexts/api-client-context';
-import { LoaderCircle, BookOpen, ArrowLeft, Moon, Clock, Play, Sparkles } from 'lucide-react';
+import { LoaderCircle, ArrowLeft, Sparkles } from 'lucide-react';
 
 // Use inline types to avoid conflicts between local types and shared-types package
 type StoryOutputType = { id: string; childFacingLabel?: string; [key: string]: any };
@@ -25,9 +25,7 @@ type StoryBookOutput = {
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { cn } from '@/lib/utils';
 import Image from 'next/image';
 
 // Format date in a kid-friendly way
@@ -227,42 +225,40 @@ export default function KidsBooksPage() {
         </div>
       </header>
 
-      {/* Books list */}
-      <main className="flex-1 px-4 py-4">
-        <div className="max-w-md mx-auto space-y-4">
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <LoaderCircle className="h-8 w-8 animate-spin text-amber-500" />
-            </div>
-          ) : completedBooks.length > 0 ? (
-            completedBooks.map((book) => (
+      {/* Books list - 2-column grid like mobile app */}
+      <main className="flex-1 px-3 py-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <LoaderCircle className="h-8 w-8 animate-spin text-amber-500" />
+          </div>
+        ) : completedBooks.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3">
+            {completedBooks.map((book) => (
               <BookCard
                 key={`${book.storyId}-${book.storybookId}`}
                 book={book}
                 outputTypeLabel={getOutputTypeLabel(book.storyOutputTypeId)}
                 imageStyleTitle={getImageStyleTitle(book.imageStyleId)}
               />
-            ))
-          ) : (
-            <div className="text-center py-12 space-y-4">
-              <div className="w-20 h-20 mx-auto rounded-full bg-amber-100 flex items-center justify-center">
-                <BookOpen className="h-10 w-10 text-amber-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-700">
-                No books yet
-              </h3>
-              <p className="text-gray-500">
-                Create a story and turn it into a beautiful book!
-              </p>
-              <Link href="/kids/create">
-                <Button className="bg-amber-500 hover:bg-amber-600">
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Create a Story
-                </Button>
-              </Link>
-            </div>
-          )}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 space-y-4">
+            <div className="text-6xl">📚</div>
+            <h3 className="text-lg font-semibold text-gray-700">
+              No books yet
+            </h3>
+            <p className="text-gray-500">
+              Create a story first, then turn it into a picture book!
+            </p>
+            <Link href="/kids/create">
+              <Button className="bg-amber-500 hover:bg-amber-600">
+                <Sparkles className="h-4 w-4 mr-2" />
+                Create a Story
+              </Button>
+            </Link>
+          </div>
+        )}
       </main>
 
       {/* Floating create button */}
@@ -282,7 +278,7 @@ export default function KidsBooksPage() {
   );
 }
 
-// Book card component
+// Book card component - 2-column grid card like mobile app
 function BookCard({
   book,
   outputTypeLabel,
@@ -293,90 +289,39 @@ function BookCard({
   imageStyleTitle: string;
 }) {
   const isReady = book.imageGenerationStatus === 'ready';
-  const isGenerating = book.imageGenerationStatus === 'running';
-  const isRateLimited = book.imageGenerationStatus === 'rate_limited';
-  const isPending = book.imageGenerationStatus === 'idle' || book.imageGenerationStatus === 'pending';
 
   // Build the read URL (new model: storyId in query params)
   const readUrl = `/kids/read/${book.storybookId}?storyId=${book.storyId}`;
 
   return (
     <Link href={readUrl} className="block">
-      <Card
-        className={cn(
-          'border-2 transition-all hover:shadow-lg active:scale-98 overflow-hidden',
-          isReady && 'border-green-200 hover:border-green-400',
-          isGenerating && 'border-amber-200 hover:border-amber-400',
-          isRateLimited && 'border-amber-300',
-          isPending && 'border-gray-200 hover:border-gray-400'
-        )}
-      >
-        <div className="flex gap-4">
-          {/* Thumbnail */}
-          <div className="w-28 h-28 flex-shrink-0 relative bg-gradient-to-br from-amber-100 to-orange-100">
-            {book.thumbnailUrl ? (
-              <Image
-                src={book.thumbnailUrl}
-                alt={book.title || 'Story book'}
-                fill
-                className="object-cover"
-              />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <BookOpen className="h-10 w-10 text-amber-300" />
-              </div>
-            )}
-          </div>
-
-          {/* Content */}
-          <CardContent className="flex-1 p-4 pr-4 flex flex-col justify-between">
-            <div>
-              <h3 className="font-semibold text-gray-900 line-clamp-1">
-                {book.title || 'Untitled Book'}
-              </h3>
-              <div className="flex flex-wrap gap-1 mt-1">
-                <Badge variant="secondary" className="text-xs px-2 py-0">
-                  {outputTypeLabel}
-                </Badge>
-                <Badge variant="outline" className="text-xs px-2 py-0">
-                  {imageStyleTitle}
-                </Badge>
-              </div>
+      <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+        {/* Square thumbnail */}
+        <div className="aspect-square relative bg-gray-100">
+          {book.thumbnailUrl ? (
+            <Image
+              src={book.thumbnailUrl}
+              alt={book.title || 'Story book'}
+              fill
+              className="object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-200">
+              <span className="text-5xl">📚</span>
             </div>
-
-            <div className="mt-2 flex items-center justify-between">
-              <span className="text-xs text-gray-400">
-                {formatDate(book.createdAt)}
-              </span>
-
-              {/* Status indicator */}
-              {isReady && (
-                <span className="flex items-center gap-1 text-green-600 text-xs font-medium">
-                  <Play className="h-3 w-3" />
-                  Ready!
-                </span>
-              )}
-              {isGenerating && (
-                <span className="flex items-center gap-1 text-amber-600 text-xs">
-                  <LoaderCircle className="h-3 w-3 animate-spin" />
-                  Making Art
-                </span>
-              )}
-              {isRateLimited && (
-                <span className="flex items-center gap-1 text-amber-700 text-xs">
-                  <Moon className="h-3 w-3" />
-                  Wizard Napping
-                </span>
-              )}
-              {isPending && (
-                <span className="flex items-center gap-1 text-gray-500 text-xs">
-                  <Clock className="h-3 w-3" />
-                  Art Coming
-                </span>
-              )}
-            </div>
-          </CardContent>
+          )}
         </div>
+
+        {/* Content */}
+        <CardContent className="p-3">
+          <h3 className="font-semibold text-gray-900 text-sm line-clamp-2 mb-1">
+            {book.title || 'Untitled Book'}
+          </h3>
+          <div className="flex items-center gap-1 text-xs text-emerald-600">
+            <span>📖</span>
+            <span>Ready to read</span>
+          </div>
+        </CardContent>
       </Card>
     </Link>
   );

@@ -8,7 +8,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { useKidsPWA } from '../../../layout';
 import { useRequiredApiClient } from '@/contexts/api-client-context';
 import type { Story } from '@/lib/types';
-import { LoaderCircle, ArrowLeft, Volume2, VolumeX, BookOpen } from 'lucide-react';
+import { LoaderCircle, ArrowLeft, Volume2, VolumeX, BookOpen, Sparkles, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -19,6 +19,16 @@ type Actor = {
   displayName: string;
   avatarUrl?: string;
   type: 'child' | 'character';
+};
+
+// Storybook type as returned by the API (with additional resolved fields)
+type Storybook = {
+  id: string;
+  storyId: string;
+  thumbnailUrl?: string;
+  imageStyleName?: string;
+  outputTypeName?: string;
+  imageGeneration?: { status: string };
 };
 
 // Extended story type with resolved fields from API
@@ -46,22 +56,26 @@ export default function KidsStoryReadPage({
 
   // State
   const [story, setStory] = useState<StoryWithResolved | null>(null);
+  const [storybooks, setStorybooks] = useState<Storybook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isReading, setIsReading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Load story via API
+  // Load story and storybooks via API
   useEffect(() => {
     if (!apiClient || !storyId) return;
 
     setLoading(true);
     setError(null);
 
-    apiClient
-      .getStory(storyId)
-      .then((data) => {
-        setStory(data as StoryWithResolved);
+    Promise.all([
+      apiClient.getStory(storyId),
+      apiClient.getMyStorybooks(storyId).catch(() => []),
+    ])
+      .then(([storyData, storybooksData]) => {
+        setStory(storyData as StoryWithResolved);
+        setStorybooks(storybooksData);
       })
       .catch((err) => {
         console.error('[KidsStoryRead] Error loading story:', err);
@@ -309,18 +323,72 @@ export default function KidsStoryReadPage({
           ))}
         </div>
 
-        {/* Create book CTA */}
-        {story.storyText && !story.imageGeneration?.status && (
-          <div className="mt-8 pt-6 border-t border-amber-200 text-center">
-            <p className="text-amber-700 mb-3">Want to turn this into a picture book?</p>
-            <Button asChild className="bg-amber-500 hover:bg-amber-600">
-              <Link href={`/kids/create/${storyId}/style`}>
-                <BookOpen className="mr-2 h-4 w-4" />
-                Create a Book
-              </Link>
-            </Button>
-          </div>
-        )}
+        {/* Storybooks and Actions - matching mobile app layout */}
+        <div className="mt-8 pt-6 border-t border-amber-200 space-y-3">
+          {/* Existing storybooks with thumbnails */}
+          {storybooks.map((sb) => (
+            <Link
+              key={sb.id}
+              href={`/kids/read/${storyId}?storybookId=${sb.id}`}
+              className="flex items-center gap-3 p-3 bg-emerald-500 rounded-2xl shadow-md hover:bg-emerald-600 transition-colors"
+            >
+              {sb.thumbnailUrl ? (
+                <img
+                  src={sb.thumbnailUrl}
+                  alt=""
+                  className="w-14 h-14 rounded-lg object-cover bg-white"
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-lg bg-white/30 flex items-center justify-center">
+                  <span className="text-2xl">📚</span>
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-white font-semibold truncate">
+                  {sb.imageStyleName || 'Picture Book'}
+                </div>
+                {sb.outputTypeName && (
+                  <div className="text-white/80 text-sm truncate">{sb.outputTypeName}</div>
+                )}
+              </div>
+              <ChevronRight className="h-6 w-6 text-white/80 flex-shrink-0" />
+            </Link>
+          ))}
+
+          {/* Legacy book button (if exists on story itself) */}
+          {story.imageGeneration?.status === 'ready' && (
+            <Link
+              href={`/kids/read/${storyId}`}
+              className="flex items-center justify-center gap-2 p-4 bg-emerald-500 rounded-2xl shadow-md hover:bg-emerald-600 transition-colors"
+            >
+              <span className="text-2xl">📚</span>
+              <span className="text-white font-semibold text-lg">Read Picture Book</span>
+            </Link>
+          )}
+
+          {/* Generating indicator */}
+          {(story.pageGeneration?.status === 'running' || story.imageGeneration?.status === 'running') && (
+            <div className="flex items-center justify-center gap-3 p-4 bg-amber-200 rounded-2xl">
+              <LoaderCircle className="h-5 w-5 animate-spin text-amber-600" />
+              <span className="text-amber-800 font-medium">Creating your book...</span>
+            </div>
+          )}
+
+          {/* Create book button - always show unless currently generating */}
+          {story.pageGeneration?.status !== 'running' && story.imageGeneration?.status !== 'running' && (
+            <Link
+              href={`/kids/create/${storyId}/style`}
+              className="flex items-center justify-center gap-2 p-4 bg-white border-2 border-amber-500 rounded-2xl shadow-md hover:bg-amber-50 transition-colors"
+            >
+              <Sparkles className="h-5 w-5 text-amber-500" />
+              <span className="text-amber-600 font-semibold text-lg">
+                {storybooks.length > 0 || story.imageGeneration?.status === 'ready'
+                  ? 'Create Another Book'
+                  : 'Create Picture Book'}
+              </span>
+            </Link>
+          )}
+        </div>
       </main>
     </div>
   );
