@@ -192,13 +192,13 @@ export default function InstallPage() {
             </ul>
             <div className="pt-2 border-t">
               <a
-                href="https://github.com/andrewbalercnx/studio/commit/603d72d"
+                href="https://github.com/andrewbalercnx/studio/commit/b373f37"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Github className="h-3 w-3" />
-                <span className="font-mono">603d72d</span>
+                <span className="font-mono">b373f37</span>
               </a>
             </div>
           </CardContent>
