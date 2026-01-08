@@ -18,6 +18,32 @@
 
 ### 2026-01-08
 
+#### `a208953` - Fix storyCompileFlow overwriting unresolved story text
+
+**Type**: Bug Fix
+
+**Summary**: The story compile flow was saving resolved story text (with display names) to the database instead of preserving the unresolved text (with `$$id$$` placeholders). This broke downstream processes like pagination and image generation which need to extract entity IDs from placeholders.
+
+**Root Cause**: In `story-compile-flow.ts`, multiple code branches were saving `resolvedStoryText` to the `storyText` field:
+- Friends mode was updating the story document with resolved text
+- Gemini mode was creating the story document with resolved text
+- Standard/chat mode was creating the story document with resolved text
+
+**Fix**:
+- Friends mode: Removed the `storyText` update entirely (the friends-flow already saved unresolved text)
+- Gemini mode: Changed to save `geminiFinalStory` (unresolved) instead of `resolvedStoryText`
+- Standard mode: Changed to save `rawStoryText` (unresolved) instead of `resolvedStoryText`
+
+**Impact**: After this fix, the `storyText` field in the `stories` collection will contain text with `$$id$$` placeholders, which is required for:
+- Page generation to extract entity IDs for each page
+- Pagination flow to understand which characters appear on each page
+- Image generation to know which characters to include in images
+
+**Files modified**:
+- `src/ai/flows/story-compile-flow.ts`
+
+---
+
 #### `8e98d04` - Add ElevenLabs API version selection
 
 **Type**: Feature

@@ -173,10 +173,13 @@ export const storyCompileFlow = ai.defineFlow(
                 }
                 await sessionRef.update(sessionUpdate);
 
-                // Update Story document with resolved text, actors, synopsis, and generation statuses
+                // Update Story document with actors, synopsis, and generation statuses
+                // NOTE: We intentionally do NOT update storyText here. The friends-flow saved
+                // the unresolved text (with $$id$$ placeholders) which is needed for page
+                // generation to extract entityIds. Overwriting with resolved text would break
+                // downstream processes like pagination and image generation.
                 const now = FieldValue.serverTimestamp();
                 const storyPayload: Partial<Story> = {
-                    storyText: resolvedStoryText, // Update with resolved text for display
                     synopsis,
                     actors,
                     storyMode: 'friends',
@@ -490,7 +493,9 @@ export const storyCompileFlow = ai.defineFlow(
                     storySessionId: sessionId,
                     childId,
                     parentUid,
-                    storyText: resolvedStoryText,
+                    // Store unresolved text (with $$id$$ placeholders) for downstream processes
+                    // like pagination and image generation which need to extract entity IDs
+                    storyText: geminiFinalStory,
                     storyMode, // Copy from session (gemini3 or gemini4)
                     synopsis, // Generated for Gemini mode
                     metadata: {
@@ -611,7 +616,9 @@ export const storyCompileFlow = ai.defineFlow(
                 storySessionId: sessionId,
                 childId,
                 parentUid,
-                storyText: resolvedStoryText,
+                // Store unresolved text (with $$id$$ placeholders) for downstream processes
+                // like pagination and image generation which need to extract entity IDs
+                storyText: rawStoryText,
                 storyMode: storyMode || 'chat', // Copy from session (default to chat for standard flow)
                 synopsis, // Generated alongside story text
                 metadata: {
