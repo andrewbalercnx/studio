@@ -18,6 +18,28 @@
 
 ### 2026-01-08
 
+#### `cd60d41` - Fix intermittent actor resolution in image generation
+
+**Type**: Bug Fix
+
+**Summary**: Fixed an intermittent issue where actors (children/characters) referenced in story pages were not being found during image generation. The image generation prompt would show only one actor (the main child) when multiple actors should have been included.
+
+**Root Cause**: The `fetchEntityReferenceData` function used sequential queries - first checking the `characters` collection, then only checking `children` for IDs not found in characters. This sequential approach was unreliable and occasionally failed to find valid actors.
+
+**Fix**: Aligned the query strategy with `story-page-flow.ts` by querying BOTH collections in parallel for ALL IDs:
+- Uses `doc(id).get()` for each ID in both collections simultaneously
+- More robust against intermittent Firestore issues
+- Adds `safeGet` helper to gracefully handle invalid IDs
+
+**Also fixed**:
+- `fetchEntityAvatarsOnly` - same parallel query approach for back cover generation
+- Child age now shows in months for children under 2 years (e.g., "8 months old" instead of "0 years old")
+
+**Files modified**:
+- `src/ai/flows/story-image-flow.ts` - Rewritten `fetchEntityReferenceData` and `fetchEntityAvatarsOnly` functions, improved age calculation
+
+---
+
 #### `8402c2b` - Persist music preference for children
 
 **Type**: Feature

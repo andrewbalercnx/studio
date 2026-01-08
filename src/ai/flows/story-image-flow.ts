@@ -461,6 +461,9 @@ function buildCharacterDetails(characters: Character[]): string {
  * Fetches reference photos/avatars AND full character details for entities based on their IDs.
  * Returns photos for visual reference and character objects for prompt enhancement.
  * Also builds an actorMap for structured prompt generation.
+ *
+ * Uses parallel queries to both characters and children collections for all IDs,
+ * which is more robust than sequential querying (aligned with story-page-flow approach).
  */
 async function fetchEntityReferenceData(
   firestore: FirebaseFirestore.Firestore,
@@ -474,72 +477,73 @@ async function fetchEntityReferenceData(
   const characters: Character[] = [];
   const actorMap = new Map<string, Character | ChildProfile>();
   let childProfile: ChildProfile | undefined;
-  // Filter out empty strings to prevent Firestore "documentPath must be non-empty" error
-  const uniqueIds = [...new Set(entityIds)].filter(id => id && id.trim().length > 0);
+
+  // Filter out empty strings and invalid IDs to prevent Firestore errors
+  const uniqueIds = [...new Set(entityIds)].filter(
+    id => id && typeof id === 'string' && id.trim().length > 0 && !id.includes('/')
+  );
 
   // Return early if all IDs were empty/invalid
   if (uniqueIds.length === 0) {
     return { photos: [], characters: [], actorMap: new Map() };
   }
 
-  // Fetch in chunks of 10 (Firestore 'in' query limit)
-  const chunkSize = 10;
-  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
-    const chunk = uniqueIds.slice(i, i + chunkSize);
+  // Helper to safely get a document (returns null for invalid IDs)
+  const safeGet = async (collection: string, id: string) => {
+    try {
+      return await firestore.collection(collection).doc(id).get();
+    } catch {
+      return null; // Return null for invalid IDs
+    }
+  };
 
-    // Check characters collection first (by document ID)
-    const characterSnapshot = await firestore
-      .collection('characters')
-      .where('__name__', 'in', chunk)
-      .get();
+  // Query BOTH collections in parallel for ALL IDs
+  // This is more robust than sequential querying - an ID might exist in either collection
+  const [characterDocs, childDocs] = await Promise.all([
+    Promise.all(uniqueIds.map(id => safeGet('characters', id))),
+    Promise.all(uniqueIds.map(id => safeGet('children', id))),
+  ]);
 
-    characterSnapshot.forEach((docSnap) => {
-      const character = { id: docSnap.id, ...docSnap.data() } as Character;
+  // Process character results
+  characterDocs.forEach(doc => {
+    if (doc && doc.exists) {
+      const character = { id: doc.id, ...doc.data() } as Character;
       characters.push(character);
-      actorMap.set(docSnap.id, character);
-      // Use avatar URL if available
+      actorMap.set(doc.id, character);
       if (character.avatarUrl) {
         photos.push(character.avatarUrl);
       }
-    });
-
-    // Find remaining IDs that weren't characters
-    const foundCharacterIds = new Set(characterSnapshot.docs.map(d => d.id));
-    const remainingChunk = chunk.filter(id => !foundCharacterIds.has(id));
-
-    if (remainingChunk.length > 0) {
-      // Check children collection (by document ID)
-      const childSnapshot = await firestore
-        .collection('children')
-        .where('__name__', 'in', remainingChunk)
-        .get();
-
-      childSnapshot.forEach((docSnap) => {
-        const child = { id: docSnap.id, ...docSnap.data() } as ChildProfile;
-        childProfile = child;
-        actorMap.set(docSnap.id, child);
-        // Use child photos if available (take first 2)
-        if (child.photos && child.photos.length > 0) {
-          photos.push(...child.photos.slice(0, 2));
-        } else if (child.avatarUrl) {
-          photos.push(child.avatarUrl);
-        }
-      });
     }
-  }
+  });
+
+  // Process child results (skip if already found as character - shouldn't happen but be safe)
+  childDocs.forEach(doc => {
+    if (doc && doc.exists && !actorMap.has(doc.id)) {
+      const child = { id: doc.id, ...doc.data() } as ChildProfile;
+      childProfile = child;
+      actorMap.set(doc.id, child);
+      // Use child photos if available (take first 2)
+      if (child.photos && child.photos.length > 0) {
+        photos.push(...child.photos.slice(0, 2));
+      } else if (child.avatarUrl) {
+        photos.push(child.avatarUrl);
+      }
+    }
+  });
 
   // Fallback: For IDs not found by document ID, try to find by displayName
   // This handles legacy data where the AI used displayName instead of document ID
   const unfoundIds = uniqueIds.filter(id => !actorMap.has(id));
   if (unfoundIds.length > 0) {
+    const chunkSize = 10; // Firestore 'in' query limit
     for (let i = 0; i < unfoundIds.length; i += chunkSize) {
       const chunk = unfoundIds.slice(i, i + chunkSize);
 
-      // Try characters by displayName
-      const charsByName = await firestore
-        .collection('characters')
-        .where('displayName', 'in', chunk)
-        .get();
+      // Query both collections by displayName in parallel
+      const [charsByName, childrenByName] = await Promise.all([
+        firestore.collection('characters').where('displayName', 'in', chunk).get(),
+        firestore.collection('children').where('displayName', 'in', chunk).get(),
+      ]);
 
       charsByName.forEach((docSnap) => {
         const character = { id: docSnap.id, ...docSnap.data() } as Character;
@@ -551,24 +555,18 @@ async function fetchEntityReferenceData(
         }
       });
 
-      // Try children by displayName
-      const stillUnfound = chunk.filter(id => !actorMap.has(id));
-      if (stillUnfound.length > 0) {
-        const childrenByName = await firestore
-          .collection('children')
-          .where('displayName', 'in', stillUnfound)
-          .get();
-
-        childrenByName.forEach((docSnap) => {
-          const child = { id: docSnap.id, ...docSnap.data() } as ChildProfile;
+      childrenByName.forEach((docSnap) => {
+        // Skip if already found by displayName as character
+        const child = { id: docSnap.id, ...docSnap.data() } as ChildProfile;
+        if (!actorMap.has(child.displayName)) {
           actorMap.set(child.displayName, child);
           if (child.photos && child.photos.length > 0) {
             photos.push(...child.photos.slice(0, 2));
           } else if (child.avatarUrl) {
             photos.push(child.avatarUrl);
           }
-        });
-      }
+        }
+      });
     }
   }
 
@@ -589,6 +587,9 @@ async function fetchEntityReferencePhotos(
 /**
  * Fetches ONLY avatar URLs for entities (not real photos).
  * Used for back cover generation which should only use avatars.
+ *
+ * Uses parallel queries to both characters and children collections for all IDs,
+ * which is more robust than sequential querying.
  */
 async function fetchEntityAvatarsOnly(
   firestore: FirebaseFirestore.Firestore,
@@ -599,53 +600,54 @@ async function fetchEntityAvatarsOnly(
   }
 
   const avatars: string[] = [];
-  // Filter out empty strings to prevent Firestore "documentPath must be non-empty" error
-  const uniqueIds = [...new Set(entityIds)].filter(id => id && id.trim().length > 0);
+  const foundIds = new Set<string>();
+
+  // Filter out empty strings and invalid IDs to prevent Firestore errors
+  const uniqueIds = [...new Set(entityIds)].filter(
+    id => id && typeof id === 'string' && id.trim().length > 0 && !id.includes('/')
+  );
 
   // Return early if all IDs were empty/invalid
   if (uniqueIds.length === 0) {
     return [];
   }
 
-  // Fetch in chunks of 10 (Firestore 'in' query limit)
-  const chunkSize = 10;
-  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
-    const chunk = uniqueIds.slice(i, i + chunkSize);
+  // Helper to safely get a document (returns null for invalid IDs)
+  const safeGet = async (collection: string, id: string) => {
+    try {
+      return await firestore.collection(collection).doc(id).get();
+    } catch {
+      return null;
+    }
+  };
 
-    // Check characters collection first
-    const characterSnapshot = await firestore
-      .collection('characters')
-      .where('__name__', 'in', chunk)
-      .get();
+  // Query BOTH collections in parallel for ALL IDs
+  const [characterDocs, childDocs] = await Promise.all([
+    Promise.all(uniqueIds.map(id => safeGet('characters', id))),
+    Promise.all(uniqueIds.map(id => safeGet('children', id))),
+  ]);
 
-    characterSnapshot.forEach((docSnap) => {
-      const character = docSnap.data() as Character;
-      // Only use avatar URL (not photos)
+  // Process character results
+  characterDocs.forEach(doc => {
+    if (doc && doc.exists) {
+      const character = doc.data() as Character;
+      foundIds.add(doc.id);
       if (character.avatarUrl) {
         avatars.push(character.avatarUrl);
       }
-    });
-
-    // Find remaining IDs that weren't characters
-    const foundCharacterIds = new Set(characterSnapshot.docs.map(d => d.id));
-    const remainingChunk = chunk.filter(id => !foundCharacterIds.has(id));
-
-    if (remainingChunk.length > 0) {
-      // Check children collection
-      const childSnapshot = await firestore
-        .collection('children')
-        .where('__name__', 'in', remainingChunk)
-        .get();
-
-      childSnapshot.forEach((docSnap) => {
-        const child = docSnap.data() as ChildProfile;
-        // Only use avatar URL (not real photos)
-        if (child.avatarUrl) {
-          avatars.push(child.avatarUrl);
-        }
-      });
     }
-  }
+  });
+
+  // Process child results (skip if already found as character)
+  childDocs.forEach(doc => {
+    if (doc && doc.exists && !foundIds.has(doc.id)) {
+      const child = doc.data() as ChildProfile;
+      foundIds.add(doc.id);
+      if (child.avatarUrl) {
+        avatars.push(child.avatarUrl);
+      }
+    }
+  });
 
   return avatars;
 }
@@ -1177,14 +1179,20 @@ export const storyImageFlow = ai.defineFlow(
         logs.push(`[entities] Found ${page.entityIds?.length ?? 0} entity IDs, ${entityData.photos.length} reference photos, ${entityData.actorMap.size} actors resolved`);
 
         // Calculate child's age for the prompt
+        // For children under 2 years, show age in months for better accuracy
         let childAge: string | undefined;
         if (childProfile?.dateOfBirth) {
           const dob = typeof (childProfile.dateOfBirth as any).toDate === 'function'
             ? (childProfile.dateOfBirth as any).toDate()
             : new Date(childProfile.dateOfBirth as any);
           const ageMs = Date.now() - dob.getTime();
+          const ageMonths = Math.floor(ageMs / (1000 * 60 * 60 * 24 * 30.44)); // Average days per month
           const ageYears = Math.floor(ageMs / (1000 * 60 * 60 * 24 * 365.25));
-          childAge = `${ageYears} years old`;
+          if (ageYears < 2) {
+            childAge = `${ageMonths} months old`;
+          } else {
+            childAge = `${ageYears} years old`;
+          }
         }
 
         // Build structured actors JSON for the prompt
