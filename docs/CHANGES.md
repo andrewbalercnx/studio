@@ -18,6 +18,27 @@
 
 ### 2026-01-08
 
+#### `8402c2b` - Persist music preference for children
+
+**Type**: Feature
+
+**Summary**: The "music off" setting now persists for each child. Previously, the music preference reset every time a child entered a new story generator flow.
+
+**Changes**:
+- Added `musicEnabled` field to `ChildProfile` type (defaults to `true` if not set)
+- `StoryBrowser` component now:
+  - Initializes music state from child profile
+  - Syncs music state when child profile loads
+  - Persists music preference to Firestore when toggled
+- Updated SCHEMA.md with new field documentation
+
+**Files modified**:
+- `src/lib/types.ts` - Added `musicEnabled` field to `ChildProfile`
+- `src/components/story/story-browser.tsx` - Read/write music preference
+- `docs/SCHEMA.md` - Document new field
+
+---
+
 #### `a208953` - Fix storyCompileFlow overwriting unresolved story text
 
 **Type**: Bug Fix

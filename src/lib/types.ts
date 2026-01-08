@@ -1012,6 +1012,10 @@ export type ChildProfile = {
     // Persists the "Read to Me" preference for this child
     autoReadAloud?: boolean;
 
+    // Whether background music is enabled during story creation
+    // Persists the music preference for this child (default: true)
+    musicEnabled?: boolean;
+
     // Soft delete - set when parent "deletes" (hides) the profile
     // Only admins can permanently delete or restore
     deletedAt?: any;

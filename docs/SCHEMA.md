@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-05 (added systemConfig/voice for voice recording script)
+> **Last Updated**: 2026-01-08 (added musicEnabled field to children)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -66,6 +66,7 @@ Child profiles owned by parents.
 | `namePronunciation` | string | No | Phonetic pronunciation for TTS |
 | `preferredVoiceId` | string | No | Preferred TTS voice ID (default: Alice `Xb7hH8MSUJpSbSDYk0k2`) |
 | `autoReadAloud` | boolean | No | Enable TTS for stories (story creation & reader) |
+| `musicEnabled` | boolean | No | Enable background music during story creation (default: true) |
 | `deletedAt` | timestamp | No | Soft delete timestamp |
 | `deletedBy` | string | No | UID of user who deleted |
 

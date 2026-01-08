@@ -129,7 +129,8 @@ export function StoryBrowser({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isEndingPhase, setIsEndingPhase] = useState(false);
   const [debugInfo, setDebugInfo] = useState<Record<string, any>>({});
-  const [musicEnabled, setMusicEnabled] = useState(true); // User preference for background music
+  // Initialize music preference from child profile, defaulting to true if not set
+  const [musicEnabled, setMusicEnabled] = useState(() => childProfile?.musicEnabled !== false);
   const [storyProgress, setStoryProgress] = useState(0); // Story progress (0-1) from API responses
 
   // Friends flow state
@@ -210,6 +211,33 @@ export function StoryBrowser({
 
   // Track whether music has been started for this session
   const musicStartedRef = useRef(false);
+
+  // Sync music preference when child profile loads (it may load after component mounts)
+  useEffect(() => {
+    if (childProfile !== null && childProfile.musicEnabled !== undefined) {
+      setMusicEnabled(childProfile.musicEnabled);
+    }
+  }, [childProfile?.musicEnabled]);
+
+  // Persist music preference when user toggles it
+  const handleMusicToggle = useCallback(async () => {
+    const newValue = !musicEnabled;
+    setMusicEnabled(newValue);
+
+    // Persist to child profile if we have one
+    if (childProfile?.id && firestore) {
+      try {
+        const childRef = doc(firestore, 'children', childProfile.id);
+        await updateDoc(childRef, {
+          musicEnabled: newValue,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (e) {
+        console.error('[StoryBrowser] Failed to persist music preference:', e);
+        // Don't revert the local state - the UI change is more important than persistence
+      }
+    }
+  }, [musicEnabled, childProfile?.id, firestore]);
 
   // Music control based on state and user preference
   // Music plays continuously once started and loops automatically (set in the hook)
@@ -931,7 +959,7 @@ export function StoryBrowser({
               <Button
                 variant={musicEnabled ? 'default' : 'ghost'}
                 size="sm"
-                onClick={() => setMusicEnabled(!musicEnabled)}
+                onClick={handleMusicToggle}
                 title={musicEnabled ? 'Turn off background music' : 'Turn on background music'}
                 className="gap-2"
               >
