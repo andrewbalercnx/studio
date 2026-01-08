@@ -7,7 +7,7 @@ import { useKidsPWA } from '../layout';
 import { useRequiredApiClient } from '@/contexts/api-client-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { LoaderCircle, ArrowLeft, BookOpen, Sparkles, CheckCircle2, AlertCircle, Pencil, Play, PlusCircle, Moon, Volume2, FileText } from 'lucide-react';
+import { LoaderCircle, ArrowLeft, BookOpen, Sparkles, Pencil, Volume2, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -169,17 +169,10 @@ export default function KidsStoriesPage() {
   );
 }
 
-// Story card component with expanded functionality
+// Story card component - shows story info only (books accessed via My Books)
 function StoryCard({ story }: { story: StoryWithResolved }) {
   const storyId = story.id || story.storySessionId;
   const title = story.titleResolved || story.metadata?.title || 'Untitled Story';
-  const pageStatus = story.pageGeneration?.status ?? 'idle';
-  const imageStatus = story.imageGeneration?.status ?? 'idle';
-  const hasBook = imageStatus === 'ready' || pageStatus === 'ready';
-  const isGenerating = pageStatus === 'running' || imageStatus === 'running';
-  const isRateLimited = pageStatus === 'rate_limited' || imageStatus === 'rate_limited';
-  const hasError = pageStatus === 'error' || imageStatus === 'error';
-  const canCreateBook = !hasBook && !isGenerating && !isRateLimited && !hasError;
   const hasStoryText = !!story.storyText;
 
   // Use resolved synopsis from API
@@ -188,41 +181,16 @@ function StoryCard({ story }: { story: StoryWithResolved }) {
   // Actors are already resolved from API
   const actors = story.actors || [];
 
-  // Determine the status display
-  const getStatusInfo = () => {
-    if (imageStatus === 'ready') {
-      return { icon: <CheckCircle2 className="h-4 w-4" />, text: 'Book ready!', color: 'text-green-600' };
-    }
-    if (isGenerating) {
-      return { icon: <LoaderCircle className="h-4 w-4 animate-spin" />, text: 'Creating book...', color: 'text-amber-600' };
-    }
-    if (isRateLimited) {
-      return { icon: <Moon className="h-4 w-4" />, text: 'Wizard napping', color: 'text-amber-700' };
-    }
-    if (hasError) {
-      return { icon: <AlertCircle className="h-4 w-4" />, text: 'Something went wrong', color: 'text-red-500' };
-    }
-    if (pageStatus === 'ready') {
-      return { icon: <Pencil className="h-4 w-4" />, text: 'Pages ready', color: 'text-blue-600' };
-    }
-    if (hasStoryText) {
-      return { icon: <FileText className="h-4 w-4" />, text: 'Story ready', color: 'text-purple-600' };
-    }
-    return { icon: <Pencil className="h-4 w-4" />, text: 'In progress', color: 'text-gray-500' };
-  };
-
-  const status = getStatusInfo();
+  // Simple status: story ready or in progress
+  const status = hasStoryText
+    ? { icon: <FileText className="h-4 w-4" />, text: 'Story ready', color: 'text-purple-600' }
+    : { icon: <Pencil className="h-4 w-4" />, text: 'In progress', color: 'text-gray-500' };
 
   return (
     <Card
       className={cn(
         'border-2 transition-all',
-        hasBook && 'border-green-200',
-        isGenerating && 'border-amber-200',
-        isRateLimited && 'border-amber-300',
-        hasError && 'border-red-200',
-        hasStoryText && !hasBook && !isGenerating && !isRateLimited && !hasError && 'border-purple-200',
-        !hasStoryText && !hasBook && !isGenerating && !isRateLimited && !hasError && 'border-gray-200'
+        hasStoryText ? 'border-purple-200' : 'border-gray-200'
       )}
     >
       <CardContent className="p-4 space-y-3">
@@ -232,24 +200,16 @@ function StoryCard({ story }: { story: StoryWithResolved }) {
           <div
             className={cn(
               'w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden',
-              hasBook && !story.actorAvatarUrl && 'bg-gradient-to-br from-green-100 to-emerald-100',
-              isGenerating && !story.actorAvatarUrl && 'bg-gradient-to-br from-amber-100 to-orange-100',
-              isRateLimited && !story.actorAvatarUrl && 'bg-amber-100',
-              hasError && !story.actorAvatarUrl && 'bg-red-100',
-              hasStoryText && !hasBook && !isGenerating && !isRateLimited && !hasError && !story.actorAvatarUrl && 'bg-gradient-to-br from-purple-100 to-pink-100',
-              !hasStoryText && !hasBook && !isGenerating && !isRateLimited && !hasError && !story.actorAvatarUrl && 'bg-gray-100'
+              hasStoryText && !story.actorAvatarUrl && 'bg-gradient-to-br from-purple-100 to-pink-100',
+              !hasStoryText && !story.actorAvatarUrl && 'bg-gray-100'
             )}
           >
             {story.actorAvatarUrl ? (
               <img src={story.actorAvatarUrl} alt="Story characters" className="w-full h-full object-cover" />
             ) : (
               <>
-                {hasBook && <BookOpen className="h-7 w-7 text-green-600" />}
-                {isGenerating && <LoaderCircle className="h-7 w-7 text-amber-600 animate-spin" />}
-                {isRateLimited && <Moon className="h-7 w-7 text-amber-600" />}
-                {hasError && <AlertCircle className="h-7 w-7 text-red-500" />}
-                {hasStoryText && !hasBook && !isGenerating && !isRateLimited && !hasError && <FileText className="h-7 w-7 text-purple-500" />}
-                {!hasStoryText && !hasBook && !isGenerating && !isRateLimited && !hasError && <Pencil className="h-7 w-7 text-gray-400" />}
+                {hasStoryText && <FileText className="h-7 w-7 text-purple-500" />}
+                {!hasStoryText && <Pencil className="h-7 w-7 text-gray-400" />}
               </>
             )}
           </div>
@@ -297,85 +257,19 @@ function StoryCard({ story }: { story: StoryWithResolved }) {
           </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-2 flex-wrap">
-          {/* Read Story button - show if story has text */}
-          {hasStoryText && (
-            <Button
-              asChild
-              size="sm"
-              variant={hasBook ? 'outline' : 'default'}
-              className={cn(
-                hasBook ? 'border-purple-300 text-purple-700' : 'bg-purple-500 hover:bg-purple-600',
-                'flex-1 min-w-[100px]'
-              )}
-            >
-              <Link href={`/kids/story/${storyId}/read`}>
-                <Volume2 className="h-4 w-4 mr-1" />
-                Read Story
-              </Link>
-            </Button>
-          )}
-
-          {/* View/Read Book button - show if book exists */}
-          {hasBook && (
-            <Button
-              asChild
-              size="sm"
-              className="flex-1 min-w-[100px] bg-green-500 hover:bg-green-600"
-            >
-              <Link href={`/kids/read/${storyId}`}>
-                <Play className="h-4 w-4 mr-1" />
-                Read Book
-              </Link>
-            </Button>
-          )}
-
-          {/* View Generating status */}
-          {isGenerating && (
-            <Button
-              asChild
-              size="sm"
-              variant="outline"
-              className="flex-1 min-w-[100px] border-amber-300 text-amber-700"
-            >
-              <Link href={`/kids/create/${storyId}/generating`}>
-                <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
-                View Progress
-              </Link>
-            </Button>
-          )}
-
-          {/* Rate limited - go to generating to see status */}
-          {isRateLimited && (
-            <Button
-              asChild
-              size="sm"
-              variant="outline"
-              className="flex-1 min-w-[100px] border-amber-300 text-amber-700"
-            >
-              <Link href={`/kids/create/${storyId}/generating`}>
-                <Moon className="h-4 w-4 mr-1" />
-                Check Status
-              </Link>
-            </Button>
-          )}
-
-          {/* Create Book button - only show if no book yet and not generating */}
-          {canCreateBook && hasStoryText && (
-            <Button
-              asChild
-              size="sm"
-              variant="outline"
-              className="flex-1 min-w-[100px] border-amber-300 text-amber-700"
-            >
-              <Link href={`/kids/create/${storyId}/style`}>
-                <PlusCircle className="h-4 w-4 mr-1" />
-                Create Book
-              </Link>
-            </Button>
-          )}
-        </div>
+        {/* Action button - Read Story only (books accessed via My Books) */}
+        {hasStoryText && (
+          <Button
+            asChild
+            size="sm"
+            className="bg-purple-500 hover:bg-purple-600"
+          >
+            <Link href={`/kids/story/${storyId}/read`}>
+              <Volume2 className="h-4 w-4 mr-1" />
+              Read Story
+            </Link>
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
