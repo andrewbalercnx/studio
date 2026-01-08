@@ -18,8 +18,6 @@ import type {
 } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { replacePlaceholdersInText, type EntityMap } from '@/lib/resolve-placeholders.server';
-import { buildStoryContext } from '@/lib/story-context-builder';
-import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
 
 // ============================================================================
 // Default Prompts (used when no custom prompt is set in Firestore)
@@ -382,15 +380,14 @@ async function initializeCharacterSelection(
   firestore: FirebaseFirestore.Firestore,
   session: StorySession,
   child: ChildProfile,
-  generator: StoryGenerator | null,
-  globalPrefix: string
+  generator: StoryGenerator | null
 ): Promise<FriendsFlowOutput> {
   const flowName = 'friendsFlow:initCharacterSelection';
 
   // Load all available characters and siblings
   const parentUid = child.ownerParentUid;
 
-  // Load siblings
+  // Load siblings with full details
   const siblingsSnap = await firestore
     .collection('children')
     .where('ownerParentUid', '==', parentUid)
@@ -400,7 +397,7 @@ async function initializeCharacterSelection(
     .map((doc) => ({ id: doc.id, ...doc.data() } as ChildProfile))
     .filter((c) => c.id !== session.childId && !c.deletedAt);
 
-  // Load characters
+  // Load characters with full details
   const charactersSnap = await firestore
     .collection('characters')
     .where('ownerParentUid', '==', parentUid)
@@ -410,7 +407,7 @@ async function initializeCharacterSelection(
     .map((doc) => ({ id: doc.id, ...doc.data() } as Character))
     .filter((c) => !c.deletedAt && (!c.childId || c.childId === session.childId));
 
-  // Build available characters list
+  // Build available characters list (basic info for UI)
   const availableCharacters: FriendsCharacterOption[] = [
     // Main child always first
     {
@@ -438,20 +435,63 @@ async function initializeCharacterSelection(
     })),
   ];
 
+  // Build available characters WITH full details for prompt
+  const availableCharsWithDetails: CharacterWithDetails[] = [
+    // Main child
+    {
+      id: child.id,
+      displayName: child.displayName,
+      type: 'child',
+      avatarUrl: child.avatarUrl,
+      isSelected: true,
+      pronouns: child.pronouns,
+      description: child.description,
+      likes: child.likes,
+      dislikes: child.dislikes,
+    },
+    // Siblings
+    ...siblings.map((s) => ({
+      id: s.id,
+      displayName: s.displayName,
+      type: 'sibling' as const,
+      avatarUrl: s.avatarUrl,
+      isSelected: false,
+      pronouns: s.pronouns,
+      description: s.description,
+      likes: s.likes,
+      dislikes: s.dislikes,
+    })),
+    // Characters
+    ...characters.map((c) => ({
+      id: c.id,
+      displayName: c.displayName,
+      type: c.type,
+      avatarUrl: c.avatarUrl,
+      isSelected: false,
+      pronouns: c.pronouns,
+      description: c.description,
+      likes: c.likes,
+      dislikes: c.dislikes,
+    })),
+  ];
+
   // Build prompt for AI to propose characters
   const childAge = getChildAgeYears(child);
   const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
 
-  const availableCharsText = availableCharacters
-    .map((c) => `- ID: ${c.id}, Name: ${c.displayName}, Type: ${c.type}`)
-    .join('\n');
+  // Use detailed character format for the prompt
+  const availableCharsText = availableCharsWithDetails
+    .map((char, index) => `${index + 1}. ${formatCharacterWithDetails(char, char.id === child.id)}`)
+    .join('\n\n');
 
   const promptTemplate = generator?.prompts?.characterProposal || DEFAULT_CHARACTER_PROPOSAL_PROMPT;
   const basePrompt = fillPromptTemplate(promptTemplate, {
     ageDescription,
     availableCharacters: availableCharsText,
   });
-  const fullPrompt = globalPrefix ? `${globalPrefix}\n\n${basePrompt}` : basePrompt;
+  // NOTE: We do NOT prepend globalPrefix here because it contains "new character introduction"
+  // guidance which is not appropriate for character selection where we're choosing from existing characters.
+  const fullPrompt = basePrompt;
 
   // Get model and temperature config
   const { model: modelName, temperature } = getModelConfig(generator, 'characterProposal');
@@ -1057,9 +1097,11 @@ const friendsFlowInternal = ai.defineFlow(
       }
       const session = { id: sessionSnap.id, ...sessionSnap.data() } as StorySession;
 
-      // 3. Load generator config and global prefix
+      // 3. Load generator config
+      // NOTE: We don't use globalPrefix in the friends flow because it contains
+      // "new character introduction" guidance which is inappropriate - characters
+      // are pre-selected by the user in this flow.
       const generator = await loadGeneratorConfig(firestore);
-      const globalPrefix = await getGlobalPrefix();
 
       // 4. Determine current phase and handle accordingly
       const currentPhase = session.friendsPhase;
@@ -1093,7 +1135,7 @@ const friendsFlowInternal = ai.defineFlow(
         }
 
         // Initial request - propose characters
-        return initializeCharacterSelection(firestore, session, child, generator, globalPrefix);
+        return initializeCharacterSelection(firestore, session, child, generator);
       }
 
       // Scenario selection phase
