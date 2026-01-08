@@ -111,6 +111,15 @@ export const imageDescriptionFlow = ai.defineFlow(
         'imageDescriptionGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+      // Log the early exit so it appears in aiFlowLogs
+      await logAIFlow({
+        flowName: 'imageDescriptionFlow:noPhotos',
+        sessionId: entityId,
+        parentId: entity.ownerParentUid,
+        prompt: `No photos found for ${entityType} - skipping image description generation`,
+        response: { text: '', finishReason: 'SKIPPED', model: 'none' },
+        startTime: Date.now(),
+      });
       return { imageDescription: '' };
     }
 
