@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 
 interface UseTTSOptions {
@@ -222,6 +222,28 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
       onError?.(error.message || 'Failed to generate speech');
     }
   }, [user, childId, voiceId, onStart, onEnd, onError, stop]);
+
+  // Clean up audio on unmount
+  useEffect(() => {
+    return () => {
+      // Abort any pending request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+
+      // Stop audio playback
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+
+      // Clear queued audio
+      if (queuedAudioRef.current) {
+        queuedAudioRef.current = null;
+      }
+    };
+  }, []);
 
   return {
     speak,
