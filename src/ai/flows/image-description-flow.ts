@@ -84,11 +84,27 @@ export const imageDescriptionFlow = ai.defineFlow(
       throw new Error(`${entityType} with id ${entityId} not found.`);
     }
 
-    const entity = entitySnap.data() as ChildProfile | Character;
-    const photoUrls = entity.photos || [];
+    let entity = entitySnap.data() as ChildProfile | Character;
+    let photoUrls = entity.photos || [];
+
+    console.log(`[imageDescriptionFlow] Starting for ${entityType} ${entityId}, found ${photoUrls.length} photos`);
+
+    // If no photos found, wait briefly and re-read in case of race condition
+    // (e.g., photo upload just happened but document not yet updated in our read)
+    if (photoUrls.length === 0) {
+      console.log(`[imageDescriptionFlow] No photos found, waiting 1s and re-reading...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const freshSnap = await entityRef.get();
+      if (freshSnap.exists) {
+        entity = freshSnap.data() as ChildProfile | Character;
+        photoUrls = entity.photos || [];
+        console.log(`[imageDescriptionFlow] After re-read: ${photoUrls.length} photos`);
+      }
+    }
 
     if (photoUrls.length === 0) {
       // No photos to analyze - clear any existing description
+      console.log(`[imageDescriptionFlow] No photos to analyze, clearing imageDescription`);
       await entityRef.update({
         imageDescription: FieldValue.delete(),
         'imageDescriptionGeneration.status': 'idle',
