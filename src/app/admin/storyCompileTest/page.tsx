@@ -36,7 +36,53 @@ type SessionOption = {
     status: string;
     currentPhase: string;
     storyMode?: string;
+    storyTypeId?: string;
+    parentUid?: string;
+    hasGeminiFinalStory?: boolean;
+    friendsPhase?: string;
 };
+
+// Determine if a session can be compiled based on its mode and state
+function getCompileStatus(session: SessionOption): { canCompile: boolean; reason: string } {
+    const { storyMode, childId, storyTypeId, parentUid, hasGeminiFinalStory, friendsPhase, currentPhase } = session;
+
+    // Friends mode requires story_generation to be complete
+    if (storyMode === 'friends') {
+        if (friendsPhase === 'complete') {
+            return { canCompile: true, reason: 'Friends story ready' };
+        }
+        return { canCompile: false, reason: `Friends mode in '${friendsPhase || currentPhase}' phase (needs 'complete')` };
+    }
+
+    // Wizard mode requires story generation to be complete (status: completed or currentPhase: final)
+    if (storyMode === 'wizard') {
+        if (currentPhase === 'final' || session.status === 'completed') {
+            return { canCompile: true, reason: 'Wizard story ready' };
+        }
+        return { canCompile: false, reason: `Wizard mode in '${currentPhase}' phase (needs story doc)` };
+    }
+
+    // Gemini modes require final story text
+    if (storyMode === 'gemini3' || storyMode === 'gemini4') {
+        if (hasGeminiFinalStory) {
+            return { canCompile: true, reason: `${storyMode} story ready` };
+        }
+        return { canCompile: false, reason: `${storyMode} mode missing final story text` };
+    }
+
+    // Standard chat mode requires childId, storyTypeId, and parentUid
+    if (!childId) {
+        return { canCompile: false, reason: 'Missing childId' };
+    }
+    if (!storyTypeId) {
+        return { canCompile: false, reason: 'Missing storyTypeId' };
+    }
+    if (!parentUid) {
+        return { canCompile: false, reason: 'Missing parentUid' };
+    }
+
+    return { canCompile: true, reason: 'Chat mode ready' };
+}
 
 export default function AdminStoryCompileTestPage() {
     const { isAuthenticated, isAdmin, isWriter, loading: authLoading, error: authError } = useAdminStatus();
@@ -70,19 +116,24 @@ export default function AdminStoryCompileTestPage() {
                     const data = d.data() as StorySession;
                     return {
                         id: d.id,
-                        childId: data.childId || 'unknown',
+                        childId: data.childId || '',
                         status: data.status || 'unknown',
                         currentPhase: data.currentPhase || 'unknown',
                         storyMode: data.storyMode,
+                        storyTypeId: data.storyTypeId,
+                        parentUid: data.parentUid,
+                        hasGeminiFinalStory: !!(data.gemini3FinalStory || data.gemini4FinalStory),
+                        friendsPhase: data.friendsPhase,
                     };
                 });
                 setSessions(sessionList);
                 setSessionsLoading(false);
                 setSessionsError(null);
 
-                // Auto-select first session if none selected
+                // Auto-select first compilable session, or first session if none are compilable
                 if (sessionList.length > 0 && !sessionIdInput) {
-                    setSessionIdInput(sessionList[0].id);
+                    const compilableSession = sessionList.find(s => getCompileStatus(s).canCompile);
+                    setSessionIdInput(compilableSession?.id || sessionList[0].id);
                 }
             },
             (err) => {
@@ -230,24 +281,28 @@ export default function AdminStoryCompileTestPage() {
                                         <SelectValue placeholder="Select a session..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {sessions.map((session) => (
-                                            <SelectItem key={session.id} value={session.id}>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-mono text-xs">{session.id.slice(0, 12)}...</span>
-                                                    <Badge variant="outline" className="text-xs">
-                                                        {session.storyMode || session.currentPhase}
-                                                    </Badge>
-                                                    <span className="text-xs text-muted-foreground">
-                                                        {session.status}
-                                                    </span>
-                                                </div>
-                                            </SelectItem>
-                                        ))}
+                                        {sessions.map((session) => {
+                                            const compileStatus = getCompileStatus(session);
+                                            return (
+                                                <SelectItem key={session.id} value={session.id}>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`w-2 h-2 rounded-full ${compileStatus.canCompile ? 'bg-green-500' : 'bg-red-500'}`} />
+                                                        <span className="font-mono text-xs">{session.id.slice(0, 12)}...</span>
+                                                        <Badge variant="outline" className="text-xs">
+                                                            {session.storyMode || session.currentPhase}
+                                                        </Badge>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {session.status}
+                                                        </span>
+                                                    </div>
+                                                </SelectItem>
+                                            );
+                                        })}
                                     </SelectContent>
                                 </Select>
                             )}
                             <p className="text-xs text-muted-foreground">
-                                {sessions.length} session{sessions.length !== 1 ? 's' : ''} available (most recent first)
+                                {sessions.length} session{sessions.length !== 1 ? 's' : ''} available • {sessions.filter(s => getCompileStatus(s).canCompile).length} compilable (🟢)
                             </p>
                         </div>
 
@@ -268,23 +323,35 @@ export default function AdminStoryCompileTestPage() {
                                 <p className="font-medium mb-1">Selected Session:</p>
                                 {(() => {
                                     const session = sessions.find(s => s.id === sessionIdInput)!;
+                                    const compileStatus = getCompileStatus(session);
                                     return (
-                                        <div className="grid grid-cols-2 gap-1 text-xs">
-                                            <span className="text-muted-foreground">ID:</span>
-                                            <span className="font-mono">{session.id}</span>
-                                            <span className="text-muted-foreground">Child:</span>
-                                            <span className="font-mono">{session.childId}</span>
-                                            <span className="text-muted-foreground">Status:</span>
-                                            <span>{session.status}</span>
-                                            <span className="text-muted-foreground">Phase:</span>
-                                            <span>{session.currentPhase}</span>
-                                            {session.storyMode && (
-                                                <>
-                                                    <span className="text-muted-foreground">Mode:</span>
-                                                    <span>{session.storyMode}</span>
-                                                </>
-                                            )}
-                                        </div>
+                                        <>
+                                            <div className="grid grid-cols-2 gap-1 text-xs">
+                                                <span className="text-muted-foreground">ID:</span>
+                                                <span className="font-mono">{session.id}</span>
+                                                <span className="text-muted-foreground">Child:</span>
+                                                <span className="font-mono">{session.childId || 'none'}</span>
+                                                <span className="text-muted-foreground">Status:</span>
+                                                <span>{session.status}</span>
+                                                <span className="text-muted-foreground">Phase:</span>
+                                                <span>{session.currentPhase}</span>
+                                                {session.storyMode && (
+                                                    <>
+                                                        <span className="text-muted-foreground">Mode:</span>
+                                                        <span>{session.storyMode}</span>
+                                                    </>
+                                                )}
+                                                {session.friendsPhase && (
+                                                    <>
+                                                        <span className="text-muted-foreground">Friends Phase:</span>
+                                                        <span>{session.friendsPhase}</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                            <div className={`mt-2 p-2 rounded text-xs ${compileStatus.canCompile ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'}`}>
+                                                <span className="font-medium">{compileStatus.canCompile ? '✓ Ready to compile' : '✗ Cannot compile'}:</span> {compileStatus.reason}
+                                            </div>
+                                        </>
                                     );
                                 })()}
                             </div>
