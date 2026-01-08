@@ -130,16 +130,23 @@ CHILD'S PROFILE:
 CHARACTERS (use $$id$$ placeholders in your story):
 {{selectedCharacters}}
 
+WHY THESE CHARACTERS WERE CHOSEN:
+{{characterRationale}}
+
 STORY SYNOPSIS:
 {{selectedSynopsis}}
 
 INSTRUCTIONS:
 1. Write a complete, engaging story of 5-7 paragraphs based on the synopsis.
-2. IMPORTANT: Use $$id$$ placeholders for character names (e.g., $$child-abc123$$).
-3. The story should be simple and age-appropriate.
-4. Include dialogue and action to make it engaging.
-5. End with a happy, satisfying conclusion.
-6. Keep paragraphs short for young readers.
+2. The story should be simple and age-appropriate.
+3. Include dialogue and action to make it engaging.
+4. End with a happy, satisfying conclusion.
+5. Keep paragraphs short for young readers.
+6. Use each character's unique traits - consider their personality, likes, and pronouns.
+7. CRITICAL: Use $$id$$ placeholders for ALL character references. Never use display names directly.
+   - Correct: "$$abc123$$ ran through the garden"
+   - Wrong: "Emma ran through the garden"
+8. Do NOT introduce any new characters. Only use the characters listed above.
 
 OUTPUT FORMAT:
 {
@@ -327,14 +334,6 @@ function formatCharacterWithDetails(char: CharacterWithDetails, isMainChild: boo
   }
 
   return parts.join('. ') + '.';
-}
-
-/**
- * Format character for story generation prompt.
- * Uses $$id$$ placeholders so the final story has resolvable placeholders.
- */
-function formatCharacterForStory(char: FriendsCharacterOption): string {
-  return `- $$${char.id}$$ (${char.displayName}): ${char.type}`;
 }
 
 /**
@@ -852,8 +851,7 @@ async function handleStoryGeneration(
   firestore: FirebaseFirestore.Firestore,
   session: StorySession,
   child: ChildProfile,
-  generator: StoryGenerator | null,
-  globalPrefix: string
+  generator: StoryGenerator | null
 ): Promise<FriendsFlowOutput> {
   const flowName = 'friendsFlow:storyGeneration';
 
@@ -868,8 +866,8 @@ async function handleStoryGeneration(
     return { state: 'error', error: 'No synopsis selected', ok: false };
   }
 
-  // Load selected character details for the prompt
-  const allCharacters: FriendsCharacterOption[] = [];
+  // Load selected character details WITH full info (pronouns, description, likes, dislikes)
+  const allCharacters: CharacterWithDetails[] = [];
 
   for (const id of selectedIds) {
     const childDoc = await firestore.collection('children').doc(id).get();
@@ -881,6 +879,10 @@ async function handleStoryGeneration(
         type: id === session.childId ? 'child' : 'sibling',
         avatarUrl: data.avatarUrl,
         isSelected: true,
+        pronouns: data.pronouns,
+        description: data.description,
+        likes: data.likes,
+        dislikes: data.dislikes,
       });
       continue;
     }
@@ -894,6 +896,10 @@ async function handleStoryGeneration(
         type: data.type,
         avatarUrl: data.avatarUrl,
         isSelected: true,
+        pronouns: data.pronouns,
+        description: data.description,
+        likes: data.likes,
+        dislikes: data.dislikes,
       });
     }
   }
@@ -901,17 +907,25 @@ async function handleStoryGeneration(
   const childAge = getChildAgeYears(child);
   const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
 
-  // Use placeholder format for story generation - these get resolved after the story is generated
-  const selectedCharsText = allCharacters.map(formatCharacterForStory).join('\n');
+  // Use detailed character format with $$id$$ placeholders and full descriptions
+  const selectedCharsText = allCharacters
+    .map((char, index) => `${index + 1}. ${formatCharacterWithDetails(char, char.id === session.childId)}`)
+    .join('\n\n');
   const synopsisText = `${selectedSynopsis.title}: ${selectedSynopsis.summary}`;
+
+  // Get the character rationale from the session (set during character selection)
+  const characterRationale = session.friendsCharacterRationale || 'These characters were selected for an exciting adventure together.';
 
   const promptTemplate = generator?.prompts?.storyGeneration || DEFAULT_STORY_GENERATION_PROMPT;
   const basePrompt = fillPromptTemplate(promptTemplate, {
     ageDescription,
     selectedCharacters: selectedCharsText,
     selectedSynopsis: synopsisText,
+    characterRationale,
   });
-  const fullPrompt = globalPrefix ? `${globalPrefix}\n\n${basePrompt}` : basePrompt;
+  // NOTE: We do NOT prepend globalPrefix here because it contains "new character introduction"
+  // guidance which is not appropriate for the friends flow where characters are pre-selected.
+  const fullPrompt = basePrompt;
 
   // Get model and temperature config
   const { model: modelName, temperature } = getModelConfig(generator, 'storyGeneration');
@@ -1120,7 +1134,7 @@ const friendsFlowInternal = ai.defineFlow(
           });
           session.friendsSelectedSynopsisId = input.selectedOptionId;
 
-          return handleStoryGeneration(firestore, session, child, generator, globalPrefix);
+          return handleStoryGeneration(firestore, session, child, generator);
         }
 
         // Re-fetch synopses
@@ -1135,7 +1149,7 @@ const friendsFlowInternal = ai.defineFlow(
 
       // Story generation phase - should not normally be called directly
       if (currentPhase === 'story_generation') {
-        return handleStoryGeneration(firestore, session, child, generator, globalPrefix);
+        return handleStoryGeneration(firestore, session, child, generator);
       }
 
       // Completed
