@@ -149,22 +149,24 @@ export class StoryPicClient {
 
   /**
    * Get available story output types (picture book, poem, etc.).
-   * Note: This fetches from Firestore client-side in the current PWA.
-   * TODO: Add server endpoint for this.
    */
   async getOutputTypes(): Promise<StoryOutputType[]> {
-    // For now, throw not implemented - will need server endpoint
-    throw new StoryPicApiError('Not implemented - use Firestore directly', 501);
+    const response = await this.get<{ ok: boolean; outputTypes: StoryOutputType[]; error?: string }>('/storyOutputTypes');
+    if (!response.ok) {
+      throw new StoryPicApiError(response.error || 'Failed to get output types', 500);
+    }
+    return response.outputTypes;
   }
 
   /**
    * Get available image styles for storybook illustrations.
-   * Note: This fetches from Firestore client-side in the current PWA.
-   * TODO: Add server endpoint for this.
    */
   async getImageStyles(): Promise<ImageStyle[]> {
-    // For now, throw not implemented - will need server endpoint
-    throw new StoryPicApiError('Not implemented - use Firestore directly', 501);
+    const response = await this.get<{ ok: boolean; imageStyles: ImageStyle[]; error?: string }>('/imageStyles');
+    if (!response.ok) {
+      throw new StoryPicApiError(response.error || 'Failed to get image styles', 500);
+    }
+    return response.imageStyles;
   }
 
   // ============================================================================
@@ -323,15 +325,14 @@ export class StoryPicClient {
 
   /**
    * Get pages for a storybook.
-   * Note: Pages are currently fetched client-side via Firestore.
-   * TODO: Add server endpoint for fetching pages.
+   * Pages are returned sorted by pageNumber, with blank/title pages filtered out.
+   * Placeholders in displayText are resolved server-side.
    */
   async getStorybookPages(
     storyId: string,
     storybookId: string
   ): Promise<StoryOutputPage[]> {
-    // For now, throw not implemented - use Firestore
-    throw new StoryPicApiError('Not implemented - use Firestore', 501);
+    return this.get<StoryOutputPage[]>(`/stories/${storyId}/storybooks/${storybookId}/pages`);
   }
 
   // ============================================================================
@@ -340,32 +341,29 @@ export class StoryPicClient {
 
   /**
    * Get a story by ID.
-   * Note: Stories are currently fetched client-side via Firestore.
-   * TODO: Add server endpoint for fetching stories.
+   * Returns story with resolved placeholders in title, synopsis, and storyText.
    */
   async getStory(storyId: string): Promise<Story> {
-    // For now, throw not implemented - use Firestore
-    throw new StoryPicApiError('Not implemented - use Firestore', 501);
+    return this.get<Story>(`/stories/${storyId}`);
   }
 
   /**
    * Get all stories for a child.
-   * Note: Stories are currently fetched client-side via Firestore.
-   * TODO: Add server endpoint for listing stories.
+   * Stories are returned sorted by createdAt descending (most recent first).
+   * Soft-deleted stories are excluded.
    */
   async getMyStories(childId: string): Promise<Story[]> {
-    // For now, throw not implemented - use Firestore
-    throw new StoryPicApiError('Not implemented - use Firestore', 501);
+    return this.get<Story[]>(`/stories?childId=${childId}`);
   }
 
   /**
-   * Get all storybooks for a child.
-   * Note: Storybooks are currently fetched client-side via Firestore.
-   * TODO: Add server endpoint for listing storybooks.
+   * Get all storybooks for a story.
+   * By default only returns storybooks with imageGeneration.status === 'ready'.
+   * Pass includeAll=true to get all storybooks.
    */
-  async getMyStorybooks(childId: string): Promise<StoryBookOutput[]> {
-    // For now, throw not implemented - use Firestore
-    throw new StoryPicApiError('Not implemented - use Firestore', 501);
+  async getMyStorybooks(storyId: string, includeAll?: boolean): Promise<StoryBookOutput[]> {
+    const query = includeAll ? '?includeAll=true' : '';
+    return this.get<StoryBookOutput[]>(`/stories/${storyId}/storybooks${query}`);
   }
 
   // ============================================================================

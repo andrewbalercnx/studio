@@ -1,65 +1,77 @@
 'use client';
 
-import { use, useEffect, useMemo } from 'react';
+import { use, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
-import { useFirestore } from '@/firebase';
-import { doc, collection, query, orderBy } from 'firebase/firestore';
-import { useDocument, useCollection } from '@/lib/firestore-hooks';
 import { useKidsPWA } from '../../layout';
-import type { Story, StoryOutputPage, StoryBookOutput } from '@/lib/types';
+import { useRequiredApiClient } from '@/contexts/api-client-context';
+import type { StoryOutputPage, StoryBookOutput } from '@/lib/types';
 import { LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ImmersivePlayer } from '@/components/book-reader';
 
+// Extended story type with resolved fields from API
+type StoryWithResolved = {
+  id: string;
+  childId: string;
+  metadata?: { title?: string };
+  titleResolved?: string;
+};
+
 export default function KidsReadBookPage({ params }: { params: Promise<{ bookId: string }> }) {
   const resolvedParams = use(params);
-  const bookId = resolvedParams.bookId;
+  const storybookId = resolvedParams.bookId;
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: userLoading } = useUser();
-  const firestore = useFirestore();
   const { childId, isLocked } = useKidsPWA();
 
-  // Check if this is the new model (storyId in query params)
-  const storyIdParam = searchParams.get('storyId');
-  const isNewModel = !!storyIdParam;
-  const storyId = storyIdParam || bookId; // For new model, storyId is separate; for legacy, bookId IS the storyId
+  // API client for data fetching
+  const apiClient = useRequiredApiClient();
 
-  // Load story
-  const storyRef = useMemo(
-    () => (firestore ? doc(firestore, 'stories', storyId) : null),
-    [firestore, storyId]
-  );
-  const { data: story, loading: storyLoading } = useDocument<Story>(storyRef);
+  // storyId is required in query params
+  const storyId = searchParams.get('storyId');
 
-  // Load storybook (for new model - to get title override)
-  const storybookRef = useMemo(
-    () => (firestore && isNewModel ? doc(firestore, 'stories', storyId, 'storybooks', bookId) : null),
-    [firestore, isNewModel, storyId, bookId]
-  );
-  const { data: storybook, loading: storybookLoading } = useDocument<StoryBookOutput>(storybookRef);
+  // State
+  const [story, setStory] = useState<StoryWithResolved | null>(null);
+  const [storybook, setStorybook] = useState<StoryBookOutput | null>(null);
+  const [pages, setPages] = useState<StoryOutputPage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load pages - different paths for legacy vs new model
-  const pagesQuery = useMemo(() => {
-    if (!firestore || !bookId) return null;
+  // Load data via API
+  useEffect(() => {
+    if (!apiClient || !storyId || !storybookId) return;
 
-    if (isNewModel && storyId) {
-      // New model: pages are in stories/{storyId}/storybooks/{storybookId}/pages
-      return query(
-        collection(firestore, 'stories', storyId, 'storybooks', bookId, 'pages'),
-        orderBy('pageNumber', 'asc')
-      );
-    } else {
-      // Legacy model: try stories/{bookId}/pages first (wizard flow)
-      return query(
-        collection(firestore, 'stories', bookId, 'pages'),
-        orderBy('pageNumber', 'asc')
-      );
-    }
-  }, [firestore, isNewModel, storyId, bookId]);
-  const { data: pages, loading: pagesLoading } = useCollection<StoryOutputPage>(pagesQuery);
+    setLoading(true);
+    setError(null);
+
+    const loadData = async () => {
+      try {
+        // Load story, pages, and storybook in parallel
+        const [storyData, pagesData, storybooks] = await Promise.all([
+          apiClient.getStory(storyId),
+          apiClient.getStorybookPages(storyId, storybookId),
+          apiClient.getMyStorybooks(storyId, true),
+        ]);
+
+        setStory(storyData as StoryWithResolved);
+        setPages(pagesData);
+
+        // Find the storybook for title override
+        const sb = storybooks.find((s) => s.id === storybookId);
+        if (sb) setStorybook(sb);
+      } catch (err: any) {
+        console.error('[KidsReadBook] Error loading data:', err);
+        setError(err.message || 'Failed to load book');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [apiClient, storyId, storybookId]);
 
   // Redirect if not set up
   useEffect(() => {
@@ -68,9 +80,20 @@ export default function KidsReadBookPage({ params }: { params: Promise<{ bookId:
     }
   }, [userLoading, user, isLocked, childId, router]);
 
+  // Missing storyId parameter
+  if (!storyId) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-amber-50 to-orange-50 gap-4">
+        <p className="text-amber-800">Missing story information.</p>
+        <Button asChild>
+          <Link href="/kids/books">Go to My Books</Link>
+        </Button>
+      </div>
+    );
+  }
+
   // Loading state
-  const isLoading = userLoading || storyLoading || pagesLoading || (isNewModel && storybookLoading);
-  if (isLoading) {
+  if (userLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
         <LoaderCircle className="h-12 w-12 animate-spin text-amber-500" />
@@ -78,11 +101,23 @@ export default function KidsReadBookPage({ params }: { params: Promise<{ bookId:
     );
   }
 
-  // Get title from storybook (new model) or story (legacy)
-  const bookTitle = isNewModel ? (storybook?.title || story?.metadata?.title) : story?.metadata?.title;
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-amber-50 to-orange-50 gap-4">
+        <p className="text-amber-800">{error}</p>
+        <Button asChild>
+          <Link href="/kids/books">Go to My Books</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  // Get title from storybook or story
+  const bookTitle = storybook?.title || story?.titleResolved || story?.metadata?.title;
 
   // No story or pages
-  if (!story || !pages || pages.length === 0) {
+  if (!story || pages.length === 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-amber-50 to-orange-50 gap-4">
         <p className="text-amber-800">Book not found or still being created.</p>

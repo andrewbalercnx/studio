@@ -1,14 +1,27 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
-import { useFirestore } from '@/firebase';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { useCollection } from '@/lib/firestore-hooks';
 import { useKidsPWA } from '../layout';
-import type { Story, StoryBookOutput, ImageStyle, StoryOutputType } from '@/lib/types';
+import { useRequiredApiClient } from '@/contexts/api-client-context';
 import { LoaderCircle, BookOpen, ArrowLeft, Moon, Clock, Play, Sparkles } from 'lucide-react';
+
+// Use inline types to avoid conflicts between local types and shared-types package
+type StoryOutputType = { id: string; childFacingLabel?: string; [key: string]: any };
+type ImageStyle = { id: string; title?: string; [key: string]: any };
+type Story = { id?: string; storySessionId?: string; metadata?: { title?: string }; [key: string]: any };
+type StoryBookOutput = {
+  id?: string;
+  title?: string;
+  storyOutputTypeId: string;
+  imageStyleId: string;
+  pageGeneration?: { status?: string };
+  imageGeneration?: { status?: string };
+  createdAt?: any;
+  thumbnailUrl?: string;
+  [key: string]: any;
+};
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,7 +33,17 @@ import Image from 'next/image';
 // Format date in a kid-friendly way
 function formatDate(timestamp: any): string {
   if (!timestamp) return '';
+  // Handle Firestore timestamp format from API (seconds)
+  if (timestamp.seconds || timestamp._seconds) {
+    const seconds = timestamp.seconds || timestamp._seconds;
+    const date = new Date(seconds * 1000);
+    return formatDateRelative(date);
+  }
   const date = typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date(timestamp);
+  return formatDateRelative(date);
+}
+
+function formatDateRelative(date: Date): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -40,17 +63,22 @@ type CompletedBook = {
   imageStyleId: string;
   createdAt: Date;
   imageGenerationStatus?: string;
-  isNewModel: boolean;
 };
 
 export default function KidsBooksPage() {
   const router = useRouter();
-  const { user, idTokenResult, loading: userLoading } = useUser();
-  const firestore = useFirestore();
+  const { user, loading: userLoading } = useUser();
   const { childId, childProfile, isLocked, isLoading: kidsLoading } = useKidsPWA();
 
+  // API client for data fetching
+  const apiClient = useRequiredApiClient();
+
+  // State
   const [completedBooks, setCompletedBooks] = useState<CompletedBook[]>([]);
-  const [booksLoading, setBooksLoading] = useState(true);
+  const [outputTypes, setOutputTypes] = useState<StoryOutputType[]>([]);
+  const [imageStyles, setImageStyles] = useState<ImageStyle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Redirect if not set up
   useEffect(() => {
@@ -65,133 +93,85 @@ export default function KidsBooksPage() {
     }
   }, [kidsLoading, userLoading, user, isLocked, childId, router]);
 
-  // Query stories for this child (only when authenticated and auth token is ready)
-  const storiesQuery = useMemo(() => {
-    if (!firestore || !childId || !user || userLoading || !idTokenResult) return null;
-    return query(
-      collection(firestore, 'stories'),
-      where('childId', '==', childId)
-    );
-  }, [firestore, childId, user, userLoading, idTokenResult]);
-
-  const { data: stories, loading: storiesLoading } = useCollection<Story>(storiesQuery);
-
-  // Load output types and image styles for display
-  const outputTypesQuery = useMemo(() => {
-    if (!firestore || !user || userLoading || !idTokenResult) return null;
-    return query(collection(firestore, 'storyOutputTypes'));
-  }, [firestore, user, userLoading, idTokenResult]);
-  const { data: outputTypes } = useCollection<StoryOutputType>(outputTypesQuery);
-
-  const imageStylesQuery = useMemo(() => {
-    if (!firestore || !user || userLoading || !idTokenResult) return null;
-    return query(collection(firestore, 'imageStyles'));
-  }, [firestore, user, userLoading, idTokenResult]);
-  const { data: imageStyles } = useCollection<ImageStyle>(imageStylesQuery);
-
-  // Load completed storybooks from subcollections
+  // Load data via API
   useEffect(() => {
-    const loadCompletedBooks = async () => {
-      if (!firestore || !stories || storiesLoading) return;
+    if (!apiClient || !childId) return;
 
-      setBooksLoading(true);
-      const books: CompletedBook[] = [];
+    setLoading(true);
+    setError(null);
 
-      // Helper to get cover image from pages collection
-      const getCoverImage = async (pagesPath: string): Promise<string | undefined> => {
-        try {
-          const pagesRef = collection(firestore, pagesPath);
-          const pagesQuery = query(pagesRef, where('pageNumber', '==', 0), orderBy('pageNumber', 'asc'));
-          const pagesSnap = await getDocs(pagesQuery);
-          if (!pagesSnap.empty) {
-            const coverPage = pagesSnap.docs[0].data();
-            if (coverPage.imageUrl && coverPage.imageStatus === 'ready') {
-              return coverPage.imageUrl;
+    const loadData = async () => {
+      try {
+        // Fetch output types, image styles, and stories in parallel
+        const [outputTypesData, imageStylesData, stories] = await Promise.all([
+          apiClient.getOutputTypes(),
+          apiClient.getImageStyles(),
+          apiClient.getMyStories(childId),
+        ]);
+
+        setOutputTypes(outputTypesData);
+        setImageStyles(imageStylesData);
+
+        // For each story, fetch storybooks
+        const books: CompletedBook[] = [];
+
+        await Promise.all(
+          stories.map(async (story: Story) => {
+            const storyId = story.id || (story as any).storySessionId;
+            if (!storyId) return;
+
+            try {
+              // includeAll=true to get storybooks in any status (for showing progress)
+              const storybooks = await apiClient.getMyStorybooks(storyId, true);
+
+              for (const sb of storybooks as StoryBookOutput[]) {
+                // Show if pages are ready (regardless of image status)
+                const pageStatus = sb.pageGeneration?.status;
+                const imageStatus = sb.imageGeneration?.status;
+
+                if (pageStatus === 'ready' || imageStatus === 'ready') {
+                  books.push({
+                    storybookId: sb.id!,
+                    storyId: storyId,
+                    title: sb.title || story.metadata?.title,
+                    thumbnailUrl: (sb as any).thumbnailUrl,
+                    storyOutputTypeId: sb.storyOutputTypeId,
+                    imageStyleId: sb.imageStyleId,
+                    createdAt: sb.createdAt
+                      ? new Date(((sb.createdAt as any).seconds || (sb.createdAt as any)._seconds || 0) * 1000)
+                      : new Date(),
+                    imageGenerationStatus: imageStatus || 'pending',
+                  });
+                }
+              }
+            } catch (err) {
+              console.error('[KidsBooks] Error loading storybooks for story:', storyId, err);
             }
-          }
-        } catch (err) {
-          // Silently fail - cover image is optional
-        }
-        return undefined;
-      };
+          })
+        );
 
-      // First, check legacy model - show if pages are ready (regardless of image status)
-      for (const story of stories) {
-        // Skip soft-deleted stories
-        if (story.deletedAt) continue;
-
-        if (story.pageGeneration?.status === 'ready' || story.imageGeneration?.status === 'ready') {
-          const storyId = story.id || story.storySessionId;
-          // Legacy book - load cover from pages (try both paths)
-          let thumbnailUrl = await getCoverImage(`stories/${storyId}/outputs/storybook/pages`);
-          if (!thumbnailUrl) {
-            thumbnailUrl = await getCoverImage(`stories/${storyId}/pages`);
-          }
-
-          books.push({
-            storybookId: storyId,
-            storyId: storyId,
-            title: story.metadata?.title,
-            thumbnailUrl,
-            storyOutputTypeId: (typeof story.metadata?.storyOutputTypeId === 'string' ? story.metadata.storyOutputTypeId : '') || '',
-            imageStyleId: story.selectedImageStyleId || '',
-            createdAt: story.updatedAt?.toDate?.() || story.createdAt?.toDate?.() || new Date(),
-            imageGenerationStatus: story.imageGeneration?.status || 'pending',
-            isNewModel: false,
-          });
-        }
-
-        // Check new model (storybooks subcollection)
-        try {
-          const storyId = story.id || story.storySessionId;
-          const storybooksRef = collection(firestore, 'stories', storyId, 'storybooks');
-          const storybooksSnap = await getDocs(storybooksRef);
-
-          for (const sbDoc of storybooksSnap.docs) {
-            const sb = sbDoc.data() as StoryBookOutput;
-            // Skip soft-deleted storybooks
-            if (sb.deletedAt) continue;
-
-            // Show if pages are ready (regardless of image status)
-            if (sb.pageGeneration?.status === 'ready' || sb.imageGeneration?.status === 'ready') {
-              // Load cover from new model pages path
-              const thumbnailUrl = await getCoverImage(`stories/${storyId}/storybooks/${sbDoc.id}/pages`);
-
-              books.push({
-                storybookId: sbDoc.id,
-                storyId: storyId,
-                title: sb.title || story.metadata?.title,
-                thumbnailUrl,
-                storyOutputTypeId: sb.storyOutputTypeId,
-                imageStyleId: sb.imageStyleId,
-                createdAt: sb.createdAt?.toDate?.() || new Date(),
-                imageGenerationStatus: sb.imageGeneration?.status || 'pending',
-                isNewModel: true,
-              });
-            }
-          }
-        } catch (err) {
-          console.error('Error loading storybooks for story:', story.id, err);
-        }
+        // Sort by created date, most recent first
+        books.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        setCompletedBooks(books);
+      } catch (err: any) {
+        console.error('[KidsBooks] Error loading data:', err);
+        setError(err.message || 'Failed to load books');
+      } finally {
+        setLoading(false);
       }
-
-      // Sort by created date, most recent first
-      books.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      setCompletedBooks(books);
-      setBooksLoading(false);
     };
 
-    loadCompletedBooks();
-  }, [firestore, stories, storiesLoading]);
+    loadData();
+  }, [apiClient, childId]);
 
   // Helper to get output type label
   const getOutputTypeLabel = (id: string) => {
-    return outputTypes?.find((t) => t.id === id)?.childFacingLabel || 'Picture Book';
+    return outputTypes.find((t) => t.id === id)?.childFacingLabel || 'Picture Book';
   };
 
   // Helper to get image style title
   const getImageStyleTitle = (id: string) => {
-    return imageStyles?.find((s) => s.id === id)?.title || 'Custom';
+    return imageStyles.find((s) => s.id === id)?.title || 'Custom';
   };
 
   // Loading state
@@ -212,7 +192,15 @@ export default function KidsBooksPage() {
     );
   }
 
-  const isLoading = storiesLoading || booksLoading;
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-amber-50 to-orange-50 p-4">
+        <p className="text-amber-800 mb-4">{error}</p>
+        <Button onClick={() => window.location.reload()}>Try Again</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-amber-50 to-orange-50">
@@ -234,7 +222,7 @@ export default function KidsBooksPage() {
         <div className="flex-1">
           <h1 className="text-xl font-bold text-amber-900">My Books</h1>
           <p className="text-sm text-amber-700">
-            {isLoading ? 'Loading...' : `${completedBooks.length} books`}
+            {loading ? 'Loading...' : `${completedBooks.length} books`}
           </p>
         </div>
       </header>
@@ -242,7 +230,7 @@ export default function KidsBooksPage() {
       {/* Books list */}
       <main className="flex-1 px-4 py-4">
         <div className="max-w-md mx-auto space-y-4">
-          {isLoading ? (
+          {loading ? (
             <div className="flex items-center justify-center py-16">
               <LoaderCircle className="h-8 w-8 animate-spin text-amber-500" />
             </div>
@@ -309,10 +297,8 @@ function BookCard({
   const isRateLimited = book.imageGenerationStatus === 'rate_limited';
   const isPending = book.imageGenerationStatus === 'idle' || book.imageGenerationStatus === 'pending';
 
-  // Build the read URL based on model type
-  const readUrl = book.isNewModel
-    ? `/kids/read/${book.storybookId}?storyId=${book.storyId}`
-    : `/kids/read/${book.storybookId}`;
+  // Build the read URL (new model: storyId in query params)
+  const readUrl = `/kids/read/${book.storybookId}?storyId=${book.storyId}`;
 
   return (
     <Link href={readUrl} className="block">

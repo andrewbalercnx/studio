@@ -1,19 +1,33 @@
 'use client';
 
-import { use, useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { use, useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
-import { useDocument } from '@/lib/firestore-hooks';
+import { doc, updateDoc } from 'firebase/firestore';
 import { useKidsPWA } from '../../../layout';
-import type { Story, ChildProfile, Character } from '@/lib/types';
-import { useResolvePlaceholdersMultiple } from '@/hooks/use-resolve-placeholders';
+import { useRequiredApiClient } from '@/contexts/api-client-context';
+import type { Story } from '@/lib/types';
 import { LoaderCircle, ArrowLeft, Volume2, VolumeX, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { ChildAvatarAnimation } from '@/components/child/child-avatar-animation';
+
+// Actor type returned by the API (different from the base Story.actors which is string[])
+type Actor = {
+  id: string;
+  displayName: string;
+  avatarUrl?: string;
+  type: 'child' | 'character';
+};
+
+// Extended story type with resolved fields from API
+type StoryWithResolved = Omit<Story, 'actors'> & {
+  titleResolved?: string;
+  synopsisResolved?: string;
+  storyTextResolved?: string;
+  actors?: Actor[];
+};
 
 export default function KidsStoryReadPage({
   params,
@@ -27,63 +41,36 @@ export default function KidsStoryReadPage({
   const firestore = useFirestore();
   const { childId, childProfile, isLocked } = useKidsPWA();
 
-  // State for audio playback
+  // API client for data fetching
+  const apiClient = useRequiredApiClient();
+
+  // State
+  const [story, setStory] = useState<StoryWithResolved | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isReading, setIsReading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Load the story document
-  const storyRef = useMemo(
-    () => (firestore && storyId && user ? doc(firestore, 'stories', storyId) : null),
-    [firestore, storyId, user]
-  );
-  const { data: story, loading: storyLoading } = useDocument<Story>(storyRef);
-
-  // Load actor profiles for avatars
-  const [actorProfiles, setActorProfiles] = useState<Map<string, { displayName: string; avatarUrl?: string }>>(new Map());
-
+  // Load story via API
   useEffect(() => {
-    if (!firestore || !story?.actors || story.actors.length === 0) return;
+    if (!apiClient || !storyId) return;
 
-    const loadActors = async () => {
-      const profiles = new Map<string, { displayName: string; avatarUrl?: string }>();
+    setLoading(true);
+    setError(null);
 
-      for (const actorId of story.actors || []) {
-        if (!actorId) continue;
-        try {
-          // Try children collection first
-          const childDocRef = doc(firestore, 'children', actorId);
-          const childDocSnap = await getDoc(childDocRef);
-          if (childDocSnap.exists()) {
-            const data = childDocSnap.data() as ChildProfile;
-            profiles.set(actorId, { displayName: data.displayName, avatarUrl: data.avatarUrl });
-            continue;
-          }
-          // Try characters collection
-          const charDocRef = doc(firestore, 'characters', actorId);
-          const charDocSnap = await getDoc(charDocRef);
-          if (charDocSnap.exists()) {
-            const data = charDocSnap.data() as Character;
-            profiles.set(actorId, { displayName: data.displayName, avatarUrl: data.avatarUrl });
-          }
-        } catch (e) {
-          console.warn('[KidsStoryRead] Error loading actor:', actorId, e);
-        }
-      }
-
-      setActorProfiles(profiles);
-    };
-
-    loadActors();
-  }, [firestore, story?.actors]);
-
-  // Resolve placeholders in story text and title
-  const textsToResolve = useMemo(
-    () => [story?.storyText, story?.metadata?.title],
-    [story?.storyText, story?.metadata?.title]
-  );
-  const { resolvedTexts, isResolving: isResolvingText } = useResolvePlaceholdersMultiple(textsToResolve);
-  const resolvedStoryText = resolvedTexts[0];
-  const resolvedTitle = resolvedTexts[1];
+    apiClient
+      .getStory(storyId)
+      .then((data) => {
+        setStory(data as StoryWithResolved);
+      })
+      .catch((err) => {
+        console.error('[KidsStoryRead] Error loading story:', err);
+        setError(err.message || 'Failed to load story');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [apiClient, storyId]);
 
   // Stop current audio playback
   const stopPlayback = useCallback(() => {
@@ -132,7 +119,11 @@ export default function KidsStoryReadPage({
       return;
     }
 
-    if (!story || !resolvedStoryText) return;
+    if (!story) return;
+
+    // Use resolved text from server
+    const textToRead = story.storyTextResolved || story.storyText || '';
+    if (!textToRead) return;
 
     persistAutoReadAloud(true);
 
@@ -149,32 +140,32 @@ export default function KidsStoryReadPage({
       audio.onerror = () => {
         console.warn('[KidsStoryRead] AI audio failed, using browser TTS');
         audioRef.current = null;
-        playBrowserTTS(resolvedStoryText);
+        playBrowserTTS(textToRead);
       };
 
       setIsReading(true);
-      audio.play().catch(() => playBrowserTTS(resolvedStoryText));
+      audio.play().catch(() => playBrowserTTS(textToRead));
     } else {
-      playBrowserTTS(resolvedStoryText);
+      playBrowserTTS(textToRead);
     }
-  }, [isReading, story, resolvedStoryText, stopPlayback, playBrowserTTS, persistAutoReadAloud]);
+  }, [isReading, story, stopPlayback, playBrowserTTS, persistAutoReadAloud]);
 
   // Auto-start reading if preference enabled
   const hasAutoStartedRef = useRef(false);
   useEffect(() => {
     if (
       childProfile?.autoReadAloud &&
-      resolvedStoryText &&
       story &&
+      (story.storyTextResolved || story.storyText) &&
       !isReading &&
-      !isResolvingText &&
+      !loading &&
       !hasAutoStartedRef.current
     ) {
       hasAutoStartedRef.current = true;
       const timer = setTimeout(() => handleReadAloud(), 500);
       return () => clearTimeout(timer);
     }
-  }, [childProfile?.autoReadAloud, resolvedStoryText, story, isReading, isResolvingText, handleReadAloud]);
+  }, [childProfile?.autoReadAloud, story, isReading, loading, handleReadAloud]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -195,10 +186,27 @@ export default function KidsStoryReadPage({
   }, [userLoading, user, isLocked, childId, router]);
 
   // Loading state
-  if (userLoading || storyLoading) {
+  if (userLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-amber-50 to-orange-50">
         <LoaderCircle className="h-12 w-12 animate-spin text-amber-500" />
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-amber-50 to-orange-50 p-4">
+        <div className="text-5xl mb-4">😕</div>
+        <h2 className="text-xl font-semibold text-amber-900 mb-2">Something went wrong</h2>
+        <p className="text-amber-700 text-center mb-4">{error}</p>
+        <Button asChild className="bg-amber-500 hover:bg-amber-600">
+          <Link href="/kids/stories">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Stories
+          </Link>
+        </Button>
       </div>
     );
   }
@@ -220,8 +228,10 @@ export default function KidsStoryReadPage({
     );
   }
 
-  const displayTitle = resolvedTitle || story.metadata?.title || 'Your Story';
-  const actorIds = story.actors || [];
+  // Use resolved text from server (already resolved server-side)
+  const displayTitle = story.titleResolved || story.metadata?.title || 'Your Story';
+  const displayText = story.storyTextResolved || story.storyText || '';
+  const actors = story.actors || [];
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-amber-50 to-orange-50">
@@ -234,22 +244,19 @@ export default function KidsStoryReadPage({
         </Link>
 
         <div className="flex items-center gap-2">
-          {/* Actor avatars */}
-          {actorIds.length > 0 && (
+          {/* Actor avatars from server response */}
+          {actors.length > 0 && (
             <div className="flex -space-x-2">
-              {actorIds.slice(0, 3).map((actorId) => {
-                const profile = actorProfiles.get(actorId);
-                return (
-                  <Avatar key={actorId} className="h-8 w-8 border-2 border-white">
-                    {profile?.avatarUrl ? (
-                      <AvatarImage src={profile.avatarUrl} alt={profile.displayName} />
-                    ) : null}
-                    <AvatarFallback className="bg-amber-200 text-amber-800 text-xs">
-                      {profile?.displayName?.charAt(0) || '?'}
-                    </AvatarFallback>
-                  </Avatar>
-                );
-              })}
+              {actors.slice(0, 3).map((actor) => (
+                <Avatar key={actor.id} className="h-8 w-8 border-2 border-white">
+                  {actor.avatarUrl ? (
+                    <AvatarImage src={actor.avatarUrl} alt={actor.displayName} />
+                  ) : null}
+                  <AvatarFallback className="bg-amber-200 text-amber-800 text-xs">
+                    {actor.displayName?.charAt(0) || '?'}
+                  </AvatarFallback>
+                </Avatar>
+              ))}
             </div>
           )}
         </div>
@@ -259,7 +266,6 @@ export default function KidsStoryReadPage({
           variant={isReading ? 'default' : 'secondary'}
           size="sm"
           onClick={handleReadAloud}
-          disabled={isResolvingText}
           className={isReading ? 'bg-amber-500 hover:bg-amber-600' : ''}
         >
           {isReading ? (
@@ -294,20 +300,14 @@ export default function KidsStoryReadPage({
         {/* Title */}
         <h1 className="text-2xl font-bold text-amber-900 text-center mb-6">{displayTitle}</h1>
 
-        {/* Story text */}
-        {isResolvingText ? (
-          <div className="flex items-center justify-center py-8">
-            <LoaderCircle className="h-6 w-6 animate-spin text-amber-500" />
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {resolvedStoryText?.split('\n\n').map((paragraph, index) => (
-              <p key={index} className="text-lg text-gray-800 leading-relaxed">
-                {paragraph}
-              </p>
-            ))}
-          </div>
-        )}
+        {/* Story text (already resolved from server) */}
+        <div className="space-y-4">
+          {displayText.split('\n\n').map((paragraph, index) => (
+            <p key={index} className="text-lg text-gray-800 leading-relaxed">
+              {paragraph}
+            </p>
+          ))}
+        </div>
 
         {/* Create book CTA */}
         {story.storyText && !story.imageGeneration?.status && (

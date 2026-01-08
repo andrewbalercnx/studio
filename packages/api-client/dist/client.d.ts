@@ -41,14 +41,10 @@ export declare class StoryPicClient {
     getGenerators(): Promise<StoryGenerator[]>;
     /**
      * Get available story output types (picture book, poem, etc.).
-     * Note: This fetches from Firestore client-side in the current PWA.
-     * TODO: Add server endpoint for this.
      */
     getOutputTypes(): Promise<StoryOutputType[]>;
     /**
      * Get available image styles for storybook illustrations.
-     * Note: This fetches from Firestore client-side in the current PWA.
-     * TODO: Add server endpoint for this.
      */
     getImageStyles(): Promise<ImageStyle[]>;
     /**
@@ -107,28 +103,27 @@ export declare class StoryPicClient {
     }>;
     /**
      * Get pages for a storybook.
-     * Note: Pages are currently fetched client-side via Firestore.
-     * TODO: Add server endpoint for fetching pages.
+     * Pages are returned sorted by pageNumber, with blank/title pages filtered out.
+     * Placeholders in displayText are resolved server-side.
      */
     getStorybookPages(storyId: string, storybookId: string): Promise<StoryOutputPage[]>;
     /**
      * Get a story by ID.
-     * Note: Stories are currently fetched client-side via Firestore.
-     * TODO: Add server endpoint for fetching stories.
+     * Returns story with resolved placeholders in title, synopsis, and storyText.
      */
     getStory(storyId: string): Promise<Story>;
     /**
      * Get all stories for a child.
-     * Note: Stories are currently fetched client-side via Firestore.
-     * TODO: Add server endpoint for listing stories.
+     * Stories are returned sorted by createdAt descending (most recent first).
+     * Soft-deleted stories are excluded.
      */
     getMyStories(childId: string): Promise<Story[]>;
     /**
-     * Get all storybooks for a child.
-     * Note: Storybooks are currently fetched client-side via Firestore.
-     * TODO: Add server endpoint for listing storybooks.
+     * Get all storybooks for a story.
+     * By default only returns storybooks with imageGeneration.status === 'ready'.
+     * Pass includeAll=true to get all storybooks.
      */
-    getMyStorybooks(childId: string): Promise<StoryBookOutput[]>;
+    getMyStorybooks(storyId: string, includeAll?: boolean): Promise<StoryBookOutput[]>;
     /**
      * Generate text-to-speech audio.
      * Returns a URL to the audio file.

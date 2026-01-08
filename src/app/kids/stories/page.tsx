@@ -1,53 +1,76 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
-import { useFirestore } from '@/firebase';
-import { collection, query, where, doc, getDoc } from 'firebase/firestore';
-import { useCollection } from '@/lib/firestore-hooks';
 import { useKidsPWA } from '../layout';
-import type { Story, ChildProfile, Character } from '@/lib/types';
+import { useRequiredApiClient } from '@/contexts/api-client-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoaderCircle, ArrowLeft, BookOpen, Sparkles, CheckCircle2, AlertCircle, Pencil, Play, PlusCircle, Moon, Volume2, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { useResolvePlaceholders } from '@/hooks/use-resolve-placeholders';
+
+// Actor type returned by the API
+type Actor = {
+  id: string;
+  displayName: string;
+  avatarUrl?: string;
+  type: 'child' | 'character';
+};
+
+// Story type with resolved fields from API
+type StoryWithResolved = {
+  id: string;
+  storySessionId?: string;
+  childId: string;
+  metadata?: { title?: string };
+  synopsis?: string;
+  storyText?: string;
+  actorAvatarUrl?: string;
+  pageGeneration?: { status?: string };
+  imageGeneration?: { status?: string };
+  createdAt?: { seconds?: number; _seconds?: number };
+  // Resolved fields from API
+  titleResolved?: string;
+  synopsisResolved?: string;
+  actors?: Actor[];
+};
 
 export default function KidsStoriesPage() {
   const router = useRouter();
   const { user, loading: userLoading } = useUser();
-  const firestore = useFirestore();
   const { childId, childProfile, isLocked } = useKidsPWA();
 
-  // Load stories for this child
-  // Note: We don't use orderBy to avoid requiring a composite index - sort client-side instead
-  const storiesQuery = useMemo(() => {
-    if (!firestore || !childId || !user) return null;
-    return query(
-      collection(firestore, 'stories'),
-      where('childId', '==', childId)
-    );
-  }, [firestore, childId, user]);
+  // API client for data fetching
+  const apiClient = useRequiredApiClient();
 
-  const { data: storiesRaw, loading: storiesLoading } = useCollection<Story>(storiesQuery);
+  // State
+  const [stories, setStories] = useState<StoryWithResolved[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Sort stories client-side
-  const sortedStories = useMemo(() => {
-    if (!storiesRaw) return [];
+  // Load stories via API
+  useEffect(() => {
+    if (!apiClient || !childId) return;
 
-    // Filter out soft-deleted stories (defense in depth - rules should block these anyway)
-    const nonDeleted = storiesRaw.filter((s) => !s.deletedAt);
+    setLoading(true);
+    setError(null);
 
-    // Sort by createdAt descending (newest first)
-    return [...nonDeleted].sort((a, b) => {
-      const aTime = a.createdAt?.toDate?.()?.getTime() ?? 0;
-      const bTime = b.createdAt?.toDate?.()?.getTime() ?? 0;
-      return bTime - aTime;
-    });
-  }, [storiesRaw]);
+    apiClient
+      .getMyStories(childId)
+      .then((data) => {
+        setStories(data as StoryWithResolved[]);
+      })
+      .catch((err) => {
+        console.error('[KidsStories] Error loading stories:', err);
+        setError(err.message || 'Failed to load stories');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [apiClient, childId]);
 
   // Redirect if not set up
   useEffect(() => {
@@ -57,10 +80,20 @@ export default function KidsStoriesPage() {
   }, [userLoading, user, isLocked, childId, router]);
 
   // Loading state
-  if (userLoading || storiesLoading) {
+  if (userLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-amber-50 to-orange-50">
         <LoaderCircle className="h-12 w-12 animate-spin text-amber-500" />
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-amber-50 to-orange-50 p-4">
+        <p className="text-amber-800 mb-4">{error}</p>
+        <Button onClick={() => window.location.reload()}>Try Again</Button>
       </div>
     );
   }
@@ -93,7 +126,7 @@ export default function KidsStoriesPage() {
       {/* Stories list */}
       <main className="flex-1 px-4 py-4">
         <div className="max-w-md mx-auto space-y-3">
-          {sortedStories.length === 0 ? (
+          {stories.length === 0 ? (
             <div className="text-center py-12 space-y-4">
               <div className="w-20 h-20 mx-auto rounded-full bg-amber-100 flex items-center justify-center">
                 <BookOpen className="h-10 w-10 text-amber-400" />
@@ -112,7 +145,7 @@ export default function KidsStoriesPage() {
               </Link>
             </div>
           ) : (
-            sortedStories.map((story) => (
+            stories.map((story) => (
               <StoryCard key={story.id || story.storySessionId} story={story} />
             ))
           )}
@@ -120,7 +153,7 @@ export default function KidsStoriesPage() {
       </main>
 
       {/* Floating create button */}
-      {sortedStories.length > 0 && (
+      {stories.length > 0 && (
         <div className="fixed bottom-6 right-6">
           <Link href="/kids/create">
             <Button
@@ -137,10 +170,9 @@ export default function KidsStoriesPage() {
 }
 
 // Story card component with expanded functionality
-function StoryCard({ story }: { story: Story }) {
-  const firestore = useFirestore();
+function StoryCard({ story }: { story: StoryWithResolved }) {
   const storyId = story.id || story.storySessionId;
-  const title = story.metadata?.title || 'Untitled Story';
+  const title = story.titleResolved || story.metadata?.title || 'Untitled Story';
   const pageStatus = story.pageGeneration?.status ?? 'idle';
   const imageStatus = story.imageGeneration?.status ?? 'idle';
   const hasBook = imageStatus === 'ready' || pageStatus === 'ready';
@@ -150,46 +182,11 @@ function StoryCard({ story }: { story: Story }) {
   const canCreateBook = !hasBook && !isGenerating && !isRateLimited && !hasError;
   const hasStoryText = !!story.storyText;
 
-  // Resolve synopsis placeholders
-  const { resolvedText: resolvedSynopsis } = useResolvePlaceholders(story.synopsis || null);
+  // Use resolved synopsis from API
+  const resolvedSynopsis = story.synopsisResolved;
 
-  // Load actor profiles for avatars
-  const [actorProfiles, setActorProfiles] = useState<Map<string, { displayName: string; avatarUrl?: string }>>(new Map());
-
-  useEffect(() => {
-    if (!firestore || !story.actors || story.actors.length === 0) return;
-
-    const loadActors = async () => {
-      const profiles = new Map<string, { displayName: string; avatarUrl?: string }>();
-
-      for (const actorId of story.actors || []) {
-        if (!actorId) continue;
-        try {
-          // Try children collection first
-          const childDocRef = doc(firestore, 'children', actorId);
-          const childDocSnap = await getDoc(childDocRef);
-          if (childDocSnap.exists()) {
-            const data = childDocSnap.data() as ChildProfile;
-            profiles.set(actorId, { displayName: data.displayName, avatarUrl: data.avatarUrl });
-            continue;
-          }
-          // Try characters collection
-          const charDocRef = doc(firestore, 'characters', actorId);
-          const charDocSnap = await getDoc(charDocRef);
-          if (charDocSnap.exists()) {
-            const data = charDocSnap.data() as Character;
-            profiles.set(actorId, { displayName: data.displayName, avatarUrl: data.avatarUrl });
-          }
-        } catch (e) {
-          console.warn('[StoryCard] Error loading actor:', actorId, e);
-        }
-      }
-
-      setActorProfiles(profiles);
-    };
-
-    loadActors();
-  }, [firestore, story.actors]);
+  // Actors are already resolved from API
+  const actors = story.actors || [];
 
   // Determine the status display
   const getStatusInfo = () => {
@@ -215,7 +212,6 @@ function StoryCard({ story }: { story: Story }) {
   };
 
   const status = getStatusInfo();
-  const actorIds = story.actors || [];
 
   return (
     <Card
@@ -263,24 +259,21 @@ function StoryCard({ story }: { story: Story }) {
             <div className="flex items-start justify-between gap-2">
               <h3 className="font-semibold text-gray-900 truncate flex-1">{title}</h3>
               {/* Actor avatars (small, stacked) */}
-              {actorIds.length > 0 && (
+              {actors.length > 0 && (
                 <div className="flex -space-x-2 flex-shrink-0">
-                  {actorIds.slice(0, 3).map((actorId) => {
-                    const profile = actorProfiles.get(actorId);
-                    return (
-                      <Avatar key={actorId} className="h-6 w-6 border-2 border-white">
-                        {profile?.avatarUrl ? (
-                          <AvatarImage src={profile.avatarUrl} alt={profile.displayName} />
-                        ) : null}
-                        <AvatarFallback className="bg-amber-200 text-amber-800 text-xs">
-                          {profile?.displayName?.charAt(0) || '?'}
-                        </AvatarFallback>
-                      </Avatar>
-                    );
-                  })}
-                  {actorIds.length > 3 && (
+                  {actors.slice(0, 3).map((actor) => (
+                    <Avatar key={actor.id} className="h-6 w-6 border-2 border-white">
+                      {actor.avatarUrl ? (
+                        <AvatarImage src={actor.avatarUrl} alt={actor.displayName} />
+                      ) : null}
+                      <AvatarFallback className="bg-amber-200 text-amber-800 text-xs">
+                        {actor.displayName?.charAt(0) || '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                  ))}
+                  {actors.length > 3 && (
                     <div className="h-6 w-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs text-gray-600">
-                      +{actorIds.length - 3}
+                      +{actors.length - 3}
                     </div>
                   )}
                 </div>

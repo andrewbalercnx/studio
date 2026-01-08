@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-08 (documented server-side filtering for storybooks and pages APIs)
+> **Last Updated**: 2026-01-08 (added storyOutputTypes, imageStyles, and stories list endpoints; enhanced stories API with resolved placeholders)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -59,6 +59,14 @@ The `StoryPicClient` provides typed methods for child-facing operations:
 
 **Discovery:**
 - `getGenerators()` - Get available story generators
+- `getOutputTypes()` - Get available story output types
+- `getImageStyles()` - Get available image styles
+
+**Reading/Viewing:**
+- `getMyStories(childId)` - Get stories for a child (with resolved placeholders)
+- `getStory(storyId)` - Get single story (with resolved placeholders and actors)
+- `getMyStorybooks(storyId, includeAll?)` - Get storybooks for a story
+- `getStorybookPages(storyId, storybookId)` - Get pages for a storybook
 
 **TTS:**
 - `speak(text, voiceId, childId)` - Generate text-to-speech audio
@@ -1599,7 +1607,145 @@ Generate background music for a story type using ElevenLabs Music API.
 
 ## Story Output Types Routes
 
-> All routes require `isAdmin` role.
+### GET `/api/storyOutputTypes`
+
+Get available story output types for storybook creation.
+
+**Authentication**: Required
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "outputTypes": [
+    {
+      "id": "picture_book_standard_v1",
+      "name": "Picture Book",
+      "childFacingLabel": "Picture Book",
+      "status": "live",
+      "imageUrl": "https://...",
+      "defaultPrintLayoutId": "a4-portrait-spread-v1"
+    }
+  ]
+}
+```
+
+**Notes**:
+- Server-side filtering: Only returns output types with `status === 'live'`
+- Server-side sorting: Results sorted alphabetically by `name`
+
+---
+
+### GET `/api/imageStyles`
+
+Get available image styles for storybook illustrations.
+
+**Authentication**: Required
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "imageStyles": [
+    {
+      "id": "watercolor",
+      "title": "Watercolor",
+      "description": "Soft, dreamy watercolor illustrations",
+      "preferred": true,
+      "sampleImageUrl": "https://..."
+    }
+  ]
+}
+```
+
+**Notes**:
+- Server-side sorting: Preferred styles first, then alphabetically by `title`
+
+---
+
+### GET `/api/stories`
+
+Get stories for a specific child with resolved placeholders.
+
+**Authentication**: Required
+
+**Query Parameters**:
+- `childId` (string, required) - Child document ID
+
+**Response**: `200 OK`
+```json
+[
+  {
+    "id": "story-id",
+    "childId": "child-id",
+    "metadata": { "title": "The Adventure of $$childId$$" },
+    "synopsis": "$$childId$$ goes on an adventure...",
+    "titleResolved": "The Adventure of Emma",
+    "synopsisResolved": "Emma goes on an adventure...",
+    "actors": [
+      {
+        "id": "child-id",
+        "displayName": "Emma",
+        "avatarUrl": "https://...",
+        "type": "child"
+      }
+    ],
+    "pageGeneration": { "status": "ready" },
+    "imageGeneration": { "status": "ready" },
+    "createdAt": { "seconds": 1704672000 }
+  }
+]
+```
+
+**Notes**:
+- Server-side filtering: Soft-deleted stories are excluded
+- Server-side sorting: Results sorted by `createdAt` descending (most recent first)
+- Placeholder resolution: `titleResolved` and `synopsisResolved` contain resolved names
+- Actor profiles: `actors` array contains resolved displayName and avatarUrl
+
+---
+
+### GET `/api/stories/[storyId]`
+
+Get a single story with fully resolved placeholders.
+
+**Path Parameters**:
+- `storyId` (string, required) - Story document ID
+
+**Response**: `200 OK`
+```json
+{
+  "id": "story-id",
+  "childId": "child-id",
+  "metadata": { "title": "The Adventure" },
+  "storyText": "Original text with $$childId$$ placeholders...",
+  "titleResolved": "The Adventure",
+  "synopsisResolved": "Emma goes on an adventure...",
+  "storyTextResolved": "Emma went on a wonderful adventure...",
+  "actors": [
+    {
+      "id": "child-id",
+      "displayName": "Emma",
+      "avatarUrl": "https://...",
+      "type": "child"
+    },
+    {
+      "id": "char-id",
+      "displayName": "Max",
+      "avatarUrl": "https://...",
+      "type": "character"
+    }
+  ]
+}
+```
+
+**Notes**:
+- Placeholder resolution: All text fields (`titleResolved`, `synopsisResolved`, `storyTextResolved`) contain resolved names
+- Actor profiles: `actors` array contains all children and characters mentioned in the story
+
+---
+
+> The following routes require `isAdmin` role:
 
 ### POST `/api/storyOutputTypes/generateImage`
 

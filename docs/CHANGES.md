@@ -18,6 +18,47 @@
 
 ### 2026-01-08
 
+#### `e99e7fd` - Refactor PWA kids routes to use API endpoints
+
+**Type**: Refactoring
+
+**Summary**: Refactored all PWA `/kids/*` routes to use the same API endpoints as the mobile app, following the server-first data processing principle. This ensures both clients (mobile and PWA) use identical APIs, and all business logic (filtering, sorting, placeholder resolution) happens on the server.
+
+**Changes**:
+- **New API endpoints**:
+  - `GET /api/storyOutputTypes` - Returns live output types, sorted alphabetically
+  - `GET /api/imageStyles` - Returns image styles, sorted with preferred first
+- **Enhanced API endpoints**:
+  - `GET /api/stories` - Now includes `titleResolved`, `synopsisResolved`, and `actors` array with resolved profiles
+  - `GET /api/stories/[storyId]` - Now includes `titleResolved`, `synopsisResolved`, `storyTextResolved`, and `actors` array
+- **Refactored PWA routes**:
+  - `/kids/story/[storyId]/read` - Uses `apiClient.getStory()` for story with resolved text
+  - `/kids/read/[bookId]` - Uses `apiClient.getStorybookPages()` for pages
+  - `/kids/stories` - Uses `apiClient.getMyStories()` for stories list with resolved text
+  - `/kids/books` - Uses `apiClient.getMyStories()`, `apiClient.getMyStorybooks()`, `apiClient.getOutputTypes()`, `apiClient.getImageStyles()`
+- **API client updates** (`@storypic/api-client`):
+  - Added working implementations for `getOutputTypes()`, `getImageStyles()`
+  - Added working implementations for `getStory()`, `getMyStories()`, `getMyStorybooks()`, `getStorybookPages()`
+- **Removed from PWA**: Direct Firestore queries, client-side placeholder resolution, client-side actor loading
+
+**Technical Debt Resolved**: PWA kids routes no longer use direct Firestore queries - they now use the same API endpoints as the mobile app.
+
+**Files Created**:
+- `src/app/api/storyOutputTypes/route.ts`
+- `src/app/api/imageStyles/route.ts`
+
+**Files Modified**:
+- `src/app/api/stories/route.ts` (added placeholder resolution and actors)
+- `src/app/api/stories/[storyId]/route.ts` (added placeholder resolution and actors)
+- `packages/api-client/src/client.ts` (implemented new methods)
+- `src/app/kids/story/[storyId]/read/page.tsx` (refactored to use API)
+- `src/app/kids/read/[bookId]/page.tsx` (refactored to use API)
+- `src/app/kids/stories/page.tsx` (refactored to use API)
+- `src/app/kids/books/page.tsx` (refactored to use API)
+- `docs/API.md` (documented new endpoints)
+
+---
+
 #### `ea39e67` - Implement server-first data processing architecture
 
 **Type**: Architecture
