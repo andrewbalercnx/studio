@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,70 +14,80 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useChild } from '../../src/contexts/ChildContext';
 import { useApiClient } from '../../src/contexts/ApiClientContext';
 
-interface WizardChoice {
+// API response format (StoryGeneratorResponse)
+interface WizardOption {
+  id: string;       // 'A', 'B', 'C', 'D'
   text: string;
+  textResolved?: string;
 }
 
 interface WizardResponse {
-  state: 'asking' | 'finished' | 'error';
+  ok: boolean;
+  sessionId: string;
   question?: string;
-  choices?: WizardChoice[];
-  answers?: Array<{ question: string; answer: string }>;
-  title?: string;
-  storyText?: string;
-  storyId?: string;
-  error?: string;
+  questionResolved?: string;
+  options?: WizardOption[];
+  isStoryComplete?: boolean;
+  finalStory?: string;
+  progress?: number;
+  errorMessage?: string;
 }
 
 export default function PlayScreen() {
   const router = useRouter();
-  const { sessionId, generator } = useLocalSearchParams<{ sessionId: string; generator: string }>();
-  const { childId, childProfile } = useChild();
+  const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
+  const { childProfile } = useChild();
   const apiClient = useApiClient();
 
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  const [wizardState, setWizardState] = useState<WizardResponse | null>(null);
-  const [answers, setAnswers] = useState<Array<{ question: string; answer: string }>>([]);
+  const [response, setResponse] = useState<WizardResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Start the wizard on mount
   useEffect(() => {
     startWizard();
-  }, []);
+  }, [sessionId]);
 
   const startWizard = async () => {
-    if (!childId || !sessionId) return;
+    if (!sessionId) return;
 
     setLoading(true);
+    setError(null);
     try {
-      const response = await apiClient.sendWizardChoice(childId, sessionId, []);
-      setWizardState(response);
-      setAnswers(response.answers || []);
+      // Initial call without selectedOptionId gets first question
+      const result = await apiClient.sendWizardChoice(sessionId);
+      setResponse(result);
+
+      // If story is already complete (shouldn't happen on first call, but handle it)
+      if (result.isStoryComplete) {
+        router.replace(`/story/${sessionId}`);
+      }
     } catch (e: any) {
       console.error('Error starting wizard:', e);
-      Alert.alert('Error', e.message || 'Failed to start story');
+      setError(e.message || 'Failed to start story');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChoice = async (choice: WizardChoice) => {
-    if (!childId || !sessionId || !wizardState?.question) return;
+  const handleChoice = async (option: WizardOption) => {
+    if (!sessionId) return;
 
     setProcessing(true);
+    setError(null);
     try {
-      const newAnswers = [...answers, { question: wizardState.question, answer: choice.text }];
-      const response = await apiClient.sendWizardChoice(childId, sessionId, newAnswers);
-      setWizardState(response);
-      setAnswers(response.answers || newAnswers);
+      // Send the option ID (A, B, C, D)
+      const result = await apiClient.sendWizardChoice(sessionId, option.id);
+      setResponse(result);
 
-      // If story is finished, navigate to the story
-      if (response.state === 'finished' && response.storyId) {
-        router.replace(`/story/${response.storyId}`);
+      // If story is complete, navigate to the story
+      if (result.isStoryComplete) {
+        router.replace(`/story/${sessionId}`);
       }
     } catch (e: any) {
       console.error('Error sending choice:', e);
-      Alert.alert('Error', e.message || 'Something went wrong');
+      setError(e.message || 'Something went wrong');
     } finally {
       setProcessing(false);
     }
@@ -93,6 +103,10 @@ export default function PlayScreen() {
       ]
     );
   };
+
+  // Calculate progress dots based on API progress (0-1)
+  const progress = response?.progress ?? 0;
+  const progressDots = Math.round(progress * 4); // 4 questions = 4 dots
 
   if (loading) {
     return (
@@ -114,18 +128,25 @@ export default function PlayScreen() {
     );
   }
 
-  if (wizardState?.state === 'error') {
+  if (error || (response && !response.ok)) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorIcon}>😢</Text>
         <Text style={styles.errorTitle}>Oops!</Text>
-        <Text style={styles.errorText}>{wizardState.error || 'Something went wrong'}</Text>
+        <Text style={styles.errorText}>{error || response?.errorMessage || 'Something went wrong'}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={startWizard}>
           <Text style={styles.retryButtonText}>Try Again</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.backLinkButton} onPress={() => router.back()}>
+          <Text style={styles.backLinkText}>Go Back</Text>
         </TouchableOpacity>
       </View>
     );
   }
+
+  // Get the question and options (use resolved text if available)
+  const questionText = response?.questionResolved || response?.question || '';
+  const options = response?.options || [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -140,8 +161,8 @@ export default function PlayScreen() {
               key={i}
               style={[
                 styles.progressDot,
-                i < answers.length && styles.progressDotFilled,
-                i === answers.length && styles.progressDotActive,
+                i < progressDots && styles.progressDotFilled,
+                i === progressDots && i < 4 && styles.progressDotActive,
               ]}
             />
           ))}
@@ -174,24 +195,33 @@ export default function PlayScreen() {
           <>
             {/* Question */}
             <View style={styles.questionContainer}>
-              <Text style={styles.questionText}>{wizardState?.question}</Text>
+              <Text style={styles.questionText}>{questionText}</Text>
             </View>
 
             {/* Choices */}
             <View style={styles.choicesContainer}>
-              {wizardState?.choices?.map((choice, index) => (
+              {options.map((option) => (
                 <TouchableOpacity
-                  key={index}
+                  key={option.id}
                   style={styles.choiceButton}
-                  onPress={() => handleChoice(choice)}
+                  onPress={() => handleChoice(option)}
                 >
-                  <Text style={styles.choiceLabel}>
-                    {String.fromCharCode(65 + index)}
+                  <Text style={styles.choiceLabel}>{option.id}</Text>
+                  <Text style={styles.choiceText}>
+                    {option.textResolved || option.text}
                   </Text>
-                  <Text style={styles.choiceText}>{choice.text}</Text>
                 </TouchableOpacity>
               ))}
             </View>
+
+            {options.length === 0 && !processing && (
+              <View style={styles.noOptionsContainer}>
+                <Text style={styles.noOptionsText}>No options available</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={startWizard}>
+                  <Text style={styles.retryButtonText}>Try Again</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -279,6 +309,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  backLinkButton: {
+    marginTop: 16,
+    paddingVertical: 8,
+  },
+  backLinkText: {
+    color: '#92400E',
+    fontSize: 16,
   },
   header: {
     flexDirection: 'row',
@@ -400,6 +438,7 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 2,
     borderColor: '#E5E7EB',
+    marginBottom: 12,
   },
   choiceLabel: {
     width: 36,
@@ -419,5 +458,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#374151',
     lineHeight: 24,
+  },
+  noOptionsContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  noOptionsText: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 16,
   },
 });

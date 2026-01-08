@@ -105,13 +105,12 @@ class MobileApiClient {
   }
 
   async sendWizardChoice(
-    childId: string,
     sessionId: string,
-    answers: Array<{ question: string; answer: string }>
+    selectedOptionId?: string
   ): Promise<any> {
     return this.request('/api/storyWizard', {
       method: 'POST',
-      body: JSON.stringify({ childId, sessionId, answers }),
+      body: JSON.stringify({ sessionId, selectedOptionId }),
     });
   }
 
