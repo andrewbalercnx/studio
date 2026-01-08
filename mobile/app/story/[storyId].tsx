@@ -183,41 +183,49 @@ export default function StoryScreen() {
 
         {/* Actions */}
         <View style={styles.actionsContainer}>
-          {hasStorybooks ? (
-            // Show storybook buttons for new model
-            storybooks.map((sb) => (
-              <TouchableOpacity
-                key={sb.id}
-                style={[styles.actionButton, styles.actionButtonPrimary, { marginBottom: 12 }]}
-                onPress={() => router.push(`/book/${storyId}?storybookId=${sb.id}`)}
-              >
-                <Text style={styles.actionButtonIcon}>📚</Text>
-                <Text style={styles.actionButtonTextPrimary}>
-                  {sb.imageStyleName || sb.outputTypeName || 'Read Picture Book'}
-                </Text>
-              </TouchableOpacity>
-            ))
-          ) : hasLegacyBook ? (
-            // Legacy book on story itself
+          {/* Show existing storybooks */}
+          {hasStorybooks && storybooks.map((sb) => (
             <TouchableOpacity
-              style={[styles.actionButton, styles.actionButtonPrimary]}
+              key={sb.id}
+              style={[styles.actionButton, styles.actionButtonPrimary, { marginBottom: 12 }]}
+              onPress={() => router.push(`/book/${storyId}?storybookId=${sb.id}`)}
+            >
+              <Text style={styles.actionButtonIcon}>📚</Text>
+              <Text style={styles.actionButtonTextPrimary}>
+                {sb.imageStyleName || sb.outputTypeName || 'Read Picture Book'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+
+          {/* Show legacy book button if exists */}
+          {hasLegacyBook && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.actionButtonPrimary, { marginBottom: 12 }]}
               onPress={() => router.push(`/book/${storyId}`)}
             >
               <Text style={styles.actionButtonIcon}>📚</Text>
               <Text style={styles.actionButtonTextPrimary}>Read Picture Book</Text>
             </TouchableOpacity>
-          ) : isGenerating ? (
-            <View style={styles.generatingContainer}>
+          )}
+
+          {/* Show generating indicator if in progress */}
+          {isGenerating && (
+            <View style={[styles.generatingContainer, { marginBottom: 12 }]}>
               <ActivityIndicator color="#F59E0B" />
               <Text style={styles.generatingText}>Creating your book...</Text>
             </View>
-          ) : (
+          )}
+
+          {/* Always show create button (unless currently generating) */}
+          {!isGenerating && (
             <TouchableOpacity
               style={[styles.actionButton, styles.actionButtonSecondary]}
               onPress={() => router.push(`/create-book/${storyId}`)}
             >
               <Text style={styles.actionButtonIcon}>✨</Text>
-              <Text style={styles.actionButtonTextSecondary}>Create Picture Book</Text>
+              <Text style={styles.actionButtonTextSecondary}>
+                {hasBook ? 'Create Another Book' : 'Create Picture Book'}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
