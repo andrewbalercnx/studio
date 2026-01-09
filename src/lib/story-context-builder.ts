@@ -202,7 +202,20 @@ export async function buildStoryContext(
 
   // Select the most appropriate characters (max 6) using the selection algorithm
   // This prioritizes parent-generated characters and filters by child scope
-  const characters = selectCharactersSimple(allCharacters, childId || '', 6);
+  let characters = selectCharactersSimple(allCharacters, childId || '', 6);
+
+  // Ensure supporting characters (newly introduced during this story) are always included
+  // These characters may not rank high in priority but are important for story continuity
+  if (supportingCharacterIds && supportingCharacterIds.length > 0) {
+    const supportingSet = new Set(supportingCharacterIds);
+    const selectedIds = new Set(characters.map(c => c.id));
+    const missingSupportingChars = allCharacters.filter(
+      char => supportingSet.has(char.id) && !selectedIds.has(char.id)
+    );
+    if (missingSupportingChars.length > 0) {
+      characters = [...characters, ...missingSupportingChars];
+    }
+  }
 
   // 5. Format the context
   const childContext = mainChild

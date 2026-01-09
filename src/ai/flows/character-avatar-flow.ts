@@ -229,19 +229,28 @@ export const characterAvatarFlow = ai.defineFlow(
     await characterRef.update({
       avatarUrl: imageUrl,
       updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // Only trigger background flows if the character has photos
+    // For story-generated characters (no photos), these are unnecessary:
+    // - avatarAnimationFlow: Only needed for main child avatar (shown during processing)
+    // - imageDescriptionFlow: No-op when there are no photos to describe
+    if (photoUrls.length > 0) {
       // Set animation generation to pending
-      'avatarAnimationGeneration.status': 'pending',
-    });
+      await characterRef.update({
+        'avatarAnimationGeneration.status': 'pending',
+      });
 
-    // Trigger avatar animation generation in background (fire-and-forget)
-    avatarAnimationFlow({ characterId, avatarUrl: imageUrl }).catch((err) => {
-      console.error('[characterAvatarFlow] Background animation generation failed:', err);
-    });
+      // Trigger avatar animation generation in background (fire-and-forget)
+      avatarAnimationFlow({ characterId, avatarUrl: imageUrl }).catch((err) => {
+        console.error('[characterAvatarFlow] Background animation generation failed:', err);
+      });
 
-    // Trigger image description generation in background (fire-and-forget)
-    imageDescriptionFlow({ entityId: characterId, entityType: 'character' }).catch((err) => {
-      console.error('[characterAvatarFlow] Background image description generation failed:', err);
-    });
+      // Trigger image description generation in background (fire-and-forget)
+      imageDescriptionFlow({ entityId: characterId, entityType: 'character' }).catch((err) => {
+        console.error('[characterAvatarFlow] Background image description generation failed:', err);
+      });
+    }
 
     return { imageUrl };
   }
