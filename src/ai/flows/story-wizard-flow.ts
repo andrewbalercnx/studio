@@ -423,6 +423,7 @@ const storyWizardFlowInternal = ai.defineFlow(
             childId,
             parentUid: child.ownerParentUid,
             storyText: parsed.storyText, // Store unresolved text with $$id$$ placeholders
+            storyMode: 'wizard', // Identifies this story was created via the wizard flow
             status: 'text_ready',
             metadata: {
               title: parsed.title,

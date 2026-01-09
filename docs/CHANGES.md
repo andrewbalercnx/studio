@@ -16,6 +16,34 @@
 
 ## Changes
 
+### 2026-01-09
+
+#### `175aefc` - Fix storyMode not being set for wizard stories
+
+**Type**: Bug Fix
+
+**Summary**: Wizard-generated stories were failing to compile because the `storyMode` field was not being set on the session or story document. This caused the storyCompile flow to skip the wizard-specific path and fall through to the standard path which requires `storyTypeId` (which wizard sessions don't have).
+
+**Root Cause**:
+1. Session creation at `/story/start/wizard/page.tsx` did not include `storyMode: 'wizard'`
+2. Story creation in `story-wizard-flow.ts` did not include `storyMode: 'wizard'`
+
+**Impact**: For wizard-generated stories:
+- Synopsis was not being generated (compile failed before reaching synopsis generation)
+- No aiFlowLog for synopsis (compile failed before calling the AI)
+- Cast avatar was not generated (compile failed before setting up actor avatar generation)
+- Story card did not display the story generator type
+
+**Fix**:
+- Added `storyMode: 'wizard'` to session creation in wizard start page
+- Added `storyMode: 'wizard'` to story payload in wizard flow
+
+**Files modified**:
+- `src/app/story/start/wizard/page.tsx` - Added storyMode to session creation
+- `src/ai/flows/story-wizard-flow.ts` - Added storyMode to story payload
+
+---
+
 ### 2026-01-08
 
 #### `cd60d41` - Fix intermittent actor resolution in image generation

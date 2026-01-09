@@ -69,6 +69,7 @@ export default function StartWizardStoryPage() {
               parentUid: user.uid,
               status: "in_progress" as const,
               currentPhase: "wizard" as const,
+              storyMode: "wizard" as const,
               currentStepIndex: 0,
               storyTitle: "",
               storyVibe: "",
