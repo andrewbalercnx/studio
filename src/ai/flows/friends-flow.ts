@@ -270,6 +270,13 @@ function getChildAgeYears(child?: ChildProfile | null): number | null {
   return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
 }
 
+/** Format age for prompts. Handles 0 (babies under 1) correctly. */
+function formatAgeDescription(childAge: number | null): string {
+  if (childAge === null) return "The child's age is unknown.";
+  if (childAge === 0) return "The child is under 1 year old (a baby).";
+  return `The child is ${childAge} years old.`;
+}
+
 async function loadGeneratorConfig(
   firestore: FirebaseFirestore.Firestore
 ): Promise<StoryGenerator | null> {
@@ -477,7 +484,7 @@ async function initializeCharacterSelection(
 
   // Build prompt for AI to propose characters
   const childAge = getChildAgeYears(child);
-  const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
+  const ageDescription = formatAgeDescription(childAge);
 
   // Use detailed character format for the prompt
   const availableCharsText = availableCharsWithDetails
@@ -615,7 +622,7 @@ async function handleScenarioGeneration(
   }
 
   const childAge = getChildAgeYears(child);
-  const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
+  const ageDescription = formatAgeDescription(childAge);
 
   // Use detailed character format with $$id$$ placeholders and full descriptions
   const selectedCharsText = allCharacters
@@ -775,7 +782,7 @@ async function handleSynopsisGeneration(
   }
 
   const childAge = getChildAgeYears(child);
-  const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
+  const ageDescription = formatAgeDescription(childAge);
 
   // Use detailed character format with $$id$$ placeholders and full descriptions
   const selectedCharsText = allCharacters
@@ -945,7 +952,7 @@ async function handleStoryGeneration(
   }
 
   const childAge = getChildAgeYears(child);
-  const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
+  const ageDescription = formatAgeDescription(childAge);
 
   // Use detailed character format with $$id$$ placeholders and full descriptions
   const selectedCharsText = allCharacters

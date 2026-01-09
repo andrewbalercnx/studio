@@ -22,9 +22,12 @@ export function buildStorySystemMessage(
   flowType: StoryFlowType,
   globalPrefix?: string
 ): string {
-  const ageDescription = childAge
-    ? `${childAge} years old`
-    : 'young (age unknown)';
+  // Format age, handling 0 (babies under 1) correctly
+  const ageDescription = childAge === null
+    ? 'young (age unknown)'
+    : childAge === 0
+      ? 'under 1 year old (a baby)'
+      : `${childAge} years old`;
 
   const ageAppropriateGuidance = getAgeAppropriateGuidance(childAge);
   const flowInstructions = getFlowSpecificInstructions(flowType);
@@ -90,10 +93,11 @@ ${flowInstructions}`.trim();
  * Returns age-appropriate content guidance based on the child's age.
  */
 function getAgeAppropriateGuidance(childAge: number | null): string {
-  if (!childAge) {
+  if (childAge === null) {
     return 'Use simple language and gentle themes suitable for young children.';
   }
 
+  // Age 0-3: Use very simple content appropriate for babies and toddlers
   if (childAge <= 3) {
     return 'Use very simple words, short sentences, and familiar concepts. Focus on sensory experiences, simple emotions, and comforting themes. Repetition is good.';
   }
@@ -175,13 +179,18 @@ Your task is to help define a character's personality and traits.
  * Extracts the core context section for flows that need minimal context.
  * Useful for warmup flows that don't need the full story context.
  */
+/** Format age for display. Handles 0 (babies under 1) correctly. */
+function formatAgeDesc(childAge: number | null): string {
+  if (childAge === null) return 'young';
+  if (childAge === 0) return 'under 1 year old';
+  return `${childAge} years old`;
+}
+
 export function buildMinimalSystemMessage(
   childName: string,
   childAge: number | null
 ): string {
-  const ageDescription = childAge
-    ? `${childAge} years old`
-    : 'young';
+  const ageDescription = formatAgeDesc(childAge);
 
   return `You are the Story Guide, a gentle and friendly helper who creates magical stories with children.
 

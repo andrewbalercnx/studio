@@ -9,6 +9,8 @@ type LogAIFlowParams = {
   sessionId?: string | null;
   parentId?: string | null;
   prompt: string;
+  /** Conversation messages passed to the AI (for multi-turn flows) */
+  messages?: Array<{ role: string; content: string }>;
   response?: any;
   error?: any;
   startTime?: number;
@@ -26,6 +28,7 @@ export async function logAIFlow({
   sessionId,
   parentId,
   prompt,
+  messages,
   response,
   error,
   startTime,
@@ -43,6 +46,11 @@ export async function logAIFlow({
       prompt,
       createdAt: FieldValue.serverTimestamp(),
     };
+
+    // Include conversation messages if provided (for multi-turn flows)
+    if (messages && messages.length > 0) {
+      logData.messages = messages;
+    }
 
     // Add retry information if this is a retry attempt
     if (attemptNumber !== undefined && attemptNumber > 1) {

@@ -109,9 +109,16 @@ function formatDate(dateOfBirth: any): string {
   return 'Unknown';
 }
 
+/** Format age for context display. Handles 0 (babies under 1) correctly. */
+function formatAgeStr(age: number | null): string {
+  if (age === null) return 'Age unknown';
+  if (age === 0) return 'Under 1 year old';
+  return `${age} years old`;
+}
+
 function formatChildProfile(child: ChildProfile, age: number | null, isMain: boolean = false): string {
   const label = isMain ? '**MAIN CHILD**' : 'Sibling';
-  const ageStr = age ? `${age} years old` : 'Age unknown';
+  const ageStr = formatAgeStr(age);
   const dob = formatDate(child.dateOfBirth);
   const pronouns = child.pronouns ? `\n  Pronouns: ${child.pronouns}` : '\n  Pronouns: they/them (default)';
   const description = child.description ? `\n  Description: ${child.description}` : '';
@@ -126,7 +133,7 @@ function formatChildProfile(child: ChildProfile, age: number | null, isMain: boo
 function formatCharacter(character: Character, isMain: boolean = false): string {
   const label = isMain ? '**MAIN CHARACTER (CHILD)**' : 'Supporting Character';
   const age = character.dateOfBirth ? calculateChildAge({ dateOfBirth: character.dateOfBirth } as ChildProfile) : null;
-  const ageStr = age ? `${age} years old` : 'Age unknown';
+  const ageStr = formatAgeStr(age);
   const dob = formatDate(character.dateOfBirth);
   const pronouns = character.pronouns ? `\n  Pronouns: ${character.pronouns}` : '\n  Pronouns: they/them (default)';
   const description = character.description ? `\n  Description: ${character.description}` : '';

@@ -10,7 +10,85 @@ import type { ChildProfile, Character, Story, StoryWizardAnswer, StoryWizardChoi
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { replacePlaceholdersInText, type EntityMap } from '@/lib/resolve-placeholders.server';
 import { buildStoryContext } from '@/lib/story-context-builder';
-import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
+
+// Retry configuration
+const MAX_RETRIES = 2;
+const INITIAL_BACKOFF_MS = 1000;
+
+/** Check if an error is transient and should be retried */
+function isRetryableError(errorMessage: string): boolean {
+  const retryablePatterns = [
+    'RESOURCE_EXHAUSTED',
+    'UNAVAILABLE',
+    'DEADLINE_EXCEEDED',
+    'timed out',
+    'timeout',
+    '429',
+    '503',
+    '500',
+    'quota',
+    'rate limit',
+    'temporarily',
+    'overloaded',
+    'capacity',
+    'fetch failed',
+    'ECONNRESET',
+    'ETIMEDOUT',
+  ];
+  const lowerMessage = errorMessage.toLowerCase();
+  return retryablePatterns.some(pattern => lowerMessage.includes(pattern.toLowerCase()));
+}
+
+/** Categorize error for user-friendly messages */
+function categorizeError(errorMessage: string): { category: string; userMessage: string } {
+  const lowerMessage = errorMessage.toLowerCase();
+
+  if (lowerMessage.includes('resource_exhausted') || lowerMessage.includes('429') || lowerMessage.includes('quota') || lowerMessage.includes('rate')) {
+    return {
+      category: 'rate_limit',
+      userMessage: 'The story wizard is very busy right now. Please wait a moment and try again.',
+    };
+  }
+
+  if (lowerMessage.includes('deadline_exceeded') || lowerMessage.includes('timed out') || lowerMessage.includes('timeout')) {
+    return {
+      category: 'timeout',
+      userMessage: 'The story wizard took too long to respond. Please try again.',
+    };
+  }
+
+  if (lowerMessage.includes('unavailable') || lowerMessage.includes('503') || lowerMessage.includes('temporarily')) {
+    return {
+      category: 'unavailable',
+      userMessage: 'The story wizard is taking a short nap. Please try again in a moment.',
+    };
+  }
+
+  if (lowerMessage.includes('fetch failed') || lowerMessage.includes('econnreset') || lowerMessage.includes('etimedout')) {
+    return {
+      category: 'network',
+      userMessage: 'Had trouble reaching the story wizard. Please check your connection and try again.',
+    };
+  }
+
+  return {
+    category: 'unknown',
+    userMessage: 'The story wizard encountered an unexpected problem. Please try again.',
+  };
+}
+
+/** Sleep for a given number of milliseconds */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** Convert MessageData array to simple log format */
+function formatMessagesForLog(messages: MessageData[]): Array<{ role: string; content: string }> {
+  return messages.map(msg => ({
+    role: msg.role,
+    content: msg.content.map(c => ('text' in c ? c.text : '[non-text content]')).join(''),
+  }));
+}
 
 // Default prompts - used when no custom prompt is set in Firestore
 const DEFAULT_QUESTION_GEN_PROMPT = `You are a friendly Story Wizard who helps a young child create a story by asking simple multiple-choice questions.
@@ -106,6 +184,13 @@ function getChildAgeYears(child?: ChildProfile | null): number | null {
   return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
 }
 
+/** Format age for prompts. Handles 0 (babies under 1) correctly. */
+function formatAgeDescription(childAge: number | null): string {
+  if (childAge === null) return "The child's age is unknown.";
+  if (childAge === 0) return "The child is under 1 year old (a baby).";
+  return `The child is ${childAge} years old.`;
+}
+
 const StoryWizardChoiceSchema = z.object({
   text: z.string().describe('A short, child-friendly option for the story.'),
 });
@@ -197,12 +282,9 @@ const storyWizardFlowInternal = ai.defineFlow(
       );
 
       const childAge = contextData.childAge;
-      const ageDescription = childAge ? `The child is ${childAge} years old.` : "The child's age is unknown.";
+      const ageDescription = formatAgeDescription(childAge);
 
       const MAX_QUESTIONS = 4;
-
-      // Fetch global prompt prefix once for this flow
-      const globalPrefix = await getGlobalPrefix();
 
       // Load generator config for custom prompts
       const generator = await loadGeneratorConfig(firestore);
@@ -221,26 +303,82 @@ const storyWizardFlowInternal = ai.defineFlow(
         ]);
 
         // Use custom prompt from Firestore if available, otherwise use default
+        // Note: We don't use globalPrefix here as it contains character introduction
+        // guidance which is not applicable to the wizard flow (no interactive choices)
         const storyGenPromptTemplate = generator?.prompts?.storyGeneration || DEFAULT_STORY_GEN_PROMPT;
-        const baseStoryGenSystemPrompt = fillPromptTemplate(storyGenPromptTemplate, templateVars);
-        const storyGenSystemPrompt = globalPrefix ? `${globalPrefix}\n\n${baseStoryGenSystemPrompt}` : baseStoryGenSystemPrompt;
+        const storyGenSystemPrompt = fillPromptTemplate(storyGenPromptTemplate, templateVars);
 
         let llmResponse;
-        const startTime = Date.now();
         const modelName = 'googleai/gemini-2.5-pro';
-        try {
-          // Using output parameter for structured schema validation
-          llmResponse = await ai.generate({
-            model: modelName,
-            system: storyGenSystemPrompt,
-            messages: wizardMessages,
-            output: { schema: WizardStoryGenOutputSchema },
-            config: { temperature: 0.7 },
-          });
-          await logAIFlow({ flowName: `${flowName}:generateStory`, sessionId, parentId: child.ownerParentUid, prompt: storyGenSystemPrompt, response: llmResponse, startTime, modelName });
-        } catch (e: any) {
-          await logAIFlow({ flowName: `${flowName}:generateStory`, sessionId, parentId: child.ownerParentUid, prompt: storyGenSystemPrompt, error: e, startTime, modelName });
-          throw e;
+        let lastError: Error | null = null;
+
+        // Retry loop for story generation
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          const startTime = Date.now();
+          try {
+            if (attempt > 0) {
+              const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+              console.log(`[storyWizardFlow:generateStory] Retry attempt ${attempt}/${MAX_RETRIES} after ${backoffMs}ms backoff`);
+              await sleep(backoffMs);
+            }
+
+            // Using output parameter for structured schema validation
+            llmResponse = await ai.generate({
+              model: modelName,
+              system: storyGenSystemPrompt,
+              messages: wizardMessages,
+              output: { schema: WizardStoryGenOutputSchema },
+              config: { temperature: 0.7 },
+            });
+            await logAIFlow({
+              flowName: `${flowName}:generateStory`,
+              sessionId,
+              parentId: child.ownerParentUid,
+              prompt: storyGenSystemPrompt,
+              messages: formatMessagesForLog(wizardMessages),
+              response: llmResponse,
+              startTime,
+              modelName,
+              attemptNumber: attempt + 1,
+              maxAttempts: MAX_RETRIES + 1,
+            });
+            // Success - break out of retry loop
+            break;
+          } catch (e: any) {
+            lastError = e;
+            const errorMessage = e?.message || String(e);
+            const { category } = categorizeError(errorMessage);
+
+            await logAIFlow({
+              flowName: `${flowName}:generateStory`,
+              sessionId,
+              parentId: child.ownerParentUid,
+              prompt: storyGenSystemPrompt,
+              messages: formatMessagesForLog(wizardMessages),
+              error: e,
+              startTime,
+              modelName,
+              attemptNumber: attempt + 1,
+              maxAttempts: MAX_RETRIES + 1,
+              retryReason: attempt < MAX_RETRIES && isRetryableError(errorMessage)
+                ? `${category}: ${errorMessage.substring(0, 100)}`
+                : undefined,
+            });
+
+            // Check if we should retry
+            if (attempt < MAX_RETRIES && isRetryableError(errorMessage)) {
+              console.warn(`[storyWizardFlow:generateStory] Retryable error (${category}): ${errorMessage}`);
+              continue;
+            }
+
+            // Non-retryable error or max retries reached
+            throw e;
+          }
+        }
+
+        // If we exited the loop without llmResponse, throw the last error
+        if (!llmResponse) {
+          throw lastError || new Error('Failed to generate story after retries');
         }
 
         try {
@@ -313,35 +451,89 @@ const storyWizardFlowInternal = ai.defineFlow(
 
         // Use custom prompt from Firestore if available, otherwise use default
         const questionGenPromptTemplate = generator?.prompts?.questionGeneration || DEFAULT_QUESTION_GEN_PROMPT;
-        const baseQuestionGenSystemPrompt = fillPromptTemplate(questionGenPromptTemplate, templateVars);
-        const questionGenSystemPrompt = globalPrefix ? `${globalPrefix}\n\n${baseQuestionGenSystemPrompt}` : baseQuestionGenSystemPrompt;
+        const questionGenSystemPrompt = fillPromptTemplate(questionGenPromptTemplate, templateVars);
 
         let llmResponse;
-        const startTime2 = Date.now();
         const modelName2 = 'googleai/gemini-2.5-pro';
-        try {
-          // Using output parameter for structured schema validation
-          // When no previous messages, use prompt instead of messages to avoid Genkit issues with empty arrays
-          if (previousMessages.length > 0) {
-            llmResponse = await ai.generate({
-              model: modelName2,
-              system: questionGenSystemPrompt,
-              messages: previousMessages,
-              output: { schema: WizardQuestionGenOutputSchema },
-              config: { temperature: 0.8 },
-            });
-          } else {
-            llmResponse = await ai.generate({
-              model: modelName2,
+        let lastError: Error | null = null;
+
+        // Retry loop for question generation
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          const startTime2 = Date.now();
+          try {
+            if (attempt > 0) {
+              const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+              console.log(`[storyWizardFlow:askQuestion] Retry attempt ${attempt}/${MAX_RETRIES} after ${backoffMs}ms backoff`);
+              await sleep(backoffMs);
+            }
+
+            // Using output parameter for structured schema validation
+            // When no previous messages, use prompt instead of messages to avoid Genkit issues with empty arrays
+            if (previousMessages.length > 0) {
+              llmResponse = await ai.generate({
+                model: modelName2,
+                system: questionGenSystemPrompt,
+                messages: previousMessages,
+                output: { schema: WizardQuestionGenOutputSchema },
+                config: { temperature: 0.8 },
+              });
+            } else {
+              llmResponse = await ai.generate({
+                model: modelName2,
+                prompt: questionGenSystemPrompt,
+                output: { schema: WizardQuestionGenOutputSchema },
+                config: { temperature: 0.8 },
+              });
+            }
+            await logAIFlow({
+              flowName: `${flowName}:askQuestion`,
+              sessionId,
+              parentId: child.ownerParentUid,
               prompt: questionGenSystemPrompt,
-              output: { schema: WizardQuestionGenOutputSchema },
-              config: { temperature: 0.8 },
+              messages: previousMessages.length > 0 ? formatMessagesForLog(previousMessages) : undefined,
+              response: llmResponse,
+              startTime: startTime2,
+              modelName: modelName2,
+              attemptNumber: attempt + 1,
+              maxAttempts: MAX_RETRIES + 1,
             });
+            // Success - break out of retry loop
+            break;
+          } catch (e: any) {
+            lastError = e;
+            const errorMessage = e?.message || String(e);
+            const { category } = categorizeError(errorMessage);
+
+            await logAIFlow({
+              flowName: `${flowName}:askQuestion`,
+              sessionId,
+              parentId: child.ownerParentUid,
+              prompt: questionGenSystemPrompt,
+              messages: previousMessages.length > 0 ? formatMessagesForLog(previousMessages) : undefined,
+              error: e,
+              startTime: startTime2,
+              modelName: modelName2,
+              attemptNumber: attempt + 1,
+              maxAttempts: MAX_RETRIES + 1,
+              retryReason: attempt < MAX_RETRIES && isRetryableError(errorMessage)
+                ? `${category}: ${errorMessage.substring(0, 100)}`
+                : undefined,
+            });
+
+            // Check if we should retry
+            if (attempt < MAX_RETRIES && isRetryableError(errorMessage)) {
+              console.warn(`[storyWizardFlow:askQuestion] Retryable error (${category}): ${errorMessage}`);
+              continue;
+            }
+
+            // Non-retryable error or max retries reached
+            throw e;
           }
-          await logAIFlow({ flowName: `${flowName}:askQuestion`, sessionId, parentId: child.ownerParentUid, prompt: questionGenSystemPrompt, response: llmResponse, startTime: startTime2, modelName: modelName2 });
-        } catch (e: any) {
-          await logAIFlow({ flowName: `${flowName}:askQuestion`, sessionId, parentId: child.ownerParentUid, prompt: questionGenSystemPrompt, error: e, startTime: startTime2, modelName: modelName2 });
-          throw e;
+        }
+
+        // If we exited the loop without llmResponse, throw the last error
+        if (!llmResponse) {
+          throw lastError || new Error('Failed to generate question after retries');
         }
 
         try {
@@ -387,8 +579,10 @@ const storyWizardFlowInternal = ai.defineFlow(
         }
       }
     } catch (e: any) {
-      console.error('Error in storyWizardFlow:', e);
-      return { state: 'error' as const, ok: false as const, error: e.message || 'An unexpected error occurred.' };
+      const errorMessage = e?.message || String(e);
+      const { category, userMessage } = categorizeError(errorMessage);
+      console.error(`[storyWizardFlow] Error (${category}):`, errorMessage);
+      return { state: 'error' as const, ok: false as const, error: userMessage };
     }
   }
 );

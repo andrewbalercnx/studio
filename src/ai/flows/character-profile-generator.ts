@@ -33,8 +33,15 @@ export type CharacterProfile = {
   dislikes: string[];
 };
 
+/** Format age context for character generation. Handles 0 (babies under 1) correctly. */
+function formatAgeContext(childAge: number | null | undefined): string {
+  if (childAge === null || childAge === undefined) return '';
+  if (childAge === 0) return 'The main character (child) is under 1 year old (a baby).';
+  return `The main character (child) is ${childAge} years old.`;
+}
+
 export async function generateCharacterProfile(input: CharacterProfileInput): Promise<CharacterProfile> {
-  const ageContext = input.childAge ? `The main character (child) is ${input.childAge} years old.` : '';
+  const ageContext = formatAgeContext(input.childAge);
 
   const prompt = `Generate a character profile for a children's story character.
 

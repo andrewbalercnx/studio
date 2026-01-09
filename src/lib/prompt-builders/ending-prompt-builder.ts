@@ -80,11 +80,18 @@ Behavior Rules:
 ${rules}`;
 }
 
+/** Format age for display. Handles 0 (babies under 1) correctly. */
+function formatAgeDesc(childAge: number | null): string {
+  if (childAge === null) return 'young (age unknown)';
+  if (childAge === 0) return 'under 1 year old (a baby)';
+  return `${childAge} years old`;
+}
+
 /**
  * STORY SUBJECT section - Child, siblings, and characters context
  */
 function buildContextSection(context: FormattedStoryContext, childAge: number | null): string {
-  const ageDesc = childAge ? `${childAge} years old` : 'young (age unknown)';
+  const ageDesc = formatAgeDesc(childAge);
   return `=== STORY SUBJECT ===
 ${context.fullContext}
 
