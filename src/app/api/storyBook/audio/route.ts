@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { storyAudioFlow } from '@/ai/flows/story-audio-flow';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
@@ -13,10 +14,10 @@ type AudioJobRequest = {
 
 /**
  * API route for generating audio narration for a story.
- * Uses Gemini Pro TTS to create child-friendly audio with British English accent.
+ * Uses ElevenLabs TTS to create child-friendly audio narration.
  *
- * This runs as a fire-and-forget background task - the API returns immediately
- * with status 'generating', and the client should poll the story document for completion.
+ * This uses Next.js `after()` to run audio generation after the response is sent,
+ * ensuring the serverless function stays alive until the work completes.
  * The story.audioGeneration.status field tracks: 'generating' -> 'ready' | 'error'
  */
 export async function POST(request: Request) {
@@ -33,21 +34,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // Fire-and-forget: Start audio generation in background
-    // Don't await - let it run while we return immediately
-    // The flow updates story.audioGeneration.status as it progresses
-    storyAudioFlow({
-      storyId,
-      forceRegenerate,
-      voiceConfig,
-    }).then(result => {
-      if (!result.ok) {
-        console.error(`[api/storyBook/audio] Background generation failed for ${storyId}:`, result.errorMessage);
-      } else {
-        console.log(`[api/storyBook/audio] Background generation completed for ${storyId}`);
+    // Use Next.js after() to run audio generation after response is sent
+    // This keeps the serverless function alive until the work completes
+    after(async () => {
+      console.log(`[api/storyBook/audio] Starting background audio generation for ${storyId}`);
+      try {
+        const result = await storyAudioFlow({
+          storyId,
+          forceRegenerate,
+          voiceConfig,
+        });
+        if (!result.ok) {
+          console.error(`[api/storyBook/audio] Background generation failed for ${storyId}:`, result.errorMessage);
+        } else {
+          console.log(`[api/storyBook/audio] Background generation completed for ${storyId}`);
+        }
+      } catch (err) {
+        console.error(`[api/storyBook/audio] Background generation error for ${storyId}:`, err);
       }
-    }).catch(err => {
-      console.error(`[api/storyBook/audio] Background generation error for ${storyId}:`, err);
     });
 
     // Return immediately - client should poll story document for status

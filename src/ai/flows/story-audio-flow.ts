@@ -53,9 +53,10 @@ async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffe
 export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryAudioFlowOutput> {
   const { storyId, forceRegenerate = false, voiceConfig } = input;
 
-  console.log(`[story-audio-flow] Starting for storyId: ${storyId}, forceRegenerate: ${forceRegenerate}`);
+  console.log(`[story-audio-flow] Starting for storyId: ${storyId}, forceRegenerate: ${forceRegenerate}, voiceConfig: ${JSON.stringify(voiceConfig)}`);
 
   try {
+    console.log(`[story-audio-flow] Initializing Firebase Admin...`);
     await initFirebaseAdminApp();
     const firestore = getFirestore();
     const storyRef = firestore.collection('stories').doc(storyId);
@@ -133,12 +134,33 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
       console.log(`[story-audio-flow] Resolving placeholders in story text`);
       const entityMap = await resolveEntitiesInText(story.storyText);
       textForTTS = await replacePlaceholdersForTTS(story.storyText, entityMap);
-      console.log(`[story-audio-flow] Resolved text length: ${textForTTS.length} chars`);
+    }
+
+    console.log(`[story-audio-flow] Text for TTS: ${textForTTS.length} chars`);
+
+    // ElevenLabs character limits:
+    // - eleven_v3: 5,000 characters per request
+    // - eleven_multilingual_v2: 5,000 characters per request
+    const MAX_TTS_CHARS = 5000;
+    if (textForTTS.length > MAX_TTS_CHARS) {
+      console.warn(`[story-audio-flow] Text exceeds ${MAX_TTS_CHARS} char limit (${textForTTS.length} chars), truncating`);
+      // Truncate at a sentence boundary if possible
+      const truncated = textForTTS.substring(0, MAX_TTS_CHARS);
+      const lastSentenceEnd = Math.max(
+        truncated.lastIndexOf('.'),
+        truncated.lastIndexOf('!'),
+        truncated.lastIndexOf('?')
+      );
+      textForTTS = lastSentenceEnd > MAX_TTS_CHARS * 0.7
+        ? truncated.substring(0, lastSentenceEnd + 1)
+        : truncated;
+      console.log(`[story-audio-flow] Truncated to ${textForTTS.length} chars`);
     }
 
     // Generate audio using ElevenLabs TTS
-    // Note: eleven_multilingual_v2 auto-detects language and doesn't support languageCode parameter
+    // Both v2 and v3 models auto-detect language from text
     // Use longer timeout and retries for reliability on Cloud Run
+    console.log(`[story-audio-flow] Calling ElevenLabs convert with ${textForTTS.length} chars`);
     const audioStream = await elevenlabs.textToSpeech.convert(
       voiceId,
       {

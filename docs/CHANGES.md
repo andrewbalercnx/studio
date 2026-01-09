@@ -18,6 +18,24 @@
 
 ### 2026-01-09
 
+#### `9d3122a` - Fix audio generation not completing on serverless
+
+**Type**: Bug Fix
+
+**Summary**: Audio generation was failing silently on Firebase App Hosting because the fire-and-forget Promise pattern doesn't work reliably on serverless - the function can terminate before background work completes.
+
+**Changes**:
+- Replaced fire-and-forget Promise pattern with Next.js `after()` API
+- The `after()` callback keeps the serverless function alive until audio generation completes
+- Added character limit handling (5,000 chars) for ElevenLabs API
+- Added more detailed logging throughout the audio flow
+
+**Files modified**:
+- `src/app/api/storyBook/audio/route.ts` - Use `after()` instead of floating Promise
+- `src/ai/flows/story-audio-flow.ts` - Add character limit handling and improved logging
+
+---
+
 #### `d1378c3` - Fix synopsis generation producing truncated output
 
 **Type**: Bug Fix
