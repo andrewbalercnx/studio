@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, UserPlus, ArrowRight, LoaderCircle } from 'lucide-react';
+import { Sparkles, UserPlus, ArrowRight, LoaderCircle, HelpCircle } from 'lucide-react';
 import type { Character } from '@/lib/types';
 
 interface CharacterIntroductionCardProps {
@@ -22,8 +22,10 @@ interface CharacterIntroductionCardProps {
   isLoading?: boolean;
   /** Loading message to display */
   loadingMessage?: string;
-  /** Whether the continue button is disabled */
+  /** Whether the continue button is disabled (in addition to avatar check) */
   disabled?: boolean;
+  /** Whether to require avatar before allowing continue (default: true) */
+  requireAvatarForContinue?: boolean;
 }
 
 /**
@@ -40,6 +42,7 @@ export function CharacterIntroductionCard({
   isLoading = false,
   loadingMessage = 'Creating your new friend...',
   disabled = false,
+  requireAvatarForContinue = true,
 }: CharacterIntroductionCardProps) {
   // Use character data if available, otherwise fall back to props
   const displayName = character?.displayName || characterName;
@@ -49,6 +52,12 @@ export function CharacterIntroductionCard({
 
   // Determine avatar generation status
   const isAvatarGenerating = !avatarUrl && !isLoading;
+
+  // Continue button is disabled if:
+  // 1. Explicitly disabled via prop
+  // 2. Still loading
+  // 3. Avatar is required but not yet generated
+  const isContinueDisabled = disabled || isLoading || (requireAvatarForContinue && isAvatarGenerating);
 
   return (
     <Card className="w-full max-w-md mx-auto bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 border-purple-200 dark:border-purple-800">
@@ -74,7 +83,7 @@ export function CharacterIntroductionCard({
             ) : null}
             <AvatarFallback className="text-4xl bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300">
               {isAvatarGenerating ? (
-                <LoaderCircle className="h-12 w-12 animate-spin text-purple-400" />
+                <HelpCircle className="h-16 w-16 text-purple-300 dark:text-purple-600" />
               ) : (
                 displayName.charAt(0).toUpperCase()
               )}
@@ -82,7 +91,8 @@ export function CharacterIntroductionCard({
           </Avatar>
           {isAvatarGenerating && (
             <div className="absolute -bottom-1 left-1/2 -translate-x-1/2">
-              <Badge variant="outline" className="text-xs bg-white dark:bg-gray-900">
+              <Badge variant="outline" className="text-xs bg-white dark:bg-gray-900 gap-1">
+                <LoaderCircle className="h-3 w-3 animate-spin" />
                 Creating avatar...
               </Badge>
             </div>
@@ -107,16 +117,21 @@ export function CharacterIntroductionCard({
           </div>
         )}
       </CardContent>
-      <CardFooter className="flex justify-center pt-2">
+      <CardFooter className="flex flex-col items-center gap-2 pt-2">
         <Button
           size="lg"
           onClick={onContinue}
-          disabled={disabled || isLoading}
-          className="gap-2 bg-purple-600 hover:bg-purple-700 text-white"
+          disabled={isContinueDisabled}
+          className="gap-2 bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Continue the Adventure
           <ArrowRight className="h-4 w-4" />
         </Button>
+        {isAvatarGenerating && requireAvatarForContinue && (
+          <p className="text-xs text-muted-foreground">
+            Please wait while we create your new friend&apos;s picture...
+          </p>
+        )}
       </CardFooter>
     </Card>
   );

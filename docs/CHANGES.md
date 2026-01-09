@@ -18,6 +18,24 @@
 
 ### 2026-01-09
 
+#### `pending` - Show placeholder and disable continue while character avatar generates
+
+**Type**: UX Improvement
+
+**Summary**: When a new character is introduced during story creation, the UI now shows a "?" icon placeholder and disables the Continue button until the character's avatar has been generated.
+
+**Changes**:
+- Avatar placeholder shows a `HelpCircle` (?) icon instead of a loading spinner
+- "Creating avatar..." badge now includes a small spinning loader
+- Continue button is disabled until avatar is ready
+- Added helper text explaining the wait
+- Added `requireAvatarForContinue` prop (defaults to true) for flexibility
+
+**Files modified**:
+- `src/components/story/character-introduction-card.tsx` - Updated avatar fallback and continue button logic
+
+---
+
 #### `9d3122a` - Fix audio generation not completing on serverless
 
 **Type**: Bug Fix
