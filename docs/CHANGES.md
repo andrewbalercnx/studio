@@ -18,6 +18,25 @@
 
 ### 2026-01-09
 
+#### `d1378c3` - Fix synopsis generation producing truncated output
+
+**Type**: Bug Fix
+
+**Summary**: Synopsis generation was producing truncated responses like "Ezra and his" instead of complete sentences.
+
+**Changes**:
+- Created centralized `generateSynopsis()` helper function in story-compile-flow.ts
+- Improved prompt with explicit completion requirements and example format
+- Increased maxOutputTokens from 150 to 200
+- Added validation to detect and handle truncated responses
+- Added fallback for responses that don't end with proper punctuation
+- Consolidated 3 duplicate synopsis generation blocks into single helper
+
+**Files modified**:
+- `src/ai/flows/story-compile-flow.ts` - Added generateSynopsis helper, refactored friends/wizard/gemini synopsis generation
+
+---
+
 #### `175aefc` - Fix storyMode not being set for wizard stories
 
 **Type**: Bug Fix

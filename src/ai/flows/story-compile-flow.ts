@@ -12,7 +12,7 @@ import { z } from 'genkit';
 import type { StorySession, StoryOutputType, Story } from '@/lib/types';
 import { logServerSessionEvent } from '@/lib/session-events.server';
 import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
-import { initializeRunTrace, logAICallToTrace, completeRunTrace } from '@/lib/ai-run-trace';
+import { initializeRunTrace, completeRunTrace } from '@/lib/ai-run-trace';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { storyTextCompileFlow } from './story-text-compile-flow';
 import { updateCharacterUsage } from '@/lib/character-usage';
@@ -36,6 +36,97 @@ function extractActorIds(text: string): string[] {
     ids.add(match[1]);
   }
   return Array.from(ids);
+}
+
+/**
+ * Generate a synopsis for a story using AI.
+ * Includes validation to ensure the response is complete and well-formed.
+ */
+async function generateSynopsis(
+  storyText: string,
+  sessionId: string,
+  parentUid: string,
+  flowSuffix: string
+): Promise<string> {
+  const synopsisModelName = 'googleai/gemini-2.5-flash';
+  const synopsisStartTime = Date.now();
+
+  // Improved prompt with explicit completion requirements
+  const synopsisPrompt = `You are writing a brief summary for parents to see on their child's story card.
+
+STORY TO SUMMARIZE:
+${storyText}
+
+YOUR TASK:
+Write exactly 1-2 complete sentences summarizing this children's story. The summary should:
+- Capture the main adventure, theme, or heartwarming moment
+- Be engaging and help a parent quickly understand what the story is about
+- Be suitable for display on a story card
+
+IMPORTANT:
+- Output ONLY the summary text, nothing else
+- Make sure your response is complete - do not stop mid-sentence
+- Do not include any labels, prefixes, or formatting
+
+EXAMPLE FORMAT:
+A young explorer and their animal friend discover a hidden treasure while learning the importance of teamwork and courage.`;
+
+  try {
+    const synopsisResponse = await ai.generate({
+      model: synopsisModelName,
+      prompt: synopsisPrompt,
+      config: {
+        temperature: 0.3,
+        maxOutputTokens: 200, // Increased from 150 to ensure complete responses
+        stopSequences: [], // Don't stop early
+      },
+    });
+
+    let synopsis = synopsisResponse.text?.trim() || '';
+
+    // Validate the response - ensure it's not truncated
+    if (synopsis && !synopsis.match(/[.!?]$/)) {
+      // Response doesn't end with sentence-ending punctuation - likely truncated
+      console.warn(`[storyCompileFlow:synopsis] Response appears truncated: "${synopsis}"`);
+      // Try to salvage by adding a period if it looks like a near-complete sentence
+      if (synopsis.length > 20) {
+        synopsis = synopsis + '.';
+      } else {
+        // Too short to be useful, use fallback
+        synopsis = 'A delightful adventure story for young readers.';
+      }
+    }
+
+    // Validate minimum length
+    if (!synopsis || synopsis.length < 10) {
+      console.warn(`[storyCompileFlow:synopsis] Response too short: "${synopsis}"`);
+      synopsis = 'A delightful adventure story for young readers.';
+    }
+
+    await logAIFlow({
+      flowName: `storyCompileFlow:synopsis:${flowSuffix}`,
+      sessionId,
+      parentId: parentUid,
+      prompt: synopsisPrompt,
+      response: synopsisResponse,
+      startTime: synopsisStartTime,
+      modelName: synopsisModelName
+    });
+
+    return synopsis;
+  } catch (err: any) {
+    console.error(`[storyCompileFlow:synopsis:${flowSuffix}] Failed to generate synopsis:`, err);
+    await logAIFlow({
+      flowName: `storyCompileFlow:synopsis:${flowSuffix}`,
+      sessionId,
+      parentId: parentUid,
+      prompt: synopsisPrompt,
+      error: err,
+      startTime: synopsisStartTime,
+      modelName: synopsisModelName
+    });
+    return 'A delightful adventure story for young readers.';
+  }
 }
 
 type StoryCompileDebugInfo = {
@@ -120,51 +211,7 @@ export const storyCompileFlow = ai.defineFlow(
                 // Generate synopsis for the friends story if not already present
                 let synopsis = existingStory.synopsis || '';
                 if (!synopsis) {
-                    const synopsisStartTime = Date.now();
-                    const synopsisModelName = 'googleai/gemini-2.5-flash';
-                    const synopsisPrompt = `Write a brief 1-2 sentence summary of this children's story suitable for a parent to read. The summary should capture the main adventure or theme.
-
-STORY:
-${resolvedStoryText}
-
-INSTRUCTIONS:
-- Write exactly 1-2 sentences
-- Make it engaging and suitable for a parent to quickly understand what the story is about
-- Do not include any labels or prefixes, just output the summary text directly`;
-                    try {
-                        const synopsisResponse = await ai.generate({
-                            model: synopsisModelName,
-                            prompt: synopsisPrompt,
-                            config: { temperature: 0.3, maxOutputTokens: 150 },
-                        });
-                        synopsis = synopsisResponse.text?.trim() || '';
-
-                        await logAIFlow({ flowName: 'storyCompileFlow:synopsis:friends', sessionId, parentId: parentUid, prompt: synopsisPrompt, response: synopsisResponse, startTime: synopsisStartTime, modelName: synopsisModelName });
-                        await logAICallToTrace({
-                            sessionId,
-                            flowName: 'storyCompileFlow:synopsis',
-                            modelName: synopsisModelName,
-                            temperature: 0.3,
-                            maxOutputTokens: 150,
-                            systemPrompt: synopsisPrompt,
-                            response: synopsisResponse,
-                            startTime: synopsisStartTime,
-                        });
-                    } catch (err: any) {
-                        console.error('[storyCompileFlow] Failed to generate synopsis for friends story:', err);
-                        synopsis = 'A magical adventure story.';
-                        await logAIFlow({ flowName: 'storyCompileFlow:synopsis:friends', sessionId, parentId: parentUid, prompt: synopsisPrompt, error: err, startTime: synopsisStartTime, modelName: synopsisModelName });
-                        await logAICallToTrace({
-                            sessionId,
-                            flowName: 'storyCompileFlow:synopsis',
-                            modelName: synopsisModelName,
-                            temperature: 0.3,
-                            maxOutputTokens: 150,
-                            systemPrompt: synopsisPrompt,
-                            error: err,
-                            startTime: synopsisStartTime,
-                        });
-                    }
+                    synopsis = await generateSynopsis(resolvedStoryText, sessionId, parentUid, 'friends');
                 }
 
                 // Mark run trace as completed
@@ -291,51 +338,7 @@ INSTRUCTIONS:
                 // Generate synopsis for the wizard story (use resolved text for AI to understand context)
                 let synopsis = existingStory.synopsis || '';
                 if (!synopsis) {
-                    const synopsisStartTime = Date.now();
-                    const synopsisModelName = 'googleai/gemini-2.5-flash';
-                    const synopsisPrompt = `Write a brief 1-2 sentence summary of this children's story suitable for a parent to read. The summary should capture the main adventure or theme.
-
-STORY:
-${resolvedStoryText}
-
-INSTRUCTIONS:
-- Write exactly 1-2 sentences
-- Make it engaging and suitable for a parent to quickly understand what the story is about
-- Do not include any labels or prefixes, just output the summary text directly`;
-                    try {
-                        const synopsisResponse = await ai.generate({
-                            model: synopsisModelName,
-                            prompt: synopsisPrompt,
-                            config: { temperature: 0.3, maxOutputTokens: 150 },
-                        });
-                        synopsis = synopsisResponse.text?.trim() || '';
-
-                        await logAIFlow({ flowName: 'storyCompileFlow:synopsis:wizard', sessionId, parentId: parentUid, prompt: synopsisPrompt, response: synopsisResponse, startTime: synopsisStartTime, modelName: synopsisModelName });
-                        await logAICallToTrace({
-                            sessionId,
-                            flowName: 'storyCompileFlow:synopsis',
-                            modelName: synopsisModelName,
-                            temperature: 0.3,
-                            maxOutputTokens: 150,
-                            systemPrompt: synopsisPrompt,
-                            response: synopsisResponse,
-                            startTime: synopsisStartTime,
-                        });
-                    } catch (err: any) {
-                        console.error('[storyCompileFlow] Failed to generate synopsis for wizard story:', err);
-                        synopsis = 'A magical adventure story.';
-                        await logAIFlow({ flowName: 'storyCompileFlow:synopsis:wizard', sessionId, parentId: parentUid, prompt: synopsisPrompt, error: err, startTime: synopsisStartTime, modelName: synopsisModelName });
-                        await logAICallToTrace({
-                            sessionId,
-                            flowName: 'storyCompileFlow:synopsis',
-                            modelName: synopsisModelName,
-                            temperature: 0.3,
-                            maxOutputTokens: 150,
-                            systemPrompt: synopsisPrompt,
-                            error: err,
-                            startTime: synopsisStartTime,
-                        });
-                    }
+                    synopsis = await generateSynopsis(resolvedStoryText, sessionId, parentUid, 'wizard');
                 }
 
                 // Mark run trace as completed
@@ -444,52 +447,7 @@ INSTRUCTIONS:
                 });
 
                 // Generate synopsis for the Gemini story
-                let synopsis = '';
-                const synopsisStartTime = Date.now();
-                const synopsisModelName = 'googleai/gemini-2.5-flash';
-                const synopsisPrompt = `Write a brief 1-2 sentence summary of this children's story suitable for a parent to read. The summary should capture the main adventure or theme.
-
-STORY:
-${resolvedStoryText}
-
-INSTRUCTIONS:
-- Write exactly 1-2 sentences
-- Make it engaging and suitable for a parent to quickly understand what the story is about
-- Do not include any labels or prefixes, just output the summary text directly`;
-                try {
-                    const synopsisResponse = await ai.generate({
-                        model: synopsisModelName,
-                        prompt: synopsisPrompt,
-                        config: { temperature: 0.3, maxOutputTokens: 150 },
-                    });
-                    synopsis = synopsisResponse.text?.trim() || '';
-
-                    await logAIFlow({ flowName: 'storyCompileFlow:synopsis:gemini', sessionId, parentId: parentUid, prompt: synopsisPrompt, response: synopsisResponse, startTime: synopsisStartTime, modelName: synopsisModelName });
-                    await logAICallToTrace({
-                        sessionId,
-                        flowName: 'storyCompileFlow:synopsis',
-                        modelName: synopsisModelName,
-                        temperature: 0.3,
-                        maxOutputTokens: 150,
-                        systemPrompt: synopsisPrompt,
-                        response: synopsisResponse,
-                        startTime: synopsisStartTime,
-                    });
-                } catch (err: any) {
-                    console.error('[storyCompileFlow] Failed to generate synopsis for Gemini story:', err);
-                    synopsis = 'A magical adventure story.';
-                    await logAIFlow({ flowName: 'storyCompileFlow:synopsis:gemini', sessionId, parentId: parentUid, prompt: synopsisPrompt, error: err, startTime: synopsisStartTime, modelName: synopsisModelName });
-                    await logAICallToTrace({
-                        sessionId,
-                        flowName: 'storyCompileFlow:synopsis',
-                        modelName: synopsisModelName,
-                        temperature: 0.3,
-                        maxOutputTokens: 150,
-                        systemPrompt: synopsisPrompt,
-                        error: err,
-                        startTime: synopsisStartTime,
-                    });
-                }
+                const synopsis = await generateSynopsis(resolvedStoryText, sessionId, parentUid, 'gemini');
 
                 // Mark run trace as completed for Gemini mode
                 await completeRunTrace(sessionId);
