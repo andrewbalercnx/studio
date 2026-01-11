@@ -196,22 +196,24 @@ Requirements:
 
       let llmResponse;
       const startTime = Date.now();
+      const modelName = 'googleai/gemini-2.5-flash-image-preview';
       try {
         llmResponse = await ai.generate({
-          model: 'googleai/gemini-2.5-flash-image-preview',
+          model: modelName,
           prompt: promptParts,
           config: {
             responseModalities: ['TEXT', 'IMAGE'],
           },
         });
-        await logAIFlow({ flowName: 'storyActorAvatarFlow', sessionId: storyId, parentId: story.parentUid, prompt: promptText, response: llmResponse, startTime });
       } catch (e: any) {
-        await logAIFlow({ flowName: 'storyActorAvatarFlow', sessionId: storyId, parentId: story.parentUid, prompt: promptText, error: e, startTime });
+        await logAIFlow({ flowName: 'storyActorAvatarFlow', sessionId: storyId, parentId: story.parentUid, prompt: promptText, error: e, startTime, modelName });
         throw e;
       }
 
       const dataUrl = llmResponse.media?.url;
       if (!dataUrl) {
+        // Log the failed attempt before throwing
+        await logAIFlow({ flowName: 'storyActorAvatarFlow', sessionId: storyId, parentId: story.parentUid, prompt: promptText, response: llmResponse, startTime, modelName });
         throw new Error('The model did not return an image.');
       }
 
@@ -223,6 +225,9 @@ Requirements:
         storyId,
         parentUid: story.parentUid,
       });
+
+      // Log success with the final image URL
+      await logAIFlow({ flowName: 'storyActorAvatarFlow', sessionId: storyId, parentId: story.parentUid, prompt: promptText, response: llmResponse, startTime, modelName, imageUrl: actorAvatarUrl });
 
       // Update story with generated avatar
       await storyRef.update({

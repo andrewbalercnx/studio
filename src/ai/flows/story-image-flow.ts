@@ -34,6 +34,12 @@ type GenerateImageResult = {
   buffer: Buffer;
   mimeType: string;
   modelUsed: string;
+  /** The prompt text used for the successful generation (for logging with final image URL) */
+  promptText: string;
+  /** Start time of generation (for logging with final image URL) */
+  startTime: number;
+  /** Flow name used for logging */
+  flowName: string;
 };
 
 const StoryImageFlowInput = z.object({
@@ -126,7 +132,7 @@ function mapAspectRatio(layout?: StoryOutputPage['layoutHints']): string | undef
   }
 }
 
-function buildMockSvg(prompt: string, targetWidthPx?: number, targetHeightPx?: number): GenerateImageResult {
+function buildMockSvg(prompt: string, targetWidthPx?: number, targetHeightPx?: number, flowName?: string): GenerateImageResult {
   const width = targetWidthPx || 1024;
   const height = targetHeightPx || 1024;
   const truncatedPrompt = prompt.length > 160 ? `${prompt.slice(0, 157)}…` : prompt;
@@ -154,6 +160,9 @@ function buildMockSvg(prompt: string, targetWidthPx?: number, targetHeightPx?: n
     buffer: Buffer.from(svg),
     mimeType: 'image/svg+xml',
     modelUsed: 'mock/storybook',
+    promptText: prompt,
+    startTime: Date.now(),
+    flowName: flowName || 'storyImageFlow:mock',
   };
 }
 
@@ -768,9 +777,10 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
 
   // Get the flow name based on page kind for logging
   const flowName = getFlowNameForPageKind(pageKind);
+  const startTime = Date.now();
 
   if (MOCK_IMAGES) {
-    return buildMockSvg(sceneText, targetWidthPx, targetHeightPx);
+    return buildMockSvg(sceneText, targetWidthPx, targetHeightPx, flowName);
   }
 
   // Fetch global image prompt configuration
@@ -912,6 +922,8 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
   let lastError: Error | null = null;
   let lastNoMediaReason: string | null = null;
   let retryReason: string | null = null; // Track why we're retrying for logging
+  let successfulPromptText: string = ''; // Track the prompt text used for successful generation
+  let successfulStartTime: number = startTime; // Track start time for the successful attempt
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     // Use progressively simpler prompts on each retry
@@ -991,6 +1003,8 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
         // Success - we have media
         lastError = null;
         lastNoMediaReason = null;
+        successfulPromptText = currentPromptText;
+        successfulStartTime = startTime;
         break;
       }
     } catch (e: any) {
@@ -1114,6 +1128,9 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     buffer,
     mimeType,
     modelUsed: generation.model ?? DEFAULT_IMAGE_MODEL,
+    promptText: successfulPromptText,
+    startTime: successfulStartTime,
+    flowName,
   };
 }
 
@@ -1396,7 +1413,7 @@ export const storyImageFlow = ai.defineFlow(
           throw generationError;
         }
         logs.push(`[info] Using mock artwork fallback for ${pageId}.`);
-        generated = buildMockSvg(page.imagePrompt);
+        generated = buildMockSvg(page.imagePrompt, undefined, undefined, 'storyImageFlow:fallback');
       }
 
       if (!generated) {
@@ -1457,6 +1474,18 @@ export const storyImageFlow = ai.defineFlow(
           lastErrorMessage: null,
         },
         updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // Log the successful generation with the final image URL
+      // This is a separate log entry from the attempt-level logging in createImage
+      await logAIFlow({
+        flowName: generated.flowName,
+        sessionId: pageId,
+        prompt: generated.promptText,
+        startTime: generated.startTime,
+        modelName: generated.modelUsed,
+        imageUrl: uploadResult.imageUrl,
+        response: { text: null, finishReason: 'STOP' }, // Minimal response since details are in attempt logs
       });
 
       // Atomically increment the storybook's pagesReady counter for real-time progress updates

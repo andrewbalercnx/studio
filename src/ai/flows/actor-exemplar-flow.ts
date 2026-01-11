@@ -380,19 +380,19 @@ export const actorExemplarFlow = ai.defineFlow(
         },
       });
 
-      await logAIFlow({
-        flowName: 'actorExemplarFlow',
-        sessionId: actorId,
-        parentId: ownerParentUid,
-        prompt: promptTextForLogging,
-        response: llmResponse,
-        startTime,
-        modelName: DEFAULT_IMAGE_MODEL,
-      });
-
       const mediaUrl = llmResponse.media?.url;
       if (!mediaUrl) {
         const reason = llmResponse.finishMessage || llmResponse.text?.substring(0, 200) || 'unknown';
+        // Log the failed attempt before throwing
+        await logAIFlow({
+          flowName: 'actorExemplarFlow',
+          sessionId: actorId,
+          parentId: ownerParentUid,
+          prompt: promptTextForLogging,
+          response: llmResponse,
+          startTime,
+          modelName: DEFAULT_IMAGE_MODEL,
+        });
         throw new Error(`Model did not return an image. Reason: ${reason}`);
       }
 
@@ -403,6 +403,18 @@ export const actorExemplarFlow = ai.defineFlow(
         mimeType,
         exemplarId,
         ownerParentUid,
+      });
+
+      // Log success with the final image URL
+      await logAIFlow({
+        flowName: 'actorExemplarFlow',
+        sessionId: actorId,
+        parentId: ownerParentUid,
+        prompt: promptTextForLogging,
+        response: llmResponse,
+        startTime,
+        modelName: DEFAULT_IMAGE_MODEL,
+        imageUrl,
       });
 
       // Update exemplar document with success

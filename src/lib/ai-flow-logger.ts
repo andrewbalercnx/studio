@@ -21,6 +21,8 @@ type LogAIFlowParams = {
   maxAttempts?: number;
   /** Reason for retry (if this is a retry attempt) */
   retryReason?: string;
+  /** URL of the generated image (for image generation flows) */
+  imageUrl?: string | null;
 };
 
 export async function logAIFlow({
@@ -36,6 +38,7 @@ export async function logAIFlow({
   attemptNumber,
   maxAttempts,
   retryReason,
+  imageUrl,
 }: LogAIFlowParams) {
   try {
     const firestore = await getServerFirestore();
@@ -124,6 +127,11 @@ export async function logAIFlow({
 
       // Don't store the full custom object - it's too large and duplicates data
       // The important fields (usage, model) are now extracted above
+    }
+
+    // Add image URL for image generation flows
+    if (imageUrl) {
+      logData.imageUrl = imageUrl;
     }
 
     await firestore.collection('aiFlowLogs').add(logData);

@@ -205,7 +205,6 @@ export const characterAvatarFlow = ai.defineFlow(
           responseModalities: ['TEXT', 'IMAGE'],
         },
       });
-      await logAIFlow({ flowName: 'characterAvatarFlow', sessionId: characterId, parentId: character.ownerParentUid, prompt: promptText, response: llmResponse, startTime, modelName });
     } catch (e: any) {
       await logAIFlow({ flowName: 'characterAvatarFlow', sessionId: characterId, parentId: character.ownerParentUid, prompt: promptText, error: e, startTime, modelName });
       throw e;
@@ -213,6 +212,8 @@ export const characterAvatarFlow = ai.defineFlow(
 
     const dataUrl = llmResponse.media?.url;
     if (!dataUrl) {
+      // Log the failed attempt before throwing
+      await logAIFlow({ flowName: 'characterAvatarFlow', sessionId: characterId, parentId: character.ownerParentUid, prompt: promptText, response: llmResponse, startTime, modelName });
       throw new Error('The model did not return an image.');
     }
 
@@ -224,6 +225,9 @@ export const characterAvatarFlow = ai.defineFlow(
       characterId,
       parentUid: character.ownerParentUid,
     });
+
+    // Log success with the final image URL
+    await logAIFlow({ flowName: 'characterAvatarFlow', sessionId: characterId, parentId: character.ownerParentUid, prompt: promptText, response: llmResponse, startTime, modelName, imageUrl });
 
     // Update character profile with avatar URL
     await characterRef.update({

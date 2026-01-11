@@ -18,7 +18,36 @@
 
 ### 2026-01-11
 
-#### `9b764e5` - Fix exemplars not being generated when actorExemplars is empty
+#### `33c6071` - Add imageUrl to AI flow logs for image generation
+
+**Type**: Enhancement
+
+**Summary**: All image generation flows now include the final uploaded image URL in their AI flow logs. This makes it easier to review generated images directly from the logs.
+
+**Changes**:
+- Added `imageUrl` parameter to `logAIFlow` function
+- Updated all image generation flows to log the final image URL after upload:
+  - `storyImageFlow` (including title and back cover images)
+  - `actorExemplarFlow`
+  - `characterAvatarFlow`
+  - `avatarFlow`
+  - `storyActorAvatarFlow`
+  - `storyOutputTypeImageFlow`
+  - `imageStyleSampleFlow`
+
+**Files modified**:
+- `src/lib/ai-flow-logger.ts` - Added `imageUrl` parameter
+- `src/ai/flows/story-image-flow.ts` - Log with imageUrl after upload
+- `src/ai/flows/actor-exemplar-flow.ts` - Log with imageUrl after upload
+- `src/ai/flows/character-avatar-flow.ts` - Log with imageUrl after upload
+- `src/ai/flows/avatar-flow.ts` - Log with imageUrl after upload
+- `src/ai/flows/story-actor-avatar-flow.ts` - Log with imageUrl after upload
+- `src/ai/flows/story-output-type-image-flow.ts` - Log with imageUrl after upload
+- `src/ai/flows/image-style-sample-flow.ts` - Log with imageUrl after upload
+
+---
+
+#### `3133b9e` - Fix exemplars not being generated when actorExemplars is empty
 
 **Type**: Bug fix
 

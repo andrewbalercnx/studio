@@ -64,14 +64,6 @@ Create a whimsical, child-friendly illustration that represents "${childFacingLa
                     responseModalities: ['TEXT', 'IMAGE'],
                 },
             });
-
-            await logAIFlow({
-                flowName: 'storyOutputTypeImageFlow',
-                prompt: fullPrompt,
-                response: imageResponse,
-                startTime,
-                modelName,
-            });
         } catch (e: any) {
             await logAIFlow({
                 flowName: 'storyOutputTypeImageFlow',
@@ -86,6 +78,14 @@ Create a whimsical, child-friendly illustration that represents "${childFacingLa
         // 3. Extract the generated image
         const media = imageResponse.media;
         if (!media || !media.url) {
+            // Log the failed attempt
+            await logAIFlow({
+                flowName: 'storyOutputTypeImageFlow',
+                prompt: fullPrompt,
+                response: imageResponse,
+                startTime,
+                modelName,
+            });
             return {
                 ok: false,
                 errorMessage: 'Image generation failed: No media URL returned',
@@ -129,6 +129,16 @@ Create a whimsical, child-friendly illustration that represents "${childFacingLa
 
         // Get the public URL
         const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+
+        // Log success with the final image URL
+        await logAIFlow({
+            flowName: 'storyOutputTypeImageFlow',
+            prompt: fullPrompt,
+            response: imageResponse,
+            startTime,
+            modelName,
+            imageUrl: publicUrl,
+        });
 
         // 6. Update the storyOutputType document with the new image URL
         await outputTypeRef.update({

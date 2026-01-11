@@ -63,14 +63,6 @@ Style: ${stylePrompt}`;
                     responseModalities: ['TEXT', 'IMAGE'],
                 },
             });
-
-            await logAIFlow({
-                flowName: 'imageStyleSampleFlow',
-                prompt: fullPrompt,
-                response: imageResponse,
-                startTime,
-                modelName,
-            });
         } catch (e: any) {
             await logAIFlow({
                 flowName: 'imageStyleSampleFlow',
@@ -85,6 +77,14 @@ Style: ${stylePrompt}`;
         // 3. Extract the generated image
         const media = imageResponse.media;
         if (!media || !media.url) {
+            // Log the failed attempt
+            await logAIFlow({
+                flowName: 'imageStyleSampleFlow',
+                prompt: fullPrompt,
+                response: imageResponse,
+                startTime,
+                modelName,
+            });
             return {
                 ok: false,
                 errorMessage: 'Image generation failed: No media URL returned',
@@ -128,6 +128,16 @@ Style: ${stylePrompt}`;
 
         // Get the public URL
         const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+
+        // Log success with the final image URL
+        await logAIFlow({
+            flowName: 'imageStyleSampleFlow',
+            prompt: fullPrompt,
+            response: imageResponse,
+            startTime,
+            modelName,
+            imageUrl: publicUrl,
+        });
 
         // 6. Update the imageStyle document with the new sample image URL
         await imageStyleRef.update({
