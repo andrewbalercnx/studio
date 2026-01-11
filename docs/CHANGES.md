@@ -18,6 +18,21 @@
 
 ### 2026-01-11
 
+#### `9b764e5` - Fix exemplars not being generated when actorExemplars is empty
+
+**Type**: Bug fix
+
+**Summary**: Fixed a bug where exemplar character reference sheets were not being generated if `exemplarGeneration.status` was already 'ready' but the `actorExemplars` mapping was empty. This could happen if exemplar generation had been marked complete but no actual exemplars were created.
+
+**Root cause**: The condition to generate exemplars only checked if `exemplarGeneration.status !== 'ready'`, but didn't verify that `actorExemplars` actually contained entries.
+
+**Fix**: Now also regenerates exemplars if status is 'ready' but `actorExemplars` is empty.
+
+**Files modified**:
+- `src/app/api/storybookV2/images/route.ts` - Updated condition to regenerate exemplars when mapping is empty
+
+---
+
 #### `2cad8c9` - Add exemplar character reference sheets for consistent character depiction
 
 **Type**: Feature

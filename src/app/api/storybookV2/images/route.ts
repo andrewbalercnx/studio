@@ -190,9 +190,20 @@ export async function POST(request: Request) {
     let actorExemplars: Record<string, string> = storybookData?.actorExemplars || {};
     const exemplarStatus = storybookData?.exemplarGeneration?.status;
 
-    if (!pageId && exemplarStatus !== 'ready') {
+    // Generate exemplars if:
+    // 1. This is full storybook generation (not single-page)
+    // 2. AND either status isn't 'ready' OR status is 'ready' but actorExemplars is empty
+    const needsExemplarGeneration = !pageId && (
+      exemplarStatus !== 'ready' ||
+      Object.keys(actorExemplars).length === 0
+    );
+
+    if (needsExemplarGeneration) {
       // Only generate exemplars for full storybook generation (not single-page regeneration)
-      allLogs.push(`[exemplars] Exemplar status: ${exemplarStatus || 'not started'}, generating...`);
+      const regenerateReason = exemplarStatus === 'ready' && Object.keys(actorExemplars).length === 0
+        ? 'status is ready but actorExemplars is empty'
+        : `status: ${exemplarStatus || 'not started'}`;
+      allLogs.push(`[exemplars] Generating exemplars (${regenerateReason})...`);
 
       try {
         const exemplarsResponse = await fetch(new URL('/api/storybookV2/exemplars', request.url).toString(), {
