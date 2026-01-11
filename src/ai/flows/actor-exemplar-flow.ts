@@ -274,6 +274,7 @@ export const actorExemplarFlow = ai.defineFlow(
   async ({ actorId, actorType, imageStyleId, imageStylePrompt, ownerParentUid, storybookId }) => {
     const startTime = Date.now();
     let exemplarId: string | undefined;
+    let promptTextForLogging: string = `Exemplar generation for ${actorType} ${actorId}`;
 
     try {
       await initFirebaseAdminApp();
@@ -358,6 +359,7 @@ export const actorExemplarFlow = ai.defineFlow(
 
       // Build the prompt
       const promptText = buildExemplarPrompt(actor, imageStylePrompt, actorType);
+      promptTextForLogging = `${promptText} [${styleExampleParts.length} style examples, ${referencePhotoParts.length} reference photos]`;
 
       // Construct prompt parts: style examples first, then reference photos, then text
       const promptParts: any[] = [
@@ -382,7 +384,7 @@ export const actorExemplarFlow = ai.defineFlow(
         flowName: 'actorExemplarFlow',
         sessionId: actorId,
         parentId: ownerParentUid,
-        prompt: `${promptText} [${styleExampleParts.length} style examples, ${referencePhotoParts.length} reference photos]`,
+        prompt: promptTextForLogging,
         response: llmResponse,
         startTime,
         modelName: DEFAULT_IMAGE_MODEL,
@@ -426,7 +428,7 @@ export const actorExemplarFlow = ai.defineFlow(
         flowName: 'actorExemplarFlow',
         sessionId: actorId,
         parentId: ownerParentUid,
-        prompt: `Failed exemplar generation for ${actorId}`,
+        prompt: promptTextForLogging,
         error,
         startTime,
         modelName: DEFAULT_IMAGE_MODEL,
