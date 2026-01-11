@@ -16,6 +16,24 @@
 
 ## Changes
 
+### 2026-01-11
+
+#### `e65512b` - Differentiate AI flow log names for cover images
+
+**Type**: Improvement
+
+**Summary**: Image generation for title/front cover and back cover pages now log with distinct flow names in AIFlowLog for easier identification and debugging.
+
+**Changes**:
+- Front cover (`cover_front`) images log as `storyImageFlow:createTitleImage`
+- Back cover (`cover_back`) images log as `storyImageFlow:createBackImage`
+- Content page images continue to log as `storyImageFlow:createImage`
+
+**Files modified**:
+- `src/ai/flows/story-image-flow.ts`
+
+---
+
 ### 2026-01-09
 
 #### `pending` - Show placeholder and disable continue while character avatar generates

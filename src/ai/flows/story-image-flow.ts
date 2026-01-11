@@ -714,7 +714,22 @@ type CreateImageParams = {
   targetHeightPx?: number;
   aspectRatio?: string;
   additionalPrompt?: string;   // Additional user instructions for image generation
+  pageKind?: string;           // Page kind for logging (cover_front, cover_back, etc.)
 };
+
+/**
+ * Get the flow name suffix based on page kind for AI flow logging.
+ */
+function getFlowNameForPageKind(pageKind?: string): string {
+  switch (pageKind) {
+    case 'cover_front':
+      return 'storyImageFlow:createTitleImage';
+    case 'cover_back':
+      return 'storyImageFlow:createBackImage';
+    default:
+      return 'storyImageFlow:createImage';
+  }
+}
 
 async function createImage(params: CreateImageParams): Promise<GenerateImageResult> {
   const {
@@ -729,7 +744,11 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     targetHeightPx,
     aspectRatio,
     additionalPrompt,
+    pageKind,
   } = params;
+
+  // Get the flow name based on page kind for logging
+  const flowName = getFlowNameForPageKind(pageKind);
 
   if (MOCK_IMAGES) {
     return buildMockSvg(sceneText, targetWidthPx, targetHeightPx);
@@ -895,7 +914,7 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
       generation = await Promise.race([generatePromise, timeoutPromise]);
       console.log('[story-image-flow] Generation completed. Keys:', Object.keys(generation));
       await logAIFlow({
-        flowName: 'storyImageFlow:createImage',
+        flowName,
         sessionId: null,
         prompt: currentPromptText,
         response: generation,
@@ -939,7 +958,7 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
       const errorMessage = e?.message || String(e);
       console.error(`[story-image-flow] Generation failed (attempt ${attempt + 1}):`, errorMessage);
       await logAIFlow({
-        flowName: 'storyImageFlow:createImage',
+        flowName,
         sessionId: null,
         prompt: currentPromptText,
         error: e,
@@ -1284,6 +1303,7 @@ export const storyImageFlow = ai.defineFlow(
           targetHeightPx,
           aspectRatio,
           additionalPrompt,
+          pageKind: page.kind,
         });
       } catch (generationError: any) {
         const fallbackAllowed = MOCK_IMAGES || !!regressionTag || process.env.STORYBOOK_IMAGE_FALLBACK === 'true';
