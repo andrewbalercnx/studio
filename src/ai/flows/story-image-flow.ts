@@ -54,6 +54,9 @@ const StoryImageFlowInput = z.object({
   aspectRatio: z.string().optional(),
   // Additional instructions from the user to guide image regeneration
   additionalPrompt: z.string().optional(),
+  // Map of actorId -> exemplarImageUrl for character reference sheets
+  // When provided, these are used instead of individual photos for character consistency
+  actorExemplars: z.record(z.string(), z.string()).optional(),
 });
 
 const StoryImageFlowOutput = z.object({
@@ -318,13 +321,20 @@ type ActorData = {
   pronouns?: string;
   likes?: string[];
   dislikes?: string[];
-  images: string[]; // Avatar + photos
+  images: string[]; // Avatar + photos (fallback when no exemplar)
+  exemplarImage?: string; // Character reference sheet URL (preferred over images)
 };
 
 /**
  * Build structured actor data from an entity
+ * @param exemplarImage - Optional exemplar URL for this actor (takes precedence over images)
  */
-function buildActorData(entity: Character | ChildProfile, entityId: string, isMainChild: boolean = false): ActorData {
+function buildActorData(
+  entity: Character | ChildProfile,
+  entityId: string,
+  isMainChild: boolean = false,
+  exemplarImage?: string
+): ActorData {
   const images: string[] = [];
   if (entity.avatarUrl) images.push(entity.avatarUrl);
   if (entity.photos?.length) images.push(...entity.photos);
@@ -343,6 +353,7 @@ function buildActorData(entity: Character | ChildProfile, entityId: string, isMa
     likes: entity.likes,
     dislikes: entity.dislikes,
     images,
+    exemplarImage, // Character reference sheet (preferred over individual images)
   };
 }
 
@@ -350,19 +361,22 @@ function buildActorData(entity: Character | ChildProfile, entityId: string, isMa
  * Build structured JSON for all actors in a scene
  * mainChild is always included if mainChildProfile is provided, even if not in actorIds
  * Other actors (siblings, characters) are included based on actorIds
+ * @param actorExemplarUrls - Map of actorId -> exemplar image URL for character reference sheets
  */
 function buildActorsJson(
   actorIds: string[],
   actorMap: Map<string, Character | ChildProfile>,
   mainChildId?: string,
-  mainChildProfile?: ChildProfile
+  mainChildProfile?: ChildProfile,
+  actorExemplarUrls?: Record<string, string>
 ): string {
   const actors: ActorData[] = [];
   const includedIds = new Set<string>();
 
   // Always add main child first if provided
   if (mainChildId && mainChildProfile) {
-    actors.push(buildActorData(mainChildProfile, mainChildId, true));
+    const exemplarUrl = actorExemplarUrls?.[mainChildId];
+    actors.push(buildActorData(mainChildProfile, mainChildId, true, exemplarUrl));
     includedIds.add(mainChildId);
   }
 
@@ -373,7 +387,8 @@ function buildActorsJson(
 
     const entity = actorMap.get(actorId);
     if (entity) {
-      actors.push(buildActorData(entity, actorId, false));
+      const exemplarUrl = actorExemplarUrls?.[actorId];
+      actors.push(buildActorData(entity, actorId, false, exemplarUrl));
       includedIds.add(actorId);
     }
   }
@@ -708,13 +723,15 @@ type CreateImageParams = {
   actorsJson: string;          // Structured JSON of all actors in the scene
   childAge?: string;           // Age of the main child (e.g., "3 years old")
   mainChildId?: string;        // ID of the main child
-  referencePhotos: string[];   // URLs of reference photos
+  referencePhotos: string[];   // URLs of reference photos (fallback when no exemplars)
+  exemplarImages?: string[];   // URLs of exemplar reference sheets (preferred)
   styleExampleImages?: string[]; // URLs of example images for art style reference
   targetWidthPx?: number;
   targetHeightPx?: number;
   aspectRatio?: string;
   additionalPrompt?: string;   // Additional user instructions for image generation
   pageKind?: string;           // Page kind for logging (cover_front, cover_back, etc.)
+  hasExemplars?: boolean;      // True if exemplars are being used (affects prompt wording)
 };
 
 /**
@@ -739,12 +756,14 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     childAge,
     mainChildId,
     referencePhotos,
+    exemplarImages,
     styleExampleImages,
     targetWidthPx,
     targetHeightPx,
     aspectRatio,
     additionalPrompt,
     pageKind,
+    hasExemplars,
   } = params;
 
   // Get the flow name based on page kind for logging
@@ -757,7 +776,7 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
   // Fetch global image prompt configuration
   const globalImagePrompt = await getGlobalImagePrompt();
 
-  // Fetch style example images first (these go before reference photos)
+  // Fetch style example images first (these go before character references)
   const styleExampleParts = styleExampleImages && styleExampleImages.length > 0
     ? (await Promise.all(
         styleExampleImages.map(async (url) => {
@@ -767,12 +786,27 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
       )).filter((part): part is { media: { url: string } } => part !== null)
     : [];
 
-  const imageParts = (await Promise.all(
+  // Fetch exemplar images (character reference sheets) - preferred over photos
+  const exemplarParts = exemplarImages && exemplarImages.length > 0
+    ? (await Promise.all(
+        exemplarImages.map(async (url) => {
+          const dataUri = await fetchImageAsDataUri(url);
+          return dataUri ? { media: { url: dataUri } } : null;
+        })
+      )).filter((part): part is { media: { url: string } } => part !== null)
+    : [];
+
+  // Fetch reference photos (fallback when no exemplars available)
+  const photoParts = (await Promise.all(
     referencePhotos.map(async (url) => {
       const dataUri = await fetchImageAsDataUri(url);
       return dataUri ? { media: { url: dataUri } } : null;
     })
   )).filter((part): part is { media: { url: string } } => part !== null);
+
+  // Use exemplars if available, otherwise fall back to photos
+  const characterRefParts = exemplarParts.length > 0 ? exemplarParts : photoParts;
+  const usingExemplars = exemplarParts.length > 0;
 
   // Build dimension hint for the prompt if target dimensions are provided
   let dimensionHint = '';
@@ -791,29 +825,35 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
 
   // 1. Target audience
   if (mainChildId && childAge) {
-    structuredPrompt += `Create an image for a child's storybook. The main child ($$${mainChildId}$$) is ${childAge}.\n\n`;
+    structuredPrompt += `Create an image for a child's storybook. The main child ($$${mainChildId}$$) is ${childAge}. Create an image of the following scene, suitable for a child of this age.\n\n`;
   } else {
     structuredPrompt += `Create an image for a child's storybook.\n\n`;
   }
 
-  // 2. Art style (with reference to example images if provided)
+  // 2. Scene description with $$Id$$ placeholders intact (moved up for better context)
+  structuredPrompt += `Scene: ${sceneText}\n\n`;
+
+  // 3. Art style (with reference to example images if provided)
   if (styleExampleParts.length > 0) {
     structuredPrompt += `Art Style: ${artStyle}\n\nIMPORTANT: Use the first ${styleExampleParts.length} image(s) provided as visual style reference. Match their artistic style, color palette, line weight, and overall aesthetic closely.\n\n`;
   } else {
     structuredPrompt += `Art Style: ${artStyle}\n\n`;
   }
 
-  // 3. Scene description with $$Id$$ placeholders intact
-  structuredPrompt += `Scene: ${sceneText}\n\n`;
-
   // 3b. Additional user instructions (if provided)
   if (additionalPrompt && additionalPrompt.trim()) {
     structuredPrompt += `Additional instructions: ${additionalPrompt.trim()}\n\n`;
   }
 
-  // 4. Structured actor data
+  // 4. Structured actor data with reference to exemplar/photo images
   if (actorsJson && actorsJson.length > 0) {
-    structuredPrompt += `Characters in this scene (use the character reference images for visual reference):\n${actorsJson}\n`;
+    if (usingExemplars || hasExemplars) {
+      // When exemplars are available, reference them as primary character source
+      structuredPrompt += `Characters in this scene (for each character, use the exemplarImage reference sheet showing front/side/back views for visual consistency, supported by the imageDescription if needed):\n${actorsJson}\n`;
+    } else {
+      // Fallback to original prompt when using photos
+      structuredPrompt += `Characters in this scene (use the character reference images for visual reference):\n${actorsJson}\n`;
+    }
   }
 
   // 5. Dimension hints
@@ -821,22 +861,22 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
 
   // Build prompt variants for retry logic - progressively simplify on failure
   // The style example images are most likely to trigger copyright/recitation filters,
-  // so we remove those first on retry while keeping reference photos and actor details
+  // so we remove those first on retry while keeping character references and actor details
   const fullPromptText = structuredPrompt.trim();
   const noStyleExamplesPromptText = structuredPrompt.trim(); // Same text, just no style images
   const minimalPromptText = `Art Style: ${artStyle}\n\nScene: ${sceneText}${dimensionHint}`.trim();  // No actor details
 
-  // Attempt 1: Full prompt with style examples, reference photos, and actor details
+  // Attempt 1: Full prompt with style examples, character references (exemplars or photos), and actor details
   const fullPromptParts: any[] = [
     ...styleExampleParts,
-    ...imageParts,
+    ...characterRefParts,
     { text: fullPromptText },
   ];
 
   // Attempt 2: Remove style example images (most likely copyright trigger)
-  // Keep reference photos and actor details for character consistency
+  // Keep character references and actor details for character consistency
   const noStyleExamplesPromptParts: any[] = [
-    ...imageParts,
+    ...characterRefParts,
     { text: noStyleExamplesPromptText },
   ];
 
@@ -846,7 +886,7 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
   ];
 
   console.log('[story-image-flow] Generating image with model:', DEFAULT_IMAGE_MODEL);
-  console.log('[story-image-flow] Prompt parts count:', fullPromptParts.length, 'Style examples:', styleExampleParts.length, 'Character refs:', imageParts.length);
+  console.log('[story-image-flow] Prompt parts count:', fullPromptParts.length, 'Style examples:', styleExampleParts.length, 'Exemplars:', exemplarParts.length, 'Photos:', photoParts.length);
   if (actorsJson) {
     console.log('[story-image-flow] Actors JSON length:', actorsJson.length);
   }
@@ -880,10 +920,10 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
 
     if (attempt === 0) {
       currentPromptParts = fullPromptParts;
-      currentPromptText = `${fullPromptText} [with ${styleExampleParts.length} style example(s), ${imageParts.length} reference photo(s), aspect=${aspectRatio || 'auto'}]`;
+      currentPromptText = `${fullPromptText} [with ${styleExampleParts.length} style example(s), ${exemplarParts.length} exemplar(s), ${photoParts.length} photo(s), aspect=${aspectRatio || 'auto'}]`;
     } else if (attempt === 1) {
       currentPromptParts = noStyleExamplesPromptParts;
-      currentPromptText = `${noStyleExamplesPromptText} [no style examples, ${imageParts.length} reference photo(s), aspect=${aspectRatio || 'auto'}]`;
+      currentPromptText = `${noStyleExamplesPromptText} [no style examples, ${characterRefParts.length} character ref(s), aspect=${aspectRatio || 'auto'}]`;
       console.log(`[story-image-flow] Retry ${attempt}: Removing style example images (possible copyright trigger)`);
     } else {
       currentPromptParts = minimalPromptParts;
@@ -1083,8 +1123,8 @@ export const storyImageFlow = ai.defineFlow(
     inputSchema: StoryImageFlowInput,
     outputSchema: StoryImageFlowOutput,
   },
-  async ({storyId, pageId, regressionTag, forceRegenerate, storybookId, targetWidthPx, targetHeightPx, imageStylePrompt, imageStyleId, aspectRatio, additionalPrompt}) => {
-    console.log(`[storyImageFlow] Called with storyId=${storyId}, pageId=${pageId}, storybookId=${storybookId || 'undefined'}, imageStyleId=${imageStyleId || 'undefined'}, aspectRatio=${aspectRatio || 'auto'}`);
+  async ({storyId, pageId, regressionTag, forceRegenerate, storybookId, targetWidthPx, targetHeightPx, imageStylePrompt, imageStyleId, aspectRatio, additionalPrompt, actorExemplars}) => {
+    console.log(`[storyImageFlow] Called with storyId=${storyId}, pageId=${pageId}, storybookId=${storybookId || 'undefined'}, imageStyleId=${imageStyleId || 'undefined'}, aspectRatio=${aspectRatio || 'auto'}, exemplars=${actorExemplars ? Object.keys(actorExemplars).length : 0}`);
     const logs: string[] = [];
 
     // Validate required document IDs upfront to give clear error messages
@@ -1214,13 +1254,40 @@ export const storyImageFlow = ai.defineFlow(
           }
         }
 
+        // Load exemplar image URLs from the actorExemplars map (if provided)
+        // These are character reference sheets generated for consistent character depiction
+        let actorExemplarUrls: Record<string, string> | undefined;
+        if (actorExemplars && Object.keys(actorExemplars).length > 0) {
+          // actorExemplars is a map of actorId -> exemplarId
+          // We need to load the exemplar documents to get the imageUrls
+          actorExemplarUrls = {};
+          const exemplarIds = Object.values(actorExemplars);
+          const exemplarDocs = await Promise.all(
+            exemplarIds.map(id => firestore.collection('exemplars').doc(id).get())
+          );
+          const actorIdToExemplarId = Object.entries(actorExemplars);
+          for (let i = 0; i < actorIdToExemplarId.length; i++) {
+            const [actorId, exemplarId] = actorIdToExemplarId[i];
+            const doc = exemplarDocs.find(d => d.id === exemplarId);
+            if (doc?.exists) {
+              const data = doc.data();
+              if (data?.imageUrl && data?.status === 'ready') {
+                actorExemplarUrls[actorId] = data.imageUrl;
+              }
+            }
+          }
+          logs.push(`[exemplars] Loaded ${Object.keys(actorExemplarUrls).length} exemplar image URLs`);
+        }
+
         // Build structured actors JSON for the prompt
         // Always include main child (with full profile), plus all actors from page.entityIds
+        // Pass exemplar URLs so each actor can reference their character sheet
         const actorsJson = buildActorsJson(
           page.entityIds ?? [],
           entityData.actorMap,
           storyData.childId,
-          childProfile ?? undefined
+          childProfile ?? undefined,
+          actorExemplarUrls
         );
         if (actorsJson) {
           logs.push(`[actors] Structured JSON built: mainChild=${!!childProfile}, pageActors=${entityData.actorMap.size}`);
@@ -1291,6 +1358,11 @@ export const storyImageFlow = ai.defineFlow(
         // Priority: imageDescription > bodyText > imagePrompt
         const sceneText = page.imageDescription || page.bodyText || page.imagePrompt;
 
+        // Collect exemplar image URLs for image generation
+        // These are the actual URLs of the character reference sheets
+        const exemplarImageUrls = actorExemplarUrls ? Object.values(actorExemplarUrls) : [];
+        const hasExemplars = exemplarImageUrls.length > 0;
+
         generated = await createImage({
           sceneText,
           artStyle,
@@ -1298,12 +1370,14 @@ export const storyImageFlow = ai.defineFlow(
           childAge,
           mainChildId: storyData.childId,
           referencePhotos,
+          exemplarImages: exemplarImageUrls,
           styleExampleImages,
           targetWidthPx,
           targetHeightPx,
           aspectRatio,
           additionalPrompt,
           pageKind: page.kind,
+          hasExemplars,
         });
       } catch (generationError: any) {
         const fallbackAllowed = MOCK_IMAGES || !!regressionTag || process.env.STORYBOOK_IMAGE_FALLBACK === 'true';

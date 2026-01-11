@@ -368,6 +368,39 @@ export type Story = {
 };
 
 /**
+ * ActorExemplar - A character reference sheet showing front/side/back views
+ * Generated in a specific image style for consistent character depiction across storybook pages.
+ * Stored at: exemplars/{exemplarId}
+ */
+export type ActorExemplar = {
+  id: string;                    // Document ID
+  actorId: string;               // Child or character document ID
+  actorType: 'child' | 'character';
+  imageStyleId: string;          // The style this exemplar was generated for
+  imageUrl?: string;             // Firebase Storage URL (set when ready)
+  storagePath?: string;          // For cleanup
+  status: 'pending' | 'generating' | 'ready' | 'error';
+  lastErrorMessage?: string;
+  createdAt: any;
+  updatedAt: any;
+  // For admin cleanup
+  ownerParentUid: string;
+  usedByStorybookIds?: string[]; // Track which storybooks used this exemplar
+};
+
+/**
+ * Exemplar generation status for a storybook
+ */
+export type StoryBookExemplarGenerationStatus = {
+  status: 'idle' | 'pending' | 'running' | 'ready' | 'error';
+  lastRunAt?: any;
+  lastCompletedAt?: any;
+  lastErrorMessage?: string;
+  actorsTotal?: number;
+  actorsReady?: number;
+};
+
+/**
  * StoryBookOutput - A specific rendering of a Story with output type, image style, and layout.
  * Multiple StoryBookOutputs can be created from a single Story.
  * Stored at: stories/{storyId}/storybooks/{storybookId}
@@ -392,6 +425,10 @@ export type StoryBookOutput = {
   // Generation status
   pageGeneration: StoryBookPageGenerationStatus;
   imageGeneration: StoryBookImageGenerationStatus;
+  exemplarGeneration?: StoryBookExemplarGenerationStatus;
+
+  // Map of actorId -> exemplarId for this storybook's character reference images
+  actorExemplars?: Record<string, string>;
 
   // Finalization for print
   isFinalized?: boolean;

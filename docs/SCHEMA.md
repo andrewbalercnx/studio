@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-08 (added musicEnabled field to children)
+> **Last Updated**: 2026-01-11 (added exemplars collection for character reference sheets)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -576,6 +576,33 @@ Art style configurations for image generation.
 | `uploadedAt` | timestamp | Upload time |
 
 **Security**: Admin only for writes; authenticated users can read.
+
+---
+
+### `exemplars`
+
+Actor reference sheets for consistent character depiction in storybook images. Each exemplar shows front/side/back views of a character in a specific art style.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Document ID |
+| `actorId` | string | Yes | Child or character document ID |
+| `actorType` | 'child' \| 'character' | Yes | Type of actor |
+| `imageStyleId` | string | Yes | Style this exemplar was generated for |
+| `imageUrl` | string | No | Firebase Storage URL (set when ready) |
+| `storagePath` | string | No | Storage path for cleanup |
+| `status` | 'pending' \| 'generating' \| 'ready' \| 'error' | Yes | Generation status |
+| `lastErrorMessage` | string | No | Error message if status is 'error' |
+| `ownerParentUid` | string | Yes | Parent's Firebase UID (for cleanup queries) |
+| `usedByStorybookIds` | string[] | No | Storybook IDs that reference this exemplar |
+| `createdAt` | timestamp | Yes | Creation time |
+| `updatedAt` | timestamp | Yes | Last update time |
+
+**Usage**: Exemplars are generated before storybook images and provide consistent character appearance. They are keyed by actorId + imageStyleId combination.
+
+**Cleanup**: Admin processes can query by `ownerParentUid` or `createdAt` to delete old exemplars.
+
+**Security**: Created by system during storybook generation; readable by owner; admin full access.
 
 ---
 

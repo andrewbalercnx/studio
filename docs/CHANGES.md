@@ -18,6 +18,40 @@
 
 ### 2026-01-11
 
+#### `2cad8c9` - Add exemplar character reference sheets for consistent character depiction
+
+**Type**: Feature
+
+**Summary**: Before generating storybook page images, the system now creates "exemplar" character reference sheets showing front, side, and back views of each actor in the selected art style. These reference sheets are used instead of individual photos, providing more consistent character appearance across all pages of the storybook.
+
+**How it works**:
+1. When storybook image generation starts, the system first generates an exemplar for each actor (child/character) in the story
+2. Each exemplar is a single image showing the character from front, 3/4, and back views in the storybook's art style
+3. Exemplars are cached per actor+style combination and reused across storybooks
+4. If exemplar generation fails for any actor, the system falls back to the previous approach (using photos/avatars)
+
+**Benefits**:
+- More consistent character appearance across all pages of a storybook
+- Reduced token usage (one exemplar image instead of multiple photos)
+- Characters appear in the art style from the start (not adapted from photos each time)
+
+**Data Model**:
+- New `exemplars` collection stores generated character reference sheets
+- `StoryBookOutput.exemplarGeneration` tracks exemplar generation status
+- `StoryBookOutput.actorExemplars` maps actorId → exemplarId
+
+**Files created**:
+- `src/ai/flows/actor-exemplar-flow.ts` - Genkit flow for generating exemplar images
+- `src/app/api/storybookV2/exemplars/route.ts` - API endpoint to orchestrate exemplar generation
+
+**Files modified**:
+- `src/lib/types.ts` - Added `ActorExemplar` type, updated `StoryBookOutput`
+- `src/ai/flows/story-image-flow.ts` - Accept and use exemplar images in prompts
+- `src/app/api/storybookV2/images/route.ts` - Generate exemplars before page images
+- `docs/SCHEMA.md` - Document new `exemplars` collection
+
+---
+
 #### `e65512b` - Differentiate AI flow log names for cover images
 
 **Type**: Improvement

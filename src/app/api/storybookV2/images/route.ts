@@ -185,6 +185,47 @@ export async function POST(request: Request) {
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    // Generate exemplar character reference sheets before image generation (if not already done)
+    // This creates consistent character reference images for each actor in the storybook
+    let actorExemplars: Record<string, string> = storybookData?.actorExemplars || {};
+    const exemplarStatus = storybookData?.exemplarGeneration?.status;
+
+    if (!pageId && exemplarStatus !== 'ready') {
+      // Only generate exemplars for full storybook generation (not single-page regeneration)
+      allLogs.push(`[exemplars] Exemplar status: ${exemplarStatus || 'not started'}, generating...`);
+
+      try {
+        const exemplarsResponse = await fetch(new URL('/api/storybookV2/exemplars', request.url).toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storyId, storybookId, forceRegenerate: false }),
+        });
+
+        if (exemplarsResponse.ok) {
+          const exemplarsResult = await exemplarsResponse.json();
+          actorExemplars = exemplarsResult.actorExemplars || {};
+          allLogs.push(`[exemplars] Generated ${Object.keys(actorExemplars).length} exemplar(s)`);
+          if (exemplarsResult.logs) {
+            allLogs.push(...exemplarsResult.logs.map((l: string) => `[exemplars] ${l}`));
+          }
+        } else {
+          const errorText = await exemplarsResponse.text();
+          allLogs.push(`[exemplars] Warning: Exemplar generation failed (${exemplarsResponse.status}): ${errorText.substring(0, 200)}`);
+          // Continue without exemplars - will fall back to photos
+        }
+      } catch (exemplarError: any) {
+        allLogs.push(`[exemplars] Warning: Exemplar generation error: ${exemplarError?.message || exemplarError}`);
+        // Continue without exemplars - will fall back to photos
+      }
+
+      // Reload storybook data to get updated actorExemplars
+      const updatedStorybookSnap = await storybookRef.get();
+      const updatedStorybookData = updatedStorybookSnap.data();
+      actorExemplars = updatedStorybookData?.actorExemplars || actorExemplars;
+    } else if (Object.keys(actorExemplars).length > 0) {
+      allLogs.push(`[exemplars] Using ${Object.keys(actorExemplars).length} existing exemplar(s)`);
+    }
+
     // Load the print layout for page-type-aware image dimensions
     // Fall back to DEFAULT_PRINT_LAYOUT_ID if storybook doesn't have one set
     // Use isValidDocumentId to ensure we have a valid string (not null, undefined, or empty)
@@ -311,6 +352,8 @@ export async function POST(request: Request) {
           targetHeightPx: pageTargetHeightPx,
           // Only pass additionalPrompt for single-page regeneration
           additionalPrompt: pageId ? additionalPrompt : undefined,
+          // Pass actor exemplars for consistent character depiction
+          actorExemplars: Object.keys(actorExemplars).length > 0 ? actorExemplars : undefined,
         },
       });
     }
