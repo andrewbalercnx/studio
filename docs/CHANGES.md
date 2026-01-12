@@ -18,30 +18,30 @@
 
 ### 2026-01-12
 
-#### `pending` - Fix exemplar layout to use 2x2 grid with face close-up
+#### `pending` - Put face close-up first in exemplar layout
 
-**Type**: Fix
+**Type**: Enhancement
 
-**Summary**: Fixed the character exemplar reference sheet to use a proper 2x2 grid layout instead of a horizontal row. Changed aspect ratio from 21:9 to 1:1 (square) to enforce the grid layout. Added ASCII art diagram in prompt to clearly show the expected quadrant arrangement. Strengthened instructions for the face close-up in the bottom-right quadrant.
+**Summary**: Moved the face close-up to the TOP-LEFT (first) position in the exemplar reference sheet since the face is the most important element for character recognition and consistency. Emphasized that face matching is critical for character recognition across scenes.
 
 **Changes**:
 1. **story-exemplar-generation-flow.ts**:
-   - Changed `EXEMPLAR_ASPECT_RATIO` from '21:9' to '1:1' (square) to support 2x2 grid
-   - Added ASCII art diagram showing the expected quadrant layout
-   - Added explicit "CRITICAL" instruction emphasizing the face close-up requirement
-   - Clarified that bottom-right must be HEAD AND SHOULDERS ONLY, not full body
-   - Added numbered quadrant details for clarity
+   - Moved FACE CLOSE-UP from bottom-right to TOP-LEFT (first quadrant)
+   - Reordered quadrant details to list face first "in order of importance"
+   - Added "THE FACE IS THE MOST IMPORTANT ELEMENT" header before layout
+   - Emphasized facial feature matching in requirements
+   - Added note that face close-up is "critical for ensuring the character is recognizable in every scene"
 
-**Expected layout** (2x2 grid):
+**New layout** (2x2 grid with face first):
 ```
 ┌─────────────────┬─────────────────┐
 │   TOP-LEFT:     │   TOP-RIGHT:    │
-│   FRONT VIEW    │   BACK VIEW     │
-│   (full body)   │   (full body)   │
+│   FACE CLOSE-UP │   FRONT VIEW    │
+│   (HEAD ONLY)   │   (full body)   │
 ├─────────────────┼─────────────────┤
 │   BOTTOM-LEFT:  │   BOTTOM-RIGHT: │
-│   3/4 VIEW      │   FACE CLOSE-UP │
-│   (full body)   │   (HEAD ONLY)   │
+│   3/4 VIEW      │   BACK VIEW     │
+│   (full body)   │   (full body)   │
 └─────────────────┴─────────────────┘
 ```
 

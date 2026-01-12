@@ -152,40 +152,43 @@ Pronouns: ${pronouns}${appearanceContext}
 
 === REFERENCE SHEET LAYOUT (CRITICAL - MUST BE EXACTLY AS SPECIFIED) ===
 
-IMAGE LAYOUT: Create a SQUARE image divided into 4 EQUAL QUADRANTS (2 rows × 2 columns):
+IMAGE LAYOUT: Create a SQUARE image divided into 4 EQUAL QUADRANTS (2 rows × 2 columns).
+
+THE FACE IS THE MOST IMPORTANT ELEMENT - it goes in the TOP-LEFT (first position) as a close-up portrait.
 
 ┌─────────────────┬─────────────────┐
 │   TOP-LEFT:     │   TOP-RIGHT:    │
-│   FRONT VIEW    │   BACK VIEW     │
-│   (full body)   │   (full body)   │
+│   FACE CLOSE-UP │   FRONT VIEW    │
+│   (HEAD ONLY)   │   (full body)   │
 ├─────────────────┼─────────────────┤
 │   BOTTOM-LEFT:  │   BOTTOM-RIGHT: │
-│   3/4 VIEW      │   FACE CLOSE-UP │
-│   (full body)   │   (HEAD ONLY)   │
+│   3/4 VIEW      │   BACK VIEW     │
+│   (full body)   │   (full body)   │
 └─────────────────┴─────────────────┘
 
-QUADRANT DETAILS:
-1. TOP-LEFT: Full body FRONT view - character facing the viewer, head to feet visible
-2. TOP-RIGHT: Full body BACK view - character facing AWAY from viewer, head to feet visible
+QUADRANT DETAILS (in order of importance):
+1. TOP-LEFT: **FACE CLOSE-UP** - HEAD AND SHOULDERS ONLY (portrait crop). This is the MOST IMPORTANT view. Show the face in clear detail: eyes, eyebrows, nose, mouth, ears, hair framing the face. This must NOT be full body.
+2. TOP-RIGHT: Full body FRONT view - character facing the viewer directly, head to feet visible, simple standing pose
 3. BOTTOM-LEFT: Full body 3/4 view - character turned slightly to show depth, head to feet visible
-4. BOTTOM-RIGHT: FACE CLOSE-UP - HEAD AND SHOULDERS ONLY, NOT full body. This is a portrait showing the face in detail.
+4. BOTTOM-RIGHT: Full body BACK view - character facing AWAY from viewer, head to feet visible
 
-CRITICAL: The bottom-right quadrant MUST be a FACE CLOSE-UP (head and shoulders portrait), NOT another full-body view. This is essential for capturing facial details.
+CRITICAL: The TOP-LEFT quadrant MUST be a FACE CLOSE-UP showing only head and shoulders. This is essential for character recognition and consistency. Do NOT put a full-body view in the top-left position.
 
 === STRICT REQUIREMENTS ===
 1. Use a plain WHITE or very light neutral background - no scenery, no props
 2. All FOUR views MUST show the EXACT SAME character with IDENTICAL:
-   - Clothing, accessories, and any distinctive items
+   - Facial features (eyes, nose, mouth, eyebrows - MUST MATCH exactly)
    - Hair style, color, and texture
-   - Skin tone and facial features
+   - Skin tone
+   - Clothing, accessories, and any distinctive items
    - Body proportions and build
    - Art style rendering
 3. The three full-body poses should be simple standing poses - neutral, not action poses
-4. The face close-up MUST clearly show: eyes, nose, mouth, eyebrows, and any distinctive facial features
+4. The face close-up should be large enough to clearly see all facial details
 5. Make the character friendly and appealing to young children
 6. Each quadrant should be clearly separated with equal spacing
 
-This reference sheet will be used to maintain character consistency across multiple story illustrations.`;
+This reference sheet will be used to maintain character consistency across multiple story illustrations. The face close-up is critical for ensuring the character is recognizable in every scene.`;
 
   // Fetch style example images first (these set the visual style)
   const styleExampleParts = (await Promise.all(
