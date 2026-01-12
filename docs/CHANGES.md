@@ -18,6 +18,24 @@
 
 ### 2026-01-12
 
+#### `pending` - Wait for exemplar generation before image generation
+
+**Type**: Fix
+
+**Summary**: The images route now waits for exemplar generation to complete before starting page image generation. Previously, if the images endpoint was called while exemplar generation was still running, it would proceed without the exemplars and fall back to using photos. Now it polls for up to 2 minutes waiting for exemplars to be ready, ensuring character reference sheets are used for consistent character depiction.
+
+**Changes**:
+1. **images/route.ts**:
+   - Added polling loop that waits for `exemplarGeneration.status` to become 'ready' or 'error'
+   - Polls every 3 seconds for up to 2 minutes
+   - Falls back to photos if exemplars time out or fail
+   - Improved logging to show wait progress
+
+**Files modified**:
+- `src/app/api/storybookV2/images/route.ts`
+
+---
+
 #### `pending` - Include failure reasons in AI flow logs
 
 **Type**: Fix

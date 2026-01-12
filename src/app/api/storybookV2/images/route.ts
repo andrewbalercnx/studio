@@ -198,9 +198,41 @@ export async function POST(request: Request) {
     // Get actor exemplar URLs from storybook (generated after pagination, in parallel with audio)
     // actorExemplarUrls is a map of actorId -> exemplarImageUrl
     let actorExemplarUrls: Record<string, string> = storybookData?.actorExemplarUrls || {};
-    const exemplarStatus = storybookData?.exemplarGeneration?.status;
+    let exemplarStatus = storybookData?.exemplarGeneration?.status;
 
-    // Log exemplar state
+    // If exemplar generation is in progress, wait for it to complete (up to 2 minutes)
+    // This ensures we use the exemplar reference sheets for consistent character depiction
+    if (exemplarStatus === 'running' || exemplarStatus === 'pending') {
+      allLogs.push(`[exemplars] Waiting for exemplar generation to complete (status: ${exemplarStatus})...`);
+      const maxWaitMs = 120000; // 2 minutes
+      const pollIntervalMs = 3000; // Check every 3 seconds
+      const startWait = Date.now();
+
+      while (Date.now() - startWait < maxWaitMs) {
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+
+        const freshSnap = await storybookRef.get();
+        const freshData = freshSnap.data();
+        exemplarStatus = freshData?.exemplarGeneration?.status;
+        actorExemplarUrls = freshData?.actorExemplarUrls || {};
+
+        if (exemplarStatus === 'ready' || exemplarStatus === 'error') {
+          break;
+        }
+
+        allLogs.push(`[exemplars] Still waiting... (${Math.round((Date.now() - startWait) / 1000)}s, status: ${exemplarStatus})`);
+      }
+
+      if (exemplarStatus === 'ready') {
+        allLogs.push(`[exemplars] Exemplar generation completed after ${Math.round((Date.now() - startWait) / 1000)}s`);
+      } else if (exemplarStatus === 'error') {
+        allLogs.push(`[exemplars] Exemplar generation failed, proceeding with photos as fallback`);
+      } else {
+        allLogs.push(`[exemplars] Timed out waiting for exemplar generation after ${Math.round((Date.now() - startWait) / 1000)}s, proceeding with photos`);
+      }
+    }
+
+    // Log final exemplar state
     console.log('[images/route] EXEMPLAR STATUS:', JSON.stringify({
       status: exemplarStatus || 'none',
       urlCount: Object.keys(actorExemplarUrls).length,
@@ -209,8 +241,6 @@ export async function POST(request: Request) {
 
     if (exemplarStatus === 'ready' && Object.keys(actorExemplarUrls).length > 0) {
       allLogs.push(`[exemplars] Using ${Object.keys(actorExemplarUrls).length} exemplar image(s): ${Object.keys(actorExemplarUrls).join(', ')}`);
-    } else if (exemplarStatus === 'running' || exemplarStatus === 'pending') {
-      allLogs.push(`[exemplars] Exemplar generation in progress (status: ${exemplarStatus}), proceeding with photos as fallback`);
     } else {
       allLogs.push(`[exemplars] No exemplars available (status: ${exemplarStatus || 'none'}), using photos as fallback`);
     }
