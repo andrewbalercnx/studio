@@ -18,6 +18,22 @@
 
 ### 2026-01-12
 
+#### `d555660` - Fix duplicate AI flow logs and add exemplar debugging
+
+**Type**: Bug Fix
+
+**Summary**: Fixed duplicate logging in storyImageFlow and added debugging for exemplar generation.
+
+**Changes**:
+1. **Fixed duplicate logs**: storyImageFlow was logging twice for each successful image generation (once in retry loop, once after upload). Now only logs once after upload for successful cases, while still logging failures/retries for debugging.
+2. **Added exemplar debugging**: Added log message showing which exemplar IDs are being passed to image generation to help diagnose why exemplars aren't being used.
+
+**Files modified**:
+- `src/ai/flows/story-image-flow.ts` - Move success logging outside retry loop
+- `src/app/api/storybookV2/images/route.ts` - Add exemplar debugging log
+
+---
+
 #### `d631bca` - Handle TTS directive tags based on ElevenLabs API version
 
 **Type**: Enhancement

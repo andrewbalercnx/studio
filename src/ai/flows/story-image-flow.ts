@@ -989,20 +989,21 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
 
       generation = await Promise.race([generatePromise, timeoutPromise]);
       console.log('[story-image-flow] Generation completed. Keys:', Object.keys(generation));
-      await logAIFlow({
-        flowName,
-        sessionId: null,
-        prompt: currentPromptText,
-        response: generation,
-        startTime,
-        modelName: DEFAULT_IMAGE_MODEL,
-        attemptNumber: attempt + 1,
-        maxAttempts: MAX_RETRIES + 1,
-        retryReason: retryReason || undefined,
-      });
 
       // Check if we got media - if not, treat as retryable error
       if (!generation.media?.url) {
+        // Log the failed attempt (no media returned)
+        await logAIFlow({
+          flowName,
+          sessionId: null,
+          prompt: currentPromptText,
+          response: generation,
+          startTime,
+          modelName: DEFAULT_IMAGE_MODEL,
+          attemptNumber: attempt + 1,
+          maxAttempts: MAX_RETRIES + 1,
+          retryReason: retryReason || undefined,
+        });
         const finishReason = generation.finishReason;
         const finishMessage = generation.finishMessage;
         const textResponse = generation.text?.substring(0, 200);

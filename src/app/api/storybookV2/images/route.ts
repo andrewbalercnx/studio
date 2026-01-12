@@ -379,6 +379,13 @@ export async function POST(request: Request) {
       });
     }
 
+    // Log exemplar status once (not per-page to avoid log spam)
+    if (Object.keys(actorExemplars).length > 0) {
+      allLogs.push(`[exemplars] Passing ${Object.keys(actorExemplars).length} exemplar ID(s) to image generation: ${Object.keys(actorExemplars).join(', ')}`);
+    } else {
+      allLogs.push(`[exemplars] No exemplars available for image generation`);
+    }
+
     // Process skipped pages (mark as ready) and reset pages that need generation
     const prepPromises: Promise<void>[] = [];
     for (const job of pageJobs) {
