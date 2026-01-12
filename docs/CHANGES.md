@@ -18,6 +18,28 @@
 
 ### 2026-01-12
 
+#### `25914e6` - Mark image generation failures clearly in AI flow logs
+
+**Type**: Enhancement
+
+**Summary**: Added `isFailure` and `failureReason` parameters to AI flow logging. When an image generation flow receives a response from the model but no image is returned (e.g., due to content filtering or safety blocks), the log entry is now marked with `status: 'failure'` instead of `status: 'success'`, and includes the specific failure reason.
+
+**Changes**:
+1. **ai-flow-logger.ts**: Added new parameters `isFailure` (boolean) and `failureReason` (string) to explicitly mark failures without an exception. When `isFailure=true`, sets `status: 'failure'` and stores the `failureReason`.
+2. **All image generation flows**: Updated to pass `isFailure: true` and detailed `failureReason` when the model returns a response but no image. The failure reason includes `finishReason`, `finishMessage`, and any text response from the model.
+
+**Files modified**:
+- `src/lib/ai-flow-logger.ts` - Add isFailure and failureReason parameters
+- `src/ai/flows/story-image-flow.ts` - Mark no-media responses as failures
+- `src/ai/flows/actor-exemplar-flow.ts` - Mark no-media responses as failures
+- `src/ai/flows/avatar-flow.ts` - Mark no-media responses as failures
+- `src/ai/flows/character-avatar-flow.ts` - Mark no-media responses as failures
+- `src/ai/flows/story-actor-avatar-flow.ts` - Mark no-media responses as failures
+- `src/ai/flows/story-output-type-image-flow.ts` - Mark no-media responses as failures
+- `src/ai/flows/image-style-sample-flow.ts` - Mark no-media responses as failures
+
+---
+
 #### `d555660` - Fix duplicate AI flow logs and add exemplar debugging
 
 **Type**: Bug Fix

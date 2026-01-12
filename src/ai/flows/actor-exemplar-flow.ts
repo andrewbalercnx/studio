@@ -382,8 +382,12 @@ export const actorExemplarFlow = ai.defineFlow(
 
       const mediaUrl = llmResponse.media?.url;
       if (!mediaUrl) {
-        const reason = llmResponse.finishMessage || llmResponse.text?.substring(0, 200) || 'unknown';
-        // Log the failed attempt before throwing
+        const finishReason = llmResponse.finishReason;
+        const finishMessage = llmResponse.finishMessage;
+        const textResponse = llmResponse.text?.substring(0, 200);
+        const failureReason = `No image returned. finishReason=${finishReason}, finishMessage=${finishMessage || 'none'}, text=${textResponse || 'none'}`;
+
+        // Log the failed attempt - mark as failure
         await logAIFlow({
           flowName: 'actorExemplarFlow',
           sessionId: actorId,
@@ -392,8 +396,10 @@ export const actorExemplarFlow = ai.defineFlow(
           response: llmResponse,
           startTime,
           modelName: DEFAULT_IMAGE_MODEL,
+          isFailure: true,
+          failureReason,
         });
-        throw new Error(`Model did not return an image. Reason: ${reason}`);
+        throw new Error(`Model did not return an image. Reason: ${failureReason}`);
       }
 
       // Parse and upload the image

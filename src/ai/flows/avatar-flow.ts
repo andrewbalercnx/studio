@@ -212,9 +212,14 @@ export const avatarFlow = ai.defineFlow(
 
     const dataUrl = llmResponse.media?.url;
     if (!dataUrl) {
-      // Log the failed attempt before throwing
-      await logAIFlow({ flowName: 'avatarFlow', sessionId: childId, parentId: child.ownerParentUid, prompt: promptText, response: llmResponse, startTime, modelName });
-      throw new Error('The model did not return an image.');
+      const finishReason = llmResponse.finishReason;
+      const finishMessage = llmResponse.finishMessage;
+      const textResponse = llmResponse.text?.substring(0, 200);
+      const failureReason = `No image returned. finishReason=${finishReason}, finishMessage=${finishMessage || 'none'}, text=${textResponse || 'none'}`;
+
+      // Log the failed attempt - mark as failure
+      await logAIFlow({ flowName: 'avatarFlow', sessionId: childId, parentId: child.ownerParentUid, prompt: promptText, response: llmResponse, startTime, modelName, isFailure: true, failureReason });
+      throw new Error(`The model did not return an image. ${failureReason}`);
     }
 
     const { buffer, mimeType } = parseDataUrl(dataUrl);

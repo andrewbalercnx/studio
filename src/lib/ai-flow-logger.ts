@@ -23,6 +23,10 @@ type LogAIFlowParams = {
   retryReason?: string;
   /** URL of the generated image (for image generation flows) */
   imageUrl?: string | null;
+  /** Explicitly mark this as a failure (e.g., model returned response but no image) */
+  isFailure?: boolean;
+  /** Reason for failure when isFailure=true but no error object */
+  failureReason?: string;
 };
 
 export async function logAIFlow({
@@ -39,6 +43,8 @@ export async function logAIFlow({
   maxAttempts,
   retryReason,
   imageUrl,
+  isFailure,
+  failureReason,
 }: LogAIFlowParams) {
   try {
     const firestore = await getServerFirestore();
@@ -78,6 +84,10 @@ export async function logAIFlow({
     if (error) {
       logData.status = 'error';
       logData.errorMessage = error.message || JSON.stringify(error);
+    } else if (isFailure) {
+      // Explicit failure without an error object (e.g., model returned response but no image)
+      logData.status = 'failure';
+      logData.failureReason = failureReason || 'Unknown failure';
     } else {
       logData.status = 'success';
 

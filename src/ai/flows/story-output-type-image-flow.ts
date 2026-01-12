@@ -78,17 +78,24 @@ Create a whimsical, child-friendly illustration that represents "${childFacingLa
         // 3. Extract the generated image
         const media = imageResponse.media;
         if (!media || !media.url) {
-            // Log the failed attempt
+            const finishReason = imageResponse.finishReason;
+            const finishMessage = imageResponse.finishMessage;
+            const textResponse = imageResponse.text?.substring(0, 200);
+            const failureReason = `No image returned. finishReason=${finishReason}, finishMessage=${finishMessage || 'none'}, text=${textResponse || 'none'}`;
+
+            // Log the failed attempt - mark as failure
             await logAIFlow({
                 flowName: 'storyOutputTypeImageFlow',
                 prompt: fullPrompt,
                 response: imageResponse,
                 startTime,
                 modelName,
+                isFailure: true,
+                failureReason,
             });
             return {
                 ok: false,
-                errorMessage: 'Image generation failed: No media URL returned',
+                errorMessage: `Image generation failed: ${failureReason}`,
             };
         }
 

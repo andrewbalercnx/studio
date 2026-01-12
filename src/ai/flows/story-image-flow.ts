@@ -992,7 +992,12 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
 
       // Check if we got media - if not, treat as retryable error
       if (!generation.media?.url) {
-        // Log the failed attempt (no media returned)
+        const finishReason = generation.finishReason;
+        const finishMessage = generation.finishMessage;
+        const textResponse = generation.text?.substring(0, 200);
+        const failureReason = `No image returned. finishReason=${finishReason}, finishMessage=${finishMessage || 'none'}, text=${textResponse || 'none'}`;
+
+        // Log the failed attempt (no media returned) - mark as failure
         await logAIFlow({
           flowName,
           sessionId: null,
@@ -1003,10 +1008,9 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
           attemptNumber: attempt + 1,
           maxAttempts: MAX_RETRIES + 1,
           retryReason: retryReason || undefined,
+          isFailure: true,
+          failureReason,
         });
-        const finishReason = generation.finishReason;
-        const finishMessage = generation.finishMessage;
-        const textResponse = generation.text?.substring(0, 200);
 
         console.warn(`[story-image-flow] No media in generation (attempt ${attempt + 1}):`, {
           finishReason,
