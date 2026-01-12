@@ -113,8 +113,10 @@ async function generateExemplarForActor(params: {
   storyId: string;
   storybookId: string;
   parentUid: string;
+  childAge?: string;           // Age of the main child (e.g., "3 years old") for age-appropriate styling
+  synopsis?: string;           // Story synopsis for clothing/context guidance
 }): Promise<{ ok: true; imageUrl: string } | { ok: false; errorMessage: string }> {
-  const { actor, actorId, actorType, imageStylePrompt, styleExampleUrls, storyId, storybookId, parentUid } = params;
+  const { actor, actorId, actorType, imageStylePrompt, styleExampleUrls, storyId, storybookId, parentUid, childAge, synopsis } = params;
   const startTime = Date.now();
   const flowName = 'storyExemplarGenerationFlow';
 
@@ -133,6 +135,20 @@ async function generateExemplarForActor(params: {
   const characterType = actorType === 'character' && 'type' in actor ? (actor as Character).type : null;
   const typeContext = characterType ? ` (${characterType.toLowerCase()})` : '';
 
+  // Build story context section if synopsis is available
+  const storyContextSection = synopsis ? `
+=== STORY CONTEXT ===
+This character appears in a story with the following synopsis:
+${synopsis}
+
+Choose clothing and accessories appropriate for this story's setting and context.
+` : '';
+
+  // Age-appropriate styling guidance
+  const ageGuidance = childAge
+    ? `Make the character appealing and appropriate for a child who is ${childAge}.`
+    : 'Make the character appealing and appropriate for young children.';
+
   const promptText = `Create a character reference sheet for a children's storybook character.
 
 === ART STYLE (CRITICAL - MUST FOLLOW EXACTLY) ===
@@ -150,7 +166,7 @@ The art style is NON-NEGOTIABLE. The character reference sheet MUST look like it
 === CHARACTER TO DEPICT ===
 Name: ${displayName}${typeContext}
 Pronouns: ${pronouns}${appearanceContext}
-
+${storyContextSection}
 === REFERENCE SHEET LAYOUT (CRITICAL - MUST BE EXACTLY AS SPECIFIED) ===
 
 IMAGE LAYOUT: Create a SQUARE image divided into 4 EQUAL QUADRANTS (2 rows × 2 columns).
@@ -168,7 +184,7 @@ THE FACE IS THE MOST IMPORTANT ELEMENT - it goes in the TOP-LEFT (first position
 └─────────────────┴─────────────────┘
 
 QUADRANT DETAILS (in order of importance):
-1. TOP-LEFT: **FACE CLOSE-UP** - HEAD AND SHOULDERS ONLY (portrait crop). This is the MOST IMPORTANT view. Show the face in clear detail: eyes, eyebrows, nose, mouth, ears, hair framing the face. This must NOT be full body.
+1. TOP-LEFT: **FACE CLOSE-UP** - HEAD AND SHOULDERS ONLY (portrait crop). This is the MOST IMPORTANT view. Show the face in clear detail: eyes, eyebrows, nose, mouth, ears. This must NOT be full body.
 2. TOP-RIGHT: Full body FRONT view - character facing the viewer directly, head to feet visible, simple standing pose
 3. BOTTOM-LEFT: Full body 3/4 view - character turned slightly to show depth, head to feet visible
 4. BOTTOM-RIGHT: Full body BACK view - character facing AWAY from viewer, head to feet visible
@@ -179,14 +195,14 @@ CRITICAL: The TOP-LEFT quadrant MUST be a FACE CLOSE-UP showing only head and sh
 1. Use a plain WHITE or very light neutral background - no scenery, no props
 2. All FOUR views MUST show the EXACT SAME character with IDENTICAL:
    - Facial features (eyes, nose, mouth, eyebrows - MUST MATCH exactly)
-   - Hair style, color, and texture
+   - Hair style, color, and texture (if the character has hair)
    - Skin tone
    - Clothing, accessories, and any distinctive items
    - Body proportions and build
    - Art style rendering
 3. The three full-body poses should be simple standing poses - neutral, not action poses
 4. The face close-up should be large enough to clearly see all facial details
-5. Make the character friendly and appealing to young children
+5. ${ageGuidance}
 6. Each quadrant should be clearly separated with equal spacing
 
 This reference sheet will be used to maintain character consistency across multiple story illustrations. The face close-up is critical for ensuring the character is recognizable in every scene.`;
@@ -362,6 +378,38 @@ export const storyExemplarGenerationFlow = ai.defineFlow(
         actorIds.unshift(story.childId);
       }
 
+      // Load main child to get their age for age-appropriate styling
+      let childAge: string | undefined;
+      if (story.childId) {
+        try {
+          const mainChildSnap = await firestore.collection('children').doc(story.childId).get();
+          if (mainChildSnap.exists) {
+            const mainChild = mainChildSnap.data() as ChildProfile;
+            if (mainChild.dateOfBirth) {
+              // Calculate age from dateOfBirth
+              const dob = mainChild.dateOfBirth.toDate ? mainChild.dateOfBirth.toDate() : new Date(mainChild.dateOfBirth);
+              const now = new Date();
+              const ageInMonths = Math.floor((now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24 * 30.44));
+              if (ageInMonths < 24) {
+                childAge = `${ageInMonths} months old`;
+              } else {
+                const ageInYears = Math.floor(ageInMonths / 12);
+                childAge = `${ageInYears} years old`;
+              }
+              console.log(`[story-exemplar-generation-flow] Main child age: ${childAge}`);
+            }
+          }
+        } catch (childError: any) {
+          console.warn(`[story-exemplar-generation-flow] Failed to load main child for age: ${childError?.message}`);
+        }
+      }
+
+      // Get story synopsis for clothing/context guidance
+      const synopsis = story.synopsis || undefined;
+      if (synopsis) {
+        console.log(`[story-exemplar-generation-flow] Using synopsis for context: ${synopsis.substring(0, 100)}...`);
+      }
+
       if (actorIds.length === 0) {
         console.log('[story-exemplar-generation-flow] No actors to generate exemplars for');
         await storybookRef.update({
@@ -405,6 +453,8 @@ export const storyExemplarGenerationFlow = ai.defineFlow(
                 storyId,
                 storybookId,
                 parentUid: story.parentUid,
+                childAge,
+                synopsis,
               }),
             };
           }
@@ -423,6 +473,8 @@ export const storyExemplarGenerationFlow = ai.defineFlow(
                 storyId,
                 storybookId,
                 parentUid: story.parentUid,
+                childAge,
+                synopsis,
               }),
             };
           }

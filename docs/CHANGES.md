@@ -18,6 +18,26 @@
 
 ### 2026-01-12
 
+#### `f2d0173` - Improve exemplar generation prompt for better context
+
+**Type**: Enhancement
+
+**Summary**: Improved the character reference sheet (exemplar) generation prompt in several ways:
+1. Removed assumption that all characters have hair ("hair framing the face" → just "eyes, eyebrows, nose, mouth, ears")
+2. Made age guidance dynamic based on the main child's actual age (e.g., "3 years old") instead of hardcoded "young children"
+3. Added story synopsis to the prompt so the generator can choose appropriate clothing and accessories for the story's context
+
+**Changes**:
+- Added `childAge` and `synopsis` parameters to `generateExemplarForActor()` function
+- Calculate child's age from their `dateOfBirth` (displays as "X months old" or "X years old")
+- Include story synopsis section when available with guidance for clothing choices
+- Added conditional "if the character has hair" qualifier to hair consistency requirement
+
+**Files modified**:
+- `src/ai/flows/story-exemplar-generation-flow.ts` - Updated prompt and function parameters
+
+---
+
 #### `30456a1` - Remove redundant exemplarImage URLs from character JSON
 
 **Type**: Optimization
