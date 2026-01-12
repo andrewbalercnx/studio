@@ -319,6 +319,8 @@ type EntityReferenceData = {
 
 /**
  * Structured actor data for image prompts
+ * When exemplars are used, the exemplarImage field provides the URL mapping so the model
+ * knows which reference sheet image corresponds to which actor ID.
  */
 type ActorData = {
   id: string;
@@ -330,8 +332,8 @@ type ActorData = {
   pronouns?: string;
   likes?: string[];
   dislikes?: string[];
-  images: string[]; // Avatar + photos (fallback when no exemplar)
-  exemplarImage?: string; // Character reference sheet URL (preferred over images)
+  images: string[]; // Avatar + photos (fallback when no exemplar - empty when exemplar is used)
+  exemplarImage?: string; // Character reference sheet URL - maps this actor to their exemplar image
 };
 
 /**
@@ -347,8 +349,8 @@ function buildActorData(
   // Check if it's a Character (has 'type' field) or ChildProfile
   const isCharacter = 'type' in entity && typeof (entity as Character).type === 'string';
 
-  // When exemplarImage is available, use it exclusively - don't include individual photos
-  // This prevents the model from seeing both the exemplar AND the original photos
+  // When exemplarImage is available, include its URL in the JSON so the model can map
+  // this actor to the correct exemplar reference sheet image
   if (exemplarImage) {
     return {
       id: entityId,
@@ -360,8 +362,8 @@ function buildActorData(
       pronouns: entity.pronouns,
       likes: entity.likes,
       dislikes: entity.dislikes,
-      images: [], // Empty - exemplarImage is the reference
-      exemplarImage,
+      images: [], // Empty when using exemplar - the exemplarImage is the reference
+      exemplarImage, // URL that maps this actor to their reference sheet in the provided images
     };
   }
 
@@ -385,10 +387,22 @@ function buildActorData(
 }
 
 /**
+ * Result from building actors data - includes JSON and ordered exemplar info
+ */
+type BuildActorsResult = {
+  json: string;
+  // Ordered list of actors with exemplars (in the order they appear in the JSON)
+  // This allows us to pass exemplar images in the same order and tell the model
+  // "image 1 is for actor 1, image 2 is for actor 2"
+  orderedExemplars: Array<{ actorId: string; displayName: string; exemplarUrl: string }>;
+};
+
+/**
  * Build structured JSON for all actors in a scene
  * mainChild is always included if mainChildProfile is provided, even if not in actorIds
  * Other actors (siblings, characters) are included based on actorIds
  * @param actorExemplarUrls - Map of actorId -> exemplar image URL for character reference sheets
+ * @returns Object with JSON string and ordered exemplar info for image mapping
  */
 function buildActorsJson(
   actorIds: string[],
@@ -396,15 +410,20 @@ function buildActorsJson(
   mainChildId?: string,
   mainChildProfile?: ChildProfile,
   actorExemplarUrls?: Record<string, string>
-): string {
+): BuildActorsResult {
   const actors: ActorData[] = [];
   const includedIds = new Set<string>();
+  // Track exemplars in order as we build actors
+  const orderedExemplars: Array<{ actorId: string; displayName: string; exemplarUrl: string }> = [];
 
   // Always add main child first if provided
   if (mainChildId && mainChildProfile) {
     const exemplarUrl = actorExemplarUrls?.[mainChildId];
     actors.push(buildActorData(mainChildProfile, mainChildId, true, exemplarUrl));
     includedIds.add(mainChildId);
+    if (exemplarUrl) {
+      orderedExemplars.push({ actorId: mainChildId, displayName: mainChildProfile.displayName, exemplarUrl });
+    }
   }
 
   // Add other actors from the page's entityIds
@@ -417,11 +436,14 @@ function buildActorsJson(
       const exemplarUrl = actorExemplarUrls?.[actorId];
       actors.push(buildActorData(entity, actorId, false, exemplarUrl));
       includedIds.add(actorId);
+      if (exemplarUrl) {
+        orderedExemplars.push({ actorId, displayName: entity.displayName, exemplarUrl });
+      }
     }
   }
 
   if (actors.length === 0) {
-    return '';
+    return { json: '', orderedExemplars: [] };
   }
 
   // Group by type for clarity
@@ -443,7 +465,7 @@ function buildActorsJson(
     result.characters = characters;
   }
 
-  return JSON.stringify(result, null, 2);
+  return { json: JSON.stringify(result, null, 2), orderedExemplars };
 }
 
 /**
@@ -751,14 +773,15 @@ type CreateImageParams = {
   childAge?: string;           // Age of the main child (e.g., "3 years old")
   mainChildId?: string;        // ID of the main child
   referencePhotos: string[];   // URLs of reference photos (fallback when no exemplars)
-  exemplarImages?: string[];   // URLs of exemplar reference sheets (preferred)
+  // Ordered exemplar info - actorId, displayName, and URL for each character with an exemplar
+  // Order matches the order actors appear in actorsJson, allowing explicit image-to-actor mapping
+  orderedExemplars?: Array<{ actorId: string; displayName: string; exemplarUrl: string }>;
   styleExampleImages?: string[]; // URLs of example images for art style reference
   targetWidthPx?: number;
   targetHeightPx?: number;
   aspectRatio?: string;
   additionalPrompt?: string;   // Additional user instructions for image generation
   pageKind?: string;           // Page kind for logging (cover_front, cover_back, etc.)
-  hasExemplars?: boolean;      // True if exemplars are being used (affects prompt wording)
   storyTitle?: string;         // Title of the story (for cover page text rendering)
   mainChildName?: string;      // Name of the main child (for "by [Name]" on cover)
   storyId?: string;            // Story ID for AI flow logging
@@ -787,14 +810,13 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     childAge,
     mainChildId,
     referencePhotos,
-    exemplarImages,
+    orderedExemplars,
     styleExampleImages,
     targetWidthPx,
     targetHeightPx,
     aspectRatio,
     additionalPrompt,
     pageKind,
-    hasExemplars,
     storyTitle,
     mainChildName,
     storyId,
@@ -822,15 +844,18 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
       )).filter((part): part is { media: { url: string } } => part !== null)
     : [];
 
-  // Fetch exemplar images (character reference sheets) - preferred over photos
-  const exemplarParts = exemplarImages && exemplarImages.length > 0
-    ? (await Promise.all(
-        exemplarImages.map(async (url) => {
-          const dataUri = await fetchImageAsDataUri(url);
-          return dataUri ? { media: { url: dataUri } } : null;
+  // Fetch exemplar images in order - preserving the actor mapping
+  // Each exemplar corresponds to a specific actor, so we track which ones loaded successfully
+  const exemplarResults = orderedExemplars && orderedExemplars.length > 0
+    ? await Promise.all(
+        orderedExemplars.map(async ({ actorId, displayName, exemplarUrl }) => {
+          const dataUri = await fetchImageAsDataUri(exemplarUrl);
+          return dataUri ? { actorId, displayName, part: { media: { url: dataUri } } } : null;
         })
-      )).filter((part): part is { media: { url: string } } => part !== null)
+      )
     : [];
+  const loadedExemplars = exemplarResults.filter((r): r is { actorId: string; displayName: string; part: { media: { url: string } } } => r !== null);
+  const exemplarParts = loadedExemplars.map(e => e.part);
 
   // Fetch reference photos (fallback when no exemplars available)
   const photoParts = (await Promise.all(
@@ -944,11 +969,19 @@ REQUIREMENTS FOR THE BACK COVER:
 
   // 4. Character reference instructions and structured actor data
   if (actorsJson && actorsJson.length > 0) {
-    if (usingExemplars || hasExemplars) {
-      // When exemplars are available, instruct to use the exemplar reference sheets
-      const exemplarCount = exemplarParts.length;
+    if (usingExemplars && loadedExemplars.length > 0) {
+      // When exemplars are available, explicitly map each image to its actor
       const styleCount = styleExampleParts.length;
-      structuredPrompt += `IMPORTANT: The images provided after the style examples are CHARACTER REFERENCE SHEETS (images ${styleCount + 1}-${styleCount + exemplarCount}).
+
+      // Build the explicit image-to-actor mapping
+      const imageMapping = loadedExemplars.map((e, idx) =>
+        `- Image ${styleCount + idx + 1}: Reference sheet for "${e.displayName}" ($$${e.actorId}$$)`
+      ).join('\n');
+
+      structuredPrompt += `IMPORTANT: The images provided after the style examples are CHARACTER REFERENCE SHEETS.
+
+IMAGE-TO-CHARACTER MAPPING (use the correct reference for each character):
+${imageMapping}
 
 Each reference sheet is a 2x2 grid showing the character from 4 angles:
 - TOP-LEFT: FACE CLOSE-UP (head and shoulders portrait) - USE THIS FOR FACIAL FEATURE MATCHING
@@ -956,10 +989,10 @@ Each reference sheet is a 2x2 grid showing the character from 4 angles:
 - BOTTOM-LEFT: Full body 3/4 VIEW (turned slightly)
 - BOTTOM-RIGHT: Full body BACK view
 
-CRITICAL: The FACE CLOSE-UP in the top-left quadrant is the most important reference. Match each character's facial features (eyes, nose, mouth, hair, skin tone) EXACTLY as shown in their face close-up. The face must be recognizably the same person across all generated images.
+CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin tone) EXACTLY as shown in their face close-up in the top-left quadrant. The face must be recognizably the same person.
 
-Use these reference sheets to maintain visual consistency for each character throughout the scene.\n\n`;
-      structuredPrompt += `Characters in this scene (match each character to their reference sheet, paying special attention to the face close-up in the top-left quadrant):\n${actorsJson}\n`;
+`;
+      structuredPrompt += `Characters in this scene:\n${actorsJson}\n`;
     } else {
       // Fallback to photos - explain these are reference photos
       const photoCount = photoParts.length;
@@ -1391,15 +1424,16 @@ export const storyImageFlow = ai.defineFlow(
         // Build structured actors JSON for the prompt
         // Always include main child (with full profile), plus all actors from page.entityIds
         // Pass exemplar URLs so each actor can reference their character sheet
-        const actorsJson = buildActorsJson(
+        // Returns both the JSON and ordered exemplar info for image-to-actor mapping
+        const actorsResult = buildActorsJson(
           page.entityIds ?? [],
           entityData.actorMap,
           storyData.childId,
           childProfile ?? undefined,
           actorExemplarUrls
         );
-        if (actorsJson) {
-          logs.push(`[actors] Structured JSON built: mainChild=${!!childProfile}, pageActors=${entityData.actorMap.size}`);
+        if (actorsResult.json) {
+          logs.push(`[actors] Structured JSON built: mainChild=${!!childProfile}, pageActors=${entityData.actorMap.size}, exemplars=${actorsResult.orderedExemplars.length}`);
         }
 
         // For back cover, use ONLY avatars (not real photos)
@@ -1467,26 +1501,20 @@ export const storyImageFlow = ai.defineFlow(
         // Priority: imageDescription > bodyText > imagePrompt
         const sceneText = page.imageDescription || page.bodyText || page.imagePrompt;
 
-        // Collect exemplar image URLs for image generation
-        // These are the actual URLs of the character reference sheets
-        const exemplarImageUrls = actorExemplarUrls ? Object.values(actorExemplarUrls) : [];
-        const hasExemplars = exemplarImageUrls.length > 0;
-
         generated = await createImage({
           sceneText,
           artStyle,
-          actorsJson,
+          actorsJson: actorsResult.json,
           childAge,
           mainChildId: storyData.childId,
           referencePhotos,
-          exemplarImages: exemplarImageUrls,
+          orderedExemplars: actorsResult.orderedExemplars,
           styleExampleImages,
           targetWidthPx,
           targetHeightPx,
           aspectRatio,
           additionalPrompt,
           pageKind: page.kind,
-          hasExemplars,
           storyTitle: storyData.metadata?.title || page.title,
           mainChildName: childProfile?.displayName,
           storyId,

@@ -18,6 +18,48 @@
 
 ### 2026-01-12
 
+#### `5ac7334` - Fix exemplar image mapping and add AI log export
+
+**Type**: Bug Fix / Enhancement
+
+**Summary**: Fixed two issues with exemplar images in storybook generation:
+1. All exemplars were being passed to every page, even when only one character appeared on a page
+2. When multiple characters were on a page, the model had no way to know which exemplar belonged to which character
+
+Also added selection and export functionality to the AI Flow Logs admin page.
+
+**Changes**:
+
+1. **Per-page exemplar filtering** (`images/route.ts`):
+   - Now filters `actorExemplarUrls` to only include actors that appear on each specific page
+   - Prevents passing 4 exemplars when only 1 character is on the page
+
+2. **Ordered exemplar tracking** (`story-image-flow.ts`):
+   - `buildActorsJson` now returns `{ json, orderedExemplars }` where `orderedExemplars` tracks actor ID, display name, and URL in order
+   - New `BuildActorsResult` type to capture this structured return value
+
+3. **Explicit image-to-actor mapping in prompt** (`story-image-flow.ts`):
+   - Prompt now includes explicit mapping like:
+     ```
+     IMAGE-TO-CHARACTER MAPPING:
+     - Image 2: Reference sheet for "Emma" ($$abc123$$)
+     - Image 3: Reference sheet for "Fluffy" ($$def456$$)
+     ```
+   - Removed `exemplarImages: string[]` param in favor of `orderedExemplars` which preserves actor identity
+   - Removed redundant `hasExemplars` param (now derived from `loadedExemplars.length > 0`)
+
+4. **AI Flow Logs export** (`ai-logs/page.tsx`):
+   - Added checkbox selection to each log row
+   - Added toolbar with Select All/Deselect All, Copy JSON, and Download buttons
+   - Allows exporting selected logs for diagnostic analysis
+
+**Files modified**:
+- `src/app/api/storybookV2/images/route.ts`
+- `src/ai/flows/story-image-flow.ts`
+- `src/app/admin/ai-logs/page.tsx`
+
+---
+
 #### `68a7d2e` - Add storyId and storybookId to AI flow logs
 
 **Type**: Enhancement
@@ -114,7 +156,7 @@
 
 ---
 
-#### `pending` - Wait for exemplar generation before image generation
+#### `5ac7334` - Wait for exemplar generation before image generation
 
 **Type**: Fix
 
@@ -132,7 +174,7 @@
 
 ---
 
-#### `pending` - Include failure reasons in AI flow logs
+#### `5ac7334` - Include failure reasons in AI flow logs
 
 **Type**: Fix
 
@@ -468,7 +510,7 @@
 
 ### 2026-01-09
 
-#### `pending` - Show placeholder and disable continue while character avatar generates
+#### `5ac7334` - Show placeholder and disable continue while character avatar generates
 
 **Type**: UX Improvement
 

@@ -11,7 +11,9 @@ import { collection, query, orderBy, limit, getDocs, startAfter, QueryDocumentSn
 import type { AIFlowLog } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { formatDistanceToNow } from 'date-fns';
+import { Copy, Download, CheckSquare, Square } from 'lucide-react';
 
 const PAGE_SIZE = 50;
 
@@ -35,6 +37,7 @@ export default function AdminAILogsPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Initial load
   useEffect(() => {
@@ -87,7 +90,72 @@ export default function AdminAILogsPage() {
       setLoadingMore(false);
     }
   }, [firestore, lastDoc, loadingMore]);
-  
+
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(logs.map(log => log.id)));
+  }, [logs]);
+
+  const deselectAll = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const getSelectedLogs = useCallback(() => {
+    return logs.filter(log => selectedIds.has(log.id));
+  }, [logs, selectedIds]);
+
+  const serializeLogsForExport = useCallback((logsToExport: AIFlowLog[]) => {
+    // Convert Firestore timestamps to ISO strings for JSON serialization
+    return logsToExport.map(log => ({
+      ...log,
+      createdAt: log.createdAt?.toDate?.()?.toISOString() || log.createdAt,
+    }));
+  }, []);
+
+  const copySelectedLogs = useCallback(async () => {
+    const selected = getSelectedLogs();
+    if (selected.length === 0) return;
+
+    const exportData = serializeLogsForExport(selected);
+    const json = JSON.stringify(exportData, null, 2);
+
+    try {
+      await navigator.clipboard.writeText(json);
+      alert(`Copied ${selected.length} log(s) to clipboard`);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      alert('Failed to copy to clipboard');
+    }
+  }, [getSelectedLogs, serializeLogsForExport]);
+
+  const downloadSelectedLogs = useCallback(() => {
+    const selected = getSelectedLogs();
+    if (selected.length === 0) return;
+
+    const exportData = serializeLogsForExport(selected);
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ai-flow-logs-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [getSelectedLogs, serializeLogsForExport]);
 
   const renderContent = () => {
     if (authLoading || loading) {
@@ -107,20 +175,76 @@ export default function AdminAILogsPage() {
         )
     }
 
+    const allSelected = logs.length > 0 && selectedIds.size === logs.length;
+    const someSelected = selectedIds.size > 0;
+
     return (
       <div className="space-y-4">
+        {/* Selection toolbar */}
+        <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={allSelected ? deselectAll : selectAll}
+            className="gap-2"
+          >
+            {allSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+            {allSelected ? 'Deselect All' : 'Select All'}
+          </Button>
+          <div className="flex-1" />
+          {someSelected && (
+            <span className="text-sm text-muted-foreground">
+              {selectedIds.size} selected
+            </span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={copySelectedLogs}
+            disabled={!someSelected}
+            className="gap-2"
+          >
+            <Copy className="h-4 w-4" />
+            Copy JSON
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={downloadSelectedLogs}
+            disabled={!someSelected}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Download
+          </Button>
+        </div>
+
         <Accordion type="single" collapsible className="w-full">
           {logs.map((log) => (
             <AccordionItem key={log.id} value={log.id}>
-              <AccordionTrigger className="hover:no-underline">
-                <div className="flex items-center justify-between w-full pr-4">
-                  <div className="flex items-center gap-4 text-sm">
-                    <Badge variant={log.status === 'success' ? 'default' : 'destructive'} className="capitalize w-20 justify-center">{log.status}</Badge>
-                    <span className="font-semibold">{log.flowName}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground font-mono">{formatTimestamp(log.createdAt)}</span>
+              <div className="flex items-center">
+                <div
+                  className="flex items-center justify-center px-3 py-4 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleSelection(log.id);
+                  }}
+                >
+                  <Checkbox
+                    checked={selectedIds.has(log.id)}
+                    onCheckedChange={() => toggleSelection(log.id)}
+                  />
                 </div>
-              </AccordionTrigger>
+                <AccordionTrigger className="hover:no-underline flex-1">
+                  <div className="flex items-center justify-between w-full pr-4">
+                    <div className="flex items-center gap-4 text-sm">
+                      <Badge variant={log.status === 'success' ? 'default' : 'destructive'} className="capitalize w-20 justify-center">{log.status}</Badge>
+                      <span className="font-semibold">{log.flowName}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground font-mono">{formatTimestamp(log.createdAt)}</span>
+                  </div>
+                </AccordionTrigger>
+              </div>
               <AccordionContent>
                 <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">

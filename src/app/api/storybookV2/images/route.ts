@@ -367,6 +367,16 @@ export async function POST(request: Request) {
         allLogs.push(`[dimensions] Page ${page.id}: ${pageTargetWidthPx}x${pageTargetHeightPx}px, aspect=${pageAspectRatio} (fallback - no layout)`);
       }
 
+      // Filter exemplar URLs to only include actors that appear on this page
+      // This prevents passing 4 exemplars when only 1 character is on the page
+      const pageEntityIds = page.entityIds ?? [];
+      const pageExemplarUrls: Record<string, string> = {};
+      for (const entityId of pageEntityIds) {
+        if (actorExemplarUrls[entityId]) {
+          pageExemplarUrls[entityId] = actorExemplarUrls[entityId];
+        }
+      }
+
       pageJobs.push({
         page,
         needsGeneration: true,
@@ -382,8 +392,8 @@ export async function POST(request: Request) {
           targetHeightPx: pageTargetHeightPx,
           // Only pass additionalPrompt for single-page regeneration
           additionalPrompt: pageId ? additionalPrompt : undefined,
-          // Pass actor exemplar image URLs for consistent character depiction
-          actorExemplarUrls: Object.keys(actorExemplarUrls).length > 0 ? actorExemplarUrls : undefined,
+          // Pass actor exemplar image URLs only for actors on this specific page
+          actorExemplarUrls: Object.keys(pageExemplarUrls).length > 0 ? pageExemplarUrls : undefined,
         },
       });
     }
