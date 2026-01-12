@@ -1330,14 +1330,15 @@ export type HelpWizard = {
 export type AIFlowLog = {
   id: string;
   flowName: string;
-  status: 'success' | 'error';
+  status: 'success' | 'error' | 'failure';
   sessionId?: string;
   parentId?: string;
   prompt: string;
   response?: {
-    text: string;
-    finishReason: string;
-    model: string;
+    text?: string | null;
+    finishReason?: string | null;
+    finishMessage?: string | null;
+    model?: string | null;
   };
   usage?: {
     inputTokens?: number;
@@ -1348,6 +1349,8 @@ export type AIFlowLog = {
   };
   latencyMs?: number;
   errorMessage?: string;
+  /** Reason for failure when status is 'failure' (AI returned response but no usable output) */
+  failureReason?: string;
   /** URL of generated image (for image generation flows) */
   imageUrl?: string;
   createdAt: any;

@@ -18,6 +18,35 @@
 
 ### 2026-01-12
 
+#### `pending` - Include failure reasons in AI flow logs
+
+**Type**: Fix
+
+**Summary**: AI flow logs now include response metadata and failure reasons even when the AI call fails or returns no usable output. This allows the admin UI to display why image generation failed (e.g., safety filters, no image returned).
+
+**Changes**:
+1. **ai-flow-logger.ts**:
+   - Always include response metadata (text, finishReason, finishMessage, model) even for errors/failures
+   - Always include usage data even for errors/failures
+   - Added 'failure' status for calls that complete but return no usable output
+
+2. **ai-logs/page.tsx**:
+   - Display `failureReason` field with amber styling for failures
+   - Display `finishReason` and `finishMessage` for non-success statuses
+
+3. **types.ts**:
+   - Added 'failure' to AIFlowLog status union type
+   - Added `failureReason` field to AIFlowLog
+   - Added `finishMessage` to response object
+   - Made response fields nullable to match actual data
+
+**Files modified**:
+- `src/lib/ai-flow-logger.ts`
+- `src/app/admin/ai-logs/page.tsx`
+- `src/lib/types.ts`
+
+---
+
 #### `aca4fe5` - Add title text to cover page images
 
 **Type**: Enhancement

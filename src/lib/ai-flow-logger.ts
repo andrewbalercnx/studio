@@ -81,6 +81,56 @@ export async function logAIFlow({
       logData.latencyMs = Date.now() - startTime;
     }
 
+    // Extract model version - prefer explicit modelName, then check response locations
+    const modelVersion = modelName
+      || response?.model
+      || response?.custom?.candidates?.[0]?.modelVersion
+      || response?.raw?.candidates?.[0]?.modelVersion
+      || null;
+
+    // Extract usage/token information from Genkit response
+    // Genkit normalizes to response.usage, but raw Gemini data is in response.custom.usageMetadata
+    const usage = response?.usage;
+    const rawUsageMetadata = response?.custom?.usageMetadata || response?.raw?.usageMetadata;
+
+    // Check if usage has any actual data (not just an empty object)
+    const hasUsageData = usage && (
+      usage.inputTokens !== undefined ||
+      usage.outputTokens !== undefined ||
+      usage.totalTokens !== undefined
+    );
+
+    // Always include response metadata if available (even for errors/failures)
+    if (response) {
+      logData.response = {
+        text: response?.text?.substring(0, 500) ?? null, // Truncate for storage
+        finishReason: response?.finishReason ?? null,
+        finishMessage: response?.finishMessage ?? null,
+        model: modelVersion,
+      };
+    }
+
+    // Always include usage data if available (even for errors/failures)
+    if (hasUsageData) {
+      logData.usage = {
+        inputTokens: usage.inputTokens ?? null,
+        outputTokens: usage.outputTokens ?? null,
+        totalTokens: usage.totalTokens ?? null,
+        thoughtsTokens: usage.thoughtsTokens ?? null,
+        cachedContentTokens: usage.cachedContentTokens ?? null,
+      };
+    } else if (rawUsageMetadata) {
+      // Fallback to raw Gemini usageMetadata if Genkit didn't normalize it
+      logData.usage = {
+        inputTokens: rawUsageMetadata.promptTokenCount ?? null,
+        outputTokens: rawUsageMetadata.candidatesTokenCount ?? null,
+        totalTokens: rawUsageMetadata.totalTokenCount ?? null,
+        thoughtsTokens: rawUsageMetadata.thoughtsTokenCount ?? null,
+        cachedContentTokens: rawUsageMetadata.cachedContentTokenCount ?? null,
+      };
+    }
+
+    // Set status based on error/failure/success
     if (error) {
       logData.status = 'error';
       logData.errorMessage = error.message || JSON.stringify(error);
@@ -90,53 +140,6 @@ export async function logAIFlow({
       logData.failureReason = failureReason || 'Unknown failure';
     } else {
       logData.status = 'success';
-
-      // Extract model version - prefer explicit modelName, then check response locations
-      const modelVersion = modelName
-        || response?.model
-        || response?.custom?.candidates?.[0]?.modelVersion
-        || response?.raw?.candidates?.[0]?.modelVersion
-        || null;
-
-      logData.response = {
-        text: response?.text ?? null,
-        finishReason: response?.finishReason ?? null,
-        model: modelVersion,
-      };
-
-      // Extract usage/token information from Genkit response
-      // Genkit normalizes to response.usage, but raw Gemini data is in response.custom.usageMetadata
-      const usage = response?.usage;
-      const rawUsageMetadata = response?.custom?.usageMetadata || response?.raw?.usageMetadata;
-
-      // Check if usage has any actual data (not just an empty object)
-      const hasUsageData = usage && (
-        usage.inputTokens !== undefined ||
-        usage.outputTokens !== undefined ||
-        usage.totalTokens !== undefined
-      );
-
-      if (hasUsageData) {
-        logData.usage = {
-          inputTokens: usage.inputTokens ?? null,
-          outputTokens: usage.outputTokens ?? null,
-          totalTokens: usage.totalTokens ?? null,
-          thoughtsTokens: usage.thoughtsTokens ?? null,
-          cachedContentTokens: usage.cachedContentTokens ?? null,
-        };
-      } else if (rawUsageMetadata) {
-        // Fallback to raw Gemini usageMetadata if Genkit didn't normalize it
-        logData.usage = {
-          inputTokens: rawUsageMetadata.promptTokenCount ?? null,
-          outputTokens: rawUsageMetadata.candidatesTokenCount ?? null,
-          totalTokens: rawUsageMetadata.totalTokenCount ?? null,
-          thoughtsTokens: rawUsageMetadata.thoughtsTokenCount ?? null,
-          cachedContentTokens: rawUsageMetadata.cachedContentTokenCount ?? null,
-        };
-      }
-
-      // Don't store the full custom object - it's too large and duplicates data
-      // The important fields (usage, model) are now extracted above
     }
 
     // Add image URL for image generation flows

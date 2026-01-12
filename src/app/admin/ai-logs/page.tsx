@@ -166,6 +166,22 @@ export default function AdminAILogsPage() {
                       <pre className="text-xs whitespace-pre-wrap font-mono bg-destructive/10 text-destructive p-2 rounded-md">{log.errorMessage}</pre>
                       </div>
                   )}
+                  {log.failureReason && (
+                      <div>
+                      <h4 className="font-semibold text-sm mb-1 text-amber-600 dark:text-amber-400">Failure Reason</h4>
+                      <pre className="text-xs whitespace-pre-wrap font-mono bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 p-2 rounded-md">{log.failureReason}</pre>
+                      </div>
+                  )}
+                  {(log.response?.finishReason || log.response?.finishMessage) && log.status !== 'success' && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                        {log.response?.finishReason && (
+                          <p><strong className="text-muted-foreground">Finish Reason:</strong> <span className="font-mono">{log.response.finishReason}</span></p>
+                        )}
+                        {log.response?.finishMessage && (
+                          <p><strong className="text-muted-foreground">Finish Message:</strong> <span className="font-mono">{log.response.finishMessage}</span></p>
+                        )}
+                      </div>
+                  )}
                 </div>
               </AccordionContent>
             </AccordionItem>
