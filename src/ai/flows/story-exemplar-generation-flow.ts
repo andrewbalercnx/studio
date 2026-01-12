@@ -10,7 +10,7 @@ import { ai } from '@/ai/genkit';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { z } from 'genkit';
-import type { Character, ChildProfile, Story } from '@/lib/types';
+import type { Character, ChildProfile, Story, ImageStyle } from '@/lib/types';
 import { getStoryBucket } from '@/firebase/admin/storage';
 import { randomUUID } from 'crypto';
 import { logAIFlow } from '@/lib/ai-flow-logger';
@@ -109,10 +109,11 @@ async function generateExemplarForActor(params: {
   actorId: string;
   actorType: 'child' | 'character';
   imageStylePrompt: string;
+  styleExampleUrls: string[];  // URLs of style example images to guide the art style
   storyId: string;
   parentUid: string;
 }): Promise<{ ok: true; imageUrl: string } | { ok: false; errorMessage: string }> {
-  const { actor, actorId, actorType, imageStylePrompt, storyId, parentUid } = params;
+  const { actor, actorId, actorType, imageStylePrompt, styleExampleUrls, storyId, parentUid } = params;
   const startTime = Date.now();
   const flowName = 'storyExemplarGenerationFlow';
 
@@ -133,30 +134,57 @@ async function generateExemplarForActor(params: {
 
   const promptText = `Create a character reference sheet for a children's storybook character.
 
-Art Style: ${imageStylePrompt}
+=== ART STYLE (CRITICAL - MUST FOLLOW EXACTLY) ===
+${imageStylePrompt}
 
-Character to depict: ${displayName}${typeContext}
+${styleExampleUrls.length > 0 ? `STYLE REFERENCE IMAGES: The first ${styleExampleUrls.length} image(s) provided show the EXACT art style you must use. Study these carefully and replicate:` : 'Apply this art style consistently:'}
+- The exact rendering technique (watercolor, digital, pencil, realistic, etc.)
+- Color palette, saturation levels, and color harmony
+- Line weight, edge treatment, and outline style
+- Level of detail, texture, and shading approach
+- Overall aesthetic, mood, and visual tone
+
+The art style is NON-NEGOTIABLE. The character reference sheet MUST look like it belongs in the same book as the style examples.
+
+=== CHARACTER TO DEPICT ===
+Name: ${displayName}${typeContext}
 Pronouns: ${pronouns}${appearanceContext}
 
-Requirements:
-1. Show THREE views of the character arranged horizontally:
-   - LEFT: Front view (facing the viewer directly)
-   - CENTER: 3/4 view (turned slightly, showing depth)
-   - RIGHT: Back view (facing away from viewer)
-2. Use a plain WHITE background - no scenery, no props
-3. Character should be full body (head to feet visible in all three views)
-4. All three views MUST show the SAME character with IDENTICAL:
-   - Clothing and accessories
-   - Hair style and color
-   - Body proportions
-   - Art style
-5. The poses should be simple standing poses - neutral, not action poses
-6. Make the character friendly and appealing to young children
-7. Leave adequate spacing between the three views
+=== REFERENCE SHEET LAYOUT ===
+Create FOUR views of this character arranged in a 2x2 grid:
 
-This is a reference sheet for character consistency across multiple story illustrations.`;
+TOP ROW (full body poses):
+- TOP-LEFT: Front view (facing viewer directly, full body from head to feet)
+- TOP-RIGHT: Back view (facing away from viewer, full body from head to feet)
 
-  // Collect reference photos from actor
+BOTTOM ROW (additional angles):
+- BOTTOM-LEFT: 3/4 view (turned slightly, showing depth, full body)
+- BOTTOM-RIGHT: FACE CLOSE-UP (head and shoulders only, showing facial features in detail)
+
+=== STRICT REQUIREMENTS ===
+1. Use a plain WHITE or very light neutral background - no scenery, no props
+2. All FOUR views MUST show the EXACT SAME character with IDENTICAL:
+   - Clothing, accessories, and any distinctive items
+   - Hair style, color, and texture
+   - Skin tone and facial features
+   - Body proportions and build
+   - Art style rendering
+3. The full-body poses should be simple standing poses - neutral, not action poses
+4. The face close-up should clearly show: eyes, nose, mouth, and any distinctive facial features
+5. Make the character friendly and appealing to young children
+6. Leave clear spacing between all four views
+
+This reference sheet will be used to maintain character consistency across multiple story illustrations.`;
+
+  // Fetch style example images first (these set the visual style)
+  const styleExampleParts = (await Promise.all(
+    styleExampleUrls.map(async (url) => {
+      const dataUri = await fetchImageAsDataUri(url);
+      return dataUri ? { media: { url: dataUri } } : null;
+    })
+  )).filter((part): part is { media: { url: string } } => part !== null);
+
+  // Collect reference photos from actor (these show who the character should look like)
   const referencePhotoUrls: string[] = [];
   if (actor.avatarUrl) referencePhotoUrls.push(actor.avatarUrl);
   if (actor.photos?.length) referencePhotoUrls.push(...actor.photos.slice(0, 3));
@@ -168,8 +196,10 @@ This is a reference sheet for character consistency across multiple story illust
     })
   )).filter((part): part is { media: { url: string } } => part !== null);
 
-  const promptParts: any[] = [...referencePhotoParts, { text: promptText }];
-  const promptTextForLogging = `${promptText} [${referencePhotoParts.length} reference photo(s)]`;
+  // Build prompt with style examples first, then character references, then text
+  // Order matters: style examples set the aesthetic, character references show appearance
+  const promptParts: any[] = [...styleExampleParts, ...referencePhotoParts, { text: promptText }];
+  const promptTextForLogging = `${promptText} [${styleExampleParts.length} style example(s), ${referencePhotoParts.length} reference photo(s)]`;
 
   try {
     console.log(`[story-exemplar-generation-flow] Generating exemplar for ${actorType} ${actorId} (${displayName})`);
@@ -267,7 +297,7 @@ export const storyExemplarGenerationFlow = ai.defineFlow(
       }
       const story = storySnap.data() as Story;
 
-      // Load storybook to get imageStylePrompt
+      // Load storybook to get imageStylePrompt and imageStyleId
       const storybookRef = storyRef.collection('storybooks').doc(storybookId);
       const storybookSnap = await storybookRef.get();
       if (!storybookSnap.exists) {
@@ -275,9 +305,33 @@ export const storyExemplarGenerationFlow = ai.defineFlow(
       }
       const storybook = storybookSnap.data()!;
       const imageStylePrompt = storybook.imageStylePrompt;
+      const imageStyleId = storybook.imageStyleId;
 
       if (!imageStylePrompt) {
         return { ok: false, errorMessage: 'Storybook has no imageStylePrompt' };
+      }
+
+      // Load style example images from imageStyles collection
+      // These are critical for getting the AI to match the target art style
+      let styleExampleUrls: string[] = [];
+      if (imageStyleId && typeof imageStyleId === 'string' && imageStyleId.trim().length > 0) {
+        try {
+          const styleSnap = await firestore.collection('imageStyles').doc(imageStyleId).get();
+          if (styleSnap.exists) {
+            const styleData = styleSnap.data() as ImageStyle;
+            if (styleData.exampleImages && styleData.exampleImages.length > 0) {
+              // Use manually uploaded example images
+              styleExampleUrls = styleData.exampleImages.map(img => img.url);
+              console.log(`[story-exemplar-generation-flow] Loaded ${styleExampleUrls.length} style example images from ${imageStyleId}`);
+            } else if (styleData.sampleImageUrl) {
+              // Fall back to the generated sample image
+              styleExampleUrls = [styleData.sampleImageUrl];
+              console.log(`[story-exemplar-generation-flow] Using generated sample image as style reference for ${imageStyleId}`);
+            }
+          }
+        } catch (styleError: any) {
+          console.warn(`[story-exemplar-generation-flow] Failed to load style ${imageStyleId}: ${styleError?.message}`);
+        }
       }
 
       // Get actor IDs from story
@@ -326,6 +380,7 @@ export const storyExemplarGenerationFlow = ai.defineFlow(
                 actorId,
                 actorType: 'child',
                 imageStylePrompt,
+                styleExampleUrls,
                 storyId,
                 parentUid: story.parentUid,
               }),
@@ -342,6 +397,7 @@ export const storyExemplarGenerationFlow = ai.defineFlow(
                 actorId,
                 actorType: 'character',
                 imageStylePrompt,
+                styleExampleUrls,
                 storyId,
                 parentUid: story.parentUid,
               }),

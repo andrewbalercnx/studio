@@ -18,6 +18,32 @@
 
 ### 2026-01-12
 
+#### `pending` - Improve exemplar generation with face close-up and style guidance
+
+**Type**: Enhancement
+
+**Summary**: Improved the character exemplar reference sheet generation to include a fourth view (face close-up) and strengthened art style guidance. The exemplar now shows front, back, 3/4 view, and face close-up in a 2x2 grid layout, and includes style example images from the imageStyles collection to ensure the reference sheet matches the storybook's art style.
+
+**Changes**:
+1. **story-exemplar-generation-flow.ts**:
+   - Changed layout from 3 horizontal views to 2x2 grid with 4 views
+   - Added FACE CLOSE-UP (head and shoulders) in bottom-right position
+   - Added `styleExampleUrls` parameter to include style reference images
+   - Loads style examples from imageStyles collection using `imageStyleId`
+   - Strengthened art style instructions with emphasis on matching rendering technique, color palette, line weight, etc.
+   - Style examples are now passed first in the prompt parts to set the aesthetic
+
+**New layout**:
+- TOP-LEFT: Front view (full body)
+- TOP-RIGHT: Back view (full body)
+- BOTTOM-LEFT: 3/4 view (full body)
+- BOTTOM-RIGHT: Face close-up (head and shoulders)
+
+**Files modified**:
+- `src/ai/flows/story-exemplar-generation-flow.ts`
+
+---
+
 #### `pending` - Wait for exemplar generation before image generation
 
 **Type**: Fix
