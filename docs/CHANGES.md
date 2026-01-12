@@ -18,6 +18,26 @@
 
 ### 2026-01-12
 
+#### `d631bca` - Handle TTS directive tags based on ElevenLabs API version
+
+**Type**: Enhancement
+
+**Summary**: Updated text normalization to handle ElevenLabs TTS directive tags (like `[emphasis]`, `[British accent]`) differently based on the API version:
+- Display text: Always strips `[...]` tags (they're not meant for users to see)
+- TTS with v2: Strips `[...]` tags (v2 doesn't support them)
+- TTS with v3: Keeps `[...]` tags and adds `[British accent]` prefix
+
+**Changes**:
+- `replacePlaceholdersInText`: Now strips TTS directive tags for display
+- `replacePlaceholdersForTTS`: Checks API version and handles tags accordingly
+- Added new `stripTTSDirectiveTags` helper function
+- v3 TTS now automatically prefixes text with `[British accent]`
+
+**Files modified**:
+- `src/lib/resolve-placeholders.server.ts`
+
+---
+
 #### `c8c284d` - Fix exemplar regeneration, duplicate generation, and actor data in prompts
 
 **Type**: Bug Fix

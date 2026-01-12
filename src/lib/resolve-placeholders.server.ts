@@ -2,6 +2,7 @@
 
 import { getServerFirestore } from '@/lib/server-firestore';
 import type { Character, ChildProfile } from '@/lib/types';
+import { getElevenLabsApiVersion } from '@/lib/get-elevenlabs-config.server';
 
 export type EntityMap = Map<string, { displayName: string; document: Character | ChildProfile }>;
 
@@ -136,13 +137,31 @@ export async function replacePlaceholdersInText(text: string, entityMap: EntityM
   result = result.replace(/\$([a-zA-Z0-9_-]{15,})\$/g, (match, id) => {
     return entityMap.get(id)?.displayName || match;
   });
+  // Strip TTS directive tags like [emphasis], [British accent], etc. for display
+  // These are meant for ElevenLabs v3 TTS only, not for screen display
+  result = await stripTTSDirectiveTags(result);
   return result;
+}
+
+/**
+ * Strip TTS directive tags like [emphasis], [British accent], etc.
+ * These are ElevenLabs v3 directives that should not appear in display text.
+ */
+export async function stripTTSDirectiveTags(text: string): Promise<string> {
+  if (!text) return '';
+  // Remove [...] tags, being careful not to remove markdown links [text](url)
+  // TTS directives are standalone [...] without a following (url)
+  return text.replace(/\[([^\]]+)\](?!\()/g, '').trim();
 }
 
 /**
  * Replace placeholders in text for TTS (Text-to-Speech).
  * Uses namePronunciation if available, otherwise falls back to displayName.
  * This ensures names like "Siobhan" are pronounced correctly as "shiv-AWN".
+ *
+ * Also handles TTS directive tags like [emphasis], [British accent]:
+ * - v2 (eleven_multilingual_v2): Strips all [...] tags (not supported)
+ * - v3 (eleven_v3): Keeps [...] tags and adds [British accent] prefix
  */
 export async function replacePlaceholdersForTTS(text: string, entityMap: EntityMap): Promise<string> {
   if (!text) return '';
@@ -164,6 +183,18 @@ export async function replacePlaceholdersForTTS(text: string, entityMap: EntityM
   result = result.replace(/\$([a-zA-Z0-9_-]{15,})\$/g, (match, id) => {
     return resolveEntity(id) || match;
   });
+
+  // Handle TTS directive tags based on ElevenLabs API version
+  const apiVersion = await getElevenLabsApiVersion();
+
+  if (apiVersion === 'v3') {
+    // v3 supports directive tags - keep them and add British accent prefix
+    result = '[British accent] ' + result;
+  } else {
+    // v2 does not support directive tags - strip them
+    result = await stripTTSDirectiveTags(result);
+  }
+
   return result;
 }
 
