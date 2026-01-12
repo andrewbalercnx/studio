@@ -17,9 +17,9 @@ import { logAIFlow } from '@/lib/ai-flow-logger';
 import { Gaxios, GaxiosError } from 'gaxios';
 
 const DEFAULT_IMAGE_MODEL = process.env.STORYBOOK_IMAGE_MODEL ?? 'googleai/gemini-2.5-flash-image-preview';
-// Use 21:9 (widest available) for character reference sheets with 3 side-by-side views
+// Use 1:1 (square) for character reference sheets with 2x2 grid layout
 // Valid options: '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'
-const EXEMPLAR_ASPECT_RATIO = '21:9';
+const EXEMPLAR_ASPECT_RATIO = '1:1';
 
 const StoryExemplarGenerationFlowInputSchema = z.object({
   storyId: z.string(),
@@ -150,16 +150,27 @@ The art style is NON-NEGOTIABLE. The character reference sheet MUST look like it
 Name: ${displayName}${typeContext}
 Pronouns: ${pronouns}${appearanceContext}
 
-=== REFERENCE SHEET LAYOUT ===
-Create FOUR views of this character arranged in a 2x2 grid:
+=== REFERENCE SHEET LAYOUT (CRITICAL - MUST BE EXACTLY AS SPECIFIED) ===
 
-TOP ROW (full body poses):
-- TOP-LEFT: Front view (facing viewer directly, full body from head to feet)
-- TOP-RIGHT: Back view (facing away from viewer, full body from head to feet)
+IMAGE LAYOUT: Create a SQUARE image divided into 4 EQUAL QUADRANTS (2 rows × 2 columns):
 
-BOTTOM ROW (additional angles):
-- BOTTOM-LEFT: 3/4 view (turned slightly, showing depth, full body)
-- BOTTOM-RIGHT: FACE CLOSE-UP (head and shoulders only, showing facial features in detail)
+┌─────────────────┬─────────────────┐
+│   TOP-LEFT:     │   TOP-RIGHT:    │
+│   FRONT VIEW    │   BACK VIEW     │
+│   (full body)   │   (full body)   │
+├─────────────────┼─────────────────┤
+│   BOTTOM-LEFT:  │   BOTTOM-RIGHT: │
+│   3/4 VIEW      │   FACE CLOSE-UP │
+│   (full body)   │   (HEAD ONLY)   │
+└─────────────────┴─────────────────┘
+
+QUADRANT DETAILS:
+1. TOP-LEFT: Full body FRONT view - character facing the viewer, head to feet visible
+2. TOP-RIGHT: Full body BACK view - character facing AWAY from viewer, head to feet visible
+3. BOTTOM-LEFT: Full body 3/4 view - character turned slightly to show depth, head to feet visible
+4. BOTTOM-RIGHT: FACE CLOSE-UP - HEAD AND SHOULDERS ONLY, NOT full body. This is a portrait showing the face in detail.
+
+CRITICAL: The bottom-right quadrant MUST be a FACE CLOSE-UP (head and shoulders portrait), NOT another full-body view. This is essential for capturing facial details.
 
 === STRICT REQUIREMENTS ===
 1. Use a plain WHITE or very light neutral background - no scenery, no props
@@ -169,10 +180,10 @@ BOTTOM ROW (additional angles):
    - Skin tone and facial features
    - Body proportions and build
    - Art style rendering
-3. The full-body poses should be simple standing poses - neutral, not action poses
-4. The face close-up should clearly show: eyes, nose, mouth, and any distinctive facial features
+3. The three full-body poses should be simple standing poses - neutral, not action poses
+4. The face close-up MUST clearly show: eyes, nose, mouth, eyebrows, and any distinctive facial features
 5. Make the character friendly and appealing to young children
-6. Leave clear spacing between all four views
+6. Each quadrant should be clearly separated with equal spacing
 
 This reference sheet will be used to maintain character consistency across multiple story illustrations.`;
 

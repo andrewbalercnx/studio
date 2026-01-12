@@ -18,26 +18,32 @@
 
 ### 2026-01-12
 
-#### `pending` - Improve exemplar generation with face close-up and style guidance
+#### `pending` - Fix exemplar layout to use 2x2 grid with face close-up
 
-**Type**: Enhancement
+**Type**: Fix
 
-**Summary**: Improved the character exemplar reference sheet generation to include a fourth view (face close-up) and strengthened art style guidance. The exemplar now shows front, back, 3/4 view, and face close-up in a 2x2 grid layout, and includes style example images from the imageStyles collection to ensure the reference sheet matches the storybook's art style.
+**Summary**: Fixed the character exemplar reference sheet to use a proper 2x2 grid layout instead of a horizontal row. Changed aspect ratio from 21:9 to 1:1 (square) to enforce the grid layout. Added ASCII art diagram in prompt to clearly show the expected quadrant arrangement. Strengthened instructions for the face close-up in the bottom-right quadrant.
 
 **Changes**:
 1. **story-exemplar-generation-flow.ts**:
-   - Changed layout from 3 horizontal views to 2x2 grid with 4 views
-   - Added FACE CLOSE-UP (head and shoulders) in bottom-right position
-   - Added `styleExampleUrls` parameter to include style reference images
-   - Loads style examples from imageStyles collection using `imageStyleId`
-   - Strengthened art style instructions with emphasis on matching rendering technique, color palette, line weight, etc.
-   - Style examples are now passed first in the prompt parts to set the aesthetic
+   - Changed `EXEMPLAR_ASPECT_RATIO` from '21:9' to '1:1' (square) to support 2x2 grid
+   - Added ASCII art diagram showing the expected quadrant layout
+   - Added explicit "CRITICAL" instruction emphasizing the face close-up requirement
+   - Clarified that bottom-right must be HEAD AND SHOULDERS ONLY, not full body
+   - Added numbered quadrant details for clarity
 
-**New layout**:
-- TOP-LEFT: Front view (full body)
-- TOP-RIGHT: Back view (full body)
-- BOTTOM-LEFT: 3/4 view (full body)
-- BOTTOM-RIGHT: Face close-up (head and shoulders)
+**Expected layout** (2x2 grid):
+```
+┌─────────────────┬─────────────────┐
+│   TOP-LEFT:     │   TOP-RIGHT:    │
+│   FRONT VIEW    │   BACK VIEW     │
+│   (full body)   │   (full body)   │
+├─────────────────┼─────────────────┤
+│   BOTTOM-LEFT:  │   BOTTOM-RIGHT: │
+│   3/4 VIEW      │   FACE CLOSE-UP │
+│   (full body)   │   (HEAD ONLY)   │
+└─────────────────┴─────────────────┘
+```
 
 **Files modified**:
 - `src/ai/flows/story-exemplar-generation-flow.ts`
