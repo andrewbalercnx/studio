@@ -18,7 +18,26 @@
 
 ### 2026-01-12
 
-#### `81ee834` - Add exemplar layout description to image generation prompts
+#### `pending` - Fix exemplar URLs not being used for image generation
+
+**Type**: Bug Fix
+
+**Summary**: Fixed a race condition where exemplar images were generated successfully but not passed to the image generation flow. When the exemplar status was 'ready' but the storybook data had been read before the URLs were written, the images route would skip waiting and use stale (empty) URL data.
+
+**Root Cause**: The images route reads storybook data once at the start, then checks exemplar status. If status is 'ready' (exemplars completed), it assumes the URLs are available in that initial read. But if the data was read just before exemplars finished writing, the URLs would be missing.
+
+**Changes**:
+1. **images/route.ts**:
+   - Added re-read logic when exemplar status is 'ready' but URLs are empty
+   - Logs when this race condition is detected and corrected
+   - Ensures the latest `actorExemplarUrls` is always used
+
+**Files modified**:
+- `src/app/api/storybookV2/images/route.ts`
+
+---
+
+#### `b6f6014` - Add exemplar layout description to image generation prompts
 
 **Type**: Enhancement
 

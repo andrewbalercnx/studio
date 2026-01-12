@@ -200,6 +200,17 @@ export async function POST(request: Request) {
     let actorExemplarUrls: Record<string, string> = storybookData?.actorExemplarUrls || {};
     let exemplarStatus = storybookData?.exemplarGeneration?.status;
 
+    // If exemplar generation is ready but we don't have URLs, re-read to get the latest data
+    // This handles the race condition where exemplars completed between initial read and now
+    if (exemplarStatus === 'ready' && Object.keys(actorExemplarUrls).length === 0) {
+      allLogs.push(`[exemplars] Status is ready but no URLs found, re-reading storybook...`);
+      const freshSnap = await storybookRef.get();
+      const freshData = freshSnap.data();
+      actorExemplarUrls = freshData?.actorExemplarUrls || {};
+      exemplarStatus = freshData?.exemplarGeneration?.status;
+      allLogs.push(`[exemplars] After re-read: status=${exemplarStatus}, urlCount=${Object.keys(actorExemplarUrls).length}`);
+    }
+
     // If exemplar generation is in progress, wait for it to complete (up to 2 minutes)
     // This ensures we use the exemplar reference sheets for consistent character depiction
     if (exemplarStatus === 'running' || exemplarStatus === 'pending') {
