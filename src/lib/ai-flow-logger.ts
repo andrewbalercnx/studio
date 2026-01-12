@@ -27,6 +27,10 @@ type LogAIFlowParams = {
   isFailure?: boolean;
   /** Reason for failure when isFailure=true but no error object */
   failureReason?: string;
+  /** Story ID for storybook-related flows */
+  storyId?: string | null;
+  /** Storybook ID for storybook-related flows */
+  storybookId?: string | null;
 };
 
 export async function logAIFlow({
@@ -45,6 +49,8 @@ export async function logAIFlow({
   imageUrl,
   isFailure,
   failureReason,
+  storyId,
+  storybookId,
 }: LogAIFlowParams) {
   try {
     const firestore = await getServerFirestore();
@@ -55,6 +61,14 @@ export async function logAIFlow({
       prompt,
       createdAt: FieldValue.serverTimestamp(),
     };
+
+    // Add storybook context if provided (for storybook-related flows)
+    if (storyId) {
+      logData.storyId = storyId;
+    }
+    if (storybookId) {
+      logData.storybookId = storybookId;
+    }
 
     // Include conversation messages if provided (for multi-turn flows)
     if (messages && messages.length > 0) {

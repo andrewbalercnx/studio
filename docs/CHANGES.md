@@ -18,7 +18,33 @@
 
 ### 2026-01-12
 
-#### `pending` - Fix exemplar URLs not being used for image generation
+#### `68a7d2e` - Add storyId and storybookId to AI flow logs
+
+**Type**: Enhancement
+
+**Summary**: Added `storyId` and `storybookId` fields to AI flow log entries for storybook-related flows. This makes it easier to trace and debug flows by filtering logs to a specific story or storybook.
+
+**Changes**:
+1. **ai-flow-logger.ts**:
+   - Added optional `storyId` and `storybookId` parameters to `LogAIFlowParams`
+   - Writes these fields to log documents when provided
+
+2. **story-image-flow.ts**:
+   - Added `storyId` and `storybookId` to `CreateImageParams` type
+   - Passes these IDs through to all `logAIFlow` calls (success, failure, and error cases)
+
+3. **story-exemplar-generation-flow.ts**:
+   - Added `storybookId` to `generateExemplarForActor` parameters
+   - Passes both IDs to all `logAIFlow` calls
+
+**Files modified**:
+- `src/lib/ai-flow-logger.ts`
+- `src/ai/flows/story-image-flow.ts`
+- `src/ai/flows/story-exemplar-generation-flow.ts`
+
+---
+
+#### `5f23cfe` - Fix exemplar URLs not being used for image generation
 
 **Type**: Bug Fix
 

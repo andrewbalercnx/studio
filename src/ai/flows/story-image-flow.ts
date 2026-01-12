@@ -761,6 +761,8 @@ type CreateImageParams = {
   hasExemplars?: boolean;      // True if exemplars are being used (affects prompt wording)
   storyTitle?: string;         // Title of the story (for cover page text rendering)
   mainChildName?: string;      // Name of the main child (for "by [Name]" on cover)
+  storyId?: string;            // Story ID for AI flow logging
+  storybookId?: string;        // Storybook ID for AI flow logging
 };
 
 /**
@@ -795,6 +797,8 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     hasExemplars,
     storyTitle,
     mainChildName,
+    storyId,
+    storybookId,
   } = params;
 
   // Get the flow name based on page kind for logging
@@ -1085,6 +1089,8 @@ Use these reference sheets to maintain visual consistency for each character thr
           retryReason: retryReason || undefined,
           isFailure: true,
           failureReason,
+          storyId,
+          storybookId,
         });
 
         console.warn(`[story-image-flow] No media in generation (attempt ${attempt + 1}):`, {
@@ -1125,6 +1131,8 @@ Use these reference sheets to maintain visual consistency for each character thr
         attemptNumber: attempt + 1,
         maxAttempts: MAX_RETRIES + 1,
         retryReason: retryReason || undefined,
+        storyId,
+        storybookId,
       });
 
       // Set retry reason for next attempt's log
@@ -1481,6 +1489,8 @@ export const storyImageFlow = ai.defineFlow(
           hasExemplars,
           storyTitle: storyData.metadata?.title || page.title,
           mainChildName: childProfile?.displayName,
+          storyId,
+          storybookId,
         });
       } catch (generationError: any) {
         const fallbackAllowed = MOCK_IMAGES || !!regressionTag || process.env.STORYBOOK_IMAGE_FALLBACK === 'true';
@@ -1572,6 +1582,8 @@ export const storyImageFlow = ai.defineFlow(
         modelName: generated.modelUsed,
         imageUrl: uploadResult.imageUrl,
         response: { text: null, finishReason: 'STOP' }, // Minimal response since details are in attempt logs
+        storyId,
+        storybookId,
       });
 
       // Atomically increment the storybook's pagesReady counter for real-time progress updates

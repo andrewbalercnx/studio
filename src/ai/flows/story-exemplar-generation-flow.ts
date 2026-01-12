@@ -111,9 +111,10 @@ async function generateExemplarForActor(params: {
   imageStylePrompt: string;
   styleExampleUrls: string[];  // URLs of style example images to guide the art style
   storyId: string;
+  storybookId: string;
   parentUid: string;
 }): Promise<{ ok: true; imageUrl: string } | { ok: false; errorMessage: string }> {
-  const { actor, actorId, actorType, imageStylePrompt, styleExampleUrls, storyId, parentUid } = params;
+  const { actor, actorId, actorType, imageStylePrompt, styleExampleUrls, storyId, storybookId, parentUid } = params;
   const startTime = Date.now();
   const flowName = 'storyExemplarGenerationFlow';
 
@@ -244,6 +245,8 @@ This reference sheet will be used to maintain character consistency across multi
         modelName: DEFAULT_IMAGE_MODEL,
         isFailure: true,
         failureReason,
+        storyId,
+        storybookId,
       });
 
       return { ok: false, errorMessage: failureReason };
@@ -267,6 +270,8 @@ This reference sheet will be used to maintain character consistency across multi
       startTime,
       modelName: DEFAULT_IMAGE_MODEL,
       imageUrl,
+      storyId,
+      storybookId,
     });
 
     console.log(`[story-exemplar-generation-flow] Successfully generated exemplar for ${displayName}: ${imageUrl}`);
@@ -284,6 +289,8 @@ This reference sheet will be used to maintain character consistency across multi
       error,
       startTime,
       modelName: DEFAULT_IMAGE_MODEL,
+      storyId,
+      storybookId,
     });
 
     return { ok: false, errorMessage };
@@ -396,6 +403,7 @@ export const storyExemplarGenerationFlow = ai.defineFlow(
                 imageStylePrompt,
                 styleExampleUrls,
                 storyId,
+                storybookId,
                 parentUid: story.parentUid,
               }),
             };
@@ -413,6 +421,7 @@ export const storyExemplarGenerationFlow = ai.defineFlow(
                 imageStylePrompt,
                 styleExampleUrls,
                 storyId,
+                storybookId,
                 parentUid: story.parentUid,
               }),
             };
