@@ -18,6 +18,25 @@
 
 ### 2026-01-12
 
+#### `685f2a0` - Display imageUrl in AI flow logs and add pagination
+
+**Type**: Enhancement
+
+**Summary**: The AI flow logs admin page now displays generated images inline and supports pagination with a "Load More" button.
+
+**Changes**:
+- Added `imageUrl` field to `AIFlowLog` TypeScript type (was already being stored in Firestore)
+- Admin AI logs page now displays the generated image when `imageUrl` is present
+- Replaced real-time listener with paginated loading (50 logs per page)
+- Added "Load More" button to fetch additional logs
+- Shows count of displayed logs and indicates when all logs are shown
+
+**Files modified**:
+- `src/lib/types.ts` - Added `imageUrl` field to `AIFlowLog` type
+- `src/app/admin/ai-logs/page.tsx` - Added image display and pagination
+
+---
+
 #### `64ca527` - Improve synopsis prompt to prevent truncated responses
 
 **Type**: Fix

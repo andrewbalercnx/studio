@@ -4,14 +4,16 @@
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoaderCircle } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useFirestore } from '@/firebase';
-import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import type { AIFlowLog } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
+
+const PAGE_SIZE = 50;
 
 function formatTimestamp(timestamp: any): string {
   if (!timestamp) return 'N/A';
@@ -29,35 +31,62 @@ export default function AdminAILogsPage() {
 
   const [logs, setLogs] = useState<AIFlowLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMore, setHasMore] = useState(true);
 
+  // Initial load
   useEffect(() => {
     if (!firestore || !isAdmin) {
       setLoading(false);
       return;
     }
-    
-    setLoading(true);
-    const logsRef = collection(firestore, 'aiFlowLogs');
-    const q = query(logsRef, orderBy('createdAt', 'desc'), limit(50));
-    
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
+
+    const loadInitial = async () => {
+      setLoading(true);
+      try {
+        const logsRef = collection(firestore, 'aiFlowLogs');
+        const q = query(logsRef, orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
+        const snapshot = await getDocs(q);
+
         const logList = snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as AIFlowLog);
         setLogs(logList);
-        setLoading(false);
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+        setHasMore(snapshot.docs.length === PAGE_SIZE);
         setError(null);
-      },
-      (err) => {
+      } catch (err) {
         console.error("Error fetching AI flow logs:", err);
         setError("Could not fetch AI logs. Check Firestore rules and collection name.");
         setLogs([]);
+      } finally {
         setLoading(false);
       }
-    );
+    };
 
-    return () => unsubscribe();
+    loadInitial();
   }, [firestore, isAdmin]);
+
+  // Load more handler
+  const loadMore = useCallback(async () => {
+    if (!firestore || !lastDoc || loadingMore) return;
+
+    setLoadingMore(true);
+    try {
+      const logsRef = collection(firestore, 'aiFlowLogs');
+      const q = query(logsRef, orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(PAGE_SIZE));
+      const snapshot = await getDocs(q);
+
+      const newLogs = snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as AIFlowLog);
+      setLogs(prev => [...prev, ...newLogs]);
+      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+      setHasMore(snapshot.docs.length === PAGE_SIZE);
+    } catch (err) {
+      console.error("Error loading more logs:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [firestore, lastDoc, loadingMore]);
   
 
   const renderContent = () => {
@@ -79,56 +108,95 @@ export default function AdminAILogsPage() {
     }
 
     return (
-      <Accordion type="single" collapsible className="w-full">
-        {logs.map((log) => (
-          <AccordionItem key={log.id} value={log.id}>
-            <AccordionTrigger className="hover:no-underline">
-              <div className="flex items-center justify-between w-full pr-4">
-                <div className="flex items-center gap-4 text-sm">
-                  <Badge variant={log.status === 'success' ? 'default' : 'destructive'} className="capitalize w-20 justify-center">{log.status}</Badge>
-                  <span className="font-semibold">{log.flowName}</span>
-                </div>
-                <span className="text-xs text-muted-foreground font-mono">{formatTimestamp(log.createdAt)}</span>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                    <p><strong className="text-muted-foreground">Session ID:</strong> {log.sessionId || 'N/A'}</p>
-                    <p><strong className="text-muted-foreground">Parent ID:</strong> {log.parentId || 'N/A'}</p>
-                    <p><strong className="text-muted-foreground">Model:</strong> {log.response?.model || 'N/A'}</p>
-                    <p><strong className="text-muted-foreground">Latency:</strong> {log.latencyMs != null ? `${log.latencyMs}ms` : 'N/A'}</p>
-                </div>
-                {log.usage && (
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs bg-blue-50 dark:bg-blue-950 p-2 rounded-md">
-                    <p><strong className="text-muted-foreground">Input Tokens:</strong> {log.usage.inputTokens ?? 'N/A'}</p>
-                    <p><strong className="text-muted-foreground">Output Tokens:</strong> {log.usage.outputTokens ?? 'N/A'}</p>
-                    <p><strong className="text-muted-foreground">Total Tokens:</strong> {log.usage.totalTokens ?? 'N/A'}</p>
-                    <p><strong className="text-muted-foreground">Thoughts Tokens:</strong> {log.usage.thoughtsTokens ?? 'N/A'}</p>
-                    <p><strong className="text-muted-foreground">Cached Tokens:</strong> {log.usage.cachedContentTokens ?? 'N/A'}</p>
+      <div className="space-y-4">
+        <Accordion type="single" collapsible className="w-full">
+          {logs.map((log) => (
+            <AccordionItem key={log.id} value={log.id}>
+              <AccordionTrigger className="hover:no-underline">
+                <div className="flex items-center justify-between w-full pr-4">
+                  <div className="flex items-center gap-4 text-sm">
+                    <Badge variant={log.status === 'success' ? 'default' : 'destructive'} className="capitalize w-20 justify-center">{log.status}</Badge>
+                    <span className="font-semibold">{log.flowName}</span>
                   </div>
-                )}
-                <div>
-                  <h4 className="font-semibold text-sm mb-1">Prompt</h4>
-                  <pre className="text-xs whitespace-pre-wrap font-mono bg-background p-2 rounded-md max-h-60 overflow-y-auto">{log.prompt}</pre>
+                  <span className="text-xs text-muted-foreground font-mono">{formatTimestamp(log.createdAt)}</span>
                 </div>
-                {log.response?.text && (
-                  <div>
-                    <h4 className="font-semibold text-sm mb-1">Response Text</h4>
-                    <pre className="text-xs whitespace-pre-wrap font-mono bg-background p-2 rounded-md max-h-40 overflow-y-auto">{log.response.text}</pre>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      <p><strong className="text-muted-foreground">Session ID:</strong> {log.sessionId || 'N/A'}</p>
+                      <p><strong className="text-muted-foreground">Parent ID:</strong> {log.parentId || 'N/A'}</p>
+                      <p><strong className="text-muted-foreground">Model:</strong> {log.response?.model || 'N/A'}</p>
+                      <p><strong className="text-muted-foreground">Latency:</strong> {log.latencyMs != null ? `${log.latencyMs}ms` : 'N/A'}</p>
                   </div>
-                )}
-                {log.errorMessage && (
-                    <div>
-                    <h4 className="font-semibold text-sm mb-1 text-destructive">Error</h4>
-                    <pre className="text-xs whitespace-pre-wrap font-mono bg-destructive/10 text-destructive p-2 rounded-md">{log.errorMessage}</pre>
+                  {log.usage && (
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs bg-blue-50 dark:bg-blue-950 p-2 rounded-md">
+                      <p><strong className="text-muted-foreground">Input Tokens:</strong> {log.usage.inputTokens ?? 'N/A'}</p>
+                      <p><strong className="text-muted-foreground">Output Tokens:</strong> {log.usage.outputTokens ?? 'N/A'}</p>
+                      <p><strong className="text-muted-foreground">Total Tokens:</strong> {log.usage.totalTokens ?? 'N/A'}</p>
+                      <p><strong className="text-muted-foreground">Thoughts Tokens:</strong> {log.usage.thoughtsTokens ?? 'N/A'}</p>
+                      <p><strong className="text-muted-foreground">Cached Tokens:</strong> {log.usage.cachedContentTokens ?? 'N/A'}</p>
                     </div>
-                )}
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
+                  )}
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1">Prompt</h4>
+                    <pre className="text-xs whitespace-pre-wrap font-mono bg-background p-2 rounded-md max-h-60 overflow-y-auto">{log.prompt}</pre>
+                  </div>
+                  {log.response?.text && (
+                    <div>
+                      <h4 className="font-semibold text-sm mb-1">Response Text</h4>
+                      <pre className="text-xs whitespace-pre-wrap font-mono bg-background p-2 rounded-md max-h-40 overflow-y-auto">{log.response.text}</pre>
+                    </div>
+                  )}
+                  {log.imageUrl && (
+                    <div>
+                      <h4 className="font-semibold text-sm mb-1">Generated Image</h4>
+                      <a href={log.imageUrl} target="_blank" rel="noopener noreferrer" className="block">
+                        <img
+                          src={log.imageUrl}
+                          alt="Generated image"
+                          className="max-h-48 rounded-md border hover:opacity-80 transition-opacity"
+                        />
+                      </a>
+                    </div>
+                  )}
+                  {log.errorMessage && (
+                      <div>
+                      <h4 className="font-semibold text-sm mb-1 text-destructive">Error</h4>
+                      <pre className="text-xs whitespace-pre-wrap font-mono bg-destructive/10 text-destructive p-2 rounded-md">{log.errorMessage}</pre>
+                      </div>
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+
+        {hasMore && (
+          <div className="flex justify-center pt-4">
+            <Button
+              variant="outline"
+              onClick={loadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? (
+                <>
+                  <LoaderCircle className="h-4 w-4 animate-spin mr-2" />
+                  Loading...
+                </>
+              ) : (
+                `Load More (showing ${logs.length})`
+              )}
+            </Button>
+          </div>
+        )}
+
+        {!hasMore && logs.length > 0 && (
+          <p className="text-center text-sm text-muted-foreground pt-4">
+            Showing all {logs.length} logs
+          </p>
+        )}
+      </div>
     );
   };
 

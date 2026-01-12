@@ -1344,6 +1344,8 @@ export type AIFlowLog = {
   };
   latencyMs?: number;
   errorMessage?: string;
+  /** URL of generated image (for image generation flows) */
+  imageUrl?: string;
   createdAt: any;
 };
 
