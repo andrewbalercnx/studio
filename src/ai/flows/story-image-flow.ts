@@ -759,6 +759,8 @@ type CreateImageParams = {
   additionalPrompt?: string;   // Additional user instructions for image generation
   pageKind?: string;           // Page kind for logging (cover_front, cover_back, etc.)
   hasExemplars?: boolean;      // True if exemplars are being used (affects prompt wording)
+  storyTitle?: string;         // Title of the story (for cover page text rendering)
+  mainChildName?: string;      // Name of the main child (for "by [Name]" on cover)
 };
 
 /**
@@ -791,6 +793,8 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     additionalPrompt,
     pageKind,
     hasExemplars,
+    storyTitle,
+    mainChildName,
   } = params;
 
   // Get the flow name based on page kind for logging
@@ -852,20 +856,53 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
   }
 
   // 1. Target audience and scene context - varies by page kind
-  if (pageKind === 'cover_front') {
-    // Front cover: explicit book cover instructions
+  if (pageKind === 'cover_front' && storyTitle) {
+    // Front cover: explicit book cover instructions WITH title text
+    // Best practices for AI text generation:
+    // - Specify exact text in quotes
+    // - Keep text short (1-4 words ideal)
+    // - Request specific placement
+    // - Use simple, common fonts
+    // - Emphasize legibility
+    const authorLine = mainChildName ? `by ${mainChildName}` : '';
+
+    structuredPrompt += `Create a FRONT COVER for a personalized children's storybook.
+
+=== TITLE TEXT (MUST BE INCLUDED) ===
+The cover MUST include this exact title text: "${storyTitle}"
+${authorLine ? `Below the title, include the author credit: "${authorLine}"` : ''}
+
+TEXT RENDERING REQUIREMENTS:
+- Place the title prominently at the TOP of the image
+- Use large, clear, LEGIBLE letters that a child can read
+- Use a fun, rounded, child-friendly font style (like a picture book)
+- Make each letter distinct and well-formed - avoid overlapping or merged letters
+- The title should be the visual focal point along with the characters
+- Use contrasting colors so text stands out against the background
+- ${authorLine ? 'Place the author credit smaller, below the title' : ''}
+- Double-check spelling: the title is "${storyTitle}" - spell it exactly
+
+ILLUSTRATION REQUIREMENTS:
+- Show the main character(s) in a dynamic, engaging pose
+- Create a scene that captures the story's spirit and invites readers in
+- Design the composition so the title has a clear area at the top
+- Make it eye-catching and appealing to both children and parents
+
+`;
+    // Include the story synopsis from the scene text
+    structuredPrompt += `${sceneText}\n\n`;
+  } else if (pageKind === 'cover_front') {
+    // Front cover without title (fallback)
     structuredPrompt += `Create a FRONT COVER illustration for a personalized children's storybook.
 
 REQUIREMENTS FOR THE COVER:
 - This is the FRONT COVER of a printed book - make it eye-catching and inviting
 - Show the main character(s) in a dynamic, engaging pose that captures the story's spirit
-- Create a scene that hints at the adventure within, but doesn't give away the ending
-- DO NOT include any text, title, or words in the image - the title will be added separately
+- Create a scene that hints at the adventure within
+- Leave space at the top for a title overlay
 - Make it visually appealing to both children and parents
-- The composition should leave space at the top for a title overlay
 
 `;
-    // Include the story synopsis from the scene text
     structuredPrompt += `${sceneText}\n\n`;
   } else if (pageKind === 'cover_back') {
     // Back cover: explicit back cover instructions
@@ -1432,6 +1469,8 @@ export const storyImageFlow = ai.defineFlow(
           additionalPrompt,
           pageKind: page.kind,
           hasExemplars,
+          storyTitle: storyData.metadata?.title || page.title,
+          mainChildName: childProfile?.displayName,
         });
       } catch (generationError: any) {
         const fallbackAllowed = MOCK_IMAGES || !!regressionTag || process.env.STORYBOOK_IMAGE_FALLBACK === 'true';

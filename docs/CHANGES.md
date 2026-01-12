@@ -18,6 +18,32 @@
 
 ### 2026-01-12
 
+#### `aca4fe5` - Add title text to cover page images
+
+**Type**: Enhancement
+
+**Summary**: Updated front cover image generation to include the story title and author name rendered directly in the image. Uses best practices for AI text generation: specifying exact text in quotes, requesting specific placement, emphasizing legibility, and requesting child-friendly fonts.
+
+**Changes**:
+1. **story-image-flow.ts**:
+   - Added `storyTitle` and `mainChildName` parameters to `CreateImageParams`
+   - Front cover prompt now includes explicit text rendering requirements
+   - Title must be placed at top with large, clear, legible letters
+   - Author credit ("by [Name]") placed below title
+   - Emphasis on correct spelling and child-friendly fonts
+
+**Text rendering best practices applied**:
+- Exact text specified in quotes
+- Specific placement instructions (top of image)
+- Request for legible, rounded fonts
+- Contrasting colors requirement
+- Spelling verification instruction
+
+**Files modified**:
+- `src/ai/flows/story-image-flow.ts`
+
+---
+
 #### `68fc643` - Improve cover page image generation prompt
 
 **Type**: Enhancement
