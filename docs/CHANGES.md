@@ -18,6 +18,35 @@
 
 ### 2026-01-12
 
+#### `2d0bb31` - Simplify exemplar generation flow
+
+**Type**: Refactor
+
+**Summary**: Simplified exemplar generation to run immediately after pagination completes, in parallel with audio generation. Each actor now gets their own AI flow call, producing individual entries in `aiFlowLogs`. The images route no longer triggers exemplar generation - it simply uses whatever exemplar URLs are already stored.
+
+**Changes**:
+1. **New flow**: `storyExemplarGenerationFlow` - generates exemplar images for all actors in a storybook in parallel, stores URLs directly on the storybook document
+2. **pages/route.ts**: Now triggers exemplar generation in parallel with audio after pagination completes
+3. **images/route.ts**: Simplified to read `actorExemplarUrls` from storybook instead of calling exemplars endpoint
+4. **story-image-flow.ts**: Changed `actorExemplars` (IDs) to `actorExemplarUrls` (URLs) - no longer needs to load exemplar documents from Firestore
+5. **types.ts**: Added `actorExemplarUrls` field to `StoryBookOutput`, deprecated `actorExemplars`
+
+**New flow sequence**:
+- Pagination completes
+- In parallel: Audio generation + Exemplar generation (one AI call per actor)
+- Image generation uses stored exemplar URLs (or falls back to photos if not ready)
+
+**Files created**:
+- `src/ai/flows/story-exemplar-generation-flow.ts`
+
+**Files modified**:
+- `src/app/api/storybookV2/pages/route.ts`
+- `src/app/api/storybookV2/images/route.ts`
+- `src/ai/flows/story-image-flow.ts`
+- `src/lib/types.ts`
+
+---
+
 #### `25914e6` - Mark image generation failures clearly in AI flow logs
 
 **Type**: Enhancement

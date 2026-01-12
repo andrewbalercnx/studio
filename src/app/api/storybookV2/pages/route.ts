@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { storyPageFlow } from '@/ai/flows/story-page-flow';
 import { storyPageAudioFlow } from '@/ai/flows/story-page-audio-flow';
+import { storyExemplarGenerationFlow } from '@/ai/flows/story-exemplar-generation-flow';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
@@ -121,13 +122,20 @@ export async function POST(request: Request) {
       'audioGeneration.status': 'pending',
       'audioGeneration.pagesReady': 0,
       'audioGeneration.pagesTotal': sortedPages.length,
+      'exemplarGeneration.status': 'pending',
+      'exemplarGeneration.actorsReady': 0,
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    // Step 7: Trigger page audio generation in the background (fire-and-forget)
-    // This generates narration for each page with actor descriptions
+    // Step 7: Trigger background flows in parallel (fire-and-forget)
+    // - Audio generation: narration for each page
+    // - Exemplar generation: character reference sheets for consistent images
     storyPageAudioFlow({ storyId, storybookId }).catch((err) => {
       logger.error('Background page audio generation failed', err, { storyId, storybookId });
+    });
+
+    storyExemplarGenerationFlow({ storyId, storybookId }).catch((err) => {
+      logger.error('Background exemplar generation failed', err, { storyId, storybookId });
     });
 
     const durationMs = Date.now() - startTime;

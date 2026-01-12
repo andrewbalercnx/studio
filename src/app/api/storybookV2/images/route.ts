@@ -195,69 +195,24 @@ export async function POST(request: Request) {
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    // Generate exemplar character reference sheets before image generation (if not already done)
-    // This creates consistent character reference images for each actor in the storybook
-    let actorExemplars: Record<string, string> = storybookData?.actorExemplars || {};
+    // Get actor exemplar URLs from storybook (generated after pagination, in parallel with audio)
+    // actorExemplarUrls is a map of actorId -> exemplarImageUrl
+    let actorExemplarUrls: Record<string, string> = storybookData?.actorExemplarUrls || {};
     const exemplarStatus = storybookData?.exemplarGeneration?.status;
 
-    // Log current exemplar state for debugging (to both console and response logs)
-    const exemplarDebugInfo = {
-      pageId: pageId || 'none',
-      exemplarStatus: exemplarStatus || 'none',
-      actorExemplarsCount: Object.keys(actorExemplars).length,
-      actorExemplarKeys: Object.keys(actorExemplars),
-    };
-    console.log('[images/route] EXEMPLAR DEBUG:', JSON.stringify(exemplarDebugInfo));
-    allLogs.push(`[exemplars-debug] ${JSON.stringify(exemplarDebugInfo)}`);
+    // Log exemplar state
+    console.log('[images/route] EXEMPLAR STATUS:', JSON.stringify({
+      status: exemplarStatus || 'none',
+      urlCount: Object.keys(actorExemplarUrls).length,
+      actorIds: Object.keys(actorExemplarUrls),
+    }));
 
-    // Generate exemplars if:
-    // 1. This is full storybook generation (not single-page)
-    // 2. AND either status isn't 'ready' OR status is 'ready' but actorExemplars is empty
-    const needsExemplarGeneration = !pageId && (
-      exemplarStatus !== 'ready' ||
-      Object.keys(actorExemplars).length === 0
-    );
-
-    console.log('[images/route] EXEMPLAR needsExemplarGeneration:', needsExemplarGeneration);
-    allLogs.push(`[exemplars-debug] needsExemplarGeneration=${needsExemplarGeneration}`);
-
-    if (needsExemplarGeneration) {
-      // Only generate exemplars for full storybook generation (not single-page regeneration)
-      const regenerateReason = exemplarStatus === 'ready' && Object.keys(actorExemplars).length === 0
-        ? 'status is ready but actorExemplars is empty'
-        : `status: ${exemplarStatus || 'not started'}`;
-      allLogs.push(`[exemplars] Generating exemplars (${regenerateReason})...`);
-
-      try {
-        const exemplarsResponse = await fetch(new URL('/api/storybookV2/exemplars', request.url).toString(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ storyId, storybookId, forceRegenerate: false }),
-        });
-
-        if (exemplarsResponse.ok) {
-          const exemplarsResult = await exemplarsResponse.json();
-          actorExemplars = exemplarsResult.actorExemplars || {};
-          allLogs.push(`[exemplars] Generated ${Object.keys(actorExemplars).length} exemplar(s)`);
-          if (exemplarsResult.logs) {
-            allLogs.push(...exemplarsResult.logs.map((l: string) => `[exemplars] ${l}`));
-          }
-        } else {
-          const errorText = await exemplarsResponse.text();
-          allLogs.push(`[exemplars] Warning: Exemplar generation failed (${exemplarsResponse.status}): ${errorText.substring(0, 200)}`);
-          // Continue without exemplars - will fall back to photos
-        }
-      } catch (exemplarError: any) {
-        allLogs.push(`[exemplars] Warning: Exemplar generation error: ${exemplarError?.message || exemplarError}`);
-        // Continue without exemplars - will fall back to photos
-      }
-
-      // Reload storybook data to get updated actorExemplars
-      const updatedStorybookSnap = await storybookRef.get();
-      const updatedStorybookData = updatedStorybookSnap.data();
-      actorExemplars = updatedStorybookData?.actorExemplars || actorExemplars;
-    } else if (Object.keys(actorExemplars).length > 0) {
-      allLogs.push(`[exemplars] Using ${Object.keys(actorExemplars).length} existing exemplar(s)`);
+    if (exemplarStatus === 'ready' && Object.keys(actorExemplarUrls).length > 0) {
+      allLogs.push(`[exemplars] Using ${Object.keys(actorExemplarUrls).length} exemplar image(s): ${Object.keys(actorExemplarUrls).join(', ')}`);
+    } else if (exemplarStatus === 'running' || exemplarStatus === 'pending') {
+      allLogs.push(`[exemplars] Exemplar generation in progress (status: ${exemplarStatus}), proceeding with photos as fallback`);
+    } else {
+      allLogs.push(`[exemplars] No exemplars available (status: ${exemplarStatus || 'none'}), using photos as fallback`);
     }
 
     // Load the print layout for page-type-aware image dimensions
@@ -386,18 +341,12 @@ export async function POST(request: Request) {
           targetHeightPx: pageTargetHeightPx,
           // Only pass additionalPrompt for single-page regeneration
           additionalPrompt: pageId ? additionalPrompt : undefined,
-          // Pass actor exemplars for consistent character depiction
-          actorExemplars: Object.keys(actorExemplars).length > 0 ? actorExemplars : undefined,
+          // Pass actor exemplar image URLs for consistent character depiction
+          actorExemplarUrls: Object.keys(actorExemplarUrls).length > 0 ? actorExemplarUrls : undefined,
         },
       });
     }
 
-    // Log exemplar status once (not per-page to avoid log spam)
-    if (Object.keys(actorExemplars).length > 0) {
-      allLogs.push(`[exemplars] Passing ${Object.keys(actorExemplars).length} exemplar ID(s) to image generation: ${Object.keys(actorExemplars).join(', ')}`);
-    } else {
-      allLogs.push(`[exemplars] No exemplars available for image generation`);
-    }
 
     // Process skipped pages (mark as ready) and reset pages that need generation
     const prepPromises: Promise<void>[] = [];

@@ -428,7 +428,11 @@ export type StoryBookOutput = {
   exemplarGeneration?: StoryBookExemplarGenerationStatus;
 
   // Map of actorId -> exemplarId for this storybook's character reference images
+  // @deprecated Use actorExemplarUrls instead
   actorExemplars?: Record<string, string>;
+
+  // Map of actorId -> exemplarImageUrl for this storybook's character reference images
+  actorExemplarUrls?: Record<string, string>;
 
   // Finalization for print
   isFinalized?: boolean;

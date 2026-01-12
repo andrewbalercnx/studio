@@ -62,7 +62,7 @@ const StoryImageFlowInput = z.object({
   additionalPrompt: z.string().optional(),
   // Map of actorId -> exemplarImageUrl for character reference sheets
   // When provided, these are used instead of individual photos for character consistency
-  actorExemplars: z.record(z.string(), z.string()).optional(),
+  actorExemplarUrls: z.record(z.string(), z.string()).optional(),
 });
 
 const StoryImageFlowOutput = z.object({
@@ -1169,8 +1169,8 @@ export const storyImageFlow = ai.defineFlow(
     inputSchema: StoryImageFlowInput,
     outputSchema: StoryImageFlowOutput,
   },
-  async ({storyId, pageId, regressionTag, forceRegenerate, storybookId, targetWidthPx, targetHeightPx, imageStylePrompt, imageStyleId, aspectRatio, additionalPrompt, actorExemplars}) => {
-    console.log(`[storyImageFlow] Called with storyId=${storyId}, pageId=${pageId}, storybookId=${storybookId || 'undefined'}, imageStyleId=${imageStyleId || 'undefined'}, aspectRatio=${aspectRatio || 'auto'}, exemplars=${actorExemplars ? Object.keys(actorExemplars).length : 0}`);
+  async ({storyId, pageId, regressionTag, forceRegenerate, storybookId, targetWidthPx, targetHeightPx, imageStylePrompt, imageStyleId, aspectRatio, additionalPrompt, actorExemplarUrls}) => {
+    console.log(`[storyImageFlow] Called with storyId=${storyId}, pageId=${pageId}, storybookId=${storybookId || 'undefined'}, imageStyleId=${imageStyleId || 'undefined'}, aspectRatio=${aspectRatio || 'auto'}, exemplars=${actorExemplarUrls ? Object.keys(actorExemplarUrls).length : 0}`);
     const logs: string[] = [];
 
     // Validate required document IDs upfront to give clear error messages
@@ -1300,29 +1300,9 @@ export const storyImageFlow = ai.defineFlow(
           }
         }
 
-        // Load exemplar image URLs from the actorExemplars map (if provided)
-        // These are character reference sheets generated for consistent character depiction
-        let actorExemplarUrls: Record<string, string> | undefined;
-        if (actorExemplars && Object.keys(actorExemplars).length > 0) {
-          // actorExemplars is a map of actorId -> exemplarId
-          // We need to load the exemplar documents to get the imageUrls
-          actorExemplarUrls = {};
-          const exemplarIds = Object.values(actorExemplars);
-          const exemplarDocs = await Promise.all(
-            exemplarIds.map(id => firestore.collection('exemplars').doc(id).get())
-          );
-          const actorIdToExemplarId = Object.entries(actorExemplars);
-          for (let i = 0; i < actorIdToExemplarId.length; i++) {
-            const [actorId, exemplarId] = actorIdToExemplarId[i];
-            const doc = exemplarDocs.find(d => d.id === exemplarId);
-            if (doc?.exists) {
-              const data = doc.data();
-              if (data?.imageUrl && data?.status === 'ready') {
-                actorExemplarUrls[actorId] = data.imageUrl;
-              }
-            }
-          }
-          logs.push(`[exemplars] Loaded ${Object.keys(actorExemplarUrls).length} exemplar image URLs`);
+        // Log exemplar usage - URLs are passed directly from the images route
+        if (actorExemplarUrls && Object.keys(actorExemplarUrls).length > 0) {
+          logs.push(`[exemplars] Using ${Object.keys(actorExemplarUrls).length} exemplar image URL(s): ${Object.keys(actorExemplarUrls).join(', ')}`);
         }
 
         // Build structured actors JSON for the prompt
