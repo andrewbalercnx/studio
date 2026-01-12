@@ -18,6 +18,24 @@
 
 ### 2026-01-12
 
+#### `866f8fa` - Add admin button to delete exemplar images
+
+**Type**: Feature
+
+**Summary**: Added admin UI and API endpoint to delete all exemplar images from Firebase Storage. Exemplars are temporary reference images used during page generation and can be safely deleted once all storybook pages are generated.
+
+**Changes**:
+1. **New API endpoint**: `/api/admin/cleanup-exemplars` - GET returns count of exemplar files, DELETE removes all exemplar files from storage
+2. **Admin cleanup page**: Added "Exemplar Images (Storage)" section with Check Count and Delete All buttons
+
+**Files created**:
+- `src/app/api/admin/cleanup-exemplars/route.ts`
+
+**Files modified**:
+- `src/app/admin/cleanup/page.tsx`
+
+---
+
 #### `2d0bb31` - Simplify exemplar generation flow
 
 **Type**: Refactor

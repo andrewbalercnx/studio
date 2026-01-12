@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-08 (added storyOutputTypes, imageStyles, and stories list endpoints; enhanced stories API with resolved placeholders)
+> **Last Updated**: 2026-01-12 (added cleanup-exemplars admin endpoints)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -1879,6 +1879,42 @@ Allow any authenticated parent or admin user to report an issue to maintenance u
 ## Admin Routes
 
 > All admin routes require `isAdmin` or `isWriter` role.
+
+### GET `/api/admin/cleanup-exemplars`
+
+Count exemplar images in Firebase Storage. Used to preview cleanup before deletion.
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "totalFiles": 25,
+  "storiesWithExemplars": 5,
+  "storyCounts": {
+    "story-123": 3,
+    "story-456": 5
+  }
+}
+```
+
+---
+
+### DELETE `/api/admin/cleanup-exemplars`
+
+Delete all exemplar images from Firebase Storage. Exemplars are temporary character reference sheets stored at `stories/{storyId}/exemplars/`.
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "deleted": 25,
+  "failed": 0,
+  "total": 25,
+  "errors": []
+}
+```
+
+---
 
 ### POST `/api/admin/test-email`
 

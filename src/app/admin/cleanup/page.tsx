@@ -21,6 +21,7 @@ import {
   Archive,
   CheckCircle2,
   XCircle,
+  Image,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -284,6 +285,11 @@ export default function AdminCleanupPage() {
     null
   );
 
+  // Exemplar cleanup state
+  const [exemplarCount, setExemplarCount] = useState<{ totalFiles: number; storiesWithExemplars: number } | null>(null);
+  const [loadingExemplars, setLoadingExemplars] = useState(false);
+  const [deletingExemplars, setDeletingExemplars] = useState(false);
+
   const scan = useCallback(async () => {
     if (!user) return;
 
@@ -468,6 +474,76 @@ export default function AdminCleanupPage() {
     [user, toast, scan]
   );
 
+  const checkExemplars = useCallback(async () => {
+    if (!user) return;
+
+    setLoadingExemplars(true);
+
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch('/api/admin/cleanup-exemplars', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to check exemplars');
+      }
+
+      const result = await response.json();
+      setExemplarCount({ totalFiles: result.totalFiles, storiesWithExemplars: result.storiesWithExemplars });
+    } catch (error: any) {
+      toast({
+        title: 'Failed to check exemplars',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingExemplars(false);
+    }
+  }, [user, toast]);
+
+  const deleteExemplars = useCallback(async () => {
+    if (!user) return;
+
+    setDeletingExemplars(true);
+
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch('/api/admin/cleanup-exemplars', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete exemplars');
+      }
+
+      const result = await response.json();
+
+      toast({
+        title: 'Exemplars deleted',
+        description: `Deleted ${result.deleted} exemplar image(s) from ${exemplarCount?.storiesWithExemplars || 0} stories`,
+      });
+
+      // Refresh the count
+      await checkExemplars();
+    } catch (error: any) {
+      toast({
+        title: 'Failed to delete exemplars',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingExemplars(false);
+    }
+  }, [user, toast, checkExemplars, exemplarCount]);
+
   if (adminLoading) {
     return (
       <div className="container mx-auto p-4 sm:p-6 md:p-8">
@@ -529,6 +605,77 @@ export default function AdminCleanupPage() {
               the help-child are preserved. All other user data will be flagged
               for deletion.
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Storage Cleanup - Exemplars */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <Image className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <CardTitle className="text-lg">Exemplar Images (Storage)</CardTitle>
+              <CardDescription>
+                Character reference sheets stored in Firebase Storage. These are temporary images used during page image generation.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            <Button onClick={checkExemplars} disabled={loadingExemplars} variant="outline">
+              {loadingExemplars ? (
+                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Check Count
+            </Button>
+
+            {exemplarCount !== null && (
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-muted-foreground">
+                  {exemplarCount.totalFiles} file(s) across {exemplarCount.storiesWithExemplars} stories
+                </span>
+
+                {exemplarCount.totalFiles > 0 && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" disabled={deletingExemplars}>
+                        {deletingExemplars ? (
+                          <LoaderCircle className="h-4 w-4 animate-spin mr-2" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 mr-2" />
+                        )}
+                        Delete All Exemplars
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                          <AlertTriangle className="h-5 w-5 text-destructive" />
+                          Delete All Exemplar Images?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will permanently delete {exemplarCount.totalFiles} exemplar image(s) from Firebase Storage.
+                          This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={deleteExemplars}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Delete All
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
