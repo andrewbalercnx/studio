@@ -18,6 +18,21 @@
 
 ### 2026-01-12
 
+#### `30456a1` - Remove redundant exemplarImage URLs from character JSON
+
+**Type**: Optimization
+
+**Summary**: Removed the redundant `exemplarImage` URL field from the character JSON in image generation prompts. The exemplar images are already attached as actual images to the prompt and mapped via the `IMAGE-TO-CHARACTER MAPPING` text section, so including the URL as text was redundant and wasted tokens.
+
+**Before**: Character JSON included both `"images": []` and `"exemplarImage": "https://..."` when exemplars were used.
+
+**After**: Character JSON only includes `"images": []` when exemplars are used. The model maps images to characters via the explicit text mapping section.
+
+**Files modified**:
+- `src/ai/flows/story-image-flow.ts` - Removed `exemplarImage` field from `ActorData` type and `buildActorData()` function
+
+---
+
 #### `5ac7334` - Fix exemplar image mapping and add AI log export
 
 **Type**: Bug Fix / Enhancement

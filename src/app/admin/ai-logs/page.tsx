@@ -223,18 +223,16 @@ export default function AdminAILogsPage() {
           {logs.map((log) => (
             <AccordionItem key={log.id} value={log.id}>
               <div className="flex items-center">
-                <div
+                <label
                   className="flex items-center justify-center px-3 py-4 cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleSelection(log.id);
-                  }}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   <Checkbox
                     checked={selectedIds.has(log.id)}
                     onCheckedChange={() => toggleSelection(log.id)}
+                    onClick={(e) => e.stopPropagation()}
                   />
-                </div>
+                </label>
                 <AccordionTrigger className="hover:no-underline flex-1">
                   <div className="flex items-center justify-between w-full pr-4">
                     <div className="flex items-center gap-4 text-sm">

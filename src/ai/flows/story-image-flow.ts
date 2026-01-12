@@ -319,8 +319,8 @@ type EntityReferenceData = {
 
 /**
  * Structured actor data for image prompts
- * When exemplars are used, the exemplarImage field provides the URL mapping so the model
- * knows which reference sheet image corresponds to which actor ID.
+ * When exemplars are used, they are attached as actual images and mapped via
+ * the IMAGE-TO-CHARACTER MAPPING text section - the URLs are NOT included here.
  */
 type ActorData = {
   id: string;
@@ -333,7 +333,6 @@ type ActorData = {
   likes?: string[];
   dislikes?: string[];
   images: string[]; // Avatar + photos (fallback when no exemplar - empty when exemplar is used)
-  exemplarImage?: string; // Character reference sheet URL - maps this actor to their exemplar image
 };
 
 /**
@@ -349,8 +348,9 @@ function buildActorData(
   // Check if it's a Character (has 'type' field) or ChildProfile
   const isCharacter = 'type' in entity && typeof (entity as Character).type === 'string';
 
-  // When exemplarImage is available, include its URL in the JSON so the model can map
-  // this actor to the correct exemplar reference sheet image
+  // When exemplarImage is available, we still use this branch but don't include the URL
+  // in the JSON. The exemplar image is attached to the prompt and the IMAGE-TO-CHARACTER
+  // MAPPING text tells the model which image corresponds to which actor.
   if (exemplarImage) {
     return {
       id: entityId,
@@ -362,8 +362,7 @@ function buildActorData(
       pronouns: entity.pronouns,
       likes: entity.likes,
       dislikes: entity.dislikes,
-      images: [], // Empty when using exemplar - the exemplarImage is the reference
-      exemplarImage, // URL that maps this actor to their reference sheet in the provided images
+      images: [], // Empty when using exemplar - the actual image is attached to the prompt
     };
   }
 
