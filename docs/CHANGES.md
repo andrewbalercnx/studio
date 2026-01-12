@@ -18,6 +18,30 @@
 
 ### 2026-01-12
 
+#### `c8c284d` - Fix exemplar regeneration, duplicate generation, and actor data in prompts
+
+**Type**: Bug Fix
+
+**Summary**: Fixed multiple issues with image generation:
+1. Exemplar route was returning early with empty actorExemplars when status was 'ready'
+2. Concurrent requests to the images route could cause duplicate image generation
+3. Actor JSON in prompts included both exemplarImage AND individual photos - now uses only exemplar when available
+4. Prompt instructions now clearly direct the AI to use exemplar reference sheets vs photos
+
+**Changes**:
+- Added check for empty `actorExemplars` when status is 'ready' in exemplars route
+- Added logging when regenerating due to empty actorExemplars
+- Added guard to prevent concurrent image generation (returns 409 if already running)
+- Modified `buildActorData` to return empty `images` array when `exemplarImage` is provided
+- Updated prompt instructions to clearly explain which images are character reference sheets vs style examples
+
+**Files modified**:
+- `src/app/api/storybookV2/exemplars/route.ts` - Fixed early return condition
+- `src/app/api/storybookV2/images/route.ts` - Added concurrent generation guard
+- `src/ai/flows/story-image-flow.ts` - Fixed buildActorData and improved prompt instructions
+
+---
+
 #### `685f2a0` - Display imageUrl in AI flow logs and add pagination
 
 **Type**: Enhancement

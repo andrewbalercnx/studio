@@ -344,12 +344,31 @@ function buildActorData(
   isMainChild: boolean = false,
   exemplarImage?: string
 ): ActorData {
+  // Check if it's a Character (has 'type' field) or ChildProfile
+  const isCharacter = 'type' in entity && typeof (entity as Character).type === 'string';
+
+  // When exemplarImage is available, use it exclusively - don't include individual photos
+  // This prevents the model from seeing both the exemplar AND the original photos
+  if (exemplarImage) {
+    return {
+      id: entityId,
+      type: isCharacter ? 'character' : (isMainChild ? 'child' : 'sibling'),
+      displayName: entity.displayName,
+      characterType: isCharacter ? (entity as Character).type : undefined,
+      description: entity.description,
+      imageDescription: entity.imageDescription,
+      pronouns: entity.pronouns,
+      likes: entity.likes,
+      dislikes: entity.dislikes,
+      images: [], // Empty - exemplarImage is the reference
+      exemplarImage,
+    };
+  }
+
+  // Fallback: use avatar + photos when no exemplar is available
   const images: string[] = [];
   if (entity.avatarUrl) images.push(entity.avatarUrl);
   if (entity.photos?.length) images.push(...entity.photos);
-
-  // Check if it's a Character (has 'type' field) or ChildProfile
-  const isCharacter = 'type' in entity && typeof (entity as Character).type === 'string';
 
   return {
     id: entityId,
@@ -362,7 +381,6 @@ function buildActorData(
     likes: entity.likes,
     dislikes: entity.dislikes,
     images,
-    exemplarImage, // Character reference sheet (preferred over individual images)
   };
 }
 
@@ -855,14 +873,20 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     structuredPrompt += `Additional instructions: ${additionalPrompt.trim()}\n\n`;
   }
 
-  // 4. Structured actor data with reference to exemplar/photo images
+  // 4. Character reference instructions and structured actor data
   if (actorsJson && actorsJson.length > 0) {
     if (usingExemplars || hasExemplars) {
-      // When exemplars are available, reference them as primary character source
-      structuredPrompt += `Characters in this scene (for each character, use the exemplarImage reference sheet showing front/side/back views for visual consistency, supported by the imageDescription if needed):\n${actorsJson}\n`;
+      // When exemplars are available, instruct to use the exemplar reference sheets
+      const exemplarCount = exemplarParts.length;
+      const styleCount = styleExampleParts.length;
+      structuredPrompt += `IMPORTANT: The images provided after the style examples are CHARACTER REFERENCE SHEETS. Each reference sheet shows a character from front, side, and back views in the target art style. Use these reference sheets (images ${styleCount + 1}-${styleCount + exemplarCount}) to maintain visual consistency for each character throughout the scene.\n\n`;
+      structuredPrompt += `Characters in this scene (match each character to their reference sheet based on the exemplarImage field):\n${actorsJson}\n`;
     } else {
-      // Fallback to original prompt when using photos
-      structuredPrompt += `Characters in this scene (use the character reference images for visual reference):\n${actorsJson}\n`;
+      // Fallback to photos - explain these are reference photos
+      const photoCount = photoParts.length;
+      const styleCount = styleExampleParts.length;
+      structuredPrompt += `IMPORTANT: The images provided after the style examples (images ${styleCount + 1}-${styleCount + photoCount}) are reference photos of the characters. Use these to understand each character's appearance, then render them in the specified art style.\n\n`;
+      structuredPrompt += `Characters in this scene (use the images array URLs as reference for each character's appearance):\n${actorsJson}\n`;
     }
   }
 

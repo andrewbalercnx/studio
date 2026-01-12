@@ -177,6 +177,16 @@ export async function POST(request: Request) {
       );
     }
 
+    // Prevent concurrent image generation - if already running, return early
+    // This avoids duplicate image generation from concurrent requests
+    if (storybookData?.imageGeneration?.status === 'running') {
+      logger.warn('Image generation already in progress', { storyId, storybookId });
+      return NextResponse.json(
+        { ok: false, errorMessage: 'Image generation is already in progress.', requestId },
+        { status: 409 }
+      );
+    }
+
     // Update status to running
     await storybookRef.update({
       'imageGeneration.status': 'running',

@@ -173,17 +173,26 @@ export async function POST(request: Request) {
     }
 
     // Check if exemplars are already ready (and not forcing regeneration)
-    if (!forceRegenerate && storybookData.exemplarGeneration?.status === 'ready') {
-      allLogs.push('[skip] Exemplars already generated');
+    // Also check that actorExemplars is not empty - if it's empty, we need to regenerate
+    const existingExemplars = storybookData.actorExemplars || {};
+    const hasExistingExemplars = Object.keys(existingExemplars).length > 0;
+
+    if (!forceRegenerate && storybookData.exemplarGeneration?.status === 'ready' && hasExistingExemplars) {
+      allLogs.push(`[skip] Exemplars already generated (${Object.keys(existingExemplars).length} actors)`);
       return NextResponse.json({
         ok: true,
         storyId,
         storybookId,
         status: 'ready',
-        actorExemplars: storybookData.actorExemplars || {},
+        actorExemplars: existingExemplars,
         logs: allLogs,
         requestId,
       });
+    }
+
+    // Log why we're regenerating
+    if (storybookData.exemplarGeneration?.status === 'ready' && !hasExistingExemplars) {
+      allLogs.push('[regenerate] Status was ready but actorExemplars was empty, regenerating...');
     }
 
     // Update status to running
