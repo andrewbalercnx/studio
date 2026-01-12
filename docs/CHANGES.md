@@ -18,6 +18,17 @@
 
 ### 2026-01-12
 
+#### `3c239df` - Add hover-to-fade on storybook player text panel
+
+**Type**: Enhancement
+
+**Summary**: Added a hover effect to the text panel in the immersive storybook player. When users hover over the text overlay, it fades to 10% opacity, allowing the image underneath to be seen more clearly.
+
+**Files modified**:
+- `src/components/book-reader/immersive-player.tsx` - Added `transition-opacity duration-300 hover:opacity-10` classes
+
+---
+
 #### `f2d0173` - Improve exemplar generation prompt for better context
 
 **Type**: Enhancement

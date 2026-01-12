@@ -464,8 +464,8 @@ export function ImmersivePlayer({
               </h1>
             )}
 
-            {/* Body text */}
-            <div className="bg-black/50 backdrop-blur-sm rounded-2xl p-6">
+            {/* Body text - fades out on hover to reveal image underneath */}
+            <div className="bg-black/50 backdrop-blur-sm rounded-2xl p-6 transition-opacity duration-300 hover:opacity-10">
               <p className="text-xl sm:text-2xl text-white leading-relaxed text-center font-medium">
                 {displayText}
               </p>
