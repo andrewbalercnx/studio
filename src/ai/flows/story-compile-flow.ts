@@ -51,25 +51,29 @@ async function generateSynopsis(
   const synopsisModelName = 'googleai/gemini-2.5-flash';
   const synopsisStartTime = Date.now();
 
-  // Improved prompt with explicit completion requirements
+  // Improved prompt with explicit completion requirements and action trigger
   const synopsisPrompt = `You are writing a brief summary for parents to see on their child's story card.
 
 STORY TO SUMMARIZE:
 ${storyText}
 
-YOUR TASK:
-Write exactly 1-2 complete sentences summarizing this children's story. The summary should:
-- Capture the main adventure, theme, or heartwarming moment
-- Be engaging and help a parent quickly understand what the story is about
+INSTRUCTIONS:
+Write exactly 1-2 complete sentences summarizing this children's story for parents.
+
+Requirements:
+- Capture the main adventure or heartwarming moment
+- Be engaging and help parents quickly understand the story
 - Be suitable for display on a story card
 
-IMPORTANT:
-- Output ONLY the summary text, nothing else
-- Make sure your response is complete - do not stop mid-sentence
-- Do not include any labels, prefixes, or formatting
+Output format:
+- Return ONLY the summary text with no labels, prefixes, or formatting
+- Your response must be grammatically complete sentences
+- End with proper punctuation (period)
 
-EXAMPLE FORMAT:
-A young explorer and their animal friend discover a hidden treasure while learning the importance of teamwork and courage.`;
+Example of correct output:
+A young explorer and their animal friend discover a hidden treasure while learning the importance of teamwork and courage.
+
+Now write the summary:`;
 
   try {
     const synopsisResponse = await ai.generate({

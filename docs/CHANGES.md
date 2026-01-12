@@ -16,6 +16,25 @@
 
 ## Changes
 
+### 2026-01-12
+
+#### `64ca527` - Improve synopsis prompt to prevent truncated responses
+
+**Type**: Fix
+
+**Summary**: Updated the synopsis generation prompt to reduce truncated responses from Gemini. Added action trigger, positive framing for completion requirements, and explicit punctuation instruction.
+
+**Changes**:
+- Added "Now write the summary:" action trigger at the end of the prompt
+- Changed negative instructions ("do not stop mid-sentence") to positive framing ("must be grammatically complete sentences")
+- Added explicit "End with proper punctuation (period)" requirement
+- Simplified and restructured prompt sections for clarity
+
+**Files modified**:
+- `src/ai/flows/story-compile-flow.ts` - Updated synopsis prompt in `generateSynopsis` function
+
+---
+
 ### 2026-01-11
 
 #### `33c6071` - Add imageUrl to AI flow logs for image generation
