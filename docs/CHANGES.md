@@ -18,6 +18,24 @@
 
 ### 2026-01-12
 
+#### `68fc643` - Improve cover page image generation prompt
+
+**Type**: Enhancement
+
+**Summary**: Improved the AI prompt for generating front and back cover images. The prompts now explicitly instruct the AI to create a book cover with specific composition requirements, include the full story synopsis for context, and leave space for title overlay.
+
+**Changes**:
+1. **story-image-flow.ts**: Added page-kind-specific prompt handling for `cover_front` and `cover_back`. Front covers get explicit instructions about composition, leaving space for title, and capturing the story's spirit. Back covers get instructions for a warm concluding scene.
+2. **story-page-flow.ts**: Enhanced `buildFrontCoverImagePrompt` to provide richer context including the story title, full synopsis, and visual direction guidance.
+3. **story-exemplar-generation-flow.ts**: Fixed invalid aspect ratio (2:1 → 21:9) for exemplar reference sheets.
+
+**Files modified**:
+- `src/ai/flows/story-image-flow.ts`
+- `src/ai/flows/story-page-flow.ts`
+- `src/ai/flows/story-exemplar-generation-flow.ts`
+
+---
+
 #### `866f8fa` - Add admin button to delete exemplar images
 
 **Type**: Feature

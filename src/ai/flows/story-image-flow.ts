@@ -851,15 +851,43 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     structuredPrompt += `${globalImagePrompt}\n\n`;
   }
 
-  // 1. Target audience
-  if (mainChildId && childAge) {
-    structuredPrompt += `Create an image for a child's storybook. The main child ($$${mainChildId}$$) is ${childAge}. Create an image of the following scene, suitable for a child of this age.\n\n`;
-  } else {
-    structuredPrompt += `Create an image for a child's storybook.\n\n`;
-  }
+  // 1. Target audience and scene context - varies by page kind
+  if (pageKind === 'cover_front') {
+    // Front cover: explicit book cover instructions
+    structuredPrompt += `Create a FRONT COVER illustration for a personalized children's storybook.
 
-  // 2. Scene description with $$Id$$ placeholders intact (moved up for better context)
-  structuredPrompt += `Scene: ${sceneText}\n\n`;
+REQUIREMENTS FOR THE COVER:
+- This is the FRONT COVER of a printed book - make it eye-catching and inviting
+- Show the main character(s) in a dynamic, engaging pose that captures the story's spirit
+- Create a scene that hints at the adventure within, but doesn't give away the ending
+- DO NOT include any text, title, or words in the image - the title will be added separately
+- Make it visually appealing to both children and parents
+- The composition should leave space at the top for a title overlay
+
+`;
+    // Include the story synopsis from the scene text
+    structuredPrompt += `${sceneText}\n\n`;
+  } else if (pageKind === 'cover_back') {
+    // Back cover: explicit back cover instructions
+    structuredPrompt += `Create a BACK COVER illustration for a personalized children's storybook.
+
+REQUIREMENTS FOR THE BACK COVER:
+- This is the BACK COVER of a printed book
+- Show the characters in a warm, concluding scene
+- DO NOT include any text or words in the image
+- Create a sense of completion and happiness
+
+`;
+    structuredPrompt += `${sceneText}\n\n`;
+  } else {
+    // Interior pages: standard storybook scene
+    if (mainChildId && childAge) {
+      structuredPrompt += `Create an image for a child's storybook. The main child ($$${mainChildId}$$) is ${childAge}. Create an image of the following scene, suitable for a child of this age.\n\n`;
+    } else {
+      structuredPrompt += `Create an image for a child's storybook.\n\n`;
+    }
+    structuredPrompt += `Scene: ${sceneText}\n\n`;
+  }
 
   // 3. Art style (with reference to example images if provided)
   if (styleExampleParts.length > 0) {

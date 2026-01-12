@@ -194,6 +194,7 @@ function buildImagePrompt(
  * Build image prompt for the front cover (uses synopsis)
  * Note: Actor details are added by story-image-flow.ts via buildActorsJson,
  * so this function only provides the scene description context.
+ * The story-image-flow adds explicit FRONT COVER instructions when pageKind is 'cover_front'.
  */
 function buildFrontCoverImagePrompt(
   synopsis: string | null | undefined,
@@ -205,8 +206,18 @@ function buildFrontCoverImagePrompt(
     ? synopsis
     : `A magical children's storybook adventure`;
 
-  // Return scene description - actor details are added by story-image-flow.ts
-  return `Create a book cover illustration for "${storyTitle}", with no text or words in the image.\n\nSynopsis: ${synopsisText}\n\nStyle: Whimsical, inviting children's book cover.`;
+  // Provide rich context for the cover image. The story-image-flow will add explicit
+  // "FRONT COVER" instructions and formatting requirements.
+  return `STORY: "${storyTitle}"
+
+SYNOPSIS:
+${synopsisText}
+
+VISUAL DIRECTION:
+- Feature the main character(s) prominently
+- Capture a key moment or mood from the story
+- Create an inviting, magical atmosphere that draws children in
+- The scene should represent the heart of the adventure`;
 }
 
 /**
