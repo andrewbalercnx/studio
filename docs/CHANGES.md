@@ -18,7 +18,26 @@
 
 ### 2026-01-12
 
-#### `pending` - Put face close-up first in exemplar layout
+#### `81ee834` - Add exemplar layout description to image generation prompts
+
+**Type**: Enhancement
+
+**Summary**: Updated the image generation prompts to include a detailed description of the exemplar reference sheet layout (2x2 grid with face close-up in top-left). Emphasizes that the face close-up is critical for facial feature matching to maintain character consistency across all generated images.
+
+**Changes**:
+1. **story-image-flow.ts**:
+   - Updated exemplar instructions in `createImage()` to describe actual 2x2 grid layout
+   - Added specific guidance for each quadrant (face close-up, front, 3/4, back)
+   - Added CRITICAL emphasis that face close-up in top-left is the most important reference
+   - Instructs AI to match facial features (eyes, nose, mouth, hair, skin tone) exactly
+   - Updated character list instruction to mention paying special attention to face close-up
+
+**Files modified**:
+- `src/ai/flows/story-image-flow.ts`
+
+---
+
+#### `9d4dc02` - Put face close-up first in exemplar layout
 
 **Type**: Enhancement
 

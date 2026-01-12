@@ -944,8 +944,18 @@ REQUIREMENTS FOR THE BACK COVER:
       // When exemplars are available, instruct to use the exemplar reference sheets
       const exemplarCount = exemplarParts.length;
       const styleCount = styleExampleParts.length;
-      structuredPrompt += `IMPORTANT: The images provided after the style examples are CHARACTER REFERENCE SHEETS. Each reference sheet shows a character from front, side, and back views in the target art style. Use these reference sheets (images ${styleCount + 1}-${styleCount + exemplarCount}) to maintain visual consistency for each character throughout the scene.\n\n`;
-      structuredPrompt += `Characters in this scene (match each character to their reference sheet based on the exemplarImage field):\n${actorsJson}\n`;
+      structuredPrompt += `IMPORTANT: The images provided after the style examples are CHARACTER REFERENCE SHEETS (images ${styleCount + 1}-${styleCount + exemplarCount}).
+
+Each reference sheet is a 2x2 grid showing the character from 4 angles:
+- TOP-LEFT: FACE CLOSE-UP (head and shoulders portrait) - USE THIS FOR FACIAL FEATURE MATCHING
+- TOP-RIGHT: Full body FRONT view
+- BOTTOM-LEFT: Full body 3/4 VIEW (turned slightly)
+- BOTTOM-RIGHT: Full body BACK view
+
+CRITICAL: The FACE CLOSE-UP in the top-left quadrant is the most important reference. Match each character's facial features (eyes, nose, mouth, hair, skin tone) EXACTLY as shown in their face close-up. The face must be recognizably the same person across all generated images.
+
+Use these reference sheets to maintain visual consistency for each character throughout the scene.\n\n`;
+      structuredPrompt += `Characters in this scene (match each character to their reference sheet, paying special attention to the face close-up in the top-left quadrant):\n${actorsJson}\n`;
     } else {
       // Fallback to photos - explain these are reference photos
       const photoCount = photoParts.length;
