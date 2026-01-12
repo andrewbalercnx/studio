@@ -17,7 +17,9 @@ import { logAIFlow } from '@/lib/ai-flow-logger';
 import { Gaxios, GaxiosError } from 'gaxios';
 
 const DEFAULT_IMAGE_MODEL = process.env.STORYBOOK_IMAGE_MODEL ?? 'googleai/gemini-2.5-flash-image-preview';
-const EXEMPLAR_ASPECT_RATIO = '2:1';
+// Use 21:9 (widest available) for character reference sheets with 3 side-by-side views
+// Valid options: '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'
+const EXEMPLAR_ASPECT_RATIO = '21:9';
 
 const StoryExemplarGenerationFlowInputSchema = z.object({
   storyId: z.string(),
