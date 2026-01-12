@@ -200,6 +200,12 @@ export async function POST(request: Request) {
     let actorExemplars: Record<string, string> = storybookData?.actorExemplars || {};
     const exemplarStatus = storybookData?.exemplarGeneration?.status;
 
+    // Log current exemplar state for debugging
+    allLogs.push(`[exemplars-debug] pageId=${pageId || 'none'}, exemplarStatus=${exemplarStatus || 'none'}, actorExemplarsCount=${Object.keys(actorExemplars).length}`);
+    if (Object.keys(actorExemplars).length > 0) {
+      allLogs.push(`[exemplars-debug] existing actorExemplars: ${JSON.stringify(actorExemplars)}`);
+    }
+
     // Generate exemplars if:
     // 1. This is full storybook generation (not single-page)
     // 2. AND either status isn't 'ready' OR status is 'ready' but actorExemplars is empty
@@ -207,6 +213,8 @@ export async function POST(request: Request) {
       exemplarStatus !== 'ready' ||
       Object.keys(actorExemplars).length === 0
     );
+
+    allLogs.push(`[exemplars-debug] needsExemplarGeneration=${needsExemplarGeneration}`);
 
     if (needsExemplarGeneration) {
       // Only generate exemplars for full storybook generation (not single-page regeneration)
