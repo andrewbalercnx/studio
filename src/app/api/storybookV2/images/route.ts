@@ -200,11 +200,15 @@ export async function POST(request: Request) {
     let actorExemplars: Record<string, string> = storybookData?.actorExemplars || {};
     const exemplarStatus = storybookData?.exemplarGeneration?.status;
 
-    // Log current exemplar state for debugging
-    allLogs.push(`[exemplars-debug] pageId=${pageId || 'none'}, exemplarStatus=${exemplarStatus || 'none'}, actorExemplarsCount=${Object.keys(actorExemplars).length}`);
-    if (Object.keys(actorExemplars).length > 0) {
-      allLogs.push(`[exemplars-debug] existing actorExemplars: ${JSON.stringify(actorExemplars)}`);
-    }
+    // Log current exemplar state for debugging (to both console and response logs)
+    const exemplarDebugInfo = {
+      pageId: pageId || 'none',
+      exemplarStatus: exemplarStatus || 'none',
+      actorExemplarsCount: Object.keys(actorExemplars).length,
+      actorExemplarKeys: Object.keys(actorExemplars),
+    };
+    console.log('[images/route] EXEMPLAR DEBUG:', JSON.stringify(exemplarDebugInfo));
+    allLogs.push(`[exemplars-debug] ${JSON.stringify(exemplarDebugInfo)}`);
 
     // Generate exemplars if:
     // 1. This is full storybook generation (not single-page)
@@ -214,6 +218,7 @@ export async function POST(request: Request) {
       Object.keys(actorExemplars).length === 0
     );
 
+    console.log('[images/route] EXEMPLAR needsExemplarGeneration:', needsExemplarGeneration);
     allLogs.push(`[exemplars-debug] needsExemplarGeneration=${needsExemplarGeneration}`);
 
     if (needsExemplarGeneration) {
