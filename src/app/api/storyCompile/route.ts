@@ -4,16 +4,24 @@ import { storyAudioFlow } from '@/ai/flows/story-audio-flow';
 import { storyTitleFlow } from '@/ai/flows/story-title-flow';
 import { storyActorAvatarFlow } from '@/ai/flows/story-actor-avatar-flow';
 import { createLogger, generateRequestId, createTimeoutController } from '@/lib/server-logger';
+import { getServerFirestore } from '@/lib/server-firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 
 // Request timeout for story compile (3 minutes - longer due to complexity)
 const COMPILE_TIMEOUT_MS = 180000;
 
+// Lock timeout - if a compile has been running for longer than this, allow a new one
+const COMPILE_LOCK_TIMEOUT_MS = 120000; // 2 minutes
+
 export async function POST(request: Request) {
     const requestId = generateRequestId();
     const logger = createLogger({ route: '/api/storyCompile', method: 'POST', requestId });
+    let sessionId: string | undefined;
 
     try {
-        const { sessionId, storyOutputTypeId } = await request.json();
+        const body = await request.json();
+        sessionId = body.sessionId;
+        const storyOutputTypeId = body.storyOutputTypeId;
         logger.info('Request received', { sessionId, storyOutputTypeId });
 
         if (!sessionId) {
@@ -22,6 +30,60 @@ export async function POST(request: Request) {
         }
         // storyOutputTypeId is now optional - story can be compiled without it
         // and storyOutputType can be selected later when creating a storybook
+
+        // Idempotency check: prevent duplicate compile requests
+        const firestore = await getServerFirestore();
+        const sessionRef = firestore.collection('storySessions').doc(sessionId);
+        const sessionDoc = await sessionRef.get();
+
+        if (sessionDoc.exists) {
+            const sessionData = sessionDoc.data();
+            const compileInProgress = sessionData?.compileInProgress;
+            const compileStartedAt = sessionData?.compileStartedAt;
+
+            // Check if compile is already in progress (and hasn't timed out)
+            if (compileInProgress) {
+                const startedAtMs = compileStartedAt?.toMillis?.() || 0;
+                const elapsedMs = Date.now() - startedAtMs;
+
+                if (elapsedMs < COMPILE_LOCK_TIMEOUT_MS) {
+                    logger.warn('Compile already in progress, rejecting duplicate request', {
+                        sessionId,
+                        elapsedMs,
+                        compileStartedAt: compileStartedAt?.toDate?.()?.toISOString()
+                    });
+                    return NextResponse.json({
+                        ok: false,
+                        errorMessage: 'Story compilation is already in progress. Please wait.',
+                        alreadyInProgress: true
+                    }, { status: 409 }); // 409 Conflict
+                } else {
+                    logger.warn('Previous compile timed out, allowing new request', { sessionId, elapsedMs });
+                }
+            }
+
+            // Check if already successfully compiled
+            if (sessionData?.status === 'completed') {
+                const storyRef = firestore.collection('stories').doc(sessionId);
+                const storyDoc = await storyRef.get();
+                if (storyDoc.exists) {
+                    logger.info('Story already compiled, returning existing result', { sessionId });
+                    return NextResponse.json({
+                        ok: true,
+                        sessionId,
+                        storyId: sessionId,
+                        alreadyCompiled: true
+                    }, { status: 200 });
+                }
+            }
+
+            // Set compile lock
+            await sessionRef.update({
+                compileInProgress: true,
+                compileStartedAt: FieldValue.serverTimestamp(),
+                compileRequestId: requestId,
+            });
+        }
 
         const startTime = Date.now();
         // Create abort controller for timeout
@@ -37,6 +99,16 @@ export async function POST(request: Request) {
             // TODO: Pass controller.signal to flow when Genkit supports abort signals
             const result = await storyCompileFlow({ sessionId, storyOutputTypeId });
             const durationMs = Date.now() - startTime;
+
+            // Release compile lock
+            try {
+                await sessionRef.update({
+                    compileInProgress: false,
+                    compileCompletedAt: FieldValue.serverTimestamp(),
+                });
+            } catch (lockError) {
+                logger.warn('Failed to release compile lock', { sessionId, error: lockError });
+            }
 
             if (controller.signal.aborted) {
                 logger.warn('Flow completed after timeout was triggered', { sessionId, durationMs });
@@ -114,6 +186,22 @@ export async function POST(request: Request) {
     } catch (e: any) {
         const errorMessage = e.message || 'An unexpected error occurred in the API route.';
         logger.error('Unhandled exception in route', e);
+
+        // Release compile lock on error (only if sessionId was successfully parsed)
+        if (sessionId) {
+            try {
+                const firestore = await getServerFirestore();
+                const sessionRef = firestore.collection('storySessions').doc(sessionId);
+                await sessionRef.update({
+                    compileInProgress: false,
+                    compileErrorAt: FieldValue.serverTimestamp(),
+                    compileLastError: errorMessage,
+                });
+            } catch (lockError) {
+                logger.warn('Failed to release compile lock after error', { sessionId, error: lockError });
+            }
+        }
+
         return NextResponse.json(
             {
                 ok: false,

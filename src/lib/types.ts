@@ -46,6 +46,28 @@ export type PrintOrderAddress = {
   country: string;
 };
 
+// Saved address for parent address book and system addresses
+export type SavedAddress = PrintOrderAddress & {
+  id: string;
+  label?: string;        // "Home", "Work", "Grandma's"
+  isDefault?: boolean;
+  createdAt: any;
+  updatedAt: any;
+};
+
+// System address configuration
+export type SystemAddressConfig = {
+  addresses: SavedAddress[];
+  mixamBillToAddressId: string | null;
+  updatedAt?: any;
+  updatedBy?: string;
+};
+
+export const DEFAULT_SYSTEM_ADDRESS_CONFIG: SystemAddressConfig = {
+  addresses: [],
+  mixamBillToAddressId: null,
+};
+
 export type UserProfile = {
   id: string;
   email: string;

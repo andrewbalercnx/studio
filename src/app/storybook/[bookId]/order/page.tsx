@@ -5,7 +5,8 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useUser } from '@/firebase/auth/use-user';
 import { useDiagnosticsOptional } from '@/hooks/use-diagnostics';
-import type { PrintProduct, PrintOrderAddress, StoryOutput } from '@/lib/types';
+import type { PrintProduct, PrintOrderAddress, StoryOutput, SavedAddress } from '@/lib/types';
+import { AddressSelector, PostcodeLookup } from '@/components/address';
 
 type EndPaperColor = 'white' | 'cream' | 'black' | 'red' | 'blue' | 'green';
 
@@ -41,6 +42,8 @@ export default function OrderPrintBookPage() {
     postalCode: '',
     country: 'GB',
   });
+  const [addressMode, setAddressMode] = useState<'saved' | 'manual'>('saved');
+  const [hasSavedAddresses, setHasSavedAddresses] = useState<boolean | null>(null);
 
   useEffect(() => {
     loadData();
@@ -69,11 +72,11 @@ export default function OrderPrintBookPage() {
         fetch('/api/printOrders/products'),
       ];
 
-      // Only fetch saved address if user is logged in
+      // Only fetch saved addresses if user is logged in
       if (user) {
         const idToken = await user.getIdToken();
         fetchPromises.push(
-          fetch('/api/user/shipping-address', {
+          fetch('/api/user/addresses', {
             headers: { Authorization: `Bearer ${idToken}` },
           })
         );
@@ -81,7 +84,7 @@ export default function OrderPrintBookPage() {
 
       const responses = await Promise.all(fetchPromises);
       const [storyResponse, productsResponse] = responses;
-      const addressResponse = responses[2];
+      const addressesResponse = responses[2];
 
       if (!storyResponse.ok) throw new Error('Failed to load story');
       if (!productsResponse.ok) throw new Error('Failed to load print products');
@@ -97,12 +100,35 @@ export default function OrderPrintBookPage() {
         setSelectedProductId(productsData.products[0].id);
       }
 
-      // Load saved shipping address if available
-      if (addressResponse?.ok) {
-        const addressData = await addressResponse.json();
-        if (addressData.ok && addressData.address) {
-          setAddress(addressData.address);
+      // Check if user has saved addresses
+      if (addressesResponse?.ok) {
+        const addressesData = await addressesResponse.json();
+        const savedAddresses = addressesData.addresses || [];
+        setHasSavedAddresses(savedAddresses.length > 0);
+
+        // If user has saved addresses, start in saved mode
+        // Otherwise, start in manual mode
+        if (savedAddresses.length > 0) {
+          setAddressMode('saved');
+          // Pre-select default address
+          const defaultAddr = savedAddresses.find((a: SavedAddress) => a.isDefault) || savedAddresses[0];
+          if (defaultAddr) {
+            setAddress({
+              name: defaultAddr.name,
+              line1: defaultAddr.line1,
+              line2: defaultAddr.line2 || '',
+              city: defaultAddr.city,
+              state: defaultAddr.state || '',
+              postalCode: defaultAddr.postalCode,
+              country: defaultAddr.country || 'GB',
+            });
+          }
+        } else {
+          setAddressMode('manual');
         }
+      } else {
+        setHasSavedAddresses(false);
+        setAddressMode('manual');
       }
 
     } catch (err: any) {
@@ -420,95 +446,152 @@ export default function OrderPrintBookPage() {
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Shipping Address</h2>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-gray-700 mb-1">
-                  Recipient Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={address.name}
-                  onChange={(e) => setAddress({ ...address, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  required
-                />
+            {/* Address mode toggle (only show if user has saved addresses) */}
+            {hasSavedAddresses && (
+              <div className="flex gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => setAddressMode('saved')}
+                  className={`px-4 py-2 text-sm rounded-md transition-colors ${
+                    addressMode === 'saved'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Saved Addresses
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddressMode('manual')}
+                  className={`px-4 py-2 text-sm rounded-md transition-colors ${
+                    addressMode === 'manual'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Enter New Address
+                </button>
               </div>
+            )}
 
-              <div>
-                <label className="block text-gray-700 mb-1">
-                  Address Line 1 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={address.line1}
-                  onChange={(e) => setAddress({ ...address, line1: e.target.value })}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  required
+            {/* Saved Address Selector */}
+            {addressMode === 'saved' && hasSavedAddresses && (
+              <AddressSelector
+                onAddressSelected={(selectedAddress) => setAddress(selectedAddress)}
+                label=""
+                showAddNew={false}
+              />
+            )}
+
+            {/* Manual Address Entry */}
+            {addressMode === 'manual' && (
+              <div className="space-y-4">
+                {/* Postcode Lookup */}
+                <PostcodeLookup
+                  onAddressSelected={(lookupAddress) => {
+                    setAddress({
+                      ...address,
+                      line1: lookupAddress.line1,
+                      line2: lookupAddress.line2 || '',
+                      city: lookupAddress.city,
+                      state: lookupAddress.state,
+                      postalCode: lookupAddress.postalCode,
+                      country: lookupAddress.country,
+                    });
+                  }}
                 />
-              </div>
 
-              <div>
-                <label className="block text-gray-700 mb-1">Address Line 2</label>
-                <input
-                  type="text"
-                  value={address.line2}
-                  onChange={(e) => setAddress({ ...address, line2: e.target.value })}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                />
-              </div>
+                <div className="border-t pt-4">
+                  <div>
+                    <label className="block text-gray-700 mb-1">
+                      Recipient Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={address.name}
+                      onChange={(e) => setAddress({ ...address, name: e.target.value })}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      required
+                    />
+                  </div>
+                </div>
 
-              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-gray-700 mb-1">
-                    City/Town <span className="text-red-500">*</span>
+                    Address Line 1 <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    value={address.city}
-                    onChange={(e) => setAddress({ ...address, city: e.target.value })}
+                    value={address.line1}
+                    onChange={(e) => setAddress({ ...address, line1: e.target.value })}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-gray-700 mb-1">County/Region</label>
+                  <label className="block text-gray-700 mb-1">Address Line 2</label>
                   <input
                     type="text"
-                    value={address.state}
-                    onChange={(e) => setAddress({ ...address, state: e.target.value })}
+                    value={address.line2}
+                    onChange={(e) => setAddress({ ...address, line2: e.target.value })}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-gray-700 mb-1">
-                  Postcode <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={address.postalCode}
-                  onChange={(e) => setAddress({ ...address, postalCode: e.target.value.toUpperCase() })}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  placeholder="SW1A 1AA"
-                  required
-                />
-              </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-700 mb-1">
+                      City/Town <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={address.city}
+                      onChange={(e) => setAddress({ ...address, city: e.target.value })}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      required
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-gray-700 mb-1">Country</label>
-                <input
-                  type="text"
-                  value="United Kingdom"
-                  disabled
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
-                />
-                <p className="text-sm text-gray-500 mt-1">
-                  Currently only shipping to UK addresses
-                </p>
+                  <div>
+                    <label className="block text-gray-700 mb-1">County/Region</label>
+                    <input
+                      type="text"
+                      value={address.state}
+                      onChange={(e) => setAddress({ ...address, state: e.target.value })}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 mb-1">
+                    Postcode <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={address.postalCode}
+                    onChange={(e) => setAddress({ ...address, postalCode: e.target.value.toUpperCase() })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    placeholder="SW1A 1AA"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 mb-1">Country</label>
+                  <input
+                    type="text"
+                    value="United Kingdom"
+                    disabled
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Currently only shipping to UK addresses
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Cost Summary */}

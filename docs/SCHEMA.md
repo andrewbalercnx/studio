@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-11 (added exemplars collection for character reference sheets)
+> **Last Updated**: 2026-01-13 (added addresses subcollection for users, systemConfig/addresses for system billing)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -36,6 +36,32 @@ User profiles with authentication and role information.
 
 **Subcollections**:
 - `voices/{voiceId}` - Parent's cloned voices for TTS (see `ParentVoice` type)
+- `addresses/{addressId}` - Parent's saved shipping addresses (see `SavedAddress` type)
+
+**Security**: Read/write by owner; admins have full access.
+
+---
+
+### `users/{uid}/addresses/{addressId}` (Subcollection)
+
+Saved shipping addresses for print orders.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Document ID |
+| `name` | string | Yes | Recipient name |
+| `line1` | string | Yes | Address line 1 |
+| `line2` | string | No | Address line 2 |
+| `city` | string | Yes | City/Town |
+| `state` | string | No | County/Region |
+| `postalCode` | string | Yes | Postcode |
+| `country` | string | Yes | Country code (e.g., "GB") |
+| `label` | string | No | User label (e.g., "Home", "Work") |
+| `isDefault` | boolean | No | Default address flag |
+| `createdAt` | timestamp | Yes | Creation time |
+| `updatedAt` | timestamp | Yes | Last update time |
+
+**Migration**: Legacy `savedShippingAddress` field on user document is auto-migrated to this subcollection on first access.
 
 **Security**: Read/write by owner; admins have full access.
 
@@ -706,6 +732,20 @@ Template types: `orderSubmitted`, `orderStatusChanged`, `orderApproved`, `orderR
 
 **Security**: Read by authenticated users; write by admin only.
 
+#### `systemConfig/addresses`
+System addresses for Mixam billing configuration.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `addresses` | SavedAddress[] | Yes | Array of system addresses |
+| `mixamBillToAddressId` | string | No | ID of address to use for Mixam billing |
+| `updatedAt` | timestamp | No | Last update time |
+| `updatedBy` | string | No | Email of last updater |
+
+**Usage**: When submitting orders to Mixam, the selected `mixamBillToAddressId` address is used for `billingAddress` and `invoiceAddress` fields. The parent's shipping address is used for delivery.
+
+**Security**: Admin only.
+
 ---
 
 ### `shareLinks`
@@ -799,6 +839,25 @@ In-app help wizard configurations.
   state: string;
   postalCode: string;
   country: string;
+}
+```
+
+### `SavedAddress`
+Extends `PrintOrderAddress` with metadata for address book management.
+```typescript
+{
+  id: string;
+  name: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  label?: string;        // "Home", "Work", "Grandma's"
+  isDefault?: boolean;
+  createdAt: timestamp;
+  updatedAt: timestamp;
 }
 ```
 
@@ -919,6 +978,7 @@ In-app help wizard configurations.
 
 | Date | Changes |
 |------|---------|
+| 2026-01-13 | Added `users/{uid}/addresses` subcollection for saved shipping addresses; Added `systemConfig/addresses` for Mixam billing; Added `SavedAddress` common type |
 | 2026-01-04 | Added "Fun with my friends" generator: FriendsPhase, FriendsScenario, FriendsSynopsis types, session fields, friends prompts, friendsEnabled config |
 | 2026-01-02 | Removed deprecated fields: ChildProfile.speechModeEnabled, StorySession.finalStoryText, StorySession.storyTypeName, ChatMessage.textResolved/optionsResolved |
 | 2025-12-29 | Initial documentation created |

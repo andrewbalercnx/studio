@@ -10,10 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, MapPin } from 'lucide-react';
 import { useEffect } from 'react';
 import type { UserProfile } from '@/lib/types';
 import { getAuth } from 'firebase/auth';
+import { AddressList } from '@/components/address';
 
 export default function ParentSettingsPage() {
   const { user, loading: userLoading } = useUser();
@@ -85,6 +86,19 @@ export default function ParentSettingsPage() {
             <CardDescription>Manage your account settings and security.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Shipping Addresses Section */}
+            <div className="space-y-4 rounded-lg border p-4" data-wiz-target="settings-addresses-section">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-muted-foreground" />
+                <h3 className="font-semibold">Shipping Addresses</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Manage your saved shipping addresses for ordering printed books.
+              </p>
+              <AddressList />
+            </div>
+
+            {/* PIN Section */}
             <div className="space-y-4 rounded-lg border p-4" data-wiz-target="settings-pin-section">
               <h3 className="font-semibold">{userProfile?.pinHash ? 'Change your PIN' : 'Set your Parent PIN'}</h3>
               <p className="text-sm text-muted-foreground">

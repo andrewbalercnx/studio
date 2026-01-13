@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-12 (added cleanup-exemplars admin endpoints)
+> **Last Updated**: 2026-01-13 (added address management endpoints)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -88,6 +88,8 @@ The `StoryPicClient` provides typed methods for child-facing operations:
 - [Story Output Types Routes](#story-output-types-routes)
 - [Issue Reporting Routes](#issue-reporting-routes)
 - [Webhook Routes](#webhook-routes)
+- [Address Routes](#address-routes)
+- [Postcode Routes](#postcode-routes)
 
 ---
 
@@ -2849,10 +2851,301 @@ Rate-limited responses return status `429` with:
 
 ---
 
+## Address Routes
+
+### GET `/api/user/addresses`
+
+List all saved addresses for the authenticated user.
+
+**Authentication**: Required
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "addresses": [
+    {
+      "id": "addr_123",
+      "name": "John Doe",
+      "line1": "123 Main Street",
+      "line2": "Flat 4",
+      "city": "London",
+      "state": "Greater London",
+      "postalCode": "SW1A 1AA",
+      "country": "GB",
+      "label": "Home",
+      "isDefault": true,
+      "createdAt": "2026-01-13T10:00:00.000Z",
+      "updatedAt": "2026-01-13T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Notes**:
+- Auto-migrates legacy `savedShippingAddress` from user profile to addresses subcollection on first access
+- Returns addresses sorted by creation date (most recent first)
+
+---
+
+### POST `/api/user/addresses`
+
+Create a new saved address.
+
+**Authentication**: Required
+
+**Request Body**:
+```json
+{
+  "name": "John Doe",
+  "line1": "123 Main Street",
+  "line2": "Flat 4",
+  "city": "London",
+  "state": "Greater London",
+  "postalCode": "SW1A 1AA",
+  "country": "GB",
+  "label": "Home"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Recipient name |
+| `line1` | string | Yes | Address line 1 |
+| `line2` | string | No | Address line 2 |
+| `city` | string | Yes | City/Town |
+| `state` | string | No | County/Region |
+| `postalCode` | string | Yes | Postcode |
+| `country` | string | Yes | Country code (e.g., "GB") |
+| `label` | string | No | User label (e.g., "Home", "Work") |
+
+**Response**: `201 Created`
+```json
+{
+  "ok": true,
+  "address": {
+    "id": "addr_123",
+    "name": "John Doe",
+    "line1": "123 Main Street",
+    "isDefault": true,
+    ...
+  }
+}
+```
+
+**Notes**:
+- First address is automatically set as default
+- UK address validation is applied
+
+**Error Responses**:
+- `400` - Missing required fields or validation failed
+- `401` - Not authenticated
+
+---
+
+### PUT `/api/user/addresses/[id]`
+
+Update an existing address.
+
+**Path Parameters**:
+- `id` (string, required) - Address document ID
+
+**Authentication**: Required
+
+**Request Body**: Same as POST `/api/user/addresses`
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "address": { ... }
+}
+```
+
+**Error Responses**:
+- `400` - Validation failed
+- `401` - Not authenticated
+- `404` - Address not found
+
+---
+
+### DELETE `/api/user/addresses/[id]`
+
+Delete a saved address.
+
+**Path Parameters**:
+- `id` (string, required) - Address document ID
+
+**Authentication**: Required
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "deletedId": "addr_123",
+  "newDefaultId": "addr_456"
+}
+```
+
+**Notes**:
+- If deleting the default address, another address is automatically set as default
+- `newDefaultId` is included if default was reassigned
+
+**Error Responses**:
+- `401` - Not authenticated
+- `404` - Address not found
+
+---
+
+### POST `/api/user/addresses/[id]/default`
+
+Set an address as the default.
+
+**Path Parameters**:
+- `id` (string, required) - Address document ID
+
+**Authentication**: Required
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "defaultAddressId": "addr_123"
+}
+```
+
+**Error Responses**:
+- `401` - Not authenticated
+- `404` - Address not found
+
+---
+
+### GET `/api/admin/system-config/addresses`
+
+Get system addresses configuration.
+
+**Authentication**: Admin required
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "config": {
+    "addresses": [
+      {
+        "id": "sys_123",
+        "name": "StoryPic Ltd",
+        "line1": "123 Business Park",
+        "city": "London",
+        "postalCode": "EC1A 1BB",
+        "country": "GB",
+        "label": "Head Office"
+      }
+    ],
+    "mixamBillToAddressId": "sys_123",
+    "updatedAt": "2026-01-13T10:00:00.000Z",
+    "updatedBy": "admin@example.com"
+  }
+}
+```
+
+---
+
+### PUT `/api/admin/system-config/addresses`
+
+Update system addresses configuration.
+
+**Authentication**: Admin required
+
+**Request Body**:
+```json
+{
+  "addresses": [
+    {
+      "id": "sys_123",
+      "name": "StoryPic Ltd",
+      "line1": "123 Business Park",
+      "city": "London",
+      "postalCode": "EC1A 1BB",
+      "country": "GB",
+      "label": "Head Office"
+    }
+  ],
+  "mixamBillToAddressId": "sys_123"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `addresses` | SavedAddress[] | Yes | Array of system addresses |
+| `mixamBillToAddressId` | string \| null | No | ID of address to use for Mixam billing |
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "message": "System addresses updated successfully"
+}
+```
+
+**Notes**:
+- The `mixamBillToAddressId` must reference an address in the `addresses` array
+- This billing address is used when submitting print orders to Mixam
+
+**Error Responses**:
+- `400` - Validation failed
+- `403` - Admin access required
+
+---
+
+## Postcode Routes
+
+### GET `/api/postcode/lookup`
+
+Look up addresses from a UK postcode using getAddress.io API.
+
+**Authentication**: Required
+
+**Query Parameters**:
+- `postcode` (string, required) - UK postcode to look up
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "postcode": "SW1A 1AA",
+  "addresses": [
+    {
+      "displayAddress": "Buckingham Palace, London, SW1A 1AA",
+      "line1": "Buckingham Palace",
+      "line2": "",
+      "city": "London",
+      "county": "Greater London",
+      "postalCode": "SW1A 1AA",
+      "country": "GB"
+    }
+  ]
+}
+```
+
+**Notes**:
+- Proxies requests to getAddress.io to keep API key server-side
+- Returns formatted addresses suitable for form population
+- Supports all valid UK postcode formats (with or without space)
+
+**Error Responses**:
+- `400` - Missing postcode parameter
+- `401` - Not authenticated
+- `404` - No addresses found for postcode
+- `503` - Postcode lookup service not configured (missing API key)
+
+---
+
 ## Version History
 
 | Date | Changes |
 |------|---------|
+| 2026-01-13 | Added address management endpoints (user addresses CRUD, system addresses, postcode lookup) |
 | 2026-01-04 | Added /api/storyFriends endpoint for "Fun with my friends" story generator |
 | 2025-12-31 | Added /api/admin/cleanup endpoints for database cleanup |
 | 2025-12-31 | Added storyOutputTypes/uploadImage endpoint |

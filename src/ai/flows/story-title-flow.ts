@@ -73,6 +73,18 @@ export const storyTitleFlow = ai.defineFlow(
         return { ok: true, title: story.metadata.title };
       }
 
+      // Check if already generating (prevent concurrent runs)
+      if (!forceRegenerate && story.titleGeneration?.status === 'generating') {
+        const lastRunAt = story.titleGeneration?.lastRunAt?.toMillis?.() || 0;
+        const elapsedMs = Date.now() - lastRunAt;
+        // Allow retry if stuck for more than 2 minutes
+        if (elapsedMs < 120000) {
+          console.log('[storyTitleFlow] Title generation already in progress, skipping duplicate run');
+          return { ok: false, errorMessage: 'Title generation already in progress.' };
+        }
+        console.log('[storyTitleFlow] Previous title generation timed out, allowing retry');
+      }
+
       // Check if synopsis is available - title generation depends on synopsis
       if (!story.synopsis || story.synopsisGeneration?.status !== 'ready') {
         console.log('[storyTitleFlow] Synopsis not ready yet, cannot generate title');

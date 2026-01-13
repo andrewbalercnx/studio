@@ -79,6 +79,18 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
       };
     }
 
+    // Check if already generating (prevent concurrent runs)
+    if (!forceRegenerate && story.audioGeneration?.status === 'generating') {
+      const lastRunAt = story.audioGeneration?.lastRunAt?.toMillis?.() || 0;
+      const elapsedMs = Date.now() - lastRunAt;
+      // Allow retry if stuck for more than 2 minutes
+      if (elapsedMs < 120000) {
+        console.log(`[story-audio-flow] Audio generation already in progress for story ${storyId}, skipping duplicate run`);
+        return { ok: false, errorMessage: 'Audio generation already in progress.' };
+      }
+      console.log(`[story-audio-flow] Previous audio generation timed out for story ${storyId}, allowing retry`);
+    }
+
     // Validate story has text to narrate
     if (!story.storyText || story.storyText.trim().length === 0) {
       return { ok: false, errorMessage: 'Story has no text to narrate' };

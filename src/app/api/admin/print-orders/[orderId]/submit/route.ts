@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
-import type { PrintOrder } from '@/lib/types';
+import type { PrintOrder, SystemAddressConfig, SavedAddress } from '@/lib/types';
 import { mixamClient } from '@/lib/mixam/client';
 import { buildMxJdfDocument } from '@/lib/mixam/mxjdf-builder';
 import { logMixamInteractions, toMixamInteractions } from '@/lib/mixam/interaction-logger';
@@ -117,11 +117,56 @@ export async function POST(
         console.log(`[print-orders] Interior PDF includes ${paddingPageCount} padding pages`);
       }
 
+      // Fetch system billing address configuration
+      let billingAddress: {
+        name: string;
+        line1: string;
+        line2?: string;
+        city: string;
+        state?: string;
+        postalCode: string;
+        country: string;
+        email: string;
+        phone?: string;
+      } | undefined;
+
+      try {
+        const systemAddressDoc = await firestore.collection('systemConfig').doc('addresses').get();
+        if (systemAddressDoc.exists) {
+          const config = systemAddressDoc.data() as SystemAddressConfig;
+          if (config.mixamBillToAddressId && config.addresses?.length > 0) {
+            const billToAddress = config.addresses.find(
+              (a: SavedAddress) => a.id === config.mixamBillToAddressId
+            );
+            if (billToAddress) {
+              billingAddress = {
+                name: billToAddress.name,
+                line1: billToAddress.line1,
+                line2: billToAddress.line2,
+                city: billToAddress.city,
+                state: billToAddress.state,
+                postalCode: billToAddress.postalCode,
+                country: billToAddress.country || 'GB',
+                email: order.contactEmail, // Use order's contact email for billing
+                phone: undefined,
+              };
+              console.log(`[print-orders] Using system bill-to address: ${billToAddress.label || billToAddress.name}`);
+            }
+          }
+        }
+        if (!billingAddress) {
+          console.log('[print-orders] No system bill-to address configured, using shipping address for billing');
+        }
+      } catch (billToError) {
+        console.warn('[print-orders] Failed to fetch system billing address, using shipping address:', billToError);
+      }
+
       const mxjdf = buildMxJdfDocument({
         order,
         metadata: order.printableMetadata!,
         coverFileRef: coverPdfUrl,    // Direct URL - Mixam will fetch
         interiorFileRef: interiorPdfUrl, // Direct URL - Mixam will fetch (includes padding)
+        billingAddress, // Pass system billing address if configured
       });
 
       // Step 4: Submit order to Mixam with interaction logging

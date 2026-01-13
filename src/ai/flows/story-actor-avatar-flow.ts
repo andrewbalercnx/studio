@@ -98,6 +98,18 @@ export const storyActorAvatarFlow = ai.defineFlow(
         return { ok: true, actorAvatarUrl: story.actorAvatarUrl };
       }
 
+      // Check if already generating (prevent concurrent runs)
+      if (!forceRegenerate && story.actorAvatarGeneration?.status === 'generating') {
+        const lastRunAt = story.actorAvatarGeneration?.lastRunAt?.toMillis?.() || 0;
+        const elapsedMs = Date.now() - lastRunAt;
+        // Allow retry if stuck for more than 2 minutes
+        if (elapsedMs < 120000) {
+          console.log('[storyActorAvatarFlow] Avatar generation already in progress, skipping duplicate run');
+          return { ok: false, errorMessage: 'Actor avatar generation already in progress.' };
+        }
+        console.log('[storyActorAvatarFlow] Previous avatar generation timed out, allowing retry');
+      }
+
       // Mark as generating
       await storyRef.update({
         'actorAvatarGeneration.status': 'generating',

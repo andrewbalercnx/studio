@@ -227,14 +227,29 @@ function getSizeSpec(trimSize: string): SizeResult {
  * Builds a Mixam Public API order document from a print order
  * If the product has a validated mixamMapping, uses those exact IDs.
  * Otherwise falls back to the legacy hardcoded mapping logic.
+ *
+ * @param params.billingAddress - Optional separate billing address.
+ *   If provided, used for billingAddress and invoiceAddress in the Mixam order.
+ *   If not provided, the shipping address is used for billing (legacy behavior).
  */
 export function buildMxJdfDocument(params: {
   order: PrintOrder;
   metadata: PrintableAssetMetadata;
   coverFileRef: string;
   interiorFileRef: string;
+  billingAddress?: {
+    name: string;
+    line1: string;
+    line2?: string;
+    city: string;
+    state?: string;
+    postalCode: string;
+    country: string;
+    email: string;
+    phone?: string;
+  };
 }): MxJdfDocument {
-  const { order, metadata, coverFileRef, interiorFileRef } = params;
+  const { order, metadata, coverFileRef, interiorFileRef, billingAddress } = params;
   const product = order.productSnapshot;
   const spec = product.mixamSpec;
   const mapping = product.mixamMapping;
@@ -254,8 +269,8 @@ export function buildMxJdfDocument(params: {
   const firstName = nameParts[0] || 'Customer';
   const lastName = nameParts.slice(1).join(' ') || 'Name';
 
-  // Build address object
-  const address: MixamAddress = {
+  // Build shipping address object
+  const shippingAddr: MixamAddress = {
     firstName,
     lastName,
     postcode: order.shippingAddress.postalCode,
@@ -267,6 +282,30 @@ export function buildMxJdfDocument(params: {
     phoneNumber: (order as any).contactPhone || '+44 000 000 0000',
     emailAddress: order.contactEmail,
   };
+
+  // Build billing address - use separate billing address if provided, otherwise use shipping address
+  let billToAddr: MixamAddress;
+  if (billingAddress) {
+    const billNameParts = billingAddress.name.split(' ');
+    const billFirstName = billNameParts[0] || 'Billing';
+    const billLastName = billNameParts.slice(1).join(' ') || 'Contact';
+    billToAddr = {
+      firstName: billFirstName,
+      lastName: billLastName,
+      postcode: billingAddress.postalCode,
+      line1: billingAddress.line1,
+      line2: billingAddress.line2 || undefined,
+      town: billingAddress.city,
+      county: billingAddress.state || billingAddress.city,
+      country: billingAddress.country || 'GB',
+      phoneNumber: billingAddress.phone || '+44 000 000 0000',
+      emailAddress: billingAddress.email,
+    };
+    console.log('[MxJdf] Using separate billing address');
+  } else {
+    billToAddr = shippingAddr;
+    console.log('[MxJdf] Using shipping address for billing (no separate billing address provided)');
+  }
 
   // Get size specification (DIN format ID or standard size string)
   const sizeSpec = getSizeSpec(metadata.trimSize);
@@ -420,11 +459,11 @@ export function buildMxJdfDocument(params: {
         },
       },
     ],
-    billingAddress: address,
-    invoiceAddress: address,
+    billingAddress: billToAddr,
+    invoiceAddress: billToAddr,
     deliveries: [
       {
-        address,
+        address: shippingAddr,
         itemDeliveryDetails: [
           {
             itemId: externalItemId,
@@ -506,18 +545,29 @@ function buildMxJdfFromMapping(
     metadata: PrintableAssetMetadata;
     coverFileRef: string;
     interiorFileRef: string;
+    billingAddress?: {
+      name: string;
+      line1: string;
+      line2?: string;
+      city: string;
+      state?: string;
+      postalCode: string;
+      country: string;
+      email: string;
+      phone?: string;
+    };
   },
   mapping: MixamProductMapping
 ): MxJdfDocument {
-  const { order, metadata, coverFileRef, interiorFileRef } = params;
+  const { order, metadata, coverFileRef, interiorFileRef, billingAddress } = params;
 
   // Parse name into first/last
   const nameParts = order.shippingAddress.name.split(' ');
   const firstName = nameParts[0] || 'Customer';
   const lastName = nameParts.slice(1).join(' ') || 'Name';
 
-  // Build address object
-  const address: MixamAddress = {
+  // Build shipping address object
+  const shippingAddr: MixamAddress = {
     firstName,
     lastName,
     postcode: order.shippingAddress.postalCode,
@@ -529,6 +579,30 @@ function buildMxJdfFromMapping(
     phoneNumber: (order as any).contactPhone || '+44 000 000 0000',
     emailAddress: order.contactEmail,
   };
+
+  // Build billing address - use separate billing address if provided, otherwise use shipping address
+  let billToAddr: MixamAddress;
+  if (billingAddress) {
+    const billNameParts = billingAddress.name.split(' ');
+    const billFirstName = billNameParts[0] || 'Billing';
+    const billLastName = billNameParts.slice(1).join(' ') || 'Contact';
+    billToAddr = {
+      firstName: billFirstName,
+      lastName: billLastName,
+      postcode: billingAddress.postalCode,
+      line1: billingAddress.line1,
+      line2: billingAddress.line2 || undefined,
+      town: billingAddress.city,
+      county: billingAddress.state || billingAddress.city,
+      country: billingAddress.country || 'GB',
+      phoneNumber: billingAddress.phone || '+44 000 000 0000',
+      emailAddress: billingAddress.email,
+    };
+    console.log('[MxJdf] Using separate billing address (mapping path)');
+  } else {
+    billToAddr = shippingAddr;
+    console.log('[MxJdf] Using shipping address for billing (mapping path)');
+  }
 
   // External item ID for tracking
   const externalItemId = `ITEM-${order.id}`;
@@ -655,11 +729,11 @@ function buildMxJdfFromMapping(
         },
       },
     ],
-    billingAddress: address,
-    invoiceAddress: address,
+    billingAddress: billToAddr,
+    invoiceAddress: billToAddr,
     deliveries: [
       {
-        address,
+        address: shippingAddr,
         itemDeliveryDetails: [
           {
             itemId: externalItemId,

@@ -22,6 +22,81 @@ import {
 } from '@/lib/story-context-builder';
 
 /**
+ * Sanitize and parse JSON response from the model.
+ * Handles:
+ * - Markdown code fences (```json ... ```)
+ * - Truncated JSON (attempts to repair)
+ * - Various quote styles
+ */
+function parseAndSanitizeJsonResponse(
+    rawText: string,
+    schema: typeof StoryTextCompileResultSchema,
+    debug: StoryTextCompileDebugInfo
+): { storyText: string; synopsis: string } {
+    let jsonToParse = rawText.trim();
+
+    // Remove markdown code fences if present (various formats)
+    // Handle ```json\n...\n``` or ```\n...\n``` or just ```...```
+    const codeBlockMatch = jsonToParse.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (codeBlockMatch) {
+        jsonToParse = codeBlockMatch[1].trim();
+        debug.details.removedCodeFences = true;
+    }
+
+    // Try to parse as-is first
+    try {
+        const parsed = JSON.parse(jsonToParse);
+        const validation = schema.safeParse(parsed);
+        if (validation.success) {
+            return validation.data;
+        }
+        // If it parsed but didn't validate, throw to try repairs
+        throw new Error(`Schema validation failed: ${validation.error.message}`);
+    } catch (firstError: any) {
+        debug.details.firstParseError = firstError.message;
+
+        // Attempt to repair truncated JSON
+        // Common issue: JSON cut off mid-string like: {"storyText": "Once upon a time...
+        let repaired = jsonToParse;
+
+        // Count open braces/brackets to detect truncation
+        const openBraces = (repaired.match(/{/g) || []).length;
+        const closeBraces = (repaired.match(/}/g) || []).length;
+
+        if (openBraces > closeBraces) {
+            debug.details.attemptingJsonRepair = true;
+
+            // Try to close the JSON structure
+            // First, check if we're in the middle of a string (odd number of unescaped quotes)
+            const quoteMatches = repaired.match(/(?<!\\)"/g) || [];
+            if (quoteMatches.length % 2 !== 0) {
+                // Close the open string
+                repaired += '"';
+            }
+
+            // Add missing closing braces
+            for (let i = 0; i < openBraces - closeBraces; i++) {
+                repaired += '}';
+            }
+
+            try {
+                const repairedParsed = JSON.parse(repaired);
+                const validation = schema.safeParse(repairedParsed);
+                if (validation.success) {
+                    debug.details.jsonRepairSucceeded = true;
+                    return validation.data;
+                }
+            } catch (repairError: any) {
+                debug.details.jsonRepairFailed = repairError.message;
+            }
+        }
+
+        // If all else fails, throw the original error
+        throw new Error(`Model JSON does not match expected shape: ${firstError.message}`);
+    }
+}
+
+/**
  * Extract all $$id$$ and $id$ placeholders from text
  * Supports both double-dollar (correct) and single-dollar (AI fallback) formats
  */
@@ -216,7 +291,9 @@ Now, generate the JSON object containing the polished story and synopsis.`;
 
             // 4. Call AI
             debug.stage = 'ai_generate';
-            const maxOutputTokens = 4000;
+            // Increased from 4000 to 8192 to prevent truncation of longer stories
+            // The story text + synopsis JSON can exceed 4000 tokens for longer narratives
+            const maxOutputTokens = 8192;
             const temperature = 0.5;
             const modelName = 'googleai/gemini-2.5-pro';
 
@@ -256,15 +333,7 @@ Now, generate the JSON object containing the polished story and synopsis.`;
                     }
 
                     debug.stage = 'json_parse';
-                    const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
-                    const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
-                    const parsed = JSON.parse(jsonToParse);
-                    const manualValidation = StoryTextCompileResultSchema.safeParse(parsed);
-                    if (manualValidation.success) {
-                        structuredOutput = manualValidation.data;
-                    } else {
-                        throw new Error(`Model JSON does not match expected shape: ${manualValidation.error.message}`);
-                    }
+                    structuredOutput = parseAndSanitizeJsonResponse(rawText, StoryTextCompileResultSchema, debug);
                 }
             } catch (e: any) {
                 // Check if this is a schema validation error (model returned null or invalid JSON)
@@ -306,17 +375,13 @@ Now, generate the JSON object containing the polished story and synopsis.`;
                             };
                         } else {
                             debug.stage = 'json_parse';
-                            const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
-                            const jsonToParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
-                            const parsed = JSON.parse(jsonToParse);
-                            const manualValidation = StoryTextCompileResultSchema.safeParse(parsed);
-                            if (manualValidation.success) {
-                                structuredOutput = manualValidation.data;
-                            } else {
-                                // Fallback on parse failure too
-                                console.warn(`[storyTextCompileFlow] JSON parse failed on retry, falling back to draft story text: ${manualValidation.error.message}`);
+                            try {
+                                structuredOutput = parseAndSanitizeJsonResponse(rawText, StoryTextCompileResultSchema, debug);
+                            } catch (parseErr: any) {
+                                // Fallback on parse failure
+                                console.warn(`[storyTextCompileFlow] JSON parse failed on retry, falling back to draft story text: ${parseErr.message}`);
                                 debug.details.fallbackToDraft = true;
-                                debug.details.parseError = manualValidation.error.message;
+                                debug.details.parseError = parseErr.message;
                                 structuredOutput = {
                                     storyText: draftStoryText,
                                     synopsis: 'A magical adventure story.',
