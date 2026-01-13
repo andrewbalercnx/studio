@@ -539,7 +539,10 @@ function PrintLayoutForm({
               name="printProductId"
               control={control}
               render={({ field }) => (
-                <Select onValueChange={field.onChange} value={field.value || ''}>
+                <Select
+                  onValueChange={(val) => field.onChange(val === '__none__' ? '' : val)}
+                  value={field.value || '__none__'}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="No product linked">
                       {field.value ? (
@@ -556,13 +559,13 @@ function PrintLayoutForm({
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">
+                    <SelectItem value="__none__">
                       <span className="flex items-center gap-2">
                         <Link2Off className="h-4 w-4" />
                         No product linked
                       </span>
                     </SelectItem>
-                    {printProducts.map((product) => (
+                    {printProducts.filter((product) => product.id).map((product) => (
                       <SelectItem key={product.id} value={product.id}>
                         <span className="flex items-center gap-2">
                           <Link2 className="h-4 w-4" />
@@ -613,12 +616,15 @@ function PrintLayoutForm({
                   name="pageConstraints.pageMultiple"
                   control={control}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value || ''}>
+                    <Select
+                      onValueChange={(val) => field.onChange(val === '__none__' ? undefined : val)}
+                      value={field.value || '__none__'}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder={linkedProduct ? `${linkedProduct.mixamSpec?.format?.pageCountIncrement ?? 4}` : 'Default'} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Use default</SelectItem>
+                        <SelectItem value="__none__">Use default</SelectItem>
                         <SelectItem value="1">Any (1)</SelectItem>
                         <SelectItem value="2">Even (2)</SelectItem>
                         <SelectItem value="4">Multiple of 4</SelectItem>
