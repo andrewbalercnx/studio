@@ -6,6 +6,9 @@ import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
 import type { PrintLayout, StoryOutputPage, PrintableAssetMetadata, PrintLayoutPageType, PrintProduct } from '@/lib/types';
 import { getLayoutForPageType, mapPageKindToLayoutType } from '@/lib/print-layout-utils';
 import SampleLayoutData from '@/data/print-layouts.json';
@@ -616,22 +619,116 @@ async function renderPageContent(
 }
 
 /**
- * Map font names to StandardFonts
+ * Custom font file mappings (Google Fonts stored in public/fonts/)
+ */
+const CUSTOM_FONTS: Record<string, string> = {
+  'comic-neue': 'ComicNeue-Regular.ttf',
+  'comic-neue-bold': 'ComicNeue-Bold.ttf',
+  'nunito': 'Nunito-Regular.ttf',
+  'patrick-hand': 'PatrickHand-Regular.ttf',
+  'quicksand': 'Quicksand-Regular.ttf',
+  'lexend': 'Lexend-Regular.ttf',
+};
+
+/**
+ * Check if font is a custom font (requires embedding TTF file)
+ */
+function isCustomFont(fontName?: string): boolean {
+  if (!fontName) return false;
+  return fontName.toLowerCase() in CUSTOM_FONTS;
+}
+
+/**
+ * Load a custom font from the public/fonts directory
+ */
+async function loadCustomFont(pdfDoc: PDFDocument, fontName: string): Promise<PDFFont> {
+  const fontKey = fontName.toLowerCase();
+  const fontFile = CUSTOM_FONTS[fontKey];
+
+  if (!fontFile) {
+    throw new Error(`Custom font "${fontName}" not found`);
+  }
+
+  // Register fontkit for custom font embedding
+  pdfDoc.registerFontkit(fontkit);
+
+  // Load font file from public/fonts directory
+  const fontPath = join(process.cwd(), 'public', 'fonts', fontFile);
+  const fontBytes = await readFile(fontPath);
+
+  const font = await pdfDoc.embedFont(fontBytes);
+  console.log(`[printable] Loaded custom font: ${fontName} from ${fontFile}`);
+
+  return font;
+}
+
+/**
+ * Map font names to StandardFonts (PDF Base 14 fonts)
+ * These are the only fonts guaranteed to be available in all PDF readers.
  */
 function getStandardFont(fontName?: string): typeof StandardFonts[keyof typeof StandardFonts] {
   switch (fontName?.toLowerCase()) {
+    // Helvetica family (sans-serif)
     case 'helvetica':
       return StandardFonts.Helvetica;
     case 'helvetica-bold':
       return StandardFonts.HelveticaBold;
+    case 'helvetica-oblique':
+    case 'helvetica-italic':
+      return StandardFonts.HelveticaOblique;
+    case 'helvetica-boldoblique':
+    case 'helvetica-bolditalic':
+      return StandardFonts.HelveticaBoldOblique;
+
+    // Courier family (monospace)
     case 'courier':
       return StandardFonts.Courier;
+    case 'courier-bold':
+      return StandardFonts.CourierBold;
+    case 'courier-oblique':
+    case 'courier-italic':
+      return StandardFonts.CourierOblique;
+    case 'courier-boldoblique':
+    case 'courier-bolditalic':
+      return StandardFonts.CourierBoldOblique;
+
+    // Times Roman family (serif)
     case 'timesroman':
     case 'times':
+    case 'times-roman':
       return StandardFonts.TimesRoman;
+    case 'timesroman-bold':
+    case 'times-bold':
+      return StandardFonts.TimesRomanBold;
+    case 'timesroman-italic':
+    case 'times-italic':
+      return StandardFonts.TimesRomanItalic;
+    case 'timesroman-bolditalic':
+    case 'times-bolditalic':
+      return StandardFonts.TimesRomanBoldItalic;
+
+    // Special fonts (limited character sets - not recommended for body text)
+    case 'symbol':
+      return StandardFonts.Symbol;
+    case 'zapfdingbats':
+    case 'dingbats':
+      return StandardFonts.ZapfDingbats;
+
     default:
       return StandardFonts.Helvetica;
   }
+}
+
+/**
+ * Embed font into PDF document - handles both standard and custom fonts
+ */
+async function embedFont(pdfDoc: PDFDocument, fontName?: string): Promise<PDFFont> {
+  if (isCustomFont(fontName)) {
+    return await loadCustomFont(pdfDoc, fontName!);
+  }
+
+  const standardFont = getStandardFont(fontName);
+  return await pdfDoc.embedFont(standardFont);
 }
 
 /**
@@ -640,8 +737,7 @@ function getStandardFont(fontName?: string): typeof StandardFonts[keyof typeof S
  */
 async function renderCombinedPdf(pages: StoryOutputPage[], layout: PrintLayout, unifiedFontSize?: number) {
   const pdfDoc = await PDFDocument.create();
-  const fontType = getStandardFont(layout.font);
-  const bodyFont = await pdfDoc.embedFont(fontType);
+  const bodyFont = await embedFont(pdfDoc, layout.font);
   const maxFontSize = Number(layout.fontSize) || 24;
 
   // Use provided unified font size, or calculate if not provided
@@ -700,8 +796,7 @@ async function renderCombinedPdf(pages: StoryOutputPage[], layout: PrintLayout, 
  */
 async function renderCoverPdf(pages: StoryOutputPage[], layout: PrintLayout, unifiedFontSize: number, includeSpine: boolean = true) {
   const pdfDoc = await PDFDocument.create();
-  const fontType = getStandardFont(layout.font);
-  const bodyFont = await pdfDoc.embedFont(fontType);
+  const bodyFont = await embedFont(pdfDoc, layout.font);
 
   // Find front and back covers by kind
   const frontCover = pages.find(p => p.kind === 'cover_front');
@@ -759,8 +854,7 @@ async function renderCoverPdf(pages: StoryOutputPage[], layout: PrintLayout, uni
  */
 async function renderInteriorPdf(pages: StoryOutputPage[], layout: PrintLayout, unifiedFontSize: number, paddingPageCount: number = 0) {
   const pdfDoc = await PDFDocument.create();
-  const fontType = getStandardFont(layout.font);
-  const bodyFont = await pdfDoc.embedFont(fontType);
+  const bodyFont = await embedFont(pdfDoc, layout.font);
 
   // Filter out cover pages - interior is everything except covers
   const interiorPages = pages.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back');
@@ -1055,8 +1149,7 @@ export async function POST(request: Request) {
       // First, calculate unified font size across all pages
       // We need to embed the font first to measure text
       const tempDoc = await PDFDocument.create();
-      const fontType = getStandardFont(printLayout.font);
-      const tempFont = await tempDoc.embedFont(fontType);
+      const tempFont = await embedFont(tempDoc, printLayout.font);
       const maxFontSize = Number(printLayout.fontSize) || 24;
       const unifiedFontSize = calculateMinimumFontSizeForPages(pagesToRender, printLayout, tempFont, maxFontSize);
       console.log(`[printable] Using unified font size: ${unifiedFontSize}pt (max was ${maxFontSize}pt)`);

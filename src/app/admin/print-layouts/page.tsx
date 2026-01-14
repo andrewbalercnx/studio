@@ -649,10 +649,28 @@ function PrintLayoutForm({
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <SelectTrigger><SelectValue placeholder="Select font" /></SelectTrigger>
                 <SelectContent>
+                  {/* Child-friendly Google Fonts (embedded TTF) */}
+                  <SelectItem value="Comic-Neue">Comic Neue (friendly)</SelectItem>
+                  <SelectItem value="Comic-Neue-Bold">Comic Neue Bold</SelectItem>
+                  <SelectItem value="Nunito">Nunito (rounded)</SelectItem>
+                  <SelectItem value="Patrick-Hand">Patrick Hand (handwritten)</SelectItem>
+                  <SelectItem value="Quicksand">Quicksand (playful)</SelectItem>
+                  <SelectItem value="Lexend">Lexend (high readability)</SelectItem>
+                  {/* Helvetica family (sans-serif) */}
                   <SelectItem value="Helvetica">Helvetica</SelectItem>
                   <SelectItem value="Helvetica-Bold">Helvetica Bold</SelectItem>
+                  <SelectItem value="Helvetica-Oblique">Helvetica Oblique</SelectItem>
+                  <SelectItem value="Helvetica-BoldOblique">Helvetica Bold Oblique</SelectItem>
+                  {/* Times Roman family (serif) */}
                   <SelectItem value="TimesRoman">Times Roman</SelectItem>
+                  <SelectItem value="TimesRoman-Bold">Times Roman Bold</SelectItem>
+                  <SelectItem value="TimesRoman-Italic">Times Roman Italic</SelectItem>
+                  <SelectItem value="TimesRoman-BoldItalic">Times Roman Bold Italic</SelectItem>
+                  {/* Courier family (monospace) */}
                   <SelectItem value="Courier">Courier</SelectItem>
+                  <SelectItem value="Courier-Bold">Courier Bold</SelectItem>
+                  <SelectItem value="Courier-Oblique">Courier Oblique</SelectItem>
+                  <SelectItem value="Courier-BoldOblique">Courier Bold Oblique</SelectItem>
                 </SelectContent>
               </Select>
             )}

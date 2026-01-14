@@ -18,13 +18,15 @@
 
 ### 2026-01-14
 
-#### `pending` - Fix two-leaf spread rendering and image aspect ratio in PDF
+#### `6f9889c` - Fix two-leaf spread, image aspect ratio, and add custom fonts
 
-**Type**: Bug fix
+**Type**: Bug fix, Enhancement
 
-**Summary**: Fixed two issues with PDF generation:
+**Summary**: Fixed PDF generation issues and added custom Google Fonts support:
 1. Combined PDF was rendering both text and image on the same page instead of creating a two-page spread
 2. Images in constrained boxes were being stretched to fill the box, distorting aspect ratio
+3. Added 6 child-friendly Google Fonts (Comic Neue, Nunito, Patrick Hand, Quicksand, Lexend) with full TTF embedding
+4. Expanded PDF Base 14 fonts from 4 to all 12 text variants
 
 **Changes**:
 - Added `isTwoLeafSpread` check to `renderCombinedPdf` function
@@ -33,9 +35,17 @@
 - Cover pages remain single pages as before
 - Images in boxes now shrink to fit while maintaining aspect ratio
 - Images are centered within their designated box
+- Installed `@pdf-lib/fontkit` for custom font embedding
+- Added child-friendly Google Fonts TTF files to `public/fonts/`
+- Created `embedFont()` function to handle both standard and custom fonts
+- Expanded `getStandardFont()` to support all PDF Base 14 fonts
+- Updated print layouts admin UI with 18 font options (6 custom + 12 standard)
 
 **Files modified**:
-- `src/app/api/storyBook/printable/route.ts` - Added two-leaf spread logic and aspect-ratio-preserving image rendering
+- `src/app/api/storyBook/printable/route.ts` - Two-leaf spread logic, aspect-ratio-preserving image rendering, custom font support
+- `src/app/admin/print-layouts/page.tsx` - Added all font options to the font selector
+- `public/fonts/` - Added 6 Google Font TTF files (Comic Neue, Nunito, Patrick Hand, Quicksand, Lexend)
+- `package.json` - Added `@pdf-lib/fontkit` dependency
 
 ---
 

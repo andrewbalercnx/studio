@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-01-07
+> **Last Updated**: 2026-01-14
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -116,7 +116,7 @@ warmup → story (beats 0-N) → ending → final/completed
 ### 3. Storybook Generation Pipeline
 
 ```
-Story → Pages → Images → Audio → Finalization
+Story → Pages → Exemplars + Audio (parallel) → Images → Finalization
 ```
 
 **Data Model** (new structure):
@@ -128,9 +128,18 @@ stories/{storyId}
 
 **Pipeline Steps**:
 1. **Pagination** (`/api/storybookV2/pages`): Story text → page structure
-2. **Image Generation** (`/api/storybookV2/images`): Page descriptions → illustrations
-3. **Audio** (`/api/storyBook/audio`): Text → TTS narration
-4. **Finalization** (`/api/storybookV2/finalize`): Lock content version
+2. **Exemplar Generation** (parallel with audio): Character reference sheets generated for each actor
+3. **Audio Generation** (parallel with exemplars): Text → TTS narration via ElevenLabs
+4. **Image Generation** (`/api/storybookV2/images`): Page descriptions → illustrations (using exemplars for character consistency)
+5. **Finalization** (`/api/storybookV2/finalize`): Lock content version
+
+**Exemplar System**:
+Character reference sheets ("exemplars") ensure consistent character appearance across all storybook pages:
+- After pagination, the system generates a 2x2 reference sheet for each actor showing: face close-up (top-left), front view, 3/4 view, and back view
+- Exemplars are generated in the storybook's selected art style
+- The image generation flow uses these reference sheets instead of raw photos
+- Exemplar URLs are stored on the storybook document (`actorExemplarUrls`) for reuse
+- If exemplar generation fails, the system falls back to using photos/avatars directly
 
 ### 4. Print Production System
 
@@ -172,9 +181,26 @@ Storybook → PrintStoryBook → PDF Generation → Mixam Order
 - `storyPhases`: Phase definitions (warmup, beat, ending)
 - `storyOutputTypes`: Output formats (picture book, poem)
 - `imageStyles`: Art style prompts (watercolor, cartoon)
+- `answerAnimations`: Q&A exit/selection animations with sound effects
 - `systemConfig/*`: Global settings (diagnostics, prompts)
 
 **Design Principle**: Content configuration is data-driven, allowing non-developers to adjust AI behavior and story options.
+
+### 7. Q&A Animation System
+
+The Q&A animation system provides visual feedback during story creation when children select answers:
+
+**Animation Flow**:
+1. Child selects an answer option
+2. Non-selected answers animate off-screen (10 different exit animations: slide, shrink, spin, bounce, etc.)
+3. Selected answer plays a celebration animation, then exits
+4. Sound effects play synchronized with animations
+
+**Components**:
+- `answerAnimations` collection: Stores animation configurations (CSS transforms, durations, easing)
+- `/api/soundEffects/generate`: Generates sound effects via ElevenLabs text-to-sound-effects API
+- `AnimatedChoiceButton`: React component that orchestrates animation playback
+- Writer portal at `/admin/answer-animations` for configuring animations
 
 ---
 
@@ -198,16 +224,16 @@ Storybook → PrintStoryBook → PDF Generation → Mixam Order
 ### Storybook Generation Flow
 
 ```
-┌──────────┐    ┌───────────┐    ┌───────────┐    ┌──────────┐
-│  Story   │───▶│  Pages    │───▶│  Images   │───▶│ Finalize │
-│  Text    │    │  API      │    │  API      │    │  API     │
-└──────────┘    └───────────┘    └───────────┘    └──────────┘
-                     │                │
-                     ▼                ▼
-               ┌───────────┐   ┌───────────┐
-               │  Gemini   │   │  Imagen   │
-               │  (Layout) │   │  (Art)    │
-               └───────────┘   └───────────┘
+┌──────────┐    ┌───────────┐    ┌─────────────────────┐    ┌───────────┐    ┌──────────┐
+│  Story   │───▶│  Pages    │───▶│ Exemplars + Audio   │───▶│  Images   │───▶│ Finalize │
+│  Text    │    │  API      │    │   (parallel)        │    │  API      │    │  API     │
+└──────────┘    └───────────┘    └─────────────────────┘    └───────────┘    └──────────┘
+                     │                 │       │                  │
+                     ▼                 ▼       ▼                  ▼
+               ┌───────────┐    ┌─────────┐ ┌───────────┐   ┌───────────┐
+               │  Gemini   │    │ Imagen  │ │ ElevenLabs│   │  Imagen   │
+               │  (Layout) │    │(Ref Sht)│ │  (TTS)    │   │  (Art)    │
+               └───────────┘    └─────────┘ └───────────┘   └───────────┘
 ```
 
 ### Print Order Flow
@@ -290,6 +316,13 @@ Storybook → PrintStoryBook → PDF Generation → Mixam Order
 - Includes token usage, costs, latencies
 - Accessible via Admin > Run Traces
 
+### AI Flow Logging
+- `aiFlowLogs` collection records individual AI flow executions
+- Includes: flow name, prompt, response, token usage, latency, status
+- Enhanced fields for debugging: `storyId`, `storybookId`, `imageUrl` (for image generation)
+- `failure` status with `failureReason` for calls that complete but produce no usable output
+- Accessible via Admin > AI Logs with export/selection functionality
+
 ---
 
 ## Directory Structure
@@ -349,6 +382,10 @@ The project uses npm workspaces to share code between the web app and future mob
 | API client context | `src/contexts/api-client-context.tsx` |
 | Firestore rules | `firestore.rules` |
 | AI flows | `src/ai/flows/*.ts` |
+| Exemplar generation | `src/ai/flows/story-exemplar-generation-flow.ts` |
+| Image generation | `src/ai/flows/story-image-flow.ts` |
+| AI flow logger | `src/lib/ai-flow-logger.ts` |
+| Animation presets | `src/lib/animation-presets.ts` |
 | API routes | `src/app/api/*/route.ts` |
 | Admin dashboard | `src/app/admin/page.tsx` |
 | Kids PWA layout | `src/app/kids/layout.tsx` |
