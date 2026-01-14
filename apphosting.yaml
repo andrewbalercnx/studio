@@ -77,3 +77,9 @@ env:
     secret: AZURE_CLIENT_SECRET
     availability:
       - RUNTIME
+
+  # UK Postcode lookup API (getAddress.io)
+  - variable: GETADDRESS_API_KEY
+    secret: GETADDRESS_API_KEY
+    availability:
+      - RUNTIME
