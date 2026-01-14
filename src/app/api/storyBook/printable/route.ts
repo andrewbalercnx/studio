@@ -483,11 +483,38 @@ async function renderPageContent(
             const boxWidth = Number(imageBox.width) * INCH_TO_POINTS;
             const boxHeight = Number(imageBox.height) * INCH_TO_POINTS;
 
+            // Calculate aspect ratios
+            const imgAspect = image.width / image.height;
+            const boxAspect = boxWidth / boxHeight;
+
+            // Shrink to fit: scale image to fit within box while maintaining aspect ratio
+            let drawWidth: number;
+            let drawHeight: number;
+
+            if (imgAspect > boxAspect) {
+              // Image is wider than box - constrain by width
+              drawWidth = boxWidth;
+              drawHeight = boxWidth / imgAspect;
+            } else {
+              // Image is taller than box - constrain by height
+              drawHeight = boxHeight;
+              drawWidth = boxHeight * imgAspect;
+            }
+
+            // Center the image within the box
+            const offsetX = (boxWidth - drawWidth) / 2;
+            const offsetY = (boxHeight - drawHeight) / 2;
+
             // Convert from top-left origin to bottom-left origin
             const pdfY = pageHeight - boxY - boxHeight;
 
-            pdfPage.drawImage(image, { x: boxX, y: pdfY, width: boxWidth, height: boxHeight });
-            console.log(`[printable] Drew image in box at (${boxX}, ${pdfY}) size ${boxWidth}x${boxHeight}`);
+            pdfPage.drawImage(image, {
+              x: boxX + offsetX,
+              y: pdfY + offsetY,
+              width: drawWidth,
+              height: drawHeight
+            });
+            console.log(`[printable] Drew image in box at (${boxX + offsetX}, ${pdfY + offsetY}) size ${drawWidth}x${drawHeight} (box: ${boxWidth}x${boxHeight})`);
           }
         }
       } catch (error) {
@@ -622,12 +649,34 @@ async function renderCombinedPdf(pages: StoryOutputPage[], layout: PrintLayout, 
   console.log(`[printable] Combined PDF using font size: ${fontSize}pt`);
 
   // Render all pages at the unified font size
+  // For two-leaf spreads, each content page creates two PDF pages (one per leaf)
+  const isTwoLeafSpread = layout.leavesPerSpread === 2;
+
   for (const page of pages) {
-    const pdfPage = pdfDoc.addPage([
-      layout.leafWidth * INCH_TO_POINTS,
-      layout.leafHeight * INCH_TO_POINTS
-    ]);
-    await renderPageContent(pdfPage, page, layout, bodyFont, fontSize);
+    // Cover pages are always single pages (no spread)
+    const isCover = page.kind === 'cover_front' || page.kind === 'cover_back';
+
+    if (isTwoLeafSpread && !isCover) {
+      // Create two pages for the spread - leaf 1 (left) and leaf 2 (right)
+      const leaf1Page = pdfDoc.addPage([
+        layout.leafWidth * INCH_TO_POINTS,
+        layout.leafHeight * INCH_TO_POINTS
+      ]);
+      await renderPageContent(leaf1Page, page, layout, bodyFont, fontSize, 1);
+
+      const leaf2Page = pdfDoc.addPage([
+        layout.leafWidth * INCH_TO_POINTS,
+        layout.leafHeight * INCH_TO_POINTS
+      ]);
+      await renderPageContent(leaf2Page, page, layout, bodyFont, fontSize, 2);
+    } else {
+      // Single-page mode or cover pages
+      const pdfPage = pdfDoc.addPage([
+        layout.leafWidth * INCH_TO_POINTS,
+        layout.leafHeight * INCH_TO_POINTS
+      ]);
+      await renderPageContent(pdfPage, page, layout, bodyFont, fontSize);
+    }
   }
 
   return await pdfDoc.save();

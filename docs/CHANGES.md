@@ -18,6 +18,27 @@
 
 ### 2026-01-14
 
+#### `pending` - Fix two-leaf spread rendering and image aspect ratio in PDF
+
+**Type**: Bug fix
+
+**Summary**: Fixed two issues with PDF generation:
+1. Combined PDF was rendering both text and image on the same page instead of creating a two-page spread
+2. Images in constrained boxes were being stretched to fill the box, distorting aspect ratio
+
+**Changes**:
+- Added `isTwoLeafSpread` check to `renderCombinedPdf` function
+- Non-cover pages now create two PDF pages when `leavesPerSpread === 2`
+- Each leaf renders its designated content (text on leaf 1, image on leaf 2)
+- Cover pages remain single pages as before
+- Images in boxes now shrink to fit while maintaining aspect ratio
+- Images are centered within their designated box
+
+**Files modified**:
+- `src/app/api/storyBook/printable/route.ts` - Added two-leaf spread logic and aspect-ratio-preserving image rendering
+
+---
+
 #### `4759c70` - Add print layout selector to Print Options dialog
 
 **Type**: Feature
