@@ -28,6 +28,23 @@ import {
 } from '@/lib/print-constraints';
 import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
 
+/**
+ * Extract all $$id$$ and $id$ placeholders from text
+ * Supports both double-dollar (correct) and single-dollar (AI fallback) formats
+ */
+function extractEntityIds(text: string): string[] {
+  if (!text) return [];
+  const ids = new Set<string>();
+  // Double $$ format (correct format)
+  const doubleMatches = [...text.matchAll(/\$\$([^$]+)\$\$/g)];
+  doubleMatches.forEach((match) => ids.add(match[1]));
+  // Single $ format (fallback for AI that didn't follow instructions)
+  // Only match IDs that look like Firestore document IDs (15+ alphanumeric chars)
+  const singleMatches = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)];
+  singleMatches.forEach((match) => ids.add(match[1]));
+  return [...ids];
+}
+
 // Schema for the AI's paginated output
 // Note: We use permissive string validation here to avoid schema errors.
 // Empty strings are filtered out during post-processing.
@@ -138,8 +155,20 @@ export const storyPaginationFlow = ai.defineFlow(
             debug.details.step = 'constraintsResolved';
 
             // Load actor details for context
+            // Use story.actors if available, otherwise extract from story text (fallback for wizard/legacy stories)
             debug.details.step = 'loadActorDetails';
-            const actorIds = story.actors || [];
+            let actorIds = story.actors || [];
+            if (actorIds.length === 0) {
+                // Fallback: extract actor IDs from story text placeholders ($$id$$ format)
+                actorIds = extractEntityIds(story.storyText);
+                debug.details.actorIdsSource = 'extracted_from_text';
+            } else {
+                debug.details.actorIdsSource = 'story.actors';
+            }
+            // Always ensure childId is included as first actor
+            if (story.childId && !actorIds.includes(story.childId)) {
+                actorIds = [story.childId, ...actorIds];
+            }
             debug.details.actorIdsRaw = actorIds;
 
             // Filter out any empty or invalid actor IDs

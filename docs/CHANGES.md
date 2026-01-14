@@ -18,6 +18,28 @@
 
 ### 2026-01-14
 
+#### `c3204b0` - Fix actor extraction in pagination and exemplar flows
+
+**Type**: Bug fix
+
+**Summary**: Fixed the `storyPaginationFlow` and `storyExemplarGenerationFlow` to extract actor IDs from story text when `story.actors` is empty. This ensures wizard stories (and other legacy stories) get proper character context during pagination and exemplar generation.
+
+**Issues Fixed**:
+1. **Pagination showing "No actors found"** - Pagination only looked at `story.actors` which may not be set
+2. **Exemplars only generated for main child** - Same issue, non-child characters were skipped
+
+**Fix**:
+- Added `extractEntityIds()` function to both flows to extract `$$id$$` placeholders from story text
+- If `story.actors` is empty, fall back to extracting IDs from story text
+- Always ensure `childId` is included as first actor
+- Added debug logging to track actor ID source
+
+**Files modified**:
+- `src/ai/flows/story-pagination-flow.ts` - Added fallback actor extraction
+- `src/ai/flows/story-exemplar-generation-flow.ts` - Added fallback actor extraction
+
+---
+
 #### `8d6a39e` - Unify Story Wizard post-generation with other generators
 
 **Type**: Bug fix / Architecture improvement

@@ -16,6 +16,23 @@ import { randomUUID } from 'crypto';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { Gaxios, GaxiosError } from 'gaxios';
 
+/**
+ * Extract all $$id$$ and $id$ placeholders from text
+ * Supports both double-dollar (correct) and single-dollar (AI fallback) formats
+ */
+function extractEntityIds(text: string): string[] {
+  if (!text) return [];
+  const ids = new Set<string>();
+  // Double $$ format (correct format)
+  const doubleMatches = [...text.matchAll(/\$\$([^$]+)\$\$/g)];
+  doubleMatches.forEach((match) => ids.add(match[1]));
+  // Single $ format (fallback for AI that didn't follow instructions)
+  // Only match IDs that look like Firestore document IDs (15+ alphanumeric chars)
+  const singleMatches = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)];
+  singleMatches.forEach((match) => ids.add(match[1]));
+  return [...ids];
+}
+
 const DEFAULT_IMAGE_MODEL = process.env.STORYBOOK_IMAGE_MODEL ?? 'googleai/gemini-2.5-flash-image-preview';
 // Use 1:1 (square) for character reference sheets with 2x2 grid layout
 // Valid options: '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'
@@ -372,7 +389,13 @@ export const storyExemplarGenerationFlow = ai.defineFlow(
       }
 
       // Get actor IDs from story
-      const actorIds = story.actors || [];
+      // Use story.actors if available, otherwise extract from story text (fallback for wizard/legacy stories)
+      let actorIds = story.actors || [];
+      if (actorIds.length === 0 && story.storyText) {
+        // Fallback: extract actor IDs from story text placeholders ($$id$$ format)
+        actorIds = extractEntityIds(story.storyText);
+        console.log(`[story-exemplar-generation-flow] Extracted ${actorIds.length} actor IDs from story text`);
+      }
       // Always include the main child
       if (story.childId && !actorIds.includes(story.childId)) {
         actorIds.unshift(story.childId);
