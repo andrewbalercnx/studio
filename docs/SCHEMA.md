@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-14 (added textBoxEnabled/imageBoxEnabled and leaf fields to PageLayoutConfig for print layouts)
+> **Last Updated**: 2026-01-14 (added answerAnimations collection for Q&A animations and sound effects)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -854,6 +854,41 @@ In-app help wizard configurations.
 
 ---
 
+### `answerAnimations`
+
+CSS animations and sound effects for Q&A answer cards. Used during story creation to animate non-selected answers off screen and celebrate the selected answer.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Document ID (e.g., 'exit-slide-left', 'selection-celebrate') |
+| `name` | string | Yes | Display name (e.g., 'Slide Left') |
+| `type` | 'exit' \| 'selection' | Yes | Animation purpose ('exit' for non-selected, 'selection' for chosen) |
+| `cssKeyframes` | string | Yes | CSS @keyframes definition |
+| `cssAnimationName` | string | Yes | Name of the animation in @keyframes |
+| `durationMs` | number | Yes | Animation duration in milliseconds (default: 500) |
+| `easing` | string | Yes | CSS easing function (default: 'ease-out') |
+| `isActive` | boolean | Yes | Whether this animation is available for use |
+| `order` | number | Yes | Display order in admin |
+| `soundEffect.prompt` | string | No | ElevenLabs SFX prompt |
+| `soundEffect.durationSeconds` | number | No | Sound duration (0.5-30 seconds) |
+| `soundEffect.promptInfluence` | number | No | ElevenLabs prompt influence (0-1) |
+| `soundEffect.audioUrl` | string | No | Firebase Storage URL for generated audio |
+| `soundEffect.storagePath` | string | No | Storage path for cleanup |
+| `soundEffect.generation.status` | 'idle' \| 'generating' \| 'ready' \| 'error' | No | Generation status |
+| `soundEffect.generation.lastRunAt` | timestamp | No | Last generation attempt |
+| `soundEffect.generation.lastCompletedAt` | timestamp | No | Last successful generation |
+| `soundEffect.generation.lastErrorMessage` | string | No | Error message if failed |
+| `createdAt` | timestamp | Yes | Creation time |
+| `updatedAt` | timestamp | Yes | Last update time |
+
+**Animation Types**:
+- **exit**: For non-selected answer cards - randomly chosen to animate cards off screen
+- **selection**: For the chosen answer - celebrates then exits to the right
+
+**Security**: Read by authenticated users; write by writers and admins.
+
+---
+
 ## Common Types
 
 ### `PrintOrderAddress`
@@ -998,6 +1033,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 | `aiFlowLogs` | Admin | Admin | |
 | `aiRunTraces` | Admin | Admin | |
 | `helpWizards` | Writer, Admin | Writer, Admin | help-* readable by authenticated |
+| `answerAnimations` | Authenticated | Writer, Admin | Q&A card animations |
 
 ---
 

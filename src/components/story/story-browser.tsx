@@ -17,6 +17,7 @@ import { LoaderCircle, Settings, RefreshCw, Sparkles, Star, CheckCircle, Bot, Mu
 import Link from 'next/link';
 
 import { ChoiceButton, type ChoiceWithEntities } from './choice-button';
+import { AnimatedChoiceButton } from './animated-choice-button';
 import { CharacterIntroductionCard } from './character-introduction-card';
 import { ChildAvatarAnimation } from '@/components/child/child-avatar-animation';
 import { SpeechModeToggle } from '@/components/child/speech-mode-toggle';
@@ -35,6 +36,7 @@ import type {
   Choice,
   FriendsCharacterOption,
   FriendsPhase,
+  AnswerAnimation,
 } from '@/lib/types';
 import { FriendsProposal } from './friends-proposal';
 import { CharacterPicker } from './character-picker';
@@ -141,6 +143,14 @@ export function StoryBrowser({
   // Track spoken content to avoid re-speaking
   const lastSpokenContentRef = useRef<string>('');
 
+  // Answer animation state
+  const [answerAnimations, setAnswerAnimations] = useState<AnswerAnimation[]>([]);
+  const [isAnimatingAnswers, setIsAnimatingAnswers] = useState(false);
+  const [animatingOptionIds, setAnimatingOptionIds] = useState<Set<string>>(new Set());
+  const [optionAnimationMap, setOptionAnimationMap] = useState<Map<string, AnswerAnimation>>(new Map());
+  const [isQuestionAnimating, setIsQuestionAnimating] = useState(false);
+  const [questionAnimation, setQuestionAnimation] = useState<AnswerAnimation | null>(null);
+
   // ---------------------------------------------------------------------------
   // Firestore Queries
   // ---------------------------------------------------------------------------
@@ -170,6 +180,20 @@ export function StoryBrowser({
     [firestore]
   );
   const { data: storyOutputTypes } = useCollection<StoryOutputType>(storyOutputTypesQuery);
+
+  // Answer animations for Q&A transitions
+  const animationsQuery = useMemo(
+    () => (firestore ? query(collection(firestore, 'answerAnimations'), where('isActive', '==', true)) : null),
+    [firestore]
+  );
+  const { data: fetchedAnimations } = useCollection<AnswerAnimation>(animationsQuery);
+
+  // Update local animations state when Firestore data changes
+  useEffect(() => {
+    if (fetchedAnimations) {
+      setAnswerAnimations(fetchedAnimations);
+    }
+  }, [fetchedAnimations]);
 
   // Get active story type for gradient/styling
   const activeStoryType = useMemo(() => {
@@ -668,6 +692,104 @@ export function StoryBrowser({
   }, [user, firestore, sessionId, sessionRef, stopSpeech, onError]);
 
   // ---------------------------------------------------------------------------
+  // Answer Animation Helpers
+  // ---------------------------------------------------------------------------
+
+  // Helper to play a sound effect
+  const playSoundEffect = useCallback((audioUrl: string | null | undefined) => {
+    if (!audioUrl) return;
+    try {
+      const audio = new Audio(audioUrl);
+      audio.play().catch(console.error);
+    } catch (e) {
+      console.error('[StoryBrowser] Sound effect playback error:', e);
+    }
+  }, []);
+
+  // Helper to delay for animation
+  const delay = useCallback((ms: number) => new Promise(resolve => setTimeout(resolve, ms)), []);
+
+  // Get random exit animation
+  const getRandomExitAnimation = useCallback((): AnswerAnimation | null => {
+    const exitAnimations = answerAnimations.filter(a => a.type === 'exit' && a.isActive);
+    if (exitAnimations.length === 0) return null;
+    return exitAnimations[Math.floor(Math.random() * exitAnimations.length)];
+  }, [answerAnimations]);
+
+  // Get selection animation
+  const getSelectionAnimation = useCallback((): AnswerAnimation | null => {
+    return answerAnimations.find(a => a.type === 'selection' && a.isActive) || null;
+  }, [answerAnimations]);
+
+  // Run the full animation sequence when an answer is selected
+  const runAnswerAnimationSequence = useCallback(async (
+    selectedOption: StoryGeneratorResponseOption,
+    allOptions: StoryGeneratorResponseOption[]
+  ) => {
+    const exitAnimations = answerAnimations.filter(a => a.type === 'exit' && a.isActive);
+    const selectionAnim = getSelectionAnimation();
+
+    // If no animations configured, skip the sequence
+    if (exitAnimations.length === 0 && !selectionAnim) {
+      return;
+    }
+
+    setIsAnimatingAnswers(true);
+
+    // 1. Animate non-selected options off screen (staggered)
+    const nonSelectedOptions = allOptions.filter(o => o.id !== selectedOption.id);
+    const animMap = new Map<string, AnswerAnimation>();
+
+    for (let i = 0; i < nonSelectedOptions.length; i++) {
+      const opt = nonSelectedOptions[i];
+      const randomAnim = getRandomExitAnimation();
+
+      if (randomAnim) {
+        animMap.set(opt.id, randomAnim);
+        setOptionAnimationMap(new Map(animMap));
+        setAnimatingOptionIds(prev => new Set([...prev, opt.id]));
+
+        // Play sound effect
+        playSoundEffect(randomAnim.soundEffect?.audioUrl);
+
+        // Stagger: wait 150ms before starting next animation
+        await delay(150);
+      }
+    }
+
+    // Wait for the last exit animation to complete
+    const lastExitAnim = exitAnimations[0];
+    if (lastExitAnim && nonSelectedOptions.length > 0) {
+      await delay(lastExitAnim.durationMs);
+    }
+
+    // 2. Animate question off screen
+    const questionAnim = getRandomExitAnimation();
+    if (questionAnim) {
+      setQuestionAnimation(questionAnim);
+      setIsQuestionAnimating(true);
+      playSoundEffect(questionAnim.soundEffect?.audioUrl);
+      await delay(questionAnim.durationMs);
+      setIsQuestionAnimating(false);
+      setQuestionAnimation(null);
+    }
+
+    // 3. Animate selected answer with celebration animation
+    if (selectionAnim) {
+      animMap.set(selectedOption.id, selectionAnim);
+      setOptionAnimationMap(new Map(animMap));
+      setAnimatingOptionIds(prev => new Set([...prev, selectedOption.id]));
+      playSoundEffect(selectionAnim.soundEffect?.audioUrl);
+      await delay(selectionAnim.durationMs);
+    }
+
+    // Reset animation state
+    setAnimatingOptionIds(new Set());
+    setOptionAnimationMap(new Map());
+    setIsAnimatingAnswers(false);
+  }, [answerAnimations, getRandomExitAnimation, getSelectionAnimation, playSoundEffect, delay]);
+
+  // ---------------------------------------------------------------------------
   // Option Selection
   // ---------------------------------------------------------------------------
   const handleSelectOption = useCallback(async (option: StoryGeneratorResponseOption) => {
@@ -682,6 +804,10 @@ export function StoryBrowser({
       selectedOptionId: option.id,
       createdAt: serverTimestamp(),
     });
+
+    // Run answer animations (in parallel with the rest of the logic)
+    // The animation sequence runs independently while we start the API call
+    const animationPromise = runAnswerAnimationSequence(option, currentOptions);
 
     // Check if this option introduces a character
     if (option.introducesCharacter && generator.capabilities.supportsCharacterIntroduction) {
@@ -726,6 +852,9 @@ export function StoryBrowser({
           }).catch(err => console.error('Avatar generation failed:', err));
         }
 
+        // Wait for animations before showing character introduction
+        await animationPromise;
+
         // Show character introduction
         setCharacterIntro({
           characterId: result.characterId,
@@ -752,6 +881,8 @@ export function StoryBrowser({
 
     // Handle "Tell me more" / "Show me different stories" option
     if (option.isMoreOption) {
+      // Wait for animations
+      await animationPromise;
       // For friends flow synopsis phase, use the more_synopses action
       if (friendsPhase === 'synopsis_selection') {
         await callFriendsAPI('more_synopses');
@@ -765,6 +896,9 @@ export function StoryBrowser({
     // If in ending phase, user is selecting their ending - save it and compile
     if (isEndingPhase && sessionRef) {
       console.log('[StoryBrowser] Ending selected, saving and compiling...');
+
+      // Wait for animations
+      await animationPromise;
 
       // Save the selected ending to the session
       await updateDoc(sessionRef, {
@@ -818,6 +952,7 @@ export function StoryBrowser({
       // If we've reached the end of the arc, call the ending API
       if (reachedEnd) {
         console.log('[StoryBrowser] Arc completed, calling ending API');
+        await animationPromise;
         await callEndingAPI();
         return;
       }
@@ -825,13 +960,16 @@ export function StoryBrowser({
 
     // For friends flow scenario/synopsis selection, use the friends API
     if (friendsPhase === 'scenario_selection' || friendsPhase === 'synopsis_selection') {
+      // Wait for animations to complete
+      await animationPromise;
       await callFriendsAPI(undefined, undefined, option.id);
       return;
     }
 
-    // Call API with selected option
+    // Wait for animations to complete, then call API with selected option
+    await animationPromise;
     await callGeneratorAPI(option.id, option.text);
-  }, [generator, firestore, user, session, sessionId, sessionRef, isEndingPhase, activeStoryType, childProfile, callGeneratorAPI, callFriendsAPI, friendsPhase, callEndingAPI, autoCompileStory, toast]);
+  }, [generator, firestore, user, session, sessionId, sessionRef, isEndingPhase, activeStoryType, childProfile, callGeneratorAPI, callFriendsAPI, friendsPhase, callEndingAPI, autoCompileStory, toast, runAnswerAnimationSequence, currentOptions]);
 
   // ---------------------------------------------------------------------------
   // Continue after character introduction
@@ -1090,13 +1228,24 @@ export function StoryBrowser({
 
             {/* Question prompt with avatar */}
             {currentQuestion && (
-              <div className="flex flex-col items-center gap-2">
-                <Avatar className="h-16 w-16">
-                  <AvatarImage src="/icons/magical-book.svg" alt="Story Guide" />
-                  <AvatarFallback><Bot /></AvatarFallback>
-                </Avatar>
-                <p className="text-xl font-medium leading-relaxed">{currentQuestion}</p>
-              </div>
+              <>
+                {/* Inject question animation keyframes if animating */}
+                {questionAnimation && (
+                  <style dangerouslySetInnerHTML={{ __html: questionAnimation.cssKeyframes }} />
+                )}
+                <div
+                  className="flex flex-col items-center gap-2"
+                  style={isQuestionAnimating && questionAnimation ? {
+                    animation: `${questionAnimation.cssAnimationName} ${questionAnimation.durationMs}ms ${questionAnimation.easing} forwards`,
+                  } : {}}
+                >
+                  <Avatar className="h-16 w-16">
+                    <AvatarImage src="/icons/magical-book.svg" alt="Story Guide" />
+                    <AvatarFallback><Bot /></AvatarFallback>
+                  </Avatar>
+                  <p className="text-xl font-medium leading-relaxed">{currentQuestion}</p>
+                </div>
+              </>
             )}
 
             {/* Tap to hear button - shown when autoplay is blocked */}
@@ -1128,12 +1277,12 @@ export function StoryBrowser({
                 };
 
                 return (
-                  <ChoiceButton
+                  <AnimatedChoiceButton
                     key={option.id}
                     choice={choiceWithEntities}
                     onClick={() => handleSelectOption(option)}
                     optionLabel={optionLabel}
-                    disabled={browserState !== 'question' && browserState !== 'ending'}
+                    disabled={(browserState !== 'question' && browserState !== 'ending') || isAnimatingAnswers}
                     variant={option.isMoreOption ? 'outline' : 'secondary'}
                     className={option.isMoreOption ? 'border-dashed' : ''}
                     icon={isEndingPhase ? (
@@ -1143,6 +1292,8 @@ export function StoryBrowser({
                     ) : (
                       <Sparkles className="w-4 h-4 mr-2 text-purple-500 flex-shrink-0" />
                     )}
+                    animation={optionAnimationMap.get(option.id) || null}
+                    isAnimating={animatingOptionIds.has(option.id)}
                   />
                 );
               })}

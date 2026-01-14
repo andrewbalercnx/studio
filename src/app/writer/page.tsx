@@ -211,6 +211,9 @@ export default function WriterDashboardPage() {
                     <Mic className="mr-2 h-4 w-4" /> Voice Recording Script
                   </Link>
                 </Button>
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/admin/answer-animations">Answer Animations</Link>
+                </Button>
               </div>
             </div>
           </CardContent>

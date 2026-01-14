@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-13 (added address management endpoints)
+> **Last Updated**: 2026-01-14 (added sound effects routes for Q&A animations)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -90,6 +90,7 @@ The `StoryPicClient` provides typed methods for child-facing operations:
 - [Webhook Routes](#webhook-routes)
 - [Address Routes](#address-routes)
 - [Postcode Routes](#postcode-routes)
+- [Sound Effects Routes](#sound-effects-routes)
 
 ---
 
@@ -3141,10 +3142,87 @@ Look up addresses from a UK postcode using getAddress.io API.
 
 ---
 
+## Sound Effects Routes
+
+Routes for managing Q&A answer animations and their sound effects.
+
+### POST `/api/soundEffects/seed`
+
+Seed the answerAnimations collection with default animation configurations.
+
+**Authentication**: Required (admin or writer role)
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "message": "Seeded 11 answer animations",
+  "results": [
+    { "id": "exit-slide-left", "action": "created" },
+    { "id": "exit-slide-right", "action": "updated" }
+  ]
+}
+```
+
+**Notes**:
+- Creates 10 exit animations and 1 selection animation
+- Preserves existing sound effect URLs if already generated
+- Safe to call multiple times (idempotent)
+
+---
+
+### POST `/api/soundEffects/generate`
+
+Generate a sound effect for an answer animation using ElevenLabs Text-to-Sound-Effects API.
+
+**Authentication**: Required (admin or writer role)
+
+**Request Body**:
+```json
+{
+  "animationId": "exit-slide-left",
+  "prompt": "quick whoosh sound swooping left",
+  "durationSeconds": 0.5,
+  "promptInfluence": 0.3
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `animationId` | string | Yes | Animation document ID |
+| `prompt` | string | No | Override stored prompt |
+| `durationSeconds` | number | No | Sound duration (0.5-30, defaults to animation config) |
+| `promptInfluence` | number | No | ElevenLabs prompt influence (0-1, default 0.3) |
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "audioUrl": "https://firebasestorage.googleapis.com/...",
+  "durationSeconds": 0.5
+}
+```
+
+**Notes**:
+- Generated audio is uploaded to Firebase Storage at `animations/{animationId}/sound-effect.mp3`
+- The animation document is updated with the audio URL and status
+- Uses ElevenLabs Text-to-Sound-Effects API
+- Updates animation's `soundEffect.generation.status` through 'generating' → 'ready' or 'error'
+
+**Error Responses**:
+- `400` - Missing animationId or no prompt provided
+- `403` - Not admin or writer
+- `404` - Animation not found
+- `500` - Generation failed
+- `503` - ElevenLabs API not configured
+
+---
+
 ## Version History
 
 | Date | Changes |
 |------|---------|
+| 2026-01-14 | Added sound effects routes (seed, generate) for Q&A animations |
 | 2026-01-13 | Added address management endpoints (user addresses CRUD, system addresses, postcode lookup) |
 | 2026-01-04 | Added /api/storyFriends endpoint for "Fun with my friends" story generator |
 | 2025-12-31 | Added /api/admin/cleanup endpoints for database cleanup |

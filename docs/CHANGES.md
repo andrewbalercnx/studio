@@ -18,6 +18,39 @@
 
 ### 2026-01-14
 
+#### `bf8e978` - Add Q&A animations system with sound effects
+
+**Type**: Feature
+
+**Summary**: Implemented a complete Q&A animation system for story creation. When a child answers a question, non-selected answers animate off-screen with sound effects, followed by the selected answer celebrating and exiting. This engages children during the waiting period while the next question is being generated.
+
+**Features**:
+1. **10 Exit Animations**: Slide left/right/up/down, shrink, spin, bounce, float, explode, fade
+2. **1 Selection Animation**: Celebrate with wiggle, then slide right
+3. **Sound Effects**: ElevenLabs text-to-sound-effects integration for each animation
+4. **Writer Portal**: New admin page at `/admin/answer-animations` to configure animations:
+   - Edit duration and easing
+   - Generate sound effects via ElevenLabs
+   - Test button to preview animation with sound
+5. **Story Browser Integration**: Animations play automatically when child selects an answer
+
+**Files created**:
+- `src/lib/animation-presets.ts` - Default animation CSS definitions
+- `src/app/api/soundEffects/seed/route.ts` - Seed default animations to Firestore
+- `src/app/api/soundEffects/generate/route.ts` - Generate sound effects via ElevenLabs
+- `src/app/admin/answer-animations/page.tsx` - Writer portal animation manager
+- `src/components/story/animated-choice-button.tsx` - Choice button with animation support
+
+**Files modified**:
+- `src/lib/types.ts` - Added `AnswerAnimation` types
+- `src/components/story/story-browser.tsx` - Integrated animation playback on answer selection
+- `src/app/writer/page.tsx` - Added link to answer animations admin page
+- `firestore.rules` - Added rules for `answerAnimations` collection (v20)
+- `docs/SCHEMA.md` - Documented `answerAnimations` collection
+- `docs/API.md` - Documented sound effects API routes
+
+---
+
 #### `376b9b8` - Add print layout enhancements: enabled toggles, leaf selection, duplicate/delete
 
 **Type**: Feature

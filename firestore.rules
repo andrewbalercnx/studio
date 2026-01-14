@@ -1,4 +1,4 @@
-// Rules version: v19 - Added shareLinks collection for share link lookups (server-only)
+// Rules version: v20 - Added answerAnimations collection for Q&A animations (read: authenticated, write: admin/writer)
 // IMPORTANT: Firebase Admin SDK bypasses these rules entirely.
 // These rules only apply to client-side (browser/mobile) requests.
 //
@@ -303,6 +303,13 @@ service cloud.firestore {
     match /storyGenerators/{document=**} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
+    }
+
+    // ========== ANSWER ANIMATIONS ==========
+    // CSS animations and sound effects for Q&A answer cards
+    match /answerAnimations/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isWriter() || isAdmin();
     }
 
     // ========== SYSTEM & LOG COLLECTIONS ==========

@@ -1999,3 +1999,59 @@ export type FriendsSynopsis = {
   title: string;                         // Story title
   summary: string;                       // 2-3 sentence summary
 };
+
+// ============================================================================
+// Answer Animation Types
+// ============================================================================
+
+/**
+ * Type of answer animation - either for removing non-selected answers
+ * or for celebrating/exiting the selected answer.
+ */
+export type AnswerAnimationType = 'exit' | 'selection';
+
+/**
+ * Generation status for sound effects.
+ */
+export type AnswerAnimationSoundEffectStatus = 'idle' | 'generating' | 'ready' | 'error';
+
+/**
+ * Sound effect configuration for an animation.
+ * Generated via ElevenLabs text-to-sound-effects API.
+ */
+export type AnswerAnimationSoundEffect = {
+  prompt: string;                        // ElevenLabs SFX prompt (e.g., "whoosh sound, quick swoosh")
+  durationSeconds: number;               // 0.5-30 seconds (ElevenLabs parameter)
+  promptInfluence?: number;              // 0-1 (ElevenLabs parameter, default 0.3)
+  audioUrl?: string | null;              // Firebase Storage URL after generation
+  storagePath?: string;                  // Storage path for cleanup
+  generation: {
+    status: AnswerAnimationSoundEffectStatus;
+    lastRunAt?: any;
+    lastCompletedAt?: any;
+    lastErrorMessage?: string | null;
+  };
+};
+
+/**
+ * An answer animation configuration stored in Firestore.
+ * Collection: answerAnimations
+ */
+export type AnswerAnimation = {
+  id: string;                            // Document ID (e.g., 'exit-slide-left', 'selection-celebrate')
+  name: string;                          // Display name (e.g., 'Slide Left')
+  type: AnswerAnimationType;             // 'exit' or 'selection'
+  cssKeyframes: string;                  // CSS @keyframes definition
+  cssAnimationName: string;              // Name of the animation in @keyframes
+  durationMs: number;                    // Animation duration in milliseconds (default: 500)
+  easing: string;                        // CSS easing function (default: 'ease-out')
+  isActive: boolean;                     // Whether this animation is available for use
+  order: number;                         // Display order in admin
+
+  // Sound effect configuration (optional)
+  soundEffect?: AnswerAnimationSoundEffect;
+
+  // Metadata
+  createdAt: any;
+  updatedAt: any;
+};
