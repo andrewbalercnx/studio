@@ -16,6 +16,27 @@
 
 ## Changes
 
+### 2026-01-14
+
+#### `376b9b8` - Add print layout enhancements: enabled toggles, leaf selection, duplicate/delete
+
+**Type**: Feature
+
+**Summary**: Enhanced print layouts with three major features:
+1. **Text/Image Box Toggles**: Each page type (cover, back cover, inside, title) now has enable/disable toggles for text boxes and image boxes, allowing layouts that omit either element
+2. **Leaf Selection for Two-Page Spreads**: When a layout uses 2 leaves per spread, the admin can specify which leaf (1=left, 2=right) each text box and image box should appear on. PDF generation creates two pages per content item, placing content on the correct leaf.
+3. **Duplicate/Delete Layouts**: Added buttons to duplicate (creates copy with "(Copy)" suffix) and delete print layouts
+
+**Files modified**:
+- `src/lib/types.ts` - Added `textBoxEnabled` and `imageBoxEnabled` to `PageLayoutConfig`
+- `src/lib/print-layout-utils.ts` - Updated `getLayoutForPageType()` to respect enabled flags
+- `src/app/admin/print-layouts/page.tsx` - Added toggle switches, leaf dropdowns, duplicate/delete buttons
+- `src/app/api/printStoryBooks/[printStoryBookId]/generate-pdfs/route.ts` - Added `targetLeaf` parameter and two-leaf spread rendering
+- `src/app/api/storyBook/printable/route.ts` - Added `targetLeaf` parameter and two-leaf spread rendering
+- `docs/SCHEMA.md` - Documented new fields and types
+
+---
+
 ### 2026-01-12
 
 #### `3c239df` - Add hover-to-fade on storybook player text panel

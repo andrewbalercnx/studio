@@ -1457,6 +1457,8 @@ export type TextLayoutBox = PageLayoutBox & {
 
 // Page layout configuration for a specific page type (cover, inside, back cover)
 export type PageLayoutConfig = {
+  textBoxEnabled?: boolean;   // Whether to show text box on this page type (default: true)
+  imageBoxEnabled?: boolean;  // Whether to show image box on this page type (default: true)
   textBox?: TextLayoutBox;
   imageBox?: PageLayoutBox;
 };

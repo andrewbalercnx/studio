@@ -386,13 +386,18 @@ async function renderTitlePage(
 
 /**
  * Renders a single page with image and/or text using page-type-specific layouts
+ *
+ * For two-leaf spreads:
+ * - When targetLeaf is specified (1 or 2), only render content designated for that leaf
+ * - When targetLeaf is undefined, render all content (single-page mode)
  */
 async function renderPageContent(
   pdfPage: PDFPage,
   page: StoryOutputPage,
   layout: PrintLayout,
   bodyFont: PDFFont,
-  fontSize: number
+  fontSize: number,
+  targetLeaf?: 1 | 2
 ) {
   // Map page kind to layout type
   const pageType = mapPageKindToLayoutType(page.kind);
@@ -416,10 +421,19 @@ async function renderPageContent(
   // Get page-type-specific layout configuration
   const pageLayout = getLayoutForPageType(layout, pageType);
 
-  console.log(`[printable] Rendering page ${page.pageNumber}, kind: ${page.kind}, pageType: ${pageType}, hasImage: ${!!page.imageUrl}, hasText: ${!!page.displayText}`);
+  // Determine which content to render based on leaf assignments
+  const imageLeaf = pageLayout.imageBox?.leaf;
+  const textLeaf = pageLayout.textBox?.leaf;
+
+  // Should we render image on this page?
+  const shouldRenderImage = targetLeaf === undefined || imageLeaf === undefined || imageLeaf === targetLeaf;
+  // Should we render text on this page?
+  const shouldRenderText = targetLeaf === undefined || textLeaf === undefined || textLeaf === targetLeaf;
+
+  console.log(`[printable] Rendering page ${page.pageNumber}, kind: ${page.kind}, pageType: ${pageType}, hasImage: ${!!page.imageUrl}, hasText: ${!!page.displayText}, targetLeaf: ${targetLeaf}, shouldRenderImage: ${shouldRenderImage}, shouldRenderText: ${shouldRenderText}`);
 
   // 1. Render image first (background layer)
-  if (page.imageUrl) {
+  if (page.imageUrl && shouldRenderImage) {
     console.log(`[printable] Fetching image: ${page.imageUrl.substring(0, 100)}...`);
     const imageData = await fetchImageBytes(page.imageUrl);
     if (imageData) {
@@ -480,7 +494,7 @@ async function renderPageContent(
   }
 
   // 2 & 3. Render text box background and text (if present)
-  if (page.displayText) {
+  if (page.displayText && shouldRenderText) {
     const textBox = pageLayout.textBox;
 
     // Default text box: 1 inch margins
@@ -702,12 +716,31 @@ async function renderInteriorPdf(pages: StoryOutputPage[], layout: PrintLayout, 
   }
 
   // Render content pages at the unified font size
+  // For two-leaf spreads, each content page creates two PDF pages (one per leaf)
+  const isTwoLeafSpread = layout.leavesPerSpread === 2;
+
   for (const page of interiorPages) {
-    const pdfPage = pdfDoc.addPage([
-      layout.leafWidth * INCH_TO_POINTS,
-      layout.leafHeight * INCH_TO_POINTS
-    ]);
-    await renderPageContent(pdfPage, page, layout, bodyFont, unifiedFontSize);
+    if (isTwoLeafSpread) {
+      // Create two pages for the spread - leaf 1 (left) and leaf 2 (right)
+      const leaf1Page = pdfDoc.addPage([
+        layout.leafWidth * INCH_TO_POINTS,
+        layout.leafHeight * INCH_TO_POINTS
+      ]);
+      await renderPageContent(leaf1Page, page, layout, bodyFont, unifiedFontSize, 1);
+
+      const leaf2Page = pdfDoc.addPage([
+        layout.leafWidth * INCH_TO_POINTS,
+        layout.leafHeight * INCH_TO_POINTS
+      ]);
+      await renderPageContent(leaf2Page, page, layout, bodyFont, unifiedFontSize, 2);
+    } else {
+      // Single-page mode - render all content on one page
+      const pdfPage = pdfDoc.addPage([
+        layout.leafWidth * INCH_TO_POINTS,
+        layout.leafHeight * INCH_TO_POINTS
+      ]);
+      await renderPageContent(pdfPage, page, layout, bodyFont, unifiedFontSize);
+    }
   }
 
   // Append blank padding pages at the end to meet Mixam requirements
@@ -721,12 +754,15 @@ async function renderInteriorPdf(pages: StoryOutputPage[], layout: PrintLayout, 
     }
   }
 
-  const totalPages = interiorPages.length + paddingPageCount;
+  // For two-leaf spreads, each content item generates 2 pages
+  const pdfPagesPerContent = isTwoLeafSpread ? 2 : 1;
+  const contentPageCount = interiorPages.length * pdfPagesPerContent;
+  const totalPages = contentPageCount + paddingPageCount;
   if (totalPages % 4 !== 0) {
     console.warn(`[printable] Total interior page count ${totalPages} is not divisible by 4`);
   }
 
-  console.log(`[printable] Interior PDF: ${interiorPages.length} content pages + ${paddingPageCount} padding at ${unifiedFontSize}pt`);
+  console.log(`[printable] Interior PDF: ${interiorPages.length} content items (${contentPageCount} pages${isTwoLeafSpread ? ' @ 2 per spread' : ''}) + ${paddingPageCount} padding at ${unifiedFontSize}pt`);
 
   return await pdfDoc.save();
 }

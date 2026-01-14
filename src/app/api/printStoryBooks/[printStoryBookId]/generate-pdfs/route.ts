@@ -294,6 +294,10 @@ async function renderTitlePage(
  * 1. Image (background layer)
  * 2. Text box background color (middle layer)
  * 3. Text (top layer)
+ *
+ * For two-leaf spreads:
+ * - When targetLeaf is specified (1 or 2), only render content designated for that leaf
+ * - When targetLeaf is undefined, render all content (single-page mode)
  */
 async function renderPageContent(
   pdfPage: PDFPage,
@@ -302,7 +306,8 @@ async function renderPageContent(
   bodyFont: PDFFont,
   fontSize: number,
   pageType: PrintLayoutPageType = 'inside',
-  logger?: ReturnType<typeof createLogger>
+  logger?: ReturnType<typeof createLogger>,
+  targetLeaf?: 1 | 2
 ) {
   // Special handling for title pages - full page centered text
   if (pageType === 'titlePage') {
@@ -317,10 +322,30 @@ async function renderPageContent(
   // Get page-type-specific layout configuration
   const pageLayout = getLayoutForPageType(layout, pageType);
 
-  logger?.debug('Rendering page', { pageNumber: page.pageNumber, type: page.type, pageType, hasImage: !!page.imageUrl, hasText: !!page.displayText });
+  // Determine which content to render based on leaf assignments
+  const imageLeaf = pageLayout.imageBox?.leaf;
+  const textLeaf = pageLayout.textBox?.leaf;
+
+  // Should we render image on this page?
+  const shouldRenderImage = targetLeaf === undefined || imageLeaf === undefined || imageLeaf === targetLeaf;
+  // Should we render text on this page?
+  const shouldRenderText = targetLeaf === undefined || textLeaf === undefined || textLeaf === targetLeaf;
+
+  logger?.debug('Rendering page', {
+    pageNumber: page.pageNumber,
+    type: page.type,
+    pageType,
+    hasImage: !!page.imageUrl,
+    hasText: !!page.displayText,
+    targetLeaf,
+    imageLeaf,
+    textLeaf,
+    shouldRenderImage,
+    shouldRenderText
+  });
 
   // 1. Render image first (background layer)
-  if (page.imageUrl) {
+  if (page.imageUrl && shouldRenderImage) {
     logger?.debug('Fetching image', { pageNumber: page.pageNumber, url: page.imageUrl.substring(0, 100) });
     const imageData = await fetchImageBytes(page.imageUrl, logger);
     if (imageData) {
@@ -395,7 +420,7 @@ async function renderPageContent(
   }
 
   // 2 & 3. Render text box background and text (if present)
-  if (page.displayText) {
+  if (page.displayText && shouldRenderText) {
     // Get textBox from page-type layout
     const textBox = pageLayout.textBox;
 
@@ -577,12 +602,31 @@ async function renderInteriorPdf(
   }
 
   // Add interior pages - all use 'inside' layout
+  // For two-leaf spreads, each content page creates two PDF pages (one per leaf)
+  const isTwoLeafSpread = layout.leavesPerSpread === 2;
+
   for (const page of interiorPages) {
-    const pdfPage = pdfDoc.addPage([
-      layout.leafWidth * INCH_TO_POINTS,
-      layout.leafHeight * INCH_TO_POINTS,
-    ]);
-    await renderPageContent(pdfPage, page, layout, bodyFont, fontSize, 'inside', logger);
+    if (isTwoLeafSpread) {
+      // Create two pages for the spread - leaf 1 (left) and leaf 2 (right)
+      const leaf1Page = pdfDoc.addPage([
+        layout.leafWidth * INCH_TO_POINTS,
+        layout.leafHeight * INCH_TO_POINTS,
+      ]);
+      await renderPageContent(leaf1Page, page, layout, bodyFont, fontSize, 'inside', logger, 1);
+
+      const leaf2Page = pdfDoc.addPage([
+        layout.leafWidth * INCH_TO_POINTS,
+        layout.leafHeight * INCH_TO_POINTS,
+      ]);
+      await renderPageContent(leaf2Page, page, layout, bodyFont, fontSize, 'inside', logger, 2);
+    } else {
+      // Single-page mode - render all content on one page
+      const pdfPage = pdfDoc.addPage([
+        layout.leafWidth * INCH_TO_POINTS,
+        layout.leafHeight * INCH_TO_POINTS,
+      ]);
+      await renderPageContent(pdfPage, page, layout, bodyFont, fontSize, 'inside', logger);
+    }
   }
 
   // Add back endpaper (blank page) - use 'inside' layout

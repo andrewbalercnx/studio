@@ -13,7 +13,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { LoaderCircle, Plus, Edit, Trash2, Link2, Link2Off } from 'lucide-react';
+import { LoaderCircle, Plus, Edit, Trash2, Link2, Link2Off, Copy } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { deleteDoc } from 'firebase/firestore';
 import type { PrintLayout, PrintProduct } from '@/lib/types';
 import SampleLayoutData from '@/data/print-layouts.json';
 import { query, where } from 'firebase/firestore';
@@ -43,6 +45,7 @@ const boxSchema = z.object({
 
 // Text box schema with styling options
 const textLayoutBoxSchema = z.object({
+  leaf: z.coerce.number().min(1).max(2).optional(),
   x: numberOrEmpty,
   y: numberOrEmpty,
   width: numberOrEmpty,
@@ -54,6 +57,7 @@ const textLayoutBoxSchema = z.object({
 
 // Image box schema
 const imageLayoutBoxSchema = z.object({
+  leaf: z.coerce.number().min(1).max(2).optional(),
   x: numberOrEmpty,
   y: numberOrEmpty,
   width: numberOrEmpty,
@@ -62,6 +66,8 @@ const imageLayoutBoxSchema = z.object({
 
 // Page layout config schema for cover/inside/back/title layouts
 const pageLayoutConfigSchema = z.object({
+  textBoxEnabled: z.boolean().optional(),
+  imageBoxEnabled: z.boolean().optional(),
   textBox: textLayoutBoxSchema,
   imageBox: imageLayoutBoxSchema,
 }).optional();
@@ -106,18 +112,26 @@ const defaultFormValues: PrintLayoutFormValues = {
   font: 'Helvetica',
   fontSize: 24,
   coverLayout: {
+    textBoxEnabled: true,
+    imageBoxEnabled: true,
     imageBox: { x: 0, y: 0, width: 8.5, height: 11 },
     textBox: { x: 0.5, y: 7.5, width: 7.5, height: 3, backgroundColor: '#F5F5DC', textColor: undefined, borderRadius: 0.1 },
   },
   backCoverLayout: {
+    textBoxEnabled: true,
+    imageBoxEnabled: true,
     imageBox: { x: 0.85, y: 1.1, width: 6.8, height: 6.5 },
     textBox: { x: 0.5, y: 8.5, width: 7.5, height: 2, backgroundColor: '#4A7C59', textColor: '#FFFFFF', borderRadius: 0.1 },
   },
   insideLayout: {
+    textBoxEnabled: true,
+    imageBoxEnabled: true,
     imageBox: { x: 0, y: 0, width: 8.5, height: 11 },
     textBox: { x: 1, y: 1, width: 6.5, height: 9, backgroundColor: undefined, textColor: undefined, borderRadius: 0 },
   },
   titlePageLayout: {
+    textBoxEnabled: true,
+    imageBoxEnabled: false,
     textBox: { x: 1, y: 3, width: 6.5, height: 5, backgroundColor: undefined, textColor: undefined, borderRadius: 0 },
   },
   textBoxes: [{ leaf: 1, x: 1, y: 7, width: 6.5, height: 3 }],
@@ -155,10 +169,26 @@ function PrintLayoutForm({
           leavesPerSpread: String(editingLayout.leavesPerSpread) as '1' | '2',
           font: editingLayout.font || defaultFormValues.font,
           fontSize: editingLayout.fontSize || defaultFormValues.fontSize,
-          coverLayout: editingLayout.coverLayout || defaultFormValues.coverLayout,
-          backCoverLayout: editingLayout.backCoverLayout || defaultFormValues.backCoverLayout,
-          insideLayout: editingLayout.insideLayout || defaultFormValues.insideLayout,
-          titlePageLayout: editingLayout.titlePageLayout || defaultFormValues.titlePageLayout,
+          coverLayout: {
+            textBoxEnabled: editingLayout.coverLayout?.textBoxEnabled ?? true,
+            imageBoxEnabled: editingLayout.coverLayout?.imageBoxEnabled ?? true,
+            ...editingLayout.coverLayout,
+          },
+          backCoverLayout: {
+            textBoxEnabled: editingLayout.backCoverLayout?.textBoxEnabled ?? true,
+            imageBoxEnabled: editingLayout.backCoverLayout?.imageBoxEnabled ?? true,
+            ...editingLayout.backCoverLayout,
+          },
+          insideLayout: {
+            textBoxEnabled: editingLayout.insideLayout?.textBoxEnabled ?? true,
+            imageBoxEnabled: editingLayout.insideLayout?.imageBoxEnabled ?? true,
+            ...editingLayout.insideLayout,
+          },
+          titlePageLayout: {
+            textBoxEnabled: editingLayout.titlePageLayout?.textBoxEnabled ?? true,
+            imageBoxEnabled: editingLayout.titlePageLayout?.imageBoxEnabled ?? false,
+            ...editingLayout.titlePageLayout,
+          },
           printProductId: editingLayout.printProductId || undefined,
           pageConstraints: editingLayout.pageConstraints ? {
             minPages: editingLayout.pageConstraints.minPages,
@@ -223,17 +253,29 @@ function PrintLayoutForm({
     if (!config) return undefined;
     const cleaned: any = {};
 
+    // Preserve enabled flags
+    if (config.textBoxEnabled !== undefined) {
+      cleaned.textBoxEnabled = config.textBoxEnabled;
+    }
+    if (config.imageBoxEnabled !== undefined) {
+      cleaned.imageBoxEnabled = config.imageBoxEnabled;
+    }
+
     if (config.imageBox) {
-      const { x, y, width, height } = config.imageBox;
+      const { leaf, x, y, width, height } = config.imageBox;
       // Only include imageBox if it has valid dimensions
       if (x !== undefined || y !== undefined || width !== undefined || height !== undefined) {
-        cleaned.imageBox = { x, y, width, height };
+        cleaned.imageBox = {
+          ...(leaf !== undefined && leaf !== null ? { leaf } : {}),
+          x, y, width, height
+        };
       }
     }
 
     if (config.textBox) {
-      const { x, y, width, height, backgroundColor, textColor, borderRadius } = config.textBox;
+      const { leaf, x, y, width, height, backgroundColor, textColor, borderRadius } = config.textBox;
       cleaned.textBox = {
+        ...(leaf !== undefined && leaf !== null ? { leaf } : {}),
         x, y, width, height,
         // Only include styling if they have values (not empty strings)
         ...(backgroundColor && backgroundColor.trim() ? { backgroundColor } : {}),
@@ -336,121 +378,229 @@ function PrintLayoutForm({
     </div>
   );
 
+  // Watch leavesPerSpread for conditional leaf selection
+  const watchedLeavesPerSpread = watch('leavesPerSpread');
+  const isTwoLeafSpread = watchedLeavesPerSpread === '2';
+
   // Render a page layout config section (cover, back cover, inside, or title page)
   const renderPageLayoutSection = (
     title: string,
     prefix: 'coverLayout' | 'backCoverLayout' | 'insideLayout' | 'titlePageLayout',
-    options: { showImageBox?: boolean; showStyling?: boolean } = {}
+    options: { showStyling?: boolean; showLeafSelector?: boolean } = {}
   ) => {
-    const { showImageBox = true, showStyling = true } = options;
+    const { showStyling = true, showLeafSelector = false } = options;
+    const showLeafDropdown = showLeafSelector && isTwoLeafSpread;
+
     return (
       <div className="rounded-lg border p-4 space-y-4">
         <h4 className="font-semibold text-sm">{title}</h4>
 
-        {showImageBox && (
-          <div className="space-y-3">
-            <Label className="text-xs font-medium text-muted-foreground">Image Box (inches)</Label>
-            <div className="grid grid-cols-4 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">X</Label>
-                <Input type="number" step="0.01" {...register(`${prefix}.imageBox.x`)} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Y</Label>
-                <Input type="number" step="0.01" {...register(`${prefix}.imageBox.y`)} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">W</Label>
-                <Input type="number" step="0.01" {...register(`${prefix}.imageBox.width`)} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">H</Label>
-                <Input type="number" step="0.01" {...register(`${prefix}.imageBox.height`)} />
-              </div>
-            </div>
-          </div>
-        )}
-
+        {/* Image Box Section */}
         <div className="space-y-3">
-          <Label className="text-xs font-medium text-muted-foreground">Text Box (inches)</Label>
-          <div className="grid grid-cols-4 gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">X</Label>
-              <Input type="number" step="0.01" {...register(`${prefix}.textBox.x`)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Y</Label>
-              <Input type="number" step="0.01" {...register(`${prefix}.textBox.y`)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">W</Label>
-              <Input type="number" step="0.01" {...register(`${prefix}.textBox.width`)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">H</Label>
-              <Input type="number" step="0.01" {...register(`${prefix}.textBox.height`)} />
-            </div>
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-medium text-muted-foreground">Image Box</Label>
+            <Controller
+              name={`${prefix}.imageBoxEnabled` as any}
+              control={control}
+              render={({ field }) => (
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-muted-foreground">Enabled</Label>
+                  <Switch
+                    checked={field.value ?? true}
+                    onCheckedChange={field.onChange}
+                  />
+                </div>
+              )}
+            />
           </div>
-          {showStyling && (
-            <div className="grid grid-cols-2 gap-4 mt-2">
-              <Controller
-                name={`${prefix}.textBox.backgroundColor` as any}
-                control={control}
-                render={({ field }) => (
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs whitespace-nowrap">BG Color</Label>
-                    <Input
-                      type="color"
-                      className="w-10 h-8 p-1 cursor-pointer"
-                      value={field.value || '#ffffff'}
-                      onChange={(e) => field.onChange(e.target.value)}
-                    />
-                    <Input
-                      type="text"
-                      placeholder="#F5F5DC"
-                      className="w-20 text-xs"
-                      value={field.value || ''}
-                      onChange={(e) => field.onChange(e.target.value)}
-                    />
+          <Controller
+            name={`${prefix}.imageBoxEnabled` as any}
+            control={control}
+            render={({ field: enabledField }) => (
+              enabledField.value !== false ? (
+                <div className="space-y-2">
+                  <div className={`grid gap-2 ${showLeafDropdown ? 'grid-cols-5' : 'grid-cols-4'}`}>
+                    {showLeafDropdown && (
+                      <div className="space-y-1">
+                        <Label className="text-xs">Leaf</Label>
+                        <Controller
+                          name={`${prefix}.imageBox.leaf` as any}
+                          control={control}
+                          render={({ field }) => (
+                            <Select
+                              onValueChange={(val) => field.onChange(val === '__none__' ? undefined : Number(val))}
+                              value={field.value?.toString() || '__none__'}
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue placeholder="—" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">—</SelectItem>
+                                <SelectItem value="1">1 (Left)</SelectItem>
+                                <SelectItem value="2">2 (Right)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <Label className="text-xs">X</Label>
+                      <Input type="number" step="0.01" {...register(`${prefix}.imageBox.x`)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Y</Label>
+                      <Input type="number" step="0.01" {...register(`${prefix}.imageBox.y`)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">W</Label>
+                      <Input type="number" step="0.01" {...register(`${prefix}.imageBox.width`)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">H</Label>
+                      <Input type="number" step="0.01" {...register(`${prefix}.imageBox.height`)} />
+                    </div>
                   </div>
-                )}
-              />
-              <Controller
-                name={`${prefix}.textBox.textColor` as any}
-                control={control}
-                render={({ field }) => (
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs whitespace-nowrap">Text Color</Label>
-                    <Input
-                      type="color"
-                      className="w-10 h-8 p-1 cursor-pointer"
-                      value={field.value || '#000000'}
-                      onChange={(e) => field.onChange(e.target.value)}
-                    />
-                    <Input
-                      type="text"
-                      placeholder="#000000"
-                      className="w-20 text-xs"
-                      value={field.value || ''}
-                      onChange={(e) => field.onChange(e.target.value)}
-                    />
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">Image box disabled for this page type</p>
+              )
+            )}
+          />
+        </div>
+
+        {/* Text Box Section */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-medium text-muted-foreground">Text Box</Label>
+            <Controller
+              name={`${prefix}.textBoxEnabled` as any}
+              control={control}
+              render={({ field }) => (
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-muted-foreground">Enabled</Label>
+                  <Switch
+                    checked={field.value ?? true}
+                    onCheckedChange={field.onChange}
+                  />
+                </div>
+              )}
+            />
+          </div>
+          <Controller
+            name={`${prefix}.textBoxEnabled` as any}
+            control={control}
+            render={({ field: enabledField }) => (
+              enabledField.value !== false ? (
+                <div className="space-y-2">
+                  <div className={`grid gap-2 ${showLeafDropdown ? 'grid-cols-5' : 'grid-cols-4'}`}>
+                    {showLeafDropdown && (
+                      <div className="space-y-1">
+                        <Label className="text-xs">Leaf</Label>
+                        <Controller
+                          name={`${prefix}.textBox.leaf` as any}
+                          control={control}
+                          render={({ field }) => (
+                            <Select
+                              onValueChange={(val) => field.onChange(val === '__none__' ? undefined : Number(val))}
+                              value={field.value?.toString() || '__none__'}
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue placeholder="—" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">—</SelectItem>
+                                <SelectItem value="1">1 (Left)</SelectItem>
+                                <SelectItem value="2">2 (Right)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <Label className="text-xs">X</Label>
+                      <Input type="number" step="0.01" {...register(`${prefix}.textBox.x`)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Y</Label>
+                      <Input type="number" step="0.01" {...register(`${prefix}.textBox.y`)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">W</Label>
+                      <Input type="number" step="0.01" {...register(`${prefix}.textBox.width`)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">H</Label>
+                      <Input type="number" step="0.01" {...register(`${prefix}.textBox.height`)} />
+                    </div>
                   </div>
-                )}
-              />
-            </div>
-          )}
-          {showStyling && (
-            <div className="flex items-center gap-2 mt-2">
-              <Label className="text-xs whitespace-nowrap">Border Radius (in)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                className="w-20 text-xs"
-                placeholder="0.1"
-                {...register(`${prefix}.textBox.borderRadius`)}
-              />
-            </div>
-          )}
+                  {showStyling && (
+                    <div className="grid grid-cols-2 gap-4 mt-2">
+                      <Controller
+                        name={`${prefix}.textBox.backgroundColor` as any}
+                        control={control}
+                        render={({ field }) => (
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs whitespace-nowrap">BG Color</Label>
+                            <Input
+                              type="color"
+                              className="w-10 h-8 p-1 cursor-pointer"
+                              value={field.value || '#ffffff'}
+                              onChange={(e) => field.onChange(e.target.value)}
+                            />
+                            <Input
+                              type="text"
+                              placeholder="#F5F5DC"
+                              className="w-20 text-xs"
+                              value={field.value || ''}
+                              onChange={(e) => field.onChange(e.target.value)}
+                            />
+                          </div>
+                        )}
+                      />
+                      <Controller
+                        name={`${prefix}.textBox.textColor` as any}
+                        control={control}
+                        render={({ field }) => (
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs whitespace-nowrap">Text Color</Label>
+                            <Input
+                              type="color"
+                              className="w-10 h-8 p-1 cursor-pointer"
+                              value={field.value || '#000000'}
+                              onChange={(e) => field.onChange(e.target.value)}
+                            />
+                            <Input
+                              type="text"
+                              placeholder="#000000"
+                              className="w-20 text-xs"
+                              value={field.value || ''}
+                              onChange={(e) => field.onChange(e.target.value)}
+                            />
+                          </div>
+                        )}
+                      />
+                    </div>
+                  )}
+                  {showStyling && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <Label className="text-xs whitespace-nowrap">Border Radius (in)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        className="w-20 text-xs"
+                        placeholder="0.1"
+                        {...register(`${prefix}.textBox.borderRadius`)}
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">Text box disabled for this page type</p>
+              )
+            )}
+          />
         </div>
       </div>
     );
@@ -518,12 +668,12 @@ function PrintLayoutForm({
       <div className="space-y-4">
         <h3 className="font-medium text-sm border-b pb-2">Page-Type Layouts</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {renderPageLayoutSection('Cover (Front)', 'coverLayout', { showImageBox: true, showStyling: true })}
-          {renderPageLayoutSection('Back Cover', 'backCoverLayout', { showImageBox: true, showStyling: true })}
+          {renderPageLayoutSection('Cover (Front)', 'coverLayout', { showStyling: true })}
+          {renderPageLayoutSection('Back Cover', 'backCoverLayout', { showStyling: true })}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {renderPageLayoutSection('Inside Pages', 'insideLayout', { showImageBox: true, showStyling: true })}
-          {renderPageLayoutSection('Title Page', 'titlePageLayout', { showImageBox: false, showStyling: true })}
+          {renderPageLayoutSection('Inside Pages', 'insideLayout', { showStyling: true, showLeafSelector: true })}
+          {renderPageLayoutSection('Title Page', 'titlePageLayout', { showStyling: true })}
         </div>
       </div>
 
@@ -735,6 +885,36 @@ function PrintLayoutsPanel() {
     setDialogOpen(false);
   };
 
+  const handleDuplicate = async (layout: PrintLayout) => {
+    if (!firestore) return;
+    try {
+      const newDocRef = doc(collection(firestore, 'printLayouts'));
+      const { id, createdAt, updatedAt, ...layoutData } = layout;
+      await setDoc(newDocRef, {
+        ...layoutData,
+        name: `${layout.name} (Copy)`,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      toast({ title: 'Layout duplicated', description: `Created "${layout.name} (Copy)"` });
+    } catch (e: any) {
+      toast({ title: 'Error duplicating layout', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const handleDelete = async (layout: PrintLayout) => {
+    if (!firestore) return;
+    if (!confirm(`Are you sure you want to delete "${layout.name}"? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      await deleteDoc(doc(firestore, 'printLayouts', layout.id));
+      toast({ title: 'Layout deleted', description: `"${layout.name}" has been deleted.` });
+    } catch (e: any) {
+      toast({ title: 'Error deleting layout', description: e.message, variant: 'destructive' });
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -788,9 +968,17 @@ function PrintLayoutsPanel() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(layout)}>
-                        <Edit className="mr-1 h-4 w-4" /> Edit
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(layout)}>
+                          <Edit className="mr-1 h-4 w-4" /> Edit
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDuplicate(layout)}>
+                          <Copy className="mr-1 h-4 w-4" /> Duplicate
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDelete(layout)} className="text-destructive hover:text-destructive">
+                          <Trash2 className="mr-1 h-4 w-4" /> Delete
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

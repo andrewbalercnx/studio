@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-13 (added addresses subcollection for users, systemConfig/addresses for system billing)
+> **Last Updated**: 2026-01-14 (added textBoxEnabled/imageBoxEnabled and leaf fields to PageLayoutConfig for print layouts)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -561,6 +561,33 @@ Print layout templates.
 | `createdAt` | timestamp | No | Creation time |
 | `updatedAt` | timestamp | No | Last update time |
 
+**PageLayoutConfig** (embedded object for coverLayout, backCoverLayout, insideLayout, titlePageLayout):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `textBoxEnabled` | boolean | No | Whether to show text box on this page type (default: true) |
+| `imageBoxEnabled` | boolean | No | Whether to show image box on this page type (default: true) |
+| `textBox` | TextLayoutBox | No | Text box configuration |
+| `imageBox` | PageLayoutBox | No | Image box configuration |
+
+**PageLayoutBox** (embedded object):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `leaf` | 1 \| 2 | No | Which leaf in a spread (1=left/first, 2=right/second). Only used for insideLayout with leavesPerSpread=2 |
+| `x` | number | No | X position in inches from left edge of leaf |
+| `y` | number | No | Y position in inches from top edge of leaf |
+| `width` | number | No | Width in inches |
+| `height` | number | No | Height in inches |
+
+**TextLayoutBox** (extends PageLayoutBox):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `backgroundColor` | string | No | Hex color for background (e.g., '#F5F5DC') |
+| `textColor` | string | No | Hex color for text |
+| `borderRadius` | number | No | Corner radius in inches |
+
 **PrintLayoutPageConstraints** (embedded object):
 
 | Field | Type | Required | Description |
@@ -978,6 +1005,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-01-14 | Added `textBoxEnabled`/`imageBoxEnabled` flags and `leaf` field to PageLayoutConfig for print layouts; Documented PageLayoutBox and TextLayoutBox types |
 | 2026-01-13 | Added `users/{uid}/addresses` subcollection for saved shipping addresses; Added `systemConfig/addresses` for Mixam billing; Added `SavedAddress` common type |
 | 2026-01-04 | Added "Fun with my friends" generator: FriendsPhase, FriendsScenario, FriendsSynopsis types, session fields, friends prompts, friendsEnabled config |
 | 2026-01-02 | Removed deprecated fields: ChildProfile.speechModeEnabled, StorySession.finalStoryText, StorySession.storyTypeName, ChatMessage.textResolved/optionsResolved |
