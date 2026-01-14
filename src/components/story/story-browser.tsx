@@ -736,7 +736,7 @@ export function StoryBrowser({
 
     setIsAnimatingAnswers(true);
 
-    // 1. Animate non-selected options off screen (staggered)
+    // 1. Animate non-selected options off screen (one after another with 500ms delay)
     const nonSelectedOptions = allOptions.filter(o => o.id !== selectedOption.id);
     const animMap = new Map<string, AnswerAnimation>();
 
@@ -752,29 +752,23 @@ export function StoryBrowser({
         // Play sound effect
         playSoundEffect(randomAnim.soundEffect?.audioUrl);
 
-        // Stagger: wait 150ms before starting next animation
-        await delay(150);
+        // Wait for this animation to complete plus 500ms before next
+        await delay(randomAnim.durationMs + 500);
       }
     }
 
-    // Wait for the last exit animation to complete
-    const lastExitAnim = exitAnimations[0];
-    if (lastExitAnim && nonSelectedOptions.length > 0) {
-      await delay(lastExitAnim.durationMs);
-    }
-
-    // 2. Animate question off screen
+    // 2. Wait 500ms, then animate question off screen
+    await delay(500);
     const questionAnim = getRandomExitAnimation();
     if (questionAnim) {
       setQuestionAnimation(questionAnim);
       setIsQuestionAnimating(true);
       playSoundEffect(questionAnim.soundEffect?.audioUrl);
       await delay(questionAnim.durationMs);
-      setIsQuestionAnimating(false);
-      setQuestionAnimation(null);
     }
 
-    // 3. Animate selected answer with celebration animation
+    // 3. Wait 1s, then animate selected answer with celebration animation
+    await delay(1000);
     if (selectionAnim) {
       animMap.set(selectedOption.id, selectionAnim);
       setOptionAnimationMap(new Map(animMap));
@@ -783,10 +777,12 @@ export function StoryBrowser({
       await delay(selectionAnim.durationMs);
     }
 
-    // Reset animation state
+    // Reset animation state - keep question hidden
     setAnimatingOptionIds(new Set());
     setOptionAnimationMap(new Map());
     setIsAnimatingAnswers(false);
+    setIsQuestionAnimating(false);
+    setQuestionAnimation(null);
   }, [answerAnimations, getRandomExitAnimation, getSelectionAnimation, playSoundEffect, delay]);
 
   // ---------------------------------------------------------------------------
