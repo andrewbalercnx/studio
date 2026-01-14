@@ -5,7 +5,7 @@ import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
 import { collection, query, where, orderBy, getDocs, doc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
-import type { Story, StoryBookOutput, ChildProfile, ImageStyle } from '@/lib/types';
+import type { Story, StoryBookOutput, ChildProfile, ImageStyle, PrintLayout } from '@/lib/types';
 import { useParentGuard } from '@/hooks/use-parent-guard';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -51,6 +51,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { format } from 'date-fns';
 import { useEffect } from 'react';
 import { DeleteButton, UndoBanner, useDeleteWithUndo } from '@/components/shared/DeleteWithUndo';
@@ -363,6 +370,8 @@ export default function ParentStorybooksPage() {
     interiorPdfUrl?: string;
   } | null>(null);
   const [isRegeneratingPdfs, setIsRegeneratingPdfs] = useState(false);
+  // Selected print layout for regeneration (null = use storybook's default)
+  const [selectedPrintLayoutId, setSelectedPrintLayoutId] = useState<string | null>(null);
 
   // Track storybook metadata for delete/undo
   const [storybookMetaMap, setStorybookMetaMap] = useState<Map<string, StorybookWithMeta>>(new Map());
@@ -384,6 +393,13 @@ export default function ParentStorybooksPage() {
     return query(collection(firestore, 'imageStyles'));
   }, [firestore, user, userLoading, idTokenResult]);
   const { data: imageStyles } = useCollection<ImageStyle>(imageStylesQuery);
+
+  // Query print layouts for the print options dialog
+  const printLayoutsQuery = useMemo(() => {
+    if (!firestore || !user || userLoading || !idTokenResult) return null;
+    return query(collection(firestore, 'printLayouts'));
+  }, [firestore, user, userLoading, idTokenResult]);
+  const { data: printLayouts } = useCollection<PrintLayout>(printLayoutsQuery);
 
   // Filter out deleted children
   const visibleChildren = useMemo(() => {
@@ -638,6 +654,7 @@ export default function ParentStorybooksPage() {
 
       // If PDFs already exist, show the print options panel directly
       if (storybook.printablePdfUrl) {
+        setSelectedPrintLayoutId(null); // Reset to default when opening dialog
         setPrintResult({
           storybook,
           pdfUrl: storybook.printablePdfUrl,
@@ -708,6 +725,7 @@ export default function ParentStorybooksPage() {
               return updated;
             });
             // Show the print result dialog for next steps
+            setSelectedPrintLayoutId(null); // Reset to default when opening dialog
             setPrintResult({
               storybook: {
                 ...storybook,
@@ -742,6 +760,9 @@ export default function ParentStorybooksPage() {
       const storybook = printResult.storybook;
       setIsRegeneratingPdfs(true);
 
+      // Use selected layout if set, otherwise fall back to storybook's default
+      const layoutId = selectedPrintLayoutId || storybook.printLayoutId || 'mixam-8x10-hardcover';
+
       try {
         const idToken = await user.getIdToken();
         const response = await fetch('/api/storyBook/printable', {
@@ -753,7 +774,7 @@ export default function ParentStorybooksPage() {
           body: JSON.stringify({
             storyId: storybook.storyId,
             storybookId: storybook.storybookId,
-            printLayoutId: storybook.printLayoutId || 'mixam-8x10-hardcover',
+            printLayoutId: layoutId,
             forceRegenerate: true,
           }),
         });
@@ -814,7 +835,7 @@ export default function ParentStorybooksPage() {
         setIsRegeneratingPdfs(false);
       }
     },
-    [user, toast, printResult]
+    [user, toast, printResult, selectedPrintLayoutId]
   );
 
   // Handle delete storybook
@@ -1022,6 +1043,44 @@ export default function ParentStorybooksPage() {
                   <ExternalLink className="ml-auto h-4 w-4 text-muted-foreground" />
                 </Button>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Print Layout</h4>
+              <Select
+                value={selectedPrintLayoutId || '__default__'}
+                onValueChange={(value) => setSelectedPrintLayoutId(value === '__default__' ? null : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue>
+                    {selectedPrintLayoutId === null ? (
+                      <span>
+                        {printLayouts?.find(l => l.id === printResult?.storybook.printLayoutId)?.name || 'Default Layout'}
+                        <span className="text-muted-foreground ml-1">(default)</span>
+                      </span>
+                    ) : (
+                      printLayouts?.find(l => l.id === selectedPrintLayoutId)?.name || selectedPrintLayoutId
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__default__">
+                    {printLayouts?.find(l => l.id === printResult?.storybook.printLayoutId)?.name || 'Default Layout'}
+                    <span className="text-muted-foreground ml-1">(default)</span>
+                  </SelectItem>
+                  {printLayouts?.filter(l => l.id !== printResult?.storybook.printLayoutId).map((layout) => (
+                    <SelectItem key={layout.id} value={layout.id}>
+                      {layout.name}
+                      <span className="text-muted-foreground ml-1">
+                        ({layout.leafWidth}" × {layout.leafHeight}")
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Select a different layout to regenerate PDFs with different dimensions or formatting.
+              </p>
             </div>
 
             <div className="space-y-2">

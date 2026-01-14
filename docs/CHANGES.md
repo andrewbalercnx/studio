@@ -18,7 +18,26 @@
 
 ### 2026-01-14
 
-#### `pending` - Fix PDF rendering to respect textBoxEnabled/imageBoxEnabled flags
+#### `4759c70` - Add print layout selector to Print Options dialog
+
+**Type**: Feature
+
+**Summary**: Added ability for parents to select a different print layout when viewing Print Options for a storybook. The storybook's default layout (set during creation) is shown initially, but parents can choose any available layout and regenerate PDFs with different dimensions/formatting.
+
+**Changes**:
+- Added print layouts query to parent storybooks page
+- Added layout selector dropdown to Print Options dialog
+- Shows default layout with "(default)" indicator
+- Other layouts show dimensions (e.g., "8" × 10"")
+- Regenerate PDFs uses selected layout (or reverts to default)
+- Selected layout resets when dialog opens
+
+**Files modified**:
+- `src/app/parent/storybooks/page.tsx` - Added layout selector and related state
+
+---
+
+#### `36c1238` - Fix PDF rendering to respect textBoxEnabled/imageBoxEnabled flags
 
 **Type**: Bug fix
 
