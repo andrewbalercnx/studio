@@ -18,6 +18,23 @@
 
 ### 2026-01-14
 
+#### `4bac32f` - Fix PDF page count calculation for dual-leaf spreads
+
+**Type**: Bug fix
+
+**Summary**: Fixed the page count calculation in the printable PDF generation route to correctly account for `leavesPerSpread`. When a layout uses 2 leaves per spread, each content item generates 2 PDF pages, which must be factored into the padding calculation for Mixam's multiple-of-4 requirement.
+
+**Changes**:
+- Content page count now multiplies by `pdfPagesPerContent` (2 for dual-leaf, 1 for single)
+- Truncation logic correctly converts PDF pages back to content items
+- Added detailed logging showing the full page breakdown calculation
+- Fixed metadata to report correct `pageCount` and `contentPageCount` values
+
+**Files modified**:
+- `src/app/api/storyBook/printable/route.ts` - Fixed calculation and added logging
+
+---
+
 #### `bf8e978` - Add Q&A animations system with sound effects
 
 **Type**: Feature

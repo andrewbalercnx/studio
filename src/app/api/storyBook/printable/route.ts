@@ -919,7 +919,12 @@ export async function POST(request: Request) {
     // Prepare metadata - count pages by kind
     // Cover PDF page count depends on whether spine is included
     const coverPageCount = includeSpine ? 3 : 2; // front + spine? + back
-    const contentPageCount = pages.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back').length;
+
+    // Calculate content page count, accounting for leavesPerSpread
+    // For two-leaf spreads, each content item generates 2 PDF pages
+    const contentItems = pages.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back');
+    const pdfPagesPerContent = printLayout.leavesPerSpread === 2 ? 2 : 1;
+    const contentPageCount = contentItems.length * pdfPagesPerContent;
 
     // Calculate interior page adjustments using the new rules:
     // 1. Inside pages must be at least minPageCount
@@ -928,8 +933,16 @@ export async function POST(request: Request) {
     const interiorAdjustment = calculateInteriorPageAdjustment(contentPageCount, blankPages, resolvedConstraints);
     const pdfGenerationWarnings: string[] = interiorAdjustment.warnings;
 
-    // Log warnings and settings
-    console.log(`[printable] Product settings: blankPages=${blankPages}, spine=${includeSpine}`);
+    // Log page breakdown calculation
+    const isTwoLeafSpread = printLayout.leavesPerSpread === 2;
+    console.log(`[printable] Page count breakdown:`);
+    console.log(`  - Layout: ${printLayout.name}, leavesPerSpread: ${printLayout.leavesPerSpread}`);
+    console.log(`  - Content items: ${contentItems.length} (title pages, inside pages, etc.)`);
+    console.log(`  - PDF pages per content: ${pdfPagesPerContent} (${isTwoLeafSpread ? 'dual-leaf spread' : 'single page'})`);
+    console.log(`  - Content PDF pages: ${contentPageCount}`);
+    console.log(`  - Product settings: blankPages=${blankPages}, spine=${includeSpine}`);
+    console.log(`  - Constraints: min=${resolvedConstraints.minPages}, max=${resolvedConstraints.maxPages || 'none'}, multiple of 4`);
+
     if (pdfGenerationWarnings.length > 0) {
       console.log(`[printable] Page count adjustment warnings:`, pdfGenerationWarnings);
     }
@@ -938,39 +951,45 @@ export async function POST(request: Request) {
     let pagesToRender = pages;
     if (interiorAdjustment.wasTruncated && resolvedConstraints.maxPages > 0) {
       // Keep covers + only up to finalInteriorPages of content
+      // For two-leaf spreads, we need to convert PDF pages back to content items
       const coverPages = pages.filter(p => p.kind === 'cover_front' || p.kind === 'cover_back');
-      const contentPages = pages.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back');
-      const truncatedContent = contentPages.slice(0, interiorAdjustment.finalInteriorPages);
+      const maxContentItems = Math.floor(interiorAdjustment.finalInteriorPages / pdfPagesPerContent);
+      const truncatedContent = contentItems.slice(0, maxContentItems);
       pagesToRender = [...coverPages.filter(p => p.kind === 'cover_front'), ...truncatedContent, ...coverPages.filter(p => p.kind === 'cover_back')];
-      console.log(`[printable] Truncated from ${contentPages.length} to ${truncatedContent.length} content pages`);
+      console.log(`[printable] Truncated from ${contentItems.length} to ${truncatedContent.length} content items (${interiorAdjustment.finalInteriorPages} PDF pages)`);
     }
 
     // Calculate padding pages needed
-    const actualContentCount = pagesToRender.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back').length;
+    const actualContentItems = pagesToRender.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back').length;
+    const actualContentPdfPages = actualContentItems * pdfPagesPerContent;
     const paddingPageCount = interiorAdjustment.paddingNeeded;
     const totalInteriorWithPadding = interiorAdjustment.finalInteriorPages;
 
-    if (paddingPageCount > 0) {
-      console.log(`[printable] Interior pages: ${actualContentCount}, padding with ${paddingPageCount} blank pages to reach ${totalInteriorWithPadding}`);
-    }
+    console.log(`[printable] Final interior PDF composition:`);
+    console.log(`  - Content items: ${actualContentItems} -> ${actualContentPdfPages} PDF pages`);
+    console.log(`  - Padding pages: ${paddingPageCount}`);
+    console.log(`  - Total interior pages: ${totalInteriorWithPadding}`);
 
     // Sanity check for total page multiple of 4
-    const totalPages = 2 + blankPages + totalInteriorWithPadding; // 2 for cover
+    const totalPages = 2 + blankPages + totalInteriorWithPadding; // 2 for cover (spine is separate)
+    console.log(`  - Total book pages (for Mixam): 2 cover + ${blankPages} blank + ${totalInteriorWithPadding} interior = ${totalPages}`);
     if (totalPages % 4 !== 0) {
-      console.error(`[printable] BUG: totalPages (${totalPages}) is not a multiple of 4! (2 cover + ${blankPages} blank + ${totalInteriorWithPadding} interior)`);
+      console.error(`[printable] BUG: totalPages (${totalPages}) is not a multiple of 4!`);
+    } else {
+      console.log(`  - Multiple of 4: YES`);
     }
 
     const printableMetadata: PrintableAssetMetadata = {
       dpi: 300,
       trimSize: `${printLayout.leafWidth}in x ${printLayout.leafHeight}in`,
-      pageCount: pagesToRender.length,
+      pageCount: totalPages, // Total pages for Mixam
       coverPageCount,
-      interiorPageCount: totalInteriorWithPadding, // Include padding in count
-      spreadCount: Math.ceil(pagesToRender.length / printLayout.leavesPerSpread),
+      interiorPageCount: totalInteriorWithPadding, // Interior PDF pages (content + padding)
+      spreadCount: Math.ceil(totalInteriorWithPadding / 2), // Each spread is 2 pages when open
       printLayoutId: printLayout.id,
       hasSeparatePDFs: true,
-      paddingPageCount, // Track how many blank pages were added
-      contentPageCount: actualContentCount, // Track actual content pages (before padding)
+      paddingPageCount, // Blank pages added for alignment
+      contentPageCount: actualContentPdfPages, // Actual content PDF pages (before padding)
     };
 
     const finalization = storybookData?.finalization;
