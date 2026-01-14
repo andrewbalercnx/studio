@@ -426,11 +426,16 @@ async function renderPageContent(
   const textLeaf = pageLayout.textBox?.leaf;
 
   // Should we render image on this page?
-  const shouldRenderImage = targetLeaf === undefined || imageLeaf === undefined || imageLeaf === targetLeaf;
-  // Should we render text on this page?
-  const shouldRenderText = targetLeaf === undefined || textLeaf === undefined || textLeaf === targetLeaf;
+  // Check both: enabled flag AND leaf targeting (for two-page spreads)
+  const imageEnabled = pageLayout.imageBoxEnabled !== false;
+  const shouldRenderImage = imageEnabled && (targetLeaf === undefined || imageLeaf === undefined || imageLeaf === targetLeaf);
 
-  console.log(`[printable] Rendering page ${page.pageNumber}, kind: ${page.kind}, pageType: ${pageType}, hasImage: ${!!page.imageUrl}, hasText: ${!!page.displayText}, targetLeaf: ${targetLeaf}, shouldRenderImage: ${shouldRenderImage}, shouldRenderText: ${shouldRenderText}`);
+  // Should we render text on this page?
+  // Check both: enabled flag AND leaf targeting (for two-page spreads)
+  const textEnabled = pageLayout.textBoxEnabled !== false;
+  const shouldRenderText = textEnabled && (targetLeaf === undefined || textLeaf === undefined || textLeaf === targetLeaf);
+
+  console.log(`[printable] Rendering page ${page.pageNumber}, kind: ${page.kind}, pageType: ${pageType}, imageEnabled: ${imageEnabled}, textEnabled: ${textEnabled}, targetLeaf: ${targetLeaf}, shouldRenderImage: ${shouldRenderImage}, shouldRenderText: ${shouldRenderText}`);
 
   // 1. Render image first (background layer)
   if (page.imageUrl && shouldRenderImage) {

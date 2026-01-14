@@ -327,16 +327,21 @@ async function renderPageContent(
   const textLeaf = pageLayout.textBox?.leaf;
 
   // Should we render image on this page?
-  const shouldRenderImage = targetLeaf === undefined || imageLeaf === undefined || imageLeaf === targetLeaf;
+  // Check both: enabled flag AND leaf targeting (for two-page spreads)
+  const imageEnabled = pageLayout.imageBoxEnabled !== false;
+  const shouldRenderImage = imageEnabled && (targetLeaf === undefined || imageLeaf === undefined || imageLeaf === targetLeaf);
+
   // Should we render text on this page?
-  const shouldRenderText = targetLeaf === undefined || textLeaf === undefined || textLeaf === targetLeaf;
+  // Check both: enabled flag AND leaf targeting (for two-page spreads)
+  const textEnabled = pageLayout.textBoxEnabled !== false;
+  const shouldRenderText = textEnabled && (targetLeaf === undefined || textLeaf === undefined || textLeaf === targetLeaf);
 
   logger?.debug('Rendering page', {
     pageNumber: page.pageNumber,
     type: page.type,
     pageType,
-    hasImage: !!page.imageUrl,
-    hasText: !!page.displayText,
+    imageEnabled,
+    textEnabled,
     targetLeaf,
     imageLeaf,
     textLeaf,

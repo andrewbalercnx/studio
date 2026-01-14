@@ -18,6 +18,23 @@
 
 ### 2026-01-14
 
+#### `pending` - Fix PDF rendering to respect textBoxEnabled/imageBoxEnabled flags
+
+**Type**: Bug fix
+
+**Summary**: Fixed PDF generation routes to properly check the `textBoxEnabled` and `imageBoxEnabled` flags from the print layout configuration. Previously, even when text box was disabled for a page type (e.g., front cover), the PDF would still render text over the image using default positioning.
+
+**Changes**:
+- Added `imageEnabled` and `textEnabled` checks before rendering content
+- These flags are now combined with the existing leaf targeting logic
+- Updated debug logging to show enabled states
+
+**Files modified**:
+- `src/app/api/storyBook/printable/route.ts` - Added enabled flag checks
+- `src/app/api/printStoryBooks/[printStoryBookId]/generate-pdfs/route.ts` - Added enabled flag checks
+
+---
+
 #### `c3204b0` - Fix actor extraction in pagination and exemplar flows
 
 **Type**: Bug fix
