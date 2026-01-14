@@ -352,7 +352,7 @@ export default function KidsCreateStoryPage() {
       if (result.state === 'asking') {
         setCurrentAnswers(result.answers || []);
       } else if (result.state === 'finished' && result.storyText) {
-        // Story is complete - update session and redirect to style selection
+        // Story is complete - update session and trigger storyCompile for post-generation tasks
         if (firestore) {
           const sessionRef = doc(firestore, 'storySessions', sessionId);
           await setDoc(
@@ -365,6 +365,24 @@ export default function KidsCreateStoryPage() {
             },
             { merge: true }
           );
+        }
+
+        // Call storyCompile to trigger post-generation tasks (synopsis, audio, cast avatar, title)
+        // This ensures wizard stories get the same treatment as other generator stories
+        try {
+          const compileResponse = await fetch('/api/storyCompile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId }),
+          });
+          const compileResult = await compileResponse.json();
+          if (!compileResult.ok && !compileResult.alreadyCompiled) {
+            console.warn('[KidsCreate] storyCompile returned error:', compileResult.errorMessage);
+            // Continue anyway - the story text is saved, just post-gen tasks may not run
+          }
+        } catch (compileErr) {
+          console.warn('[KidsCreate] storyCompile call failed:', compileErr);
+          // Continue anyway - non-blocking
         }
 
         toast({

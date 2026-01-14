@@ -18,6 +18,29 @@
 
 ### 2026-01-14
 
+#### `8d6a39e` - Unify Story Wizard post-generation with other generators
+
+**Type**: Bug fix / Architecture improvement
+
+**Summary**: Fixed the Story Wizard flow to trigger the same post-generation tasks as other story generators. Previously, wizard stories were created directly without calling `/api/storyCompile`, which meant they missed out on synopsis generation, AI voice narration, cast avatar generation, and title regeneration.
+
+**Issues Fixed**:
+1. **Cast Avatar not auto-generated** - Wizard stories now trigger `storyActorAvatarFlow`
+2. **Synopsis not generated** - Wizard stories now get a proper synopsis via `storyCompileFlow`
+3. **AI Voice not auto-generated** - Wizard stories now trigger `storyAudioFlow`
+4. **Title generation status missing** - Wizard stories now have proper generation status fields
+
+**Technical Details**:
+- After wizard completes (state='finished'), the client now calls `/api/storyCompile` before redirecting to style selection
+- The `storyCompileFlow` already had wizard mode handling (lines 295-417) which generates synopsis and sets up generation status fields
+- The `/api/storyCompile` route's `after()` block triggers parallel background tasks: audio, cast avatar, and title generation
+- This ensures all story generators produce consistent data structures and trigger the same post-generation flows
+
+**Files modified**:
+- `src/app/kids/create/page.tsx` - Added storyCompile call after wizard completion
+
+---
+
 #### `4bac32f` - Fix PDF page count calculation for dual-leaf spreads
 
 **Type**: Bug fix
