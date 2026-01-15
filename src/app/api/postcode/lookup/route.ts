@@ -71,8 +71,10 @@ export async function GET(request: NextRequest) {
   const cleanPostcode = postcode.replace(/\s+/g, '').toUpperCase();
 
   // Validate postcode format (basic UK postcode pattern - no spaces since we cleaned it)
+  // Also allow getAddress.io test postcodes (XX2 00X, XX4 04X, etc.)
   const postcodePattern = /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/i;
-  if (!postcodePattern.test(cleanPostcode)) {
+  const testPostcodePattern = /^XX\d\d\d[A-Z]$/i;
+  if (!postcodePattern.test(cleanPostcode) && !testPostcodePattern.test(cleanPostcode)) {
     return NextResponse.json<PostcodeLookupResponse>(
       { ok: false, error: 'Invalid UK postcode format' },
       { status: 400 }
