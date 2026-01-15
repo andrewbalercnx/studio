@@ -107,8 +107,9 @@ export async function GET(request: NextRequest) {
       console.error(`[postcode/lookup] Error response body: ${errorBody}`);
 
       if (response.status === 404) {
+        console.error(`[postcode/lookup] 404 for postcode ${cleanPostcode} - may be trial API key limitation or postcode not in database`);
         return NextResponse.json<PostcodeLookupResponse>(
-          { ok: false, error: 'No addresses found for this postcode' },
+          { ok: false, error: 'No addresses found for this postcode. Please enter address manually.' },
           { status: 404 }
         );
       }
