@@ -70,8 +70,8 @@ export async function GET(request: NextRequest) {
   // Clean up the postcode (remove spaces, uppercase)
   const cleanPostcode = postcode.replace(/\s+/g, '').toUpperCase();
 
-  // Validate postcode format (basic UK postcode pattern)
-  const postcodePattern = /^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i;
+  // Validate postcode format (basic UK postcode pattern - no spaces since we cleaned it)
+  const postcodePattern = /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/i;
   if (!postcodePattern.test(cleanPostcode)) {
     return NextResponse.json<PostcodeLookupResponse>(
       { ok: false, error: 'Invalid UK postcode format' },
