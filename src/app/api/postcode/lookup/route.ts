@@ -90,17 +90,22 @@ export async function GET(request: NextRequest) {
 
   try {
     // Call getAddress.io Find API
-    const response = await fetch(
-      `https://api.getAddress.io/find/${cleanPostcode}?api-key=${apiKey}&expand=true`,
-      {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-      }
-    );
+    const url = `https://api.getAddress.io/find/${cleanPostcode}?api-key=${apiKey}&expand=true`;
+    console.log(`[postcode/lookup] Fetching: ${url.replace(apiKey, 'API_KEY_HIDDEN')}`);
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    console.log(`[postcode/lookup] Response status: ${response.status} for postcode: ${cleanPostcode}`);
 
     if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`[postcode/lookup] Error response body: ${errorBody}`);
+
       if (response.status === 404) {
         return NextResponse.json<PostcodeLookupResponse>(
           { ok: false, error: 'No addresses found for this postcode' },
@@ -120,7 +125,7 @@ export async function GET(request: NextRequest) {
           { status: 429 }
         );
       }
-      throw new Error(`getAddress.io returned status ${response.status}`);
+      throw new Error(`getAddress.io returned status ${response.status}: ${errorBody}`);
     }
 
     const data: GetAddressResponse = await response.json();
