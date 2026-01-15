@@ -90,6 +90,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Log API key diagnostics (length and first/last chars only)
+  console.log(`[postcode/lookup] API key present: length=${apiKey.length}, starts=${apiKey.substring(0, 4)}, ends=${apiKey.substring(apiKey.length - 4)}`);
+
   try {
     // Call getAddress.io Find API
     const url = `https://api.getAddress.io/find/${cleanPostcode}?api-key=${apiKey}&expand=true`;
