@@ -3,7 +3,7 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { requireAdminUser } from '@/lib/server-auth';
 import { validateUKAddress } from '@/lib/mixam/address-validator';
-import type { SystemAddressConfig, SavedAddress, PrintOrderAddress, DEFAULT_SYSTEM_ADDRESS_CONFIG } from '@/lib/types';
+import type { SystemAddressConfig, SavedAddress, PrintOrderAddress } from '@/lib/types';
 
 /**
  * GET /api/admin/system-config/addresses
@@ -115,6 +115,7 @@ export async function PUT(request: NextRequest) {
       // Generate ID if not present
       const id = addr.id || `sys_addr_${Date.now()}_${i}`;
 
+      const now = new Date();
       processedAddresses.push({
         id,
         name: normalizedAddress.name,
@@ -126,8 +127,8 @@ export async function PUT(request: NextRequest) {
         country: normalizedAddress.country || 'GB',
         label: addr.label || '',
         isDefault: addr.isDefault || false,
-        createdAt: addr.createdAt || FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
+        createdAt: addr.createdAt || now.toISOString(),
+        updatedAt: now.toISOString(),
       });
     }
 
