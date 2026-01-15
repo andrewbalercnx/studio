@@ -18,6 +18,23 @@
 
 ### 2026-01-14
 
+#### `1ef4eee` - Smarter image scaling with distortion threshold
+
+**Type**: Enhancement
+
+**Summary**: Improved image rendering in PDF boxes with a smart distortion threshold approach. If stretching the image to fill the box requires less than 10% distortion, it fills the box completely. If more than 10% distortion would be needed, it shrinks to fit while maintaining aspect ratio.
+
+**Changes**:
+- Calculate distortion percentage when comparing image and box aspect ratios
+- Fill box completely if distortion is ≤10% (imperceptible stretching)
+- Shrink to fit with centering if distortion would be >10%
+- Added detailed logging showing fill mode and distortion percentage
+
+**Files modified**:
+- `src/app/api/storyBook/printable/route.ts` - Smart image scaling logic
+
+---
+
 #### `6f9889c` - Fix two-leaf spread, image aspect ratio, and add custom fonts
 
 **Type**: Bug fix, Enhancement

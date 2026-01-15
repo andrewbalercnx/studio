@@ -490,23 +490,43 @@ async function renderPageContent(
             const imgAspect = image.width / image.height;
             const boxAspect = boxWidth / boxHeight;
 
-            // Shrink to fit: scale image to fit within box while maintaining aspect ratio
+            // Calculate how much distortion filling the box would require
+            // Distortion is the ratio difference between image and box aspects
+            const aspectRatio = imgAspect / boxAspect;
+            const distortionPercent = Math.abs(1 - aspectRatio) * 100;
+
+            // Threshold: if distortion is less than 10%, fill the box (stretch slightly)
+            // Otherwise, shrink to fit while maintaining aspect ratio
+            const DISTORTION_THRESHOLD = 10;
+
             let drawWidth: number;
             let drawHeight: number;
+            let offsetX = 0;
+            let offsetY = 0;
+            let fillMode: string;
 
-            if (imgAspect > boxAspect) {
-              // Image is wider than box - constrain by width
+            if (distortionPercent <= DISTORTION_THRESHOLD) {
+              // Minor distortion - fill the entire box (stretch to fit)
               drawWidth = boxWidth;
-              drawHeight = boxWidth / imgAspect;
-            } else {
-              // Image is taller than box - constrain by height
               drawHeight = boxHeight;
-              drawWidth = boxHeight * imgAspect;
-            }
+              fillMode = `fill (${distortionPercent.toFixed(1)}% distortion)`;
+            } else {
+              // Significant distortion - shrink to fit while maintaining aspect ratio
+              if (imgAspect > boxAspect) {
+                // Image is wider than box - constrain by width
+                drawWidth = boxWidth;
+                drawHeight = boxWidth / imgAspect;
+              } else {
+                // Image is taller than box - constrain by height
+                drawHeight = boxHeight;
+                drawWidth = boxHeight * imgAspect;
+              }
 
-            // Center the image within the box
-            const offsetX = (boxWidth - drawWidth) / 2;
-            const offsetY = (boxHeight - drawHeight) / 2;
+              // Center the image within the box
+              offsetX = (boxWidth - drawWidth) / 2;
+              offsetY = (boxHeight - drawHeight) / 2;
+              fillMode = `shrink-to-fit (${distortionPercent.toFixed(1)}% distortion avoided)`;
+            }
 
             // Convert from top-left origin to bottom-left origin
             const pdfY = pageHeight - boxY - boxHeight;
@@ -517,7 +537,7 @@ async function renderPageContent(
               width: drawWidth,
               height: drawHeight
             });
-            console.log(`[printable] Drew image in box at (${boxX + offsetX}, ${pdfY + offsetY}) size ${drawWidth}x${drawHeight} (box: ${boxWidth}x${boxHeight})`);
+            console.log(`[printable] Drew image in box: ${fillMode}, size ${drawWidth.toFixed(0)}x${drawHeight.toFixed(0)} (box: ${boxWidth.toFixed(0)}x${boxHeight.toFixed(0)})`);
           }
         }
       } catch (error) {
