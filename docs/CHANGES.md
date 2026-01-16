@@ -16,6 +16,25 @@
 
 ## Changes
 
+### 2026-01-16
+
+#### `0c2be78` - Fix postcode lookup to use correct getAddress.io API flow
+
+**Type**: Bug Fix
+
+**Summary**: Fixed postcode lookup to use the correct getAddress.io Autocomplete + Get API flow instead of the deprecated Find endpoint. The Find endpoint was returning 404 for all postcodes.
+
+**Changes**:
+- Changed from `/find/{postcode}` endpoint to `/autocomplete/{postcode}` for suggestions
+- Added `/get/{id}` calls to fetch full address details for each suggestion
+- Limited to 10 addresses per postcode to avoid rate limits
+- Added proper types for Autocomplete and Get API responses
+
+**Files Modified**:
+- `src/app/api/postcode/lookup/route.ts`
+
+---
+
 ### 2026-01-14
 
 #### `1ef4eee` - Smarter image scaling with distortion threshold

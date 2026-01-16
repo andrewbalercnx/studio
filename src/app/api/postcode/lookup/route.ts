@@ -1,16 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * Response format from getAddress.io Find API
+ * Response format from getAddress.io Autocomplete API
+ */
+type AutocompleteResponse = {
+  suggestions: AutocompleteSuggestion[];
+};
+
+type AutocompleteSuggestion = {
+  address: string;
+  url: string;
+  id: string;
+};
+
+/**
+ * Response format from getAddress.io Get API (full address details)
  */
 type GetAddressResponse = {
   postcode: string;
   latitude: number;
   longitude: number;
-  addresses: GetAddressEntry[];
-};
-
-type GetAddressEntry = {
   formatted_address: string[];
   thoroughfare: string;
   building_name: string;
@@ -94,82 +103,108 @@ export async function GET(request: NextRequest) {
   console.log(`[postcode/lookup] API key present: length=${apiKey.length}, starts=${apiKey.substring(0, 4)}, ends=${apiKey.substring(apiKey.length - 4)}`);
 
   try {
-    // Call getAddress.io Find API
-    const url = `https://api.getAddress.io/find/${cleanPostcode}?api-key=${apiKey}&expand=true`;
-    console.log(`[postcode/lookup] Fetching: ${url.replace(apiKey, 'API_KEY_HIDDEN')}`);
+    // Step 1: Call getAddress.io Autocomplete API to get address suggestions
+    const autocompleteUrl = `https://api.getAddress.io/autocomplete/${cleanPostcode}?api-key=${apiKey}`;
+    console.log(`[postcode/lookup] Fetching autocomplete: ${autocompleteUrl.replace(apiKey, 'API_KEY_HIDDEN')}`);
 
-    const response = await fetch(url, {
+    const autocompleteResponse = await fetch(autocompleteUrl, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
       },
     });
 
-    console.log(`[postcode/lookup] Response status: ${response.status} for postcode: ${cleanPostcode}`);
+    console.log(`[postcode/lookup] Autocomplete response status: ${autocompleteResponse.status} for postcode: ${cleanPostcode}`);
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(`[postcode/lookup] Error response body: ${errorBody}`);
+    if (!autocompleteResponse.ok) {
+      const errorBody = await autocompleteResponse.text();
+      console.error(`[postcode/lookup] Autocomplete error response body: ${errorBody}`);
 
-      if (response.status === 404) {
-        console.error(`[postcode/lookup] 404 for postcode ${cleanPostcode} - may be trial API key limitation or postcode not in database`);
+      if (autocompleteResponse.status === 404) {
         return NextResponse.json<PostcodeLookupResponse>(
           { ok: false, error: 'No addresses found for this postcode. Please enter address manually.' },
           { status: 404 }
         );
       }
-      if (response.status === 401) {
+      if (autocompleteResponse.status === 401) {
         console.error('[postcode/lookup] Invalid API key');
         return NextResponse.json<PostcodeLookupResponse>(
           { ok: false, error: 'Postcode lookup service configuration error' },
           { status: 500 }
         );
       }
-      if (response.status === 429) {
+      if (autocompleteResponse.status === 429) {
         return NextResponse.json<PostcodeLookupResponse>(
           { ok: false, error: 'Too many requests. Please try again later.' },
           { status: 429 }
         );
       }
-      throw new Error(`getAddress.io returned status ${response.status}: ${errorBody}`);
+      throw new Error(`getAddress.io autocomplete returned status ${autocompleteResponse.status}: ${errorBody}`);
     }
 
-    const data: GetAddressResponse = await response.json();
+    const autocompleteData: AutocompleteResponse = await autocompleteResponse.json();
+    console.log(`[postcode/lookup] Found ${autocompleteData.suggestions?.length || 0} suggestions`);
+
+    if (!autocompleteData.suggestions || autocompleteData.suggestions.length === 0) {
+      return NextResponse.json<PostcodeLookupResponse>(
+        { ok: false, error: 'No addresses found for this postcode. Please enter address manually.' },
+        { status: 404 }
+      );
+    }
 
     // Format the postcode with space (e.g., "SW1A 1AA")
     const formattedPostcode = formatPostcode(cleanPostcode);
 
-    // Transform addresses to our format
-    const addresses: PostcodeLookupAddress[] = data.addresses.map((addr, index) => {
-      // Build line1 from building info
-      let line1 = '';
-      if (addr.sub_building_name) line1 += addr.sub_building_name + ', ';
-      if (addr.building_name) line1 += addr.building_name + ', ';
-      if (addr.building_number) line1 += addr.building_number + ' ';
-      if (addr.sub_building_number) line1 += addr.sub_building_number + ' ';
-      line1 += addr.thoroughfare || addr.line_1;
-      line1 = line1.trim().replace(/,\s*$/, '');
+    // Step 2: Fetch full details for each suggestion (limited to first 10 to avoid rate limits)
+    const limitedSuggestions = autocompleteData.suggestions.slice(0, 10);
+    const addresses: PostcodeLookupAddress[] = [];
 
-      // Use line_2 or locality for line2
-      const line2 = addr.line_2 || addr.locality || '';
+    for (const suggestion of limitedSuggestions) {
+      try {
+        const getUrl = `https://api.getAddress.io/get/${suggestion.id}?api-key=${apiKey}`;
+        const getResponse = await fetch(getUrl, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+        });
 
-      // Build display address
-      const displayParts = [line1];
-      if (line2) displayParts.push(line2);
-      displayParts.push(addr.town_or_city);
-      const displayAddress = displayParts.join(', ');
+        if (getResponse.ok) {
+          const addr: GetAddressResponse = await getResponse.json();
 
-      return {
-        id: `addr_${index}`,
-        displayAddress,
-        line1: line1 || addr.line_1,
-        line2,
-        city: addr.town_or_city,
-        county: addr.county || addr.district || '',
-        postalCode: formattedPostcode,
-        country: 'GB',
-      };
-    });
+          // Build line1 from building info
+          let line1 = '';
+          if (addr.sub_building_name) line1 += addr.sub_building_name + ', ';
+          if (addr.building_name) line1 += addr.building_name + ', ';
+          if (addr.building_number) line1 += addr.building_number + ' ';
+          if (addr.sub_building_number) line1 += addr.sub_building_number + ' ';
+          line1 += addr.thoroughfare || addr.line_1;
+          line1 = line1.trim().replace(/,\s*$/, '');
+
+          // Use line_2 or locality for line2
+          const line2 = addr.line_2 || addr.locality || '';
+
+          addresses.push({
+            id: suggestion.id,
+            displayAddress: suggestion.address,
+            line1: line1 || addr.line_1,
+            line2,
+            city: addr.town_or_city,
+            county: addr.county || addr.district || '',
+            postalCode: formattedPostcode,
+            country: 'GB',
+          });
+        }
+      } catch (err) {
+        console.error(`[postcode/lookup] Error fetching address ${suggestion.id}:`, err);
+        // Continue with other addresses
+      }
+    }
+
+    if (addresses.length === 0) {
+      return NextResponse.json<PostcodeLookupResponse>(
+        { ok: false, error: 'Failed to retrieve address details. Please enter address manually.' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json<PostcodeLookupResponse>({
       ok: true,
