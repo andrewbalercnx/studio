@@ -127,9 +127,11 @@ export default function AIModelsPage() {
 
       const data = await response.json();
 
-      if (data.ok) {
-        setConfig(data.config);
-        setOriginalConfig(data.config);
+      if (data.ok && data.config) {
+        // Merge with defaults to ensure all fields exist
+        const mergedConfig = { ...DEFAULT_AI_MODELS_CONFIG, ...data.config };
+        setConfig(mergedConfig);
+        setOriginalConfig(mergedConfig);
         setUsageMap(data.usageMap || {});
         setEnvOverrides(data.envOverrides || {});
 

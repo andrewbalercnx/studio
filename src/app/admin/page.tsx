@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, Settings, Users, Printer, Database, Bug, Trash2, Mail, ShieldCheck, Upload, FileText, MapPin } from 'lucide-react';
+import { LoaderCircle, Settings, Users, Printer, Database, Bug, Trash2, Mail, ShieldCheck, Upload, FileText, MapPin, Cpu } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useDiagnostics } from '@/hooks/use-diagnostics';
 import { Switch } from '@/components/ui/switch';
@@ -146,6 +146,11 @@ export default function AdminDashboardPage() {
               <Button asChild variant="outline" size="sm">
                 <Link href="/admin/system-addresses">
                   <MapPin className="mr-2 h-4 w-4" /> System Addresses
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/admin/ai-models">
+                  <Cpu className="mr-2 h-4 w-4" /> AI Models
                 </Link>
               </Button>
             </div>
