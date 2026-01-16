@@ -15,6 +15,7 @@ import { getStoryBucket } from '@/firebase/admin/storage';
 import { randomUUID } from 'crypto';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { Gaxios, GaxiosError } from 'gaxios';
+import { getImageGenerationModel } from '@/lib/ai-model-config';
 
 /**
  * Extract all $$id$$ and $id$ placeholders from text
@@ -33,7 +34,9 @@ function extractEntityIds(text: string): string[] {
   return [...ids];
 }
 
-const DEFAULT_IMAGE_MODEL = process.env.STORYBOOK_IMAGE_MODEL ?? 'googleai/gemini-2.5-flash-image-preview';
+// Image model loaded dynamically from central config
+// Fallback model name if config fails to load
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
 // Use 1:1 (square) for character reference sheets with 2x2 grid layout
 // Valid options: '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'
 const EXEMPLAR_ASPECT_RATIO = '1:1';
@@ -136,6 +139,9 @@ async function generateExemplarForActor(params: {
   const { actor, actorId, actorType, imageStylePrompt, styleExampleUrls, storyId, storybookId, parentUid, childAge, synopsis } = params;
   const startTime = Date.now();
   const flowName = 'storyExemplarGenerationFlow';
+
+  // Load the image generation model from central config
+  const imageModel = await getImageGenerationModel().catch(() => FALLBACK_IMAGE_MODEL);
 
   const displayName = actor.displayName || 'the character';
   const pronouns = actor.pronouns || 'they/them';
@@ -253,7 +259,7 @@ This reference sheet will be used to maintain character consistency across multi
     console.log(`[story-exemplar-generation-flow] Generating exemplar for ${actorType} ${actorId} (${displayName})`);
 
     const llmResponse = await ai.generate({
-      model: DEFAULT_IMAGE_MODEL,
+      model: imageModel,
       prompt: promptParts,
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
@@ -275,7 +281,7 @@ This reference sheet will be used to maintain character consistency across multi
         prompt: promptTextForLogging,
         response: llmResponse,
         startTime,
-        modelName: DEFAULT_IMAGE_MODEL,
+        modelName: imageModel,
         isFailure: true,
         failureReason,
         storyId,
@@ -301,7 +307,7 @@ This reference sheet will be used to maintain character consistency across multi
       prompt: promptTextForLogging,
       response: llmResponse,
       startTime,
-      modelName: DEFAULT_IMAGE_MODEL,
+      modelName: imageModel,
       imageUrl,
       storyId,
       storybookId,
@@ -321,7 +327,7 @@ This reference sheet will be used to maintain character consistency across multi
       prompt: promptTextForLogging,
       error,
       startTime,
-      modelName: DEFAULT_IMAGE_MODEL,
+      modelName: imageModel,
       storyId,
       storybookId,
     });

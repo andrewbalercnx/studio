@@ -2055,3 +2055,78 @@ export type AnswerAnimation = {
   createdAt: any;
   updatedAt: any;
 };
+
+// ============================================================================
+// AI Models Configuration
+// ============================================================================
+
+/**
+ * AI Models configuration stored in systemConfig/aiModels
+ * Used to centrally manage which AI models are used across the application
+ */
+export type AIModelsConfig = {
+  // Image generation model (e.g., 'googleai/gemini-2.5-flash-image')
+  imageGenerationModel: string;
+
+  // Primary text model for complex tasks (e.g., 'googleai/gemini-2.5-pro')
+  primaryTextModel: string;
+
+  // Lightweight text model for simple tasks (e.g., 'googleai/gemini-2.5-flash')
+  lightweightTextModel: string;
+
+  // Legacy text model for specific use cases (e.g., 'googleai/gemini-2.0-flash')
+  legacyTextModel: string;
+
+  // Availability status from last check
+  availabilityCheck?: AIModelAvailabilityCheck;
+
+  // Metadata
+  updatedAt?: any;
+  updatedBy?: string;
+};
+
+/**
+ * Default AI model configuration
+ */
+export const DEFAULT_AI_MODELS_CONFIG: AIModelsConfig = {
+  imageGenerationModel: 'googleai/gemini-2.5-flash-image',
+  primaryTextModel: 'googleai/gemini-2.5-pro',
+  lightweightTextModel: 'googleai/gemini-2.5-flash',
+  legacyTextModel: 'googleai/gemini-2.0-flash',
+};
+
+/**
+ * Result of checking model availability against Google AI API
+ */
+export type AIModelAvailabilityCheck = {
+  lastCheckedAt: any;
+  status: 'ok' | 'warning' | 'error';
+  issues: AIModelIssue[];
+  availableModels?: GoogleAIModelInfo[];
+};
+
+/**
+ * An issue with a configured model
+ */
+export type AIModelIssue = {
+  model: string;
+  configKey: keyof AIModelsConfig;
+  issue: 'deprecated' | 'unavailable' | 'unknown';
+  message: string;
+};
+
+/**
+ * Model info from Google AI API ListModels response
+ */
+export type GoogleAIModelInfo = {
+  name: string;                           // e.g., 'models/gemini-2.5-pro'
+  displayName: string;
+  description?: string;
+  version?: string;
+  inputTokenLimit?: number;
+  outputTokenLimit?: number;
+  supportedGenerationMethods?: string[];
+  // Derived fields
+  category?: 'text' | 'image' | 'embedding' | 'other';
+  isImageGeneration?: boolean;
+};

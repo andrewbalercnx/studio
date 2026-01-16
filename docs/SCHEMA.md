@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-14 (added answerAnimations collection for Q&A animations and sound effects)
+> **Last Updated**: 2026-01-16 (added systemConfig/aiModels for centralized AI model configuration)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -758,6 +758,32 @@ Template types: `orderSubmitted`, `orderStatusChanged`, `orderApproved`, `orderR
 | `updatedBy` | string | No | Email of last updater |
 
 **Security**: Read by authenticated users; write by admin only.
+
+#### `systemConfig/aiModels`
+Centralized configuration for AI model selections across the application.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `imageGenerationModel` | string | Yes | Model for image generation (e.g., 'googleai/gemini-2.5-flash-image') |
+| `primaryTextModel` | string | Yes | Primary text model for complex tasks (e.g., 'googleai/gemini-2.5-pro') |
+| `lightweightTextModel` | string | Yes | Lightweight text model for simple tasks (e.g., 'googleai/gemini-2.5-flash') |
+| `legacyTextModel` | string | Yes | Legacy model for specific use cases (e.g., 'googleai/gemini-2.0-flash') |
+| `availabilityCheck` | object | No | Last model availability check result |
+| `availabilityCheck.lastCheckedAt` | timestamp | No | When availability was last checked |
+| `availabilityCheck.status` | 'ok' \| 'warning' \| 'error' | No | Overall availability status |
+| `availabilityCheck.issues` | array | No | List of issues found during check |
+| `updatedAt` | timestamp | No | Last update time |
+| `updatedBy` | string | No | Email of last updater |
+
+**Defaults** (if document doesn't exist):
+- `imageGenerationModel`: 'googleai/gemini-2.5-flash-image'
+- `primaryTextModel`: 'googleai/gemini-2.5-pro'
+- `lightweightTextModel`: 'googleai/gemini-2.5-flash'
+- `legacyTextModel`: 'googleai/gemini-2.0-flash'
+
+**Priority**: Environment variable `STORYBOOK_IMAGE_MODEL` takes precedence over Firestore config for image generation model.
+
+**Security**: Admin only.
 
 #### `systemConfig/addresses`
 System addresses for Mixam billing configuration.

@@ -16,6 +16,10 @@ import { getStoryBucket } from '@/firebase/admin/storage';
 import { randomUUID } from 'crypto';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { Gaxios } from 'gaxios';
+import { getImageGenerationModel } from '@/lib/ai-model-config';
+
+// Fallback model name if config fails to load
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
 
 const AvatarAnimationFlowInputSchema = z.object({
   // Either childId or characterId must be provided
@@ -200,6 +204,9 @@ export const avatarAnimationFlow = ai.defineFlow(
   },
   async ({ childId, characterId, avatarUrl: providedAvatarUrl, forceRegenerate }) => {
     const firestore = await getServerFirestore();
+
+    // Load the image generation model from central config
+    const imageModel = await getImageGenerationModel().catch(() => FALLBACK_IMAGE_MODEL);
 
     // Validate input - must have either childId or characterId
     if (!childId && !characterId) {
@@ -422,7 +429,7 @@ Output a smooth, looping video suitable for a profile animation.`;
 
 Output the generated image directly. Do not describe what you would create - actually generate and output the image.`;
 
-      const fallbackModelName = 'googleai/gemini-2.5-flash-image-preview';
+      const fallbackModelName = imageModel;
       console.log('[avatarAnimationFlow] Using fallback model:', fallbackModelName);
 
       // Retry logic - sometimes the model returns text instead of an image
@@ -438,7 +445,7 @@ Output the generated image directly. Do not describe what you would create - act
         }
 
         llmResponse = await ai.generate({
-          model: fallbackModelName,
+          model: imageModel,
           prompt: [
             { media: { url: avatarDataUri } },
             { text: fallbackPrompt },

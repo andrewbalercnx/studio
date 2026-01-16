@@ -3,6 +3,10 @@ import { ai } from '@/ai/genkit';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { getImageGenerationModel } from '@/lib/ai-model-config';
+
+// Fallback model name if config fails to load
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
 
 const ImageStyleSampleInputSchema = z.object({
     imageStyleId: z.string().describe("The ID of the imageStyle document"),
@@ -52,12 +56,15 @@ export async function imageStyleSampleFlow(input: z.infer<typeof ImageStyleSampl
 
 Style: ${stylePrompt}`;
 
+        // Load the image generation model from central config
+        const imageModel = await getImageGenerationModel().catch(() => FALLBACK_IMAGE_MODEL);
+
         let imageResponse;
         const startTime = Date.now();
-        const modelName = 'googleai/gemini-2.5-flash-image-preview';
+        const modelName = imageModel;
         try {
             imageResponse = await ai.generate({
-                model: modelName,
+                model: imageModel,
                 prompt: fullPrompt,
                 config: {
                     responseModalities: ['TEXT', 'IMAGE'],

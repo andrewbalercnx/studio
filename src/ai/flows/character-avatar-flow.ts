@@ -16,6 +16,10 @@ import { logAIFlow } from '@/lib/ai-flow-logger';
 import { Gaxios, GaxiosError } from 'gaxios';
 import { avatarAnimationFlow } from './avatar-animation-flow';
 import { imageDescriptionFlow } from './image-description-flow';
+import { getImageGenerationModel } from '@/lib/ai-model-config';
+
+// Fallback model name if config fails to load
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
 
 const CharacterAvatarFlowInputSchema = z.object({
   characterId: z.string(),
@@ -115,6 +119,10 @@ export const characterAvatarFlow = ai.defineFlow(
   async ({ characterId, feedback }) => {
     await initFirebaseAdminApp();
     const firestore = getFirestore();
+
+    // Load the image generation model from central config
+    const imageModel = await getImageGenerationModel().catch(() => FALLBACK_IMAGE_MODEL);
+
     const characterRef = firestore.collection('characters').doc(characterId);
     const characterSnap = await characterRef.get();
 
@@ -196,10 +204,10 @@ export const characterAvatarFlow = ai.defineFlow(
 
     let llmResponse;
     const startTime = Date.now();
-    const modelName = 'googleai/gemini-2.5-flash-image-preview';
+    const modelName = imageModel;
     try {
       llmResponse = await ai.generate({
-        model: modelName,
+        model: imageModel,
         prompt: promptParts,
         config: {
           responseModalities: ['TEXT', 'IMAGE'],

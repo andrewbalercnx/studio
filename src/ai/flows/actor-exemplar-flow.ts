@@ -15,8 +15,10 @@ import { getStoryBucket } from '@/firebase/admin/storage';
 import { randomUUID } from 'crypto';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { Gaxios, GaxiosError } from 'gaxios';
+import { getImageGenerationModel } from '@/lib/ai-model-config';
 
-const DEFAULT_IMAGE_MODEL = process.env.STORYBOOK_IMAGE_MODEL ?? 'googleai/gemini-2.5-flash-image-preview';
+// Fallback model name if config fails to load
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
 
 // Exemplar images are landscape format to fit 3 views side by side
 const EXEMPLAR_WIDTH_PX = 2400;
@@ -280,6 +282,9 @@ export const actorExemplarFlow = ai.defineFlow(
       await initFirebaseAdminApp();
       const firestore = getFirestore();
 
+      // Load the image generation model from central config
+      const imageModel = await getImageGenerationModel().catch(() => FALLBACK_IMAGE_MODEL);
+
       // Check if an exemplar already exists for this actor + style combination
       const existingQuery = await firestore
         .collection('exemplars')
@@ -372,7 +377,7 @@ export const actorExemplarFlow = ai.defineFlow(
 
       // Generate the exemplar image
       const llmResponse = await ai.generate({
-        model: DEFAULT_IMAGE_MODEL,
+        model: imageModel,
         prompt: promptParts,
         config: {
           responseModalities: ['TEXT', 'IMAGE'],
@@ -395,7 +400,7 @@ export const actorExemplarFlow = ai.defineFlow(
           prompt: promptTextForLogging,
           response: llmResponse,
           startTime,
-          modelName: DEFAULT_IMAGE_MODEL,
+          modelName: imageModel,
           isFailure: true,
           failureReason,
         });
@@ -419,7 +424,7 @@ export const actorExemplarFlow = ai.defineFlow(
         prompt: promptTextForLogging,
         response: llmResponse,
         startTime,
-        modelName: DEFAULT_IMAGE_MODEL,
+        modelName: imageModel,
         imageUrl,
       });
 
@@ -449,7 +454,7 @@ export const actorExemplarFlow = ai.defineFlow(
         prompt: promptTextForLogging,
         error,
         startTime,
-        modelName: DEFAULT_IMAGE_MODEL,
+        modelName: FALLBACK_IMAGE_MODEL, // Use fallback in catch - actual model may not be available
       });
 
       // Update exemplar document with error if we created one

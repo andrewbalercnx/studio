@@ -21,6 +21,10 @@ import {
   buildActorDescription,
   type ActorDetailsWithImageData,
 } from '@/lib/story-context-builder';
+import { getImageGenerationModel } from '@/lib/ai-model-config';
+
+// Fallback model name if config fails to load
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
 
 const StoryActorAvatarFlowInputSchema = z.object({
   storyId: z.string(),
@@ -82,6 +86,10 @@ export const storyActorAvatarFlow = ai.defineFlow(
   },
   async ({ storyId, forceRegenerate }) => {
     const firestore = await getServerFirestore();
+
+    // Load the image generation model from central config
+    const imageModel = await getImageGenerationModel().catch(() => FALLBACK_IMAGE_MODEL);
+
     const storyRef = firestore.collection('stories').doc(storyId);
 
     try {
@@ -208,10 +216,10 @@ Requirements:
 
       let llmResponse;
       const startTime = Date.now();
-      const modelName = 'googleai/gemini-2.5-flash-image-preview';
+      const modelName = imageModel;
       try {
         llmResponse = await ai.generate({
-          model: modelName,
+          model: imageModel,
           prompt: promptParts,
           config: {
             responseModalities: ['TEXT', 'IMAGE'],

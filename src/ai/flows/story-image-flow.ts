@@ -13,6 +13,7 @@ import { Gaxios, GaxiosError } from 'gaxios';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { notifyMaintenanceError } from '@/lib/email/notify-admins';
 import { getGlobalImagePrompt } from '@/lib/image-prompt-config.server';
+import { getImageGenerationModel } from '@/lib/ai-model-config';
 // New actor utilities - available for future use alongside existing fetchEntityReferenceData
 import {
   getActorsDetailsWithImageData,
@@ -27,7 +28,8 @@ function isValidDocumentId(id: unknown): id is string {
   return typeof id === 'string' && id.trim().length > 0;
 }
 
-const DEFAULT_IMAGE_MODEL = process.env.STORYBOOK_IMAGE_MODEL ?? 'googleai/gemini-2.5-flash-image-preview';
+// Fallback model name if config fails to load
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
 const MOCK_IMAGES = process.env.MOCK_STORYBOOK_IMAGES === 'true';
 
 type GenerateImageResult = {
@@ -830,6 +832,9 @@ async function createImage(params: CreateImageParams): Promise<GenerateImageResu
     return buildMockSvg(sceneText, targetWidthPx, targetHeightPx, flowName);
   }
 
+  // Load the image generation model from central config
+  const imageModel = await getImageGenerationModel().catch(() => FALLBACK_IMAGE_MODEL);
+
   // Fetch global image prompt configuration
   const globalImagePrompt = await getGlobalImagePrompt();
 
@@ -1030,7 +1035,7 @@ CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin 
     { text: minimalPromptText },
   ];
 
-  console.log('[story-image-flow] Generating image with model:', DEFAULT_IMAGE_MODEL);
+  console.log('[story-image-flow] Generating image with model:', imageModel);
   console.log('[story-image-flow] Prompt parts count:', fullPromptParts.length, 'Style examples:', styleExampleParts.length, 'Exemplars:', exemplarParts.length, 'Photos:', photoParts.length);
   if (actorsJson) {
     console.log('[story-image-flow] Actors JSON length:', actorsJson.length);
@@ -1087,7 +1092,7 @@ CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin 
 
       // Wrap ai.generate in a timeout to prevent hanging on rate limits
       const generatePromise = ai.generate({
-        model: DEFAULT_IMAGE_MODEL,
+        model: imageModel,
         prompt: currentPromptParts,
         config: generateConfig,
       });
@@ -1115,7 +1120,7 @@ CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin 
           prompt: currentPromptText,
           response: generation,
           startTime,
-          modelName: DEFAULT_IMAGE_MODEL,
+          modelName: imageModel,
           attemptNumber: attempt + 1,
           maxAttempts: MAX_RETRIES + 1,
           retryReason: retryReason || undefined,
@@ -1159,7 +1164,7 @@ CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin 
         prompt: currentPromptText,
         error: e,
         startTime,
-        modelName: DEFAULT_IMAGE_MODEL,
+        modelName: imageModel,
         attemptNumber: attempt + 1,
         maxAttempts: MAX_RETRIES + 1,
         retryReason: retryReason || undefined,
@@ -1271,7 +1276,7 @@ CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin 
   return {
     buffer,
     mimeType,
-    modelUsed: generation.model ?? DEFAULT_IMAGE_MODEL,
+    modelUsed: generation.model ?? imageModel,
     promptText: successfulPromptText,
     startTime: successfulStartTime,
     flowName,
@@ -1328,6 +1333,9 @@ export const storyImageFlow = ai.defineFlow(
 
     await initFirebaseAdminApp();
     const firestore = getFirestore();
+
+    // Load the image generation model from central config
+    const imageModel = await getImageGenerationModel().catch(() => FALLBACK_IMAGE_MODEL);
     const storyRef = firestore.collection('stories').doc(storyId);
     let generated: GenerateImageResult | null = null;
 
@@ -1665,7 +1673,7 @@ export const storyImageFlow = ai.defineFlow(
         targetDimensions: targetWidthPx && targetHeightPx ? `${targetWidthPx}x${targetHeightPx}px` : null,
 
         // Model info
-        model: DEFAULT_IMAGE_MODEL,
+        model: imageModel,
         mockImagesEnabled: MOCK_IMAGES,
 
         // Logs for debugging

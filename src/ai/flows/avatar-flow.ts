@@ -17,6 +17,10 @@ import { randomUUID } from 'crypto';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { avatarAnimationFlow } from './avatar-animation-flow';
 import { imageDescriptionFlow } from './image-description-flow';
+import { getImageGenerationModel } from '@/lib/ai-model-config';
+
+// Fallback model name if config fails to load
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
 
 const AvatarFlowInputSchema = z.object({
   childId: z.string(),
@@ -116,6 +120,10 @@ export const avatarFlow = ai.defineFlow(
   async ({ childId, feedback }) => {
     await initFirebaseAdminApp();
     const firestore = getFirestore();
+
+    // Load the image generation model from central config
+    const imageModel = await getImageGenerationModel().catch(() => FALLBACK_IMAGE_MODEL);
+
     const childRef = firestore.collection('children').doc(childId);
     const childSnap = await childRef.get();
 
@@ -196,10 +204,10 @@ export const avatarFlow = ai.defineFlow(
 
     let llmResponse;
     const startTime = Date.now();
-    const modelName = 'googleai/gemini-2.5-flash-image-preview';
+    const modelName = imageModel;
     try {
       llmResponse = await ai.generate({
-        model: modelName,
+        model: imageModel,
         prompt: promptParts,
         config: {
           responseModalities: ['TEXT', 'IMAGE'],

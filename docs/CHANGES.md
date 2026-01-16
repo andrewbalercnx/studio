@@ -18,6 +18,51 @@
 
 ### 2026-01-16
 
+#### `8b359e4` - Add AI Models admin page and central model configuration
+
+**Type**: Feature, Bug Fix
+
+**Summary**: Fixed image generation failure caused by deprecated `gemini-2.5-flash-image-preview` model (deprecated January 15, 2026). More importantly, created an admin page to manage AI model configuration and check model availability, preventing future deprecation surprises.
+
+**Problem Solved**: Model names were hardcoded across 9+ files with no monitoring for deprecation. When Google deprecated the preview model, all image generation failed with 404 errors and no alerting occurred.
+
+**Solution**:
+1. Central configuration in Firestore (`systemConfig/aiModels`) with 1-minute caching
+2. Admin UI at `/admin/ai-models` to view/change model selections
+3. Availability checking against Google AI API (`listModels` endpoint)
+4. Integration with maintenance alerting for model issues
+5. Environment variable override preserved for deployment flexibility
+
+**Changes**:
+- Created central AI model config module with caching
+- Created admin UI page with model configuration and availability checking
+- Created API endpoints for model config CRUD and availability checking
+- Updated all 9 image generation flows to use central config
+- Added AIModelsConfig types and defaults
+- Documented new schema and API routes
+
+**Files Created**:
+- `src/lib/ai-model-config.ts` - Central config module with caching
+- `src/app/admin/ai-models/page.tsx` - Admin UI page
+- `src/app/api/admin/ai-models/route.ts` - GET/PUT config API
+- `src/app/api/admin/ai-models/check-availability/route.ts` - Check availability API
+
+**Files Modified**:
+- `src/lib/types.ts` - Added AIModelsConfig, AIModelAvailabilityCheck, GoogleAIModelInfo types
+- `src/ai/flows/story-image-flow.ts` - Use central config
+- `src/ai/flows/avatar-flow.ts` - Use central config
+- `src/ai/flows/actor-exemplar-flow.ts` - Use central config
+- `src/ai/flows/character-avatar-flow.ts` - Use central config
+- `src/ai/flows/image-style-sample-flow.ts` - Use central config
+- `src/ai/flows/avatar-animation-flow.ts` - Use central config
+- `src/ai/flows/story-exemplar-generation-flow.ts` - Use central config
+- `src/ai/flows/story-actor-avatar-flow.ts` - Use central config
+- `src/ai/flows/story-output-type-image-flow.ts` - Use central config
+- `docs/SCHEMA.md` - Added systemConfig/aiModels documentation
+- `docs/API.md` - Added new API routes
+
+---
+
 #### `0c2be78` - Fix postcode lookup to use correct getAddress.io API flow
 
 **Type**: Bug Fix

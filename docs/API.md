@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-14 (added sound effects routes for Q&A animations)
+> **Last Updated**: 2026-01-16 (added AI models configuration routes)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -1946,6 +1946,108 @@ If `email` is not provided, sends to the authenticated admin's email.
 **Error Responses**:
 - `400` - Test email template is disabled in configuration
 - `503` - Microsoft Graph not configured (missing environment variables)
+
+---
+
+### GET `/api/admin/ai-models`
+
+Get current AI models configuration. Admin only.
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "config": {
+    "imageGenerationModel": "googleai/gemini-2.5-flash-image",
+    "primaryTextModel": "googleai/gemini-2.5-pro",
+    "lightweightTextModel": "googleai/gemini-2.5-flash",
+    "legacyTextModel": "googleai/gemini-2.0-flash",
+    "availabilityCheck": {
+      "lastCheckedAt": "...",
+      "status": "ok",
+      "issues": []
+    }
+  },
+  "usageMap": {
+    "imageGenerationModel": ["story-image-flow.ts", "avatar-flow.ts", ...],
+    "primaryTextModel": ["gemini3-flow.ts", ...],
+    ...
+  },
+  "envOverrides": {
+    "imageGenerationModel": "googleai/custom-model"
+  },
+  "isDefault": false
+}
+```
+
+---
+
+### PUT `/api/admin/ai-models`
+
+Update AI models configuration. Admin only.
+
+**Request Body**:
+```json
+{
+  "imageGenerationModel": "googleai/gemini-2.5-flash-image",
+  "primaryTextModel": "googleai/gemini-2.5-pro",
+  "lightweightTextModel": "googleai/gemini-2.5-flash",
+  "legacyTextModel": "googleai/gemini-2.0-flash"
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "message": "AI models configuration updated successfully"
+}
+```
+
+---
+
+### POST `/api/admin/ai-models/check-availability`
+
+Check if configured models are available in the Google AI API. Admin only.
+
+**Request Body** (optional):
+```json
+{
+  "sendAlerts": true
+}
+```
+
+When `sendAlerts` is true and issues are found, maintenance users will be notified via email.
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "status": "ok",
+  "issues": [],
+  "availableModels": {
+    "image": [...],
+    "text": [...],
+    "embedding": [...],
+    "other": [...]
+  },
+  "totalModels": 50,
+  "configuredModels": {
+    "imageGenerationModel": {
+      "model": "googleai/gemini-2.5-flash-image",
+      "status": "available",
+      "usedBy": ["story-image-flow.ts", ...]
+    },
+    ...
+  },
+  "alertsSent": false
+}
+```
+
+**Status values**:
+- `ok` - All configured models are available
+- `warning` - Some non-critical models have issues
+- `error` - Critical models (image generation) are unavailable
 
 ---
 
