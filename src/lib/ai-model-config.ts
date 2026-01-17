@@ -58,9 +58,11 @@ export async function getAIModelConfig(): Promise<AIModelsConfig> {
 export async function getImageGenerationModel(): Promise<string> {
   // Allow env var override for backward compatibility
   if (process.env.STORYBOOK_IMAGE_MODEL) {
+    console.log('[ai-model-config] Using STORYBOOK_IMAGE_MODEL env var:', process.env.STORYBOOK_IMAGE_MODEL);
     return process.env.STORYBOOK_IMAGE_MODEL;
   }
   const config = await getAIModelConfig();
+  console.log('[ai-model-config] Image generation model from config:', config.imageGenerationModel);
   return config.imageGenerationModel;
 }
 

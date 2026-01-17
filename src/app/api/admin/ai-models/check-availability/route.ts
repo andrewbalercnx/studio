@@ -77,7 +77,10 @@ async function fetchAvailableModels(): Promise<GoogleAIModelInfo[]> {
  * Convert a Genkit model name to Google AI API format
  * e.g., 'googleai/gemini-2.5-flash-image' -> 'models/gemini-2.5-flash-image'
  */
-function toGoogleApiModelName(genkitName: string): string {
+function toGoogleApiModelName(genkitName: string | undefined | null): string {
+  if (!genkitName) {
+    return 'models/unknown';
+  }
   // Remove the 'googleai/' prefix if present
   const baseName = genkitName.replace(/^googleai\//, '');
   return `models/${baseName}`;

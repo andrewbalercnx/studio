@@ -1177,23 +1177,36 @@ CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin 
 
       // Check if this is a retryable error
       const isPatternError = errorMessage.includes('did not match the expected pattern');
+      // Note: Match 'rate limit' or 'rate_limit' but not just 'rate' (which matches 'aspect ratio')
       const isRateLimitError = errorMessage.includes('RESOURCE_EXHAUSTED') ||
                                errorMessage.includes('429') ||
                                errorMessage.includes('quota') ||
-                               errorMessage.includes('rate') ||
+                               errorMessage.includes('rate limit') ||
+                               errorMessage.includes('rate_limit') ||
                                errorMessage.includes('timed out');
+      // Check for model configuration errors (wrong model being used for image generation)
+      const isModelConfigError = errorMessage.includes('Aspect ratio is not enabled') ||
+                                 errorMessage.includes('INVALID_ARGUMENT');
       const isTransientError = isRateLimitError ||
                                errorMessage.includes('UNAVAILABLE') ||
                                errorMessage.includes('DEADLINE_EXCEEDED') ||
                                errorMessage.includes('temporarily');
 
-      if (!isPatternError && !isTransientError) {
+      if (!isPatternError && !isTransientError && !isModelConfigError) {
         // Non-retryable error, throw immediately
         throw e;
       }
 
       if (attempt === MAX_RETRIES) {
         // Final attempt failed - provide clear error messages
+        if (isModelConfigError) {
+          throw new Error(
+            `Image generation failed: Model configuration error. ` +
+            `The configured model "${imageModel}" may not support image generation. ` +
+            `Please check the AI Models configuration in /admin/ai-models. ` +
+            `Original error: ${errorMessage}`
+          );
+        }
         if (isRateLimitError) {
           throw new Error(
             `Image generation failed: Rate limit exceeded or timeout. ` +

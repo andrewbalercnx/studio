@@ -102,6 +102,11 @@ export async function logAIFlow({
       || response?.raw?.candidates?.[0]?.modelVersion
       || null;
 
+    // Always store the model name at the top level if available
+    if (modelVersion) {
+      logData.modelName = modelVersion;
+    }
+
     // Extract usage/token information from Genkit response
     // Genkit normalizes to response.usage, but raw Gemini data is in response.custom.usageMetadata
     const usage = response?.usage;

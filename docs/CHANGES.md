@@ -16,7 +16,45 @@
 
 ## Changes
 
+### 2026-01-17
+
+#### `6559d0c` - Fix AI Models page and improve error handling
+
+**Type**: Bug Fix
+
+**Summary**: Fixed multiple issues with the AI Models admin page and improved error handling for image generation failures.
+
+**Fixes**:
+1. Fixed misleading "Rate limit exceeded" error when the wrong model was being used for image generation (the pattern 'rate' was matching 'aspect ratio')
+2. Fixed AI Flow Log not capturing model name on error logs (now stored at top level)
+3. Fixed "Cannot read properties of undefined (reading 'replace')" error in Check Availability
+4. Added null-safety for model name handling in admin page
+5. Added logging to show which model is being used from config vs env var
+
+**Root Cause Note**: The actual image generation failure was caused by `STORYBOOK_IMAGE_MODEL` environment variable being set to the wrong model (`gemini-2.5-pro` instead of `gemini-2.5-flash-image`). This needs to be fixed in the production environment configuration.
+
+**Files Modified**:
+- `src/ai/flows/story-image-flow.ts` - Fixed error classification and added model config error handling
+- `src/lib/ai-flow-logger.ts` - Always store model name at top level for visibility
+- `src/lib/ai-model-config.ts` - Added logging when model is selected
+- `src/app/admin/ai-models/page.tsx` - Added null-safety for model names
+- `src/app/api/admin/ai-models/check-availability/route.ts` - Added null-safety
+
+---
+
 ### 2026-01-16
+
+#### `c1d32d4` - Fix AI Models page null check and add nav button to admin
+
+**Type**: Bug Fix
+
+**Summary**: Fixed undefined config access in AI Models page and added AI Models button to admin dashboard.
+
+**Files Modified**:
+- `src/app/admin/ai-models/page.tsx`
+- `src/app/admin/page.tsx`
+
+---
 
 #### `8b359e4` - Add AI Models admin page and central model configuration
 

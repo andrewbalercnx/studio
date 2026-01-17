@@ -503,16 +503,16 @@ export default function AIModelsPage() {
                       <div>
                         <Label className="text-sm font-medium">Image Generation Models</Label>
                         <div className="mt-2 space-y-1">
-                          {availableModels.image.map((model) => (
+                          {availableModels.image.filter(m => m.name).map((model) => (
                             <div
                               key={model.name}
                               className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm"
                             >
                               <span className="font-mono text-xs">
-                                googleai/{model.name.replace('models/', '')}
+                                googleai/{model.name?.replace('models/', '') || 'unknown'}
                               </span>
                               <span className="text-muted-foreground">
-                                {model.displayName}
+                                {model.displayName || model.name}
                               </span>
                             </div>
                           ))}
@@ -525,16 +525,16 @@ export default function AIModelsPage() {
                       <div>
                         <Label className="text-sm font-medium">Text Generation Models</Label>
                         <div className="mt-2 space-y-1">
-                          {availableModels.text.map((model) => (
+                          {availableModels.text.filter(m => m.name).map((model) => (
                             <div
                               key={model.name}
                               className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm"
                             >
                               <span className="font-mono text-xs">
-                                googleai/{model.name.replace('models/', '')}
+                                googleai/{model.name?.replace('models/', '') || 'unknown'}
                               </span>
                               <span className="text-muted-foreground">
-                                {model.displayName}
+                                {model.displayName || model.name}
                               </span>
                             </div>
                           ))}
@@ -547,16 +547,16 @@ export default function AIModelsPage() {
                       <div>
                         <Label className="text-sm font-medium">Embedding Models</Label>
                         <div className="mt-2 space-y-1">
-                          {availableModels.embedding.map((model) => (
+                          {availableModels.embedding.filter(m => m.name).map((model) => (
                             <div
                               key={model.name}
                               className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm"
                             >
                               <span className="font-mono text-xs">
-                                googleai/{model.name.replace('models/', '')}
+                                googleai/{model.name?.replace('models/', '') || 'unknown'}
                               </span>
                               <span className="text-muted-foreground">
-                                {model.displayName}
+                                {model.displayName || model.name}
                               </span>
                             </div>
                           ))}
