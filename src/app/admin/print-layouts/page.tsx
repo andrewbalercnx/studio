@@ -24,6 +24,93 @@ import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
+
+// Font configuration with display names and CSS font-family values
+type FontConfig = {
+  value: string;
+  label: string;
+  cssFamily: string;
+  description: string;
+  fontWeight?: number;
+  fontStyle?: 'italic' | 'normal';
+};
+
+const AVAILABLE_FONTS: FontConfig[] = [
+  // Child-friendly Google Fonts (embedded TTF)
+  { value: 'Comic-Neue', label: 'Comic Neue', cssFamily: "'Comic Neue', cursive", description: 'friendly' },
+  { value: 'Comic-Neue-Bold', label: 'Comic Neue Bold', cssFamily: "'Comic Neue', cursive", fontWeight: 700, description: 'friendly bold' },
+  { value: 'Nunito', label: 'Nunito', cssFamily: "'Nunito', sans-serif", description: 'rounded' },
+  { value: 'Patrick-Hand', label: 'Patrick Hand', cssFamily: "'Patrick Hand', cursive", description: 'handwritten' },
+  { value: 'Quicksand', label: 'Quicksand', cssFamily: "'Quicksand', sans-serif", description: 'playful' },
+  { value: 'Lexend', label: 'Lexend', cssFamily: "'Lexend', sans-serif", description: 'high readability' },
+  // Helvetica family (sans-serif)
+  { value: 'Helvetica', label: 'Helvetica', cssFamily: 'Helvetica, Arial, sans-serif', description: 'sans-serif' },
+  { value: 'Helvetica-Bold', label: 'Helvetica Bold', cssFamily: 'Helvetica, Arial, sans-serif', fontWeight: 700, description: 'sans-serif bold' },
+  { value: 'Helvetica-Oblique', label: 'Helvetica Oblique', cssFamily: 'Helvetica, Arial, sans-serif', fontStyle: 'italic', description: 'sans-serif italic' },
+  { value: 'Helvetica-BoldOblique', label: 'Helvetica Bold Oblique', cssFamily: 'Helvetica, Arial, sans-serif', fontWeight: 700, fontStyle: 'italic', description: 'sans-serif bold italic' },
+  // Times Roman family (serif)
+  { value: 'TimesRoman', label: 'Times Roman', cssFamily: "'Times New Roman', Times, serif", description: 'serif' },
+  { value: 'TimesRoman-Bold', label: 'Times Roman Bold', cssFamily: "'Times New Roman', Times, serif", fontWeight: 700, description: 'serif bold' },
+  { value: 'TimesRoman-Italic', label: 'Times Roman Italic', cssFamily: "'Times New Roman', Times, serif", fontStyle: 'italic', description: 'serif italic' },
+  { value: 'TimesRoman-BoldItalic', label: 'Times Roman Bold Italic', cssFamily: "'Times New Roman', Times, serif", fontWeight: 700, fontStyle: 'italic', description: 'serif bold italic' },
+  // Courier family (monospace)
+  { value: 'Courier', label: 'Courier', cssFamily: "'Courier New', Courier, monospace", description: 'monospace' },
+  { value: 'Courier-Bold', label: 'Courier Bold', cssFamily: "'Courier New', Courier, monospace", fontWeight: 700, description: 'monospace bold' },
+  { value: 'Courier-Oblique', label: 'Courier Oblique', cssFamily: "'Courier New', Courier, monospace", fontStyle: 'italic', description: 'monospace italic' },
+  { value: 'Courier-BoldOblique', label: 'Courier Bold Oblique', cssFamily: "'Courier New', Courier, monospace", fontWeight: 700, fontStyle: 'italic', description: 'monospace bold italic' },
+];
+
+const SAMPLE_TEXT = 'The Quick Brown Fox 1234567890';
+
+function FontSelector({
+  value,
+  onChange,
+}: {
+  value: string | undefined;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm font-medium">Font</Label>
+      <ScrollArea className="h-64 rounded-md border">
+        <div className="p-2 space-y-1">
+          {AVAILABLE_FONTS.map((font) => (
+            <button
+              key={font.value}
+              type="button"
+              onClick={() => onChange(font.value)}
+              className={cn(
+                "w-full text-left px-3 py-2 rounded-md transition-colors hover:bg-muted",
+                value === font.value && "bg-primary/10 ring-1 ring-primary"
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground truncate max-w-[120px]">
+                  {font.label}
+                </span>
+                <span className="text-xs text-muted-foreground/60">
+                  {font.description}
+                </span>
+              </div>
+              <div
+                className="text-lg mt-1 truncate"
+                style={{
+                  fontFamily: font.cssFamily,
+                  fontWeight: font.fontWeight || 400,
+                  fontStyle: font.fontStyle || 'normal',
+                }}
+              >
+                {SAMPLE_TEXT}
+              </div>
+            </button>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
 
 const positiveNumber = z.preprocess(
   (val) => Number(val),
@@ -631,7 +718,7 @@ function PrintLayoutForm({
           />
         </div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <div className="grid gap-2">
           <Label htmlFor="leaf-width">Leaf Width (in)</Label>
           <Input id="leaf-width" type="number" step="0.01" {...register('leafWidth')} />
@@ -641,46 +728,19 @@ function PrintLayoutForm({
           <Input id="leaf-height" type="number" step="0.01" {...register('leafHeight')} />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="font">Font</Label>
-          <Controller
-            name="font"
-            control={control}
-            render={({ field }) => (
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <SelectTrigger><SelectValue placeholder="Select font" /></SelectTrigger>
-                <SelectContent>
-                  {/* Child-friendly Google Fonts (embedded TTF) */}
-                  <SelectItem value="Comic-Neue">Comic Neue (friendly)</SelectItem>
-                  <SelectItem value="Comic-Neue-Bold">Comic Neue Bold</SelectItem>
-                  <SelectItem value="Nunito">Nunito (rounded)</SelectItem>
-                  <SelectItem value="Patrick-Hand">Patrick Hand (handwritten)</SelectItem>
-                  <SelectItem value="Quicksand">Quicksand (playful)</SelectItem>
-                  <SelectItem value="Lexend">Lexend (high readability)</SelectItem>
-                  {/* Helvetica family (sans-serif) */}
-                  <SelectItem value="Helvetica">Helvetica</SelectItem>
-                  <SelectItem value="Helvetica-Bold">Helvetica Bold</SelectItem>
-                  <SelectItem value="Helvetica-Oblique">Helvetica Oblique</SelectItem>
-                  <SelectItem value="Helvetica-BoldOblique">Helvetica Bold Oblique</SelectItem>
-                  {/* Times Roman family (serif) */}
-                  <SelectItem value="TimesRoman">Times Roman</SelectItem>
-                  <SelectItem value="TimesRoman-Bold">Times Roman Bold</SelectItem>
-                  <SelectItem value="TimesRoman-Italic">Times Roman Italic</SelectItem>
-                  <SelectItem value="TimesRoman-BoldItalic">Times Roman Bold Italic</SelectItem>
-                  {/* Courier family (monospace) */}
-                  <SelectItem value="Courier">Courier</SelectItem>
-                  <SelectItem value="Courier-Bold">Courier Bold</SelectItem>
-                  <SelectItem value="Courier-Oblique">Courier Oblique</SelectItem>
-                  <SelectItem value="Courier-BoldOblique">Courier Bold Oblique</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </div>
-        <div className="grid gap-2">
           <Label htmlFor="fontSize">Font Size (pt)</Label>
           <Input id="fontSize" type="number" step="0.5" {...register('fontSize')} />
         </div>
       </div>
+
+      {/* Font Selection */}
+      <Controller
+        name="font"
+        control={control}
+        render={({ field }) => (
+          <FontSelector value={field.value} onChange={field.onChange} />
+        )}
+      />
 
       {/* Page-type-specific layouts */}
       <div className="space-y-4">

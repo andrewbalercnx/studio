@@ -29,20 +29,26 @@ export async function GET(request: Request) {
     const docRef = firestore.doc(AI_MODELS_DOC_PATH);
     const doc = await docRef.get();
 
-    let config: AIModelsConfig;
+    // Build config with explicit defaults for each field
+    // This handles cases where doc exists but is missing some model fields
+    const docData = doc.exists ? doc.data() : {};
+    const config: AIModelsConfig = {
+      imageGenerationModel: docData?.imageGenerationModel || DEFAULT_AI_MODELS_CONFIG.imageGenerationModel,
+      primaryTextModel: docData?.primaryTextModel || DEFAULT_AI_MODELS_CONFIG.primaryTextModel,
+      lightweightTextModel: docData?.lightweightTextModel || DEFAULT_AI_MODELS_CONFIG.lightweightTextModel,
+      legacyTextModel: docData?.legacyTextModel || DEFAULT_AI_MODELS_CONFIG.legacyTextModel,
+    };
+
     let isDefault = false;
 
-    if (!doc.exists) {
-      // Auto-seed with defaults on first access
-      config = DEFAULT_AI_MODELS_CONFIG;
+    // If document doesn't have the model fields, seed them now
+    if (!doc.exists || !docData?.imageGenerationModel) {
       await docRef.set({
-        ...DEFAULT_AI_MODELS_CONFIG,
+        ...config,
         createdAt: FieldValue.serverTimestamp(),
         createdBy: 'system-auto-seed',
-      });
-      isDefault = true;
-    } else {
-      config = { ...DEFAULT_AI_MODELS_CONFIG, ...doc.data() } as AIModelsConfig;
+      }, { merge: true });
+      isDefault = !doc.exists;
     }
 
     return NextResponse.json({

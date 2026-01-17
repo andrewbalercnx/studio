@@ -18,6 +18,25 @@
 
 ### 2026-01-17
 
+#### `8e02594` - Fix AI Models config field-level auto-seeding
+
+**Type**: Bug Fix
+
+**Summary**: Fixed issue where Firestore document existed but was missing model configuration fields, causing "undefined" model errors.
+
+**Root Cause**: The initial auto-seed only wrote `availabilityCheck`, `createdAt`, and `createdBy` fields, but not the actual model configuration fields (`imageGenerationModel`, etc.).
+
+**Changes**:
+- Build config with explicit field-by-field defaults (not spread merge)
+- Auto-seed model fields even when document exists but is missing them
+- Check for `!docData?.imageGenerationModel` to detect incomplete documents
+
+**Files Modified**:
+- `src/app/api/admin/ai-models/route.ts` - Field-level default handling
+- `src/app/api/admin/ai-models/check-availability/route.ts` - Same fix
+
+---
+
 #### `b819ad2` - Fix AI Models admin page errors and add auto-seeding
 
 **Type**: Bug Fix

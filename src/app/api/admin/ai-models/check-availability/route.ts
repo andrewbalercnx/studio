@@ -145,22 +145,33 @@ export async function POST(request: Request) {
     const docRef = firestore.doc(AI_MODELS_DOC_PATH);
     const doc = await docRef.get();
 
-    let config: AIModelsConfig;
-    if (!doc.exists) {
-      config = DEFAULT_AI_MODELS_CONFIG;
-    } else {
-      config = { ...DEFAULT_AI_MODELS_CONFIG, ...doc.data() } as AIModelsConfig;
+    // Build config with explicit defaults for each field
+    // This handles cases where doc exists but is missing some model fields
+    const docData = doc.exists ? doc.data() : {};
+    const config: AIModelsConfig = {
+      imageGenerationModel: docData?.imageGenerationModel || DEFAULT_AI_MODELS_CONFIG.imageGenerationModel,
+      primaryTextModel: docData?.primaryTextModel || DEFAULT_AI_MODELS_CONFIG.primaryTextModel,
+      lightweightTextModel: docData?.lightweightTextModel || DEFAULT_AI_MODELS_CONFIG.lightweightTextModel,
+      legacyTextModel: docData?.legacyTextModel || DEFAULT_AI_MODELS_CONFIG.legacyTextModel,
+    };
+
+    // If document doesn't have the model fields, seed them now
+    if (!doc.exists || !docData?.imageGenerationModel) {
+      await docRef.set({
+        ...config,
+        createdAt: FieldValue.serverTimestamp(),
+        createdBy: 'system-auto-seed',
+      }, { merge: true });
     }
 
     // Check each configured model
     const issues: AIModelIssue[] = [];
 
-    // Ensure all model values are defined (use defaults if missing)
     const modelChecks: Array<{ key: keyof AIModelsConfig; value: string }> = [
-      { key: 'imageGenerationModel', value: config.imageGenerationModel || DEFAULT_AI_MODELS_CONFIG.imageGenerationModel },
-      { key: 'primaryTextModel', value: config.primaryTextModel || DEFAULT_AI_MODELS_CONFIG.primaryTextModel },
-      { key: 'lightweightTextModel', value: config.lightweightTextModel || DEFAULT_AI_MODELS_CONFIG.lightweightTextModel },
-      { key: 'legacyTextModel', value: config.legacyTextModel || DEFAULT_AI_MODELS_CONFIG.legacyTextModel },
+      { key: 'imageGenerationModel', value: config.imageGenerationModel },
+      { key: 'primaryTextModel', value: config.primaryTextModel },
+      { key: 'lightweightTextModel', value: config.lightweightTextModel },
+      { key: 'legacyTextModel', value: config.legacyTextModel },
     ];
 
     for (const { key, value } of modelChecks) {
