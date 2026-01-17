@@ -30,8 +30,17 @@ export async function GET(request: Request) {
     const doc = await docRef.get();
 
     let config: AIModelsConfig;
+    let isDefault = false;
+
     if (!doc.exists) {
+      // Auto-seed with defaults on first access
       config = DEFAULT_AI_MODELS_CONFIG;
+      await docRef.set({
+        ...DEFAULT_AI_MODELS_CONFIG,
+        createdAt: FieldValue.serverTimestamp(),
+        createdBy: 'system-auto-seed',
+      });
+      isDefault = true;
     } else {
       config = { ...DEFAULT_AI_MODELS_CONFIG, ...doc.data() } as AIModelsConfig;
     }
@@ -40,7 +49,7 @@ export async function GET(request: Request) {
       ok: true,
       config,
       usageMap: MODEL_USAGE_MAP,
-      isDefault: !doc.exists,
+      isDefault,
     });
 
   } catch (error: unknown) {

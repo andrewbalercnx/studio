@@ -155,11 +155,12 @@ export async function POST(request: Request) {
     // Check each configured model
     const issues: AIModelIssue[] = [];
 
+    // Ensure all model values are defined (use defaults if missing)
     const modelChecks: Array<{ key: keyof AIModelsConfig; value: string }> = [
-      { key: 'imageGenerationModel', value: config.imageGenerationModel },
-      { key: 'primaryTextModel', value: config.primaryTextModel },
-      { key: 'lightweightTextModel', value: config.lightweightTextModel },
-      { key: 'legacyTextModel', value: config.legacyTextModel },
+      { key: 'imageGenerationModel', value: config.imageGenerationModel || DEFAULT_AI_MODELS_CONFIG.imageGenerationModel },
+      { key: 'primaryTextModel', value: config.primaryTextModel || DEFAULT_AI_MODELS_CONFIG.primaryTextModel },
+      { key: 'lightweightTextModel', value: config.lightweightTextModel || DEFAULT_AI_MODELS_CONFIG.lightweightTextModel },
+      { key: 'legacyTextModel', value: config.legacyTextModel || DEFAULT_AI_MODELS_CONFIG.legacyTextModel },
     ];
 
     for (const { key, value } of modelChecks) {
@@ -186,10 +187,18 @@ export async function POST(request: Request) {
     };
 
     // Store the check results (without the full model list to save space)
-    const storedCheck: AIModelAvailabilityCheck = {
+    // Ensure all issue fields are defined to avoid Firestore undefined value errors
+    const sanitizedIssues = issues.map(issue => ({
+      model: issue.model || 'unknown',
+      configKey: issue.configKey || 'unknown',
+      issue: issue.issue || 'unknown',
+      message: issue.message || 'Unknown issue',
+    }));
+
+    const storedCheck = {
       lastCheckedAt: FieldValue.serverTimestamp(),
       status,
-      issues,
+      issues: sanitizedIssues,
     };
 
     await docRef.set({

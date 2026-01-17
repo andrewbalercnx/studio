@@ -18,6 +18,30 @@
 
 ### 2026-01-17
 
+#### `b819ad2` - Fix AI Models admin page errors and add auto-seeding
+
+**Type**: Bug Fix
+
+**Summary**: Fixed errors on the `/admin/ai-models` page and added auto-seeding of the Firestore configuration document.
+
+**Issues Fixed**:
+- "Failed to load configuration" error on page load when no Firestore document existed
+- "Cannot use undefined as a Firestore value" error when running availability check
+- Ensured all model values have defaults to prevent undefined values
+
+**Changes**:
+- Auto-seed `systemConfig/aiModels` document with defaults on first admin access
+- Sanitize issue objects before storing to Firestore (prevent undefined values)
+- Added fallback to defaults for any missing model configuration values
+- Updated CLAUDE.md with explicit triggers for when SYSTEM_DESIGN.md must be updated
+
+**Files Modified**:
+- `src/app/api/admin/ai-models/route.ts` - Auto-seed on first access
+- `src/app/api/admin/ai-models/check-availability/route.ts` - Sanitize issues, use default values
+- `CLAUDE.md` - Added explicit SYSTEM_DESIGN.md update triggers
+
+---
+
 #### `9e21034` - Add Development Todo List feature
 
 **Type**: Feature
