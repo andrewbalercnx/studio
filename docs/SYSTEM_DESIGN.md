@@ -221,6 +221,27 @@ The Q&A animation system provides visual feedback during story creation when chi
 - `AnimatedChoiceButton`: React component that orchestrates animation playback
 - Writer portal at `/admin/answer-animations` for configuring animations
 
+### 8. Development Todo List
+
+Tracks work items that should be done for a production-ready system. Both admins and Claude (AI assistant) can add items to this list.
+
+**Purpose**:
+- Track technical debt, missing features, and improvements identified during development
+- Provide context and implementation guidance for future work
+- Enable Claude to flag follow-up items when completing tasks
+
+**Components**:
+- `devTodos` collection: Stores todo items with title, description (Markdown), status, priority, category
+- `/api/admin/dev-todos`: CRUD API endpoints (admin-only)
+- `DevTodoList` component: UI at `/admin/dev` with add/edit/delete, markdown preview, "Copy for Claude" feature
+- Standing instructions in `CLAUDE.md` for when/how Claude should add items
+
+**Workflow**:
+1. Admin or Claude identifies work needed for production readiness
+2. Item added via UI (admin) or API (Claude) with description in Markdown format
+3. Admin can copy formatted todo to clipboard to provide context to Claude
+4. Items marked complete when implemented
+
 ---
 
 ## Data Flow Diagrams
