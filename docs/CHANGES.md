@@ -18,6 +18,25 @@
 
 ### 2026-01-17
 
+#### `7b2ae1c` - Add binding-aware minimum page count for PDF generation
+
+**Type**: Bug Fix
+
+**Summary**: Fixed PDF generation to enforce binding-specific minimum page counts. CASE binding (hardcover) requires at least 24 interior pages for proper spine thickness. Previously, PDFs could be generated with fewer pages, causing order submission to fail.
+
+**Root Cause**: The `resolvePageConstraints` function didn't account for binding-specific minimums. Even if the PrintProduct had a lower `minPageCount`, CASE binding requires 24 pages minimum (Mixam constraint).
+
+**Changes**:
+- Added `getBindingMinPageCount()` helper to determine binding-specific minimums
+- CASE and case_with_sewing bindings enforce 24-page minimum
+- Other bindings default to 8-page minimum
+- Binding minimum is enforced as a floor on all constraint sources (layout, product, default)
+
+**Files Modified**:
+- `src/lib/print-constraints.ts` - Added binding-aware minimum enforcement
+
+---
+
 #### `290d2ce` - Add completionSummary and commitId fields to dev todos
 
 **Type**: Enhancement

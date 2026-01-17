@@ -35,12 +35,29 @@ export const DEFAULT_PAGE_CONSTRAINTS: ResolvedPageConstraints = {
 };
 
 /**
+ * Get the binding-specific minimum interior page count.
+ * Case-bound (hardcover) books require more pages due to spine thickness constraints.
+ */
+function getBindingMinPageCount(bindingType: string | undefined): number {
+  // CASE binding (hardcover) requires minimum 24 interior pages for proper spine
+  // This is a Mixam constraint - fewer pages makes the spine too thin
+  if (bindingType === 'case' || bindingType === 'CASE' || bindingType === 'case_with_sewing') {
+    return 24;
+  }
+  // Perfect bound and other bindings have lower minimums
+  return 8;
+}
+
+/**
  * Resolve page constraints from a PrintLayout and optionally its linked PrintProduct.
  *
  * Priority:
  * 1. PrintLayout.pageConstraints (if set)
  * 2. PrintProduct.mixamSpec.format (if printProductId set and product provided)
  * 3. Defaults
+ *
+ * Note: Binding-specific minimums are enforced as a floor. Even if the product
+ * specifies a lower minPageCount, we enforce CASE binding minimum of 24 pages.
  *
  * @param layout - The PrintLayout to resolve constraints from
  * @param product - Optional PrintProduct (loaded separately if layout.printProductId is set)
@@ -50,6 +67,10 @@ export function resolvePageConstraints(
   layout: PrintLayout | null | undefined,
   product: PrintProduct | null | undefined
 ): ResolvedPageConstraints {
+  // Get binding-specific minimum from product
+  const bindingType = product?.mixamSpec?.binding?.type;
+  const bindingMinPages = getBindingMinPageCount(bindingType);
+
   // Priority 1: Layout-level constraints
   if (layout?.pageConstraints) {
     const constraints = layout.pageConstraints;
@@ -59,8 +80,10 @@ export function resolvePageConstraints(
       constraints.maxPages !== undefined ||
       constraints.pageMultiple !== undefined
     ) {
+      // Enforce binding minimum as a floor
+      const effectiveMin = Math.max(constraints.minPages ?? 0, bindingMinPages);
       return {
-        minPages: constraints.minPages ?? 0,
+        minPages: effectiveMin,
         maxPages: constraints.maxPages ?? 0,
         pageMultiple: constraints.pageMultiple ?? 4,
         source: 'layout',
@@ -71,16 +94,21 @@ export function resolvePageConstraints(
   // Priority 2: Product constraints (from mixamSpec.format)
   if (product?.mixamSpec?.format) {
     const format = product.mixamSpec.format;
+    // Enforce binding minimum as a floor
+    const effectiveMin = Math.max(format.minPageCount ?? 0, bindingMinPages);
     return {
-      minPages: format.minPageCount ?? 0,
+      minPages: effectiveMin,
       maxPages: format.maxPageCount ?? 0,
       pageMultiple: (format.pageCountIncrement as 1 | 2 | 4) ?? 4,
       source: 'product',
     };
   }
 
-  // Priority 3: Defaults
-  return { ...DEFAULT_PAGE_CONSTRAINTS };
+  // Priority 3: Defaults (still enforce binding minimum if product provided)
+  return {
+    ...DEFAULT_PAGE_CONSTRAINTS,
+    minPages: bindingMinPages,
+  };
 }
 
 /**
