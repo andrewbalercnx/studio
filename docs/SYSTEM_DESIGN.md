@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-01-14
+> **Last Updated**: 2026-01-17
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -34,10 +34,12 @@ StoryPic Kids is an interactive story creation platform for children. Children c
 - **Authentication**: Firebase Authentication
 
 ### AI/ML Services
-- **Text Generation**: Google Gemini models (2.5-pro via googleAI plugin)
-- **Image Generation**: Vertex AI (Imagen)
+- **Text Generation**: Google Gemini models (configurable via admin UI)
+- **Image Generation**: Google Gemini image models (configurable via admin UI)
 - **Video Generation**: Vertex AI (Veo for avatar animations)
 - **Voice Cloning & TTS**: ElevenLabs
+
+Model selection is centrally managed via Firestore (`systemConfig/aiModels`) and the admin UI at `/admin/ai-models`. See Configuration System section for details.
 
 ### External Integrations
 - **Print-on-Demand**: Mixam API for book printing
@@ -182,7 +184,24 @@ Storybook → PrintStoryBook → PDF Generation → Mixam Order
 - `storyOutputTypes`: Output formats (picture book, poem)
 - `imageStyles`: Art style prompts (watercolor, cartoon)
 - `answerAnimations`: Q&A exit/selection animations with sound effects
-- `systemConfig/*`: Global settings (diagnostics, prompts)
+- `systemConfig/*`: Global settings (diagnostics, prompts, AI models)
+
+**AI Model Configuration** (`systemConfig/aiModels`):
+
+Central configuration for which AI models to use across the application. Managed via `/admin/ai-models`.
+
+| Model Type | Purpose | Flows Using It |
+|------------|---------|----------------|
+| `imageGenerationModel` | Image generation | story-image-flow, avatar-flow, character-avatar-flow, etc. |
+| `primaryTextModel` | Complex text generation | story-beat-flow, story-compile-flow, character-traits-flow |
+| `lightweightTextModel` | Simple text tasks | story-synopsis-flow, image-description-flow |
+| `legacyTextModel` | Specific older use cases | story-title-flow, story-pagination-flow |
+
+**Implementation**:
+- Central module at `src/lib/ai-model-config.ts` with 1-minute caching
+- Flows call `getImageGenerationModel()`, `getPrimaryTextModel()`, etc.
+- Admin UI includes availability checking against Google AI API
+- Alerts can be sent to maintenance users when models become unavailable
 
 **Design Principle**: Content configuration is data-driven, allowing non-developers to adjust AI behavior and story options.
 
