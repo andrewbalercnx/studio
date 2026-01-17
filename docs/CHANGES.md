@@ -18,6 +18,39 @@
 
 ### 2026-01-17
 
+#### `97827ad` - Implement incremental loading for storybooks page
+
+**Type**: Performance Enhancement
+
+**Summary**: Refactored the parent storybooks page (`/parent/storybooks`) to use server-side API endpoints instead of direct client-side Firestore queries. This significantly improves page load times for parents with many storybooks.
+
+**Problem**: The storybooks page was making O(n×m) Firestore queries where n=stories and m=pages per story. For each storybook, it queried all pages to calculate thumbnails and audio status, causing slow load times.
+
+**Solution**:
+1. Created `/api/parent/storybooks` endpoint that returns document-level data without page queries
+2. Created `/api/parent/storybooks/thumbnails` endpoint for incremental thumbnail/audio loading
+3. Added `thumbnailUrl` field to `StoryBookOutput` type for caching cover images
+4. Thumbnails are now cached on the storybook document when fetched, improving future load times
+
+**Loading Strategy**:
+- Initial load: Returns storybook list immediately with basic metadata
+- Incremental: Thumbnails and audio status loaded asynchronously after render
+- Caching: Thumbnails cached on document for faster subsequent loads
+
+**Files Created**:
+- `src/app/api/parent/storybooks/route.ts` - Main storybooks list API
+- `src/app/api/parent/storybooks/thumbnails/route.ts` - Batch thumbnail fetching
+
+**Files Modified**:
+- `src/lib/types.ts` - Added `thumbnailUrl` field to `StoryBookOutput`
+- `src/app/parent/storybooks/page.tsx` - Refactored to use API endpoints
+
+**Documentation Updated**:
+- `docs/API.md` - Added new endpoint documentation
+- `docs/SCHEMA.md` - Added storybooks subcollection schema
+
+---
+
 #### `da8dd91` - Fix title page duplication in two-leaf spread PDFs
 
 **Type**: Bug Fix

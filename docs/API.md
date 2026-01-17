@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-17 (added dev-todos CRUD endpoints for development work tracking)
+> **Last Updated**: 2026-01-17 (added parent storybooks API for incremental loading)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -156,6 +156,87 @@ Verify parent PIN.
   "valid": true
 }
 ```
+
+---
+
+### GET `/api/parent/storybooks`
+
+Get all storybooks for the authenticated parent, grouped by child. Optimized for fast loading - returns document-level data without querying pages.
+
+**Query Parameters**:
+- `includeThumbnails` (boolean, optional) - If true, queries pages to get thumbnails (slower). Default: false.
+
+**Response**: `200 OK`
+```json
+{
+  "children": [
+    {
+      "childId": "child123",
+      "displayName": "Emma",
+      "avatarUrl": "https://...",
+      "storybooks": [
+        {
+          "storybookId": "sb123",
+          "storyId": "story456",
+          "childId": "child123",
+          "title": "The Dragon Adventure",
+          "thumbnailUrl": null,
+          "imageStyleId": "watercolor",
+          "printLayoutId": "mixam-8x10-hardcover",
+          "createdAt": "2026-01-15T10:30:00.000Z",
+          "imageGenerationStatus": "ready",
+          "pageGenerationStatus": "ready",
+          "audioStatus": "none",
+          "isNewModel": true,
+          "printablePdfUrl": null,
+          "printableCoverPdfUrl": null,
+          "printableInteriorPdfUrl": null
+        }
+      ]
+    }
+  ],
+  "totalBooks": 5
+}
+```
+
+---
+
+### POST `/api/parent/storybooks/thumbnails`
+
+Batch fetch thumbnails and audio status for storybooks. Called after initial list load for incremental loading.
+
+**Request Body**:
+```json
+{
+  "storybooks": [
+    {
+      "storybookId": "sb123",
+      "storyId": "story456",
+      "isNewModel": true
+    }
+  ]
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "thumbnails": [
+    {
+      "storybookId": "sb123",
+      "thumbnailUrl": "https://storage.googleapis.com/...",
+      "audioStatus": "ready",
+      "pagesWithAudio": 12,
+      "totalPages": 12,
+      "calculatedImageStatus": "ready"
+    }
+  ]
+}
+```
+
+**Side Effects**: Caches thumbnailUrl on storybook document for future fast loads.
+
+**Limits**: Maximum 50 storybooks per request.
 
 ---
 

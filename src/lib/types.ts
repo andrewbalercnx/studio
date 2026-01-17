@@ -463,6 +463,7 @@ export type StoryBookOutput = {
 
   // Metadata
   title?: string;                 // Can override story title
+  thumbnailUrl?: string | null;   // Cached cover image URL (from page 0) for fast list loading
   createdAt: any;
   updatedAt: any;
 

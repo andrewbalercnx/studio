@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-17 (added devTodos collection for development work tracking)
+> **Last Updated**: 2026-01-17 (added storybooks subcollection schema with thumbnailUrl field)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -205,11 +205,45 @@ Compiled story content.
 | `updatedAt` | timestamp | Yes | Last update time |
 
 **Subcollections**:
-- `storybooks/{storybookId}` - Storybook outputs (see `StoryBookOutput`)
+- `storybooks/{storybookId}` - Storybook outputs (see below)
 - `storybooks/{storybookId}/pages/{pageId}` - Storybook pages (see `StoryOutputPage`)
 - `shareTokens/{tokenId}` - Share links (see `StoryBookShareToken`)
 
 **Security**: Parents can CRUD their own stories; admins have full access.
+
+---
+
+### `stories/{storyId}/storybooks/{storybookId}` (Subcollection)
+
+A specific rendering of a story with output type, image style, and layout.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Document ID |
+| `storyId` | string | Yes | Parent story ID |
+| `childId` | string | Yes | Child ID |
+| `parentUid` | string | Yes | Parent's Firebase UID |
+| `storyOutputTypeId` | string | Yes | Output type (e.g., "picture-book") |
+| `imageStyleId` | string | Yes | Image style ID |
+| `imageStylePrompt` | string | Yes | Style prompt for image generation |
+| `printLayoutId` | string | No | Print layout ID (determines image dimensions) |
+| `imageWidthPx` | number | No | Width in pixels (layoutWidth × 300 DPI) |
+| `imageHeightPx` | number | No | Height in pixels (layoutHeight × 300 DPI) |
+| `pageGeneration` | object | Yes | Page generation status |
+| `imageGeneration` | object | Yes | Image generation status |
+| `exemplarGeneration` | object | No | Character exemplar generation status |
+| `actorExemplarUrls` | map | No | Map of actorId → exemplar image URL |
+| `isFinalized` | boolean | No | Whether book is finalized |
+| `isLocked` | boolean | No | Whether book is locked for edits |
+| `finalization` | StoryBookFinalization | No | Finalization/print details |
+| `title` | string | No | Override story title |
+| `thumbnailUrl` | string | No | Cached cover image URL for fast list loading |
+| `deletedAt` | timestamp | No | Soft delete timestamp |
+| `deletedBy` | string | No | UID of user who deleted |
+| `createdAt` | timestamp | Yes | Creation time |
+| `updatedAt` | timestamp | Yes | Last update time |
+
+**Security**: Parents can CRUD their own storybooks; admins have full access.
 
 ---
 

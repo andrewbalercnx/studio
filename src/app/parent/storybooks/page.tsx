@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
-import { collection, query, where, orderBy, getDocs, doc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
-import type { Story, StoryBookOutput, ChildProfile, ImageStyle, PrintLayout } from '@/lib/types';
+import { collection, query } from 'firebase/firestore';
+import type { ImageStyle, PrintLayout } from '@/lib/types';
 import { useParentGuard } from '@/hooks/use-parent-guard';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -59,8 +60,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { format } from 'date-fns';
-import { useEffect } from 'react';
 import { DeleteButton, UndoBanner, useDeleteWithUndo } from '@/components/shared/DeleteWithUndo';
+import type {
+  StorybookListItem,
+  ChildWithStorybooks as APIChildWithStorybooks,
+  StorybooksResponse,
+} from '@/app/api/parent/storybooks/route';
 
 /**
  * Format a date in a friendly format like "12th December 2025"
@@ -74,29 +79,19 @@ function formatFriendlyDate(date: Date): string {
   return `${day}${suffix} ${format(date, 'MMMM yyyy')}`;
 }
 
-type StorybookWithMeta = {
-  storybookId: string;
-  storyId: string;
-  childId: string;
-  title?: string;
-  thumbnailUrl?: string;
-  imageStyleId: string;
-  createdAt: Date;
-  imageGenerationStatus?: string;
-  audioStatus?: 'none' | 'partial' | 'ready';
+// Extended type for client-side with loaded thumbnails
+type StorybookWithMeta = StorybookListItem & {
+  // Client-side computed fields
+  createdAtDate: Date;
+  thumbnailLoaded?: boolean;
   pagesWithAudio?: number;
   totalPages?: number;
-  isNewModel: boolean;
-  // Print layout for generating printable PDFs
-  printLayoutId?: string;
-  // Printable PDF status
-  printablePdfUrl?: string;
-  printableCoverPdfUrl?: string;
-  printableInteriorPdfUrl?: string;
 };
 
 type ChildWithStorybooks = {
-  child: ChildProfile;
+  childId: string;
+  displayName: string;
+  avatarUrl?: string | null;
   storybooks: StorybookWithMeta[];
 };
 
@@ -184,7 +179,13 @@ function StorybookCard({
             fill
             className="object-cover"
           />
+        ) : storybook.thumbnailLoaded === false ? (
+          // Thumbnail is loading
+          <div className="absolute inset-0 flex items-center justify-center">
+            <LoaderCircle className="h-8 w-8 animate-spin text-primary/40" />
+          </div>
         ) : (
+          // No thumbnail available or not yet loaded
           <div className="absolute inset-0 flex items-center justify-center">
             <BookOpen className="h-12 w-12 text-primary/40" />
           </div>
@@ -210,7 +211,7 @@ function StorybookCard({
 
       <CardContent className="pb-2 flex-grow">
         <p className="text-xs text-muted-foreground">
-          Created {formatFriendlyDate(storybook.createdAt)}
+          Created {formatFriendlyDate(storybook.createdAtDate)}
         </p>
       </CardContent>
 
@@ -298,20 +299,20 @@ function ChildStorybooksSection({
   generatingPrintableFor: string | null;
 }) {
   const [isOpen, setIsOpen] = useState(true);
-  const { child, storybooks } = childWithStorybooks;
+  const { storybooks, displayName, avatarUrl } = childWithStorybooks;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <CollapsibleTrigger asChild>
         <Button variant="ghost" className="w-full justify-start gap-3 p-3 h-auto">
           <Avatar className="h-10 w-10">
-            <AvatarImage src={child.avatarUrl} alt={child.displayName} />
+            <AvatarImage src={avatarUrl || undefined} alt={displayName} />
             <AvatarFallback>
-              {child.displayName?.charAt(0) || <User className="h-5 w-5" />}
+              {displayName?.charAt(0) || <User className="h-5 w-5" />}
             </AvatarFallback>
           </Avatar>
           <div className="flex-grow text-left">
-            <p className="font-semibold">{child.displayName}</p>
+            <p className="font-semibold">{displayName}</p>
             <p className="text-sm text-muted-foreground">
               {storybooks.length} {storybooks.length === 1 ? 'book' : 'books'}
             </p>
@@ -358,6 +359,7 @@ export default function ParentStorybooksPage() {
 
   const [childrenWithStorybooks, setChildrenWithStorybooks] = useState<ChildWithStorybooks[]>([]);
   const [loading, setLoading] = useState(true);
+  const [thumbnailsLoading, setThumbnailsLoading] = useState(false);
   const [regeneratingAudioFor, setRegeneratingAudioFor] = useState<string | null>(null);
   const [generatingPrintableFor, setGeneratingPrintableFor] = useState<string | null>(null);
   const { deletedItem, markAsDeleted, clearDeletedItem } = useDeleteWithUndo();
@@ -376,17 +378,6 @@ export default function ParentStorybooksPage() {
   // Track storybook metadata for delete/undo
   const [storybookMetaMap, setStorybookMetaMap] = useState<Map<string, StorybookWithMeta>>(new Map());
 
-  // Query children for this parent
-  const childrenQuery = useMemo(() => {
-    if (!user || !firestore || userLoading || !idTokenResult) return null;
-    return query(
-      collection(firestore, 'children'),
-      where('ownerParentUid', '==', user.uid)
-    );
-  }, [user, firestore, userLoading, idTokenResult]);
-
-  const { data: children, loading: childrenLoading } = useCollection<ChildProfile>(childrenQuery);
-
   // Query image styles for display
   const imageStylesQuery = useMemo(() => {
     if (!firestore || !user || userLoading || !idTokenResult) return null;
@@ -401,189 +392,161 @@ export default function ParentStorybooksPage() {
   }, [firestore, user, userLoading, idTokenResult]);
   const { data: printLayouts } = useCollection<PrintLayout>(printLayoutsQuery);
 
-  // Filter out deleted children
-  const visibleChildren = useMemo(() => {
-    return (children || []).filter(child => !child.deletedAt);
-  }, [children]);
+  // Fetch storybooks from API
+  const fetchStorybooks = useCallback(async () => {
+    if (!user) return;
 
-  // Load storybooks for all children
-  useEffect(() => {
-    const loadStorybooks = async () => {
-      if (!firestore || !visibleChildren.length || childrenLoading) return;
+    setLoading(true);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/parent/storybooks', {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
 
-      setLoading(true);
-      const results: ChildWithStorybooks[] = [];
-
-      for (const child of visibleChildren) {
-        const storybooks: StorybookWithMeta[] = [];
-
-        // Query stories for this child
-        const storiesQuery = query(
-          collection(firestore, 'stories'),
-          where('childId', '==', child.id)
-        );
-        const storiesSnap = await getDocs(storiesQuery);
-
-        for (const storyDoc of storiesSnap.docs) {
-          const story = storyDoc.data() as Story;
-          const storyId = storyDoc.id;
-
-          // Skip soft-deleted stories
-          if (story.deletedAt) continue;
-
-          // Helper to get cover image, audio stats, and calculated image status
-          const getPageStats = async (pagesPath: string) => {
-            try {
-              const pagesRef = collection(firestore, pagesPath);
-              const pagesQuery = query(pagesRef, orderBy('pageNumber', 'asc'));
-              const pagesSnap = await getDocs(pagesQuery);
-
-              let thumbnailUrl: string | undefined;
-              let pagesWithAudio = 0;
-              const totalPages = pagesSnap.size;
-
-              // Track image status for pages that actually need images
-              let pagesRequiringImages = 0;
-              let pagesWithReadyImages = 0;
-              let pagesWithErrorImages = 0;
-
-              for (const pageDoc of pagesSnap.docs) {
-                const page = pageDoc.data();
-                // Get cover image from page 0
-                if (page.pageNumber === 0 && page.imageUrl && page.imageStatus === 'ready') {
-                  thumbnailUrl = page.imageUrl;
-                }
-                // Count pages with audio
-                if (page.audioStatus === 'ready' && page.audioUrl) {
-                  pagesWithAudio++;
-                }
-                // Calculate image status - exclude title_page and blank pages without imagePrompt
-                const needsImage = page.kind !== 'title_page' && page.kind !== 'blank' && !!page.imagePrompt;
-                if (needsImage) {
-                  pagesRequiringImages++;
-                  if (page.imageStatus === 'ready') {
-                    pagesWithReadyImages++;
-                  } else if (page.imageStatus === 'error') {
-                    pagesWithErrorImages++;
-                  }
-                }
-              }
-
-              const audioStatus: 'none' | 'partial' | 'ready' =
-                pagesWithAudio === 0
-                  ? 'none'
-                  : pagesWithAudio === totalPages
-                  ? 'ready'
-                  : 'partial';
-
-              // Calculate actual image generation status from page data
-              const calculatedImageStatus: string =
-                pagesRequiringImages > 0 && pagesWithReadyImages === pagesRequiringImages
-                  ? 'ready'
-                  : pagesWithErrorImages > 0
-                    ? 'error'
-                    : 'pending';
-
-              return { thumbnailUrl, audioStatus, pagesWithAudio, totalPages, calculatedImageStatus };
-            } catch {
-              return { thumbnailUrl: undefined, audioStatus: 'none' as const, pagesWithAudio: 0, totalPages: 0, calculatedImageStatus: 'pending' };
-            }
-          };
-
-          // Check legacy model - show if pages are ready (regardless of image status)
-          // This allows users to see storybooks while images are still generating
-          if (story.pageGeneration?.status === 'ready' || story.imageGeneration?.status === 'ready') {
-            const stats = await getPageStats(`stories/${storyId}/outputs/storybook/pages`);
-            storybooks.push({
-              storybookId: storyId,
-              storyId: storyId,
-              childId: child.id,
-              title: story.metadata?.title,
-              thumbnailUrl: stats.thumbnailUrl,
-              imageStyleId: story.selectedImageStyleId || '',
-              createdAt: story.updatedAt?.toDate?.() || story.createdAt?.toDate?.() || new Date(),
-              // Use calculated status from actual pages, not the document's cached status
-              imageGenerationStatus: stats.calculatedImageStatus,
-              audioStatus: stats.audioStatus,
-              pagesWithAudio: stats.pagesWithAudio,
-              totalPages: stats.totalPages,
-              isNewModel: false,
-            });
-          }
-
-          // Check new model (storybooks subcollection)
-          try {
-            const storybooksRef = collection(firestore, 'stories', storyId, 'storybooks');
-            const storybooksSnap = await getDocs(storybooksRef);
-
-            for (const sbDoc of storybooksSnap.docs) {
-              const sb = sbDoc.data() as StoryBookOutput;
-              console.log(`[storybooks] Found storybook ${sbDoc.id}:`, {
-                deletedAt: sb.deletedAt,
-                pageGenStatus: sb.pageGeneration?.status,
-                imageGenStatus: sb.imageGeneration?.status,
-              });
-              // Skip soft-deleted storybooks
-              if (sb.deletedAt) continue;
-              // Show if pages are ready (regardless of image status)
-              // This allows users to see storybooks while images are still generating
-              if (sb.pageGeneration?.status === 'ready' || sb.imageGeneration?.status === 'ready') {
-                const stats = await getPageStats(`stories/${storyId}/storybooks/${sbDoc.id}/pages`);
-                storybooks.push({
-                  storybookId: sbDoc.id,
-                  storyId: storyId,
-                  childId: child.id,
-                  title: sb.title || story.metadata?.title,
-                  thumbnailUrl: stats.thumbnailUrl,
-                  imageStyleId: sb.imageStyleId,
-                  createdAt: sb.createdAt?.toDate?.() || new Date(),
-                  // Use calculated status from actual pages, not the document's cached status
-                  imageGenerationStatus: stats.calculatedImageStatus,
-                  audioStatus: stats.audioStatus,
-                  pagesWithAudio: stats.pagesWithAudio,
-                  totalPages: stats.totalPages,
-                  isNewModel: true,
-                  // Print layout for generating printable PDFs
-                  printLayoutId: sb.printLayoutId || undefined,
-                  // Include printable PDF URLs from finalization if available
-                  printablePdfUrl: sb.finalization?.printablePdfUrl || undefined,
-                  printableCoverPdfUrl: sb.finalization?.printableCoverPdfUrl || undefined,
-                  printableInteriorPdfUrl: sb.finalization?.printableInteriorPdfUrl || undefined,
-                });
-                console.log(`[storybooks] Added storybook ${sbDoc.id} with calculatedImageStatus: ${stats.calculatedImageStatus} (document had: ${sb.imageGeneration?.status})`);
-              } else {
-                console.log(`[storybooks] Skipped storybook ${sbDoc.id} - not ready`);
-              }
-            }
-          } catch (err) {
-            console.error('Error loading storybooks for story:', storyId, err);
-          }
-        }
-
-        // Sort storybooks by date, most recent first
-        storybooks.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-        results.push({ child, storybooks });
+      if (!response.ok) {
+        throw new Error('Failed to fetch storybooks');
       }
 
-      // Sort children by number of storybooks (descending)
-      results.sort((a, b) => b.storybooks.length - a.storybooks.length);
+      const data: StorybooksResponse = await response.json();
+
+      // Convert API response to client format
+      const children: ChildWithStorybooks[] = data.children.map((child) => ({
+        childId: child.childId,
+        displayName: child.displayName,
+        avatarUrl: child.avatarUrl,
+        storybooks: child.storybooks.map((sb) => ({
+          ...sb,
+          createdAtDate: new Date(sb.createdAt),
+          thumbnailLoaded: sb.thumbnailUrl ? true : false, // Mark as loaded if we have it
+        })),
+      }));
 
       // Build metadata map for delete/undo operations
       const metaMap = new Map<string, StorybookWithMeta>();
-      for (const { storybooks } of results) {
-        for (const sb of storybooks) {
+      for (const child of children) {
+        for (const sb of child.storybooks) {
           metaMap.set(sb.storybookId, sb);
         }
       }
       setStorybookMetaMap(metaMap);
+      setChildrenWithStorybooks(children);
 
-      setChildrenWithStorybooks(results);
+      // Fetch thumbnails for storybooks that don't have them
+      const storybooksNeedingThumbnails = children.flatMap((child) =>
+        child.storybooks
+          .filter((sb) => !sb.thumbnailUrl)
+          .map((sb) => ({
+            storybookId: sb.storybookId,
+            storyId: sb.storyId,
+            isNewModel: sb.isNewModel,
+          }))
+      );
+
+      if (storybooksNeedingThumbnails.length > 0) {
+        setThumbnailsLoading(true);
+        fetchThumbnails(storybooksNeedingThumbnails, idToken);
+      }
+    } catch (error) {
+      console.error('Error fetching storybooks:', error);
+      toast({
+        title: 'Error loading storybooks',
+        description: 'Please try refreshing the page.',
+        variant: 'destructive',
+      });
+    } finally {
       setLoading(false);
-    };
+    }
+  }, [user, toast]);
 
-    loadStorybooks();
-  }, [firestore, visibleChildren, childrenLoading]);
+  // Fetch thumbnails in batches
+  const fetchThumbnails = useCallback(
+    async (
+      storybooks: Array<{ storybookId: string; storyId: string; isNewModel: boolean }>,
+      idToken: string
+    ) => {
+      try {
+        const response = await fetch('/api/parent/storybooks/thumbnails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ storybooks }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch thumbnails');
+        }
+
+        const data = await response.json();
+
+        // Update storybooks with thumbnail data
+        setChildrenWithStorybooks((prev) =>
+          prev.map((child) => ({
+            ...child,
+            storybooks: child.storybooks.map((sb) => {
+              const thumbnail = data.thumbnails.find(
+                (t: any) => t.storybookId === sb.storybookId
+              );
+              if (thumbnail) {
+                return {
+                  ...sb,
+                  thumbnailUrl: thumbnail.thumbnailUrl || sb.thumbnailUrl,
+                  thumbnailLoaded: true,
+                  audioStatus: thumbnail.audioStatus || sb.audioStatus,
+                  pagesWithAudio: thumbnail.pagesWithAudio,
+                  totalPages: thumbnail.totalPages,
+                  imageGenerationStatus: thumbnail.calculatedImageStatus || sb.imageGenerationStatus,
+                };
+              }
+              return { ...sb, thumbnailLoaded: true };
+            }),
+          }))
+        );
+
+        // Also update the metadata map
+        setStorybookMetaMap((prev) => {
+          const updated = new Map(prev);
+          for (const thumbnail of data.thumbnails) {
+            const existing = updated.get(thumbnail.storybookId);
+            if (existing) {
+              updated.set(thumbnail.storybookId, {
+                ...existing,
+                thumbnailUrl: thumbnail.thumbnailUrl || existing.thumbnailUrl,
+                thumbnailLoaded: true,
+                audioStatus: thumbnail.audioStatus || existing.audioStatus,
+                pagesWithAudio: thumbnail.pagesWithAudio,
+                totalPages: thumbnail.totalPages,
+                imageGenerationStatus: thumbnail.calculatedImageStatus || existing.imageGenerationStatus,
+              });
+            }
+          }
+          return updated;
+        });
+      } catch (error) {
+        console.error('Error fetching thumbnails:', error);
+        // Mark all as loaded even on error to stop loading state
+        setChildrenWithStorybooks((prev) =>
+          prev.map((child) => ({
+            ...child,
+            storybooks: child.storybooks.map((sb) => ({ ...sb, thumbnailLoaded: true })),
+          }))
+        );
+      } finally {
+        setThumbnailsLoading(false);
+      }
+    },
+    []
+  );
+
+  // Load storybooks on mount
+  useEffect(() => {
+    if (!userLoading && user && idTokenResult) {
+      fetchStorybooks();
+    }
+  }, [user, userLoading, idTokenResult, fetchStorybooks]);
 
   // Handle regenerate audio
   const handleRegenerateAudio = useCallback(
@@ -658,8 +621,8 @@ export default function ParentStorybooksPage() {
         setPrintResult({
           storybook,
           pdfUrl: storybook.printablePdfUrl,
-          coverPdfUrl: storybook.printableCoverPdfUrl,
-          interiorPdfUrl: storybook.printableInteriorPdfUrl,
+          coverPdfUrl: storybook.printableCoverPdfUrl || undefined,
+          interiorPdfUrl: storybook.printableInteriorPdfUrl || undefined,
         });
         return;
       }
@@ -898,11 +861,11 @@ export default function ParentStorybooksPage() {
       // Add back to local state
       setChildrenWithStorybooks((prev) =>
         prev.map((cws) => {
-          if (cws.child.id === storybook.childId) {
+          if (cws.childId === storybook.childId) {
             return {
               ...cws,
               storybooks: [...cws.storybooks, storybook].sort(
-                (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+                (a, b) => b.createdAtDate.getTime() - a.createdAtDate.getTime()
               ),
             };
           }
@@ -917,16 +880,14 @@ export default function ParentStorybooksPage() {
 
   // Handle refresh
   const handleRefresh = useCallback(() => {
-    setLoading(true);
-    // Force re-render by clearing state
-    setChildrenWithStorybooks([]);
-  }, []);
+    fetchStorybooks();
+  }, [fetchStorybooks]);
 
   if (!isParentGuardValidated) {
     return null;
   }
 
-  const isLoading = userLoading || childrenLoading || loading;
+  const isLoading = userLoading || loading;
   const totalBooks = childrenWithStorybooks.reduce((sum, c) => sum + c.storybooks.length, 0);
 
   return (
@@ -974,7 +935,7 @@ export default function ParentStorybooksPage() {
           <CardContent className="p-0 divide-y">
             {childrenWithStorybooks.map((cws) => (
               <ChildStorybooksSection
-                key={cws.child.id}
+                key={cws.childId}
                 childWithStorybooks={cws}
                 imageStyles={imageStyles ?? undefined}
                 onRegenerateAudio={handleRegenerateAudio}
