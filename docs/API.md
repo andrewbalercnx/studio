@@ -2198,13 +2198,19 @@ Update an existing development todo item. Admin only.
 {
   "todoId": "abc123",
   "status": "completed",
-  "completedBy": "claude"
+  "completedBy": "claude",
+  "completionSummary": "Implemented incremental loading for storybooks page...",
+  "commitId": "b01742d"
 }
 ```
 
 **Required Fields**: `todoId`
 
-**Optional Fields**: `title`, `description`, `status`, `priority`, `partialComment`, `category`, `relatedFiles`, `completedBy`
+**Optional Fields**: `title`, `description`, `status`, `priority`, `partialComment`, `category`, `relatedFiles`, `completedBy`, `completionSummary`, `commitId`
+
+**Notes**:
+- When setting `status` to `completed`, you can optionally provide `completionSummary` (what was done) and `commitId` (git commit reference)
+- When reopening a completed item (setting `status` to `pending` or `in_progress`), completion fields are automatically cleared
 
 **Response**: `200 OK`
 ```json

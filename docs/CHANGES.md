@@ -18,6 +18,28 @@
 
 ### 2026-01-17
 
+#### `290d2ce` - Add completionSummary and commitId fields to dev todos
+
+**Type**: Enhancement
+
+**Summary**: Added ability to save a completion summary and git commit ID when completing dev todo items. This provides an audit trail of what was done and allows linking to specific commits.
+
+**Changes**:
+- Added `completionSummary` field to DevTodo type for storing what was accomplished
+- Added `commitId` field to DevTodo type for linking to git commits
+- Updated PUT endpoint to accept these fields when completing items
+- When reopening a completed item, completion fields are automatically cleared
+
+**Files Modified**:
+- `src/lib/types.ts` - Added new fields to DevTodo type
+- `src/app/api/admin/dev-todos/route.ts` - Handle new fields in PUT endpoint
+
+**Documentation Updated**:
+- `docs/SCHEMA.md` - Updated devTodos schema
+- `docs/API.md` - Updated PUT endpoint documentation
+
+---
+
 #### `97827ad` - Implement incremental loading for storybooks page
 
 **Type**: Performance Enhancement

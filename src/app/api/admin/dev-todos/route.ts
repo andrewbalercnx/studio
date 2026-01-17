@@ -173,6 +173,8 @@ export async function PUT(request: Request) {
       category,
       relatedFiles,
       completedBy,
+      completionSummary,
+      commitId,
     } = body;
 
     // Validate todoId
@@ -223,11 +225,26 @@ export async function PUT(request: Request) {
       }
       updateData.status = status;
 
-      // Track who completed the item
+      // Track who completed the item and capture completion details
       if (status === 'completed') {
         updateData.completedAt = FieldValue.serverTimestamp();
         updateData.completedBy = completedBy || 'admin';
         updateData.completedByEmail = (completedBy || 'admin') === 'admin' ? (user.email || null) : null;
+        if (completionSummary) {
+          updateData.completionSummary = completionSummary.trim();
+        }
+        if (commitId) {
+          updateData.commitId = commitId.trim();
+        }
+      }
+
+      // If reopening (setting to pending/in_progress from completed), clear completion fields
+      if (status === 'pending' || status === 'in_progress') {
+        updateData.completedAt = null;
+        updateData.completedBy = null;
+        updateData.completedByEmail = null;
+        updateData.completionSummary = null;
+        updateData.commitId = null;
       }
     }
 

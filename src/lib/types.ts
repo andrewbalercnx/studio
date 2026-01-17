@@ -2170,6 +2170,8 @@ export type DevTodo = {
   createdByEmail?: string;                // Email of admin who created (if admin)
   completedBy?: 'admin' | 'claude';       // Who completed this item
   completedByEmail?: string;              // Email of admin who completed (if admin)
+  completionSummary?: string;             // Summary of what was done when completing the item
+  commitId?: string;                      // Git commit ID for the completion (if applicable)
 
   // Optional categorization
   category?: string;                      // e.g., 'security', 'performance', 'UX', 'testing'

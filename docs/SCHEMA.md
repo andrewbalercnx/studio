@@ -963,11 +963,17 @@ Development todo items for tracking work that should be done for a production-re
 | `createdByEmail` | string | No | Email of admin who created (if admin) |
 | `completedBy` | 'admin' \| 'claude' | No | Who completed this item |
 | `completedByEmail` | string | No | Email of admin who completed (if admin) |
+| `completionSummary` | string | No | Summary of what was done when completing the item |
+| `commitId` | string | No | Git commit ID for the completion (if applicable) |
 | `category` | string | No | Category (e.g., 'security', 'performance', 'UX', 'testing') |
 | `relatedFiles` | string[] | No | Relevant file paths |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
 | `completedAt` | timestamp | No | Completion time |
+
+**Notes**:
+- When reopening a completed item (setting status back to 'pending' or 'in_progress'), completion fields are cleared.
+- The `completionSummary` field should contain a summary of what was accomplished, useful for audit trail.
 
 **Security**: Admin only.
 
