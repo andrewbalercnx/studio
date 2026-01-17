@@ -15,9 +15,17 @@ This document describes the current architecture of the system, including techno
 
 **Rules**:
 - **Read at the start of any major piece of work** to understand the system architecture
-- Update whenever architectural changes are made
 - Always reflects the **current state** of the system (not a history of changes)
 - Include rationale for architectural decisions
+
+**Rule**: You **MUST** update `docs/SYSTEM_DESIGN.md` when any of the following occur:
+- Adding a new system component or service (e.g., new admin page, new background job, new integration)
+- Adding or changing a configuration system (e.g., Firestore-based config, feature flags)
+- Changing how components interact or communicate
+- Adding new external service integrations (e.g., new API provider, new AI model provider)
+- Modifying authentication, authorization, or security patterns
+- Changing data flow patterns between client and server
+- Adding new caching strategies or state management approaches
 
 ### Schema Documentation
 Location: `docs/SCHEMA.md`
@@ -280,10 +288,87 @@ git push
 
 ---
 
+## Development Todo List
+
+Location: Admin Dashboard > Development > Development Todo List
+
+The development todo list tracks work items that should be done for a production-ready system. Both the admin and Claude can add items to this list.
+
+### When to Add Items
+
+You **SHOULD** add a todo item when:
+- You complete a piece of work but identify follow-up improvements that would be valuable in production
+- You notice technical debt, missing error handling, or incomplete features while working
+- You implement a quick solution that could benefit from a more robust implementation later
+- You skip optional enhancements (e.g., caching, validation, logging) to stay focused on the main task
+- You identify security, performance, or UX improvements that aren't critical but would add value
+
+### How to Add Items (via API)
+
+Use the `/api/admin/dev-todos` endpoint with a POST request:
+
+```typescript
+// Example: Adding a dev todo after completing work
+const response = await fetch('/api/admin/dev-todos', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  },
+  body: JSON.stringify({
+    title: 'Add rate limiting to print order submission',
+    description: `## Context
+The print order submission endpoint currently has no rate limiting.
+
+## Implementation Notes
+- Add rate limiting middleware to prevent abuse
+- Consider using Redis for distributed rate limiting
+- Suggested limit: 5 orders per user per hour
+
+## Related Files
+- \`src/app/api/print-orders/route.ts\`
+`,
+    priority: 'medium', // 'low' | 'medium' | 'high'
+    category: 'security', // e.g., 'security', 'performance', 'UX', 'testing'
+    createdBy: 'claude',
+  }),
+});
+```
+
+### Description Format
+
+The description field supports Markdown. Include:
+- **Context**: Why this work is needed
+- **Implementation Notes**: Guidance for future implementation
+- **Related Files**: File paths that will need to be modified
+
+### Marking Items Complete
+
+When you complete a todo item, update its status via PUT:
+
+```typescript
+await fetch('/api/admin/dev-todos', {
+  method: 'PUT',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  },
+  body: JSON.stringify({
+    todoId: 'abc123',
+    status: 'completed',
+    completedBy: 'claude',
+  }),
+});
+```
+
+---
+
 ## Version History
 
 | Date | Changes |
 |------|---------|
+| 2026-01-17 | Added Development Todo List section with instructions for Claude to add items |
+| 2026-01-17 | Added explicit triggers for when SYSTEM_DESIGN.md must be updated |
 | 2026-01-08 | Added Mobile App (APK) Updates section |
 | 2026-01-08 | Added Architectural Principles section with Server-First Data Processing rule |
 | 2026-01-04 | Updated Git Workflow to single-push pattern (amend before push) |

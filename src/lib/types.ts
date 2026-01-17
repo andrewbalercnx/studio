@@ -2130,3 +2130,52 @@ export type GoogleAIModelInfo = {
   category?: 'text' | 'image' | 'embedding' | 'other';
   isImageGeneration?: boolean;
 };
+
+// ============================================================================
+// Development Todo Types
+// ============================================================================
+
+/**
+ * Status of a development todo item.
+ * - pending: Not yet started
+ * - in_progress: Currently being worked on
+ * - partial: Partially completed with a comment explaining what remains
+ * - completed: Fully done
+ */
+export type DevTodoStatus = 'pending' | 'in_progress' | 'partial' | 'completed';
+
+/**
+ * Priority level for development todos.
+ */
+export type DevTodoPriority = 'low' | 'medium' | 'high';
+
+/**
+ * A development todo item tracked in Firestore.
+ * Collection: devTodos
+ *
+ * These items are used to track work that should be done for a production-ready system.
+ * Both admins and Claude can add items to this list.
+ */
+export type DevTodo = {
+  id: string;                             // Document ID
+  title: string;                          // Short description of the work item
+  description?: string;                   // Detailed description (optional)
+  status: DevTodoStatus;                  // Current status
+  priority: DevTodoPriority;              // Priority level
+  partialComment?: string;                // Comment when status is 'partial'
+
+  // Tracking who created/modified this item
+  createdBy: 'admin' | 'claude';          // Who created this item
+  createdByEmail?: string;                // Email of admin who created (if admin)
+  completedBy?: 'admin' | 'claude';       // Who completed this item
+  completedByEmail?: string;              // Email of admin who completed (if admin)
+
+  // Optional categorization
+  category?: string;                      // e.g., 'security', 'performance', 'UX', 'testing'
+  relatedFiles?: string[];                // Relevant file paths
+
+  // Metadata
+  createdAt: any;
+  updatedAt: any;
+  completedAt?: any;
+};

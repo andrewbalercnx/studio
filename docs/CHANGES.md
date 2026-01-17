@@ -18,6 +18,35 @@
 
 ### 2026-01-17
 
+#### `9e21034` - Add Development Todo List feature
+
+**Type**: Feature
+
+**Summary**: Added a development todo list to the admin Development page that tracks work items for production readiness. Both admins and Claude can add items to this list.
+
+**Features**:
+- Todo list UI with add/edit/delete functionality
+- Markdown support for descriptions with live preview
+- Status tracking (pending, in_progress, partial, completed)
+- Priority levels (low, medium, high)
+- Categories for organization
+- "Copy for Claude" button to format todos for pasting to AI
+- Collapsible descriptions with hover preview
+- Track who created/completed items (admin vs Claude)
+
+**Files Created**:
+- `src/app/api/admin/dev-todos/route.ts` - CRUD API endpoints
+- `src/components/admin/DevTodoList.tsx` - UI component
+
+**Files Modified**:
+- `src/lib/types.ts` - Added DevTodo, DevTodoStatus, DevTodoPriority types
+- `src/app/admin/dev/page.tsx` - Added DevTodoList component
+- `CLAUDE.md` - Added instructions for Claude to add dev todos
+- `docs/SCHEMA.md` - Added devTodos collection documentation
+- `docs/API.md` - Added dev-todos API endpoint documentation
+
+---
+
 #### `10dcd9f` - Remove environment variable override for AI model configuration
 
 **Type**: Simplification

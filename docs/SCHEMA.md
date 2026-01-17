@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-16 (added systemConfig/aiModels for centralized AI model configuration)
+> **Last Updated**: 2026-01-17 (added devTodos collection for development work tracking)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -913,6 +913,32 @@ CSS animations and sound effects for Q&A answer cards. Used during story creatio
 
 ---
 
+### `devTodos`
+
+Development todo items for tracking work that should be done for a production-ready system. Both admins and Claude can add items to this list via the admin dashboard or API.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Document ID |
+| `title` | string | Yes | Short description of the work item |
+| `description` | string | No | Detailed description (supports Markdown) |
+| `status` | 'pending' \| 'in_progress' \| 'partial' \| 'completed' | Yes | Current status |
+| `priority` | 'low' \| 'medium' \| 'high' | Yes | Priority level |
+| `partialComment` | string | No | Comment when status is 'partial' explaining what remains |
+| `createdBy` | 'admin' \| 'claude' | Yes | Who created this item |
+| `createdByEmail` | string | No | Email of admin who created (if admin) |
+| `completedBy` | 'admin' \| 'claude' | No | Who completed this item |
+| `completedByEmail` | string | No | Email of admin who completed (if admin) |
+| `category` | string | No | Category (e.g., 'security', 'performance', 'UX', 'testing') |
+| `relatedFiles` | string[] | No | Relevant file paths |
+| `createdAt` | timestamp | Yes | Creation time |
+| `updatedAt` | timestamp | Yes | Last update time |
+| `completedAt` | timestamp | No | Completion time |
+
+**Security**: Admin only.
+
+---
+
 ## Common Types
 
 ### `PrintOrderAddress`
@@ -1058,6 +1084,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 | `aiRunTraces` | Admin | Admin | |
 | `helpWizards` | Writer, Admin | Writer, Admin | help-* readable by authenticated |
 | `answerAnimations` | Authenticated | Writer, Admin | Q&A card animations |
+| `devTodos` | Admin | Admin | Development work items |
 
 ---
 
@@ -1065,6 +1092,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-01-17 | Added `devTodos` collection for development work tracking |
 | 2026-01-14 | Added `textBoxEnabled`/`imageBoxEnabled` flags and `leaf` field to PageLayoutConfig for print layouts; Documented PageLayoutBox and TextLayoutBox types |
 | 2026-01-13 | Added `users/{uid}/addresses` subcollection for saved shipping addresses; Added `systemConfig/addresses` for Mixam billing; Added `SavedAddress` common type |
 | 2026-01-04 | Added "Fun with my friends" generator: FriendsPhase, FriendsScenario, FriendsSynopsis types, session fields, friends prompts, friendsEnabled config |

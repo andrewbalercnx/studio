@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-16 (added AI models configuration routes)
+> **Last Updated**: 2026-01-17 (added dev-todos CRUD endpoints for development work tracking)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -2048,6 +2048,107 @@ When `sendAlerts` is true and issues are found, maintenance users will be notifi
 - `ok` - All configured models are available
 - `warning` - Some non-critical models have issues
 - `error` - Critical models (image generation) are unavailable
+
+---
+
+### GET `/api/admin/dev-todos`
+
+Get all development todo items. Admin only.
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "todos": [
+    {
+      "id": "abc123",
+      "title": "Add rate limiting to print order submission",
+      "description": "## Context\nThe endpoint needs protection...",
+      "status": "pending",
+      "priority": "medium",
+      "category": "security",
+      "createdBy": "claude",
+      "createdAt": "...",
+      "updatedAt": "..."
+    }
+  ]
+}
+```
+
+---
+
+### POST `/api/admin/dev-todos`
+
+Create a new development todo item. Admin only.
+
+**Request Body**:
+```json
+{
+  "title": "Add rate limiting",
+  "description": "## Context\n...",
+  "priority": "medium",
+  "category": "security",
+  "createdBy": "claude",
+  "relatedFiles": ["src/app/api/print-orders/route.ts"]
+}
+```
+
+**Required Fields**: `title`
+
+**Optional Fields**: `description`, `priority` (default: 'medium'), `category`, `createdBy` (default: 'admin'), `relatedFiles`
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "todoId": "abc123",
+  "message": "Dev todo created successfully"
+}
+```
+
+---
+
+### PUT `/api/admin/dev-todos`
+
+Update an existing development todo item. Admin only.
+
+**Request Body**:
+```json
+{
+  "todoId": "abc123",
+  "status": "completed",
+  "completedBy": "claude"
+}
+```
+
+**Required Fields**: `todoId`
+
+**Optional Fields**: `title`, `description`, `status`, `priority`, `partialComment`, `category`, `relatedFiles`, `completedBy`
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "message": "Dev todo updated successfully"
+}
+```
+
+---
+
+### DELETE `/api/admin/dev-todos`
+
+Delete a development todo item. Admin only.
+
+**Query Parameters**:
+- `todoId` (required) - ID of the todo to delete
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "message": "Dev todo deleted successfully"
+}
+```
 
 ---
 

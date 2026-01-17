@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { LoaderCircle, FlaskConical, Wand2, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
+import { DevTodoList } from '@/components/admin/DevTodoList';
 import { useUser } from '@/firebase/auth/use-user';
 
 export default function DevelopmentPage() {
@@ -39,6 +40,9 @@ export default function DevelopmentPage() {
     }
     return (
       <div className="space-y-8">
+        {/* Development Todo List */}
+        <DevTodoList />
+
         {/* AI Flow Tests */}
         <Card data-wiz-target="dev-ai-tests">
           <CardHeader>
