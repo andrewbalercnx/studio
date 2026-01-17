@@ -445,8 +445,11 @@ export default function ParentStorybooksPage() {
       );
 
       if (storybooksNeedingThumbnails.length > 0) {
+        console.log('[storybooks] Fetching thumbnails for', storybooksNeedingThumbnails.length, 'storybooks:', storybooksNeedingThumbnails.map(s => s.storybookId));
         setThumbnailsLoading(true);
         fetchThumbnails(storybooksNeedingThumbnails, idToken);
+      } else {
+        console.log('[storybooks] All storybooks have thumbnails, no fetch needed');
       }
     } catch (error) {
       console.error('Error fetching storybooks:', error);
@@ -481,6 +484,7 @@ export default function ParentStorybooksPage() {
         }
 
         const data = await response.json();
+        console.log('[storybooks] Received thumbnails:', data.thumbnails?.map((t: any) => ({ id: t.storybookId, url: t.thumbnailUrl ? 'found' : 'null' })));
 
         // Update storybooks with thumbnail data
         setChildrenWithStorybooks((prev) =>

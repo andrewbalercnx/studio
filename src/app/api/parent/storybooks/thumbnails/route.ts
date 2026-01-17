@@ -116,8 +116,11 @@ export async function POST(request: NextRequest) {
           const page = pageDoc.data();
 
           // Get thumbnail from page 0 (cover page)
-          if (page.pageNumber === 0 && page.imageUrl && page.imageStatus === 'ready') {
-            thumbnailUrl = page.imageUrl;
+          if (page.pageNumber === 0) {
+            console.log(`[thumbnails] Page 0 for ${sb.storybookId}: imageUrl=${page.imageUrl ? 'yes' : 'no'}, imageStatus=${page.imageStatus}`);
+            if (page.imageUrl && page.imageStatus === 'ready') {
+              thumbnailUrl = page.imageUrl;
+            }
           }
 
           // Count audio status
@@ -171,6 +174,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        console.log(`[thumbnails] Result for ${sb.storybookId}: thumbnailUrl=${thumbnailUrl ? 'found' : 'null'}, totalPages=${totalPages}`);
         results.push({
           storybookId: sb.storybookId,
           thumbnailUrl,
