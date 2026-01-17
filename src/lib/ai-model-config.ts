@@ -5,9 +5,8 @@
  *
  * Provides functions to get AI model names from a central Firestore configuration.
  * Priority order:
- * 1. Environment variable (highest - for deployment-specific overrides)
- * 2. Firestore config (systemConfig/aiModels)
- * 3. Hardcoded defaults (lowest)
+ * 1. Firestore config (systemConfig/aiModels)
+ * 2. Hardcoded defaults (fallback)
  *
  * Includes a 1-minute cache to avoid excessive Firestore reads.
  */
@@ -53,16 +52,10 @@ export async function getAIModelConfig(): Promise<AIModelsConfig> {
 
 /**
  * Get the image generation model name.
- * Priority: STORYBOOK_IMAGE_MODEL env var > Firestore config > default
+ * Reads from Firestore config, falls back to default.
  */
 export async function getImageGenerationModel(): Promise<string> {
-  // Allow env var override for backward compatibility
-  if (process.env.STORYBOOK_IMAGE_MODEL) {
-    console.log('[ai-model-config] Using STORYBOOK_IMAGE_MODEL env var:', process.env.STORYBOOK_IMAGE_MODEL);
-    return process.env.STORYBOOK_IMAGE_MODEL;
-  }
   const config = await getAIModelConfig();
-  console.log('[ai-model-config] Image generation model from config:', config.imageGenerationModel);
   return config.imageGenerationModel;
 }
 

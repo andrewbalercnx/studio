@@ -36,17 +36,10 @@ export async function GET(request: Request) {
       config = { ...DEFAULT_AI_MODELS_CONFIG, ...doc.data() } as AIModelsConfig;
     }
 
-    // Include environment variable override info
-    const envOverrides: Record<string, string> = {};
-    if (process.env.STORYBOOK_IMAGE_MODEL) {
-      envOverrides.imageGenerationModel = process.env.STORYBOOK_IMAGE_MODEL;
-    }
-
     return NextResponse.json({
       ok: true,
       config,
       usageMap: MODEL_USAGE_MAP,
-      envOverrides,
       isDefault: !doc.exists,
     });
 

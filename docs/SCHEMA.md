@@ -781,8 +781,6 @@ Centralized configuration for AI model selections across the application.
 - `lightweightTextModel`: 'googleai/gemini-2.5-flash'
 - `legacyTextModel`: 'googleai/gemini-2.0-flash'
 
-**Priority**: Environment variable `STORYBOOK_IMAGE_MODEL` takes precedence over Firestore config for image generation model.
-
 **Security**: Admin only.
 
 #### `systemConfig/addresses`

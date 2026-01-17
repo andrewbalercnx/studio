@@ -100,7 +100,6 @@ export default function AIModelsPage() {
   const [config, setConfig] = useState<AIModelsConfig>(DEFAULT_AI_MODELS_CONFIG);
   const [originalConfig, setOriginalConfig] = useState<AIModelsConfig>(DEFAULT_AI_MODELS_CONFIG);
   const [usageMap, setUsageMap] = useState<Record<string, string[]>>({});
-  const [envOverrides, setEnvOverrides] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -133,7 +132,6 @@ export default function AIModelsPage() {
         setConfig(mergedConfig);
         setOriginalConfig(mergedConfig);
         setUsageMap(data.usageMap || {});
-        setEnvOverrides(data.envOverrides || {});
 
         // If there's a stored availability check, restore its status
         if (data.config.availabilityCheck) {
@@ -446,18 +444,10 @@ export default function AIModelsPage() {
               {MODEL_ORDER.map((key) => {
                 const label = MODEL_LABELS[key];
                 const flows = usageMap[key] || [];
-                const envOverride = envOverrides[key];
 
                 return (
                   <div key={key} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor={key}>{label.title}</Label>
-                      {envOverride && (
-                        <Badge variant="outline" className="text-xs">
-                          Env override: {envOverride}
-                        </Badge>
-                      )}
-                    </div>
+                    <Label htmlFor={key}>{label.title}</Label>
                     <Input
                       id={key}
                       value={config[key]}
@@ -465,8 +455,6 @@ export default function AIModelsPage() {
                         setConfig((prev) => ({ ...prev, [key]: e.target.value }))
                       }
                       placeholder={DEFAULT_AI_MODELS_CONFIG[key]}
-                      className={envOverride ? 'opacity-50' : ''}
-                      disabled={!!envOverride}
                     />
                     <p className="text-xs text-muted-foreground">{label.description}</p>
                     {flows.length > 0 && (
@@ -609,7 +597,6 @@ export default function AIModelsPage() {
                 availabilityStatus,
                 availabilityIssues,
                 usageMap,
-                envOverrides,
               }}
               className="mt-8"
             />

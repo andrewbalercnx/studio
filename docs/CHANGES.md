@@ -18,7 +18,26 @@
 
 ### 2026-01-17
 
-#### `6559d0c` - Fix AI Models page and improve error handling
+#### `10dcd9f` - Remove environment variable override for AI model configuration
+
+**Type**: Simplification
+
+**Summary**: Removed support for `STORYBOOK_IMAGE_MODEL` environment variable override. AI model configuration is now only controlled via the Firestore `systemConfig/aiModels` document and the admin UI at `/admin/ai-models`.
+
+**Changes**:
+- Removed env var check from `getImageGenerationModel()`
+- Removed env override display from admin UI
+- Updated documentation to remove env var priority note
+
+**Files Modified**:
+- `src/lib/ai-model-config.ts` - Removed env var override
+- `src/app/api/admin/ai-models/route.ts` - Removed envOverrides from response
+- `src/app/admin/ai-models/page.tsx` - Removed env override display
+- `docs/SCHEMA.md` - Removed env var priority note
+
+---
+
+#### `417aec4` - Fix AI Models page and improve error handling
 
 **Type**: Bug Fix
 
@@ -29,14 +48,10 @@
 2. Fixed AI Flow Log not capturing model name on error logs (now stored at top level)
 3. Fixed "Cannot read properties of undefined (reading 'replace')" error in Check Availability
 4. Added null-safety for model name handling in admin page
-5. Added logging to show which model is being used from config vs env var
-
-**Root Cause Note**: The actual image generation failure was caused by `STORYBOOK_IMAGE_MODEL` environment variable being set to the wrong model (`gemini-2.5-pro` instead of `gemini-2.5-flash-image`). This needs to be fixed in the production environment configuration.
 
 **Files Modified**:
 - `src/ai/flows/story-image-flow.ts` - Fixed error classification and added model config error handling
 - `src/lib/ai-flow-logger.ts` - Always store model name at top level for visibility
-- `src/lib/ai-model-config.ts` - Added logging when model is selected
 - `src/app/admin/ai-models/page.tsx` - Added null-safety for model names
 - `src/app/api/admin/ai-models/check-availability/route.ts` - Added null-safety
 
