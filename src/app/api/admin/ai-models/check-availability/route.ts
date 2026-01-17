@@ -145,23 +145,34 @@ export async function POST(request: Request) {
     const docRef = firestore.doc(AI_MODELS_DOC_PATH);
     const doc = await docRef.get();
 
+    // Hardcoded fallbacks in case DEFAULT_AI_MODELS_CONFIG import has issues
+    const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
+    const FALLBACK_PRIMARY_MODEL = 'googleai/gemini-2.5-pro';
+    const FALLBACK_LIGHTWEIGHT_MODEL = 'googleai/gemini-2.5-flash';
+    const FALLBACK_LEGACY_MODEL = 'googleai/gemini-2.0-flash';
+
     // Build config with explicit defaults for each field
     // This handles cases where doc exists but is missing some model fields
     const docData = doc.exists ? doc.data() : {};
     const config: AIModelsConfig = {
-      imageGenerationModel: docData?.imageGenerationModel || DEFAULT_AI_MODELS_CONFIG.imageGenerationModel,
-      primaryTextModel: docData?.primaryTextModel || DEFAULT_AI_MODELS_CONFIG.primaryTextModel,
-      lightweightTextModel: docData?.lightweightTextModel || DEFAULT_AI_MODELS_CONFIG.lightweightTextModel,
-      legacyTextModel: docData?.legacyTextModel || DEFAULT_AI_MODELS_CONFIG.legacyTextModel,
+      imageGenerationModel: docData?.imageGenerationModel || DEFAULT_AI_MODELS_CONFIG?.imageGenerationModel || FALLBACK_IMAGE_MODEL,
+      primaryTextModel: docData?.primaryTextModel || DEFAULT_AI_MODELS_CONFIG?.primaryTextModel || FALLBACK_PRIMARY_MODEL,
+      lightweightTextModel: docData?.lightweightTextModel || DEFAULT_AI_MODELS_CONFIG?.lightweightTextModel || FALLBACK_LIGHTWEIGHT_MODEL,
+      legacyTextModel: docData?.legacyTextModel || DEFAULT_AI_MODELS_CONFIG?.legacyTextModel || FALLBACK_LEGACY_MODEL,
     };
 
     // If document doesn't have the model fields, seed them now
     if (!doc.exists || !docData?.imageGenerationModel) {
-      await docRef.set({
-        ...config,
+      // Use explicit object to avoid any undefined values
+      const seedData = {
+        imageGenerationModel: config.imageGenerationModel,
+        primaryTextModel: config.primaryTextModel,
+        lightweightTextModel: config.lightweightTextModel,
+        legacyTextModel: config.legacyTextModel,
         createdAt: FieldValue.serverTimestamp(),
         createdBy: 'system-auto-seed',
-      }, { merge: true });
+      };
+      await docRef.set(seedData, { merge: true });
     }
 
     // Check each configured model
