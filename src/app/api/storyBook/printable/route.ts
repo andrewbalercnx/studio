@@ -884,11 +884,16 @@ async function renderInteriorPdf(pages: StoryOutputPage[], layout: PrintLayout, 
   }
 
   // Render content pages at the unified font size
-  // For two-leaf spreads, each content page creates two PDF pages (one per leaf)
+  // For two-leaf spreads, INSIDE pages create two PDF pages (one per leaf)
+  // Title pages and blank pages are always single pages (not spread across two leaves)
   const isTwoLeafSpread = layout.leavesPerSpread === 2;
 
   for (const page of interiorPages) {
-    if (isTwoLeafSpread) {
+    // Title pages and blank pages should only generate one PDF page, not two
+    // Only 'inside' pages (text/image content) should spread across two leaves
+    const isSpreadPage = isTwoLeafSpread && page.kind !== 'title_page' && page.kind !== 'blank';
+
+    if (isSpreadPage) {
       // Create two pages for the spread - leaf 1 (left) and leaf 2 (right)
       const leaf1Page = pdfDoc.addPage([
         layout.leafWidth * INCH_TO_POINTS,
@@ -903,6 +908,7 @@ async function renderInteriorPdf(pages: StoryOutputPage[], layout: PrintLayout, 
       await renderPageContent(leaf2Page, page, layout, bodyFont, unifiedFontSize, 2);
     } else {
       // Single-page mode - render all content on one page
+      // This includes: title_page, blank, and all pages when leavesPerSpread=1
       const pdfPage = pdfDoc.addPage([
         layout.leafWidth * INCH_TO_POINTS,
         layout.leafHeight * INCH_TO_POINTS
@@ -922,15 +928,18 @@ async function renderInteriorPdf(pages: StoryOutputPage[], layout: PrintLayout, 
     }
   }
 
-  // For two-leaf spreads, each content item generates 2 pages
-  const pdfPagesPerContent = isTwoLeafSpread ? 2 : 1;
-  const contentPageCount = interiorPages.length * pdfPagesPerContent;
+  // Calculate actual page count:
+  // - Title pages and blank pages = 1 PDF page each
+  // - Inside pages (text/image) = 2 PDF pages each when isTwoLeafSpread, else 1
+  const singlePageItems = interiorPages.filter(p => p.kind === 'title_page' || p.kind === 'blank').length;
+  const spreadPageItems = interiorPages.length - singlePageItems;
+  const contentPageCount = singlePageItems + (spreadPageItems * (isTwoLeafSpread ? 2 : 1));
   const totalPages = contentPageCount + paddingPageCount;
   if (totalPages % 4 !== 0) {
     console.warn(`[printable] Total interior page count ${totalPages} is not divisible by 4`);
   }
 
-  console.log(`[printable] Interior PDF: ${interiorPages.length} content items (${contentPageCount} pages${isTwoLeafSpread ? ' @ 2 per spread' : ''}) + ${paddingPageCount} padding at ${unifiedFontSize}pt`);
+  console.log(`[printable] Interior PDF: ${singlePageItems} single-page items + ${spreadPageItems} spread items (${contentPageCount} pages${isTwoLeafSpread ? ' @ 2 per spread for inside pages' : ''}) + ${paddingPageCount} padding at ${unifiedFontSize}pt`);
 
   return await pdfDoc.save();
 }
@@ -1089,10 +1098,13 @@ export async function POST(request: Request) {
     const coverPageCount = includeSpine ? 3 : 2; // front + spine? + back
 
     // Calculate content page count, accounting for leavesPerSpread
-    // For two-leaf spreads, each content item generates 2 PDF pages
+    // For two-leaf spreads, INSIDE pages generate 2 PDF pages, but title_page and blank are always 1
     const contentItems = pages.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back');
-    const pdfPagesPerContent = printLayout.leavesPerSpread === 2 ? 2 : 1;
-    const contentPageCount = contentItems.length * pdfPagesPerContent;
+    const isTwoLeafSpread = printLayout.leavesPerSpread === 2;
+    // Count single-page items (title_page, blank) vs spread items (text, image, etc.)
+    const singlePageItems = contentItems.filter(p => p.kind === 'title_page' || p.kind === 'blank');
+    const spreadItems = contentItems.filter(p => p.kind !== 'title_page' && p.kind !== 'blank');
+    const contentPageCount = singlePageItems.length + (spreadItems.length * (isTwoLeafSpread ? 2 : 1));
 
     // Calculate interior page adjustments using the new rules:
     // 1. Inside pages must be at least minPageCount
@@ -1102,12 +1114,10 @@ export async function POST(request: Request) {
     const pdfGenerationWarnings: string[] = interiorAdjustment.warnings;
 
     // Log page breakdown calculation
-    const isTwoLeafSpread = printLayout.leavesPerSpread === 2;
     console.log(`[printable] Page count breakdown:`);
     console.log(`  - Layout: ${printLayout.name}, leavesPerSpread: ${printLayout.leavesPerSpread}`);
-    console.log(`  - Content items: ${contentItems.length} (title pages, inside pages, etc.)`);
-    console.log(`  - PDF pages per content: ${pdfPagesPerContent} (${isTwoLeafSpread ? 'dual-leaf spread' : 'single page'})`);
-    console.log(`  - Content PDF pages: ${contentPageCount}`);
+    console.log(`  - Content items: ${contentItems.length} (${singlePageItems.length} single-page + ${spreadItems.length} spread items)`);
+    console.log(`  - Content PDF pages: ${contentPageCount} (single-page items=1 each, spread items=${isTwoLeafSpread ? 2 : 1} each)`);
     console.log(`  - Product settings: blankPages=${blankPages}, spine=${includeSpine}`);
     console.log(`  - Constraints: min=${resolvedConstraints.minPages}, max=${resolvedConstraints.maxPages || 'none'}, multiple of 4`);
 
@@ -1119,22 +1129,33 @@ export async function POST(request: Request) {
     let pagesToRender = pages;
     if (interiorAdjustment.wasTruncated && resolvedConstraints.maxPages > 0) {
       // Keep covers + only up to finalInteriorPages of content
-      // For two-leaf spreads, we need to convert PDF pages back to content items
+      // Truncation is complex with mixed single/spread pages - truncate from the end
       const coverPages = pages.filter(p => p.kind === 'cover_front' || p.kind === 'cover_back');
-      const maxContentItems = Math.floor(interiorAdjustment.finalInteriorPages / pdfPagesPerContent);
-      const truncatedContent = contentItems.slice(0, maxContentItems);
+      let targetPdfPages = interiorAdjustment.finalInteriorPages;
+      const truncatedContent: typeof contentItems = [];
+      for (const item of contentItems) {
+        const itemPages = (item.kind === 'title_page' || item.kind === 'blank') ? 1 : (isTwoLeafSpread ? 2 : 1);
+        if (targetPdfPages >= itemPages) {
+          truncatedContent.push(item);
+          targetPdfPages -= itemPages;
+        } else {
+          break; // Can't fit any more items
+        }
+      }
       pagesToRender = [...coverPages.filter(p => p.kind === 'cover_front'), ...truncatedContent, ...coverPages.filter(p => p.kind === 'cover_back')];
       console.log(`[printable] Truncated from ${contentItems.length} to ${truncatedContent.length} content items (${interiorAdjustment.finalInteriorPages} PDF pages)`);
     }
 
-    // Calculate padding pages needed
-    const actualContentItems = pagesToRender.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back').length;
-    const actualContentPdfPages = actualContentItems * pdfPagesPerContent;
+    // Calculate padding pages needed - recalculate actual PDF pages from the items we're rendering
+    const actualContentItems = pagesToRender.filter(p => p.kind !== 'cover_front' && p.kind !== 'cover_back');
+    const actualSinglePageItems = actualContentItems.filter(p => p.kind === 'title_page' || p.kind === 'blank').length;
+    const actualSpreadItems = actualContentItems.length - actualSinglePageItems;
+    const actualContentPdfPages = actualSinglePageItems + (actualSpreadItems * (isTwoLeafSpread ? 2 : 1));
     const paddingPageCount = interiorAdjustment.paddingNeeded;
     const totalInteriorWithPadding = interiorAdjustment.finalInteriorPages;
 
     console.log(`[printable] Final interior PDF composition:`);
-    console.log(`  - Content items: ${actualContentItems} -> ${actualContentPdfPages} PDF pages`);
+    console.log(`  - Content items: ${actualContentItems.length} (${actualSinglePageItems} single + ${actualSpreadItems} spread) -> ${actualContentPdfPages} PDF pages`);
     console.log(`  - Padding pages: ${paddingPageCount}`);
     console.log(`  - Total interior pages: ${totalInteriorWithPadding}`);
 

@@ -18,6 +18,26 @@
 
 ### 2026-01-17
 
+#### `da8dd91` - Fix title page duplication in two-leaf spread PDFs
+
+**Type**: Bug Fix
+
+**Summary**: Fixed an issue where title pages (and blank pages) were being rendered twice in two-leaf spread layouts. Title pages should only generate one PDF page, not two.
+
+**Root Cause**: When `leavesPerSpread === 2`, the interior PDF renderer was creating two PDF pages for every content item, including title pages and blank pages. However, these single-content pages don't have separate text/image boxes assigned to different leaves - they should remain as single pages.
+
+**Changes**:
+- Title pages and blank pages now generate 1 PDF page regardless of spread mode
+- Only inside pages (text/image content) generate 2 PDF pages in two-leaf spread mode
+- Updated page count calculation to correctly account for mixed single/spread pages
+- Updated truncation logic to handle mixed page types
+- Improved logging to show breakdown of single-page vs spread items
+
+**Files Modified**:
+- `src/app/api/storyBook/printable/route.ts` - Fixed interior PDF rendering and page count logic
+
+---
+
 #### `8e02594` - Fix AI Models config field-level auto-seeding
 
 **Type**: Bug Fix
