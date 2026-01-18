@@ -677,6 +677,7 @@ export type MixamOrderStatus =
   | 'submitted'
   | 'confirmed'
   | 'in_production'
+  | 'on_hold'
   | 'shipped'
   | 'delivered'
   | 'cancelled'

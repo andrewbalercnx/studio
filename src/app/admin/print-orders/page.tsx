@@ -12,7 +12,7 @@ export default function PrintOrdersPage() {
   const [orders, setOrders] = useState<PrintOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'submitted'>('pending');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'submitted' | 'on_hold'>('pending');
 
   useEffect(() => {
     if (!userLoading && user) {
@@ -60,6 +60,7 @@ export default function PrintOrdersPage() {
       submitted: 'bg-purple-200 text-purple-800',
       confirmed: 'bg-purple-300 text-purple-900',
       in_production: 'bg-indigo-200 text-indigo-800',
+      on_hold: 'bg-orange-200 text-orange-800',
       shipped: 'bg-blue-300 text-blue-900',
       delivered: 'bg-green-400 text-green-950',
       cancelled: 'bg-gray-300 text-gray-900',
@@ -123,6 +124,7 @@ export default function PrintOrdersPage() {
                 { key: 'pending', label: 'Pending Approval' },
                 { key: 'approved', label: 'Approved' },
                 { key: 'submitted', label: 'Submitted' },
+                { key: 'on_hold', label: 'On Hold' },
                 { key: 'all', label: 'All Orders' },
               ].map((tab) => (
                 <button

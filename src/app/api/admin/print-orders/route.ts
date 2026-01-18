@@ -43,6 +43,8 @@ export async function GET(request: NextRequest) {
         'shipped',
         'delivered',
       ]);
+    } else if (filter === 'on_hold') {
+      query = query.where('fulfillmentStatus', '==', 'on_hold');
     }
 
     const snapshot = await query.limit(100).get();
