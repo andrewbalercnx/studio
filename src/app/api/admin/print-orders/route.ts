@@ -40,9 +40,9 @@ export async function GET(request: NextRequest) {
         'submitted',
         'confirmed',
         'in_production',
-        'shipped',
-        'delivered',
       ]);
+    } else if (filter === 'shipped') {
+      query = query.where('fulfillmentStatus', 'in', ['shipped', 'delivered']);
     } else if (filter === 'on_hold') {
       query = query.where('fulfillmentStatus', '==', 'on_hold');
     }

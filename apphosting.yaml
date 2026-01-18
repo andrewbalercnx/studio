@@ -61,12 +61,8 @@ env:
     availability:
       - RUNTIME
 
-  # Mixam payment method: TEST_ORDER (testing), ACCOUNT (bill to account), or CARD_ON_FILE
-  # Use TEST_ORDER for integration testing, ACCOUNT for production
-  - variable: MIXAM_PAYMENT_METHOD
-    secret: MIXAM_PAYMENT_METHOD
-    availability:
-      - RUNTIME
+  # Note: MIXAM_PAYMENT_METHOD is now configured via Admin Portal (Mixam Catalogue page)
+  # and stored in Firestore at systemConfig/mixam
 
   # Microsoft Graph API credentials for email notifications
   # Uses Azure AD App Registration with Mail.Send permission

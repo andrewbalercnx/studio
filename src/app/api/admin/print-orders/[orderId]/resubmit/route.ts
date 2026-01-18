@@ -46,10 +46,11 @@ export async function POST(
 
     const order = { id: orderDoc.id, ...orderDoc.data() } as PrintOrder;
 
-    // Verify order is on_hold (the only status we allow resubmission from)
-    if (order.fulfillmentStatus !== 'on_hold') {
+    // Verify order is on_hold or submitted (Pending state in Mixam)
+    const allowedStatuses = ['on_hold', 'submitted'];
+    if (!allowedStatuses.includes(order.fulfillmentStatus)) {
       return NextResponse.json(
-        { ok: false, error: `Resubmit is only available for orders on hold. Current status: ${order.fulfillmentStatus}` },
+        { ok: false, error: `Resubmit is only available for orders on hold or pending. Current status: ${order.fulfillmentStatus}` },
         { status: 400 }
       );
     }

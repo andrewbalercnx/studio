@@ -343,7 +343,7 @@ export default function PrintOrderDetailPage() {
   const canReject = order.fulfillmentStatus === 'awaiting_approval' || order.fulfillmentStatus === 'ready_to_submit';
   const canSubmit = order.fulfillmentStatus === 'approved';
   const canReset = order.fulfillmentStatus === 'validating';
-  const canResubmit = order.fulfillmentStatus === 'on_hold'; // Resubmit for on_hold orders (transient errors)
+  const canResubmit = ['on_hold', 'submitted'].includes(order.fulfillmentStatus); // Resubmit for on_hold or submitted (pending) orders
   const canRefreshStatus = !!order.mixamOrderId;
   // Can cancel if order is in any state before production (not in_production, shipped, delivered, or already cancelled)
   const canCancel = [

@@ -18,6 +18,30 @@
 
 ### 2026-01-18
 
+#### `5d5a4cf` - Print order management improvements
+
+**Type**: Enhancement
+
+**Summary**: Multiple improvements to print order management:
+1. Added "Shipped" tab to print orders page for tracking shipped/delivered orders
+2. Allow resubmit for orders in "submitted" (Pending) state, not just "on_hold"
+3. Removed unused MIXAM_PAYMENT_METHOD secret from apphosting.yaml (now stored in Firestore)
+
+**Changes**:
+- Added "Shipped" tab that shows orders with `shipped` and `delivered` statuses
+- Renamed "Submitted" tab to "In Progress" (shows `submitted`, `confirmed`, `in_production`)
+- Updated resubmit endpoint and UI to allow resubmitting orders in `submitted` status
+- Removed MIXAM_PAYMENT_METHOD from apphosting.yaml (was causing build failure)
+
+**Files Modified**:
+- `src/app/admin/print-orders/page.tsx` - Added Shipped tab, renamed Submitted to In Progress
+- `src/app/api/admin/print-orders/route.ts` - Added shipped filter, updated submitted filter
+- `src/app/admin/print-orders/[orderId]/page.tsx` - Allow resubmit for submitted orders
+- `src/app/api/admin/print-orders/[orderId]/resubmit/route.ts` - Allow submitted status
+- `apphosting.yaml` - Removed MIXAM_PAYMENT_METHOD secret (now in Firestore)
+
+---
+
 #### `5e11560` - Make Mixam payment method configurable via Admin portal
 
 **Type**: Enhancement
