@@ -765,14 +765,17 @@ async function renderCombinedPdf(pages: StoryOutputPage[], layout: PrintLayout, 
   console.log(`[printable] Combined PDF using font size: ${fontSize}pt`);
 
   // Render all pages at the unified font size
-  // For two-leaf spreads, each content page creates two PDF pages (one per leaf)
+  // For two-leaf spreads, only content pages (not covers, title_page, or blank) create two PDF pages
   const isTwoLeafSpread = layout.leavesPerSpread === 2;
 
   for (const page of pages) {
-    // Cover pages are always single pages (no spread)
+    // Determine if this page should be rendered as a 2-page spread
+    // Covers, title pages, and blank pages are always single pages
     const isCover = page.kind === 'cover_front' || page.kind === 'cover_back';
+    const isSinglePage = isCover || page.kind === 'title_page' || page.kind === 'blank';
+    const isSpreadPage = isTwoLeafSpread && !isSinglePage;
 
-    if (isTwoLeafSpread && !isCover) {
+    if (isSpreadPage) {
       // Create two pages for the spread - leaf 1 (left) and leaf 2 (right)
       const leaf1Page = pdfDoc.addPage([
         layout.leafWidth * INCH_TO_POINTS,
@@ -786,7 +789,7 @@ async function renderCombinedPdf(pages: StoryOutputPage[], layout: PrintLayout, 
       ]);
       await renderPageContent(leaf2Page, page, layout, bodyFont, fontSize, 2);
     } else {
-      // Single-page mode or cover pages
+      // Single-page mode: covers, title_page, blank, or all pages when leavesPerSpread=1
       const pdfPage = pdfDoc.addPage([
         layout.leafWidth * INCH_TO_POINTS,
         layout.leafHeight * INCH_TO_POINTS
