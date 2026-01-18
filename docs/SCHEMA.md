@@ -831,6 +831,24 @@ System addresses for Mixam billing configuration.
 
 **Security**: Admin only.
 
+#### `systemConfig/mixam`
+Mixam API configuration settings.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `paymentMethod` | 'TEST_ORDER' \| 'ACCOUNT' \| 'CARD_ON_FILE' | Yes | Payment method for Mixam orders |
+| `updatedAt` | timestamp | No | Last update time |
+| `updatedBy` | string | No | UID of last updater |
+
+**Payment Method Values**:
+- `TEST_ORDER`: For testing only - orders will not be processed/fulfilled by Mixam
+- `ACCOUNT`: Bill to Mixam account (production mode)
+- `CARD_ON_FILE`: Use card on file with Mixam
+
+**Default**: `ACCOUNT` (production mode)
+
+**Security**: Admin only.
+
 ---
 
 ### `shareLinks`

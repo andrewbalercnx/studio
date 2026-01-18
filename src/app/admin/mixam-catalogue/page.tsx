@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useUser } from '@/firebase/auth/use-user';
+
+type PaymentMethod = 'TEST_ORDER' | 'ACCOUNT' | 'CARD_ON_FILE';
 
 type CatalogueProduct = {
   id: number;
@@ -43,6 +45,11 @@ export default function MixamCataloguePage() {
   const [selectedProduct, setSelectedProduct] = useState<number | null>(null);
   const [selectedSubProduct, setSelectedSubProduct] = useState<number | null>(null);
 
+  // Mixam config state
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('ACCOUNT');
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configSaved, setConfigSaved] = useState(false);
+
   async function getAuthHeaders(): Promise<HeadersInit> {
     if (!user) throw new Error('Not authenticated');
     const idToken = await user.getIdToken();
@@ -51,6 +58,49 @@ export default function MixamCataloguePage() {
       'Content-Type': 'application/json',
     };
   }
+
+  // Fetch Mixam config on mount
+  useEffect(() => {
+    if (user && !userLoading) {
+      fetchMixamConfig();
+    }
+  }, [user, userLoading]);
+
+  const fetchMixamConfig = async () => {
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/admin/system-config/mixam', { headers });
+      const result = await response.json();
+      if (result.ok && result.config) {
+        setPaymentMethod(result.config.paymentMethod || 'ACCOUNT');
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch Mixam config:', err);
+    }
+  };
+
+  const saveMixamConfig = async () => {
+    setConfigLoading(true);
+    setConfigSaved(false);
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/admin/system-config/mixam', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ paymentMethod }),
+      });
+      const result = await response.json();
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to save config');
+      }
+      setConfigSaved(true);
+      setTimeout(() => setConfigSaved(false), 3000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setConfigLoading(false);
+    }
+  };
 
   const fetchCatalogue = async () => {
     setLoading(true);
@@ -136,10 +186,7 @@ export default function MixamCataloguePage() {
 
   return (
     <div className="container mx-auto py-8 px-4">
-      <h1 className="text-3xl font-bold mb-6">Mixam Catalogue Explorer</h1>
-      <p className="text-gray-600 mb-6">
-        Use this tool to explore Mixam&apos;s product catalogue and find the correct format/substrate IDs for orders.
-      </p>
+      <h1 className="text-3xl font-bold mb-6">Mixam Settings &amp; Catalogue</h1>
 
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
@@ -147,11 +194,56 @@ export default function MixamCataloguePage() {
         </div>
       )}
 
-      <div className="mb-6">
-        <Button onClick={fetchCatalogue} disabled={loading}>
-          {loading ? 'Loading...' : 'Fetch Catalogue'}
-        </Button>
-      </div>
+      {/* Mixam Settings */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Mixam API Settings</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Payment Method
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="ACCOUNT">ACCOUNT - Bill to Mixam account (Production)</option>
+                <option value="TEST_ORDER">TEST_ORDER - Testing only (orders not processed)</option>
+                <option value="CARD_ON_FILE">CARD_ON_FILE - Use card on file</option>
+              </select>
+              <p className="mt-1 text-sm text-gray-500">
+                Use TEST_ORDER for integration testing. Use ACCOUNT for production orders that should be fulfilled.
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <Button onClick={saveMixamConfig} disabled={configLoading}>
+                {configLoading ? 'Saving...' : 'Save Settings'}
+              </Button>
+              {configSaved && (
+                <span className="text-green-600 text-sm">Settings saved!</span>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Catalogue Explorer */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Catalogue Explorer</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-gray-600 mb-4">
+            Use this tool to explore Mixam&apos;s product catalogue and find the correct format/substrate IDs for orders.
+          </p>
+          <Button onClick={fetchCatalogue} disabled={loading}>
+            {loading ? 'Loading...' : 'Fetch Catalogue'}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Products List */}
       {catalogue && (

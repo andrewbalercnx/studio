@@ -2059,6 +2059,33 @@ export type AnswerAnimation = {
 };
 
 // ============================================================================
+// Mixam Configuration
+// ============================================================================
+
+/**
+ * Mixam configuration stored in systemConfig/mixam
+ * Controls Mixam API behavior and payment settings
+ */
+export type MixamConfig = {
+  // Payment method for Mixam orders
+  // - TEST_ORDER: For testing (order won't be fulfilled by Mixam)
+  // - ACCOUNT: Bill to your Mixam account (production)
+  // - CARD_ON_FILE: Use card on file with Mixam
+  paymentMethod: 'TEST_ORDER' | 'ACCOUNT' | 'CARD_ON_FILE';
+
+  // Metadata
+  updatedAt?: any;
+  updatedBy?: string;
+};
+
+/**
+ * Default Mixam configuration
+ */
+export const DEFAULT_MIXAM_CONFIG: MixamConfig = {
+  paymentMethod: 'ACCOUNT', // Default to production mode
+};
+
+// ============================================================================
 // AI Models Configuration
 // ============================================================================
 

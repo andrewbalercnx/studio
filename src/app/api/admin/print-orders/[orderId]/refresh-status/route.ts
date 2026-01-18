@@ -78,7 +78,10 @@ export async function POST(
     }
 
     // Log the API interactions
-    await logMixamInteractions(firestore, orderId, toMixamInteractions(statusInteractions, order.mixamOrderId));
+    console.log(`[print-orders] Logging ${statusInteractions.length} status interactions for order ${orderId}`);
+    const convertedInteractions = toMixamInteractions(statusInteractions, order.mixamOrderId);
+    console.log(`[print-orders] Converted to ${convertedInteractions.length} MixamInteraction objects`);
+    await logMixamInteractions(firestore, orderId, convertedInteractions);
 
     console.log(`[print-orders] Mixam status response:`, JSON.stringify(mixamStatus, null, 2));
 

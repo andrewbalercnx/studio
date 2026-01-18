@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-18 (added resubmit endpoint for on_hold orders)
+> **Last Updated**: 2026-01-18 (added Mixam config API, resubmit endpoint for on_hold orders)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -3414,6 +3414,62 @@ Update system addresses configuration.
 
 **Error Responses**:
 - `400` - Validation failed
+- `403` - Admin access required
+
+---
+
+### GET `/api/admin/system-config/mixam`
+
+Get Mixam API configuration.
+
+**Authentication**: Admin required
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "config": {
+    "paymentMethod": "ACCOUNT"
+  }
+}
+```
+
+---
+
+### PUT `/api/admin/system-config/mixam`
+
+Update Mixam API configuration.
+
+**Authentication**: Admin required
+
+**Request Body**:
+```json
+{
+  "paymentMethod": "ACCOUNT"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `paymentMethod` | string | Yes | Must be one of: `TEST_ORDER`, `ACCOUNT`, `CARD_ON_FILE` |
+
+**Payment Method Values**:
+- `TEST_ORDER` - For testing/integration (orders not processed by Mixam)
+- `ACCOUNT` - Bill to Mixam account (production)
+- `CARD_ON_FILE` - Use card on file with Mixam
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "config": {
+    "paymentMethod": "ACCOUNT"
+  }
+}
+```
+
+**Error Responses**:
+- `400` - Invalid payment method
 - `403` - Admin access required
 
 ---

@@ -18,6 +18,33 @@
 
 ### 2026-01-18
 
+#### `5e11560` - Make Mixam payment method configurable via Admin portal
+
+**Type**: Enhancement
+
+**Summary**: Made the Mixam payment method configurable from the Admin portal instead of being hardcoded. Previously, `paymentMethod` was hardcoded to `'TEST_ORDER'` which caused orders to go on hold. Now it can be set to `ACCOUNT` (production), `TEST_ORDER` (testing), or `CARD_ON_FILE` via the Mixam Settings page.
+
+**Problem**: The `paymentMethod` was hardcoded to `'TEST_ORDER'` which told Mixam not to process orders, causing them to go on hold.
+
+**Solution**:
+1. Added `MixamConfig` type to store payment method setting in Firestore (`systemConfig/mixam`)
+2. Created API endpoint `/api/admin/system-config/mixam` to get/update settings
+3. Added Mixam Settings section to the Mixam Catalogue page (`/admin/mixam-catalogue`)
+4. Both submit and resubmit endpoints now fetch the payment method from system config
+
+**Files Created**:
+- `src/app/api/admin/system-config/mixam/route.ts` - GET/PUT API for Mixam config
+
+**Files Modified**:
+- `src/lib/types.ts` - Added `MixamConfig` type and `DEFAULT_MIXAM_CONFIG`
+- `src/lib/mixam/mxjdf-builder.ts` - Made `paymentMethod` a parameter instead of hardcoded
+- `src/app/api/admin/print-orders/[orderId]/submit/route.ts` - Fetch payment method from config
+- `src/app/api/admin/print-orders/[orderId]/resubmit/route.ts` - Fetch payment method from config
+- `src/app/admin/mixam-catalogue/page.tsx` - Added Mixam Settings UI with payment method dropdown
+- `docs/SCHEMA.md` - Document new `systemConfig/mixam` collection
+
+---
+
 #### `8a0701f` - Fix resubmit to cancel previous Mixam order and improve status refresh
 
 **Type**: Bug Fix

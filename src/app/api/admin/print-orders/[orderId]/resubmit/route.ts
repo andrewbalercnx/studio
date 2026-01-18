@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
-import type { PrintOrder, SystemAddressConfig, SavedAddress } from '@/lib/types';
+import type { PrintOrder, SystemAddressConfig, SavedAddress, MixamConfig } from '@/lib/types';
+import { DEFAULT_MIXAM_CONFIG } from '@/lib/types';
 import { mixamClient } from '@/lib/mixam/client';
-import { buildMxJdfDocument } from '@/lib/mixam/mxjdf-builder';
+import { buildMxJdfDocument, MixamPaymentMethod } from '@/lib/mixam/mxjdf-builder';
 import { logMixamInteractions, toMixamInteractions } from '@/lib/mixam/interaction-logger';
 
 /**
@@ -206,6 +207,21 @@ export async function POST(
         console.warn('[print-orders] Failed to fetch system billing address:', billToError);
       }
 
+      // Fetch Mixam configuration (payment method, etc.)
+      let paymentMethod: MixamPaymentMethod = DEFAULT_MIXAM_CONFIG.paymentMethod;
+      try {
+        const mixamConfigDoc = await firestore.collection('systemConfig').doc('mixam').get();
+        if (mixamConfigDoc.exists) {
+          const mixamConfig = mixamConfigDoc.data() as MixamConfig;
+          paymentMethod = mixamConfig.paymentMethod || DEFAULT_MIXAM_CONFIG.paymentMethod;
+          console.log(`[print-orders] Using Mixam payment method from config: ${paymentMethod}`);
+        } else {
+          console.log(`[print-orders] No Mixam config found, using default payment method: ${paymentMethod}`);
+        }
+      } catch (configError) {
+        console.warn('[print-orders] Failed to fetch Mixam config, using default payment method:', configError);
+      }
+
       // Build MxJdf document with existing PDF URLs
       console.log('[print-orders] Building MxJdf document for resubmission...');
       const mxjdf = buildMxJdfDocument({
@@ -214,6 +230,7 @@ export async function POST(
         coverFileRef: coverPdfUrl,
         interiorFileRef: interiorPdfUrl,
         billingAddress,
+        paymentMethod,
       });
 
       // Submit order to Mixam

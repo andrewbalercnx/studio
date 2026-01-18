@@ -86,16 +86,24 @@ export async function logMixamInteractions(
   printOrderId: string,
   interactions: MixamInteraction[]
 ): Promise<void> {
+  if (!interactions || interactions.length === 0) {
+    console.log(`[Mixam] No interactions to log for order ${printOrderId}`);
+    return;
+  }
+
   try {
     const orderRef = firestore.collection('printOrders').doc(printOrderId);
+
+    console.log(`[Mixam] Logging ${interactions.length} interactions for order ${printOrderId}:`,
+      interactions.map(i => `${i.type}:${i.action}`).join(', '));
 
     await orderRef.update({
       mixamInteractions: FieldValue.arrayUnion(...interactions),
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    console.log(`[Mixam] Logged ${interactions.length} interactions for order ${printOrderId}`);
+    console.log(`[Mixam] Successfully logged ${interactions.length} interactions for order ${printOrderId}`);
   } catch (error: any) {
-    console.warn(`[Mixam] Failed to log interactions for order ${printOrderId}:`, error.message);
+    console.error(`[Mixam] Failed to log interactions for order ${printOrderId}:`, error.message, error);
   }
 }

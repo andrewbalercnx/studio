@@ -6,6 +6,8 @@ import type { PrintOrder, PrintableAssetMetadata, MixamProductMapping } from '@/
  * https://mixam.co.uk/documentation/api/public#orders
  */
 
+export type MixamPaymentMethod = 'TEST_ORDER' | 'ACCOUNT' | 'CARD_ON_FILE';
+
 export type MixamAddress = {
   company?: string;
   firstName: string;
@@ -248,8 +250,9 @@ export function buildMxJdfDocument(params: {
     email: string;
     phone?: string;
   };
+  paymentMethod?: MixamPaymentMethod;
 }): MxJdfDocument {
-  const { order, metadata, coverFileRef, interiorFileRef, billingAddress } = params;
+  const { order, metadata, coverFileRef, interiorFileRef, billingAddress, paymentMethod = 'ACCOUNT' } = params;
   const product = order.productSnapshot;
   const spec = product.mixamSpec;
   const mapping = product.mixamMapping;
@@ -476,7 +479,7 @@ export function buildMxJdfDocument(params: {
       },
     ],
     plainPackaging: false,
-    paymentMethod: 'TEST_ORDER',
+    paymentMethod,
   };
 
   // Note: Padding pages are now embedded in the interior PDF
@@ -559,10 +562,11 @@ function buildMxJdfFromMapping(
       email: string;
       phone?: string;
     };
+    paymentMethod?: MixamPaymentMethod;
   },
   mapping: MixamProductMapping
 ): MxJdfDocument {
-  const { order, metadata, coverFileRef, interiorFileRef, billingAddress } = params;
+  const { order, metadata, coverFileRef, interiorFileRef, billingAddress, paymentMethod = 'ACCOUNT' } = params;
 
   // Parse name into first/last
   const nameParts = order.shippingAddress.name.split(' ');
@@ -749,7 +753,7 @@ function buildMxJdfFromMapping(
       },
     ],
     plainPackaging: false,
-    paymentMethod: 'TEST_ORDER',
+    paymentMethod,
   };
 
   return document;
