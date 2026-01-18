@@ -253,12 +253,16 @@ export type InteriorPageAdjustment = {
  * Calculate interior page adjustments for a print product.
  *
  * Rules:
- * 1. The number of inside PDF pages must be at least the minimum (minPageCount)
- * 2. Total pages (2 for cover + blankPages + inside pages) must be a multiple of 4
- * 3. If inside pages exceeds maximum, truncate to maximum
+ * 1. The interior PDF page count must be at least the minimum (minPageCount)
+ * 2. The interior PDF page count must be a multiple of 4 (for CASE binding)
+ * 3. If interior pages exceeds maximum, truncate to maximum (aligned to multiple of 4)
  *
- * @param contentPageCount - Number of actual content pages (excluding covers)
- * @param blankPages - Fixed blank pages in the product (e.g., endpapers)
+ * Note: blankPages (endpapers) are physical pages Mixam adds during binding.
+ * They are NOT included in our interior PDF - we only need to ensure our
+ * interior PDF itself is a valid multiple of 4.
+ *
+ * @param contentPageCount - Number of actual content pages in interior PDF (excluding covers)
+ * @param blankPages - Fixed blank pages Mixam adds (endpapers) - for metadata only, not used in calculation
  * @param constraints - Resolved page constraints from product/layout
  * @returns Adjustment details including final page count and padding needed
  */
@@ -268,61 +272,44 @@ export function calculateInteriorPageAdjustment(
   constraints: ResolvedPageConstraints
 ): InteriorPageAdjustment {
   const warnings: string[] = [];
-  let insidePages = contentPageCount;
+  let interiorPages = contentPageCount;
   let wasTruncated = false;
 
-  // The cover counts as 2 pages in the total
-  const coverPages = 2;
-
-  // Step 1: Ensure inside pages meets minimum
-  if (constraints.minPages > 0 && insidePages < constraints.minPages) {
-    const pagesToAdd = constraints.minPages - insidePages;
+  // Step 1: Ensure interior PDF pages meets minimum
+  if (constraints.minPages > 0 && interiorPages < constraints.minPages) {
+    const pagesToAdd = constraints.minPages - interiorPages;
     warnings.push(
       `Padded ${pagesToAdd} page${pagesToAdd === 1 ? '' : 's'} to meet minimum of ${constraints.minPages}.`
     );
-    insidePages = constraints.minPages;
+    interiorPages = constraints.minPages;
   }
 
-  // Step 2: Ensure total is a multiple of 4
-  // Total = coverPages + blankPages + insidePages
-  const totalBeforeAlignment = coverPages + blankPages + insidePages;
-  const remainder = totalBeforeAlignment % 4;
+  // Step 2: Ensure interior PDF is a multiple of 4 (required for CASE binding)
+  const remainder = interiorPages % 4;
   if (remainder !== 0) {
     const additionalPadding = 4 - remainder;
     warnings.push(
-      `Added ${additionalPadding} page${additionalPadding === 1 ? '' : 's'} for 4-page alignment (total: ${totalBeforeAlignment} -> ${totalBeforeAlignment + additionalPadding}).`
+      `Added ${additionalPadding} page${additionalPadding === 1 ? '' : 's'} for 4-page alignment (${interiorPages} -> ${interiorPages + additionalPadding}).`
     );
-    insidePages += additionalPadding;
+    interiorPages += additionalPadding;
   }
 
   // Step 3: Truncate if exceeds maximum
-  if (constraints.maxPages > 0 && insidePages > constraints.maxPages) {
-    const pagesToRemove = insidePages - constraints.maxPages;
+  if (constraints.maxPages > 0 && interiorPages > constraints.maxPages) {
+    // Truncate to maximum, but align down to multiple of 4
+    const maxAligned = Math.floor(constraints.maxPages / 4) * 4;
+    const pagesToRemove = interiorPages - maxAligned;
     warnings.push(
-      `WARNING: Truncated ${pagesToRemove} page${pagesToRemove === 1 ? '' : 's'} to meet maximum of ${constraints.maxPages}.`
+      `WARNING: Truncated ${pagesToRemove} page${pagesToRemove === 1 ? '' : 's'} to meet maximum of ${constraints.maxPages} (aligned to ${maxAligned}).`
     );
-    insidePages = constraints.maxPages;
+    interiorPages = maxAligned;
     wasTruncated = true;
-
-    // After truncation, we may need to re-align to multiple of 4
-    // But we must stay at or below maximum, so we can only pad up to max
-    const totalAfterTruncation = coverPages + blankPages + insidePages;
-    const remainderAfterTruncation = totalAfterTruncation % 4;
-    if (remainderAfterTruncation !== 0) {
-      // We need to pad, but that would exceed max
-      // So we truncate further to get to a valid multiple of 4
-      const truncateMore = remainderAfterTruncation;
-      insidePages -= truncateMore;
-      warnings.push(
-        `Reduced by ${truncateMore} more page${truncateMore === 1 ? '' : 's'} to maintain 4-page alignment within maximum.`
-      );
-    }
   }
 
-  const paddingNeeded = insidePages - contentPageCount;
+  const paddingNeeded = interiorPages - contentPageCount;
 
   return {
-    finalInteriorPages: insidePages,
+    finalInteriorPages: interiorPages,
     paddingNeeded: paddingNeeded > 0 ? paddingNeeded : 0,
     wasTruncated,
     warnings,

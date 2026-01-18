@@ -1159,19 +1159,19 @@ export async function POST(request: Request) {
     console.log(`  - Padding pages: ${paddingPageCount}`);
     console.log(`  - Total interior pages: ${totalInteriorWithPadding}`);
 
-    // Sanity check for total page multiple of 4
-    const totalPages = 2 + blankPages + totalInteriorWithPadding; // 2 for cover (spine is separate)
-    console.log(`  - Total book pages (for Mixam): 2 cover + ${blankPages} blank + ${totalInteriorWithPadding} interior = ${totalPages}`);
-    if (totalPages % 4 !== 0) {
-      console.error(`[printable] BUG: totalPages (${totalPages}) is not a multiple of 4!`);
+    // Sanity check: interior PDF must be a multiple of 4 for CASE binding
+    // Note: blankPages are endpapers Mixam adds during binding - not in our PDF
+    console.log(`  - Product blankPages (endpapers, Mixam adds): ${blankPages}`);
+    if (totalInteriorWithPadding % 4 !== 0) {
+      console.error(`[printable] BUG: interior PDF pages (${totalInteriorWithPadding}) is not a multiple of 4!`);
     } else {
-      console.log(`  - Multiple of 4: YES`);
+      console.log(`  - Interior PDF multiple of 4: YES (${totalInteriorWithPadding} pages)`);
     }
 
     const printableMetadata: PrintableAssetMetadata = {
       dpi: 300,
       trimSize: `${printLayout.leafWidth}in x ${printLayout.leafHeight}in`,
-      pageCount: totalPages, // Total pages for Mixam
+      pageCount: totalInteriorWithPadding, // Interior PDF page count (what we submit)
       coverPageCount,
       interiorPageCount: totalInteriorWithPadding, // Interior PDF pages (content + padding)
       spreadCount: Math.ceil(totalInteriorWithPadding / 2), // Each spread is 2 pages when open
