@@ -111,10 +111,13 @@ export async function POST(
         source: 'mixam',
       });
 
-      // Map Mixam status to our fulfillment status
+      // Map Mixam status to our fulfillment status (case-insensitive)
       const mixamToFulfillmentStatus: Record<string, string> = {
         'submitted': 'submitted',
+        'pending': 'submitted', // PENDING in Mixam means order received
         'confirmed': 'confirmed',
+        'on_hold': 'on_hold',
+        'onhold': 'on_hold', // Mixam uses ONHOLD
         'in_production': 'in_production',
         'printed': 'printed',
         'shipped': 'shipped',
@@ -122,8 +125,11 @@ export async function POST(
         'cancelled': 'cancelled',
       };
 
-      if (mixamToFulfillmentStatus[mixamStatus.status]) {
-        updateData.fulfillmentStatus = mixamToFulfillmentStatus[mixamStatus.status];
+      const normalizedStatus = mixamStatus.status.toLowerCase().replace(/_/g, '');
+      const fulfillmentStatus = mixamToFulfillmentStatus[normalizedStatus] ||
+                                 mixamToFulfillmentStatus[mixamStatus.status.toLowerCase()];
+      if (fulfillmentStatus) {
+        updateData.fulfillmentStatus = fulfillmentStatus;
       }
     }
 

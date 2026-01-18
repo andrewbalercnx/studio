@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-17 (added parent storybooks API for incremental loading)
+> **Last Updated**: 2026-01-18 (added resubmit endpoint for on_hold orders)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -2354,6 +2354,35 @@ Cancel an order. If already submitted to Mixam, will attempt to cancel with them
 - `403 Forbidden` - Admin access required
 - `404 Not Found` - Order not found
 - `409 Conflict` - Order already in production with Mixam
+
+---
+
+### POST `/api/admin/print-orders/[orderId]/resubmit`
+
+Resubmit an on_hold order to Mixam. This cancels the previous Mixam order (if possible) and creates a new one using the existing PDFs.
+
+**Requirements**:
+- Order must be in `on_hold` status
+- Cover and interior PDFs must already be generated
+- Interior page count must meet binding requirements
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "mixamJobNumber": "UK123456",
+  "mixamOrderId": "abc-123-def",
+  "previousMixamOrderId": "old-order-id",
+  "previousMixamJobNumber": "UK123455",
+  "previousOrderCancelled": true
+}
+```
+
+**Error Responses**:
+- `400 Bad Request` - Order not on_hold, missing PDFs, or page count issues
+- `403 Forbidden` - Admin access required
+- `404 Not Found` - Order not found
+- `500 Internal Server Error` - Mixam submission failed
 
 ---
 

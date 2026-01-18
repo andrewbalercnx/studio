@@ -18,6 +18,28 @@
 
 ### 2026-01-18
 
+#### `8a0701f` - Fix resubmit to cancel previous Mixam order and improve status refresh
+
+**Type**: Bug Fix
+
+**Summary**: Updated the resubmit endpoint to cancel the previous Mixam order before creating a new one, preventing orphaned orders in Mixam. Also improved the refresh status endpoint to handle all Mixam status codes case-insensitively.
+
+**Problem**:
+1. When resubmitting an on_hold order, the system was creating a new Mixam order without cancelling the previous one
+2. The refresh status endpoint didn't handle ONHOLD/PENDING status codes from Mixam correctly
+
+**Solution**:
+1. The resubmit endpoint now cancels the previous Mixam order before creating a new one
+2. The refresh status endpoint now normalizes Mixam status codes case-insensitively (ONHOLD → on_hold, PENDING → submitted)
+
+**Files Modified**:
+- `src/app/api/admin/print-orders/[orderId]/resubmit/route.ts` - Added cancellation logic before resubmission
+- `src/app/api/admin/print-orders/[orderId]/refresh-status/route.ts` - Added case-insensitive status mapping for on_hold and pending
+- `src/app/admin/print-orders/[orderId]/page.tsx` - Updated confirmation message and success feedback
+- `docs/API.md` - Added documentation for the resubmit endpoint
+
+---
+
 #### `7872b61` - Add completion dialog and summary to dev todos
 
 **Type**: Enhancement

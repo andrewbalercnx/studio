@@ -194,7 +194,7 @@ export default function PrintOrderDetailPage() {
   }
 
   async function handleResubmitToMixam() {
-    if (!confirm('This will create a new Mixam order using the existing PDFs. Continue?')) {
+    if (!confirm('This will cancel the existing Mixam order and create a new one using the existing PDFs. Continue?')) {
       return;
     }
 
@@ -212,9 +212,12 @@ export default function PrintOrderDetailPage() {
       }
 
       await loadOrder();
+      const cancelNote = data.previousOrderCancelled
+        ? ` (previous order ${data.previousMixamJobNumber || data.previousMixamOrderId} cancelled)`
+        : '';
       setActionResult({
         type: 'success',
-        message: `Order resubmitted successfully! New Job Number: ${data.mixamJobNumber}`,
+        message: `Order resubmitted successfully! New Job Number: ${data.mixamJobNumber}${cancelNote}`,
       });
     } catch (err: any) {
       console.error('Resubmit error:', err);

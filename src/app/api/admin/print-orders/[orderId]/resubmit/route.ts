@@ -109,6 +109,62 @@ export async function POST(
       }),
     });
 
+    // Cancel the previous Mixam order to avoid orphaned orders
+    let previousOrderCancelled = false;
+    if (previousMixamOrderId) {
+      try {
+        console.log(`[print-orders] Cancelling previous Mixam order: ${previousMixamOrderId}`);
+        const cancelResult = await mixamClient.cancelOrderWithLogging(previousMixamOrderId);
+        const { interactions: cancelInteractions, ...cancelResponse } = cancelResult;
+
+        // Log the cancellation interactions
+        await logMixamInteractions(firestore, orderId, toMixamInteractions(cancelInteractions, previousMixamOrderId));
+
+        console.log(`[print-orders] Previous Mixam order cancelled:`, cancelResponse);
+        previousOrderCancelled = true;
+
+        // Log the cancellation
+        await orderDoc.ref.update({
+          processLog: FieldValue.arrayUnion({
+            event: 'mixam_order_cancelled',
+            timestamp: new Date(),
+            message: `Cancelled previous Mixam order before resubmission`,
+            data: {
+              cancelledOrderId: previousMixamOrderId,
+              cancelledJobNumber: previousMixamJobNumber,
+              cancelResponse,
+            },
+            source: 'system',
+            userId: user.uid,
+          }),
+        });
+      } catch (cancelError: any) {
+        // Log cancellation failure but continue with resubmission
+        // The old order might already be cancelled, in production, or otherwise unable to cancel
+        console.warn(`[print-orders] Failed to cancel previous Mixam order (continuing with resubmission):`, cancelError.message);
+
+        // Log the failed cancellation attempt
+        if (cancelError.interactions) {
+          await logMixamInteractions(firestore, orderId, toMixamInteractions(cancelError.interactions, previousMixamOrderId));
+        }
+
+        await orderDoc.ref.update({
+          processLog: FieldValue.arrayUnion({
+            event: 'mixam_cancel_failed',
+            timestamp: new Date(),
+            message: `Failed to cancel previous Mixam order (will proceed with new order): ${cancelError.message}`,
+            data: {
+              orderIdAttempted: previousMixamOrderId,
+              jobNumberAttempted: previousMixamJobNumber,
+              error: cancelError.message,
+            },
+            source: 'system',
+            userId: user.uid,
+          }),
+        });
+      }
+    }
+
     try {
       // Fetch system billing address configuration
       let billingAddress: {
@@ -214,6 +270,7 @@ export async function POST(
         mixamOrderId: mixamOrder.orderId,
         previousMixamOrderId,
         previousMixamJobNumber,
+        previousOrderCancelled,
       });
 
     } catch (error: any) {
