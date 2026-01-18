@@ -99,6 +99,16 @@ function formatTodoForClaude(todo: DevTodo): string {
     lines.push('', '### Partial Progress Note', '', todo.partialComment);
   }
 
+  // Include previous completion info if the item was previously completed
+  // This helps Claude understand what was done before when reopening
+  if (todo.completionSummary) {
+    lines.push('', '### Previous Completion Summary', '');
+    if (todo.commitId) {
+      lines.push(`**Commit:** ${todo.commitId}`);
+    }
+    lines.push('', todo.completionSummary);
+  }
+
   if (todo.relatedFiles && todo.relatedFiles.length > 0) {
     lines.push('', '### Related Files', '');
     todo.relatedFiles.forEach(file => lines.push(`- ${file}`));
@@ -122,6 +132,12 @@ export function DevTodoList() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [expandedTodos, setExpandedTodos] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Completion dialog state
+  const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
+  const [completingTodo, setCompletingTodo] = useState<DevTodo | null>(null);
+  const [completionSummary, setCompletionSummary] = useState('');
+  const [completionCommitId, setCompletionCommitId] = useState('');
 
   // Form state for add/edit
   const [formTitle, setFormTitle] = useState('');
@@ -385,6 +401,65 @@ export function DevTodoList() {
     }
   };
 
+  // Open completion dialog
+  const openCompleteDialog = (todo: DevTodo) => {
+    setCompletingTodo(todo);
+    setCompletionSummary('');
+    setCompletionCommitId('');
+    setIsCompleteDialogOpen(true);
+  };
+
+  // Handle marking todo as complete with summary
+  const handleMarkComplete = async () => {
+    if (!user || !completingTodo) return;
+
+    setIsSaving(true);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch('/api/admin/dev-todos', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          todoId: completingTodo.id,
+          status: 'completed',
+          completedBy: 'admin',
+          completionSummary: completionSummary.trim() || undefined,
+          commitId: completionCommitId.trim() || undefined,
+        }),
+      });
+      const result = await response.json();
+
+      if (result.ok) {
+        toast({
+          title: 'Todo Completed',
+          description: 'Development todo has been marked as complete',
+        });
+        setIsCompleteDialogOpen(false);
+        setCompletingTodo(null);
+        setCompletionSummary('');
+        setCompletionCommitId('');
+        fetchTodos();
+      } else {
+        toast({
+          title: 'Error',
+          description: result.errorMessage || 'Failed to complete todo',
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to complete todo',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Filter todos based on showCompleted
   const filteredTodos = todos.filter(todo =>
     showCompleted ? true : todo.status !== 'completed'
@@ -406,10 +481,13 @@ export function DevTodoList() {
           <Checkbox
             checked={isCompleted}
             onCheckedChange={(checked) => {
-              handleUpdateTodo(todo.id, {
-                status: checked ? 'completed' : 'pending',
-                completedBy: 'admin',
-              });
+              if (checked) {
+                // Open completion dialog to capture summary
+                openCompleteDialog(todo);
+              } else {
+                // Reopen - just set to pending
+                handleUpdateTodo(todo.id, { status: 'pending' });
+              }
             }}
             className="mt-1"
           />
@@ -488,6 +566,27 @@ export function DevTodoList() {
                 {todo.partialComment}
               </p>
             )}
+
+            {/* Completion info for completed todos */}
+            {todo.status === 'completed' && (todo.completionSummary || todo.commitId) && (
+              <div className="mt-2 p-2 bg-green-50 rounded-md text-sm">
+                {todo.commitId && (
+                  <p className="text-green-700 font-mono text-xs mb-1">
+                    Commit: {todo.commitId}
+                  </p>
+                )}
+                {todo.completionSummary && (
+                  <div className="text-green-800 prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown>{todo.completionSummary}</ReactMarkdown>
+                  </div>
+                )}
+                {todo.completedBy && (
+                  <p className="text-xs text-green-600 mt-1">
+                    Completed by {todo.completedBy === 'claude' ? 'Claude' : todo.completedByEmail || 'admin'}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Copy button */}
@@ -547,11 +646,11 @@ export function DevTodoList() {
                 Mark Partial...
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => handleUpdateTodo(todo.id, { status: 'completed', completedBy: 'admin' })}
+                onClick={() => openCompleteDialog(todo)}
                 disabled={todo.status === 'completed'}
               >
                 <CheckCircle2 className="h-4 w-4 mr-2" />
-                Mark Complete
+                Mark Complete...
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -817,6 +916,80 @@ export function DevTodoList() {
                   </>
                 ) : (
                   'Save Changes'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Completion Dialog */}
+        <Dialog open={isCompleteDialogOpen} onOpenChange={setIsCompleteDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                Mark Todo Complete
+              </DialogTitle>
+              <DialogDescription>
+                Add a summary of what was done. This helps track work history and provides context if the item is reopened.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="p-3 bg-muted rounded-md">
+                <p className="font-medium">{completingTodo?.title}</p>
+                {completingTodo?.description && (
+                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                    {completingTodo.description.substring(0, 150)}
+                    {completingTodo.description.length > 150 ? '...' : ''}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="text-sm font-medium">Commit ID (optional)</label>
+                <Input
+                  value={completionCommitId}
+                  onChange={(e) => setCompletionCommitId(e.target.value)}
+                  placeholder="e.g., abc1234"
+                  className="font-mono"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Git commit hash for this change
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Completion Summary (Markdown)</label>
+                <Textarea
+                  value={completionSummary}
+                  onChange={(e) => setCompletionSummary(e.target.value)}
+                  placeholder="Describe what was implemented, key changes, any notes for future reference..."
+                  rows={6}
+                  className="font-mono text-sm"
+                />
+                {completionSummary && (
+                  <div className="mt-2 p-3 bg-green-50 rounded-md">
+                    <p className="text-xs text-muted-foreground mb-2">Preview:</p>
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-green-800">
+                      <ReactMarkdown>{completionSummary}</ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setIsCompleteDialogOpen(false); setCompletingTodo(null); }}>
+                Cancel
+              </Button>
+              <Button onClick={handleMarkComplete} disabled={isSaving} className="bg-green-600 hover:bg-green-700">
+                {isSaving ? (
+                  <>
+                    <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
+                    Completing...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Mark Complete
+                  </>
                 )}
               </Button>
             </DialogFooter>

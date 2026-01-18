@@ -16,6 +16,26 @@
 
 ## Changes
 
+### 2026-01-18
+
+#### `7872b61` - Add completion dialog and summary to dev todos
+
+**Type**: Enhancement
+
+**Summary**: Enhanced the development todo list to prompt for completion details when marking items complete. Completion summaries and commit IDs are now displayed on completed items and included when copying to Claude for reopened items.
+
+**Features Added**:
+- Completion dialog prompts for summary and commit ID when marking todo complete
+- Completed todos display their completion summary, commit ID, and who completed them
+- When copying a todo to Claude, any previous completion summary is included as context
+- Checkbox click to mark complete now opens the completion dialog
+- Menu "Mark Complete" option now shows dialog instead of immediately completing
+
+**Files Modified**:
+- `src/components/admin/DevTodoList.tsx` - Added completion dialog, display, and copy-to-Claude integration
+
+---
+
 ### 2026-01-17
 
 #### `7b2ae1c` - Add binding-aware minimum page count for PDF generation
