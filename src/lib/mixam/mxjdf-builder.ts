@@ -404,7 +404,10 @@ export function buildMxJdfDocument(params: {
                 type: bindingType,
                 edge: spec.binding.edge || 'LEFT_RIGHT',
                 sewn: spec.binding.sewn || false,
-                headAndTailBands: (order.customOptions?.headTailBandColor || 'NONE').toUpperCase().replace(/ /g, '_'),
+                // Only include head/tail bands if the product allows selection AND a color was chosen
+                headAndTailBands: spec.binding.allowHeadTailBandSelection && order.customOptions?.headTailBandColor
+                  ? order.customOptions.headTailBandColor.toUpperCase().replace(/ /g, '_')
+                  : 'NONE',
               },
             },
             // Cover component
@@ -651,7 +654,10 @@ function buildMxJdfFromMapping(
         type: mapping.binding.type,
         edge: mapping.binding.edge,
         sewn: mapping.binding.sewn || false,
-        headAndTailBands: (order.customOptions?.headTailBandColor || 'NONE').toUpperCase().replace(/ /g, '_'),
+        // Only include head/tail bands if the product allows selection AND a color was chosen
+        headAndTailBands: order.productSnapshot.mixamSpec.binding.allowHeadTailBandSelection && order.customOptions?.headTailBandColor
+          ? order.customOptions.headTailBandColor.toUpperCase().replace(/ /g, '_')
+          : 'NONE',
       },
     },
     // Cover component
