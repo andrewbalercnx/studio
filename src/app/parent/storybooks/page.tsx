@@ -463,35 +463,30 @@ export default function ParentStorybooksPage() {
     }
   }, [user, toast]);
 
-  // Fetch thumbnails in batches
+  // Fetch thumbnails in batches (API limit is 50 per request)
   const fetchThumbnails = useCallback(
     async (
       storybooks: Array<{ storybookId: string; storyId: string; isNewModel: boolean }>,
       idToken: string
     ) => {
-      try {
-        const response = await fetch('/api/parent/storybooks/thumbnails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({ storybooks }),
-        });
+      const BATCH_SIZE = 50;
+      const batches: Array<typeof storybooks> = [];
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch thumbnails');
-        }
+      // Split into batches of 50
+      for (let i = 0; i < storybooks.length; i += BATCH_SIZE) {
+        batches.push(storybooks.slice(i, i + BATCH_SIZE));
+      }
 
-        const data = await response.json();
-        console.log('[storybooks] Received thumbnails:', data.thumbnails?.map((t: any) => ({ id: t.storybookId, url: t.thumbnailUrl ? 'found' : 'null' })));
+      console.log(`[storybooks] Fetching thumbnails in ${batches.length} batch(es)`);
 
+      // Helper to update state with a batch of thumbnails
+      const applyThumbnailBatch = (thumbnails: any[]) => {
         // Update storybooks with thumbnail data
         setChildrenWithStorybooks((prev) =>
           prev.map((child) => ({
             ...child,
             storybooks: child.storybooks.map((sb) => {
-              const thumbnail = data.thumbnails.find(
+              const thumbnail = thumbnails.find(
                 (t: any) => t.storybookId === sb.storybookId
               );
               if (thumbnail) {
@@ -505,7 +500,7 @@ export default function ParentStorybooksPage() {
                   imageGenerationStatus: thumbnail.calculatedImageStatus || sb.imageGenerationStatus,
                 };
               }
-              return { ...sb, thumbnailLoaded: true };
+              return sb;
             }),
           }))
         );
@@ -513,7 +508,7 @@ export default function ParentStorybooksPage() {
         // Also update the metadata map
         setStorybookMetaMap((prev) => {
           const updated = new Map(prev);
-          for (const thumbnail of data.thumbnails) {
+          for (const thumbnail of thumbnails) {
             const existing = updated.get(thumbnail.storybookId);
             if (existing) {
               updated.set(thumbnail.storybookId, {
@@ -529,18 +524,49 @@ export default function ParentStorybooksPage() {
           }
           return updated;
         });
-      } catch (error) {
-        console.error('Error fetching thumbnails:', error);
-        // Mark all as loaded even on error to stop loading state
-        setChildrenWithStorybooks((prev) =>
-          prev.map((child) => ({
-            ...child,
-            storybooks: child.storybooks.map((sb) => ({ ...sb, thumbnailLoaded: true })),
-          }))
-        );
-      } finally {
-        setThumbnailsLoading(false);
+      };
+
+      // Fetch batches sequentially to avoid overwhelming the server
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        try {
+          console.log(`[storybooks] Fetching batch ${i + 1}/${batches.length} (${batch.length} items)`);
+          const response = await fetch('/api/parent/storybooks/thumbnails', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({ storybooks: batch }),
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[storybooks] Batch ${i + 1} failed:`, response.status, errorText);
+            continue; // Continue with next batch even if this one fails
+          }
+
+          const data = await response.json();
+          console.log(`[storybooks] Batch ${i + 1} received:`, data.thumbnails?.length, 'thumbnails');
+          applyThumbnailBatch(data.thumbnails || []);
+        } catch (error) {
+          console.error(`[storybooks] Error fetching batch ${i + 1}:`, error);
+          // Continue with next batch
+        }
       }
+
+      // Mark any remaining storybooks as loaded (even if no thumbnail found)
+      setChildrenWithStorybooks((prev) =>
+        prev.map((child) => ({
+          ...child,
+          storybooks: child.storybooks.map((sb) => ({
+            ...sb,
+            thumbnailLoaded: sb.thumbnailLoaded ?? true,
+          })),
+        }))
+      );
+
+      setThumbnailsLoading(false);
     },
     []
   );
