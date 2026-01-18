@@ -283,12 +283,18 @@ export async function POST(request: NextRequest) {
     };
 
     // Deep clean undefined values (Firestore doesn't accept them)
+    // Preserve FieldValue sentinel objects (like serverTimestamp())
     function removeUndefined(obj: any): any {
       if (obj === null || obj === undefined) return obj;
       if (Array.isArray(obj)) {
         return obj.map(removeUndefined);
       }
       if (typeof obj === 'object') {
+        // Preserve FieldValue sentinel objects - they have a special internal structure
+        // Check for FieldValue by looking for the _methodName property (serverTimestamp, etc.)
+        if (obj._methodName !== undefined || obj.isEqual !== undefined) {
+          return obj;
+        }
         return Object.fromEntries(
           Object.entries(obj)
             .filter(([_, v]) => v !== undefined)

@@ -100,11 +100,25 @@ export async function GET(request: NextRequest) {
     const orders: PrintOrder[] = [];
     snapshot.forEach((doc) => {
       const data = doc.data();
+
+      // Try to get createdAt, fall back to first statusHistory entry or processLog entry
+      let createdAt = convertTimestamp(data.createdAt);
+      if (!createdAt) {
+        // Try statusHistory first entry
+        if (data.statusHistory?.length > 0 && data.statusHistory[0].timestamp) {
+          createdAt = convertTimestamp(data.statusHistory[0].timestamp);
+        }
+        // Try processLog first entry
+        if (!createdAt && data.processLog?.length > 0 && data.processLog[0].timestamp) {
+          createdAt = convertTimestamp(data.processLog[0].timestamp);
+        }
+      }
+
       orders.push({
         id: doc.id,
         ...data,
         // Ensure timestamps are properly serializable
-        createdAt: convertTimestamp(data.createdAt),
+        createdAt,
         updatedAt: convertTimestamp(data.updatedAt),
         statusHistory: convertStatusHistory(data.statusHistory),
       } as PrintOrder);
