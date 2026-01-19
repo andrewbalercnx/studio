@@ -18,6 +18,29 @@
 
 ### 2026-01-19
 
+#### `ecca186` - Add internal API for Claude to create dev todos
+
+**Type**: Feature
+
+**Summary**: Added an internal API endpoint that allows Claude Code to create dev todo items without user authentication. Uses a shared secret for authentication.
+
+**Changes**:
+- Created `/api/internal/dev-todos` endpoint for Claude to POST dev todos
+- Uses `X-Internal-Secret` header for authentication (no user auth required)
+- Added `INTERNAL_API_SECRET` to apphosting.yaml
+- Updated CLAUDE.md with instructions for using the internal API
+- Updated API.md with Internal Routes documentation
+
+**Files Created**:
+- `src/app/api/internal/dev-todos/route.ts` - Internal API endpoint
+
+**Files Modified**:
+- `apphosting.yaml` - Added INTERNAL_API_SECRET secret
+- `docs/API.md` - Added Internal Routes section
+- `CLAUDE.md` - Updated dev todo instructions to use internal API
+
+---
+
 #### `d613834` - Webhook refresh and navigation improvements
 
 **Type**: Enhancement

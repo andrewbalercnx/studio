@@ -86,3 +86,10 @@ env:
     secret: GETADDRESS_API_KEY
     availability:
       - RUNTIME
+
+  # Internal API secret for Claude Code to call internal APIs
+  # Generate with: openssl rand -hex 32
+  - variable: INTERNAL_API_SECRET
+    secret: INTERNAL_API_SECRET
+    availability:
+      - RUNTIME

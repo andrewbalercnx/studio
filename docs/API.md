@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-18 (added Mixam config API, resubmit endpoint for on_hold orders)
+> **Last Updated**: 2026-01-19 (added internal dev-todos API for Claude Code)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -87,6 +87,7 @@ The `StoryPicClient` provides typed methods for child-facing operations:
 - [Music Routes](#music-routes)
 - [Story Output Types Routes](#story-output-types-routes)
 - [Issue Reporting Routes](#issue-reporting-routes)
+- [Internal Routes](#internal-routes)
 - [Webhook Routes](#webhook-routes)
 - [Address Routes](#address-routes)
 - [Postcode Routes](#postcode-routes)
@@ -3029,6 +3030,49 @@ Save user's shipping address.
 ```json
 {
   "success": true
+}
+```
+
+---
+
+## Internal Routes
+
+Internal APIs for automated tools (Claude Code). These use a shared secret instead of user authentication.
+
+**Authentication**: `X-Internal-Secret` header with value matching `INTERNAL_API_SECRET` environment variable.
+
+### POST `/api/internal/dev-todos`
+
+Create a dev todo item. Used by Claude Code to track follow-up work items.
+
+**Request Headers**:
+- `X-Internal-Secret` - Internal API secret (required)
+
+**Request Body**:
+```json
+{
+  "title": "string (required)",
+  "description": "string (optional, supports markdown)",
+  "priority": "low|medium|high (default: medium)",
+  "category": "string (optional, e.g. 'integration', 'security', 'performance')",
+  "relatedFiles": ["array of file paths (optional)"]
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "ok": true,
+  "todoId": "firestore-doc-id",
+  "message": "Dev todo created successfully"
+}
+```
+
+**Response** (401 Unauthorized):
+```json
+{
+  "ok": false,
+  "errorMessage": "Invalid or missing internal secret"
 }
 ```
 

@@ -303,37 +303,24 @@ You **SHOULD** add a todo item when:
 - You skip optional enhancements (e.g., caching, validation, logging) to stay focused on the main task
 - You identify security, performance, or UX improvements that aren't critical but would add value
 
-### How to Add Items (via API)
+### How to Add Items (via Internal API)
 
-Use the `/api/admin/dev-todos` endpoint with a POST request:
+Use the `/api/internal/dev-todos` endpoint with the internal secret:
 
-```typescript
-// Example: Adding a dev todo after completing work
-const response = await fetch('/api/admin/dev-todos', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  },
-  body: JSON.stringify({
-    title: 'Add rate limiting to print order submission',
-    description: `## Context
-The print order submission endpoint currently has no rate limiting.
-
-## Implementation Notes
-- Add rate limiting middleware to prevent abuse
-- Consider using Redis for distributed rate limiting
-- Suggested limit: 5 orders per user per hour
-
-## Related Files
-- \`src/app/api/print-orders/route.ts\`
-`,
-    priority: 'medium', // 'low' | 'medium' | 'high'
-    category: 'security', // e.g., 'security', 'performance', 'UX', 'testing'
-    createdBy: 'claude',
-  }),
-});
+```bash
+# Using curl (production URL)
+curl -X POST https://storypic.app/api/internal/dev-todos \
+  -H "Content-Type: application/json" \
+  -H "X-Internal-Secret: $INTERNAL_API_SECRET" \
+  -d '{
+    "title": "Add rate limiting to print order submission",
+    "description": "## Context\nThe print order submission endpoint currently has no rate limiting.\n\n## Implementation Notes\n- Add rate limiting middleware to prevent abuse\n- Consider using Redis for distributed rate limiting\n- Suggested limit: 5 orders per user per hour\n\n## Related Files\n- `src/app/api/print-orders/route.ts`",
+    "priority": "medium",
+    "category": "security"
+  }'
 ```
+
+**Note**: The `INTERNAL_API_SECRET` environment variable must be set. Ask the admin for the secret value if needed.
 
 ### Description Format
 
@@ -344,22 +331,7 @@ The description field supports Markdown. Include:
 
 ### Marking Items Complete
 
-When you complete a todo item, update its status via PUT:
-
-```typescript
-await fetch('/api/admin/dev-todos', {
-  method: 'PUT',
-  headers: {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  },
-  body: JSON.stringify({
-    todoId: 'abc123',
-    status: 'completed',
-    completedBy: 'claude',
-  }),
-});
-```
+When you complete a todo item, inform the admin so they can mark it as completed in the admin UI.
 
 ---
 
@@ -367,6 +339,7 @@ await fetch('/api/admin/dev-todos', {
 
 | Date | Changes |
 |------|---------|
+| 2026-01-19 | Updated dev todo API to use internal endpoint with shared secret (no auth required) |
 | 2026-01-17 | Added Development Todo List section with instructions for Claude to add items |
 | 2026-01-17 | Added explicit triggers for when SYSTEM_DESIGN.md must be updated |
 | 2026-01-08 | Added Mobile App (APK) Updates section |
