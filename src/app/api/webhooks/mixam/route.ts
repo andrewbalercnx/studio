@@ -4,7 +4,8 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import type { PrintOrder, DiagnosticsConfig } from '@/lib/types';
 import { DEFAULT_DIAGNOSTICS_CONFIG } from '@/lib/types';
 import { notifyOrderStatusChanged } from '@/lib/email/notify-admins';
-import { logMixamInteraction, createWebhookInteraction } from '@/lib/mixam/interaction-logger';
+import { logMixamInteraction, logMixamInteractions, createWebhookInteraction, toMixamInteractions } from '@/lib/mixam/interaction-logger';
+import { mixamClient } from '@/lib/mixam/client';
 
 // Helper to check if debug logging is enabled
 async function isDebugLoggingEnabled(firestore: FirebaseFirestore.Firestore): Promise<boolean> {
@@ -234,18 +235,48 @@ export async function POST(request: Request) {
       webhookPayload: webhook,
       orderId: webhook.orderId,
     });
-    await logMixamInteraction(firestore, ourOrderId, webhookInteraction);
 
-    // 5. Map status
-    const newStatus = mapMixamStatusToInternal(webhook.status, webhook.hasErrors);
+    // 5. Immediately call refresh-status API to get authoritative status from Mixam
+    // This ensures we have the most current status and logs both interactions
+    let refreshStatus: { status: string; trackingUrl?: string; estimatedDelivery?: string } | null = null;
+    let refreshInteractions: any[] = [];
 
-    // 6. Build update data
+    if (order.mixamOrderId) {
+      try {
+        console.log(`[Mixam Webhook] Fetching fresh status from Mixam API for order ${order.mixamOrderId}`);
+        const refreshResult = await mixamClient.getOrderStatusWithLogging(order.mixamOrderId);
+        const { interactions, ...statusData } = refreshResult;
+        refreshStatus = statusData;
+        refreshInteractions = interactions;
+        console.log(`[Mixam Webhook] Refresh status result: ${refreshStatus.status}`);
+      } catch (refreshError: any) {
+        console.warn(`[Mixam Webhook] Failed to refresh status from Mixam API: ${refreshError.message}`);
+        // Log the failed attempt if we have interactions
+        if (refreshError.interactions) {
+          refreshInteractions = refreshError.interactions;
+        }
+      }
+    }
+
+    // Log both webhook and refresh interactions together
+    const allInteractions = [
+      webhookInteraction,
+      ...toMixamInteractions(refreshInteractions, order.mixamOrderId || undefined),
+    ];
+    await logMixamInteractions(firestore, ourOrderId, allInteractions);
+
+    // 6. Determine final status - prefer refresh result if available, otherwise use webhook
+    const effectiveStatus = refreshStatus?.status || webhook.status;
+    const newStatus = mapMixamStatusToInternal(effectiveStatus, webhook.hasErrors);
+
+    // 7. Build update data
     const updateData: Record<string, any> = {
-      mixamStatus: webhook.status,
+      mixamStatus: effectiveStatus,
       mixamArtworkComplete: webhook.artworkComplete,
       mixamHasErrors: webhook.hasErrors,
       fulfillmentUpdatedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
+      mixamStatusCheckedAt: FieldValue.serverTimestamp(),
       // Store full webhook payload for debugging
       lastWebhookPayload: webhook,
       lastWebhookAt: FieldValue.serverTimestamp(),
@@ -262,14 +293,22 @@ export async function POST(request: Request) {
       updateData.fulfillmentNotes = webhook.statusReason;
     }
 
+    // Add tracking info from refresh if available
+    if (refreshStatus?.trackingUrl) {
+      updateData.mixamTrackingUrl = refreshStatus.trackingUrl;
+    }
+    if (refreshStatus?.estimatedDelivery) {
+      updateData.mixamEstimatedDelivery = refreshStatus.estimatedDelivery;
+    }
+
     // Add status to history
     const now = new Date();
     updateData.statusHistory = FieldValue.arrayUnion({
       status: newStatus,
       timestamp: now,
-      note: webhook.statusReason || `Mixam status: ${webhook.status}`,
+      note: webhook.statusReason || `Mixam status: ${effectiveStatus} (webhook + refresh)`,
       source: 'webhook',
-      mixamStatus: webhook.status,
+      mixamStatus: effectiveStatus,
     });
 
     // Extract and store artwork errors if present

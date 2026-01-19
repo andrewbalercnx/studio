@@ -62,7 +62,7 @@ export async function POST(
     } catch (error: any) {
       // Log interactions from failed attempt
       if (error.interactions) {
-        await logMixamInteractions(firestore, orderId, toMixamInteractions(error.interactions, order.mixamOrderId));
+        await logMixamInteractions(firestore, orderId, toMixamInteractions(error.interactions, order.mixamOrderId || undefined));
       }
 
       // If order ID lookup fails, try with job number
@@ -77,11 +77,16 @@ export async function POST(
       }
     }
 
-    // Log the API interactions
+    // Log the API interactions to the order's mixamInteractions array
     console.log(`[print-orders] Logging ${statusInteractions.length} status interactions for order ${orderId}`);
-    const convertedInteractions = toMixamInteractions(statusInteractions, order.mixamOrderId);
+    const convertedInteractions = toMixamInteractions(statusInteractions, order.mixamOrderId || undefined);
     console.log(`[print-orders] Converted to ${convertedInteractions.length} MixamInteraction objects`);
-    await logMixamInteractions(firestore, orderId, convertedInteractions);
+    if (convertedInteractions.length > 0) {
+      await logMixamInteractions(firestore, orderId, convertedInteractions);
+      console.log(`[print-orders] Successfully logged ${convertedInteractions.length} interactions for order ${orderId}`);
+    } else {
+      console.warn(`[print-orders] No interactions to log for order ${orderId}`);
+    }
 
     console.log(`[print-orders] Mixam status response:`, JSON.stringify(mixamStatus, null, 2));
 

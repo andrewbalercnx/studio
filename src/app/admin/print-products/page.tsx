@@ -14,7 +14,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { LoaderCircle, Plus, Edit, Trash2, Copy, Sprout } from 'lucide-react';
+import { LoaderCircle, Plus, Edit, Trash2, Copy, Sprout, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
 import type { PrintProduct, MixamProductMapping } from '@/lib/types';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { MixamMappingEditor } from '@/components/admin/MixamMappingEditor';
@@ -1055,6 +1056,15 @@ export default function AdminPrintProductsPage() {
 
   return (
     <div className="container mx-auto p-4 sm:p-6 md:p-8">
+      <div className="mb-4">
+        <Link
+          href="/admin/mixam-catalogue"
+          className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          <ExternalLink className="mr-1 h-4 w-4" />
+          Mixam Catalogue & Settings
+        </Link>
+      </div>
       <PrintProductsPanel />
     </div>
   );

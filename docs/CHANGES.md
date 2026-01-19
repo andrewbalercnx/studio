@@ -16,6 +16,29 @@
 
 ## Changes
 
+### 2026-01-19
+
+#### `d613834` - Webhook refresh and navigation improvements
+
+**Type**: Enhancement
+
+**Summary**: Two improvements to the print order system:
+1. Added link to Mixam Catalogue page from Print Products admin page
+2. Webhook handler now calls refresh-status API after receiving webhook to get authoritative status
+
+**Changes**:
+- Added "Mixam Catalogue & Settings" link at top of Print Products page
+- Webhook now immediately calls Mixam API to refresh status after receiving a webhook
+- Both webhook and API refresh interactions are logged together
+- Only one email notification is sent (after combining webhook + refresh data)
+- Tracking URL and estimated delivery from refresh are captured
+
+**Files Modified**:
+- `src/app/admin/print-products/page.tsx` - Added link to Mixam Catalogue
+- `src/app/api/webhooks/mixam/route.ts` - Added refresh-status call after webhook
+
+---
+
 ### 2026-01-18
 
 #### `5d5a4cf` - Print order management improvements
