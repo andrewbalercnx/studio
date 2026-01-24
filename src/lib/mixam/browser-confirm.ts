@@ -98,8 +98,8 @@ export async function confirmMixamOrder(
     });
 
     // Log what inputs we find for debugging
-    const allInputs = await page.$$eval('input', (inputs) =>
-      inputs.map((i) => ({
+    const allInputs = await page.$$eval('input', (inputs: HTMLInputElement[]) =>
+      inputs.map((i: HTMLInputElement) => ({
         type: i.type,
         name: i.name,
         id: i.id,
@@ -139,8 +139,8 @@ export async function confirmMixamOrder(
     await passwordInput.type(MIXAM_PASSWORD, { delay: 50 });
 
     // Find and click login button - log what we find
-    const allButtons = await page.$$eval('button, input[type="submit"]', (btns) =>
-      btns.map((b) => ({
+    const allButtons = await page.$$eval('button, input[type="submit"]', (btns: Element[]) =>
+      btns.map((b: Element) => ({
         type: (b as HTMLInputElement).type || 'button',
         text: b.textContent?.trim(),
         id: b.id,
