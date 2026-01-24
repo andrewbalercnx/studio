@@ -18,6 +18,29 @@
 
 ### 2026-01-24
 
+#### `5d5e052` - Parse character names in regenerate instructions
+
+**Type**: Enhancement
+
+**Summary**: When parents add additional instructions during image regeneration, character names are now automatically converted to their `$$id$$` placeholder format. This ensures the AI image generator correctly identifies which character is being referenced.
+
+**Example**:
+- Parent types: "The child on this page is Nymira"
+- System converts to: "The child on this page is $$abc123$$" (where abc123 is Nymira's ID)
+
+**Changes**:
+- Created utility function to replace actor display names with `$$id$$` placeholders
+- Applied conversion in `handleConfirmRegenerate` before passing to image generation API
+- Uses case-insensitive matching with word boundaries to avoid partial replacements
+
+**Files Created**:
+- `src/lib/replace-names-with-placeholders.ts` - Utility for name-to-placeholder conversion
+
+**Files Modified**:
+- `src/app/storybook/[bookId]/page.tsx` - Apply conversion in regenerate handler
+
+---
+
 #### `44ac99c` - Add Puppeteer browser automation for Mixam order confirmation
 
 **Type**: Feature

@@ -46,6 +46,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { useResolvePlaceholders } from '@/hooks/use-resolve-placeholders';
 import { useDiagnosticsOptional } from '@/hooks/use-diagnostics';
+import { replaceNamesWithPlaceholders } from '@/lib/replace-names-with-placeholders';
 
 type StatusBadge = {label: string; variant: 'default' | 'secondary' | 'outline'};
 
@@ -396,10 +397,17 @@ export default function StorybookViewerPage() {
   const handleConfirmRegenerate = () => {
     if (!regeneratePageId) return;
     setRegenerateDialogOpen(false);
+
+    // Process the additional prompt to replace character names with $$id$$ placeholders
+    // e.g., "The child is Nymira" becomes "The child is $$childId$$"
+    const processedPrompt = additionalPrompt.trim()
+      ? replaceNamesWithPlaceholders(additionalPrompt.trim(), actors)
+      : undefined;
+
     triggerImageJob({
       pageId: regeneratePageId,
       forceRegenerate: true,
-      additionalPrompt: additionalPrompt.trim() || undefined,
+      additionalPrompt: processedPrompt,
     });
     setRegeneratePageId(null);
     setAdditionalPrompt('');
