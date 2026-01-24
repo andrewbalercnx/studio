@@ -275,8 +275,10 @@ export default function PrintOrderDetailPage() {
       });
 
       const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to confirm order');
+
+      // Check both HTTP status and the ok field in the response
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || data.details || 'Failed to confirm order');
       }
 
       await loadOrder();

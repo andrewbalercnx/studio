@@ -9,9 +9,12 @@
  * 1. User to be logged in
  * 2. Check the confirmation checkbox
  * 3. Click the "Yes I confirm" button
+ *
+ * Uses @sparticuz/chromium for serverless compatibility (Firebase App Hosting / Cloud Run)
  */
 
-import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import type { Browser } from 'puppeteer-core';
 
 const MIXAM_BASE_URL = process.env.MIXAM_API_BASE_URL || 'https://mixam.co.uk';
 const MIXAM_USERNAME = process.env.MIXAM_USERNAME;
@@ -49,15 +52,15 @@ export async function confirmMixamOrder(
   try {
     console.log(`[mixam-browser] Starting browser automation for order ${mixamOrderId}`);
 
-    // Launch browser in headless mode
+    // Import @sparticuz/chromium for serverless environments
+    // This provides a Chromium binary that works in Cloud Run / Firebase App Hosting
+    const chromium = await import('@sparticuz/chromium');
+
+    // Launch browser with serverless-compatible Chromium
     browser = await puppeteer.launch({
+      args: chromium.default.args,
+      executablePath: await chromium.default.executablePath(),
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-      ],
     });
 
     const page = await browser.newPage();
