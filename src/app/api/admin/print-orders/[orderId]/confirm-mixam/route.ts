@@ -50,12 +50,13 @@ export async function POST(
       );
     }
 
-    // Verify order is in submitted/pending status
-    if (order.fulfillmentStatus !== 'submitted') {
+    // Verify order is in submitted/pending or on_hold status
+    const allowedStatuses = ['submitted', 'on_hold'];
+    if (!allowedStatuses.includes(order.fulfillmentStatus)) {
       return NextResponse.json(
         {
           ok: false,
-          error: `Order must be in submitted (pending) status to confirm. Current status: ${order.fulfillmentStatus}`,
+          error: `Order must be in submitted (pending) or on_hold status to confirm. Current status: ${order.fulfillmentStatus}`,
         },
         { status: 400 }
       );
