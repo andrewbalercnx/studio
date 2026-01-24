@@ -69,7 +69,7 @@ export async function confirmMixamOrder(
     console.log('[mixam-browser] Creating Steel session...');
     session = await steel.sessions.create({
       useProxy: false,
-      solveCaptcha: true,
+      solveCaptcha: false, // Requires paid plan
     });
     console.log(`[mixam-browser] Steel session created: ${session.id}`);
 
