@@ -23,6 +23,7 @@ export default function PrintOrderDetailPage() {
   const [actionResult, setActionResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showInteractions, setShowInteractions] = useState(false);
   const [expandedInteraction, setExpandedInteraction] = useState<string | null>(null);
+  const [debugScreenshots, setDebugScreenshots] = useState<{ beforeConfirm?: string; afterConfirm?: string } | null>(null);
 
   useEffect(() => {
     if (!userLoading && user) {
@@ -266,6 +267,7 @@ export default function PrintOrderDetailPage() {
 
     try {
       setActionLoading(true);
+      setDebugScreenshots(null); // Clear any previous screenshots
       setActionResult({ type: 'success', message: 'Confirming order with Mixam... This may take up to 30 seconds.' });
 
       const headers = await getAuthHeaders();
@@ -278,6 +280,10 @@ export default function PrintOrderDetailPage() {
 
       // Check both HTTP status and the ok field in the response
       if (!response.ok || !data.ok) {
+        // Capture screenshots if available for debugging
+        if (data.screenshots) {
+          setDebugScreenshots(data.screenshots);
+        }
         throw new Error(data.error || data.details || 'Failed to confirm order');
       }
 
@@ -414,12 +420,47 @@ export default function PrintOrderDetailPage() {
                 {actionResult.type === 'success' ? '✓' : '✗'} {actionResult.message}
               </p>
               <button
-                onClick={() => setActionResult(null)}
+                onClick={() => { setActionResult(null); setDebugScreenshots(null); }}
                 className="text-gray-500 hover:text-gray-700"
               >
                 ×
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Debug screenshots from browser automation */}
+        {debugScreenshots && (
+          <div className="mb-6 p-4 rounded-lg bg-gray-50 border border-gray-200">
+            <h3 className="font-semibold text-gray-800 mb-3">Browser Automation Screenshots</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {debugScreenshots.beforeConfirm && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Before Login Click:</p>
+                  <img
+                    src={`data:image/png;base64,${debugScreenshots.beforeConfirm}`}
+                    alt="Before login"
+                    className="border border-gray-300 rounded max-w-full"
+                  />
+                </div>
+              )}
+              {debugScreenshots.afterConfirm && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">After Login Attempt:</p>
+                  <img
+                    src={`data:image/png;base64,${debugScreenshots.afterConfirm}`}
+                    alt="After login attempt"
+                    className="border border-gray-300 rounded max-w-full"
+                  />
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setDebugScreenshots(null)}
+              className="mt-3 text-sm text-gray-500 hover:text-gray-700"
+            >
+              Hide screenshots
+            </button>
           </div>
         )}
 
