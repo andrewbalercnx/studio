@@ -158,36 +158,13 @@ export async function confirmMixamOrder(
     console.log('[mixam-browser] Found password input, typing password...');
     await passwordInput.type(MIXAM_PASSWORD, { delay: 50 });
 
-    // Find and click login button - log what we find
-    const allButtons = await page.$$eval('button, input[type="submit"]', (btns: Element[]) =>
-      btns.map((b: Element) => ({
-        type: (b as HTMLInputElement).type || 'button',
-        text: b.textContent?.trim(),
-        id: b.id,
-        className: b.className,
-      }))
-    );
-    console.log('[mixam-browser] Found buttons:', JSON.stringify(allButtons));
-
-    const loginButton = await page.$('button[type="submit"]') ||
-                        await page.$('input[type="submit"]') ||
-                        await page.$('.login-button') ||
-                        await page.$('#login-button') ||
-                        await page.$('button');
-
-    if (!loginButton) {
-      throw new Error('Could not find login button');
-    }
-
-    // Take screenshot before clicking login for debugging
+    // Take screenshot before submitting login for debugging
     const preLoginScreenshot = await page.screenshot({ encoding: 'base64' });
     console.log('[mixam-browser] Pre-login screenshot captured');
 
-    console.log('[mixam-browser] Clicking login button...');
-
-    // Click login and wait for either navigation or URL change
-    // Mixam may use client-side routing, so don't rely solely on waitForNavigation
-    await loginButton.click();
+    // Press Enter to submit the form (more reliable than finding the button)
+    console.log('[mixam-browser] Pressing Enter to submit login form...');
+    await passwordInput.press('Enter');
 
     // Wait for either navigation to complete or for the page to settle
     await Promise.race([
