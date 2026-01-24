@@ -16,6 +16,34 @@
 
 ## Changes
 
+### 2026-01-24
+
+#### `44ac99c` - Add Puppeteer browser automation for Mixam order confirmation
+
+**Type**: Feature
+
+**Summary**: Added browser automation to confirm Mixam orders from the admin panel. This is a temporary solution until Mixam provides an API endpoint for order confirmation.
+
+**Changes**:
+- Added Puppeteer dependency for browser automation
+- Created browser automation utility that logs into Mixam and confirms orders
+- Created `/api/admin/print-orders/[orderId]/confirm-mixam` endpoint
+- Added "Confirm Order" button to print order detail page for orders in `submitted` status
+- The automation logs in, navigates to the order page, checks the confirmation checkbox, and clicks confirm
+
+**Files Created**:
+- `src/lib/mixam/browser-confirm.ts` - Browser automation utility
+- `src/app/api/admin/print-orders/[orderId]/confirm-mixam/route.ts` - API endpoint
+
+**Files Modified**:
+- `package.json` - Added Puppeteer dependency
+- `src/app/admin/print-orders/[orderId]/page.tsx` - Added Confirm Order button
+- `docs/API.md` - Added confirm-mixam endpoint documentation
+
+**Note**: This is a temporary solution. A dev todo has been created to follow up with Mixam about an API endpoint.
+
+---
+
 ### 2026-01-19
 
 #### `ecca186` - Add internal API for Claude to create dev todos
