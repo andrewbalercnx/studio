@@ -128,24 +128,43 @@ export async function confirmMixamOrder(
     }
 
     console.log('[mixam-browser] Clicking login button...');
-    await Promise.all([
-      page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }),
-      loginButton.click(),
+
+    // Click login and wait for either navigation or URL change
+    // Mixam may use client-side routing, so don't rely solely on waitForNavigation
+    await loginButton.click();
+
+    // Wait for either navigation to complete or for the page to settle
+    await Promise.race([
+      page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {
+        console.log('[mixam-browser] No navigation event, checking page state...');
+      }),
+      new Promise((resolve) => setTimeout(resolve, 5000)), // Fallback: wait 5 seconds
     ]);
 
-    // Check if login was successful
+    // Additional wait for any AJAX to complete
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    // Check if login was successful by looking at the current URL
     const currentUrl = page.url();
+    console.log(`[mixam-browser] Current URL after login attempt: ${currentUrl}`);
+
     if (currentUrl.includes('/login')) {
+      // Check if there's an error message on the page
+      const pageContent = await page.content();
+      const hasError = pageContent.toLowerCase().includes('invalid') ||
+                       pageContent.toLowerCase().includes('incorrect') ||
+                       pageContent.toLowerCase().includes('wrong password');
+
       const screenshot = await page.screenshot({ encoding: 'base64' });
       return {
         success: false,
-        message: 'Login failed - still on login page',
+        message: hasError ? 'Login failed - invalid credentials' : 'Login failed - still on login page',
         screenshots: { beforeConfirm: screenshot as string },
         error: 'Login credentials may be incorrect or login form has changed',
       };
     }
 
-    console.log('[mixam-browser] Login successful, navigating to order page...');
+    console.log('[mixam-browser] Login appears successful, navigating to order page...');
 
     // Step 3: Navigate to order confirmation page
     const orderUrl = `${MIXAM_BASE_URL}/orders/${mixamOrderId}`;
