@@ -100,6 +100,7 @@ export async function POST(
         ok: false,
         error: result.message,
         details: result.error,
+        screenshots: result.screenshots,
       });
     }
   } catch (error: any) {
