@@ -259,15 +259,19 @@ export default function PrintOrderDetailPage() {
     }
   }
 
-  async function handleConfirmMixamOrder() {
-    if (!confirm('This will use browser automation to confirm the order on Mixam. This may take up to 30 seconds. Continue?')) {
+  function handleOpenMixamConfirmPage() {
+    if (!order?.mixamOrderId) return;
+    const mixamUrl = `https://mixam.co.uk/orders/${order.mixamOrderId}`;
+    window.open(mixamUrl, '_blank');
+  }
+
+  async function handleMarkAsConfirmed() {
+    if (!confirm('Have you confirmed this order on the Mixam website? This will update the order status to Confirmed.')) {
       return;
     }
 
     try {
       setActionLoading(true);
-      setActionResult({ type: 'success', message: 'Confirming order with Mixam... This may take up to 30 seconds.' });
-
       const headers = await getAuthHeaders();
       const response = await fetch(`/api/admin/print-orders/${orderId}/confirm-mixam`, {
         method: 'POST',
@@ -278,13 +282,13 @@ export default function PrintOrderDetailPage() {
 
       // Check both HTTP status and the ok field in the response
       if (!response.ok || !data.ok) {
-        throw new Error(data.error || data.details || 'Failed to confirm order');
+        throw new Error(data.error || data.details || 'Failed to mark order as confirmed');
       }
 
       await loadOrder();
       setActionResult({
         type: 'success',
-        message: data.message || 'Order confirmed successfully!',
+        message: data.message || 'Order marked as confirmed!',
       });
     } catch (err: any) {
       console.error('Confirm Mixam error:', err);
@@ -479,13 +483,21 @@ export default function PrintOrderDetailPage() {
                 </button>
               )}
               {canConfirmMixam && (
-                <button
-                  onClick={handleConfirmMixamOrder}
-                  disabled={actionLoading}
-                  className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                >
-                  Confirm Order
-                </button>
+                <>
+                  <button
+                    onClick={handleOpenMixamConfirmPage}
+                    className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                  >
+                    Open Mixam ↗
+                  </button>
+                  <button
+                    onClick={handleMarkAsConfirmed}
+                    disabled={actionLoading}
+                    className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                  >
+                    Mark Confirmed
+                  </button>
+                </>
               )}
               {canRefreshStatus && (
                 <button
