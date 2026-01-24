@@ -59,6 +59,7 @@ export async function confirmMixamOrder(
 
   try {
     console.log(`[mixam-browser] Starting Steel browser automation for order ${mixamOrderId}`);
+    console.log(`[mixam-browser] Using credentials - Username: ${MIXAM_USERNAME}, Password: ${'*'.repeat(MIXAM_PASSWORD.length)} (${MIXAM_PASSWORD.length} chars)`);
 
     // Initialize Steel client
     const steel = new Steel({
