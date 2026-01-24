@@ -3,17 +3,12 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import type { PrintOrder } from '@/lib/types';
+import { confirmMixamOrder } from '@/lib/mixam/browser-confirm';
 
 /**
  * POST /api/admin/print-orders/[orderId]/confirm-mixam
  *
- * Marks a Mixam order as confirmed after the admin has manually confirmed it
- * on the Mixam website.
- *
- * NOTE: Automatic browser confirmation is not available in Firebase App Hosting.
- * The admin must:
- * 1. Open the Mixam order page and confirm manually
- * 2. Click "Mark as Confirmed" to update the order status here
+ * Confirms a Mixam order using Steel cloud browser automation.
  *
  * The order must be in 'submitted' or 'on_hold' status.
  */
@@ -66,23 +61,47 @@ export async function POST(
       );
     }
 
-    console.log(`[confirm-mixam] Marking order ${orderId} as confirmed (Mixam ID: ${order.mixamOrderId})`);
+    console.log(`[confirm-mixam] Starting browser confirmation for order ${orderId}, Mixam ID: ${order.mixamOrderId}`);
 
-    // Update the order status to confirmed
+    // Attempt to confirm the order using browser automation
+    const result = await confirmMixamOrder(order.mixamOrderId);
+
+    // Log the attempt
     await firestore.collection('printOrders').doc(orderId).update({
-      fulfillmentStatus: 'confirmed',
-      confirmedAt: FieldValue.serverTimestamp(),
-      confirmedBy: user.email || user.uid,
+      'mixamConfirmAttempt': {
+        timestamp: FieldValue.serverTimestamp(),
+        success: result.success,
+        message: result.message,
+        error: result.error || null,
+      },
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    console.log(`[confirm-mixam] Order ${orderId} marked as confirmed`);
+    if (result.success) {
+      console.log(`[confirm-mixam] Successfully confirmed order ${orderId}`);
 
-    return NextResponse.json({
-      ok: true,
-      message: 'Order marked as confirmed',
-      newStatus: 'confirmed',
-    });
+      // Update the order status to confirmed
+      await firestore.collection('printOrders').doc(orderId).update({
+        fulfillmentStatus: 'confirmed',
+        confirmedAt: FieldValue.serverTimestamp(),
+        confirmedBy: user.email || user.uid,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      return NextResponse.json({
+        ok: true,
+        message: result.message,
+        newStatus: 'confirmed',
+      });
+    } else {
+      console.error(`[confirm-mixam] Failed to confirm order ${orderId}: ${result.error || result.message}`);
+
+      return NextResponse.json({
+        ok: false,
+        error: result.message,
+        details: result.error,
+      });
+    }
   } catch (error: any) {
     console.error('[confirm-mixam] Error:', error);
     return NextResponse.json(

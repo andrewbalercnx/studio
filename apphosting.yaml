@@ -93,3 +93,9 @@ env:
     secret: INTERNAL_API_SECRET
     availability:
       - RUNTIME
+
+  # Steel.dev cloud browser API for Mixam order confirmation automation
+  - variable: STEEL_API_KEY
+    secret: STEEL_API_KEY
+    availability:
+      - RUNTIME

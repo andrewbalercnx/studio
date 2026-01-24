@@ -18,6 +18,27 @@
 
 ### 2026-01-24
 
+#### `535d0c1` - Switch to Steel.dev cloud browser for Mixam order confirmation
+
+**Type**: Enhancement
+
+**Summary**: Replaced local Puppeteer with Steel.dev cloud browser service for Mixam order confirmation. This solves the issue of Puppeteer not working in Firebase App Hosting (Cloud Run) environments which don't have Chrome installed.
+
+**Changes**:
+- Switched from `puppeteer` to `puppeteer-core` + `steel-sdk`
+- Browser automation now runs in Steel.dev cloud instead of locally
+- Supports both `submitted` and `on_hold` order statuses
+- Added STEEL_API_KEY to environment configuration
+
+**Files Modified**:
+- `src/lib/mixam/browser-confirm.ts` - Rewrote to use Steel.dev SDK
+- `src/app/api/admin/print-orders/[orderId]/confirm-mixam/route.ts` - Added on_hold status support
+- `apphosting.yaml` - Added STEEL_API_KEY secret
+- `docs/API.md` - Updated confirm-mixam endpoint documentation
+- `package.json` - Replaced puppeteer with steel-sdk and puppeteer-core
+
+---
+
 #### `5d5e052` - Parse character names in regenerate instructions
 
 **Type**: Enhancement
