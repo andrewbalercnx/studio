@@ -90,6 +90,25 @@ export async function confirmMixamOrder(
       timeout: 30000,
     });
 
+    // Step 1.5: Dismiss any popup dialogs (Terms & Conditions, Cookie consent)
+    console.log('[mixam-browser] Checking for popup dialogs to dismiss...');
+
+    // Try to accept Terms & Conditions if present
+    const acceptTermsButton = await page.$('#acceptTerms');
+    if (acceptTermsButton) {
+      console.log('[mixam-browser] Dismissing Terms & Conditions dialog...');
+      await acceptTermsButton.click();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    // Try to accept cookies if present
+    const acceptCookiesButton = await page.$('#acceptAllCookies');
+    if (acceptCookiesButton) {
+      console.log('[mixam-browser] Dismissing Cookie consent dialog...');
+      await acceptCookiesButton.click();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
     // Step 2: Log in
     console.log('[mixam-browser] Entering credentials...');
 
