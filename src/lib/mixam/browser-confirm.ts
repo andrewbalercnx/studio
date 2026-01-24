@@ -92,21 +92,41 @@ export async function confirmMixamOrder(
     // Step 2: Log in
     console.log('[mixam-browser] Entering credentials...');
 
-    // Wait for login form
-    await page.waitForSelector('input[type="email"], input[name="email"], input[id="email"], #username', {
+    // Wait for login form - try multiple selectors
+    await page.waitForSelector('input[type="email"], input[name="email"], input[id="email"], #username, input[type="text"]', {
       timeout: 10000,
     });
 
-    // Find and fill email/username field
-    const emailInput = await page.$('input[type="email"]') ||
-                       await page.$('input[name="email"]') ||
-                       await page.$('input[id="email"]') ||
-                       await page.$('#username');
+    // Log what inputs we find for debugging
+    const allInputs = await page.$$eval('input', (inputs) =>
+      inputs.map((i) => ({
+        type: i.type,
+        name: i.name,
+        id: i.id,
+        placeholder: i.placeholder,
+      }))
+    );
+    console.log('[mixam-browser] Found inputs:', JSON.stringify(allInputs));
+
+    // Find and fill email/username field - try more selectors
+    let emailInput = await page.$('input[type="email"]') ||
+                     await page.$('input[name="email"]') ||
+                     await page.$('input[id="email"]') ||
+                     await page.$('#username') ||
+                     await page.$('input[name="username"]') ||
+                     await page.$('input[placeholder*="email" i]') ||
+                     await page.$('input[placeholder*="user" i]');
+
+    // If still not found, try the first text input
+    if (!emailInput) {
+      emailInput = await page.$('input[type="text"]');
+    }
 
     if (!emailInput) {
       throw new Error('Could not find email/username input field');
     }
 
+    console.log('[mixam-browser] Found email input, typing username...');
     await emailInput.type(MIXAM_USERNAME, { delay: 50 });
 
     // Find and fill password field
@@ -115,17 +135,33 @@ export async function confirmMixamOrder(
       throw new Error('Could not find password input field');
     }
 
+    console.log('[mixam-browser] Found password input, typing password...');
     await passwordInput.type(MIXAM_PASSWORD, { delay: 50 });
 
-    // Find and click login button
+    // Find and click login button - log what we find
+    const allButtons = await page.$$eval('button, input[type="submit"]', (btns) =>
+      btns.map((b) => ({
+        type: (b as HTMLInputElement).type || 'button',
+        text: b.textContent?.trim(),
+        id: b.id,
+        className: b.className,
+      }))
+    );
+    console.log('[mixam-browser] Found buttons:', JSON.stringify(allButtons));
+
     const loginButton = await page.$('button[type="submit"]') ||
                         await page.$('input[type="submit"]') ||
                         await page.$('.login-button') ||
-                        await page.$('#login-button');
+                        await page.$('#login-button') ||
+                        await page.$('button');
 
     if (!loginButton) {
       throw new Error('Could not find login button');
     }
+
+    // Take screenshot before clicking login for debugging
+    const preLoginScreenshot = await page.screenshot({ encoding: 'base64' });
+    console.log('[mixam-browser] Pre-login screenshot captured');
 
     console.log('[mixam-browser] Clicking login button...');
 
@@ -155,11 +191,14 @@ export async function confirmMixamOrder(
                        pageContent.toLowerCase().includes('incorrect') ||
                        pageContent.toLowerCase().includes('wrong password');
 
-      const screenshot = await page.screenshot({ encoding: 'base64' });
+      const postLoginScreenshot = await page.screenshot({ encoding: 'base64' });
       return {
         success: false,
         message: hasError ? 'Login failed - invalid credentials' : 'Login failed - still on login page',
-        screenshots: { beforeConfirm: screenshot as string },
+        screenshots: {
+          beforeConfirm: preLoginScreenshot as string,
+          afterConfirm: postLoginScreenshot as string,
+        },
         error: 'Login credentials may be incorrect or login form has changed',
       };
     }
