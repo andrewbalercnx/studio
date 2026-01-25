@@ -98,7 +98,7 @@ export async function confirmMixamOrder(
     if (acceptTermsButton) {
       console.log('[mixam-browser] Dismissing Terms & Conditions dialog...');
       await acceptTermsButton.click();
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
     // Try to accept cookies if present
@@ -106,14 +106,26 @@ export async function confirmMixamOrder(
     if (acceptCookiesButton) {
       console.log('[mixam-browser] Dismissing Cookie consent dialog...');
       await acceptCookiesButton.click();
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
+
+    // Wait for dialogs to fully dismiss
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Verify dialogs are gone
+    const termsStillVisible = await page.$('#acceptTerms');
+    const cookiesStillVisible = await page.$('#acceptAllCookies');
+    console.log(`[mixam-browser] Dialogs dismissed - Terms: ${!termsStillVisible}, Cookies: ${!cookiesStillVisible}`);
+
+    // Log the entire DOM for debugging (compressed to single line)
+    const bodyHTML = await page.$eval('body', (body: Element) => body.innerHTML.replace(/\s+/g, ' ').substring(0, 5000));
+    console.log(`[mixam-browser] DOM (first 5000 chars): ${bodyHTML}`);
 
     // Step 2: Log in
     console.log('[mixam-browser] Entering credentials...');
 
-    // Wait for login form - try multiple selectors
-    await page.waitForSelector('input[type="email"], input[name="email"], input[id="email"], #username, input[type="text"]', {
+    // Wait for login form's password field specifically (more reliable than generic selectors)
+    await page.waitForSelector('input[type="password"]', {
       timeout: 10000,
     });
 
@@ -128,43 +140,82 @@ export async function confirmMixamOrder(
     );
     console.log('[mixam-browser] Found inputs:', JSON.stringify(allInputs));
 
-    // Find and fill email/username field - try more selectors
-    let emailInput = await page.$('input[type="email"]') ||
-                     await page.$('input[name="email"]') ||
-                     await page.$('input[id="email"]') ||
-                     await page.$('#username') ||
-                     await page.$('input[name="username"]') ||
-                     await page.$('input[placeholder*="email" i]') ||
-                     await page.$('input[placeholder*="user" i]');
+    // Find the password field first (more unique than email/text fields)
+    const passwordInput = await page.$('input[type="password"]');
+    if (!passwordInput) {
+      throw new Error('Could not find password input field');
+    }
+    console.log('[mixam-browser] Found password input');
 
-    // If still not found, try the first text input
+    // Find email field - look for input[type="email"] or text input near password field
+    // The login form should have an email field before the password field
+    let emailInput = await page.$('input[type="email"]');
+
+    // If not type="email", try to find the text input that's part of the login form
+    // by looking for inputs near the password field (in the same form/container)
     if (!emailInput) {
-      emailInput = await page.$('input[type="text"]');
+      // Try to find the form containing the password field and get its email input
+      const formInputs = await page.$$eval('form input[type="text"], form input[type="email"]', (inputs: HTMLInputElement[]) =>
+        inputs.map((i, idx) => ({
+          idx,
+          type: i.type,
+          placeholder: i.placeholder,
+          isSearch: i.placeholder?.toLowerCase().includes('search'),
+        }))
+      );
+      console.log('[mixam-browser] Form inputs found:', JSON.stringify(formInputs));
+
+      // Find a non-search text input
+      const nonSearchInputs = formInputs.filter((i: { isSearch: boolean }) => !i.isSearch);
+      if (nonSearchInputs.length > 0) {
+        const formTextInputs = await page.$$('form input[type="text"], form input[type="email"]');
+        for (let i = 0; i < formTextInputs.length; i++) {
+          const placeholder = await formTextInputs[i].evaluate((el: HTMLInputElement) => el.placeholder);
+          if (!placeholder?.toLowerCase().includes('search')) {
+            emailInput = formTextInputs[i];
+            break;
+          }
+        }
+      }
     }
 
     if (!emailInput) {
       throw new Error('Could not find email/username input field');
     }
 
-    console.log('[mixam-browser] Found email input, typing username...');
+    // Click to focus the email input first
+    console.log('[mixam-browser] Clicking email input to focus...');
+    await emailInput.click();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    console.log('[mixam-browser] Typing username...');
     await emailInput.type(MIXAM_USERNAME, { delay: 50 });
 
-    // Find and fill password field
-    const passwordInput = await page.$('input[type="password"]');
-    if (!passwordInput) {
-      throw new Error('Could not find password input field');
-    }
+    // Click to focus password input
+    console.log('[mixam-browser] Clicking password input to focus...');
+    await passwordInput.click();
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
-    console.log('[mixam-browser] Found password input, typing password...');
+    console.log('[mixam-browser] Typing password...');
     await passwordInput.type(MIXAM_PASSWORD, { delay: 50 });
 
     // Take screenshot before submitting login for debugging
     const preLoginScreenshot = await page.screenshot({ encoding: 'base64' });
     console.log('[mixam-browser] Pre-login screenshot captured');
 
-    // Press Enter to submit the form (more reliable than finding the button)
-    console.log('[mixam-browser] Pressing Enter to submit login form...');
-    await passwordInput.press('Enter');
+    // Try to find and click the login button with submitBtn class
+    const loginButton = await page.$('.submitBtn') ||
+                        await page.$('button[type="submit"]') ||
+                        await page.$('input[type="submit"]');
+
+    if (loginButton) {
+      console.log('[mixam-browser] Found login button, clicking...');
+      await loginButton.click();
+    } else {
+      // Fallback to pressing Enter
+      console.log('[mixam-browser] No login button found, pressing Enter...');
+      await passwordInput.press('Enter');
+    }
 
     // Wait for either navigation to complete or for the page to settle
     await Promise.race([
