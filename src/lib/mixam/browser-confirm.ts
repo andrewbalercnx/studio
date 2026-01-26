@@ -234,17 +234,34 @@ export async function confirmMixamOrder(
     const preLoginScreenshot = await page.screenshot({ encoding: 'base64' });
     console.log('[mixam-browser] Pre-login screenshot captured');
 
-    // Try to find and click the login button with submitBtn class
-    const loginButton = await page.$('.submitBtn') ||
-                        await page.$('button[type="submit"]') ||
-                        await page.$('input[type="submit"]');
+    // Find and click the login button using JavaScript for reliability
+    // Look for button with "Login" text in the login form specifically
+    const loginClicked = await page.evaluate(() => {
+      // Find all buttons with "Login" text
+      const buttons = Array.from(document.querySelectorAll('button, input[type="submit"]'));
+      const loginBtn = buttons.find(btn => {
+        const text = btn.textContent?.trim().toLowerCase();
+        const isLoginBtn = text === 'login' || btn.classList.contains('submitBtn');
+        // Make sure it's not hidden
+        const style = window.getComputedStyle(btn);
+        const isVisible = style.display !== 'none' && style.visibility !== 'hidden';
+        return isLoginBtn && isVisible;
+      }) as HTMLButtonElement | undefined;
 
-    if (loginButton) {
-      console.log('[mixam-browser] Found login button, clicking...');
-      await loginButton.click();
+      if (loginBtn) {
+        console.log('Found login button:', loginBtn.textContent?.trim(), loginBtn.className);
+        loginBtn.scrollIntoView({ behavior: 'instant', block: 'center' });
+        loginBtn.click();
+        return { clicked: true, text: loginBtn.textContent?.trim(), className: loginBtn.className };
+      }
+      return { clicked: false };
+    });
+
+    if (loginClicked.clicked) {
+      console.log(`[mixam-browser] Clicked login button: "${loginClicked.text}" (class: ${loginClicked.className})`);
     } else {
       // Fallback to pressing Enter
-      console.log('[mixam-browser] No login button found, pressing Enter...');
+      console.log('[mixam-browser] No login button found via JS, pressing Enter...');
       await passwordInput.press('Enter');
     }
 
