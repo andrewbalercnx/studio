@@ -234,36 +234,9 @@ export async function confirmMixamOrder(
     const preLoginScreenshot = await page.screenshot({ encoding: 'base64' });
     console.log('[mixam-browser] Pre-login screenshot captured');
 
-    // Find and click the login button using JavaScript for reliability
-    // Look for button with "Login" text in the login form specifically
-    const loginClicked = await page.evaluate(() => {
-      // Find all buttons with "Login" text
-      const buttons = Array.from(document.querySelectorAll('button, input[type="submit"]'));
-      const loginBtn = buttons.find(btn => {
-        const text = btn.textContent?.trim().toLowerCase();
-        const isLoginBtn = text === 'login' || btn.classList.contains('submitBtn');
-        // Make sure it's not hidden
-        const style = window.getComputedStyle(btn);
-        const isVisible = style.display !== 'none' && style.visibility !== 'hidden';
-        return isLoginBtn && isVisible;
-      }) as HTMLButtonElement | undefined;
-
-      if (loginBtn) {
-        console.log('Found login button:', loginBtn.textContent?.trim(), loginBtn.className);
-        loginBtn.scrollIntoView({ behavior: 'instant', block: 'center' });
-        loginBtn.click();
-        return { clicked: true, text: loginBtn.textContent?.trim(), className: loginBtn.className };
-      }
-      return { clicked: false };
-    });
-
-    if (loginClicked.clicked) {
-      console.log(`[mixam-browser] Clicked login button: "${loginClicked.text}" (class: ${loginClicked.className})`);
-    } else {
-      // Fallback to pressing Enter
-      console.log('[mixam-browser] No login button found via JS, pressing Enter...');
-      await passwordInput.press('Enter');
-    }
+    // Submit the form by pressing Enter in the password field
+    console.log('[mixam-browser] Pressing Enter to submit login form...');
+    await passwordInput.press('Enter');
 
     // Wait for either navigation to complete or for the page to settle
     await Promise.race([
