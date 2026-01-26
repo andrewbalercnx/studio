@@ -91,30 +91,61 @@ export async function confirmMixamOrder(
     });
 
     // Step 1.5: Dismiss any popup dialogs (Terms & Conditions, Cookie consent)
+    // These dialogs block interaction with the login form
     console.log('[mixam-browser] Checking for popup dialogs to dismiss...');
 
-    // Try to accept Terms & Conditions if present
-    const acceptTermsButton = await page.$('#acceptTerms');
-    if (acceptTermsButton) {
-      console.log('[mixam-browser] Dismissing Terms & Conditions dialog...');
-      await acceptTermsButton.click();
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+    // Dismiss dialogs using JavaScript click (more reliable than Puppeteer click for overlays)
+    const dismissedTerms = await page.evaluate(() => {
+      const btn = document.querySelector('#acceptTerms') as HTMLButtonElement;
+      if (btn) {
+        btn.scrollIntoView({ behavior: 'instant', block: 'center' });
+        btn.click();
+        return true;
+      }
+      return false;
+    });
+    if (dismissedTerms) {
+      console.log('[mixam-browser] Clicked Terms & Conditions Accept button');
+      await new Promise((resolve) => setTimeout(resolve, 1500));
     }
 
-    // Try to accept cookies if present
-    const acceptCookiesButton = await page.$('#acceptAllCookies');
-    if (acceptCookiesButton) {
-      console.log('[mixam-browser] Dismissing Cookie consent dialog...');
-      await acceptCookiesButton.click();
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+    const dismissedCookies = await page.evaluate(() => {
+      const btn = document.querySelector('#acceptAllCookies') as HTMLButtonElement;
+      if (btn) {
+        btn.scrollIntoView({ behavior: 'instant', block: 'center' });
+        btn.click();
+        return true;
+      }
+      return false;
+    });
+    if (dismissedCookies) {
+      console.log('[mixam-browser] Clicked Cookie consent Accept All button');
+      await new Promise((resolve) => setTimeout(resolve, 1500));
     }
 
-    // Wait for dialogs to fully dismiss
+    // Wait for dialogs to fully dismiss (animation)
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    // Verify dialogs are gone
-    const termsStillVisible = await page.$('#acceptTerms');
-    const cookiesStillVisible = await page.$('#acceptAllCookies');
+    // Check if dialogs are gone - if not, try clicking again
+    let termsStillVisible = await page.$('#acceptTerms');
+    let cookiesStillVisible = await page.$('#acceptAllCookies');
+
+    if (termsStillVisible || cookiesStillVisible) {
+      console.log('[mixam-browser] Dialogs still visible, trying again...');
+
+      // Try again with a direct evaluate click
+      await page.evaluate(() => {
+        const terms = document.querySelector('#acceptTerms') as HTMLButtonElement;
+        const cookies = document.querySelector('#acceptAllCookies') as HTMLButtonElement;
+        if (terms) terms.click();
+        if (cookies) cookies.click();
+      });
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      termsStillVisible = await page.$('#acceptTerms');
+      cookiesStillVisible = await page.$('#acceptAllCookies');
+    }
+
     console.log(`[mixam-browser] Dialogs dismissed - Terms: ${!termsStillVisible}, Cookies: ${!cookiesStillVisible}`);
 
     // Log the entire DOM for debugging (compressed to single line)
