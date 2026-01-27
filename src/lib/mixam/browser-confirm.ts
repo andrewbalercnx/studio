@@ -241,8 +241,31 @@ export async function confirmMixamOrder(
     const preLoginScreenshot = await page.screenshot({ encoding: 'base64' });
     console.log('[mixam-browser] Pre-login screenshot captured');
 
-    // Submit the form by pressing Enter in the password field
-    console.log('[mixam-browser] Pressing Enter to submit login form...');
+    // Submit the form - try multiple approaches
+    console.log('[mixam-browser] Submitting login form...');
+
+    // First, try to find and submit the form directly
+    const formSubmitted = await page.evaluate(() => {
+      const passwordField = document.querySelector('input[type="password"]');
+      if (passwordField) {
+        const form = passwordField.closest('form');
+        if (form) {
+          // Dispatch submit event
+          const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+          const eventHandled = !form.dispatchEvent(submitEvent);
+          if (!eventHandled) {
+            // If not prevented, also call submit()
+            form.submit();
+          }
+          return { method: 'form.submit', formAction: form.action };
+        }
+      }
+      return { method: 'none' };
+    });
+
+    console.log(`[mixam-browser] Form submission: ${JSON.stringify(formSubmitted)}`);
+
+    // Also press Enter as backup
     await passwordInput.press('Enter');
 
     // Wait for either navigation to complete or for the page to settle
