@@ -94,58 +94,65 @@ export async function confirmMixamOrder(
     // These dialogs block interaction with the login form
     console.log('[mixam-browser] Checking for popup dialogs to dismiss...');
 
-    // Dismiss dialogs using JavaScript click (more reliable than Puppeteer click for overlays)
-    const dismissedTerms = await page.evaluate(() => {
-      const btn = document.querySelector('#acceptTerms') as HTMLButtonElement;
-      if (btn) {
-        btn.scrollIntoView({ behavior: 'instant', block: 'center' });
-        btn.click();
-        return true;
+    // Remove dialog containers from DOM entirely (clicking buttons doesn't seem to work reliably)
+    const dialogsRemoved = await page.evaluate(() => {
+      const removed: string[] = [];
+
+      // Find and remove Terms & Conditions dialog
+      const termsBtn = document.querySelector('#acceptTerms');
+      if (termsBtn) {
+        // Find parent dialog/modal container and remove it
+        let parent = termsBtn.parentElement;
+        while (parent && !parent.classList.contains('modal') && !parent.classList.contains('toast') && parent.tagName !== 'BODY') {
+          if (parent.classList.contains('fixed-bottom') || parent.style.position === 'fixed' ||
+              window.getComputedStyle(parent).position === 'fixed') {
+            parent.remove();
+            removed.push('terms-container');
+            break;
+          }
+          parent = parent.parentElement;
+        }
+        // If we didn't find a fixed container, just hide the button's closest container
+        if (!removed.includes('terms-container')) {
+          const container = termsBtn.closest('.toast, .alert, .modal, [class*="banner"], [class*="notice"]');
+          if (container) {
+            (container as HTMLElement).style.display = 'none';
+            removed.push('terms-closest');
+          }
+        }
       }
-      return false;
-    });
-    if (dismissedTerms) {
-      console.log('[mixam-browser] Clicked Terms & Conditions Accept button');
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-    }
 
-    const dismissedCookies = await page.evaluate(() => {
-      const btn = document.querySelector('#acceptAllCookies') as HTMLButtonElement;
-      if (btn) {
-        btn.scrollIntoView({ behavior: 'instant', block: 'center' });
-        btn.click();
-        return true;
+      // Find and remove Cookie consent dialog
+      const cookiesBtn = document.querySelector('#acceptAllCookies');
+      if (cookiesBtn) {
+        let parent = cookiesBtn.parentElement;
+        while (parent && !parent.classList.contains('modal') && !parent.classList.contains('toast') && parent.tagName !== 'BODY') {
+          if (parent.classList.contains('fixed-bottom') || parent.style.position === 'fixed' ||
+              window.getComputedStyle(parent).position === 'fixed') {
+            parent.remove();
+            removed.push('cookies-container');
+            break;
+          }
+          parent = parent.parentElement;
+        }
+        if (!removed.includes('cookies-container')) {
+          const container = cookiesBtn.closest('.toast, .alert, .modal, [class*="banner"], [class*="notice"]');
+          if (container) {
+            (container as HTMLElement).style.display = 'none';
+            removed.push('cookies-closest');
+          }
+        }
       }
-      return false;
+
+      return removed;
     });
-    if (dismissedCookies) {
-      console.log('[mixam-browser] Clicked Cookie consent Accept All button');
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-    }
 
-    // Wait for dialogs to fully dismiss (animation)
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    console.log(`[mixam-browser] Dialog removal result: ${JSON.stringify(dialogsRemoved)}`);
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
-    // Check if dialogs are gone - if not, try clicking again
-    let termsStillVisible = await page.$('#acceptTerms');
-    let cookiesStillVisible = await page.$('#acceptAllCookies');
-
-    if (termsStillVisible || cookiesStillVisible) {
-      console.log('[mixam-browser] Dialogs still visible, trying again...');
-
-      // Try again with a direct evaluate click
-      await page.evaluate(() => {
-        const terms = document.querySelector('#acceptTerms') as HTMLButtonElement;
-        const cookies = document.querySelector('#acceptAllCookies') as HTMLButtonElement;
-        if (terms) terms.click();
-        if (cookies) cookies.click();
-      });
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      termsStillVisible = await page.$('#acceptTerms');
-      cookiesStillVisible = await page.$('#acceptAllCookies');
-    }
-
+    // Verify dialogs are gone
+    const termsStillVisible = await page.$('#acceptTerms');
+    const cookiesStillVisible = await page.$('#acceptAllCookies');
     console.log(`[mixam-browser] Dialogs dismissed - Terms: ${!termsStillVisible}, Cookies: ${!cookiesStillVisible}`);
 
     // Log the entire DOM for debugging (compressed to single line)
