@@ -241,6 +241,20 @@ export async function confirmMixamOrder(
     const preLoginScreenshot = await page.screenshot({ encoding: 'base64' });
     console.log('[mixam-browser] Pre-login screenshot captured');
 
+    // Log what's actually in the form fields before submission
+    const fieldValues = await page.evaluate(() => {
+      const emailField = document.querySelector('input[type="email"]') as HTMLInputElement;
+      const passwordField = document.querySelector('input[type="password"]') as HTMLInputElement;
+      return {
+        emailValue: emailField?.value || '(not found)',
+        emailLength: emailField?.value?.length || 0,
+        passwordLength: passwordField?.value?.length || 0,
+        hasEmail: !!emailField,
+        hasPassword: !!passwordField,
+      };
+    });
+    console.log(`[mixam-browser] Field values before submit: ${JSON.stringify(fieldValues)}`);
+
     // Submit the form - try multiple approaches
     console.log('[mixam-browser] Submitting login form...');
 
@@ -284,16 +298,43 @@ export async function confirmMixamOrder(
     console.log(`[mixam-browser] Current URL after login attempt: ${currentUrl}`);
 
     if (currentUrl.includes('/login')) {
-      // Check if there's an error message on the page
-      const pageContent = await page.content();
-      const hasError = pageContent.toLowerCase().includes('invalid') ||
-                       pageContent.toLowerCase().includes('incorrect') ||
-                       pageContent.toLowerCase().includes('wrong password');
+      // Check for error messages on the page
+      const errorInfo = await page.evaluate(() => {
+        // Look for common error message patterns
+        const errorSelectors = [
+          '.alert-danger',
+          '.error-message',
+          '.invalid-feedback',
+          '[class*="error"]',
+          '[class*="alert"]',
+        ];
+
+        for (const selector of errorSelectors) {
+          const el = document.querySelector(selector);
+          if (el && el.textContent?.trim()) {
+            return { found: true, text: el.textContent.trim(), selector };
+          }
+        }
+
+        // Check page content for error keywords
+        const bodyText = document.body.innerText.toLowerCase();
+        const hasInvalid = bodyText.includes('invalid');
+        const hasIncorrect = bodyText.includes('incorrect');
+        const hasWrongPassword = bodyText.includes('wrong password');
+
+        return {
+          found: hasInvalid || hasIncorrect || hasWrongPassword,
+          text: hasInvalid ? 'invalid' : hasIncorrect ? 'incorrect' : hasWrongPassword ? 'wrong password' : 'none',
+          selector: 'body text search',
+        };
+      });
+
+      console.log(`[mixam-browser] Error detection result: ${JSON.stringify(errorInfo)}`);
 
       const postLoginScreenshot = await page.screenshot({ encoding: 'base64' });
       return {
         success: false,
-        message: hasError ? 'Login failed - invalid credentials' : 'Login failed - still on login page',
+        message: errorInfo.found ? `Login failed - ${errorInfo.text}` : 'Login failed - still on login page',
         screenshots: {
           beforeConfirm: preLoginScreenshot as string,
           afterConfirm: postLoginScreenshot as string,
