@@ -94,41 +94,81 @@ export async function confirmMixamOrder(
     // These must be ACCEPTED (not just hidden) for the server to recognize the acceptance
     console.log('[mixam-browser] Checking for popup dialogs to accept...');
 
-    // Accept Terms & Conditions - use Puppeteer click which properly triggers form submission
-    const termsButton = await page.$('#acceptTerms');
-    if (termsButton) {
-      console.log('[mixam-browser] Found Terms & Conditions dialog, clicking Accept...');
-      await termsButton.click();
-      // Wait for the acceptance to be processed (cookie set, etc.)
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      // Wait for the dialog to disappear
-      await page.waitForSelector('#acceptTerms', { hidden: true, timeout: 5000 }).catch(() => {
-        console.log('[mixam-browser] Terms dialog may still be visible');
-      });
-    }
+    // Accept dialogs by submitting their forms directly via JavaScript
+    const dialogResult = await page.evaluate(() => {
+      const results: string[] = [];
 
-    // Accept Cookies
-    const cookiesButton = await page.$('#acceptAllCookies');
-    if (cookiesButton) {
-      console.log('[mixam-browser] Found Cookie consent dialog, clicking Accept All...');
-      await cookiesButton.click();
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      await page.waitForSelector('#acceptAllCookies', { hidden: true, timeout: 5000 }).catch(() => {
-        console.log('[mixam-browser] Cookie dialog may still be visible');
-      });
+      // Find Terms button and submit its form
+      const termsBtn = document.querySelector('#acceptTerms') as HTMLButtonElement;
+      if (termsBtn) {
+        results.push('terms-found');
+        const form = termsBtn.closest('form');
+        if (form) {
+          results.push(`terms-form-action:${form.action}`);
+          // Submit the form
+          form.submit();
+          results.push('terms-form-submitted');
+        } else {
+          // No form, try clicking with proper events
+          termsBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+          results.push('terms-click-dispatched');
+        }
+      }
+
+      // Find Cookies button and submit its form
+      const cookiesBtn = document.querySelector('#acceptAllCookies') as HTMLButtonElement;
+      if (cookiesBtn) {
+        results.push('cookies-found');
+        const form = cookiesBtn.closest('form');
+        if (form) {
+          results.push(`cookies-form-action:${form.action}`);
+          form.submit();
+          results.push('cookies-form-submitted');
+        } else {
+          cookiesBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+          results.push('cookies-click-dispatched');
+        }
+      }
+
+      return results;
+    });
+
+    console.log(`[mixam-browser] Dialog acceptance result: ${JSON.stringify(dialogResult)}`);
+
+    // Wait for any form submissions to complete (may cause page reload)
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    // Check if page reloaded or dialogs are now gone
+    const termsStillThere = await page.$('#acceptTerms');
+    const cookiesStillThere = await page.$('#acceptAllCookies');
+
+    if (termsStillThere || cookiesStillThere) {
+      console.log('[mixam-browser] Dialogs still present after form submit, trying focus+Enter...');
+
+      // Try keyboard approach - focus the button and press Enter
+      if (termsStillThere) {
+        const termsButton = await page.$('#acceptTerms');
+        if (termsButton) {
+          await termsButton.focus();
+          await page.keyboard.press('Enter');
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      }
+
+      const cookiesStillThere2 = await page.$('#acceptAllCookies');
+      if (cookiesStillThere2) {
+        const cookiesButton = await page.$('#acceptAllCookies');
+        if (cookiesButton) {
+          await cookiesButton.focus();
+          await page.keyboard.press('Enter');
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      }
     }
 
     // Log cookies to verify acceptance was recorded
     const cookies = await page.cookies();
-    const relevantCookies = cookies.filter((c: { name: string }) =>
-      c.name.toLowerCase().includes('terms') ||
-      c.name.toLowerCase().includes('cookie') ||
-      c.name.toLowerCase().includes('consent') ||
-      c.name.toLowerCase().includes('gdpr')
-    );
-    console.log(`[mixam-browser] Relevant cookies after acceptance: ${JSON.stringify(relevantCookies.map((c: { name: string; value: string }) => ({ name: c.name, value: c.value.substring(0, 20) })))}`);
-
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    console.log(`[mixam-browser] All cookies: ${JSON.stringify(cookies.map((c: { name: string; value: string }) => c.name))}`);
 
     // Verify dialogs are gone
     const termsStillVisible = await page.$('#acceptTerms');
