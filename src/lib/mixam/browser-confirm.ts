@@ -90,64 +90,44 @@ export async function confirmMixamOrder(
       timeout: 30000,
     });
 
-    // Step 1.5: Dismiss any popup dialogs (Terms & Conditions, Cookie consent)
-    // These dialogs block interaction with the login form
-    console.log('[mixam-browser] Checking for popup dialogs to dismiss...');
+    // Step 1.5: Accept any popup dialogs (Terms & Conditions, Cookie consent)
+    // These must be ACCEPTED (not just hidden) for the server to recognize the acceptance
+    console.log('[mixam-browser] Checking for popup dialogs to accept...');
 
-    // Remove dialog containers from DOM entirely (clicking buttons doesn't seem to work reliably)
-    const dialogsRemoved = await page.evaluate(() => {
-      const removed: string[] = [];
+    // Accept Terms & Conditions - use Puppeteer click which properly triggers form submission
+    const termsButton = await page.$('#acceptTerms');
+    if (termsButton) {
+      console.log('[mixam-browser] Found Terms & Conditions dialog, clicking Accept...');
+      await termsButton.click();
+      // Wait for the acceptance to be processed (cookie set, etc.)
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Wait for the dialog to disappear
+      await page.waitForSelector('#acceptTerms', { hidden: true, timeout: 5000 }).catch(() => {
+        console.log('[mixam-browser] Terms dialog may still be visible');
+      });
+    }
 
-      // Find and remove Terms & Conditions dialog
-      const termsBtn = document.querySelector('#acceptTerms');
-      if (termsBtn) {
-        // Find parent dialog/modal container and remove it
-        let parent = termsBtn.parentElement;
-        while (parent && !parent.classList.contains('modal') && !parent.classList.contains('toast') && parent.tagName !== 'BODY') {
-          if (parent.classList.contains('fixed-bottom') || parent.style.position === 'fixed' ||
-              window.getComputedStyle(parent).position === 'fixed') {
-            parent.remove();
-            removed.push('terms-container');
-            break;
-          }
-          parent = parent.parentElement;
-        }
-        // If we didn't find a fixed container, just hide the button's closest container
-        if (!removed.includes('terms-container')) {
-          const container = termsBtn.closest('.toast, .alert, .modal, [class*="banner"], [class*="notice"]');
-          if (container) {
-            (container as HTMLElement).style.display = 'none';
-            removed.push('terms-closest');
-          }
-        }
-      }
+    // Accept Cookies
+    const cookiesButton = await page.$('#acceptAllCookies');
+    if (cookiesButton) {
+      console.log('[mixam-browser] Found Cookie consent dialog, clicking Accept All...');
+      await cookiesButton.click();
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await page.waitForSelector('#acceptAllCookies', { hidden: true, timeout: 5000 }).catch(() => {
+        console.log('[mixam-browser] Cookie dialog may still be visible');
+      });
+    }
 
-      // Find and remove Cookie consent dialog
-      const cookiesBtn = document.querySelector('#acceptAllCookies');
-      if (cookiesBtn) {
-        let parent = cookiesBtn.parentElement;
-        while (parent && !parent.classList.contains('modal') && !parent.classList.contains('toast') && parent.tagName !== 'BODY') {
-          if (parent.classList.contains('fixed-bottom') || parent.style.position === 'fixed' ||
-              window.getComputedStyle(parent).position === 'fixed') {
-            parent.remove();
-            removed.push('cookies-container');
-            break;
-          }
-          parent = parent.parentElement;
-        }
-        if (!removed.includes('cookies-container')) {
-          const container = cookiesBtn.closest('.toast, .alert, .modal, [class*="banner"], [class*="notice"]');
-          if (container) {
-            (container as HTMLElement).style.display = 'none';
-            removed.push('cookies-closest');
-          }
-        }
-      }
+    // Log cookies to verify acceptance was recorded
+    const cookies = await page.cookies();
+    const relevantCookies = cookies.filter((c: { name: string }) =>
+      c.name.toLowerCase().includes('terms') ||
+      c.name.toLowerCase().includes('cookie') ||
+      c.name.toLowerCase().includes('consent') ||
+      c.name.toLowerCase().includes('gdpr')
+    );
+    console.log(`[mixam-browser] Relevant cookies after acceptance: ${JSON.stringify(relevantCookies.map((c: { name: string; value: string }) => ({ name: c.name, value: c.value.substring(0, 20) })))}`);
 
-      return removed;
-    });
-
-    console.log(`[mixam-browser] Dialog removal result: ${JSON.stringify(dialogsRemoved)}`);
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Verify dialogs are gone
