@@ -94,27 +94,55 @@ export async function confirmMixamOrder(
     // These must be ACCEPTED (not just hidden) for the server to recognize the acceptance
     console.log('[mixam-browser] Checking for popup dialogs to accept...');
 
-    // First, log button info to understand what we're dealing with
+    // First, log detailed button info including full data attributes
     const buttonInfo = await page.evaluate(() => {
       const termsBtn = document.querySelector('#acceptTerms') as HTMLButtonElement;
       const cookiesBtn = document.querySelector('#acceptAllCookies') as HTMLButtonElement;
+
+      // Get parent dialog container HTML
+      const getDialogHTML = (btn: HTMLElement | null) => {
+        if (!btn) return null;
+        // Find the toast/alert container
+        let container = btn.closest('.toast, .alert, [class*="banner"], [class*="notice"], .fixed-bottom');
+        if (!container) {
+          // Go up a few levels
+          container = btn.parentElement?.parentElement?.parentElement || null;
+        }
+        return container?.outerHTML?.substring(0, 500);
+      };
+
       return {
         terms: termsBtn ? {
           tagName: termsBtn.tagName,
           type: termsBtn.type,
-          onclick: termsBtn.onclick?.toString()?.substring(0, 100),
-          dataset: Object.keys(termsBtn.dataset),
-          parentHTML: termsBtn.parentElement?.outerHTML?.substring(0, 200),
+          id: termsBtn.id,
+          className: termsBtn.className,
+          dataAction: termsBtn.getAttribute('data-action'), // Full data-action value
+          allDataAttrs: Object.fromEntries(
+            Array.from(termsBtn.attributes)
+              .filter(a => a.name.startsWith('data-'))
+              .map(a => [a.name, a.value])
+          ),
+          dialogHTML: getDialogHTML(termsBtn),
         } : null,
         cookies: cookiesBtn ? {
           tagName: cookiesBtn.tagName,
           type: cookiesBtn.type,
-          onclick: cookiesBtn.onclick?.toString()?.substring(0, 100),
-          dataset: Object.keys(cookiesBtn.dataset),
+          id: cookiesBtn.id,
+          dataAction: cookiesBtn.getAttribute('data-action'),
+          allDataAttrs: Object.fromEntries(
+            Array.from(cookiesBtn.attributes)
+              .filter(a => a.name.startsWith('data-'))
+              .map(a => [a.name, a.value])
+          ),
         } : null,
       };
     });
     console.log(`[mixam-browser] Button info: ${JSON.stringify(buttonInfo)}`);
+
+    // Take screenshot before clicking
+    const preClickScreenshot = await page.screenshot({ encoding: 'base64' });
+    console.log('[mixam-browser] Pre-click screenshot captured');
 
     // Try clicking with actual mouse coordinates (more realistic click)
     const termsButton = await page.$('#acceptTerms');
@@ -122,10 +150,29 @@ export async function confirmMixamOrder(
       console.log('[mixam-browser] Clicking Terms Accept with mouse coordinates...');
       const box = await termsButton.boundingBox();
       if (box) {
+        const clickX = box.x + box.width / 2;
+        const clickY = box.y + box.height / 2;
+
+        // Log what element is at those coordinates before clicking
+        const elementAtPoint = await page.evaluate((x: number, y: number) => {
+          const el = document.elementFromPoint(x, y);
+          return el ? {
+            tagName: el.tagName,
+            id: el.id,
+            className: el.className,
+            textContent: el.textContent?.substring(0, 50),
+          } : null;
+        }, clickX, clickY);
+        console.log(`[mixam-browser] Element at click point (${clickX}, ${clickY}): ${JSON.stringify(elementAtPoint)}`);
+
         // Click in the center of the button
-        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-        console.log(`[mixam-browser] Mouse clicked at (${box.x + box.width / 2}, ${box.y + box.height / 2})`);
+        await page.mouse.click(clickX, clickY);
+        console.log(`[mixam-browser] Mouse clicked at (${clickX}, ${clickY})`);
         await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        // Take screenshot after clicking
+        const postClickScreenshot = await page.screenshot({ encoding: 'base64' });
+        console.log('[mixam-browser] Post-click screenshot captured');
       }
     }
 
@@ -133,6 +180,20 @@ export async function confirmMixamOrder(
     let termsStillThere = await page.$('#acceptTerms');
     if (termsStillThere) {
       console.log('[mixam-browser] Terms still there after mouse click');
+
+      // Log the dialog state after click
+      const dialogStateAfter = await page.evaluate(() => {
+        const termsBtn = document.querySelector('#acceptTerms') as HTMLElement;
+        if (!termsBtn) return null;
+        const container = termsBtn.closest('.toast, .alert, [class*="banner"]') ||
+                          termsBtn.parentElement?.parentElement?.parentElement;
+        return {
+          containerDisplay: container ? window.getComputedStyle(container).display : null,
+          containerVisibility: container ? window.getComputedStyle(container).visibility : null,
+          buttonDisabled: (termsBtn as HTMLButtonElement).disabled,
+        };
+      });
+      console.log(`[mixam-browser] Dialog state after click: ${JSON.stringify(dialogStateAfter)}`);
     }
 
     const cookiesButton = await page.$('#acceptAllCookies');
