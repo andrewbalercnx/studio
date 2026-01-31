@@ -179,12 +179,73 @@ export async function confirmMixamOrder(
     // Check if Terms dialog is gone, then do cookies
     let termsStillThere = await page.$('#acceptTerms');
     if (termsStillThere) {
-      console.log('[mixam-browser] Terms still there after mouse click');
+      console.log('[mixam-browser] Terms still there after mouse click, trying Stimulus controller directly...');
+
+      // Try to call the Stimulus controller method directly
+      const stimulusResult = await page.evaluate(() => {
+        const results: string[] = [];
+
+        // The button has data-action="click->terms--terms#acceptTerms"
+        // This means there's a controller "terms--terms" with method "acceptTerms"
+        // The controller should be on a parent element with data-controller="terms--terms"
+        const termsBtn = document.querySelector('#acceptTerms') as HTMLElement;
+        if (!termsBtn) {
+          results.push('button-not-found');
+          return results;
+        }
+
+        // Find the controller element (parent with data-controller)
+        const controllerEl = termsBtn.closest('[data-controller*="terms"]');
+        if (controllerEl) {
+          results.push(`controller-element-found: ${controllerEl.getAttribute('data-controller')}`);
+
+          // Try to access Stimulus application
+          const app = (window as any).Stimulus || (window as any).Application;
+          if (app) {
+            results.push('stimulus-app-found');
+            try {
+              // Get controller instance
+              const controller = app.getControllerForElementAndIdentifier(controllerEl, 'terms--terms');
+              if (controller && typeof controller.acceptTerms === 'function') {
+                results.push('calling-acceptTerms');
+                controller.acceptTerms();
+                results.push('acceptTerms-called');
+              } else {
+                results.push(`controller-or-method-not-found: ${controller}`);
+              }
+            } catch (e: any) {
+              results.push(`stimulus-error: ${e.message}`);
+            }
+          } else {
+            results.push('stimulus-app-not-found');
+          }
+        } else {
+          results.push('controller-element-not-found');
+        }
+
+        // Alternative: Try clicking with a trusted event
+        try {
+          const clickEvent = new MouseEvent('click', {
+            view: window,
+            bubbles: true,
+            cancelable: true,
+          });
+          termsBtn.dispatchEvent(clickEvent);
+          results.push('dispatched-click-event');
+        } catch (e: any) {
+          results.push(`click-dispatch-error: ${e.message}`);
+        }
+
+        return results;
+      });
+      console.log(`[mixam-browser] Stimulus attempt result: ${JSON.stringify(stimulusResult)}`);
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Log the dialog state after click
       const dialogStateAfter = await page.evaluate(() => {
         const termsBtn = document.querySelector('#acceptTerms') as HTMLElement;
-        if (!termsBtn) return null;
+        if (!termsBtn) return { buttonGone: true };
         const container = termsBtn.closest('.toast, .alert, [class*="banner"]') ||
                           termsBtn.parentElement?.parentElement?.parentElement;
         return {
