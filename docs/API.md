@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-01-24 (switched confirm-mixam to Steel.dev cloud browser)
+> **Last Updated**: 2026-02-04 (removed browser automation code)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -2398,46 +2398,6 @@ Refresh order status from Mixam.
   "status": "in_production"
 }
 ```
-
----
-
-### POST `/api/admin/print-orders/[orderId]/confirm-mixam`
-
-Confirm a Mixam order using browser automation. This is a temporary solution until Mixam provides an API endpoint.
-
-**Note**: This endpoint uses Steel.dev cloud browser service to automate the Mixam web interface. It may take up to 30 seconds to complete.
-
-**Requirements**:
-- Order must be in `submitted` or `on_hold` status
-- Order must have a valid `mixamOrderId`
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "message": "Order confirmed successfully",
-  "newStatus": "confirmed"
-}
-```
-
-**Error Response**:
-```json
-{
-  "ok": false,
-  "error": "Confirmation may have failed - error indicators found on page",
-  "details": "Additional error details",
-  "screenshots": {
-    "beforeConfirm": "base64-encoded-screenshot",
-    "afterConfirm": "base64-encoded-screenshot"
-  }
-}
-```
-
-**Error Responses**:
-- `400 Bad Request` - Order not in submitted/on_hold status or missing Mixam order ID
-- `403 Forbidden` - Admin access required
-- `404 Not Found` - Order not found
-- `500 Internal Server Error` - Browser automation failed
 
 ---
 

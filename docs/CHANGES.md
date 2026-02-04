@@ -16,6 +16,34 @@
 
 ## Changes
 
+### 2026-02-04
+
+#### `93a4d9d` - Remove all browser automation code for Mixam order confirmation
+
+**Type**: Code Removal
+
+**Summary**: Removed all browser automation code (Puppeteer/Steel.dev) that was attempting to automate Mixam order confirmation. The automation never worked reliably due to dialog handling issues. Mixam provides a Public API with a proper `/api/public/orders/{orderId}/confirm` endpoint that should be used instead.
+
+**Changes**:
+- Removed `src/lib/mixam/browser-confirm.ts` (Steel.dev browser automation)
+- Removed `src/app/api/admin/print-orders/[orderId]/confirm-mixam/route.ts` (API endpoint)
+- Removed browser automation UI from print order detail page
+- Removed `puppeteer-core` and `steel-sdk` dependencies from package.json
+- Removed `STEEL_API_KEY` from apphosting.yaml
+- Removed confirm-mixam endpoint documentation from docs/API.md
+
+**Files Modified**:
+- `src/app/admin/print-orders/[orderId]/page.tsx` - Removed Confirm Order button and related state
+- `package.json` - Removed puppeteer-core and steel-sdk
+- `apphosting.yaml` - Removed STEEL_API_KEY
+- `docs/API.md` - Removed confirm-mixam endpoint documentation
+
+**Files Deleted**:
+- `src/lib/mixam/browser-confirm.ts`
+- `src/app/api/admin/print-orders/[orderId]/confirm-mixam/route.ts`
+
+---
+
 ### 2026-01-24
 
 #### `535d0c1` - Switch to Steel.dev cloud browser for Mixam order confirmation
