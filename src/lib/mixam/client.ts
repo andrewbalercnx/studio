@@ -502,6 +502,75 @@ class MixamAPIClient {
   }
 
   /**
+   * Confirms an order with Mixam
+   * MOCK MODE: Returns fake confirmation response
+   */
+  async confirmOrder(orderId: string): Promise<MixamOrderResponse> {
+    if (MIXAM_MOCK_MODE) {
+      return this.mockConfirmOrder(orderId);
+    }
+
+    const token = await this.authenticate();
+    const url = `${MIXAM_API_BASE_URL}/api/public/orders/${orderId}/confirm`;
+
+    console.log(`[Mixam] Confirming order ${orderId} via: ${url}`);
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (fetchError: any) {
+      console.error(`[Mixam] Network error calling ${url}:`, fetchError);
+      throw new Error(`Network error calling Mixam API (${url}): ${fetchError.message || fetchError}`);
+    }
+
+    if (!response.ok) {
+      // Get raw response text first for debugging
+      const rawText = await response.text();
+      console.error(`[Mixam] Confirm order error ${response.status}, raw response:`, rawText);
+
+      // Try to parse as JSON
+      let errorData: any = { error: 'Unknown error' };
+      try {
+        errorData = JSON.parse(rawText);
+      } catch {
+        // Response wasn't JSON, use raw text as error message
+        errorData = { error: rawText || 'Unknown error' };
+      }
+
+      // Extract error message from various possible formats
+      const errorMessage = errorData.message || errorData.error || errorData.reason || rawText || 'Unknown error';
+
+      if (response.status === 409) {
+        // 409 Conflict - order may already be confirmed or in wrong state
+        throw new Error(`Order cannot be confirmed: ${errorMessage}`);
+      }
+      if (response.status === 404) {
+        throw new Error(`Order not found: ${orderId}`);
+      }
+      if (response.status === 400) {
+        throw new Error(`Invalid confirm request: ${errorMessage}`);
+      }
+
+      throw new Error(`Failed to confirm order (${response.status}): ${errorMessage}`);
+    }
+
+    const data = await response.json();
+    console.log(`[Mixam] Confirm order response: ${JSON.stringify(data).substring(0, 300)}`);
+
+    return {
+      orderId: data.orderId || orderId,
+      jobNumber: data.orderNumber ? String(data.orderNumber) : '',
+      status: data.status || 'confirmed',
+    };
+  }
+
+  /**
    * Submits an order to Mixam with interaction logging
    * Returns both the result and interaction data for persistence
    */
@@ -608,6 +677,62 @@ class MixamAPIClient {
         error: error.message,
         durationMs,
         action: 'Cancel Order',
+      });
+
+      const errorWithInteractions = new Error(error.message) as any;
+      errorWithInteractions.interactions = interactions;
+      throw errorWithInteractions;
+    }
+  }
+
+  /**
+   * Confirms an order with Mixam with interaction logging
+   * Returns both the result and interaction data for persistence
+   */
+  async confirmOrderWithLogging(orderId: string): Promise<MixamOrderResponseWithInteractions> {
+    const interactions: MixamApiInteraction[] = [];
+    const endpoint = `/api/public/orders/${orderId}/confirm`;
+    const startTime = Date.now();
+
+    // Log the request
+    interactions.push({
+      type: 'api_request',
+      timestamp: new Date().toISOString(),
+      method: 'POST',
+      endpoint,
+      action: 'Confirm Order',
+    });
+
+    try {
+      const result = await this.confirmOrder(orderId);
+      const durationMs = Date.now() - startTime;
+
+      // Log successful response
+      interactions.push({
+        type: 'api_response',
+        timestamp: new Date().toISOString(),
+        method: 'POST',
+        endpoint,
+        statusCode: 200,
+        responseBody: result,
+        durationMs,
+        action: 'Confirm Order',
+      });
+
+      return { ...result, interactions };
+    } catch (error: any) {
+      const durationMs = Date.now() - startTime;
+
+      // Log error response
+      interactions.push({
+        type: 'api_response',
+        timestamp: new Date().toISOString(),
+        method: 'POST',
+        endpoint,
+        statusCode: error.statusCode || 500,
+        error: error.message,
+        durationMs,
+        action: 'Confirm Order',
       });
 
       const errorWithInteractions = new Error(error.message) as any;
@@ -874,6 +999,15 @@ class MixamAPIClient {
       orderId,
       jobNumber: '',
       status: 'CANCELED',
+    };
+  }
+
+  private mockConfirmOrder(orderId: string): MixamOrderResponse {
+    console.log(`[MIXAM MOCK] Confirming order: ${orderId}`);
+    return {
+      orderId,
+      jobNumber: 'MXM' + Math.floor(100000 + Math.random() * 900000),
+      status: 'confirmed',
     };
   }
 

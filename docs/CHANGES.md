@@ -16,6 +16,31 @@
 
 ## Changes
 
+### 2026-02-05
+
+#### `f609655` - Implement Mixam order confirmation using Public API
+
+**Type**: Feature
+
+**Summary**: Implemented proper Mixam order confirmation using the Mixam Public API endpoint `POST /api/public/orders/{orderId}/confirm`. This replaces the failed browser automation approach.
+
+**Changes**:
+- Added `confirmOrder` and `confirmOrderWithLogging` methods to Mixam client
+- Added mock confirmation for testing
+- Created `/api/admin/print-orders/[orderId]/confirm` endpoint
+- Added Confirm Order button to print order detail page
+- Button available for orders in `submitted` or `on_hold` status with a Mixam order ID
+
+**Files Created**:
+- `src/app/api/admin/print-orders/[orderId]/confirm/route.ts` - API endpoint
+
+**Files Modified**:
+- `src/lib/mixam/client.ts` - Added confirmOrder methods
+- `src/app/admin/print-orders/[orderId]/page.tsx` - Added confirm button and handler
+- `docs/API.md` - Added confirm endpoint documentation
+
+---
+
 ### 2026-02-04
 
 #### `93a4d9d` - Remove all browser automation code for Mixam order confirmation

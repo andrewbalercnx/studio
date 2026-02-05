@@ -227,6 +227,33 @@ export default function PrintOrderDetailPage() {
     }
   }
 
+  async function handleConfirmOrder() {
+    try {
+      setActionLoading(true);
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/admin/print-orders/${orderId}/confirm`, {
+        method: 'POST',
+        headers,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to confirm order');
+      }
+
+      await loadOrder();
+      setActionResult({
+        type: 'success',
+        message: `Order confirmed successfully with Mixam!`,
+      });
+    } catch (err: any) {
+      console.error('Confirm error:', err);
+      setActionResult({ type: 'error', message: err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function handleCancelOrder() {
     try {
       setActionLoading(true);
@@ -345,6 +372,8 @@ export default function PrintOrderDetailPage() {
   const canReset = order.fulfillmentStatus === 'validating';
   const canResubmit = ['on_hold', 'submitted'].includes(order.fulfillmentStatus); // Resubmit for on_hold or submitted (pending) orders
   const canRefreshStatus = !!order.mixamOrderId;
+  // Can confirm if order is submitted or on_hold and has a Mixam order ID
+  const canConfirm = ['submitted', 'on_hold'].includes(order.fulfillmentStatus) && !!order.mixamOrderId;
   // Can cancel if order is in any state before production (not in_production, shipped, delivered, or already cancelled)
   const canCancel = [
     'draft', 'validating', 'validation_failed', 'ready_to_submit',
@@ -440,6 +469,15 @@ export default function PrintOrderDetailPage() {
                   className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
                 >
                   Resubmit to Mixam
+                </button>
+              )}
+              {canConfirm && (
+                <button
+                  onClick={handleConfirmOrder}
+                  disabled={actionLoading}
+                  className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                >
+                  Confirm Order
                 </button>
               )}
               {canRefreshStatus && (

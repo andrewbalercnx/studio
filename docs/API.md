@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-02-04 (removed browser automation code)
+> **Last Updated**: 2026-02-05 (added confirm endpoint using Mixam Public API)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -2355,6 +2355,31 @@ Cancel an order. If already submitted to Mixam, will attempt to cancel with them
 - `403 Forbidden` - Admin access required
 - `404 Not Found` - Order not found
 - `409 Conflict` - Order already in production with Mixam
+
+---
+
+### POST `/api/admin/print-orders/[orderId]/confirm`
+
+Confirm an order with Mixam using the Mixam Public API. This moves the order from `submitted` or `on_hold` status to `confirmed`.
+
+**Requirements**:
+- Order must be in `submitted` or `on_hold` status
+- Order must have a valid `mixamOrderId`
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "orderId": "...",
+  "mixamStatus": "confirmed"
+}
+```
+
+**Error Responses**:
+- `400 Bad Request` - Order not in confirmable status or missing Mixam order ID
+- `403 Forbidden` - Admin access required
+- `404 Not Found` - Order not found
+- `500 Internal Server Error` - Failed to confirm with Mixam API
 
 ---
 
