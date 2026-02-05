@@ -11,22 +11,27 @@ function generateInteractionId(): string {
 
 /**
  * Converts MixamApiInteraction from client to MixamInteraction for Firestore
+ * Note: We must filter out undefined values as Firestore doesn't accept them
  */
 export function toMixamInteraction(apiInteraction: MixamApiInteraction, orderId?: string): MixamInteraction {
-  return {
+  const interaction: MixamInteraction = {
     id: generateInteractionId(),
     timestamp: apiInteraction.timestamp,
     type: apiInteraction.type,
-    method: apiInteraction.method,
-    endpoint: apiInteraction.endpoint,
-    requestBody: apiInteraction.requestBody,
-    statusCode: apiInteraction.statusCode,
-    responseBody: apiInteraction.responseBody,
-    durationMs: apiInteraction.durationMs,
-    error: apiInteraction.error,
-    action: apiInteraction.action,
-    orderId,
   };
+
+  // Only add defined values (Firestore rejects undefined)
+  if (apiInteraction.method !== undefined) interaction.method = apiInteraction.method;
+  if (apiInteraction.endpoint !== undefined) interaction.endpoint = apiInteraction.endpoint;
+  if (apiInteraction.requestBody !== undefined) interaction.requestBody = apiInteraction.requestBody;
+  if (apiInteraction.statusCode !== undefined) interaction.statusCode = apiInteraction.statusCode;
+  if (apiInteraction.responseBody !== undefined) interaction.responseBody = apiInteraction.responseBody;
+  if (apiInteraction.durationMs !== undefined) interaction.durationMs = apiInteraction.durationMs;
+  if (apiInteraction.error !== undefined) interaction.error = apiInteraction.error;
+  if (apiInteraction.action !== undefined) interaction.action = apiInteraction.action;
+  if (orderId !== undefined) interaction.orderId = orderId;
+
+  return interaction;
 }
 
 /**
@@ -38,21 +43,28 @@ export function toMixamInteractions(apiInteractions: MixamApiInteraction[], orde
 
 /**
  * Creates a MixamInteraction object for a webhook event
+ * Note: We must filter out undefined values as Firestore doesn't accept them
  */
 export function createWebhookInteraction(params: {
   webhookEvent: string;
   webhookPayload: any;
   orderId?: string;
 }): MixamInteraction {
-  return {
+  const interaction: MixamInteraction = {
     id: generateInteractionId(),
     timestamp: new Date().toISOString(),
     type: 'webhook',
     webhookEvent: params.webhookEvent,
     webhookPayload: params.webhookPayload,
     action: `Webhook: ${params.webhookEvent}`,
-    orderId: params.orderId,
   };
+
+  // Only add orderId if defined (Firestore rejects undefined)
+  if (params.orderId !== undefined) {
+    interaction.orderId = params.orderId;
+  }
+
+  return interaction;
 }
 
 /**
@@ -97,6 +109,11 @@ export async function logMixamInteractions(
     console.log(`[Mixam] Logging ${interactions.length} interactions for order ${printOrderId}:`,
       interactions.map(i => `${i.type}:${i.action}`).join(', '));
 
+    // Log the interaction IDs and types for debugging
+    interactions.forEach((i, idx) => {
+      console.log(`[Mixam]   ${idx + 1}. ${i.type} - ${i.action} (id: ${i.id})`);
+    });
+
     await orderRef.update({
       mixamInteractions: FieldValue.arrayUnion(...interactions),
       updatedAt: FieldValue.serverTimestamp(),
@@ -104,6 +121,14 @@ export async function logMixamInteractions(
 
     console.log(`[Mixam] Successfully logged ${interactions.length} interactions for order ${printOrderId}`);
   } catch (error: any) {
-    console.error(`[Mixam] Failed to log interactions for order ${printOrderId}:`, error.message, error);
+    // Log full error details to help diagnose issues
+    console.error(`[Mixam] FAILED to log interactions for order ${printOrderId}:`, {
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      interactionCount: interactions.length,
+      interactionTypes: interactions.map(i => i.type),
+    });
+    console.error(`[Mixam] Full error:`, error);
   }
 }

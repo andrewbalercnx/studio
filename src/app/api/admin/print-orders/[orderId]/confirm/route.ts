@@ -76,6 +76,7 @@ export async function POST(
       confirmResult = mixamResult;
 
       // Log the API interactions
+      console.log(`[print-orders] Logging ${interactions.length} confirm interactions for order ${orderId}`);
       await logMixamInteractions(firestore, orderId, toMixamInteractions(interactions, order.mixamOrderId));
 
       console.log(`[print-orders] Mixam confirm response:`, confirmResult);
