@@ -66,7 +66,8 @@ export default function MyBooksPage({ params }: { params: Promise<{ childId: str
     if (!firestore || !activeChildId || !user || userLoading || !idTokenResult) return null;
     return query(
       collection(firestore, 'stories'),
-      where('childId', '==', activeChildId)
+      where('childId', '==', activeChildId),
+      where('parentUid', '==', user.uid)
     );
   }, [firestore, activeChildId, user, userLoading, idTokenResult]);
 

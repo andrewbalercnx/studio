@@ -141,21 +141,23 @@ export default function MyStoriesPage() {
   }, [roleMode, activeChildId, router]);
 
   const storiesQuery = useMemo(() => {
-    if (!firestore || !activeChildId) return null;
+    if (!firestore || !activeChildId || !user) return null;
     return query(
       collection(firestore, 'children', activeChildId, 'sessions'),
+      where('parentUid', '==', user.uid),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore, activeChildId]);
+  }, [firestore, activeChildId, user]);
 
   const { data: stories, loading: storiesLoading, error: storiesError } = useCollection<StorySession>(storiesQuery);
   const storyBooksQuery = useMemo(() => {
-    if (!firestore || !activeChildId) return null;
+    if (!firestore || !activeChildId || !user) return null;
     return query(
       collection(firestore, 'stories'),
-      where('childId', '==', activeChildId)
+      where('childId', '==', activeChildId),
+      where('parentUid', '==', user.uid)
     );
-  }, [firestore, activeChildId]);
+  }, [firestore, activeChildId, user]);
   const { data: storyBooks, loading: storyBooksLoading } = useCollection<Story>(storyBooksQuery);
   const storyBooksBySessionId = useMemo(() => {
     const map: Record<string, Story> = {};

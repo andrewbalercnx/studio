@@ -16,6 +16,29 @@
 
 ## Changes
 
+### 2026-03-07
+
+#### `52d5f46` - Production-harden Firestore and Storage security rules
+
+**Type**: Security
+
+**Summary**: Tightened all Firestore `list` rules to enforce ownership via `resource.data` checks (previously relied on client-side filtering). Hardened Storage rules by removing broken `isServer()` function, restricting child photo access, and adding upload size/type limits. Updated client queries to include required `where()` clauses.
+
+**Changes**:
+- Firestore rules v20 -> v21: All `list` operations on user-owned collections now require ownership filter in query
+- Storage rules: Removed `isServer()` (matched unauthenticated users), child photos no longer public, 10MB upload limit with image-only validation
+- Added `where('parentUid', '==', user.uid)` to 4 client-side stories queries
+- Added explicit rules for `users` subcollections (voices, addresses)
+
+**Modified files**:
+- `firestore.rules`
+- `storage.rules`
+- `src/app/child/[childId]/stories/page.tsx`
+- `src/app/child/[childId]/books/page.tsx`
+- `src/app/stories/page.tsx`
+
+---
+
 ### 2026-02-05
 
 #### `f609655` - Implement Mixam order confirmation using Public API

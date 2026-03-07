@@ -1,21 +1,24 @@
-
+// Storage rules v2 - Production-hardened
+// - Removed isServer() function (Admin SDK bypasses rules entirely)
+// - Child photos restricted to owner + admin (no longer public)
+// - Added file size limits on uploads
+// - Added content type validation
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    
-    // Allow server-side access by checking if auth is null.
-    function isServer() {
-        return request.auth == null;
-    }
 
     function isAdmin() {
-        return request.auth != null && request.auth.token.isAdmin == true;
+      return request.auth != null && request.auth.token.isAdmin == true;
+    }
+
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
     function storyOwnedByParent(storyId) {
-        return request.auth != null
-            && get(/databases/(default)/documents/stories/$(storyId)).data.parentUid == request.auth.uid;
+      return request.auth != null
+          && firestore.get(/databases/(default)/documents/stories/$(storyId)).data.parentUid == request.auth.uid;
     }
 
     // By default, deny all reads and writes.
@@ -23,28 +26,25 @@ service firebase.storage {
       allow read, write: if false;
     }
 
-    // Allow a user to upload photos for their own children.
-    // The path contains the parent's UID, which we verify against their auth token.
+    // Child photos - owner or admin only
     match /users/{parentUid}/children/{childId}/photos/{fileName} {
-        allow write: if isServer() || request.auth.uid == parentUid;
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == parentUid);
+      allow write: if isAdmin()
+                   || (isAuthenticated() && request.auth.uid == parentUid
+                       && request.resource.size < 10 * 1024 * 1024
+                       && request.resource.contentType.matches('image/.*'));
     }
 
-    // Allow public read access to child photos so they can be displayed in the app.
-    // In a production app, you might want to restrict this further, e.g., only to the parent.
-    match /users/{parentUid}/children/{childId}/photos/{fileName} {
-        allow read: if true;
-    }
-
+    // Story assets - owner or admin
     match /stories/{storyId}/{restOfPath=**} {
-        allow read: if isServer() || isAdmin() || storyOwnedByParent(storyId);
-        allow write: if isServer() || isAdmin() || storyOwnedByParent(storyId);
+      allow read: if isAdmin() || storyOwnedByParent(storyId);
+      allow write: if isAdmin() || storyOwnedByParent(storyId);
     }
 
+    // Storybook printables - owner can read, only admin can write
     match /storybook_printables/{storyId}/{restOfPath=**} {
-        allow read: if isServer() || isAdmin() || storyOwnedByParent(storyId);
-        allow write: if isServer() || isAdmin();
+      allow read: if isAdmin() || storyOwnedByParent(storyId);
+      allow write: if isAdmin();
     }
   }
 }
-
-    
