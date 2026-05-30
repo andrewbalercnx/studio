@@ -18,6 +18,19 @@
 
 ### 2026-05-30
 
+#### `04e7eb1` - Dev log buffer on healthz endpoint
+
+**Type**: Developer Experience
+
+**Summary**: In non-production environments, the last 10 server-side console lines are captured in an in-memory ring buffer and surfaced as `recentLogs` in the `/api/healthz` response. No-op in production.
+
+**Changes**:
+- `src/lib/dev-log-buffer.ts` (NEW): Module-level ring buffer (10 lines); `appendLog` / `getRecentLogs`
+- `src/instrumentation.ts`: Monkey-patches `console.log/info/warn/error` in non-production to feed the buffer
+- `src/app/api/healthz/route.ts`: Appends `recentLogs` array to response when `NODE_ENV !== 'production'`
+
+---
+
 #### `ae226ce` - Startup backfill for scene exemplars
 
 **Type**: Feature / Infrastructure
