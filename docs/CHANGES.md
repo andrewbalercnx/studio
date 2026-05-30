@@ -18,6 +18,18 @@
 
 ### 2026-05-30
 
+#### `ae226ce` - Startup backfill for scene exemplars
+
+**Type**: Feature / Infrastructure
+
+**Summary**: Next.js instrumentation hook that runs once on server start and back-fills scene exemplars for any image style missing them. Idempotent — after all exemplars are ready, subsequent cold starts do nothing. Only generates the specific missing tags per style.
+
+**Changes**:
+- `src/instrumentation.ts` (NEW): Next.js `register()` hook; guarded to Node.js runtime only and skipped during build
+- `src/lib/scene-exemplar-backfill.ts` (NEW): Reads all imageStyles, collects styles/tags with missing or not-ready exemplars, fires `styleSceneExemplarFlow` sequentially in background with 5 s inter-style delay
+
+---
+
 #### `e027574` - Scene exemplar system for image styles
 
 **Type**: Feature / Image Quality
