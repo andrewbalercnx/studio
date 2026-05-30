@@ -12,7 +12,8 @@ import { z } from 'genkit';
 import type { StorySession, ChatMessage, StoryType, ChildProfile } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { logAICallToTrace, completeRunTrace } from '@/lib/ai-run-trace';
-import { replacePlaceholdersWithDescriptions, extractEntityIds } from '@/lib/resolve-placeholders.server';
+import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
+import { extractEntityIds } from '@/lib/entity-utils';
 import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
 import { getCompilePrompt } from '@/lib/compile-prompt-config.server';
 import {

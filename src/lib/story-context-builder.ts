@@ -1,6 +1,6 @@
 import type { ChildProfile, Character } from '@/lib/types';
 import { getServerFirestore } from '@/lib/server-firestore';
-import { extractEntityIds } from '@/lib/resolve-placeholders.server';
+import { extractEntityIds } from '@/lib/entity-utils';
 
 /**
  * Get a human-readable label for a character's type

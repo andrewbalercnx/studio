@@ -26,7 +26,8 @@ import {
     buildPageCountInstruction,
     type ResolvedPageConstraints,
 } from '@/lib/print-constraints';
-import { replacePlaceholdersWithDescriptions, extractEntityIds } from '@/lib/resolve-placeholders.server';
+import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
+import { extractEntityIds } from '@/lib/entity-utils';
 
 // Schema for the AI's paginated output
 // Note: We use permissive string validation here to avoid schema errors.

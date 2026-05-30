@@ -13,8 +13,8 @@ import {
   resolveEntitiesInText,
   replacePlaceholdersInText as replacePlaceholders,
   getEntitiesInText,
-  extractEntityIds,
 } from '@/lib/resolve-placeholders.server';
+import { extractEntityIds } from '@/lib/entity-utils';
 import { storyPaginationFlow } from './story-pagination-flow';
 
 

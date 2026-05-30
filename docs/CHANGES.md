@@ -18,7 +18,24 @@
 
 ### 2026-05-30
 
-#### `b1bbdf1` - Prompt audit batch 2: clarity, redundancy, and guardrails
+#### `478ed65` - Fix: move extractEntityIds out of 'use server' file to unblock Cloud Build
+
+**Type**: Bug Fix
+
+**Summary**: Every production build since commit `5a052c3` failed with "Server Actions must be async functions" because `extractEntityIds` (a synchronous utility) was exported from `resolve-placeholders.server.ts` which carries the `'use server'` directive. Moved the function to a new `entity-utils.ts` module with no server directive and updated five import sites.
+
+**Changes**:
+- `src/lib/entity-utils.ts`: New file — canonical `extractEntityIds` implementation
+- `src/lib/resolve-placeholders.server.ts`: Removed `extractEntityIds` export
+- `src/lib/story-context-builder.ts`: Updated import to `entity-utils`
+- `src/ai/flows/story-compile-flow.ts`: Updated import to `entity-utils`
+- `src/ai/flows/story-page-flow.ts`: Updated import to `entity-utils`
+- `src/ai/flows/story-pagination-flow.ts`: Updated import to `entity-utils`
+- `src/ai/flows/story-text-compile-flow.ts`: Updated import to `entity-utils`
+
+---
+
+
 
 **Type**: Prompt / Tech-debt
 
