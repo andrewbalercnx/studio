@@ -93,3 +93,10 @@ env:
     secret: INTERNAL_API_SECRET
     availability:
       - RUNTIME
+
+  # Enable server-side log buffer surfaced in /api/healthz as recentLogs.
+  # Remove this entry when no longer needed.
+  - variable: ENABLE_DEV_LOGS
+    value: "true"
+    availability:
+      - RUNTIME
