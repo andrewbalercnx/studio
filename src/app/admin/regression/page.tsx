@@ -327,6 +327,10 @@ const initialTests: TestResult[] = [
   { id: 'DATA_PRINT_LAYOUTS', name: 'Firestore: Print Layouts', status: 'PENDING', message: '' },
   { id: 'DATA_PROMPTS_STORY_BEAT_LIVE', name: 'Firestore: StoryBeat Live Configs', status: 'PENDING', message: '' },
   { id: 'DATA_PROMPTS', name: 'Firestore: Prompt Configs', status: 'PENDING', message: '' },
+  { id: 'DATA_IMAGE_STYLES_SCENE_EXEMPLARS', name: 'Firestore: Image Style Scene Exemplars', status: 'PENDING', message: '' },
+  { id: 'DATA_CHILDREN_CANONICAL', name: 'Firestore: Children Canonical Image Status', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_PAGINATION_SCENE_TAG', name: 'Scenario: Pagination Scene Tag Assignment', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_CANONICAL_IMAGE_TRIGGER', name: 'Scenario: Canonical Image Generation Trigger', status: 'PENDING', message: '' },
 ];
 
 const resetTestState = (): TestResult[] =>
@@ -682,6 +686,70 @@ export default function AdminRegressionPage() {
         updateTestResult('DATA_SESSIONS_OVERVIEW', { status: 'FAIL', message: e.message });
       }
        
+      // Test: DATA_IMAGE_STYLES_SCENE_EXEMPLARS
+      try {
+          const SCENE_TAGS = ['indoor-day', 'outdoor-day', 'indoor-night', 'outdoor-night'] as const;
+          const stylesRef = collection(firestore, 'imageStyles');
+          const stylesSnap = await getDocs(query(stylesRef, limit(10)));
+          fsSummary.imageStylesCount = stylesSnap.size;
+
+          if (stylesSnap.empty) {
+              updateTestResult('DATA_IMAGE_STYLES_SCENE_EXEMPLARS', { status: 'SKIP', message: 'No image styles found.' });
+          } else {
+              let stylesWithExemplars = 0;
+              let totalTagsReady = 0;
+              let totalTagsMissing = 0;
+
+              for (const docSnap of stylesSnap.docs) {
+                  const style = docSnap.data();
+                  const exemplars: Record<string, any> = style.sceneExemplars ?? {};
+                  if (SCENE_TAGS.some(tag => exemplars[tag]?.status)) stylesWithExemplars++;
+                  for (const tag of SCENE_TAGS) {
+                      const entry = exemplars[tag];
+                      if (entry?.status === 'ready' && entry?.imageUrl) totalTagsReady++;
+                      else totalTagsMissing++;
+                  }
+              }
+
+              updateTestResult('DATA_IMAGE_STYLES_SCENE_EXEMPLARS', {
+                  status: totalTagsReady > 0 ? 'PASS' : 'FAIL',
+                  message: `${stylesSnap.size} style(s) checked; ${stylesWithExemplars} have exemplars; ${totalTagsReady} tag(s) ready, ${totalTagsMissing} missing/pending.`,
+              });
+          }
+      } catch (e: any) {
+          updateTestResult('DATA_IMAGE_STYLES_SCENE_EXEMPLARS', { status: 'FAIL', message: e.message });
+      }
+
+      // Test: DATA_CHILDREN_CANONICAL
+      try {
+          const childrenRef = collection(firestore, 'children');
+          const childrenSnap = await getDocs(query(childrenRef, limit(10)));
+
+          if (childrenSnap.empty) {
+              updateTestResult('DATA_CHILDREN_CANONICAL', { status: 'SKIP', message: 'No children found.' });
+          } else {
+              const withPhotos = childrenSnap.docs.filter(d => {
+                  const photos = d.data().photos;
+                  return Array.isArray(photos) && photos.length > 0;
+              });
+
+              if (withPhotos.length === 0) {
+                  updateTestResult('DATA_CHILDREN_CANONICAL', { status: 'SKIP', message: `${childrenSnap.size} children found, none have photos yet.` });
+              } else {
+                  const withCanonicalField = withPhotos.filter(d => d.data().canonicalImageGeneration !== undefined);
+                  const withCanonicalReady = withCanonicalField.filter(d => d.data().canonicalImageGeneration?.status === 'ready');
+
+                  if (withCanonicalField.length === 0) {
+                      updateTestResult('DATA_CHILDREN_CANONICAL', { status: 'FAIL', message: `${withPhotos.length} child(ren) with photos but none have canonicalImageGeneration field.` });
+                  } else {
+                      updateTestResult('DATA_CHILDREN_CANONICAL', { status: 'PASS', message: `${withPhotos.length} child(ren) with photos; ${withCanonicalField.length} have canonicalImageGeneration; ${withCanonicalReady.length} ready.` });
+                  }
+              }
+          }
+      } catch (e: any) {
+          updateTestResult('DATA_CHILDREN_CANONICAL', { status: 'FAIL', message: e.message });
+      }
+
        setDiagnostics((prev: any) => ({...prev, firestoreSummary: {...prev.firestoreSummary, ...fsSummary }}));
   };
   
@@ -1834,8 +1902,132 @@ export default function AdminRegressionPage() {
         updateTestResult('SCENARIO_STORYBOOK_RETRY', { status: 'ERROR', message: e.message });
     }
 
+    // Test: SCENARIO_PAGINATION_SCENE_TAG
+    // Creates a minimal story doc directly, runs pages API, checks imageScene.sceneTag on pages
+    // and locationRegistry on the story doc.
+    try {
+        const VALID_SCENE_TAGS = ['indoor-day', 'outdoor-day', 'indoor-night', 'outdoor-night'] as const;
+        const childRef = await createRegressionChild({
+            displayName: 'Scene Tag Test Child',
+            ownerParentUid: `${REGRESSION_SUITE_TAG}-scene-tag-parent`,
+            createdAt: serverTimestamp(),
+            likes: [],
+            dislikes: [],
+        }, 'SCENARIO_PAGINATION_SCENE_TAG');
+
+        // Create a minimal story doc directly (bypasses storyCompile)
+        const storyRef = doc(collection(firestore, 'stories'));
+        await setDoc(storyRef, addRegressionMeta({
+            childId: childRef.id,
+            actors: [],
+            synopsis: 'A test story with varied scenes for regression testing.',
+            storyText: `Mia woke early and padded into the sunny kitchen, where she poured herself some cereal and read her favourite book at the table while her dog Max lay at her feet. After breakfast, Mia and Max ran outside to the park. The sky was bright blue and birds sang in the tall oak trees as Max chased a butterfly through the long grass. In the evening, Mia's family gathered around the dining table for dinner. The warm glow of the lamp lit the room as they laughed and told stories about their day. When it was nearly bedtime, Mia and Max crept outside to the back garden one last time. The stars were bright overhead, and an owl hooted softly from a nearby tree. Max wagged his tail and Mia whispered good night to the moon.`,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        }, 'SCENARIO_PAGINATION_SCENE_TAG'));
+        trackArtifact(artifacts, 'stories', storyRef.id);
+
+        const storybookRef = doc(collection(firestore, 'stories', storyRef.id, 'storybooks'));
+        await setDoc(storybookRef, {
+            storyOutputTypeId: 'picture_book_standard_v1',
+            status: 'draft',
+            createdAt: serverTimestamp(),
+            regressionTest: true,
+            regressionTag: `${REGRESSION_SUITE_TAG}:SCENARIO_PAGINATION_SCENE_TAG`,
+        });
+
+        const pagesRes = await fetch('/api/storybookV2/pages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storyId: storyRef.id, storybookId: storybookRef.id }),
+        });
+        const pagesPayload = await pagesRes.json();
+        if (!pagesRes.ok || !pagesPayload?.ok) {
+            throw new Error(pagesPayload?.errorMessage || `Pages API returned ${pagesRes.status}`);
+        }
+
+        // Read pages from Firestore
+        const pagesSnap = await getDocs(query(
+            tracedCollection(firestore, 'SCENARIO_PAGINATION_SCENE_TAG:pages', 'stories', storyRef.id, 'storybooks', storybookRef.id, 'pages'),
+            orderBy('pageNumber', 'asc')
+        ));
+        if (pagesSnap.empty) throw new Error('No pages created by pagination API.');
+
+        const textPages = pagesSnap.docs.map(d => d.data()).filter(p => p.kind === 'text');
+        if (textPages.length === 0) throw new Error('No text pages found after pagination.');
+
+        const pagesWithoutSceneTag = textPages.filter(p => !VALID_SCENE_TAGS.includes(p.imageScene?.sceneTag));
+        if (pagesWithoutSceneTag.length > 0) {
+            const badTags = pagesWithoutSceneTag.map(p => `${p.imageScene?.sceneTag ?? 'missing'}`).join(', ');
+            throw new Error(`${pagesWithoutSceneTag.length}/${textPages.length} text page(s) have invalid or missing sceneTag: ${badTags}`);
+        }
+
+        // Check locationRegistry was persisted to story doc
+        const refreshedStory = await getDoc(storyRef);
+        const locationRegistry = refreshedStory.data()?.locationRegistry;
+        const locationCount = locationRegistry ? Object.keys(locationRegistry).length : 0;
+        if (locationCount === 0) {
+            throw new Error('locationRegistry was not persisted to story doc after pagination.');
+        }
+
+        const sceneTags = textPages.map((p: any) => p.imageScene?.sceneTag);
+        updateTestResult('SCENARIO_PAGINATION_SCENE_TAG', {
+            status: 'PASS',
+            message: `${textPages.length} text page(s) all have valid sceneTag; ${locationCount} location(s) in registry. Tags: ${[...new Set(sceneTags)].join(', ')}`,
+        });
+    } catch (e: any) {
+        updateTestResult('SCENARIO_PAGINATION_SCENE_TAG', { status: 'ERROR', message: e.message });
+    }
+
+    // Test: SCENARIO_CANONICAL_IMAGE_TRIGGER
+    // Uploads a minimal photo via API and verifies canonicalImageGeneration.status is set to 'pending'.
+    try {
+        const authToken = await auth?.currentUser?.getIdToken?.();
+        if (!authToken) throw new Error('Admin auth token not available.');
+
+        const childRef = await createRegressionChild({
+            displayName: 'Photo Trigger Test Child',
+            ownerParentUid: `${REGRESSION_SUITE_TAG}-photo-parent`,
+            createdAt: serverTimestamp(),
+            likes: [],
+            dislikes: [],
+        }, 'SCENARIO_CANONICAL_IMAGE_TRIGGER');
+
+        // Minimal 1×1 PNG
+        const MINIMAL_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI6QAAAABJRU5ErkJggg==';
+
+        const uploadRes = await fetch('/api/children/photos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+            body: JSON.stringify({ childId: childRef.id, dataUrl: MINIMAL_PNG }),
+        });
+        const uploadBody = await uploadRes.json();
+        if (!uploadRes.ok || !uploadBody?.ok) {
+            throw new Error(uploadBody?.errorMessage || `Photo upload API returned ${uploadRes.status}`);
+        }
+
+        // Read the child doc to verify generation statuses were set
+        const childSnap = await getDoc(childRef);
+        if (!childSnap.exists()) throw new Error('Child document missing after photo upload.');
+        const childData = childSnap.data();
+
+        if (childData.canonicalImageGeneration?.status !== 'pending') {
+            throw new Error(`Expected canonicalImageGeneration.status='pending', got '${childData.canonicalImageGeneration?.status ?? 'undefined'}'.`);
+        }
+        if (childData.imageDescriptionGeneration?.status !== 'pending') {
+            throw new Error(`Expected imageDescriptionGeneration.status='pending', got '${childData.imageDescriptionGeneration?.status ?? 'undefined'}'.`);
+        }
+
+        updateTestResult('SCENARIO_CANONICAL_IMAGE_TRIGGER', {
+            status: 'PASS',
+            message: `Photo uploaded; canonicalImageGeneration and imageDescriptionGeneration both set to 'pending'.`,
+        });
+    } catch (e: any) {
+        updateTestResult('SCENARIO_CANONICAL_IMAGE_TRIGGER', { status: 'ERROR', message: e.message });
+    }
+
     // --- API Tests ---
-    
+
     // Test: API_STORY_BEAT
     if (!beatSessionId) {
       updateTestResult('API_STORY_BEAT', { status: 'SKIP', message: 'No beat-ready sessionId provided' });

@@ -38,6 +38,7 @@ const FlowPageSchema = z.object({
   displayText: z.string().optional(),
   entityIds: z.array(z.string()).optional(),
   imageDescription: z.string().optional(),
+  imageScene: z.any().optional(),
   imagePrompt: z.string().optional(),
   imageUrl: z.string().optional(),
   layoutHints: PageLayoutSchema.optional(),
@@ -416,6 +417,7 @@ export const storyPageFlow = ai.defineFlow(
       let chunks: string[][] = [];
       let aiPaginatedEntityIds: string[][] = [];
       let aiImageDescriptions: (string | undefined)[] = [];
+      let aiImageScenes: (any)[] = [];
       let usedAIPagination = false;
 
       if (storyOutputTypeId) {
@@ -430,6 +432,7 @@ export const storyPageFlow = ai.defineFlow(
             chunks = paginationResult.pages.map((page: { bodyText: string }) => [page.bodyText]);
             aiPaginatedEntityIds = paginationResult.pages.map((page: { entityIds: string[] }) => page.entityIds || []);
             aiImageDescriptions = paginationResult.pages.map((page: { imageDescription?: string }) => page.imageDescription);
+            aiImageScenes = paginationResult.pages.map((page: any) => page.imageScene);
             usedAIPagination = true;
             diagnostics.details.usedAIPagination = true;
             diagnostics.details.aiPageCount = paginationResult.pages.length;
@@ -532,6 +535,7 @@ export const storyPageFlow = ai.defineFlow(
           displayText: displayText,
           entityIds: pageEntityIds,
           imageDescription: pageImageDescription,
+          imageScene: usedAIPagination ? aiImageScenes[index] : undefined,
           imagePrompt: buildImagePrompt(displayText, child, derivedTitle, actorsOnPage, pageEntityIds, pageImageDescription),
           imageUrl: choosePlaceholderImage(index + 2), // +2 to account for cover and title page
           layoutHints: {

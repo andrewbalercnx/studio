@@ -18,6 +18,20 @@
 
 ### 2026-05-30
 
+#### `a1d1f39` - Regression tests for new pipeline features + imageScene bug fix
+
+**Type**: Tests / Bug Fix
+
+**Summary**: Adds 4 regression tests covering the canonical image pipeline, scene exemplar data state, pagination sceneTag assignment, and locationRegistry persistence. Also fixes a silent bug where `imageScene` (including `sceneTag`) from the pagination flow was never included in the Firestore page documents.
+
+**Changes**:
+- `src/ai/flows/story-page-flow.ts`: Added `imageScene` field to `FlowPageSchema`, extracted `aiImageScenes` from pagination result, and included `imageScene` on each content page push — fixes sceneTag never reaching page docs
+- `src/app/admin/regression/page.tsx`: Added `DATA_IMAGE_STYLES_SCENE_EXEMPLARS` (reads imageStyles, counts ready scene exemplar tags), `DATA_CHILDREN_CANONICAL` (checks children with photos have canonicalImageGeneration field), `SCENARIO_PAGINATION_SCENE_TAG` (creates minimal story, runs pages API, verifies sceneTag on all text pages and locationRegistry on story doc), `SCENARIO_CANONICAL_IMAGE_TRIGGER` (uploads 1×1 PNG via /api/children/photos, verifies both generation statuses set to pending)
+
+---
+
+### 2026-05-30
+
 #### `04e7eb1` - Dev log buffer on healthz endpoint
 
 **Type**: Developer Experience
