@@ -37,8 +37,10 @@ export async function register() {
     '@/lib/scene-exemplar-backfill'
   );
 
-  // Fire and forget — must never block startup
-  backfillMissingSceneExemplars().catch(e =>
-    console.error('[instrumentation] Unhandled backfill error:', e?.message ?? e)
+  // Await the check (one Firestore read) so the log entry is in the buffer
+  // before the first request arrives. Generation fires in the background
+  // from within the function and does not block register() from returning.
+  await backfillMissingSceneExemplars().catch(e =>
+    console.error('[instrumentation] Backfill check error:', e?.message ?? e)
   );
 }

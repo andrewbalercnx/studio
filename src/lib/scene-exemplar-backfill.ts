@@ -21,7 +21,10 @@ export async function backfillMissingSceneExemplars(): Promise<void> {
     const firestore = getFirestore();
 
     const stylesSnap = await firestore.collection('imageStyles').get();
-    if (stylesSnap.empty) return;
+    if (stylesSnap.empty) {
+      console.log('[startup:sceneExemplars] No image styles found — nothing to backfill');
+      return;
+    }
 
     // Collect styles that have at least one tag missing or not-ready,
     // and record exactly which tags need generation.
