@@ -18,6 +18,22 @@
 
 ### 2026-05-30
 
+#### `4a7792f` - Two-stage canonical reference image pipeline
+
+**Type**: Feature / Image Quality
+
+**Summary**: Implement Stage 1 of the two-stage reference image pipeline. On each photo upload, a background Genkit flow (`canonicalImageFlow`) generates a clean naturalistic portrait of the entity from their raw photos and stores it as `canonicalImageUrl`. The actor exemplar flow (Stage 2) now uses this single clean canonical instead of multiple raw photos, improving cross-storybook character consistency.
+
+**Changes**:
+- `src/ai/flows/canonical-image-flow.ts` (NEW): Genkit flow that generates a naturalistic portrait from entity photos; stores result at `canonicals/{ownerParentUid}/{entityId}/portrait.{ext}` in Firebase Storage; writes `canonicalImageUrl` + `canonicalImageGeneration` status to entity document
+- `src/lib/types.ts`: Added `canonicalImageUrl?` and `canonicalImageGeneration?` to both `ChildProfile` and `Character`
+- `src/app/api/children/photos/route.ts`: Triggers `canonicalImageFlow` in background alongside existing `imageDescriptionFlow` on photo upload
+- `src/app/api/characters/photos/route.ts`: Same as children route
+- `src/ai/flows/actor-exemplar-flow.ts`: Prefers `actor.canonicalImageUrl` as sole reference when available; falls back to `avatarUrl` + raw photos for entities without a canonical
+- `docs/SCHEMA.md`: Documented `canonicalImageUrl` and `canonicalImageGeneration` fields on `children` and `characters` collections
+
+---
+
 #### `481c798` - Structured image scene: deterministic prompt assembly for image generation
 
 **Type**: Feature / Image Quality

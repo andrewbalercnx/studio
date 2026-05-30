@@ -337,15 +337,17 @@ export const actorExemplarFlow = ai.defineFlow(
       const styleExampleUrls = await loadStyleExamples(firestore, imageStyleId);
       console.log(`[actor-exemplar-flow] Loaded ${styleExampleUrls.length} style examples for ${imageStyleId}`);
 
-      // Collect reference photos from actor (avatar + photos)
+      // Collect reference for the actor.
+      // Prefer canonicalImageUrl (clean naturalistic portrait from Stage 1 pipeline)
+      // over raw photos which may be noisy or inconsistent.
       const referencePhotoUrls: string[] = [];
-      if (actor.avatarUrl) {
-        referencePhotoUrls.push(actor.avatarUrl);
+      if (actor.canonicalImageUrl) {
+        referencePhotoUrls.push(actor.canonicalImageUrl);
+      } else {
+        if (actor.avatarUrl) referencePhotoUrls.push(actor.avatarUrl);
+        if (actor.photos?.length) referencePhotoUrls.push(...actor.photos.slice(0, 3));
       }
-      if (actor.photos?.length) {
-        referencePhotoUrls.push(...actor.photos.slice(0, 3));
-      }
-      console.log(`[actor-exemplar-flow] Collected ${referencePhotoUrls.length} reference photos`);
+      console.log(`[actor-exemplar-flow] Collected ${referencePhotoUrls.length} reference photos (canonical=${!!actor.canonicalImageUrl})`);
 
       // Convert all images to data URIs
       const styleExampleParts = (await Promise.all(

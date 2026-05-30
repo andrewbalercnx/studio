@@ -1089,6 +1089,15 @@ export type ChildProfile = {
         lastCompletedAt?: any;
         lastErrorMessage?: string | null;
     };
+    // Stage 1 of two-stage reference pipeline: naturalistic portrait generated from raw photos.
+    // Used as cleaner input to actor-exemplar-flow instead of raw photos.
+    canonicalImageUrl?: string;
+    canonicalImageGeneration?: {
+        status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
+        lastRunAt?: any;
+        lastCompletedAt?: any;
+        lastErrorMessage?: string | null;
+    };
     ownerParentUid: string;
     createdAt: any;
     updatedAt?: any;
@@ -1243,6 +1252,15 @@ export type Character = {
     // Internal field - not exposed to parents
     imageDescription?: string;
     imageDescriptionGeneration?: {
+        status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
+        lastRunAt?: any;
+        lastCompletedAt?: any;
+        lastErrorMessage?: string | null;
+    };
+    // Stage 1 of two-stage reference pipeline: naturalistic portrait generated from raw photos.
+    // Used as cleaner input to actor-exemplar-flow instead of raw photos.
+    canonicalImageUrl?: string;
+    canonicalImageGeneration?: {
         status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
         lastRunAt?: any;
         lastCompletedAt?: any;

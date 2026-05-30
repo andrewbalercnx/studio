@@ -6,6 +6,7 @@ import {AuthError} from '@/lib/auth-error';
 import {getStoryBucket} from '@/firebase/admin/storage';
 import {initFirebaseAdminApp} from '@/firebase/admin/app';
 import {imageDescriptionFlow} from '@/ai/flows/image-description-flow';
+import {canonicalImageFlow} from '@/ai/flows/canonical-image-flow';
 
 type UploadPhotoRequest = {
   childId: string;
@@ -120,15 +121,19 @@ export async function POST(request: Request) {
       objectPath,
     )}?alt=media&token=${downloadToken}`;
 
-    // Trigger image description generation in background
-    // Set status to pending before triggering
+    // Trigger background AI generation: image description + canonical portrait
     await childRef.update({
       'imageDescriptionGeneration.status': 'pending',
+      'canonicalImageGeneration.status': 'pending',
       updatedAt: FieldValue.serverTimestamp(),
     });
 
     imageDescriptionFlow({ entityId: childId, entityType: 'child' }).catch((err) => {
       console.error('[api/children/photos] Background image description generation failed:', err);
+    });
+
+    canonicalImageFlow({ entityId: childId, entityType: 'child' }).catch((err) => {
+      console.error('[api/children/photos] Background canonical image generation failed:', err);
     });
 
     return NextResponse.json({
