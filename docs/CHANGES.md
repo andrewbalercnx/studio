@@ -18,6 +18,27 @@
 
 ### 2026-05-30
 
+#### `0a2a83a` - Scene-driven actor collection (Todo 3) and centralised entity extraction (Todo 4)
+
+**Type**: Architecture / Tech-debt
+
+**Summary**: Story actor lists are now populated from scene annotations (capturing implicitly-referenced actors) in addition to text extraction. The five duplicate `extractEntityIds`/`extractActorIds` functions across the codebase are replaced with a single canonical export from `resolve-placeholders.server.ts`.
+
+**Changes**:
+- `resolve-placeholders.server.ts`: added `extractEntityIds()` as canonical export (stricter regex, shared across all consumers)
+- `story-context-builder.ts`: `extractActorIdsFromText` now delegates to the shared implementation
+- `story-text-compile-flow.ts`: collects `scene.presentActors` from all `beat_continuation` messages; returns `sceneAnnotatedActorIds` alongside text-derived actors
+- `story-compile-flow.ts` (standard chat path): merges `sceneAnnotatedActorIds` (from scene annotations) with text-extracted IDs to produce a more complete `story.actors` list; graceful degradation for pre-scene-annotation sessions
+- `story-pagination-flow.ts`, `story-compile-flow.ts`, `story-text-compile-flow.ts`, `story-page-flow.ts`: removed local `extractEntityIds`/`extractActorIds` functions, now import shared implementation
+
+**Modified files**:
+- `src/lib/resolve-placeholders.server.ts`
+- `src/lib/story-context-builder.ts`
+- `src/ai/flows/story-text-compile-flow.ts`
+- `src/ai/flows/story-compile-flow.ts`
+- `src/ai/flows/story-pagination-flow.ts`
+- `src/ai/flows/story-page-flow.ts`
+
 #### `c5fb4b1` - World-state scene annotation (Todo 1) and server-side display text contract (Todo 2)
 
 **Type**: Architecture / Bug Fix

@@ -12,7 +12,7 @@ import { z } from 'genkit';
 import type { StorySession, ChatMessage, StoryType, ChildProfile } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { logAICallToTrace, completeRunTrace } from '@/lib/ai-run-trace';
-import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
+import { replacePlaceholdersWithDescriptions, extractEntityIds } from '@/lib/resolve-placeholders.server';
 import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
 import { getCompilePrompt } from '@/lib/compile-prompt-config.server';
 import {
@@ -94,27 +94,6 @@ function parseAndSanitizeJsonResponse(
         // If all else fails, throw the original error
         throw new Error(`Model JSON does not match expected shape: ${firstError.message}`);
     }
-}
-
-/**
- * Extract all $$id$$ and $id$ placeholders from text
- * Supports both double-dollar (correct) and single-dollar (AI fallback) formats
- */
-function extractActorIds(text: string): string[] {
-  const ids = new Set<string>();
-  // Double $$ format (correct format)
-  const doubleRegex = /\$\$([a-zA-Z0-9_-]+)\$\$/g;
-  let match;
-  while ((match = doubleRegex.exec(text)) !== null) {
-    ids.add(match[1]);
-  }
-  // Single $ format (fallback for AI that didn't follow instructions)
-  // Only match IDs that look like Firestore document IDs (15+ alphanumeric chars)
-  const singleRegex = /\$([a-zA-Z0-9_-]{15,})\$/g;
-  while ((match = singleRegex.exec(text)) !== null) {
-    ids.add(match[1]);
-  }
-  return Array.from(ids);
 }
 
 // Default compile prompt used when admin prompt is not configured
@@ -213,9 +192,11 @@ export const storyTextCompileFlow = ai.defineFlow(
             debug.stage = 'building_prompt';
 
             // Get story continuation messages (the narrative beats)
-            const beatContinuations = messages
-                .filter(m => m.kind === 'beat_continuation')
-                .map(m => m.text);
+            const beatMessages = messages.filter(m => m.kind === 'beat_continuation');
+            const beatContinuations = beatMessages.map(m => m.text);
+            // Collect actor IDs from scene annotations — includes implicit actors text extraction misses
+            const sceneActorIds = new Set<string>();
+            beatMessages.forEach(m => m.scene?.presentActors?.forEach(id => sceneActorIds.add(id)));
 
             // Get the chosen ending
             const endingChoice = messages.find(m => m.kind === 'child_ending_choice');
@@ -431,13 +412,14 @@ Now, generate the JSON object containing the polished story and synopsis.`;
             const resolvedSynopsis = await replacePlaceholdersWithDescriptions(synopsis);
 
             // Extract actor IDs from the story text
-            const storyActorIds = extractActorIds(storyText);
+            const storyActorIds = extractEntityIds(storyText);
             const sessionActors = session.actors || [];
             const actorSet = new Set([childId, ...sessionActors, ...storyActorIds]);
             const finalActorIds = [childId, ...Array.from(actorSet).filter(id => id !== childId)];
 
             debug.details.extractedActorIds = storyActorIds;
             debug.details.finalActorIds = finalActorIds;
+            debug.details.sceneAnnotatedActorCount = sceneActorIds.size;
 
             // Mark the run trace as completed since this is typically the final AI call
             await completeRunTrace(sessionId);
@@ -448,6 +430,9 @@ Now, generate the JSON object containing the polished story and synopsis.`;
                 storyText,
                 synopsis: resolvedSynopsis,
                 actors: finalActorIds,
+                // Actor IDs from scene annotations — more accurate than text extraction
+                // because they include actors referenced implicitly or grammatically
+                sceneAnnotatedActorIds: sceneActorIds.size > 0 ? [...sceneActorIds] : undefined,
                 debug: process.env.NODE_ENV === 'development' ? {
                     ...debug,
                     storyLength: storyText.length,

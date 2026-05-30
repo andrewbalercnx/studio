@@ -1,5 +1,6 @@
 import type { ChildProfile, Character } from '@/lib/types';
 import { getServerFirestore } from '@/lib/server-firestore';
+import { extractEntityIds } from '@/lib/resolve-placeholders.server';
 
 /**
  * Get a human-readable label for a character's type
@@ -455,23 +456,9 @@ export type ActorDetailsWithImageData = ActorDetailsWithImages & {
   avatarDataUri?: string;
 };
 
-/**
- * Extract $$id$$ placeholders from text (also handles single $ format as fallback)
- */
+/** Extract $$id$$ and $id$ entity placeholder IDs from text. Delegates to the shared canonical implementation. */
 export function extractActorIdsFromText(text: string): string[] {
-  const ids = new Set<string>();
-  // Match double $$ format (correct)
-  const doubleRegex = /\$\$([a-zA-Z0-9_-]+)\$\$/g;
-  let match;
-  while ((match = doubleRegex.exec(text)) !== null) {
-    ids.add(match[1]);
-  }
-  // Match single $ format (fallback for AI that didn't follow instructions)
-  const singleRegex = /\$([a-zA-Z0-9_-]{15,})\$/g;
-  while ((match = singleRegex.exec(text)) !== null) {
-    ids.add(match[1]);
-  }
-  return Array.from(ids);
+  return extractEntityIds(text);
 }
 
 /**

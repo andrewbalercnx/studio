@@ -13,6 +13,7 @@ import {
   resolveEntitiesInText,
   replacePlaceholdersInText as replacePlaceholders,
   getEntitiesInText,
+  extractEntityIds,
 } from '@/lib/resolve-placeholders.server';
 import { storyPaginationFlow } from './story-pagination-flow';
 
@@ -43,23 +44,6 @@ const FlowPageSchema = z.object({
 });
 
 type FlowPage = z.infer<typeof FlowPageSchema>;
-
-/**
- * Extract all $$id$$ and $id$ placeholders from text
- * Supports both double-dollar (correct) and single-dollar (AI fallback) formats
- */
-function extractEntityIds(text: string): string[] {
-  if (!text) return [];
-  const ids = new Set<string>();
-  // Double $$ format (correct format)
-  const doubleMatches = [...text.matchAll(/\$\$([^$]+)\$\$/g)];
-  doubleMatches.forEach((match) => ids.add(match[1]));
-  // Single $ format (fallback for AI that didn't follow instructions)
-  // Only match IDs that look like Firestore document IDs (15+ alphanumeric chars)
-  const singleMatches = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)];
-  singleMatches.forEach((match) => ids.add(match[1]));
-  return [...ids];
-}
 
 /**
  * Format a date in a friendly, child-appropriate way

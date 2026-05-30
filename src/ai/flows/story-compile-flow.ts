@@ -11,32 +11,11 @@ import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { StorySession, StoryOutputType, Story } from '@/lib/types';
 import { logServerSessionEvent } from '@/lib/session-events.server';
-import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
+import { replacePlaceholdersWithDescriptions, extractEntityIds } from '@/lib/resolve-placeholders.server';
 import { initializeRunTrace, completeRunTrace } from '@/lib/ai-run-trace';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { storyTextCompileFlow } from './story-text-compile-flow';
 import { updateCharacterUsage } from '@/lib/character-usage';
-
-/**
- * Extract all $$id$$ and $id$ placeholders from text
- * Supports both double-dollar (correct) and single-dollar (AI fallback) formats
- */
-function extractActorIds(text: string): string[] {
-  const ids = new Set<string>();
-  // Double $$ format (correct format)
-  const doubleRegex = /\$\$([a-zA-Z0-9_-]+)\$\$/g;
-  let match;
-  while ((match = doubleRegex.exec(text)) !== null) {
-    ids.add(match[1]);
-  }
-  // Single $ format (fallback for AI that didn't follow instructions)
-  // Only match IDs that look like Firestore document IDs (15+ alphanumeric chars)
-  const singleRegex = /\$([a-zA-Z0-9_-]{15,})\$/g;
-  while ((match = singleRegex.exec(text)) !== null) {
-    ids.add(match[1]);
-  }
-  return Array.from(ids);
-}
 
 /**
  * Generate a synopsis for a story using AI.
@@ -324,7 +303,7 @@ export const storyCompileFlow = ai.defineFlow(
                 }
 
                 // Extract actors from the raw story text (contains $$id$$ placeholders)
-                const textActorIds = extractActorIds(rawStoryText);
+                const textActorIds = extractEntityIds(rawStoryText);
                 const sessionActors = session.actors || [];
                 const actorSet = new Set([childId, ...sessionActors, ...textActorIds]);
                 const actors = [childId, ...Array.from(actorSet).filter(id => id !== childId)];
@@ -438,7 +417,7 @@ export const storyCompileFlow = ai.defineFlow(
                 // Extract actors from the original story text (before placeholder resolution)
                 // Start with actors tracked during the session, then add any from final story
                 const sessionActors = session.actors || [];
-                const storyActorIds = extractActorIds(geminiFinalStory);
+                const storyActorIds = extractEntityIds(geminiFinalStory);
                 const actorSet = new Set([childId, ...sessionActors, ...storyActorIds]);
                 const actors = [childId, ...Array.from(actorSet).filter(id => id !== childId)];
 
@@ -567,12 +546,17 @@ export const storyCompileFlow = ai.defineFlow(
             const rawStoryText = textCompileResult.storyText; // Text with $$id$$ placeholders
             const resolvedStoryText = await replacePlaceholdersWithDescriptions(rawStoryText);
             const synopsis = textCompileResult.synopsis || 'A magical adventure story.';
-            const finalActorIds = textCompileResult.actors || [childId];
+            // Scene annotations include implicitly-referenced actors; merge with text-extracted list
+            const sceneAnnotatedActorIds: string[] = textCompileResult.sceneAnnotatedActorIds || [];
+            const textDerivedActorIds: string[] = textCompileResult.actors || [childId];
+            const mergedActorSet = new Set([childId, ...sceneAnnotatedActorIds, ...textDerivedActorIds]);
+            const finalActorIds = [childId, ...Array.from(mergedActorSet).filter(id => id !== childId)];
 
             debug.stage = 'ai_generate_result';
             debug.details.storyTextLength = resolvedStoryText?.length;
             debug.details.synopsisLength = synopsis?.length;
             debug.details.finalActorIds = finalActorIds;
+            debug.details.sceneAnnotatedActorCount = sceneAnnotatedActorIds.length;
 
             // Calculate paragraph count
             const paragraphCount = resolvedStoryText.split(/\n\n+/).filter((p: string) => p.trim()).length;
