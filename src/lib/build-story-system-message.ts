@@ -38,9 +38,6 @@ export function buildStorySystemMessage(
 ${context.fullContext}
 
 === NARRATIVE GUIDELINES ===
-• CRITICAL: Always refer to the child and known characters using ONLY their placeholder IDs (e.g., $$abc123$$). Do NOT include the display name alongside the placeholder - just use $$id$$ by itself. The system will automatically replace these with the correct names.
-• WRONG: "$$abc123$$ (Alice) went to the park" or "Alice ($$abc123$$)"
-• RIGHT: "$$abc123$$ went to the park"
 • The main child is ${ageDescription}. ${ageAppropriateGuidance}
 • Feature the main child prominently as the hero of their story.
 • Incorporate the child's likes into the narrative and avoid their dislikes.

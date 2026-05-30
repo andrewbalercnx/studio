@@ -1,4 +1,4 @@
-import type { StoryType, StoryTypePromptConfig, ArcStep } from '@/lib/types';
+import type { StoryType, StoryTypePromptConfig, ArcStep, WorldState } from '@/lib/types';
 import type { FormattedStoryContext } from '@/lib/story-context-builder';
 import { generateStoryBeatOutputDescription } from '@/lib/schemas/story-beat-output';
 
@@ -15,6 +15,7 @@ export type StoryBeatPromptContext = {
   globalPrefix?: string;         // Optional global prefix to prepend to prompt
   useSchemaOutput?: boolean;     // If true, omit OUTPUT REQUIREMENTS section (schema is passed separately)
   newlyIntroducedCharactersContext?: string; // Characters introduced during this story session
+  currentWorldState?: WorldState; // World state from the previous beat for cross-beat continuity
 };
 
 /**
@@ -54,6 +55,11 @@ export function buildStoryBeatPrompt(ctx: StoryBeatPromptContext): string {
   const newlyIntroducedContext = ctx.formattedContext.newlyIntroducedCharactersContext;
   if (newlyIntroducedContext) {
     sections.push(buildNewlyIntroducedCharactersSection(newlyIntroducedContext));
+  }
+
+  // Add world state section if available (from previous beat)
+  if (ctx.currentWorldState && (ctx.currentWorldState.presentActorIds?.length || ctx.currentWorldState.currentLocation)) {
+    sections.push(buildWorldStateSection(ctx.currentWorldState));
   }
 
   // Only include STORY SO FAR section if not using messages array
@@ -176,6 +182,23 @@ IMPORTANT: Continue to feature these newly introduced characters in the story! T
 • Reference them by their $$id$$ placeholder (e.g., $$abc123$$)
 • Give them actions, dialogue, or presence that advances the plot
 • Consider including options that involve these characters`;
+}
+
+/**
+ * CURRENT WORLD STATE section — carries forward the physical state from the last beat.
+ * Placed before SCENE ANNOTATION so the AI can see who was present and update accordingly.
+ */
+function buildWorldStateSection(worldState: WorldState): string {
+  const lines: string[] = ['=== CURRENT WORLD STATE ===', 'Continuing from the previous scene:'];
+  if (worldState.presentActorIds?.length) {
+    const ids = worldState.presentActorIds.map(id => `$$${id}$$`).join(', ');
+    lines.push(`• Characters present: ${ids}`);
+  }
+  if (worldState.currentLocation) {
+    lines.push(`• Location: ${worldState.currentLocation}`);
+  }
+  lines.push('\nContinue from this state. Update location and present characters as the new beat requires.');
+  return lines.join('\n');
 }
 
 /**

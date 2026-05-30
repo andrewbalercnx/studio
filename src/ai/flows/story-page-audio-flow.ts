@@ -15,6 +15,7 @@ import { DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 import {
   resolveEntitiesInText,
   replacePlaceholdersForTTS,
+  buildActorDescriptionsForAudio,
   type EntityMap,
 } from '@/lib/resolve-placeholders.server';
 import { logAIFlow } from '@/lib/ai-flow-logger';
@@ -106,6 +107,14 @@ async function generatePageAudio(
   if (!textToNarrate || textToNarrate.trim().length === 0) {
     console.log(`[page-audio-flow] Page ${page.pageNumber} has no text to narrate, skipping`);
     return null;
+  }
+
+  // Prepend actor context (character descriptions + pronunciation hints) for higher-quality TTS
+  if (entityMap && page.entityIds?.length) {
+    const actorContext = await buildActorDescriptionsForAudio(page.entityIds, entityMap);
+    if (actorContext) {
+      textToNarrate = actorContext.trim() + '\n\n' + textToNarrate;
+    }
   }
 
   console.log(`[page-audio-flow] Generating audio for page ${page.pageNumber}: "${textToNarrate.slice(0, 50)}..."`);

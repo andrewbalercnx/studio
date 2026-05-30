@@ -141,6 +141,11 @@ export type StoryBeat = {
     draftText: string;
 };
 
+export type WorldState = {
+    presentActorIds?: string[];
+    currentLocation?: string;
+};
+
 export type StorySession = {
     id:string;
     childId: string;
@@ -181,6 +186,8 @@ export type StorySession = {
     // List of actor IDs ($$id$$ placeholders) discovered during story play
     // This gets copied to Story.actors at compile time
     actors?: string[];
+    // World state from the last story beat — used to maintain cross-beat continuity
+    worldState?: WorldState;
     progress?: {
       warmupCompletedAt?: any;
       storyTypeChosenAt?: any;

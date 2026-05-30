@@ -15,7 +15,7 @@ import { ai } from '@/ai/genkit';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { MessageData } from 'genkit';
-import type { StorySession, ChatMessage, StoryType, Character, ChildProfile, ArcStep } from '@/lib/types';
+import type { StorySession, ChatMessage, StoryType, Character, ChildProfile, ArcStep, WorldState } from '@/lib/types';
 import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
 import { logServerSessionEvent } from '@/lib/session-events.server';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
@@ -234,6 +234,7 @@ export const storyBeatFlow = ai.defineFlow(
                     useMessagesArray: true, // Story history will be passed via messages parameter
                     useSchemaOutput: true,  // Schema is passed to model separately, no need for text-based output requirements
                     globalPrefix,
+                    currentWorldState: session.worldState,
                 };
 
                 finalPrompt = buildStoryBeatPrompt(promptContext);
@@ -519,6 +520,16 @@ ${generateStoryBeatOutputDescription()}
                     storyTypeId,
                 },
             });
+
+            // Fire-and-forget: persist world state from this beat for next beat's context
+            if (structuredOutput.scene) {
+                const newWorldState: WorldState = {
+                    presentActorIds: structuredOutput.scene.presentActors || [],
+                    currentLocation: structuredOutput.scene.location ?? undefined,
+                };
+                firestore.collection('storySessions').doc(sessionId).update({ worldState: newWorldState })
+                    .catch(e => console.warn('[beat-flow] worldState update failed:', e));
+            }
 
             // Resolve placeholders in text for display using prebuiltEntityMap (no extra Firestore reads)
             const [resolvedStoryContinuation, resolvedOptions] = await Promise.all([

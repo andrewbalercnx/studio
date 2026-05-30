@@ -154,6 +154,7 @@ Interactive story creation sessions.
 | `supportingCharacterIds` | string[] | No | Supporting character IDs |
 | `storyMode` | string | No | Story generator ID (e.g., 'wizard', 'friends', or dynamic generator IDs) |
 | `actors` | string[] | No | Actor IDs ($$id$$ placeholders) |
+| `worldState` | WorldState | No | World state from the last beat (presentActorIds, currentLocation) |
 | `wizardAnswers` | object[] | No | Wizard mode Q&A state (question, answer pairs) |
 | `wizardLastQuestion` | string | No | Wizard mode: last question asked |
 | `wizardLastChoices` | object[] | No | Wizard mode: last choices offered |

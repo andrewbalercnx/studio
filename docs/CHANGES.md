@@ -18,6 +18,24 @@
 
 ### 2026-05-30
 
+#### `f79b82d` - Todos 5, 6, 7: Compile name resolution, world-state persistence, TTS actor context
+
+**Type**: Architecture / Feature
+
+**Summary**: Three complementary improvements to the story pipeline: (5) the compile step now replaces `$$id$$` placeholders with real character names producing clean story text; (6) each story beat's scene state is persisted and fed back into the next beat's prompt for cross-beat world continuity; (7) character descriptions and pronunciation hints are prepended to TTS text for both page-level and story-level audio.
+
+**Changes**:
+- `src/lib/types.ts`: added `WorldState` type (`presentActorIds`, `currentLocation`) and `worldState?: WorldState` field to `StorySession`
+- `src/lib/prompt-builders/story-beat-prompt-builder.ts`: added `currentWorldState?: WorldState` to `StoryBeatPromptContext`; added `buildWorldStateSection()` to inject previous scene state into beat prompt
+- `src/ai/flows/story-beat-flow.ts`: passes `session.worldState` to beat prompt context; fire-and-forget persists new world state from each beat's `scene` annotation
+- `src/ai/flows/story-text-compile-flow.ts`: changed compile instruction from "preserve `$$id$$`" to "replace with character names"; updated output format description; updated stale comments
+- `src/ai/flows/story-page-audio-flow.ts`: imports and calls `buildActorDescriptionsForAudio`; prepends actor context to `textToNarrate` for higher-quality per-page TTS
+- `src/ai/flows/story-audio-flow.ts`: imports and calls `buildActorDescriptionsForAudio`; prepends actor context to `textForTTS` for whole-story audio (handles both legacy `$$id$$` and clean-text paths)
+- `src/lib/build-story-system-message.ts`: removed "CRITICAL: use `$$id$$` placeholders" instruction from legacy beat system message (display is now handled by server-resolved `displayText`)
+- `docs/SCHEMA.md`: documented `worldState` field on `StorySession`
+
+### 2026-05-30
+
 #### `0a2a83a` - Scene-driven actor collection (Todo 3) and centralised entity extraction (Todo 4)
 
 **Type**: Architecture / Tech-debt

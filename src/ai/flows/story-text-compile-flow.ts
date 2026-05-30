@@ -107,8 +107,8 @@ You will be given a DRAFT STORY TEXT that was assembled from story beats. Your j
 4. Keep the story faithful to the original - do not add new plot points or characters
 5. Write a brief 1-2 sentence synopsis suitable for a parent to read
 
-**CRITICAL - Character References:**
-You MUST preserve all $$id$$ placeholders exactly as they appear in the draft. These are character references that will be resolved later. Never replace $$id$$ with actual names.`;
+**Character References:**
+If $$id$$ placeholders appear in the draft, replace them with the actual character name from the CHARACTER REFERENCE section below. The final story text should use real names, not placeholder IDs.`;
 
 const StoryTextCompileResultSchema = z.object({
   storyText: z.string().min(50, "Story text must be at least 50 characters."),
@@ -245,9 +245,9 @@ export const storyTextCompileFlow = ai.defineFlow(
 
 **Story Context:**
 - **Story Type:** ${storyType.name} (${storyType.shortDescription})
-- **Main Character:** ${mainCharacterName} (use $$${childId}$$ in the story)
+- **Main Character:** ${mainCharacterName}
 
-**CHARACTER REFERENCE (these $$id$$ placeholders appear in the draft):**
+**CHARACTER REFERENCE (replace these $$id$$ placeholders with the names shown):**
 ${actorIdMapping}
 
 **CHARACTER DETAILS (for context):**
@@ -260,8 +260,8 @@ ${draftStoryText}
 You MUST return a single JSON object matching this exact shape. Do not include any markdown, code fences, or explanatory text.
 
 {
-  "storyText": "The polished story text, preserving all $$id$$ placeholders exactly as they appear.",
-  "synopsis": "A brief 1-2 sentence summary of the story suitable for a parent to read. Use $$id$$ placeholders for character names."
+  "storyText": "The polished story text with character names resolved (no $$id$$ placeholders).",
+  "synopsis": "A brief 1-2 sentence summary of the story suitable for a parent to read, using character names."
 }
 
 Now, generate the JSON object containing the polished story and synopsis.`;
@@ -408,7 +408,7 @@ Now, generate the JSON object containing the polished story and synopsis.`;
 
             const { storyText, synopsis } = structuredOutput;
 
-            // Resolve placeholders in the synopsis (story text keeps placeholders for later resolution)
+            // Resolve any remaining placeholders in the synopsis (story text should already have names from compile step)
             const resolvedSynopsis = await replacePlaceholdersWithDescriptions(synopsis);
 
             // Extract actor IDs from the story text
