@@ -18,6 +18,20 @@
 
 ### 2026-05-30
 
+#### `811c0db` - GitHub Actions setup script
+
+**Type**: Developer Experience
+
+**Summary**: Shell script to configure the two GitHub Actions values required by the system test workflow.
+
+**Changes**:
+- `scripts/setup-github-secrets.sh` (NEW): Sets `INTERNAL_API_SECRET` (Actions secret) and `APP_URL` (Actions variable) via `gh` CLI; reads secret from `INTERNAL_API_SECRET` env var
+
+---
+
+
+### 2026-05-30
+
 #### `d7cef8d` - Live system test endpoint and scheduled CI workflow
 
 **Type**: Infrastructure / Developer Experience
