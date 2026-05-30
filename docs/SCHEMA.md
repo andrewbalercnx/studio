@@ -1041,11 +1041,17 @@ Extends `PrintOrderAddress` with metadata for address book management.
 {
   id: string;
   sender: 'child' | 'assistant' | 'system';
-  text: string;  // May contain $$id$$ placeholders - resolve with useResolvePlaceholders hook
+  text: string;        // Raw AI output — $$id$$ placeholders intact; used by compile/TTS/AI history
+  displayText?: string; // Resolved display text — populated server-side at write time; used by all UI
   createdAt: any;
-  kind?: string; // Message type
-  options?: Choice[];  // May contain $$id$$ placeholders
-  selectedOptionId?: string; // Selected choice
+  kind?: string;       // Message type
+  options?: Choice[];  // Beat choices — each has text (raw) and displayText (resolved)
+  selectedOptionId?: string;
+  // World state snapshot for this beat — authoritative actor list for image generation
+  scene?: {
+    presentActors: string[];  // $$id$$ values of ALL characters present (explicit, collapsed, implied)
+    location?: string;        // Where the scene takes place
+  };
 }
 ```
 
@@ -1053,12 +1059,14 @@ Extends `PrintOrderAddress` with metadata for address book management.
 ```typescript
 {
   id: string;
-  text: string;
+  text: string;         // Raw AI output — $$id$$ placeholders intact
+  displayText?: string; // Resolved display text — populated server-side at write time
   value?: string;
   introducesCharacter?: boolean;
   newCharacterName?: string;
   newCharacterLabel?: string;
   newCharacterKind?: 'toy' | 'pet' | 'friend' | 'family';
+  newCharacterType?: 'Family' | 'Friend' | 'Pet' | 'Toy' | 'Other';
   existingCharacterId?: string;
   avatarUrl?: string;
 }

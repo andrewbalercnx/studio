@@ -130,7 +130,14 @@ Your task is to continue the story and provide choices for the child.
 • Choices should be meaningfully different and child-appropriate
 • At least one choice should be actionable by the main child
 • Consider including an existing character in one choice when natural
-• If the story would benefit from a new character (helper, friend, magical creature), include an option that introduces one`;
+• If the story would benefit from a new character (helper, friend, magical creature), include an option that introduces one
+
+=== SCENE ANNOTATION ===
+Your output includes a "scene" field. In scene.presentActors, list the $$id$$ of EVERY character physically present in the scene — not just those you explicitly named. This list drives the illustration, so a missing ID means a missing character in the image.
+• Explicit reference: "$$abc$$ jumped" → include abc
+• Grammatical collapse: "they both laughed" → include both IDs
+• Implied presence: "everyone cheered" → include all characters currently in the scene
+• Always include the main child's ID`;
 
     case 'ending':
       return `=== STORY ENDING INSTRUCTIONS ===

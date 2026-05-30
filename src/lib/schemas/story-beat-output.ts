@@ -20,10 +20,22 @@ export const StoryBeatOptionSchema = z.object({
     .describe("Avatar URL for existing characters"),
 });
 
+// === Scene Annotation Schema ===
+// Records the authoritative world state for this beat — used by image generation
+// so that ALL present actors are included in the image, not only those explicitly named.
+export const SceneAnnotationSchema = z.object({
+  presentActors: z.array(z.string())
+    .describe("IDs of ALL characters present in this scene. Include actors who are explicitly named, grammatically collapsed ('they both', 'all three of them'), or simply implied as still present from earlier in the scene. Always include the main child's ID."),
+  location: z.string().optional()
+    .describe("Where this scene takes place (e.g., 'the garden', 'Alice's bedroom')"),
+});
+
 // === Main Output Schema ===
 export const StoryBeatOutputSchema = z.object({
   storyContinuation: z.string()
     .describe("The next paragraph of the story, continuing from the story so far"),
+  scene: SceneAnnotationSchema
+    .describe("Scene state for this beat — who is present and where. Used by image generation to ensure all characters appear in the illustration."),
   options: z.array(StoryBeatOptionSchema).min(3).max(3)
     .describe("Exactly 3 choices for the child")
 });
@@ -36,6 +48,10 @@ export type StoryBeatOption = z.infer<typeof StoryBeatOptionSchema>;
 export function generateStoryBeatOutputDescription(): string {
   return `{
   "storyContinuation": "The next paragraph of the story",
+  "scene": {
+    "presentActors": ["actorId1", "actorId2"],
+    "location": "where the scene takes place (optional)"
+  },
   "options": [
     {
       "id": "A | B | C",

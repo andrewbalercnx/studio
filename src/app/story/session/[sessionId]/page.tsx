@@ -21,7 +21,6 @@ import { logSessionEvent } from '@/lib/session-events';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { resolveEntitiesInText, replacePlaceholdersInText } from '@/lib/resolve-placeholders';
 
 
 type WarmupGenkitDiagnostics = {
@@ -170,9 +169,6 @@ export default function StorySessionPage() {
 
     const [selectedOutputTypeId, setSelectedOutputTypeId] = useState<string>('');
 
-    // State to store resolved placeholder text
-    const [resolvedTexts, setResolvedTexts] = useState<Map<string, string>>(new Map());
-
     const [beatDiagnostics, setBeatDiagnostics] = useState<BeatGenkitDiagnostics>({
         lastBeatOk: null,
         lastBeatErrorMessage: null,
@@ -279,48 +275,6 @@ export default function StorySessionPage() {
             console.warn('[story-session] Failed to log event', event, err);
         }
     }, [firestore, sessionId]);
-
-    // Effect to resolve placeholders in messages
-    useEffect(() => {
-        if (!messages || messages.length === 0) return;
-
-        const resolveAllPlaceholders = async () => {
-            // Collect all unique text strings that need resolution
-            const textsToResolve = new Set<string>();
-
-            messages.forEach(msg => {
-                if (msg.text) textsToResolve.add(msg.text);
-                if (msg.options) {
-                    msg.options.forEach(opt => {
-                        if (opt.text) textsToResolve.add(opt.text);
-                    });
-                }
-            });
-
-            // Get all entity IDs from all texts
-            const allText = Array.from(textsToResolve).join(' ');
-            const entityMap = await resolveEntitiesInText(allText);
-
-            // Resolve each text
-            const newResolvedTexts = new Map<string, string>();
-            for (const text of textsToResolve) {
-                const resolved = await replacePlaceholdersInText(text, entityMap);
-                newResolvedTexts.set(text, resolved);
-            }
-
-            setResolvedTexts(newResolvedTexts);
-        };
-
-        resolveAllPlaceholders().catch(err => {
-            console.error('[story-session] Failed to resolve placeholders:', err);
-        });
-    }, [messages]);
-
-    // Helper function to get resolved text with fallback to original
-    const getResolvedText = useCallback((text: string | undefined): string => {
-        if (!text) return '';
-        return resolvedTexts.get(text) || text;
-    }, [resolvedTexts]);
 
     // Derived state from session
     const currentStoryTypeId = session?.storyTypeId ?? null;
@@ -551,21 +505,28 @@ export default function StorySessionPage() {
             }
 
             // On success, write to Firestore
-            const { storyContinuation, options, promptConfigId, arcStep } = flowResult;
+            const { storyContinuation, storyContinuationResolved, options, optionsResolved, promptConfigId, arcStep, scene } = flowResult;
             const messagesRef = collection(firestore, 'storySessions', sessionId, 'messages');
 
             await addDoc(messagesRef, {
                 sender: 'assistant',
                 text: storyContinuation,
+                displayText: storyContinuationResolved,
                 kind: 'beat_continuation',
+                ...(scene && { scene }),
                 createdAt: serverTimestamp(),
             });
             
+            // Merge resolved display text into each option (keeps raw text intact for pipeline)
+            const optionsWithDisplay = options.map((opt: any, i: number) => ({
+                ...opt,
+                displayText: optionsResolved?.[i]?.text ?? opt.text,
+            }));
             await addDoc(messagesRef, {
                 sender: 'assistant',
                 text: "What happens next?",
                 kind: 'beat_options',
-                options: options,
+                options: optionsWithDisplay,
                 createdAt: serverTimestamp(),
             });
 
@@ -785,6 +746,7 @@ export default function StorySessionPage() {
         await addDoc(messagesRef, {
             sender: 'child',
             text: chosenOption.text,
+            ...(chosenOption.displayText && { displayText: chosenOption.displayText }),
             kind: 'child_choice',
             selectedOptionId: chosenOption.id,
             createdAt: serverTimestamp(),
@@ -1401,7 +1363,7 @@ export default function StorySessionPage() {
                        <div key={msg.id} className={`flex flex-col ${msg.sender === 'child' ? 'items-end' : 'items-start'}`}>
                             {msg.kind === 'beat_options' && msg.options ? (
                                 <div className="p-2 rounded-lg bg-muted w-full">
-                                    <p className="text-sm text-muted-foreground mb-2">{getResolvedText(msg.text)}</p>
+                                    <p className="text-sm text-muted-foreground mb-2">{msg.displayText ?? msg.text}</p>
                                     <div className="flex flex-col gap-2">
                                         {msg.options.map(opt => (
                                             <Button
@@ -1412,7 +1374,7 @@ export default function StorySessionPage() {
                                                 className="justify-start h-auto"
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    <span>{getResolvedText(opt.text)}</span>
+                                                    <span>{opt.displayText ?? opt.text}</span>
                                                     {opt.introducesCharacter && (
                                                         <Badge variant="secondary" className="gap-1">
                                                             <Sparkles className="h-3 w-3" />
@@ -1446,7 +1408,7 @@ export default function StorySessionPage() {
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <Star className="h-3.5 w-3.5 text-amber-500" />
-                                                    <span>{getResolvedText(opt.text)}</span>
+                                                    <span>{opt.displayText ?? opt.text}</span>
                                                 </div>
                                             </Button>
                                         ))}
@@ -1458,7 +1420,7 @@ export default function StorySessionPage() {
                                     {msg.sender === 'assistant' ? 'Story Guide' : 'You'}
                                 </span>
                                 <p className={`whitespace-pre-wrap p-2 rounded-md ${msg.sender === 'child' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                                    {getResolvedText(msg.text)}
+                                    {msg.displayText ?? msg.text}
                                 </p>
                                </>
                             )}

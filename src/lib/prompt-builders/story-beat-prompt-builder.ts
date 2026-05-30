@@ -62,6 +62,10 @@ export function buildStoryBeatPrompt(ctx: StoryBeatPromptContext): string {
     sections.push(buildStorySoFarSection(ctx.storySoFar));
   }
 
+  // Scene annotation instructions are always included — they explain the scene field
+  // regardless of whether we use schema output or the legacy text format
+  sections.push(buildSceneAnnotationSection());
+
   // Only include OUTPUT REQUIREMENTS section if not using schema-based output
   // When using schema output, Genkit passes the schema to the model separately
   if (!useSchemaOutput) {
@@ -172,6 +176,23 @@ IMPORTANT: Continue to feature these newly introduced characters in the story! T
 • Reference them by their $$id$$ placeholder (e.g., $$abc123$$)
 • Give them actions, dialogue, or presence that advances the plot
 • Consider including options that involve these characters`;
+}
+
+/**
+ * SCENE ANNOTATION INSTRUCTIONS — explains how to populate scene.presentActors
+ * Placed just before output requirements so it is fresh when the AI generates the schema fields.
+ */
+function buildSceneAnnotationSection(): string {
+  return `=== SCENE ANNOTATION ===
+Your output includes a "scene" field. Populate it carefully:
+
+• scene.presentActors: list the $$id$$ values of EVERY character physically present in the scene you are writing — not just those explicitly named in the text. This list is used to generate the illustration, so omitting a character means they will not appear in the image.
+  - Explicit: "$$abc123$$ jumped on the bed" → include abc123
+  - Grammatical collapse: "they both laughed" → include both IDs
+  - Implied presence: "everyone cheered" → include all characters who are in the scene
+  - Always include the main child's ID
+
+• scene.location: a short phrase describing where the scene takes place (e.g., "the garden", "Alice's bedroom"). Optional but helpful for image generation.`;
 }
 
 /**

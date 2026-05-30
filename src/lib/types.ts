@@ -101,7 +101,10 @@ export type ParentVoice = {
 
 export type Choice = {
     id: string;
+    // raw AI output — $$id$$ placeholders intact
     text: string;
+    // resolved display text — populated server-side at write time; used by all UI rendering
+    displayText?: string;
     value?: string;
     introducesCharacter?: boolean;
     newCharacterName?: string | null; // The character's proper name (e.g., "Nutsy", "Captain Sparkle")
@@ -116,7 +119,10 @@ export type ChatMessage = {
     id: string;
     // This is different from the Genkit role, which is 'user' | 'assistant' | 'system'
     sender: 'child' | 'assistant' | 'system';
+    // raw AI output — $$id$$ placeholders intact; consumed by compile pipeline, TTS, AI history
     text: string;
+    // resolved display text — populated server-side at write time; used by all UI rendering
+    displayText?: string;
     createdAt: any; // Allow for server timestamp or Date
     // For Genkit compatibility
     role?: 'user' | 'model' | 'system' | 'tool';
@@ -125,6 +131,8 @@ export type ChatMessage = {
     kind?: 'beat_continuation' | 'beat_options' | 'child_choice' | 'character_traits_question' | 'character_traits_answer' | 'ending_options' | 'child_ending_choice' | 'system_status' | 'gemini3_question' | 'gemini3_choice' | 'gemini3_final_story' | 'gemini4_question' | 'gemini4_choice' | 'gemini4_final_story';
     options?: Choice[];
     selectedOptionId?: string;
+    // World state snapshot for this beat — authoritative actor list for image generation
+    scene?: { presentActors: string[]; location?: string };
 };
 
 export type StoryBeat = {

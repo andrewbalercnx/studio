@@ -18,6 +18,30 @@
 
 ### 2026-05-30
 
+#### `c5fb4b1` - World-state scene annotation (Todo 1) and server-side display text contract (Todo 2)
+
+**Type**: Architecture / Bug Fix
+
+**Summary**: AI now outputs an explicit `scene.presentActors` list covering all three actor reference cases (explicit, grammatically collapsed, implied), eliminating the under-counting bug in image generation. Simultaneously, the `$id$` placeholder leak to the UI is fixed by writing server-resolved `displayText` at beat write time and removing the client-side `resolveAllPlaceholders` effect.
+
+**Changes**:
+- `story-beat-output.ts`: added `SceneAnnotationSchema` (`presentActors: string[]`, optional `location`) and required `scene` field on `StoryBeatOutputSchema`
+- `story-beat-prompt-builder.ts`: added `buildSceneAnnotationSection()` explaining all three actor reference cases (explicit, grammatical collapse, implied); wired into `buildStoryBeatPrompt()`
+- `build-story-system-message.ts`: mirrored SCENE ANNOTATION block in `story_beat` case of `getFlowSpecificInstructions()`
+- `types.ts`: added `displayText?: string` and `scene?: { presentActors: string[]; location?: string }` to `ChatMessage`; added `displayText?: string` to `Choice`
+- `story-beat-flow.ts`: passes `scene: structuredOutput.scene` through both main and fallback return paths
+- `session/[sessionId]/page.tsx`: beat write now stores `displayText` (resolved), `scene`, and `optionsWithDisplay` (each option has `displayText`); `child_choice` propagates `displayText`; removed client-side `resolveAllPlaceholders` useEffect, `resolvedTexts` state, `getResolvedText` helper, and `@/lib/resolve-placeholders` import; all UI render sites use `msg.displayText ?? msg.text` and `opt.displayText ?? opt.text`
+- `SCHEMA.md`: updated `ChatMessage` and `Choice` documentation for new fields
+
+**Modified files**:
+- `src/lib/schemas/story-beat-output.ts`
+- `src/lib/prompt-builders/story-beat-prompt-builder.ts`
+- `src/lib/build-story-system-message.ts`
+- `src/lib/types.ts`
+- `src/ai/flows/story-beat-flow.ts`
+- `src/app/story/session/[sessionId]/page.tsx`
+- `docs/SCHEMA.md`
+
 #### `97f8eba` - Perf: entity map reuse, context capping, parallel message resolution
 
 **Type**: Performance

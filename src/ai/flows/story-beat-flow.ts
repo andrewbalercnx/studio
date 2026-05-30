@@ -456,6 +456,7 @@ ${generateStoryBeatOutputDescription()}
                                 storyContinuationResolved: resolvedStoryContinuation,
                                 options: manualOutput.options,
                                 optionsResolved: resolvedOptions,
+                                scene: manualOutput.scene,
                                 // Progress: arc step completion (0.0 to ~0.9, leaving room for ending)
                                 progress: arcSteps.length > 1 ? (safeArcStepIndex + 1) / (arcSteps.length + 1) : 0.5,
                                 debug: {
@@ -543,6 +544,7 @@ ${generateStoryBeatOutputDescription()}
                 storyContinuationResolved: resolvedStoryContinuation, // Resolved for display
                 options: structuredOutput.options, // Original with placeholders
                 optionsResolved: resolvedOptions, // Resolved for display
+                scene: structuredOutput.scene, // Authoritative actor list for image generation
                 // Progress: arc step completion (0.0 to ~0.9, leaving room for ending)
                 progress: arcSteps.length > 1 ? (safeArcStepIndex + 1) / (arcSteps.length + 1) : 0.5,
                 debug: {
