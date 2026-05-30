@@ -17,9 +17,9 @@ export async function register() {
     return;
   }
 
-  // In non-production: capture console output into an in-memory ring buffer
+  // When ENABLE_DEV_LOGS=true: capture console output into an in-memory ring buffer
   // so the healthz endpoint can surface recent log lines for diagnostics.
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.ENABLE_DEV_LOGS === 'true') {
     const { appendLog } = await import('@/lib/dev-log-buffer');
     const wrap = (orig: (...a: any[]) => void, prefix = '') =>
       (...args: any[]) => {

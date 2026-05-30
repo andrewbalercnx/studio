@@ -9,7 +9,7 @@ export async function GET() {
         timestamp: new Date().toISOString(),
     };
 
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.ENABLE_DEV_LOGS === 'true') {
         const { getRecentLogs } = await import('@/lib/dev-log-buffer');
         body.recentLogs = getRecentLogs();
     }
