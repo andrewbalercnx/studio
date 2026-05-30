@@ -18,6 +18,18 @@
 
 ### 2026-05-30
 
+#### `0382e5a` - Show per-page image prompts in pipeline view
+
+**Type**: Observability
+
+**Summary**: Each image generation call now carries the page ID in its trace flow name, and the Pipeline view shows an expandable list of image pages with the full text prompt and generated image thumbnail.
+
+**Changes**:
+- `src/ai/flows/story-image-flow.ts` (MODIFIED): `logAICallToTrace` flowName changed from `'storyImageFlow'` to `generated.flowName + ':' + pageId` (e.g. `storyImageFlow:createImage:page-003`)
+- `src/app/admin/run-traces/page.tsx` (MODIFIED): Added `ImagePromptsSection` component; wired into Pipeline tab between the breakdown table and optimisation panel
+
+---
+
 #### `fb8c567` - Pipeline timing audit for story creation flows
 
 **Type**: Observability / Developer Experience

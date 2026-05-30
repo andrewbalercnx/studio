@@ -1691,7 +1691,7 @@ export const storyImageFlow = ai.defineFlow(
       if (storyData.storySessionId) {
         await logAICallToTrace({
           sessionId: storyData.storySessionId,
-          flowName: 'storyImageFlow',
+          flowName: `${generated.flowName}:${pageId}`,
           modelName: generated.modelUsed,
           temperature: 1.0,
           maxOutputTokens: 0,

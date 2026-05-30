@@ -61,7 +61,7 @@ const PIPELINE_PHASES: PipelinePhase[] = [
   {
     id: 'image',
     label: 'Image Generation',
-    flowPattern: /^storyImageFlow/,
+    flowPattern: /^storyImageFlow/,  // matches storyImageFlow:createImage:page-001 etc.
     model: 'gemini-2.5-flash-image',
     alternativeModels: [],
   },
@@ -87,6 +87,74 @@ function buildPhaseStats(calls: AICallTrace[]): PhaseStats[] {
     const modelsUsed = new Set(phaseCalls.map((c) => c.modelName).filter(Boolean));
     return { phase, calls: phaseCalls, totalLatencyMs, totalCost, totalInputTokens, totalOutputTokens, modelsUsed };
   });
+}
+
+function ImagePromptsSection({ phases }: { phases: PhaseStats[] }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const imagePhase = phases.find((p) => p.phase.id === 'image');
+  if (!imagePhase || imagePhase.calls.length === 0) return null;
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold mb-3">Image Prompts ({imagePhase.calls.length} pages)</h3>
+      <div className="space-y-1">
+        {imagePhase.calls.map((call) => {
+          // flowName format: storyImageFlow:createImage:page-001
+          const parts = call.flowName.split(':');
+          const pageId = parts[parts.length - 1] ?? call.flowName;
+          const kind = parts[1] ?? 'createImage';
+          const isExpanded = expandedId === call.callId;
+          const imageUrl = call.outputText?.startsWith('http') ? call.outputText : null;
+
+          return (
+            <div key={call.callId} className="border rounded-lg overflow-hidden">
+              <button
+                onClick={() => setExpandedId(isExpanded ? null : call.callId)}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                  <span className="font-mono font-medium">{pageId}</span>
+                  <Badge variant="outline" className="text-[10px]">{kind}</Badge>
+                </div>
+                <div className="flex items-center gap-3 text-muted-foreground">
+                  <span>{(call.latencyMs / 1000).toFixed(1)}s</span>
+                  {call.status === 'error' && (
+                    <Badge variant="destructive" className="text-[10px]">error</Badge>
+                  )}
+                </div>
+              </button>
+
+              {isExpanded && (
+                <div className="border-t px-3 py-3 space-y-3 bg-muted/20">
+                  {imageUrl && (
+                    <div>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imageUrl}
+                        alt={`Generated image for ${pageId}`}
+                        className="max-h-48 rounded border object-contain"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Prompt</span>
+                      <CopyButton text={call.systemPrompt} label="Copy" />
+                    </div>
+                    <pre className="text-xs whitespace-pre-wrap font-mono bg-muted p-3 rounded-lg max-h-64 overflow-y-auto leading-relaxed">
+                      {call.systemPrompt || '(no prompt captured)'}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function PipelineWaterfallView({ trace }: { trace: AIRunTrace }) {
@@ -204,6 +272,9 @@ function PipelineWaterfallView({ trace }: { trace: AIRunTrace }) {
               </tbody>
             </table>
           </div>
+
+          {/* Image prompts */}
+          <ImagePromptsSection phases={phases} />
 
           {/* Model optimisation notes */}
           <div>
