@@ -19,10 +19,10 @@ import type { StorySession, ChatMessage, StoryType, Character, ChildProfile, Arc
 import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
 import { logServerSessionEvent } from '@/lib/session-events.server';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
-import { replacePlaceholdersWithDescriptions, resolveEntitiesInText, replacePlaceholdersInText, extractEntityMetadataFromText } from '@/lib/resolve-placeholders.server';
+import { replacePlaceholdersInText, extractEntityMetadataFromText } from '@/lib/resolve-placeholders.server';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { initializeRunTrace, logAICallToTrace } from '@/lib/ai-run-trace';
-import { buildStoryContext } from '@/lib/story-context-builder';
+import { buildStoryContext, buildEntityMapFromContext } from '@/lib/story-context-builder';
 import { buildStorySystemMessage } from '@/lib/build-story-system-message';
 import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
 // New structured prompt system
@@ -124,6 +124,9 @@ export const storyBeatFlow = ai.defineFlow(
                 storyTypeName: storyType.name,
             }).catch(err => console.error('[storyBeatFlow] initializeRunTrace error:', err));
 
+            // Build entity map from already-loaded context (no extra Firestore reads needed)
+            const prebuiltEntityMap = buildEntityMapFromContext(contextData);
+
             // Build list of existing characters (including mainCharacter if it exists for backward compatibility)
             const existingCharacters = contextData.mainCharacter
                 ? [contextData.mainCharacter, ...contextData.characters]
@@ -164,26 +167,48 @@ export const storyBeatFlow = ai.defineFlow(
 
 
             // 4. Build Messages Array for conversation history
-            // (messagesSnapshot already fetched in parallel with storyType and context above)
-            const conversationMessages: MessageData[] = [];
-            for (const doc of messagesSnapshot.docs) {
-                const data = doc.data() as ChatMessage;
-                const resolvedText = await replacePlaceholdersWithDescriptions(data.text);
-                conversationMessages.push({
-                    role: data.sender === 'assistant' ? 'model' : 'user',
-                    content: [{ text: resolvedText }],
-                });
-            }
+            // Cap context window to bound token payload; summarise earlier beats for continuity
+            const CONTEXT_WINDOW = 8;
+            const allDocs = messagesSnapshot.docs;
+            const historicalDocs = allDocs.length > CONTEXT_WINDOW ? allDocs.slice(0, allDocs.length - CONTEXT_WINDOW) : [];
+            const recentDocs = allDocs.length > CONTEXT_WINDOW ? allDocs.slice(-CONTEXT_WINDOW) : allDocs;
 
-            // Also build storySoFar string for legacy system (which doesn't use messages array)
-            const storySoFar = conversationMessages
-                .map(m => {
-                    // Extract text from the content parts array
-                    const textContent = m.content.map(part =>
-                        typeof part === 'object' && 'text' in part ? part.text : ''
-                    ).join('');
-                    return `${m.role === 'model' ? 'Story Guide' : 'Child'}: ${textContent}`;
-                })
+            // Resolve placeholders for all messages in parallel (uses prebuiltEntityMap — no Firestore reads)
+            const [recentResolved, historicalResolved] = await Promise.all([
+                Promise.all(recentDocs.map(async (doc) => {
+                    const data = doc.data() as ChatMessage;
+                    const resolvedText = await replacePlaceholdersInText(data.text, prebuiltEntityMap);
+                    return { data, resolvedText };
+                })),
+                Promise.all(historicalDocs.map(async (doc) => {
+                    const data = doc.data() as ChatMessage;
+                    const resolvedText = await replacePlaceholdersInText(data.text, prebuiltEntityMap);
+                    return { data, resolvedText };
+                })),
+            ]);
+
+            // Build narrative summary from historical beat_continuation messages (resolved text)
+            const narrativeSummaryParts = historicalResolved
+                .filter(({ data }) => data.kind === 'beat_continuation')
+                .map(({ resolvedText }) => resolvedText);
+            const narrativeSummary = narrativeSummaryParts.length > 0
+                ? narrativeSummaryParts.join('\n\n')
+                : null;
+
+            // Windowed conversation for AI (new system uses last CONTEXT_WINDOW messages only)
+            const conversationMessages: MessageData[] = recentResolved.map(({ data, resolvedText }) => ({
+                role: data.sender === 'assistant' ? 'model' : 'user',
+                content: [{ text: resolvedText }],
+            }));
+
+            // Full message list for trace logging and legacy storySoFar
+            const allConversationMessages = [...historicalResolved, ...recentResolved];
+
+            // Build storySoFar string for legacy system (full history embedded in prompt)
+            const storySoFar = allConversationMessages
+                .map(({ data, resolvedText }) =>
+                    `${data.sender === 'assistant' ? 'Story Guide' : 'Child'}: ${resolvedText}`
+                )
                 .join('\n');
 
 
@@ -212,6 +237,11 @@ export const storyBeatFlow = ai.defineFlow(
                 };
 
                 finalPrompt = buildStoryBeatPrompt(promptContext);
+
+                // Inject narrative summary of earlier beats to maintain story continuity within token budget
+                if (narrativeSummary) {
+                    finalPrompt += `\n\n=== STORY SO FAR (earlier beats for continuity) ===\n${narrativeSummary}\n\n(The most recent conversation follows in the messages below.)`;
+                }
 
                 // Use model settings from storyType.promptConfig
                 modelTemperature = storyType.promptConfig.model?.temperature ?? 0.7;
@@ -283,12 +313,10 @@ ${generateStoryBeatOutputDescription()}
             let llmResponse;
             const startTime = Date.now();
 
-            // Prepare user messages for trace logging
-            const userMessagesForTrace = conversationMessages.map(m => ({
-                role: m.role === 'model' ? 'model' as const : 'user' as const,
-                content: m.content.map(part =>
-                    typeof part === 'object' && 'text' in part ? part.text : ''
-                ).join(''),
+            // Prepare user messages for trace logging (full history)
+            const userMessagesForTrace = allConversationMessages.map(({ data, resolvedText }) => ({
+                role: data.sender === 'assistant' ? 'model' as const : 'user' as const,
+                content: resolvedText,
             }));
 
             try {
@@ -405,16 +433,16 @@ ${generateStoryBeatOutputDescription()}
                                 },
                             });
 
-                            const allText = [manualOutput.storyContinuation, ...manualOutput.options.map(o => o.text)].join(' ');
-                            const entityMap = await resolveEntitiesInText(allText);
-                            const resolvedStoryContinuation = await replacePlaceholdersInText(manualOutput.storyContinuation, entityMap);
-                            const resolvedOptions = await Promise.all(
-                                manualOutput.options.map(async (option) => ({
-                                    ...option,
-                                    text: await replacePlaceholdersInText(option.text, entityMap),
-                                    entities: await extractEntityMetadataFromText(option.text, entityMap),
-                                }))
-                            );
+                            const [resolvedStoryContinuation, resolvedOptions] = await Promise.all([
+                                replacePlaceholdersInText(manualOutput.storyContinuation, prebuiltEntityMap),
+                                Promise.all(
+                                    manualOutput.options.map(async (option) => ({
+                                        ...option,
+                                        text: await replacePlaceholdersInText(option.text, prebuiltEntityMap),
+                                        entities: await extractEntityMetadataFromText(option.text, prebuiltEntityMap),
+                                    }))
+                                ),
+                            ]);
 
                             return {
                                 ok: true,
@@ -433,6 +461,9 @@ ${generateStoryBeatOutputDescription()}
                                 debug: {
                                     storySoFarLength: storySoFar.length,
                                     messagesCount: conversationMessages.length,
+                                    totalMessagesCount: allConversationMessages.length,
+                                    contextWindowUsed: CONTEXT_WINDOW,
+                                    narrativeSummaryLength: narrativeSummary?.length ?? 0,
                                     usedMessagesArray: debug.usedNewPromptSystem && conversationMessages.length > 0,
                                     arcStepIndex: safeArcStepIndex,
                                     modelName,
@@ -488,21 +519,17 @@ ${generateStoryBeatOutputDescription()}
                 },
             });
 
-            // Resolve placeholders in text for display
-            // Collect all text that needs resolution to build a complete entityMap
-            const allText = [
-                structuredOutput.storyContinuation,
-                ...structuredOutput.options.map(o => o.text)
-            ].join(' ');
-            const entityMap = await resolveEntitiesInText(allText);
-            const resolvedStoryContinuation = await replacePlaceholdersInText(structuredOutput.storyContinuation, entityMap);
-            const resolvedOptions = await Promise.all(
-                structuredOutput.options.map(async (option) => ({
-                    ...option,
-                    text: await replacePlaceholdersInText(option.text, entityMap),
-                    entities: await extractEntityMetadataFromText(option.text, entityMap),
-                }))
-            );
+            // Resolve placeholders in text for display using prebuiltEntityMap (no extra Firestore reads)
+            const [resolvedStoryContinuation, resolvedOptions] = await Promise.all([
+                replacePlaceholdersInText(structuredOutput.storyContinuation, prebuiltEntityMap),
+                Promise.all(
+                    structuredOutput.options.map(async (option) => ({
+                        ...option,
+                        text: await replacePlaceholdersInText(option.text, prebuiltEntityMap),
+                        entities: await extractEntityMetadataFromText(option.text, prebuiltEntityMap),
+                    }))
+                ),
+            ]);
 
             return {
                 ok: true,
@@ -521,6 +548,9 @@ ${generateStoryBeatOutputDescription()}
                 debug: {
                     storySoFarLength: storySoFar.length,
                     messagesCount: conversationMessages.length,
+                    totalMessagesCount: allConversationMessages.length,
+                    contextWindowUsed: CONTEXT_WINDOW,
+                    narrativeSummaryLength: narrativeSummary?.length ?? 0,
                     usedMessagesArray: debug.usedNewPromptSystem && conversationMessages.length > 0,
                     arcStepIndex: safeArcStepIndex,
                     modelName,
@@ -529,7 +559,7 @@ ${generateStoryBeatOutputDescription()}
                     usedNewPromptSystem: debug.usedNewPromptSystem,
                     promptSystem: debug.details.promptSystem,
                     promptPreview: finalPrompt.substring(0, 500) + '...',
-                    fullPrompt: finalPrompt, // Include full prompt for diagnostics
+                    fullPrompt: finalPrompt,
                 }
             };
 

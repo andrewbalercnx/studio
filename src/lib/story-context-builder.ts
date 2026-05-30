@@ -681,3 +681,33 @@ export async function getActorsDetailsWithImageData(
 
   return results;
 }
+
+/**
+ * Build an entity map from already-loaded story context data.
+ * Avoids redundant Firestore reads when resolving $$id$$ placeholders
+ * after AI responses.
+ */
+export function buildEntityMapFromContext(
+  data: StoryContextData
+): Map<string, { displayName: string; document: ChildProfile | Character }> {
+  const entityMap = new Map<string, { displayName: string; document: ChildProfile | Character }>();
+
+  if (data.mainChild?.id) {
+    entityMap.set(data.mainChild.id, { displayName: data.mainChild.displayName, document: data.mainChild });
+  }
+  for (const sibling of data.siblings) {
+    if (sibling.id) {
+      entityMap.set(sibling.id, { displayName: sibling.displayName, document: sibling });
+    }
+  }
+  if (data.mainCharacter?.id) {
+    entityMap.set(data.mainCharacter.id, { displayName: data.mainCharacter.displayName, document: data.mainCharacter });
+  }
+  for (const character of data.characters) {
+    if (character.id) {
+      entityMap.set(character.id, { displayName: character.displayName, document: character });
+    }
+  }
+
+  return entityMap;
+}

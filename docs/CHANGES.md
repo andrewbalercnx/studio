@@ -18,6 +18,24 @@
 
 ### 2026-05-30
 
+#### `97f8eba` - Perf: entity map reuse, context capping, parallel message resolution
+
+**Type**: Performance
+
+**Summary**: Eliminated N sequential Firestore reads for placeholder resolution per story beat, capped conversation context to 8 messages to bound token payload, and parallelised all message resolutions using a pre-built entity map. Older beats beyond the window are summarised and injected into the system prompt to maintain story continuity.
+
+**Changes**:
+- `storyBeatFlow`: pre-build entity map from already-loaded context data via `buildEntityMapFromContext` — no additional Firestore reads for placeholder resolution
+- `storyBeatFlow`: context window capped at 8 messages; historical `beat_continuation` messages condensed into a narrative summary injected into the system prompt
+- `storyBeatFlow`: placeholder resolution for all messages now runs in parallel via `Promise.all` instead of a sequential `for...await` loop
+- `storyBeatFlow`: post-AI placeholder resolution (main and fallback paths) uses `prebuiltEntityMap` instead of calling `resolveEntitiesInText` (eliminating an extra Firestore read after every AI call)
+- `storyBeatFlow`: trace logging now captures full message history via `allConversationMessages`; debug output includes `totalMessagesCount`, `contextWindowUsed`, `narrativeSummaryLength`
+- `story-context-builder`: added `buildEntityMapFromContext` export to build entity map from already-loaded `StoryContextData`
+
+**Modified files**:
+- `src/ai/flows/story-beat-flow.ts`
+- `src/lib/story-context-builder.ts`
+
 #### `cf74114` - Perf: parallelize Firestore reads and use Flash for warmup
 
 **Type**: Performance
