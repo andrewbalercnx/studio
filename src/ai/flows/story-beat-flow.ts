@@ -87,22 +87,26 @@ export const storyBeatFlow = ai.defineFlow(
                 return { ok: false, sessionId, errorMessage: `Session is missing required field: parentUid.` };
             }
 
-            // 2. Load StoryType
+            // 2. Load storyType, story context, messages, and global prefix in parallel
             debug.stage = 'loading_storyType';
-            const storyTypeDoc = await firestore.collection('storyTypes').doc(storyTypeId).get();
+            const [storyTypeDoc, contextResult, messagesSnapshot, globalPrefix] = await Promise.all([
+                firestore.collection('storyTypes').doc(storyTypeId).get(),
+                buildStoryContext(
+                    parentUid,
+                    session.childId,
+                    session.mainCharacterId,
+                    session.supportingCharacterIds
+                ),
+                firestore.collection('storySessions').doc(sessionId)
+                    .collection('messages').orderBy('createdAt', 'asc').get(),
+                getGlobalPrefix(),
+            ]);
+
             if (!storyTypeDoc.exists) {
                 return { ok: false, sessionId, errorMessage: `StoryType with id ${storyTypeId} not found.` };
             }
             const storyType = storyTypeDoc.data() as StoryType;
-
-            // Load unified story context (child, siblings, characters)
-            // Pass supportingCharacterIds so we can highlight newly introduced story characters
-            const { data: contextData, formatted: contextFormatted } = await buildStoryContext(
-                parentUid,
-                session.childId,
-                session.mainCharacterId,
-                session.supportingCharacterIds
-            );
+            const { data: contextData, formatted: contextFormatted } = contextResult;
             const childProfile = contextData.mainChild;
             const childAge = contextData.childAge;
             const childPreferenceSummary = summarizeChildPreferences(childProfile);
@@ -111,14 +115,14 @@ export const storyBeatFlow = ai.defineFlow(
             debug.details.siblingsCount = contextData.siblings.length;
             debug.details.charactersCount = contextData.characters.length + (contextData.mainCharacter ? 1 : 0);
 
-            // Initialize run trace for this session (if not already initialized)
-            await initializeRunTrace({
+            // Fire-and-forget trace initialization (non-blocking write)
+            initializeRunTrace({
                 sessionId,
                 parentUid,
                 childId: session.childId,
                 storyTypeId,
                 storyTypeName: storyType.name,
-            });
+            }).catch(err => console.error('[storyBeatFlow] initializeRunTrace error:', err));
 
             // Build list of existing characters (including mainCharacter if it exists for backward compatibility)
             const existingCharacters = contextData.mainCharacter
@@ -145,14 +149,8 @@ export const storyBeatFlow = ai.defineFlow(
             // Calculate story temperature based on arc progress
             const arcProgress = arcSteps.length > 0 ? safeArcStepIndex / Math.max(arcSteps.length - 1, 1) : 0;
 
-            // Count messages to track story length
-            const messageCountSnapshot = await firestore
-                .collection('storySessions')
-                .doc(sessionId)
-                .collection('messages')
-                .count()
-                .get();
-            const messageCount = messageCountSnapshot.data().count || 0;
+            // Message count from already-fetched snapshot (no separate count query needed)
+            const messageCount = messagesSnapshot.docs.length;
             const lengthFactor = Math.min(messageCount / 20, 1.0); // Normalize to 20 beats
 
             // Combined temperature (70% arc progress, 30% length)
@@ -166,14 +164,7 @@ export const storyBeatFlow = ai.defineFlow(
 
 
             // 4. Build Messages Array for conversation history
-            const messagesSnapshot = await firestore
-                .collection('storySessions')
-                .doc(sessionId)
-                .collection('messages')
-                .orderBy('createdAt', 'asc')
-                .get();
-
-            // Build structured messages array for ai.generate() using Genkit MessageData format
+            // (messagesSnapshot already fetched in parallel with storyType and context above)
             const conversationMessages: MessageData[] = [];
             for (const doc of messagesSnapshot.docs) {
                 const data = doc.data() as ChatMessage;
@@ -202,9 +193,6 @@ export const storyBeatFlow = ai.defineFlow(
             let resolvedPromptConfigId: string | null = null;
             let modelTemperature = 0.7;
             let maxOutputTokens = 10000;
-
-            // Fetch global prompt prefix
-            const globalPrefix = await getGlobalPrefix();
 
             if (storyType.promptConfig) {
                 // NEW SYSTEM: Use structured prompt builder with messages array
