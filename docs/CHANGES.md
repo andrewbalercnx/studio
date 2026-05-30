@@ -18,6 +18,20 @@
 
 ### 2026-05-30
 
+#### `fb8c567` - Pipeline timing audit for story creation flows
+
+**Type**: Observability / Developer Experience
+
+**Summary**: Wires compile-synopsis, pagination, and image generation into the `aiRunTraces` collection so the run-traces admin page shows the complete pipeline. Adds a Pipeline tab with a waterfall chart, phase breakdown table, and per-phase model optimisation recommendations.
+
+**Changes**:
+- `src/ai/flows/story-compile-flow.ts` (MODIFIED): Added `logAICallToTrace` import; added call in `generateSynopsis` so synopsis timing appears in the run trace
+- `src/ai/flows/story-pagination-flow.ts` (MODIFIED): Added `logAICallToTrace` import; added calls on both success and error paths using `story.storySessionId`
+- `src/ai/flows/story-image-flow.ts` (MODIFIED): Added `logAICallToTrace` import; added call on successful image generation using `storyData.storySessionId`
+- `src/app/admin/run-traces/page.tsx` (MODIFIED): Added `PIPELINE_PHASES` config, `buildPhaseStats`, `PipelineWaterfallView` component with bar chart + table + optimisation panel; added Pipeline/Calls tab switcher to `RunTraceDetail`
+
+---
+
 #### `69662bc` - Simplify system-tests.yml: hardcode APP_URL
 
 **Type**: CI / Developer Experience

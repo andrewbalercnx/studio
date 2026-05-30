@@ -13,7 +13,7 @@ import type { StorySession, StoryOutputType, Story } from '@/lib/types';
 import { logServerSessionEvent } from '@/lib/session-events.server';
 import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
 import { extractEntityIds } from '@/lib/entity-utils';
-import { initializeRunTrace, completeRunTrace } from '@/lib/ai-run-trace';
+import { initializeRunTrace, completeRunTrace, logAICallToTrace } from '@/lib/ai-run-trace';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { storyTextCompileFlow } from './story-text-compile-flow';
 import { updateCharacterUsage } from '@/lib/character-usage';
@@ -95,6 +95,16 @@ Now write the summary:`;
       response: synopsisResponse,
       startTime: synopsisStartTime,
       modelName: synopsisModelName
+    });
+    await logAICallToTrace({
+      sessionId,
+      flowName: 'storyCompileFlow:synopsis',
+      modelName: synopsisModelName,
+      temperature: 0.3,
+      maxOutputTokens: 200,
+      systemPrompt: synopsisPrompt,
+      response: synopsisResponse,
+      startTime: synopsisStartTime,
     });
 
     return synopsis;

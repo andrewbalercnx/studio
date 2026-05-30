@@ -2,7 +2,7 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, ChevronDown, ChevronRight, DollarSign, Clock, Zap, MessageSquare, Copy, Check } from 'lucide-react';
+import { LoaderCircle, ChevronDown, ChevronRight, DollarSign, Clock, Zap, MessageSquare, Copy, Check, BarChart3, List } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useFirestore } from '@/firebase';
 import { collection, onSnapshot, query, orderBy, limit, doc, getDoc } from 'firebase/firestore';
@@ -11,6 +11,237 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatDistanceToNow } from 'date-fns';
 import type { AIRunTrace, AICallTrace } from '@/lib/types';
+
+// ── Pipeline phase definitions ────────────────────────────────────────────────
+
+type PipelinePhase = {
+  id: string;
+  label: string;
+  flowPattern: RegExp;
+  model: string;
+  alternativeModels: { model: string; tradeoff: string }[];
+};
+
+const PIPELINE_PHASES: PipelinePhase[] = [
+  {
+    id: 'beat',
+    label: 'Beat Generation',
+    flowPattern: /^storyBeatFlow$/,
+    model: 'gemini-2.5-pro',
+    alternativeModels: [
+      { model: 'gemini-2.5-flash', tradeoff: '~10× cheaper, ~40% faster — may reduce narrative depth for complex story types' },
+      { model: 'gemini-2.5-flash-thinking', tradeoff: 'Better reasoning for story arcs at lower cost than Pro' },
+    ],
+  },
+  {
+    id: 'compile',
+    label: 'Story Compile',
+    flowPattern: /^storyTextCompileFlow/,
+    model: 'gemini-2.5-flash',
+    alternativeModels: [
+      { model: 'gemini-2.0-flash', tradeoff: 'Faster and cheaper but lower narrative coherence on complex compilations' },
+    ],
+  },
+  {
+    id: 'synopsis',
+    label: 'Synopsis',
+    flowPattern: /^storyCompileFlow:synopsis/,
+    model: 'gemini-2.5-flash',
+    alternativeModels: [
+      { model: 'gemini-2.0-flash', tradeoff: 'Good candidate for downgrade — synopsis is a short, well-constrained task' },
+    ],
+  },
+  {
+    id: 'pagination',
+    label: 'Pagination',
+    flowPattern: /^storyPaginationFlow/,
+    model: 'gemini-2.0-flash',
+    alternativeModels: [],
+  },
+  {
+    id: 'image',
+    label: 'Image Generation',
+    flowPattern: /^storyImageFlow/,
+    model: 'gemini-2.5-flash-image',
+    alternativeModels: [],
+  },
+];
+
+type PhaseStats = {
+  phase: PipelinePhase;
+  calls: AICallTrace[];
+  totalLatencyMs: number;
+  totalCost: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  modelsUsed: Set<string>;
+};
+
+function buildPhaseStats(calls: AICallTrace[]): PhaseStats[] {
+  return PIPELINE_PHASES.map((phase) => {
+    const phaseCalls = calls.filter((c) => phase.flowPattern.test(c.flowName));
+    const totalLatencyMs = phaseCalls.reduce((sum, c) => sum + (c.latencyMs || 0), 0);
+    const totalCost = phaseCalls.reduce((sum, c) => sum + (c.cost?.totalCost || 0), 0);
+    const totalInputTokens = phaseCalls.reduce((sum, c) => sum + (c.usage?.inputTokens || 0), 0);
+    const totalOutputTokens = phaseCalls.reduce((sum, c) => sum + (c.usage?.outputTokens || 0), 0);
+    const modelsUsed = new Set(phaseCalls.map((c) => c.modelName).filter(Boolean));
+    return { phase, calls: phaseCalls, totalLatencyMs, totalCost, totalInputTokens, totalOutputTokens, modelsUsed };
+  });
+}
+
+function PipelineWaterfallView({ trace }: { trace: AIRunTrace }) {
+  const calls = trace.calls || [];
+  const phases = buildPhaseStats(calls);
+  const totalMs = phases.reduce((sum, p) => sum + p.totalLatencyMs, 0);
+  const totalCost = phases.reduce((sum, p) => sum + p.totalCost, 0);
+
+  // Unmatched calls (not in any defined phase)
+  const matchedCallIds = new Set(phases.flatMap((p) => p.calls.map((c) => c.callId)));
+  const unmatchedCalls = calls.filter((c) => !matchedCallIds.has(c.callId));
+
+  const hasData = calls.length > 0;
+
+  return (
+    <div className="space-y-6">
+      {!hasData && (
+        <div className="text-center py-8 border-2 border-dashed rounded-lg bg-muted/30 text-sm text-muted-foreground">
+          No AI calls recorded yet — run the story pipeline to populate timing data.
+        </div>
+      )}
+
+      {hasData && (
+        <>
+          {/* Waterfall bar chart */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold">Time Distribution</h3>
+            {phases.map((p) => {
+              if (p.calls.length === 0) return null;
+              const pct = totalMs > 0 ? (p.totalLatencyMs / totalMs) * 100 : 0;
+              return (
+                <div key={p.phase.id} className="flex items-center gap-3 text-xs">
+                  <span className="w-36 text-right text-muted-foreground shrink-0">{p.phase.label}</span>
+                  <div className="flex-1 bg-muted rounded-full h-5 overflow-hidden">
+                    <div
+                      className="h-full rounded-full flex items-center justify-end pr-2 text-white text-[10px] font-mono transition-all"
+                      style={{
+                        width: `${Math.max(pct, 2)}%`,
+                        backgroundColor: p.phase.id === 'beat' ? '#6366f1'
+                          : p.phase.id === 'compile' ? '#0ea5e9'
+                          : p.phase.id === 'synopsis' ? '#06b6d4'
+                          : p.phase.id === 'pagination' ? '#10b981'
+                          : '#f59e0b',
+                      }}
+                    >
+                      {pct >= 8 ? `${pct.toFixed(0)}%` : ''}
+                    </div>
+                  </div>
+                  <span className="w-16 font-mono text-right shrink-0">
+                    {(p.totalLatencyMs / 1000).toFixed(1)}s
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Phase breakdown table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="border-b text-muted-foreground text-left">
+                  <th className="py-2 pr-4 font-medium">Phase</th>
+                  <th className="py-2 pr-4 font-medium">Model</th>
+                  <th className="py-2 pr-4 font-mono text-right font-medium">Calls</th>
+                  <th className="py-2 pr-4 font-mono text-right font-medium">AI Time</th>
+                  <th className="py-2 pr-4 font-mono text-right font-medium">Tokens In</th>
+                  <th className="py-2 pr-4 font-mono text-right font-medium">Tokens Out</th>
+                  <th className="py-2 font-mono text-right font-medium">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {phases.map((p) => {
+                  if (p.calls.length === 0) return null;
+                  const models = Array.from(p.modelsUsed).map((m) => m.replace('googleai/', '')).join(', ');
+                  return (
+                    <tr key={p.phase.id} className="border-b hover:bg-muted/30">
+                      <td className="py-2 pr-4 font-medium">{p.phase.label}</td>
+                      <td className="py-2 pr-4 font-mono text-muted-foreground">{models || p.phase.model}</td>
+                      <td className="py-2 pr-4 font-mono text-right">{p.calls.length}</td>
+                      <td className="py-2 pr-4 font-mono text-right">{(p.totalLatencyMs / 1000).toFixed(2)}s</td>
+                      <td className="py-2 pr-4 font-mono text-right">{formatTokens(p.totalInputTokens)}</td>
+                      <td className="py-2 pr-4 font-mono text-right">{formatTokens(p.totalOutputTokens)}</td>
+                      <td className="py-2 font-mono text-right text-green-600">{formatCost(p.totalCost)}</td>
+                    </tr>
+                  );
+                })}
+                {unmatchedCalls.length > 0 && (
+                  <tr className="border-b hover:bg-muted/30 text-muted-foreground">
+                    <td className="py-2 pr-4">Other</td>
+                    <td className="py-2 pr-4">—</td>
+                    <td className="py-2 pr-4 font-mono text-right">{unmatchedCalls.length}</td>
+                    <td className="py-2 pr-4 font-mono text-right">
+                      {(unmatchedCalls.reduce((s, c) => s + (c.latencyMs || 0), 0) / 1000).toFixed(2)}s
+                    </td>
+                    <td className="py-2 pr-4 font-mono text-right">—</td>
+                    <td className="py-2 pr-4 font-mono text-right">—</td>
+                    <td className="py-2 font-mono text-right">
+                      {formatCost(unmatchedCalls.reduce((s, c) => s + (c.cost?.totalCost || 0), 0))}
+                    </td>
+                  </tr>
+                )}
+                <tr className="font-semibold bg-muted/30">
+                  <td className="py-2 pr-4">Total</td>
+                  <td className="py-2 pr-4" />
+                  <td className="py-2 pr-4 font-mono text-right">{calls.length}</td>
+                  <td className="py-2 pr-4 font-mono text-right">{(totalMs / 1000).toFixed(2)}s</td>
+                  <td className="py-2 pr-4 font-mono text-right">
+                    {formatTokens(phases.reduce((s, p) => s + p.totalInputTokens, 0))}
+                  </td>
+                  <td className="py-2 pr-4 font-mono text-right">
+                    {formatTokens(phases.reduce((s, p) => s + p.totalOutputTokens, 0))}
+                  </td>
+                  <td className="py-2 font-mono text-right text-green-600">{formatCost(totalCost)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Model optimisation notes */}
+          <div>
+            <h3 className="text-sm font-semibold mb-3">Model Optimisation Opportunities</h3>
+            <div className="space-y-2">
+              {phases.map((p) => {
+                if (p.calls.length === 0) return null;
+                const currentModel = Array.from(p.modelsUsed)[0]?.replace('googleai/', '') || p.phase.model;
+                const share = totalMs > 0 ? ((p.totalLatencyMs / totalMs) * 100).toFixed(0) : '0';
+                return (
+                  <div key={p.phase.id} className="border rounded-lg p-3 text-xs space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{p.phase.label}</span>
+                      <Badge variant="outline" className="font-mono text-[10px]">{currentModel}</Badge>
+                      <span className="text-muted-foreground">{share}% of AI time · {formatCost(p.totalCost)}</span>
+                    </div>
+                    {p.phase.alternativeModels.length === 0 ? (
+                      <p className="text-muted-foreground">Already on the optimal model for this task.</p>
+                    ) : (
+                      <ul className="space-y-1 mt-1">
+                        {p.phase.alternativeModels.map((alt) => (
+                          <li key={alt.model} className="flex gap-2">
+                            <span className="font-mono text-blue-600 shrink-0">→ {alt.model}</span>
+                            <span className="text-muted-foreground">{alt.tradeoff}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function formatTimestamp(timestamp: any): string {
   if (!timestamp) return 'N/A';
@@ -212,6 +443,7 @@ function CallTraceCard({ call, index }: { call: AICallTrace; index: number }) {
 
 function RunTraceDetail({ trace }: { trace: AIRunTrace }) {
   const [showAllCalls, setShowAllCalls] = useState(false);
+  const [view, setView] = useState<'pipeline' | 'calls'>('pipeline');
   const calls = trace.calls || [];
   const displayedCalls = showAllCalls ? calls : calls.slice(0, 5);
 
@@ -263,55 +495,76 @@ function RunTraceDetail({ trace }: { trace: AIRunTrace }) {
         </Card>
       </div>
 
-      {/* Calls by Flow */}
-      {trace.summary?.callsByFlow && Object.keys(trace.summary.callsByFlow).length > 0 && (
-        <div className="bg-muted/50 rounded-lg p-4">
-          <h3 className="text-sm font-semibold mb-2">Calls by Flow</h3>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(trace.summary.callsByFlow).map(([flow, count]) => (
-              <Badge key={flow} variant="secondary" className="text-xs">
-                {flow}: {count}
-              </Badge>
-            ))}
-          </div>
+      {/* View toggle */}
+      <div className="flex gap-2 border-b pb-2">
+        <Button
+          variant={view === 'pipeline' ? 'default' : 'ghost'}
+          size="sm"
+          onClick={() => setView('pipeline')}
+          className="gap-1.5"
+        >
+          <BarChart3 className="h-3.5 w-3.5" />
+          Pipeline
+        </Button>
+        <Button
+          variant={view === 'calls' ? 'default' : 'ghost'}
+          size="sm"
+          onClick={() => setView('calls')}
+          className="gap-1.5"
+        >
+          <List className="h-3.5 w-3.5" />
+          Calls ({calls.length})
+        </Button>
+      </div>
+
+      {view === 'pipeline' && <PipelineWaterfallView trace={trace} />}
+
+      {view === 'calls' && (
+        <div>
+          {/* Calls by Flow */}
+          {trace.summary?.callsByFlow && Object.keys(trace.summary.callsByFlow).length > 0 && (
+            <div className="bg-muted/50 rounded-lg p-4 mb-4">
+              <h3 className="text-sm font-semibold mb-2">Calls by Flow</h3>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(trace.summary.callsByFlow).map(([flow, count]) => (
+                  <Badge key={flow} variant="secondary" className="text-xs">
+                    {flow}: {count}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {calls.length === 0 ? (
+            <div className="text-center py-8 border-2 border-dashed rounded-lg bg-muted/30">
+              <p className="text-muted-foreground mb-2">No AI calls recorded for this trace.</p>
+              <ul className="text-xs text-muted-foreground mt-1 space-y-1">
+                <li>• The session was completed before instrumentation was deployed</li>
+                <li>• The trace was initialized but no AI calls were made yet</li>
+                <li>• There was an error logging the calls</li>
+              </ul>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {displayedCalls.map((call, index) => (
+                  <CallTraceCard key={call.callId || index} call={call} index={index} />
+                ))}
+              </div>
+              {calls.length > 5 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 w-full"
+                  onClick={() => setShowAllCalls(!showAllCalls)}
+                >
+                  {showAllCalls ? 'Show Less' : `Show All ${calls.length} Calls`}
+                </Button>
+              )}
+            </>
+          )}
         </div>
       )}
-
-      {/* Individual Calls */}
-      <div>
-        <h3 className="text-sm font-semibold mb-3">AI Calls ({calls.length})</h3>
-        {calls.length === 0 ? (
-          <div className="text-center py-8 border-2 border-dashed rounded-lg bg-muted/30">
-            <p className="text-muted-foreground mb-2">No AI calls recorded for this trace.</p>
-            <p className="text-xs text-muted-foreground">
-              This can happen if:
-            </p>
-            <ul className="text-xs text-muted-foreground mt-1 space-y-1">
-              <li>• The session was completed before instrumentation was deployed</li>
-              <li>• The trace was initialized but no AI calls were made yet</li>
-              <li>• There was an error logging the calls</li>
-            </ul>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-2">
-              {displayedCalls.map((call, index) => (
-                <CallTraceCard key={call.callId || index} call={call} index={index} />
-              ))}
-            </div>
-            {calls.length > 5 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3 w-full"
-                onClick={() => setShowAllCalls(!showAllCalls)}
-              >
-                {showAllCalls ? 'Show Less' : `Show All ${calls.length} Calls`}
-              </Button>
-            )}
-          </>
-        )}
-      </div>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {z} from 'genkit';
 import imageSize from 'image-size';
 import { Gaxios, GaxiosError } from 'gaxios';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { logAICallToTrace } from '@/lib/ai-run-trace';
 import { notifyMaintenanceError } from '@/lib/email/notify-admins';
 import { getGlobalImagePrompt } from '@/lib/image-prompt-config.server';
 import { getImageGenerationModel } from '@/lib/ai-model-config';
@@ -1687,6 +1688,18 @@ export const storyImageFlow = ai.defineFlow(
         storyId,
         storybookId,
       });
+      if (storyData.storySessionId) {
+        await logAICallToTrace({
+          sessionId: storyData.storySessionId,
+          flowName: 'storyImageFlow',
+          modelName: generated.modelUsed,
+          temperature: 1.0,
+          maxOutputTokens: 0,
+          systemPrompt: generated.promptText,
+          response: { text: uploadResult.imageUrl, finishReason: 'STOP' },
+          startTime: generated.startTime,
+        });
+      }
 
       // Atomically increment the storybook's pagesReady counter for real-time progress updates
       // This allows parallel image generation while still showing incremental progress

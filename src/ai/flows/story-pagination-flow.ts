@@ -15,6 +15,7 @@ import { z } from 'genkit';
 import type { Story, StoryOutputType, ChildProfile, PrintLayout, PrintProduct, ImageScene } from '@/lib/types';
 import { DEFAULT_PAGINATION_PROMPT } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { logAICallToTrace } from '@/lib/ai-run-trace';
 import { getPaginationPrompt } from '@/lib/pagination-prompt-config.server';
 import {
     type ActorInfo,
@@ -313,6 +314,18 @@ Generate the paginated output now.`;
                     startTime,
                     modelName,
                 });
+                if (story.storySessionId) {
+                    await logAICallToTrace({
+                        sessionId: story.storySessionId,
+                        flowName: 'storyPaginationFlow',
+                        modelName,
+                        temperature: 0.3,
+                        maxOutputTokens: 8000,
+                        systemPrompt: finalPrompt,
+                        response: llmResponse,
+                        startTime,
+                    });
+                }
             } catch (e: any) {
                 await logAIFlow({
                     flowName: 'storyPaginationFlow',
@@ -323,6 +336,18 @@ Generate the paginated output now.`;
                     startTime,
                     modelName,
                 });
+                if (story.storySessionId) {
+                    await logAICallToTrace({
+                        sessionId: story.storySessionId,
+                        flowName: 'storyPaginationFlow',
+                        modelName,
+                        temperature: 0.3,
+                        maxOutputTokens: 8000,
+                        systemPrompt: finalPrompt,
+                        error: e,
+                        startTime,
+                    });
+                }
                 throw e;
             }
 
