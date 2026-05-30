@@ -16,6 +16,30 @@
 
 ## Changes
 
+### 2026-05-30
+
+#### `cf74114` - Perf: parallelize Firestore reads and use Flash for warmup
+
+**Type**: Performance
+
+**Summary**: Eliminated sequential Firestore round-trips from the story beat critical path, reducing per-beat overhead by an estimated 200–600ms. Switched warmup from Gemini 2.5 Pro to Flash for a 2–6s latency improvement on the first interaction.
+
+**Changes**:
+- `storyBeatFlow`: storyType fetch, `buildStoryContext`, messages fetch, and `getGlobalPrefix` now run in a single `Promise.all` (previously 5+ sequential awaits)
+- `storyBeatFlow`: removed redundant `count()` query — message count derived from already-fetched snapshot
+- `storyBeatFlow`: `initializeRunTrace` is now fire-and-forget (non-blocking write)
+- `endingFlow`: same parallel-fetch treatment as storyBeatFlow
+- `buildStoryContext`: child profile, siblings, mainCharacter, and all-characters queries now run in a single `Promise.all` (previously 4 sequential awaits)
+- `warmupReplyFlow`: model switched from `googleai/gemini-2.5-pro` to `googleai/gemini-2.5-flash`
+
+**Modified files**:
+- `src/ai/flows/story-beat-flow.ts`
+- `src/ai/flows/ending-flow.ts`
+- `src/ai/flows/warmup-reply-flow.ts`
+- `src/lib/story-context-builder.ts`
+
+---
+
 ### 2026-03-07
 
 #### `52d5f46` - Production-harden Firestore and Storage security rules

@@ -84,20 +84,25 @@ export const endingFlow = ai.defineFlow(
             }
 
 
-            // 2. Load StoryType
+            // 2. Load storyType, story context, messages, and global prefix in parallel
             debug.stage = 'loading_storyType';
-            const storyTypeDoc = await firestore.collection('storyTypes').doc(storyTypeId).get();
+            const [storyTypeDoc, contextResult, messagesSnapshot, globalPrefix] = await Promise.all([
+                firestore.collection('storyTypes').doc(storyTypeId).get(),
+                buildStoryContext(
+                    session.parentUid || '',
+                    session.childId,
+                    session.mainCharacterId
+                ),
+                firestore.collection('storySessions').doc(sessionId)
+                    .collection('messages').orderBy('createdAt', 'asc').get(),
+                getGlobalPrefix(),
+            ]);
+
             if (!storyTypeDoc.exists) {
                 return { ok: false, sessionId, errorMessage: `StoryType with id ${storyTypeId} not found.` };
             }
             const storyType = storyTypeDoc.data() as StoryType;
-
-            // Load unified story context (child, siblings, characters)
-            const { data: contextData, formatted: contextFormatted } = await buildStoryContext(
-                session.parentUid || '',
-                session.childId,
-                session.mainCharacterId
-            );
+            const { data: contextData, formatted: contextFormatted } = contextResult;
             const childProfile = contextData.mainChild;
             const childAge = contextData.childAge;
             const childPreferenceSummary = summarizeChildPreferences(childProfile);
@@ -115,16 +120,8 @@ export const endingFlow = ai.defineFlow(
             debug.details.lastStepId = arcSteps[maxIndex]?.id;
             debug.details.currentArcStepId = currentArcStepObj?.id;
 
-            // 3. Load Messages and build messages array
+            // 3. Build messages array from already-fetched snapshot
             debug.stage = 'loading_messages_and_characters';
-            const messagesSnapshot = await firestore
-                .collection('storySessions')
-                .doc(sessionId)
-                .collection('messages')
-                .orderBy('createdAt', 'asc')
-                .get();
-
-            // Build structured messages array for ai.generate()
             const conversationMessages: MessageData[] = messagesSnapshot.docs.map(d => {
                 const msg = d.data() as ChatMessage;
                 return {
@@ -136,7 +133,6 @@ export const endingFlow = ai.defineFlow(
 
             // 4. Build System Prompt
             debug.stage = 'building_prompt';
-            const globalPrefix = await getGlobalPrefix();
             let systemPrompt: string;
             let modelTemperature = 0.4;
             let maxOutputTokens = 2000;

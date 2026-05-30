@@ -161,41 +161,40 @@ export async function buildStoryContext(
 ): Promise<{ data: StoryContextData; formatted: FormattedStoryContext }> {
   const firestore = await getServerFirestore();
 
-  // 1. Load main child profile
+  // Load child profile, siblings, main character, and all characters in parallel
+  const childDocPromise = childId
+    ? firestore.collection('children').doc(childId).get()
+    : Promise.resolve(null);
+  const mainCharDocPromise = mainCharacterId
+    ? firestore.collection('characters').doc(mainCharacterId).get()
+    : Promise.resolve(null);
+
+  const [childDoc, siblingsSnapshot, mainCharDoc, charactersSnapshot] = await Promise.all([
+    childDocPromise,
+    firestore.collection('children').where('ownerParentUid', '==', parentUid).limit(10).get(),
+    mainCharDocPromise,
+    firestore.collection('characters').where('ownerParentUid', '==', parentUid).get(),
+  ]);
+
+  // 1. Process child profile
   let mainChild: ChildProfile | null = null;
-  if (childId) {
-    const childDoc = await firestore.collection('children').doc(childId).get();
-    if (childDoc.exists) {
-      mainChild = { ...childDoc.data(), id: childDoc.id } as ChildProfile;
-    }
+  if (childDoc?.exists) {
+    mainChild = { ...childDoc.data(), id: childDoc.id } as ChildProfile;
   }
   const childAge = calculateChildAge(mainChild);
 
-  // 2. Load siblings (other children of the same parent)
-  const siblingsSnapshot = await firestore
-    .collection('children')
-    .where('ownerParentUid', '==', parentUid)
-    .limit(10)
-    .get();
+  // 2. Process siblings
   const siblings = siblingsSnapshot.docs
     .map(doc => ({ ...doc.data(), id: doc.id } as ChildProfile))
     .filter(child => child.id !== childId); // Exclude the main child
 
-  // 3. Load main character (deprecated - child should be referenced directly)
-  // This is kept for backward compatibility with existing sessions
+  // 3. Process main character (deprecated - kept for backward compatibility)
   let mainCharacter: Character | null = null;
-  if (mainCharacterId) {
-    const charDoc = await firestore.collection('characters').doc(mainCharacterId).get();
-    if (charDoc.exists) {
-      mainCharacter = { ...charDoc.data(), id: charDoc.id } as Character;
-    }
+  if (mainCharDoc?.exists) {
+    mainCharacter = { ...mainCharDoc.data(), id: mainCharDoc.id } as Character;
   }
 
-  // 4. Load all characters for this parent and select the most appropriate ones
-  const charactersSnapshot = await firestore
-    .collection('characters')
-    .where('ownerParentUid', '==', parentUid)
-    .get();
+  // 4. Process all characters for this parent
   const allCharacters = charactersSnapshot.docs
     .map(doc => ({ ...doc.data(), id: doc.id } as Character))
     .filter(char => char.id !== mainCharacterId && !char.deletedAt); // Exclude main character and deleted
