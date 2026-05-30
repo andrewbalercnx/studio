@@ -45,11 +45,11 @@ ${context.fullContext}
 • Use the pronouns specified for each character consistently.
 
 === CREATING NEW CHARACTERS ===
-New characters enrich stories! Don't hesitate to introduce them when:
-• The story needs a helper, guide, or companion for the protagonist
-• A challenge requires someone with special knowledge or abilities
-• The narrative would benefit from a new relationship or friendship
-• No existing character fits the story's current needs
+New characters enrich stories! Introduce one when:
+• The protagonist needs a helper, guide, or companion to move the plot forward
+• A challenge requires knowledge or abilities no existing character has
+• The story has been running for several beats without fresh energy
+Avoid introducing new characters near the end of a story or when existing characters haven't yet had their moment.
 
 When introducing a NEW character (one NOT already in the lists above), you MUST provide:
 1. **introducesCharacter**: Set to true

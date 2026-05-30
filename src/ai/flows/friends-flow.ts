@@ -257,6 +257,10 @@ function fillPromptTemplate(template: string, vars: Record<string, string>): str
       result = result.replace(placeholder, value);
     }
   }
+  const unreplaced = result.match(/\{\{[a-zA-Z]+\}\}/g);
+  if (unreplaced) {
+    console.warn('[friends] fillPromptTemplate: unreplaced variables in prompt:', unreplaced);
+  }
   return result;
 }
 

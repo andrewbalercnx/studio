@@ -105,10 +105,10 @@ You will be given a DRAFT STORY TEXT that was assembled from story beats. Your j
 2. Fix any awkward transitions between sections
 3. Ensure consistent tone and style throughout
 4. Keep the story faithful to the original - do not add new plot points or characters
-5. Write a brief 1-2 sentence synopsis suitable for a parent to read
+5. Write a brief synopsis (1-2 sentences, maximum 30 words) suitable for a parent to read
 
 **Character References:**
-If $$id$$ placeholders appear in the draft, replace them with the actual character name from the CHARACTER REFERENCE section below. The final story text should use real names, not placeholder IDs.`;
+If $$id$$ placeholders appear in the draft, replace them with the actual character name from the CHARACTER REFERENCE section below. The final story text must use real names — this makes it readable in the finished book.`;
 
 const StoryTextCompileResultSchema = z.object({
   storyText: z.string().min(50, "Story text must be at least 50 characters."),

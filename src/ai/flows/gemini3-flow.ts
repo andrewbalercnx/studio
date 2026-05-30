@@ -44,6 +44,10 @@ function fillPromptTemplate(template: string, vars: Record<string, string>): str
       result = result.replace(placeholder, value);
     }
   }
+  const unreplaced = result.match(/\{\{[a-zA-Z]+\}\}/g);
+  if (unreplaced) {
+    console.warn('[gemini3] fillPromptTemplate: unreplaced variables in prompt:', unreplaced);
+  }
   return result;
 }
 
@@ -141,8 +145,11 @@ export const gemini3Flow = ai.defineFlow(
             const messageCount = messagesSnapshot.size;
             debug.details.messageCount = messageCount;
 
-            // Calculate story temperature based on message count
-            const lengthFactor = Math.min(messageCount / 15, 1.0); // Normalize to 15 messages (8-15 range)
+            // Calculate story temperature: 0.0 (start) → 1.0 (end), normalised over ~15 exchanges
+            const TEMP_MUST_CONCLUDE = 0.8;   // Story MUST wrap up now
+            const TEMP_APPROACHING_END = 0.6;  // Start guiding toward conclusion
+            const TEMP_DEVELOPING = 0.4;       // Keep building, no new threads
+            const lengthFactor = Math.min(messageCount / 15, 1.0);
             const storyTemperature = lengthFactor;
             debug.details.temperature = {
                 messageCount,
@@ -154,16 +161,17 @@ export const gemini3Flow = ai.defineFlow(
             const isFirstMessage = messageCount === 0;
 
             // Build temperature guidance
-            const temperatureGuidance = storyTemperature > 0.8
-                ? `\n\n**CRITICAL: STORY CONCLUSION NEEDED**\nThe story is ${Math.round(storyTemperature * 100)}% complete (${messageCount} exchanges). You MUST wrap up the story now. Set isStoryComplete to true and provide the finalStory with a satisfying ending. The child has had a wonderful journey - bring it to a close!`
-                : storyTemperature > 0.6
-                ? `\n\n**IMPORTANT: APPROACHING STORY END**\nThe story is ${Math.round(storyTemperature * 100)}% complete (${messageCount} exchanges). Begin guiding toward the climax and conclusion. Your next 2-3 questions should build toward a satisfying ending.`
-                : storyTemperature > 0.4
-                ? `\n\n**STORY PROGRESSION UPDATE**\nThe story is ${Math.round(storyTemperature * 100)}% complete (${messageCount} exchanges). Continue developing the adventure while keeping the eventual conclusion in mind. Don't introduce major new plot threads.`
+            const pct = Math.round(storyTemperature * 100);
+            const temperatureGuidance = storyTemperature > TEMP_MUST_CONCLUDE
+                ? `\n\n**CRITICAL: STORY CONCLUSION NEEDED**\nThe story is ${pct}% complete (${messageCount} exchanges). You MUST wrap up the story now. Set isStoryComplete to true and provide the finalStory with a satisfying ending. The child has had a wonderful journey - bring it to a close!`
+                : storyTemperature > TEMP_APPROACHING_END
+                ? `\n\n**STORY PROGRESSION: APPROACHING END**\nThe story is ${pct}% complete (${messageCount} exchanges). Begin guiding toward the climax and conclusion. Your next 2-3 questions should build toward a satisfying ending.`
+                : storyTemperature > TEMP_DEVELOPING
+                ? `\n\n**STORY PROGRESSION: DEVELOPING**\nThe story is ${pct}% complete (${messageCount} exchanges). Continue developing the adventure while keeping the eventual conclusion in mind. Don't introduce major new plot threads.`
                 : '';
 
             // Override conversation continuation instruction when story must end
-            const conversationInstruction = storyTemperature > 0.8
+            const conversationInstruction = storyTemperature > TEMP_MUST_CONCLUDE
                 ? `\n\n**YOU MUST END THE STORY NOW.**\nDo NOT ask another question. Do NOT provide options.\nInstead:\n1. Set "isStoryComplete": true\n2. Set "question": "" (empty string)\n3. Set "options": [] (empty array)\n4. Provide "finalStory": A complete, satisfying story (5-7 paragraphs) that wraps up all the adventures ${conversationHistory ? 'based on all the choices the child made' : ''}.`
                 : `\nContinue the story based on what the child has told you. Ask the next creative question or advance the plot!`;
 

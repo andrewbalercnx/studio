@@ -160,7 +160,7 @@ This story beat is an excellent opportunity to introduce a NEW character!
 • When introducing a character, provide:
   - newCharacterName: A proper name (e.g., "Bramble", "Captain Whiskers", "Luna")
   - newCharacterLabel: A descriptive phrase about who they are (e.g., "a wise old owl who knows all the forest secrets")
-  - newCharacterType: Family, Friend, Pet, Toy, or Other
+  - newCharacterType: Family, Friend, Pet, Toy, or Other (schema-validated — use exactly one of these)
 • The name and label must be DIFFERENT - the name is what to call them, the label describes who they are`;
   }
 
