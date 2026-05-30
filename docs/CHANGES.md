@@ -18,6 +18,20 @@
 
 ### 2026-05-30
 
+#### `4b61d66` - Prompt audit fixes: $$id$$ cleanup, JSON output clarity, exact-3-options constraint
+
+**Type**: Prompt / Tech-debt
+
+**Summary**: Three prompt clarity fixes from a full prompt audit. Removes stale $$id$$ instructions added before the two-field display contract, strengthens the compile flow JSON output instruction to reduce parse fallback frequency, and makes the "exactly 3 options" schema constraint explicit in the prompt so the model can't silently produce 2 or 4.
+
+**Changes**:
+- `src/ai/flows/story-pagination-flow.ts`: Removed "preserve these $$id$$ placeholders exactly" from CHARACTER REFERENCE header; updated `text` field description to say "copy verbatim — do not rewrite"; imageDescription instruction kept ($$id$$ still valid there for image generation)
+- `src/lib/prompt-builders/story-beat-prompt-builder.ts`: `buildNewlyIntroducedCharactersSection` — replaced "Reference them by their $$id$$ placeholder" with "Include their ID in scene.presentActors"; added "exactly 3 options (ids A/B/C) — schema rejects any other count" to `buildCurrentBeatSection`
+- `src/lib/schemas/story-beat-output.ts`: Added comment to `generateStoryBeatOutputDescription` making the exactly-3 constraint explicit for the legacy non-schema prompt path
+- `src/ai/flows/story-text-compile-flow.ts`: Strengthened JSON output instruction — now says "response must begin with { and end with }; any deviation makes the story unreadable"
+
+### 2026-05-30
+
 #### `f79b82d` - Todos 5, 6, 7: Compile name resolution, world-state persistence, TTS actor context
 
 **Type**: Architecture / Feature

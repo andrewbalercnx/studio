@@ -137,7 +137,8 @@ function buildCurrentBeatSection(storyType: StoryType, arcStep: ArcStep, progres
   let section = `=== CURRENT BEAT ===
 Story Type: ${storyType.name}
 Arc Step: ${arcStep.id} (${arcStep.label})
-Story Progress: ${pct}%`;
+Story Progress: ${pct}%
+Output: exactly 3 options (ids: "A", "B", "C") — the schema rejects any other count`;
 
   if (arcStep.guidance) {
     section += `\n\nStep Guidance: ${arcStep.guidance}`;
@@ -179,9 +180,9 @@ ${charactersContext}
 
 IMPORTANT: Continue to feature these newly introduced characters in the story! The child specifically chose to add them, so:
 • Include them in the story continuation when narratively appropriate
-• Reference them by their $$id$$ placeholder (e.g., $$abc123$$)
 • Give them actions, dialogue, or presence that advances the plot
-• Consider including options that involve these characters`;
+• Consider including options that involve these characters
+• Always include their ID in scene.presentActors so they appear in the illustration`;
 }
 
 /**

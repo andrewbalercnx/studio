@@ -53,6 +53,7 @@ export function generateStoryBeatOutputDescription(): string {
     "location": "where the scene takes place (optional)"
   },
   "options": [
+    // Exactly 3 entries required — ids must be "A", "B", "C"
     {
       "id": "A | B | C",
       "text": "A short, child-friendly choice",

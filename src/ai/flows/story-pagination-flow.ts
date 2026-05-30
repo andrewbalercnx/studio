@@ -221,7 +221,7 @@ ${rhymeInstruction}
 
 ${pageCountInstruction}
 
-**CHARACTER REFERENCE (preserve these $$id$$ placeholders exactly):**
+**CHARACTER REFERENCE (IDs for image generation — use these in imageDescription):**
 ${actorIdMapping}
 
 **CHARACTER DETAILS (for context):**
@@ -236,7 +236,7 @@ Return a JSON object with this exact structure:
   "pages": [
     {
       "pageNumber": 1,
-      "text": "The page text with $$id$$ placeholders preserved...",
+      "text": "The exact story text for this page (copy verbatim — do not rewrite)",
       "actors": ["actor-id-1", "actor-id-2"],
       "imageDescription": "A vivid description of the scene for AI image generation..."
     },
@@ -246,13 +246,12 @@ Return a JSON object with this exact structure:
 
 IMPORTANT:
 - pageNumber starts at 1 and increments sequentially
-- text contains the story content for that page with $$id$$ placeholders preserved
+- text is copied verbatim from the story — do NOT rewrite, summarise, or add content
 - actors is an array of actor IDs (without the $$ markers) that appear on that page
 - imageDescription is a rich, visual description of what should be illustrated on this page:
   * Describe the setting/environment (e.g., "a sunny garden with colorful flowers")
-  * Describe the action/pose of characters (e.g., "$$child-id$$ jumping with joy", "$$character-id$$ looking surprised")
+  * Describe the action/pose of characters — use $$id$$ from the CHARACTER REFERENCE above (e.g., "$$child-id$$ jumping with joy")
   * Include the mood/atmosphere (e.g., "warm and cheerful", "mysterious and exciting")
-  * Use $$id$$ placeholders for characters (same as in the text) so they can be resolved later
   * Be specific about visual details that match the story text
 
 Generate the paginated output now.`;

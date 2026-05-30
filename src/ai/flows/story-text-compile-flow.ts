@@ -256,15 +256,15 @@ ${characterRoster}
 **DRAFT STORY TEXT TO POLISH:**
 ${draftStoryText}
 
-**Output Format (Crucial):**
-You MUST return a single JSON object matching this exact shape. Do not include any markdown, code fences, or explanatory text.
+**OUTPUT FORMAT — STRICT:**
+Your entire response must be a single raw JSON object. No markdown. No code fences. No explanation before or after. The response must begin with { and end with }. Any deviation makes the story unreadable.
 
 {
   "storyText": "The polished story text with character names resolved (no $$id$$ placeholders).",
   "synopsis": "A brief 1-2 sentence summary of the story suitable for a parent to read, using character names."
 }
 
-Now, generate the JSON object containing the polished story and synopsis.`;
+Respond with only the JSON object now.`;
 
             const systemPrompt = globalPrefix ? `${globalPrefix}\n\n${baseSystemPrompt}` : baseSystemPrompt;
             debug.details.promptLength = systemPrompt.length;
