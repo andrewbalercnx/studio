@@ -18,6 +18,27 @@
 
 ### 2026-05-30
 
+#### `40b7fad` - Vitest unit test suite and GitHub Actions CI
+
+**Type**: Developer Experience / Infrastructure
+
+**Summary**: Sets up the unit test infrastructure from scratch. 53 tests across 5 pure utility modules, all passing. GitHub Actions runs typecheck + tests on every push to main and on PRs.
+
+**Changes**:
+- `vitest.config.ts` (NEW): node environment, `@/` alias resolved to `src/`
+- `package.json`: added `test` and `test:watch` scripts; vitest 4.x devDependency
+- `src/lib/__tests__/entity-utils.test.ts` (NEW): 9 tests for `extractEntityIds` (double/single dollar, dedup, short ID rejection)
+- `src/lib/__tests__/auth-error.test.ts` (NEW): 6 tests for `AuthError` (status defaults, custom message/status, Error instanceof)
+- `src/lib/__tests__/scene-exemplar-config.test.ts` (NEW): 6 tests for tag count, field presence, distinctness invariants
+- `src/lib/__tests__/dev-log-buffer.test.ts` (NEW): 8 tests for ring buffer eviction, datetime prefix, copy semantics
+- `src/lib/__tests__/print-constraints.test.ts` (NEW): 24 tests for constraint resolution priority, page count validation, alignment, truncation, and AI instruction generation
+- `.github/workflows/ci.yml` (NEW): `unit-tests` job; node 20, `npm ci`, typecheck, vitest run
+
+---
+
+
+### 2026-05-30
+
 #### `a1d1f39` - Regression tests for new pipeline features + imageScene bug fix
 
 **Type**: Tests / Bug Fix
