@@ -18,6 +18,22 @@
 
 ### 2026-05-30
 
+#### `d7cef8d` - Live system test endpoint and scheduled CI workflow
+
+**Type**: Infrastructure / Developer Experience
+
+**Summary**: Daily GitHub Actions job that calls a live endpoint against the deployed app to catch model deprecation, Firestore rule changes, or pipeline regressions. Creates and destroys its own test artifacts atomically.
+
+**Changes**:
+- `src/app/api/internal/system-test/route.ts` (NEW): Protected by `INTERNAL_API_SECRET`; creates child/story/storybook, runs `storyPageFlow` (checks sceneTag on all text pages), verifies `locationRegistry` persisted to story doc, generates a single page image via `storyImageFlow`; fully cleans up Firestore + Storage in `finally` block; returns `{ ok, results[], totalDurationMs, timestamp }`
+- `.github/workflows/system-tests.yml` (NEW): Scheduled daily at 02:00 UTC + manual trigger; calls endpoint with curl; writes result table to GitHub Actions job summary; fails CI if any test fails
+- `src/lib/__tests__/print-constraints.test.ts`: Add `withConstraints` helper to preserve `1|2|4` literal type through object spread
+
+---
+
+
+### 2026-05-30
+
 #### `40b7fad` - Vitest unit test suite and GitHub Actions CI
 
 **Type**: Developer Experience / Infrastructure

@@ -5,7 +5,12 @@ import {
   validatePageCount,
   buildPageCountInstruction,
   calculateInteriorPageAdjustment,
+  type ResolvedPageConstraints,
 } from '@/lib/print-constraints';
+
+// Spread loses the `1 | 2 | 4` literal type; this helper restores it.
+const withConstraints = (overrides: Partial<ResolvedPageConstraints>): ResolvedPageConstraints =>
+  ({ ...DEFAULT_PAGE_CONSTRAINTS, ...overrides } as ResolvedPageConstraints);
 
 // ─── resolvePageConstraints ──────────────────────────────────────────────────
 
@@ -60,7 +65,7 @@ describe('resolvePageConstraints', () => {
 
 describe('validatePageCount', () => {
   it('is valid when count meets all constraints', () => {
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 8, maxPages: 24 };
+    const constraints = withConstraints({minPages: 8, maxPages: 24 });
     const result = validatePageCount(16, constraints);
     expect(result.valid).toBe(true);
     expect(result.warnings).toHaveLength(0);
@@ -69,7 +74,7 @@ describe('validatePageCount', () => {
   });
 
   it('pads when count is below minimum', () => {
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 16, maxPages: 0 };
+    const constraints = withConstraints({minPages: 16, maxPages: 0 });
     const result = validatePageCount(8, constraints);
     expect(result.adjustedCount).toBe(16);
     expect(result.paddingNeeded).toBe(8);
@@ -77,21 +82,21 @@ describe('validatePageCount', () => {
   });
 
   it('truncates when count exceeds maximum', () => {
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 0, maxPages: 12 };
+    const constraints = withConstraints({minPages: 0, maxPages: 12 });
     const result = validatePageCount(20, constraints);
     expect(result.adjustedCount).toBe(12);
     expect(result.wasTruncated).toBe(true);
   });
 
   it('aligns up to next multiple of 4', () => {
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 0, maxPages: 0, pageMultiple: 4 };
+    const constraints = withConstraints({minPages: 0, maxPages: 0, pageMultiple: 4 });
     const result = validatePageCount(10, constraints);
     expect(result.adjustedCount).toBe(12); // next multiple of 4 after 10
     expect(result.paddingNeeded).toBe(2);
   });
 
   it('no alignment padding when already a valid multiple', () => {
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 0, maxPages: 0, pageMultiple: 4 };
+    const constraints = withConstraints({minPages: 0, maxPages: 0, pageMultiple: 4 });
     const result = validatePageCount(12, constraints);
     expect(result.valid).toBe(true);
     expect(result.adjustedCount).toBe(12);
@@ -99,7 +104,7 @@ describe('validatePageCount', () => {
 
   it('applies minimum then alignment (order matters)', () => {
     // count=6, min=8, multiple=4 → pad to 8, then align: 8 is already multiple of 4
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 8, maxPages: 0, pageMultiple: 4 };
+    const constraints = withConstraints({minPages: 8, maxPages: 0, pageMultiple: 4 });
     const result = validatePageCount(6, constraints);
     expect(result.adjustedCount).toBe(8);
   });
@@ -121,7 +126,7 @@ describe('buildPageCountInstruction', () => {
   });
 
   it('includes range when both min and max are set', () => {
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 8, maxPages: 24 };
+    const constraints = withConstraints({minPages: 8, maxPages: 24 });
     const result = buildPageCountInstruction(0, constraints);
     expect(result).toContain('8');
     expect(result).toContain('24');
@@ -129,7 +134,7 @@ describe('buildPageCountInstruction', () => {
   });
 
   it('states minimum only when max is 0', () => {
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 16, maxPages: 0 };
+    const constraints = withConstraints({minPages: 16, maxPages: 0 });
     const result = buildPageCountInstruction(0, constraints);
     expect(result).toContain('16');
     expect(result).toMatch(/minimum/i);
@@ -137,7 +142,7 @@ describe('buildPageCountInstruction', () => {
   });
 
   it('states maximum only when min is 0', () => {
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 0, maxPages: 20 };
+    const constraints = withConstraints({minPages: 0, maxPages: 20 });
     const result = buildPageCountInstruction(0, constraints);
     expect(result).toContain('20');
     expect(result).toMatch(/maximum/i);
@@ -149,7 +154,7 @@ describe('buildPageCountInstruction', () => {
 
 describe('calculateInteriorPageAdjustment', () => {
   it('returns no adjustments when count is already valid', () => {
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 8, maxPages: 0 };
+    const constraints = withConstraints({minPages: 8, maxPages: 0 });
     const result = calculateInteriorPageAdjustment(24, 0, constraints);
     expect(result.finalInteriorPages).toBe(24);
     expect(result.paddingNeeded).toBe(0);
@@ -158,21 +163,21 @@ describe('calculateInteriorPageAdjustment', () => {
   });
 
   it('pads to minimum when below', () => {
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 24, maxPages: 0 };
+    const constraints = withConstraints({minPages: 24, maxPages: 0 });
     const result = calculateInteriorPageAdjustment(16, 0, constraints);
     expect(result.finalInteriorPages).toBeGreaterThanOrEqual(24);
     expect(result.paddingNeeded).toBeGreaterThan(0);
   });
 
   it('aligns up to multiple of 4', () => {
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 0, maxPages: 0 };
+    const constraints = withConstraints({minPages: 0, maxPages: 0 });
     const result = calculateInteriorPageAdjustment(10, 0, constraints);
     expect(result.finalInteriorPages % 4).toBe(0);
     expect(result.finalInteriorPages).toBe(12);
   });
 
   it('truncates and aligns when exceeding maximum', () => {
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 0, maxPages: 20 };
+    const constraints = withConstraints({minPages: 0, maxPages: 20 });
     const result = calculateInteriorPageAdjustment(28, 0, constraints);
     expect(result.wasTruncated).toBe(true);
     expect(result.finalInteriorPages).toBeLessThanOrEqual(20);
@@ -180,7 +185,7 @@ describe('calculateInteriorPageAdjustment', () => {
   });
 
   it('result finalInteriorPages is always a multiple of 4', () => {
-    const constraints = { ...DEFAULT_PAGE_CONSTRAINTS, minPages: 24, maxPages: 48 };
+    const constraints = withConstraints({minPages: 24, maxPages: 48 });
     for (const n of [6, 11, 17, 24, 33, 45]) {
       const result = calculateInteriorPageAdjustment(n, 0, constraints);
       expect(result.finalInteriorPages % 4).toBe(0);
