@@ -20,6 +20,15 @@ import { logAIFlow } from '@/lib/ai-flow-logger';
 import { replacePlaceholdersInText, type EntityMap } from '@/lib/resolve-placeholders.server';
 
 // ============================================================================
+// Shared prompt rules
+// ============================================================================
+
+// Reused across all three generation prompts — single source of truth for $$id$$ usage
+const ENTITY_ID_RULE = `CRITICAL: Use $$id$$ placeholders for ALL character references. Never use display names directly.
+   - Correct: "$$abc123$$ discovers a magical garden"
+   - Wrong: "Emma discovers a magical garden"`;
+
+// ============================================================================
 // Default Prompts (used when no custom prompt is set in Firestore)
 // ============================================================================
 
@@ -44,7 +53,7 @@ OUTPUT FORMAT:
   "rationale": "A brief explanation of why these characters would have fun together"
 }`;
 
-const DEFAULT_SCENARIO_GENERATION_PROMPT = `You are creating WILDLY IMAGINATIVE adventure scenarios for a children's story!
+const DEFAULT_SCENARIO_GENERATION_PROMPT = `You are creating imaginative adventure scenarios for a children's story!
 
 CHILD'S PROFILE:
 {{ageDescription}}
@@ -56,7 +65,7 @@ WHY THESE CHARACTERS WERE CHOSEN:
 {{characterRationale}}
 
 YOUR MISSION:
-Create 3-4 absolutely delightful, wonderfully inventive adventure scenarios! Think like a child with boundless imagination - the more creative and unexpected, the better!
+Create 3-4 delightful, inventive adventure scenarios — magical and surprising, but ALWAYS warm, cheerful, and age-appropriate. Aim for wonder, not darkness.
 
 INSPIRATION (mix and match, or invent something entirely new!):
 - Shrink down to ant-size and explore the garden as a jungle
@@ -73,12 +82,11 @@ INSPIRATION (mix and match, or invent something entirely new!):
 GUIDELINES:
 1. Be INVENTIVE - surprise and delight! Avoid generic "go to the park" scenarios.
 2. Include a sense of wonder, magic, or whimsy in each option.
-3. Make scenarios age-appropriate but never boring.
+3. Make scenarios age-appropriate: cheerful, safe, and never scary or sad.
 4. Each scenario should feel like the start of an amazing adventure!
-5. Use each character's unique traits creatively - consider their likes, personality, and type when assigning roles.
-6. CRITICAL: Use $$id$$ placeholders for ALL character references. Never use display names directly.
-   - Correct: "$$abc123$$ discovers a magical garden"
-   - Wrong: "Emma discovers a magical garden"
+5. Every selected character must have a meaningful role in EACH scenario — do not leave anyone out.
+6. Use each character's unique traits creatively - consider their likes, personality, and type when assigning roles.
+7. ${ENTITY_ID_RULE}
 
 OUTPUT FORMAT:
 {
@@ -107,10 +115,9 @@ INSTRUCTIONS:
 2. Each synopsis should be 2-3 sentences that capture the story arc.
 3. Include a beginning, middle (with a small challenge), and happy ending.
 4. Make each synopsis distinctly different while fitting the scenario.
-5. Use each character's unique traits - consider their personality, likes, and type.
-6. CRITICAL: Use $$id$$ placeholders for ALL character references. Never use display names directly.
-   - Correct: "$$abc123$$ discovers a magical garden"
-   - Wrong: "Emma discovers a magical garden"
+5. Every selected character must appear in each synopsis.
+6. Use each character's unique traits - consider their personality, likes, and type.
+7. ${ENTITY_ID_RULE}
 
 OUTPUT FORMAT:
 {
@@ -141,9 +148,7 @@ INSTRUCTIONS:
 4. End with a happy, satisfying conclusion.
 5. Keep paragraphs short for young readers.
 6. Use each character's unique traits - consider their personality, likes, and pronouns.
-7. CRITICAL: Use $$id$$ placeholders for ALL character references. Never use display names directly.
-   - Correct: "$$abc123$$ ran through the garden"
-   - Wrong: "Emma ran through the garden"
+7. ${ENTITY_ID_RULE}
 8. Do NOT introduce any new characters. Only use the characters listed above.
 
 OUTPUT FORMAT:

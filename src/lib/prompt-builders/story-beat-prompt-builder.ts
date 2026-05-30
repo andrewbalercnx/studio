@@ -68,9 +68,8 @@ export function buildStoryBeatPrompt(ctx: StoryBeatPromptContext): string {
     sections.push(buildStorySoFarSection(ctx.storySoFar));
   }
 
-  // Scene annotation instructions are always included — they explain the scene field
-  // regardless of whether we use schema output or the legacy text format
-  sections.push(buildSceneAnnotationSection());
+  // Scene annotation: full explanation for legacy text path; compact reminder when schema constrains the field
+  sections.push(buildSceneAnnotationSection(!!useSchemaOutput));
 
   // Only include OUTPUT REQUIREMENTS section if not using schema-based output
   // When using schema output, Genkit passes the schema to the model separately
@@ -203,10 +202,15 @@ function buildWorldStateSection(worldState: WorldState): string {
 }
 
 /**
- * SCENE ANNOTATION INSTRUCTIONS — explains how to populate scene.presentActors
- * Placed just before output requirements so it is fresh when the AI generates the schema fields.
+ * SCENE ANNOTATION INSTRUCTIONS — explains how to populate scene.presentActors.
+ * Full version for the legacy text path; compact reminder when the Zod schema already
+ * constrains the field and is passed to the model separately.
  */
-function buildSceneAnnotationSection(): string {
+function buildSceneAnnotationSection(schemaProvided: boolean): string {
+  if (schemaProvided) {
+    return `=== SCENE ANNOTATION ===
+scene.presentActors must include ALL characters in this scene — explicit, grammatically collapsed ("they both"), and implied ("everyone"). A missing ID means a missing character in the illustration. Always include the main child's ID.`;
+  }
   return `=== SCENE ANNOTATION ===
 Your output includes a "scene" field. Populate it carefully:
 
@@ -223,14 +227,15 @@ Your output includes a "scene" field. Populate it carefully:
  * Returns progress-based guidance for story pacing
  */
 function getProgressGuidance(progress: number): string {
+  const pct = Math.round(progress * 100);
   if (progress > 0.7) {
-    return `\nIMPORTANT: Story is ${Math.round(progress * 100)}% complete. Guide toward a satisfying conclusion. Include options that lead to resolution.`;
+    return `\nSTORY PROGRESSION: Story is ${pct}% complete. Guide urgently toward a satisfying conclusion — options should lead to resolution and closure.`;
   }
   if (progress > 0.5) {
-    return `\nSTORY PROGRESSION: Begin setting up for the climax and resolution.`;
+    return `\nSTORY PROGRESSION: Story is ${pct}% complete. Begin setting up for the climax and resolution.`;
   }
   if (progress > 0.3) {
-    return `\nSTORY PROGRESSION: Continue developing the plot while keeping momentum.`;
+    return `\nSTORY PROGRESSION: Story is ${pct}% complete. Continue developing the plot while keeping momentum.`;
   }
   return '';
 }

@@ -25,7 +25,7 @@ export const StoryBeatOptionSchema = z.object({
 // so that ALL present actors are included in the image, not only those explicitly named.
 export const SceneAnnotationSchema = z.object({
   presentActors: z.array(z.string())
-    .describe("IDs of ALL characters present in this scene. Include actors who are explicitly named, grammatically collapsed ('they both', 'all three of them'), or simply implied as still present from earlier in the scene. Always include the main child's ID."),
+    .describe("IDs of ALL characters present during THIS beat — explicitly named, grammatically collapsed ('they both', 'all three of them'), or implied by context within this beat. Do not carry forward actors from earlier beats unless they are still physically present. Always include the main child's ID."),
   location: z.string().optional()
     .describe("Where this scene takes place (e.g., 'the garden', 'Alice's bedroom')"),
 });

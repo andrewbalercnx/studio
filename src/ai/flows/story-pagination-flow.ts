@@ -211,7 +211,7 @@ export const storyPaginationFlow = ai.defineFlow(
                 : '';
 
             const rhymeInstruction = storyOutputType.aiHints?.allowRhyme
-                ? `IMPORTANT: The text should maintain its rhyming structure across pages.`
+                ? `IMPORTANT: This story has rhyming verse. Maintain the rhyme scheme across page breaks. Never split a rhyming couplet across two pages — if two lines rhyme, keep them together on the same page.`
                 : '';
 
             const systemPrompt = `${paginationInstructions}
@@ -247,6 +247,7 @@ Return a JSON object with this exact structure:
 IMPORTANT:
 - pageNumber starts at 1 and increments sequentially
 - text is copied verbatim from the story — do NOT rewrite, summarise, or add content
+- each page should have at least 2 sentences; avoid pages with fewer than 10 words
 - actors is an array of actor IDs (without the $$ markers) that appear on that page
 - imageDescription is a rich, visual description of what should be illustrated on this page:
   * Describe the setting/environment (e.g., "a sunny garden with colorful flowers")

@@ -18,6 +18,21 @@
 
 ### 2026-05-30
 
+#### `b1bbdf1` - Prompt audit batch 2: clarity, redundancy, and guardrails
+
+**Type**: Prompt / Tech-debt
+
+**Summary**: Second batch of prompt audit fixes: schema-aware scene annotation, standardised progress tone, deduplicated $$id$$ rules in friends flow with age-appropriate guardrails, clearer pagination constraints, specific ending fallback instruction.
+
+**Changes**:
+- `src/lib/prompt-builders/story-beat-prompt-builder.ts`: SCENE ANNOTATION now compact when schema is provided; STORY PROGRESSION strings standardised
+- `src/lib/schemas/story-beat-output.ts`: Fixed ambiguous presentActors description
+- `src/ai/flows/friends-flow.ts`: Extracted ENTITY_ID_RULE constant; added age-appropriate guardrail; added all-characters-in-every-scenario instruction
+- `src/ai/flows/story-pagination-flow.ts`: Expanded rhyme couplet instruction; added minimum page length
+- `src/lib/prompt-builders/ending-prompt-builder.ts`: Replaced vague fallback with specific format guidance
+
+### 2026-05-30
+
 #### `4b61d66` - Prompt audit fixes: $$id$$ cleanup, JSON output clarity, exact-3-options constraint
 
 **Type**: Prompt / Tech-debt

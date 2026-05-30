@@ -104,7 +104,7 @@ The main child is ${ageDesc}.`;
 function buildTaskSection(config: StoryTypePromptConfig, childPreferenceSummary: string): string {
   // Use endingInstructions from storyType if available, otherwise use a sensible default
   const instructions = config.endingInstructions ||
-    'Based on the story conversation, generate three possible endings that feel satisfying and age-appropriate.';
+    'Based on the story so far, generate exactly three possible endings. Each ending should: (1) resolve the story with a happy, satisfying conclusion; (2) be 1–2 paragraphs long; (3) give the main child a moment of triumph or warmth. Make the three options meaningfully different so the child has a real choice.';
 
   return `=== YOUR TASK ===
 ${instructions}
