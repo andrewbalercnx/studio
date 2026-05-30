@@ -5,7 +5,11 @@ name: System Tests
 #
 # Required GitHub configuration:
 #   Secrets:  INTERNAL_API_SECRET  (same value as apphosting.yaml INTERNAL_API_SECRET)
-#   Variables: APP_URL             (e.g. https://storypic.rcnx.io)
+#
+# Set at: https://github.com/andrewbalercnx/studio/settings/secrets/actions/new
+
+env:
+  APP_URL: https://storypic.rcnx.io
 
 on:
   schedule:
@@ -26,7 +30,7 @@ jobs:
             -X POST \
             -H "X-Internal-Secret: ${{ secrets.INTERNAL_API_SECRET }}" \
             -H "Content-Type: application/json" \
-            "${{ vars.APP_URL }}/api/internal/system-test")
+            "${{ env.APP_URL }}/api/internal/system-test")
           echo "response<<EOF" >> $GITHUB_OUTPUT
           echo "$RESPONSE" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT

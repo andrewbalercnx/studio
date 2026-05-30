@@ -18,6 +18,17 @@
 
 ### 2026-05-30
 
+#### `69662bc` - Simplify system-tests.yml: hardcode APP_URL
+
+**Type**: CI / Developer Experience
+
+**Summary**: Removes the need for a GitHub Actions variable by hardcoding `APP_URL = https://storypic.rcnx.io` directly in the workflow. Only `INTERNAL_API_SECRET` now needs manual configuration as a repository secret.
+
+**Changes**:
+- `.github/workflows/system-tests.yml` (MODIFIED): Added top-level `env.APP_URL`, replaced `${{ vars.APP_URL }}` with `${{ env.APP_URL }}`
+
+---
+
 #### `811c0db` - GitHub Actions setup script
 
 **Type**: Developer Experience
