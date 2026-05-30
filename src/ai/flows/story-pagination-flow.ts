@@ -12,7 +12,7 @@
 import { ai } from '@/ai/genkit';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
-import type { Story, StoryOutputType, ChildProfile, PrintLayout, PrintProduct } from '@/lib/types';
+import type { Story, StoryOutputType, ChildProfile, PrintLayout, PrintProduct, ImageScene } from '@/lib/types';
 import { DEFAULT_PAGINATION_PROMPT } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { getPaginationPrompt } from '@/lib/pagination-prompt-config.server';
@@ -32,12 +32,25 @@ import { extractEntityIds } from '@/lib/entity-utils';
 // Schema for the AI's paginated output
 // Note: We use permissive string validation here to avoid schema errors.
 // Empty strings are filtered out during post-processing.
+const ImageSceneActorSchema = z.object({
+  id: z.string(),
+  action: z.string(),
+  facing: z.string().optional(),
+});
+
+const ImageSceneSchema = z.object({
+  locationKey: z.string(),
+  locationDescription: z.string(),
+  actors: z.array(ImageSceneActorSchema),
+  atmosphere: z.string(),
+});
+
 const PaginationAIOutputSchema = z.object({
   pages: z.array(z.object({
     pageNumber: z.number().int().positive(),
     text: z.string(),
     actors: z.array(z.string()),
-    imageDescription: z.string().optional().default(''),
+    imageScene: ImageSceneSchema.optional(),
   })),
 });
 
@@ -222,7 +235,7 @@ ${rhymeInstruction}
 
 ${pageCountInstruction}
 
-**CHARACTER REFERENCE (IDs for image generation — use these in imageDescription):**
+**CHARACTER REFERENCE (IDs for image generation — use these in imageScene):**
 ${actorIdMapping}
 
 **CHARACTER DETAILS (for context):**
@@ -239,7 +252,15 @@ Return a JSON object with this exact structure:
       "pageNumber": 1,
       "text": "The exact story text for this page (copy verbatim — do not rewrite)",
       "actors": ["actor-id-1", "actor-id-2"],
-      "imageDescription": "A vivid description of the scene for AI image generation..."
+      "imageScene": {
+        "locationKey": "kitchen",
+        "locationDescription": "a cozy farmhouse kitchen with a round wooden table, yellow walls, and morning sunlight streaming through a checked curtain",
+        "actors": [
+          { "id": "actor-id-1", "action": "standing at the table, reaching for a cookie jar, eyes wide with excitement" },
+          { "id": "actor-id-2", "action": "sitting on the kitchen floor, looking up with a big grin, tail wagging" }
+        ],
+        "atmosphere": "warm, bright morning light, cheerful and playful"
+      }
     },
     ...
   ]
@@ -250,11 +271,12 @@ IMPORTANT:
 - text is copied verbatim from the story — do NOT rewrite, summarise, or add content
 - each page should have at least 2 sentences; avoid pages with fewer than 10 words
 - actors is an array of actor IDs (without the $$ markers) that appear on that page
-- imageDescription is a rich, visual description of what should be illustrated on this page:
-  * Describe the setting/environment (e.g., "a sunny garden with colorful flowers")
-  * Describe the action/pose of characters — use $$id$$ from the CHARACTER REFERENCE above (e.g., "$$child-id$$ jumping with joy")
-  * Include the mood/atmosphere (e.g., "warm and cheerful", "mysterious and exciting")
-  * Be specific about visual details that match the story text
+- imageScene describes the illustration for this page in structured form:
+  * locationKey: a short, consistent label for the setting (e.g., "kitchen", "garden", "bedroom"). Use the EXACT same key for the same location across pages — this enforces visual consistency
+  * locationDescription: a detailed visual description of the environment. For the FIRST use of a locationKey, describe it fully. For subsequent pages at the same location, use the identical description
+  * actors: list EVERY actor from the actors array above — no more, no fewer. Each entry must have the actor's ID (without $$) and a specific action describing what they are physically doing and their expression/pose. Do NOT use vague phrases like "standing nearby" or "in the background" — be explicit
+  * atmosphere: mood, lighting, time of day, and emotional tone of the scene
+  * CRITICAL: actors in imageScene MUST exactly match the actors array. If actors has 2 IDs, imageScene.actors must have exactly 2 entries with those same IDs.
 
 Generate the paginated output now.`;
 
@@ -342,25 +364,49 @@ Generate the paginated output now.`;
             debug.details.filteredOutPages = pages.length - validPages.length;
             debug.stage = 'done';
 
-            // Resolve placeholders for displayText
+            // Build location registry: first occurrence of each locationKey becomes canonical
+            const locationRegistry: Record<string, string> = {};
+            for (const page of validPages) {
+                const scene = (page as any).imageScene as ImageScene | undefined;
+                if (scene?.locationKey && !locationRegistry[scene.locationKey]) {
+                    locationRegistry[scene.locationKey] = scene.locationDescription;
+                }
+            }
+
+            // Resolve placeholders for displayText; apply canonical location descriptions
             const pagesWithDisplayText = await Promise.all(
-                validPages.map(async (page: { pageNumber: number; text: string; actors: string[]; imageDescription?: string }) => ({
-                    pageNumber: page.pageNumber,
-                    bodyText: page.text, // Raw text with $$id$$ placeholders
-                    displayText: await replacePlaceholdersWithDescriptions(page.text), // Resolved text with names
-                    entityIds: page.actors,
-                    imageDescription: page.imageDescription || undefined,
-                }))
+                validPages.map(async (page: any) => {
+                    const imageScene: ImageScene | undefined = page.imageScene;
+                    return {
+                        pageNumber: page.pageNumber,
+                        bodyText: page.text,
+                        displayText: await replacePlaceholdersWithDescriptions(page.text),
+                        entityIds: page.actors,
+                        // Apply canonical location description from registry
+                        imageScene: imageScene ? {
+                            ...imageScene,
+                            locationDescription: locationRegistry[imageScene.locationKey] ?? imageScene.locationDescription,
+                        } : undefined,
+                    };
+                })
             );
+
+            // Persist location registry to story document so image flow can look it up
+            if (Object.keys(locationRegistry).length > 0) {
+                await storyRef.update({ locationRegistry }).catch((e: any) =>
+                    console.warn('[storyPaginationFlow] Failed to save locationRegistry:', e?.message)
+                );
+            }
 
             return {
                 ok: true,
                 storyId,
                 pages: pagesWithDisplayText,
+                locationRegistry,
                 stats: {
                     pageCount: validPages.length,
                     targetPageCount,
-                    resolvedConstraints, // Include for downstream PDF generation
+                    resolvedConstraints,
                 },
                 debug,
             };

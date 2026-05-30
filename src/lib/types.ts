@@ -141,6 +141,17 @@ export type StoryBeat = {
     draftText: string;
 };
 
+export type ImageScene = {
+    locationKey: string;           // short canonical label, e.g. "kitchen", "garden"
+    locationDescription: string;   // full visual description of the environment
+    actors: Array<{
+        id: string;                // actor document ID (no $$ markers)
+        action: string;            // explicit action and pose description
+        facing?: string;           // optional: "toward Tommy", "facing left"
+    }>;
+    atmosphere: string;            // mood, lighting, time of day
+};
+
 export type WorldState = {
     presentActorIds?: string[];
     currentLocation?: string;
@@ -363,6 +374,8 @@ export type Story = {
 
   // List of actor IDs ($$id$$) used in the story - includes child, characters, etc.
   actors?: string[];
+  // Maps locationKey → canonical visual description; built at pagination time for cross-scene consistency
+  locationRegistry?: Record<string, string>;
 
   // Composite avatar created from all actors in the story
   actorAvatarUrl?: string | null;
@@ -596,6 +609,7 @@ export type StoryOutputPage = {
     displayText?: string;
     entityIds?: string[];  // IDs of characters/children referenced on this page ($$id$$ placeholders)
     imageDescription?: string;  // AI-generated scene description for image generation (uses $$id$$ placeholders)
+    imageScene?: ImageScene;    // Structured scene data for deterministic image prompt assembly
     imagePrompt?: string;
     imageUrl?: string;
     imageStatus?: 'pending' | 'generating' | 'ready' | 'error';

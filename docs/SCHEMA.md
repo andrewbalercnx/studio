@@ -194,6 +194,7 @@ Compiled story content.
 | `titleGeneration` | object | No | Title generation status |
 | `synopsis` | string | No | AI-generated synopsis |
 | `actors` | string[] | No | Actor IDs used in story |
+| `locationRegistry` | object | No | Maps `locationKey → canonical visual description`; built at pagination time for cross-scene consistency |
 | `actorAvatarUrl` | string | No | Composite avatar URL |
 | `audioGeneration` | object | No | Audio generation status |
 | `audioUrl` | string | No | Full audio narration URL |
@@ -208,6 +209,20 @@ Compiled story content.
 **Subcollections**:
 - `storybooks/{storybookId}` - Storybook outputs (see below)
 - `storybooks/{storybookId}/pages/{pageId}` - Storybook pages (see `StoryOutputPage`)
+
+**`StoryOutputPage` key fields** (pages subcollection):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pageNumber` | number | Yes | Sequential page number |
+| `kind` | string | Yes | `cover_front`, `cover_back`, `title_page`, `text`, `image`, `blank` |
+| `bodyText` | string | No | Story text for this page (raw, with `$$id$$` placeholders) |
+| `displayText` | string | No | Resolved text with character names substituted |
+| `entityIds` | string[] | No | Actor IDs referenced on this page |
+| `imageScene` | object | No | **Structured scene** — `{ locationKey, locationDescription, actors[], atmosphere }`. Source of truth for deterministic image prompt assembly |
+| `imageDescription` | string | No | Legacy freeform scene description (used when `imageScene` is absent) |
+| `imageUrl` | string | No | Generated image URL |
+| `imageStatus` | string | No | `pending`, `generating`, `ready`, `error` |
 - `shareTokens/{tokenId}` - Share links (see `StoryBookShareToken`)
 
 **Security**: Parents can CRUD their own stories; admins have full access.

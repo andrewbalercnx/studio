@@ -5,7 +5,7 @@ import {ai} from '@/ai/genkit';
 import {initFirebaseAdminApp} from '@/firebase/admin/app';
 import {getFirestore, FieldValue} from 'firebase-admin/firestore';
 import {getStoryBucket, deleteStorageObject} from '@/firebase/admin/storage';
-import type {ChildProfile, Story, StoryOutputPage, Character, ImageStyle} from '@/lib/types';
+import type {ChildProfile, Story, StoryOutputPage, Character, ImageStyle, ImageScene} from '@/lib/types';
 import {randomUUID} from 'crypto';
 import {z} from 'genkit';
 import imageSize from 'image-size';
@@ -765,6 +765,38 @@ async function uploadImageToStorage(params: {
 }
 
 /**
+ * Build a deterministic scene description from structured ImageScene data.
+ * Replaces freeform imageDescription with explicit per-actor actions and a hard
+ * actor-count constraint that prevents the image model from adding ghost characters.
+ */
+function buildMechanicalScenePrompt(
+  imageScene: ImageScene,
+  canonicalLocation: string,
+  actorMap: Map<string, Character | ChildProfile>,
+  mainChildId?: string,
+  childProfile?: ChildProfile
+): string {
+  const count = imageScene.actors.length;
+  const actorLines = imageScene.actors.map(a => {
+    const entity = actorMap.get(a.id);
+    const name = entity?.displayName
+      ?? (a.id === mainChildId ? childProfile?.displayName : undefined)
+      ?? a.id;
+    const facing = a.facing ? `, ${a.facing}` : '';
+    return `• ${name} ($$${a.id}$$): ${a.action}${facing}`;
+  }).join('\n');
+
+  const countWord = count === 1 ? '1 character' : `${count} characters`;
+  return `Location: ${canonicalLocation}
+Atmosphere: ${imageScene.atmosphere}
+
+Characters in this scene (EXACTLY ${countWord} — no other people or figures):
+${actorLines}
+
+IMPORTANT: Only the ${countWord} listed above may appear in this illustration. Do not add any other people, children, figures, crowd members, or background characters.`;
+}
+
+/**
  * Parameters for image creation with structured actor data
  */
 type CreateImageParams = {
@@ -1517,9 +1549,24 @@ export const storyImageFlow = ai.defineFlow(
           logs.push(`[aspectRatio] ${aspectRatio}`);
         }
 
-        // Use imageDescription (from pagination flow) as the scene text, with fallbacks
-        // Priority: imageDescription > bodyText > imagePrompt
-        const sceneText = page.imageDescription || page.bodyText || page.imagePrompt;
+        // Build scene text: use structured imageScene for deterministic assembly when available,
+        // otherwise fall back to freeform imageDescription / bodyText / imagePrompt for older pages
+        let sceneText: string | undefined;
+        if (page.imageScene) {
+          const canonicalLocation = storyData.locationRegistry?.[page.imageScene.locationKey]
+            ?? page.imageScene.locationDescription;
+          sceneText = buildMechanicalScenePrompt(
+            page.imageScene,
+            canonicalLocation,
+            entityData.actorMap,
+            storyData.childId,
+            childProfile ?? undefined
+          );
+          logs.push(`[scene] Using structured imageScene (locationKey="${page.imageScene.locationKey}", actors=${page.imageScene.actors.length})`);
+        } else {
+          sceneText = page.imageDescription || page.bodyText || page.imagePrompt;
+          logs.push(`[scene] Using legacy freeform scene text`);
+        }
 
         generated = await createImage({
           sceneText,

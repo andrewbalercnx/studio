@@ -18,6 +18,20 @@
 
 ### 2026-05-30
 
+#### `481c798` - Structured image scene: deterministic prompt assembly for image generation
+
+**Type**: Feature / Image Quality
+
+**Summary**: Replace freeform `imageDescription` string in the pagination flow with a validated `ImageScene` schema. Enforces three image quality constraints: explicit per-actor action descriptions, cross-scene location consistency via a location registry, and a hard actor-count constraint preventing ghost characters.
+
+**Changes**:
+- `src/lib/types.ts`: Added `ImageScene` type; added `imageScene?` to `StoryOutputPage`; added `locationRegistry?` to `Story`
+- `src/ai/flows/story-pagination-flow.ts`: Replaced `imageDescription` schema field with `ImageSceneSchema`; updated prompt to request structured scene data; post-processing builds `locationRegistry` (first-occurrence canonical descriptions) and persists it to the story document
+- `src/ai/flows/story-image-flow.ts`: Added `buildMechanicalScenePrompt()` that assembles scene text from `ImageScene` + registry lookup + explicit "EXACTLY N characters" constraint; falls back to legacy `imageDescription` for pre-migration pages
+- `docs/SCHEMA.md`: Documented new fields and `StoryOutputPage` key fields
+
+---
+
 #### `478ed65` - Fix: move extractEntityIds out of 'use server' file to unblock Cloud Build
 
 **Type**: Bug Fix
