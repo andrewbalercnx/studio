@@ -670,6 +670,7 @@ Art style configurations for image generation.
 | `sampleDescription` | string | Yes | Sample image description |
 | `sampleImageUrl` | string | No | Sample image URL |
 | `exampleImages` | array | No | Example images for AI style reference |
+| `sceneExemplars` | object | No | Scene-contextual style reference images, keyed by tag (indoor-day, outdoor-day, indoor-night, outdoor-night) |
 | `preferred` | boolean | No | If true, shown first in child-facing selection (sorted alphabetically within preferred/non-preferred groups) |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
@@ -681,6 +682,18 @@ Art style configurations for image generation.
 | `url` | string | Firebase Storage URL |
 | `storagePath` | string | Storage path for deletion |
 | `uploadedAt` | timestamp | Upload time |
+
+**sceneExemplars map structure** (each key is a sceneTag: `indoor-day`, `outdoor-day`, `indoor-night`, `outdoor-night`):
+| Field | Type | Description |
+|-------|------|-------------|
+| `imageUrl` | string | Firebase Storage URL of generated exemplar |
+| `storagePath` | string | Storage path (`sceneExemplars/{styleId}/{tag}/image.{ext}`) |
+| `generatedAt` | timestamp | Generation time |
+| `status` | string | `generating` \| `ready` \| `error` |
+| `errorMessage` | string | Error detail if status=error |
+
+**systemConfig/sceneExemplars** (Firestore document, admin-editable overrides):
+Stores per-tag overrides for `SceneExemplarDefinition`. Keys are scene tags. Each entry can override `label`, `description`, and/or `generationPrompt`. Missing keys use hardcoded defaults from `src/lib/scene-exemplar-config.ts`.
 
 **Security**: Admin only for writes; authenticated users can read.
 

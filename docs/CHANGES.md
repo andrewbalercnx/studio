@@ -18,6 +18,24 @@
 
 ### 2026-05-30
 
+#### `e027574` - Scene exemplar system for image styles
+
+**Type**: Feature / Image Quality
+
+**Summary**: Four scene-contextual style reference images (indoor-day, outdoor-day, indoor-night, outdoor-night) are generated per image style and used during page image generation instead of generic example images. The pagination flow now assigns a `sceneTag` to each page's `imageScene`, and the image flow selects the matching scene exemplar for that tag. An admin page section shows all four exemplars per style with per-style and batch generation controls. Rate limiting is handled via sequential processing with 2 s per-tag and 5 s per-style delays.
+
+**Changes**:
+- `src/lib/scene-exemplar-config.ts` (NEW): Hardcoded defaults for the 4 scene exemplar definitions (tag, label, description, generationPrompt); overridable via `systemConfig/sceneExemplars` in Firestore
+- `src/lib/types.ts`: Added `SceneExemplarEntry` type; added `sceneExemplars?: Record<string, SceneExemplarEntry>` to `ImageStyle`; added `sceneTag?: string` to `ImageScene`
+- `src/ai/flows/style-scene-exemplar-flow.ts` (NEW): Genkit flow that generates all 4 scene exemplars for one style; sequential per-tag with 2 s gap; stores at `sceneExemplars/{styleId}/{tag}/image.{ext}`
+- `src/app/api/imageStyles/generateSceneExemplars/route.ts` (NEW): POST endpoint — single style (foreground) or all styles (background sequential, 5 s between styles)
+- `src/ai/flows/story-pagination-flow.ts`: Added `sceneTag` enum to `ImageSceneSchema`; added classification instruction to pagination prompt
+- `src/ai/flows/story-image-flow.ts`: Scene exemplar lookup by `imageScene.sceneTag`; falls back to `exampleImages` → `sampleImageUrl` when no scene exemplar is available
+- `src/app/admin/image-styles/page.tsx`: `SceneExemplarGrid` component (4-thumbnail 2×2 grid with status indicators per card); per-style "Generate/Regenerate" button; "Generate All Scene Exemplars" batch button in header
+- `docs/SCHEMA.md`: Documented `sceneExemplars` map and `systemConfig/sceneExemplars` override document
+
+---
+
 #### `4a7792f` - Two-stage canonical reference image pipeline
 
 **Type**: Feature / Image Quality

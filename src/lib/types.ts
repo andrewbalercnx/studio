@@ -150,6 +150,7 @@ export type ImageScene = {
         facing?: string;           // optional: "toward Tommy", "facing left"
     }>;
     atmosphere: string;            // mood, lighting, time of day
+    sceneTag?: string;             // one of: indoor-day, outdoor-day, indoor-night, outdoor-night
 };
 
 export type WorldState = {
@@ -1575,6 +1576,14 @@ export type ImageStyleExampleImage = {
   uploadedAt: any;      // Timestamp
 };
 
+export type SceneExemplarEntry = {
+  imageUrl: string;
+  storagePath: string;
+  generatedAt: any;
+  status: 'generating' | 'ready' | 'error';
+  errorMessage?: string | null;
+};
+
 export type ImageStyle = {
   id: string;
   title: string;
@@ -1586,6 +1595,8 @@ export type ImageStyle = {
   sampleDescription: string;
   sampleImageUrl?: string | null;
   exampleImages?: ImageStyleExampleImage[]; // Reference images for AI generation
+  // Scene-specific style exemplars (generated once, keyed by sceneTag)
+  sceneExemplars?: Record<string, SceneExemplarEntry>;
   preferred?: boolean; // If true, shown first in child-facing image style selection
   createdAt: any;
   updatedAt: any;

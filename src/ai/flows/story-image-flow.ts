@@ -1514,24 +1514,31 @@ export const storyImageFlow = ai.defineFlow(
           ?? storyData.metadata?.artStyleHint
           ?? "a gentle, vibrant watercolor style";
 
-        // Load example images from imageStyles collection if imageStyleId is provided
-        // Priority: manually uploaded exampleImages > generated sampleImageUrl
+        // Load style reference images.
+        // Priority order:
+        //   1. Scene exemplar matching page.imageScene.sceneTag (scene-contextual, best quality)
+        //   2. Manually uploaded exampleImages (generic style reference)
+        //   3. Generated sampleImageUrl (last resort)
         let styleExampleImages: string[] = [];
         if (isValidDocumentId(imageStyleId)) {
           try {
             const styleSnap = await firestore.collection('imageStyles').doc(imageStyleId).get();
             if (styleSnap.exists) {
               const styleData = styleSnap.data() as ImageStyle;
-              if (styleData.exampleImages && styleData.exampleImages.length > 0) {
-                // Use manually uploaded example images
+              const sceneTag = (page as any).imageScene?.sceneTag as string | undefined;
+
+              if (sceneTag && styleData.sceneExemplars?.[sceneTag]?.status === 'ready' && styleData.sceneExemplars[sceneTag].imageUrl) {
+                // Best: use the scene-specific style exemplar
+                styleExampleImages = [styleData.sceneExemplars[sceneTag].imageUrl];
+                logs.push(`[styleExamples] Using scene exemplar [${sceneTag}] for style ${imageStyleId}`);
+              } else if (styleData.exampleImages && styleData.exampleImages.length > 0) {
                 styleExampleImages = styleData.exampleImages.map(img => img.url);
-                logs.push(`[styleExamples] Loaded ${styleExampleImages.length} example images from style ${imageStyleId}`);
+                logs.push(`[styleExamples] Loaded ${styleExampleImages.length} example images from style ${imageStyleId}${sceneTag ? ` (no scene exemplar for ${sceneTag})` : ''}`);
               } else if (styleData.sampleImageUrl) {
-                // Fall back to the generated sample image
                 styleExampleImages = [styleData.sampleImageUrl];
                 logs.push(`[styleExamples] Using generated sample image as style reference for ${imageStyleId}`);
               } else {
-                logs.push(`[styleExamples] Style ${imageStyleId} has no example or sample images`);
+                logs.push(`[styleExamples] Style ${imageStyleId} has no example, sample, or scene exemplar images`);
               }
             } else {
               logs.push(`[styleExamples] Style ${imageStyleId} not found`);

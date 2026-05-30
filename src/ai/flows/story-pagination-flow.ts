@@ -43,6 +43,7 @@ const ImageSceneSchema = z.object({
   locationDescription: z.string(),
   actors: z.array(ImageSceneActorSchema),
   atmosphere: z.string(),
+  sceneTag: z.enum(['indoor-day', 'outdoor-day', 'indoor-night', 'outdoor-night']),
 });
 
 const PaginationAIOutputSchema = z.object({
@@ -259,7 +260,8 @@ Return a JSON object with this exact structure:
           { "id": "actor-id-1", "action": "standing at the table, reaching for a cookie jar, eyes wide with excitement" },
           { "id": "actor-id-2", "action": "sitting on the kitchen floor, looking up with a big grin, tail wagging" }
         ],
-        "atmosphere": "warm, bright morning light, cheerful and playful"
+        "atmosphere": "warm, bright morning light, cheerful and playful",
+        "sceneTag": "indoor-day"
       }
     },
     ...
@@ -276,6 +278,7 @@ IMPORTANT:
   * locationDescription: a detailed visual description of the environment. For the FIRST use of a locationKey, describe it fully. For subsequent pages at the same location, use the identical description
   * actors: list EVERY actor from the actors array above — no more, no fewer. Each entry must have the actor's ID (without $$) and a specific action describing what they are physically doing and their expression/pose. Do NOT use vague phrases like "standing nearby" or "in the background" — be explicit
   * atmosphere: mood, lighting, time of day, and emotional tone of the scene
+  * sceneTag: classify the scene as exactly one of: indoor-day (interior in daylight/morning), outdoor-day (outside in daylight), indoor-night (interior at night/bedtime with lamp or moonlight), outdoor-night (outside at night/twilight/magical setting)
   * CRITICAL: actors in imageScene MUST exactly match the actors array. If actors has 2 IDs, imageScene.actors must have exactly 2 entries with those same IDs.
 
 Generate the paginated output now.`;

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { ImageStyle, ImageStyleExampleImage } from '@/lib/types';
+import { ImageStyle, ImageStyleExampleImage, SceneExemplarEntry } from '@/lib/types';
+import { SCENE_EXEMPLAR_TAGS } from '@/lib/scene-exemplar-config';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,8 @@ export default function ImageStylesAdminPage() {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isSeeding, setIsSeeding] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [generatingSceneExemplarsFor, setGeneratingSceneExemplarsFor] = useState<string | null>(null);
+    const [isGeneratingAllSceneExemplars, setIsGeneratingAllSceneExemplars] = useState(false);
 
     // Load image styles
     useEffect(() => {
@@ -129,6 +132,49 @@ export default function ImageStylesAdminPage() {
         }
     };
 
+    const handleGenerateSceneExemplars = async (styleId: string) => {
+        if (!user) return;
+        setGeneratingSceneExemplarsFor(styleId);
+        try {
+            const token = await user.getIdToken();
+            const response = await fetch('/api/imageStyles/generateSceneExemplars', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ styleId }),
+            });
+            const result = await response.json();
+            if (!result.ok) alert(`Error: ${result.errorMessage}`);
+        } catch (error: any) {
+            alert(`Error: ${error.message}`);
+        } finally {
+            setGeneratingSceneExemplarsFor(null);
+        }
+    };
+
+    const handleGenerateAllSceneExemplars = async () => {
+        if (!user) return;
+        if (!confirm(`Generate scene exemplars for ALL ${imageStyles.length} styles? This will run in the background and may take several minutes.`)) return;
+        setIsGeneratingAllSceneExemplars(true);
+        try {
+            const token = await user.getIdToken();
+            const response = await fetch('/api/imageStyles/generateSceneExemplars', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({}),
+            });
+            const result = await response.json();
+            if (result.ok) {
+                alert(`${result.message}`);
+            } else {
+                alert(`Error: ${result.errorMessage}`);
+            }
+        } catch (error: any) {
+            alert(`Error: ${error.message}`);
+        } finally {
+            setIsGeneratingAllSceneExemplars(false);
+        }
+    };
+
     const handleCreateNew = () => {
         setSelectedStyle({
             id: '',
@@ -151,12 +197,19 @@ export default function ImageStylesAdminPage() {
                     <h1 className="text-3xl font-bold">Image Styles</h1>
                     <p className="text-muted-foreground">Manage visual styles for story illustrations</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                     <Button onClick={handleCreateNew} variant="default">
                         Create New Style
                     </Button>
                     <Button onClick={handleSeedStyles} disabled={isSeeding} variant="outline">
                         {isSeeding ? 'Seeding...' : 'Seed Styles'}
+                    </Button>
+                    <Button
+                        onClick={handleGenerateAllSceneExemplars}
+                        disabled={isGeneratingAllSceneExemplars || imageStyles.length === 0}
+                        variant="outline"
+                    >
+                        {isGeneratingAllSceneExemplars ? 'Dispatching...' : 'Generate All Scene Exemplars'}
                     </Button>
                 </div>
             </div>
@@ -204,7 +257,15 @@ export default function ImageStylesAdminPage() {
                                         />
                                     )}
                                 </div>
-                                <div className="flex gap-2 flex-wrap">
+
+                                {/* Scene Exemplars */}
+                                <SceneExemplarGrid
+                                    style={style}
+                                    isGenerating={generatingSceneExemplarsFor === style.id}
+                                    onGenerate={() => handleGenerateSceneExemplars(style.id)}
+                                />
+
+                                <div className="flex gap-2 flex-wrap mt-3">
                                     <Button
                                         onClick={() => handleEditStyle(style)}
                                         variant="outline"
@@ -618,6 +679,77 @@ function ImageStyleEditor({ style, onClose, firestore, user }: { style: ImageSty
                 <Button onClick={handleSave} disabled={isSaving}>
                     {isSaving ? 'Saving...' : 'Save'}
                 </Button>
+            </div>
+        </div>
+    );
+}
+
+const SCENE_TAG_LABELS: Record<string, string> = {
+  'indoor-day': 'Indoor Day',
+  'outdoor-day': 'Outdoor Day',
+  'indoor-night': 'Indoor Night',
+  'outdoor-night': 'Outdoor Night',
+};
+
+function SceneExemplarGrid({ style, isGenerating, onGenerate }: {
+    style: ImageStyle;
+    isGenerating: boolean;
+    onGenerate: () => void;
+}) {
+    const exemplars = style.sceneExemplars ?? {};
+    const anyReady = SCENE_EXEMPLAR_TAGS.some(tag => exemplars[tag]?.status === 'ready');
+    const anyGenerating = SCENE_EXEMPLAR_TAGS.some(tag => exemplars[tag]?.status === 'generating');
+
+    return (
+        <div className="border-t pt-3 mt-2">
+            <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Scene Exemplars
+                </span>
+                <Button
+                    onClick={onGenerate}
+                    disabled={isGenerating || anyGenerating}
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs h-6 px-2"
+                >
+                    {isGenerating || anyGenerating ? 'Generating...' : anyReady ? 'Regenerate' : 'Generate'}
+                </Button>
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+                {SCENE_EXEMPLAR_TAGS.map(tag => {
+                    const entry = exemplars[tag] as SceneExemplarEntry | undefined;
+                    return (
+                        <div key={tag} className="relative">
+                            {entry?.status === 'ready' && entry.imageUrl ? (
+                                <img
+                                    src={entry.imageUrl}
+                                    alt={SCENE_TAG_LABELS[tag]}
+                                    className="w-full aspect-[4/3] object-cover rounded border"
+                                    title={SCENE_TAG_LABELS[tag]}
+                                />
+                            ) : (
+                                <div
+                                    className={`w-full aspect-[4/3] rounded border flex items-center justify-center text-center p-1 ${
+                                        entry?.status === 'generating' ? 'bg-blue-50 border-blue-200 animate-pulse' :
+                                        entry?.status === 'error' ? 'bg-red-50 border-red-200' :
+                                        'bg-muted border-dashed'
+                                    }`}
+                                    title={entry?.errorMessage ?? undefined}
+                                >
+                                    <span className="text-[9px] leading-tight text-muted-foreground">
+                                        {entry?.status === 'generating' ? '...' :
+                                         entry?.status === 'error' ? '!' :
+                                         SCENE_TAG_LABELS[tag]}
+                                    </span>
+                                </div>
+                            )}
+                            <span className="absolute bottom-0.5 left-0.5 right-0.5 text-center text-[8px] text-white drop-shadow-sm leading-tight bg-black/30 rounded-sm px-0.5">
+                                {SCENE_TAG_LABELS[tag]}
+                            </span>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
