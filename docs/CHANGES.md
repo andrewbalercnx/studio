@@ -303,7 +303,7 @@
 
 **Files Modified**:
 - `src/app/api/admin/print-orders/[orderId]/resubmit/route.ts` - Added cancellation logic before resubmission
-- `src/app/api/admin/print-orders/[orderId]/refresh-status/route.ts` - Added case-insensitive status mapping for on_hold and pending
+- `src/app/api/admin/print-orders/[orderId]/refresh-status/route.ts` - Added case-insensitive status mapping for on_hold and a2a0dbe
 - `src/app/admin/print-orders/[orderId]/page.tsx` - Updated confirmation message and success feedback
 - `docs/API.md` - Added documentation for the resubmit endpoint
 
@@ -475,7 +475,7 @@
 **Features**:
 - Todo list UI with add/edit/delete functionality
 - Markdown support for descriptions with live preview
-- Status tracking (pending, in_progress, partial, completed)
+- Status tracking (a2a0dbe, in_progress, partial, completed)
 - Priority levels (low, medium, high)
 - Categories for organization
 - "Copy for Claude" button to format todos for pasting to AI
@@ -2142,8 +2142,8 @@ Also added selection and export functionality to the AI Flow Logs admin page.
 **Solution**: Don't prepend `globalPrefix` for scenario and synopsis generation. The globalPrefix is only needed for story generation where we want `$$id$$` placeholders for later processing.
 
 **Changes**:
-- **handleScenarioGeneration**: Removed globalPrefix prepending, added explanatory comment
-- **handleSynopsisGeneration**: Removed globalPrefix prepending, added explanatory comment
+- **handleScenarioGeneration**: Removed globalPrefix prea2a0dbe, added explanatory comment
+- **handleSynopsisGeneration**: Removed globalPrefix prea2a0dbe, added explanatory comment
 - Removed unused `globalPrefix` parameter from both functions
 - **handleStoryGeneration**: Still uses globalPrefix (correctly) since story text needs placeholders
 
@@ -3142,7 +3142,7 @@ Placeholder resolution extension:
      - Loads existing story created by wizard flow
      - Extracts actors from session (childId always included)
      - Generates synopsis if not present
-     - Sets up actors, generation statuses (actorAvatarGeneration: pending)
+     - Sets up actors, generation statuses (actorAvatarGeneration: a2a0dbe)
      - Returns storyId to trigger background tasks (avatar, title, audio)
 
 **Files Modified**:
