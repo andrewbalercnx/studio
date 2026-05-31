@@ -18,6 +18,18 @@
 
 ### 2026-05-30
 
+#### `bdde79f` - Fix TTS reading actor descriptions instead of story text
+
+**Type**: Bug Fix
+
+**Summary**: Both audio flows were prepending `[Characters in this scene: ...]` and `[Pronunciation: ...]` blocks into the text passed to ElevenLabs, which reads everything verbatim. Pronunciation is correctly handled by `replacePlaceholdersForTTS` which substitutes `namePronunciation`/`displayName` for `$$id$$` placeholders. The incorrect prepend is removed from both flows.
+
+**Changes**:
+- `src/ai/flows/story-page-audio-flow.ts` (MODIFIED): Removed `buildActorDescriptionsForAudio` call and prepend; removed unused import
+- `src/ai/flows/story-audio-flow.ts` (MODIFIED): Removed `buildActorDescriptionsForAudio` call and prepend from both placeholder and clean-text paths; removed unused import
+
+---
+
 #### `070adeb` - Fix silent Firestore failure in logAICallToTrace
 
 **Type**: Bug Fix

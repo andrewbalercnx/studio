@@ -13,7 +13,7 @@ import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import type { Story, ChildProfile } from '@/lib/types';
 import { DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 import type { StoryAudioFlowInput, StoryAudioFlowOutput } from '@/lib/tts-config';
-import { resolveEntitiesInText, replacePlaceholdersForTTS, buildActorDescriptionsForAudio } from '@/lib/resolve-placeholders.server';
+import { resolveEntitiesInText, replacePlaceholdersForTTS } from '@/lib/resolve-placeholders.server';
 import { getElevenLabsModelId } from '@/lib/get-elevenlabs-config.server';
 
 /**
@@ -144,21 +144,10 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
     const actorIds = story.actors || [];
 
     if (story.storyText.includes('$$')) {
-      // Legacy: story text still has $$id$$ placeholders — resolve them to display names
+      // Story text still has $$id$$ placeholders — resolve them to display names / pronunciation
       console.log(`[story-audio-flow] Resolving placeholders in story text`);
       const entityMap = await resolveEntitiesInText(story.storyText);
       textForTTS = await replacePlaceholdersForTTS(story.storyText, entityMap);
-      // Prepend actor context for pronunciation hints
-      if (actorIds.length > 0) {
-        const actorContext = await buildActorDescriptionsForAudio(actorIds, entityMap);
-        if (actorContext) textForTTS = actorContext.trim() + '\n\n' + textForTTS;
-      }
-    } else if (actorIds.length > 0) {
-      // Clean text (no placeholders): build entity map from known actor IDs for pronunciation context
-      const idsText = actorIds.map(id => `$$${id}$$`).join(' ');
-      const entityMap = await resolveEntitiesInText(idsText);
-      const actorContext = await buildActorDescriptionsForAudio(actorIds, entityMap);
-      if (actorContext) textForTTS = actorContext.trim() + '\n\n' + textForTTS;
     }
 
     console.log(`[story-audio-flow] Text for TTS: ${textForTTS.length} chars`);
