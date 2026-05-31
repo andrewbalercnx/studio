@@ -18,6 +18,17 @@
 
 ### 2026-05-30
 
+#### `d9e49bb` - Fix logAICallToTrace silent failures due to undefined values
+
+**Type**: Bug Fix
+
+**Summary**: Firestore Admin SDK rejects objects containing `undefined` values — `errorMessage: undefined` on every success path was causing every `logAICallToTrace` write to fail silently, leaving all run traces at 0 calls. Added `sanitizeForFirestore()` which recursively strips `undefined` fields and truncates strings over 20k characters (document size guard). Applied to both write paths (create and update).
+
+**Changes**:
+- `src/lib/ai-run-trace.ts` (MODIFIED): Added `sanitizeForFirestore()` helper; applied to `callTrace` before both Firestore write sites
+
+---
+
 #### `bdde79f` - Fix TTS reading actor descriptions instead of story text
 
 **Type**: Bug Fix
