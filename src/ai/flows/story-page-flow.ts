@@ -210,6 +210,13 @@ async function generateCoverImageScene(
     return `- ${a.id}: ${a.displayName}${detail}`;
   }).join('\n');
 
+  // Any actor whose display name appears in the title must be on the cover
+  const titleLower = title.toLowerCase();
+  const titleActors = allActors.filter(a => titleLower.includes(a.displayName.toLowerCase()));
+  const requiredSection = titleActors.length > 0
+    ? `\nREQUIRED ACTORS — named in the title, MUST appear in the actors array:\n${titleActors.map(a => `- ${a.id}: ${a.displayName}`).join('\n')}\n`
+    : '';
+
   const prompt = `You are an art director designing the FRONT COVER illustration for a personalized children's storybook.
 
 A great book cover:
@@ -219,7 +226,7 @@ A great book cover:
 - Creates an emotional hook that makes a child want to read the book
 
 STORY TITLE: "${title}"
-
+${requiredSection}
 SYNOPSIS:
 ${synopsis}
 
@@ -260,7 +267,16 @@ Return JSON only:
 
     // Strip any actor IDs the AI invented that aren't in our cast
     const knownIds = new Set(allActors.map(a => a.id));
+    const presentIds = new Set(output.imageScene.actors.map(a => a.id));
     const validActors = output.imageScene.actors.filter(a => knownIds.has(a.id));
+
+    // Guarantee any title-named actor is included even if the AI omitted them
+    for (const ta of titleActors) {
+      if (!presentIds.has(ta.id)) {
+        validActors.push({ id: ta.id, action: 'featured prominently, looking adventurous and inviting' });
+      }
+    }
+
     if (validActors.length === 0) return null;
 
     return { ...output.imageScene, actors: validActors } as ImageScene;

@@ -18,6 +18,17 @@
 
 ### 2026-05-31
 
+#### `e73746f` - Guarantee title-named characters appear on the front cover
+
+**Type**: Bug Fix
+
+**Summary**: If a character's display name appears in the story title (e.g. "Kiko and the Magical Forest"), they are now guaranteed to appear on the front cover. Two-layer enforcement: (1) a `REQUIRED ACTORS` section is injected into the art-director prompt; (2) after the AI responds, any title actor still missing from the validated actors array is inserted with a generic cover-appropriate action as a hard fallback.
+
+**Changes**:
+- `src/ai/flows/story-page-flow.ts` (MODIFIED): `generateCoverImageScene()` — detect title actors, inject required-actors section into prompt, post-process to re-insert any missing title actors
+
+---
+
 #### `d839f4d` - Add TTS capability map; drive audio-tag stripping from model capabilities
 
 **Type**: Refactor / Robustness
