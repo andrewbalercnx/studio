@@ -169,6 +169,30 @@ function generateCallId(): string {
 }
 
 /**
+ * Strip undefined values so Firestore Admin SDK doesn't reject the write.
+ * Also truncates very long strings to stay within Firestore's 1 MB document limit.
+ */
+function sanitizeForFirestore(obj: any, maxStringLength = 20_000): any {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== 'object') {
+    if (typeof obj === 'string' && obj.length > maxStringLength) {
+      return obj.slice(0, maxStringLength) + '…[truncated]';
+    }
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => sanitizeForFirestore(item, maxStringLength));
+  }
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      result[key] = sanitizeForFirestore(value, maxStringLength);
+    }
+  }
+  return result;
+}
+
+/**
  * Initialize a new AI run trace for a session
  */
 export async function initializeRunTrace(params: {
@@ -303,8 +327,8 @@ export async function logAICallToTrace(params: LogAICallParams): Promise<void> {
       tokenUsage.cachedContentTokens
     );
 
-    // Build the call trace
-    const callTrace: AICallTrace = {
+    // Build the call trace, then sanitize before writing (Firestore rejects undefined values)
+    const rawCallTrace: AICallTrace = {
       callId: generateCallId(),
       flowName: params.flowName,
       timestamp: new Date().toISOString(),
@@ -322,6 +346,7 @@ export async function logAICallToTrace(params: LogAICallParams): Promise<void> {
       status: isError ? 'error' : 'success',
       errorMessage: isError ? (params.error?.message || JSON.stringify(params.error)) : undefined,
     };
+    const callTrace = sanitizeForFirestore(rawCallTrace) as AICallTrace;
 
     // Update the trace document
     const traceDoc = await traceRef.get();
