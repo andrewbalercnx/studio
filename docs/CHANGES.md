@@ -18,6 +18,18 @@
 
 ### 2026-05-31
 
+#### `d839f4d` - Add TTS capability map; drive audio-tag stripping from model capabilities
+
+**Type**: Refactor / Robustness
+
+**Summary**: Replaces the hardcoded `apiVersion === 'v3'` branch in `replacePlaceholdersForTTS()` with a model-ID-keyed capability map (`ELEVENLABS_MODEL_CAPABILITIES`). Each entry declares `supportsAudioTags: boolean`. The function now calls `getElevenLabsModelId()` and `getModelCapabilities(modelId)` — if a future model is added, only `tts-config.ts` needs updating. Unknown model IDs safely fall back to `{ supportsAudioTags: false }` (strip tags).
+
+**Changes**:
+- `src/lib/tts-config.ts` (MODIFIED): Added `ElevenLabsModelCapabilities` type, `ELEVENLABS_MODEL_CAPABILITIES` map, and `getModelCapabilities()` helper
+- `src/lib/resolve-placeholders.server.ts` (MODIFIED): `replacePlaceholdersForTTS()` now imports `getElevenLabsModelId` + `getModelCapabilities` and branches on `capabilities.supportsAudioTags`; removed `getElevenLabsApiVersion` import
+
+---
+
 #### `f209923` - Strip stage directions from displayText only; preserve in bodyText for ElevenLabs v3
 
 **Type**: Bug Fix

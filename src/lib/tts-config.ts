@@ -66,6 +66,20 @@ export function getElevenLabsModel(version: ElevenLabsApiVersion): string {
   return ELEVENLABS_MODELS[version];
 }
 
+export type ElevenLabsModelCapabilities = {
+  supportsAudioTags: boolean; // Whether [tag] directives are rendered rather than read literally
+};
+
+// Capability map keyed by model ID string — safe fallback is no audio tag support
+export const ELEVENLABS_MODEL_CAPABILITIES: Record<string, ElevenLabsModelCapabilities> = {
+  'eleven_multilingual_v2': { supportsAudioTags: false },
+  'eleven_v3':              { supportsAudioTags: true  },
+};
+
+export function getModelCapabilities(modelId: string): ElevenLabsModelCapabilities {
+  return ELEVENLABS_MODEL_CAPABILITIES[modelId] ?? { supportsAudioTags: false };
+}
+
 export type StoryAudioFlowInput = {
   storyId: string;
   forceRegenerate?: boolean;

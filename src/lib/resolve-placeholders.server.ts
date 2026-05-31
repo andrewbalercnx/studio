@@ -2,7 +2,8 @@
 
 import { getServerFirestore } from '@/lib/server-firestore';
 import type { Character, ChildProfile } from '@/lib/types';
-import { getElevenLabsApiVersion } from '@/lib/get-elevenlabs-config.server';
+import { getElevenLabsModelId } from '@/lib/get-elevenlabs-config.server';
+import { getModelCapabilities } from '@/lib/tts-config';
 
 export type EntityMap = Map<string, { displayName: string; document: Character | ChildProfile }>;
 
@@ -161,8 +162,8 @@ export async function stripTTSDirectiveTags(text: string): Promise<string> {
  * This ensures names like "Siobhan" are pronounced correctly as "shiv-AWN".
  *
  * Also handles TTS directive tags like [emphasis], [British accent]:
- * - v2 (eleven_multilingual_v2): Strips all [...] tags (not supported)
- * - v3 (eleven_v3): Keeps [...] tags and adds [British accent] prefix
+ * - models with supportsAudioTags=false: strips all [...] tags
+ * - models with supportsAudioTags=true: keeps [...] tags and prepends [British accent]
  */
 export async function replacePlaceholdersForTTS(text: string, entityMap: EntityMap): Promise<string> {
   if (!text) return '';
@@ -185,14 +186,13 @@ export async function replacePlaceholdersForTTS(text: string, entityMap: EntityM
     return resolveEntity(id) || match;
   });
 
-  // Handle TTS directive tags based on ElevenLabs API version
-  const apiVersion = await getElevenLabsApiVersion();
+  // Handle TTS directive tags based on model capabilities
+  const modelId = await getElevenLabsModelId();
+  const capabilities = getModelCapabilities(modelId);
 
-  if (apiVersion === 'v3') {
-    // v3 supports directive tags - keep them and add British accent prefix
+  if (capabilities.supportsAudioTags) {
     result = '[British accent] ' + result;
   } else {
-    // v2 does not support directive tags - strip them
     result = await stripTTSDirectiveTags(result);
   }
 
