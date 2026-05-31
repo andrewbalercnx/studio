@@ -18,6 +18,17 @@
 
 ### 2026-05-30
 
+#### `070adeb` - Fix silent Firestore failure in logAICallToTrace
+
+**Type**: Bug Fix
+
+**Summary**: Every `logAICallToTrace` call was failing silently because `FieldValue.serverTimestamp()` cannot be placed inside a Firestore array element. The error was caught and swallowed, leaving all run traces at 0 calls despite the trace document existing. Fixed by using `new Date().toISOString()` for the per-call timestamp.
+
+**Changes**:
+- `src/lib/ai-run-trace.ts` (MODIFIED): `callTrace.timestamp` changed from `FieldValue.serverTimestamp()` to `new Date().toISOString()`
+
+---
+
 #### `0382e5a` - Show per-page image prompts in pipeline view
 
 **Type**: Observability
