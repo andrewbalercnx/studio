@@ -307,7 +307,7 @@ export async function logAICallToTrace(params: LogAICallParams): Promise<void> {
     const callTrace: AICallTrace = {
       callId: generateCallId(),
       flowName: params.flowName,
-      timestamp: FieldValue.serverTimestamp(),
+      timestamp: new Date().toISOString(),
       modelName: params.modelName,
       temperature: params.temperature,
       maxOutputTokens: params.maxOutputTokens,
