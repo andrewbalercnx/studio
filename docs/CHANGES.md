@@ -18,6 +18,23 @@
 
 ### 2026-05-31
 
+#### `cc362bd` - Fix beat conversation duplicates and pagination minimum contradiction
+
+**Type**: Bug Fix / Efficiency
+
+**Summary**:
+
+*storyBeatFlow*: `beat_options` messages ("What happens next?") were being passed to the AI as conversation history. They are UI-only Firestore state — the child's selection is already carried by the `child_choice` user message that follows. Including them caused consecutive model turns (invalid for Gemini) and wasted tokens, with each message appearing twice.
+
+*buildPageCountInstruction*: The minimum page count (e.g. 24 for case/hardcover binding) was expressed as "MINIMUM: At least N pages required," directly contradicting the "do not add content" pagination rule. The minimum is a print constraint satisfied by code-level blank-page padding, not by the AI stretching story content. Maximum remains a hard AI-enforced ceiling. Tests updated.
+
+**Changes**:
+- `src/ai/flows/story-beat-flow.ts` (MODIFIED): Filter `beat_options` from `conversationMessages` before passing to AI
+- `src/lib/print-constraints.ts` (MODIFIED): `buildPageCountInstruction` — max is hard ceiling, min becomes a blank-page padding note
+- `src/lib/__tests__/print-constraints.test.ts` (MODIFIED): Updated test expectations to match new semantics
+
+---
+
 #### `55f6daf` - Guarantee main child appears on front and back covers
 
 **Type**: Bug Fix

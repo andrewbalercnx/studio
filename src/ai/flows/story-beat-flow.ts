@@ -196,10 +196,15 @@ export const storyBeatFlow = ai.defineFlow(
                 : null;
 
             // Windowed conversation for AI (new system uses last CONTEXT_WINDOW messages only)
-            const conversationMessages: MessageData[] = recentResolved.map(({ data, resolvedText }) => ({
-                role: data.sender === 'assistant' ? 'model' : 'user',
-                content: [{ text: resolvedText }],
-            }));
+            // beat_options messages ("What happens next?") are UI-only — exclude them from the AI
+            // context to avoid consecutive model turns and token waste. The selected choice is
+            // already carried by the child_choice user message that follows.
+            const conversationMessages: MessageData[] = recentResolved
+                .filter(({ data }) => data.kind !== 'beat_options')
+                .map(({ data, resolvedText }) => ({
+                    role: data.sender === 'assistant' ? 'model' : 'user',
+                    content: [{ text: resolvedText }],
+                }));
 
             // Full message list for trace logging and legacy storySoFar
             const allConversationMessages = [...historicalResolved, ...recentResolved];

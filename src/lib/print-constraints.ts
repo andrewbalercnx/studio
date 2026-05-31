@@ -227,13 +227,14 @@ export function buildPageCountInstruction(
     parts.push(`PAGE COUNT: Use your judgment to create an appropriate number of pages (typically 8-16 for a picture book).`);
   }
 
-  // Constraint guidance
-  if (constraints.minPages > 0 && constraints.maxPages > 0) {
-    parts.push(`RANGE: Must be between ${constraints.minPages} and ${constraints.maxPages} pages.`);
-  } else if (constraints.minPages > 0) {
-    parts.push(`MINIMUM: At least ${constraints.minPages} pages required.`);
-  } else if (constraints.maxPages > 0) {
-    parts.push(`MAXIMUM: No more than ${constraints.maxPages} pages.`);
+  // Maximum is a hard ceiling — AI must merge pages to stay within it.
+  // Minimum is a print/binding constraint satisfied by blank-page padding in code,
+  // NOT by the AI stretching content. Never tell the AI to invent content to hit a minimum.
+  if (constraints.maxPages > 0) {
+    parts.push(`MAXIMUM: No more than ${constraints.maxPages} pages — merge content if needed.`);
+  }
+  if (constraints.minPages > 0) {
+    parts.push(`Note: The print format needs at least ${constraints.minPages} pages total; any shortfall is filled with blank pages automatically — do not pad or repeat content to reach this number.`);
   }
 
   return parts.join(' ');

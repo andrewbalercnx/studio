@@ -125,19 +125,22 @@ describe('buildPageCountInstruction', () => {
     expect(result).toMatch(/aim for/i);
   });
 
-  it('includes range when both min and max are set', () => {
+  it('includes max as hard ceiling and min as padding note when both set', () => {
     const constraints = withConstraints({minPages: 8, maxPages: 24 });
     const result = buildPageCountInstruction(0, constraints);
     expect(result).toContain('8');
     expect(result).toContain('24');
-    expect(result).toMatch(/between/i);
+    expect(result).toMatch(/maximum/i);
+    // min is expressed as a padding note, not a content requirement
+    expect(result).not.toMatch(/range.*between/i);
   });
 
-  it('states minimum only when max is 0', () => {
+  it('expresses minimum as a blank-page padding note, not a content requirement', () => {
     const constraints = withConstraints({minPages: 16, maxPages: 0 });
     const result = buildPageCountInstruction(0, constraints);
     expect(result).toContain('16');
-    expect(result).toMatch(/minimum/i);
+    // should mention blank/padding, not "you must produce this many pages"
+    expect(result).toMatch(/blank|pad/i);
     expect(result).not.toMatch(/maximum/i);
   });
 
@@ -146,7 +149,7 @@ describe('buildPageCountInstruction', () => {
     const result = buildPageCountInstruction(0, constraints);
     expect(result).toContain('20');
     expect(result).toMatch(/maximum/i);
-    expect(result).not.toMatch(/minimum/i);
+    expect(result).not.toMatch(/blank|pad/i);
   });
 });
 
