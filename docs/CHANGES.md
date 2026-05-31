@@ -18,6 +18,17 @@
 
 ### 2026-05-31
 
+#### `4eda4ee` - Generate AI-designed cover imageScene for front cover page
+
+**Type**: Feature / Image Quality
+
+**Summary**: The front cover image prompt was previously a static template (synopsis + three bullet points), giving the image model no direction on character poses, composition, or framing. Added `generateCoverImageScene()` — a dedicated Gemini 2.5 Flash call that acts as art director: picks the most visually compelling moment and setting from the story, writes specific dynamic poses for each character, and provides rich composition guidance (focal point, framing, mood) via the `atmosphere` field. The result is stored as `page.imageScene` (same structure as interior pages) and picked up by `buildMechanicalScenePrompt()` in `story-image-flow.ts` with no changes required. The Promise is fired before `storyPaginationFlow` so both run concurrently — zero added sequential latency. Falls back to the existing synopsis-based `imagePrompt` if the AI call fails or returns no valid actors.
+
+**Changes**:
+- `src/ai/flows/story-page-flow.ts` (MODIFIED): Added `CoverImageSceneOutputSchema`, `generateCoverImageScene()` function, cover Promise started before pagination, result awaited and attached as `page.imageScene` on cover page
+
+---
+
 #### `646984e` - Parallelize Firestore queries on my-books page for faster load
 
 **Type**: Performance Optimisation

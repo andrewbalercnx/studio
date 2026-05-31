@@ -6,7 +6,7 @@ import { ai } from '@/ai/genkit';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
-import type { Story, StorySession, ChildProfile, Character, StoryBookPage as StoryBookPageType, StoryOutputType } from '@/lib/types';
+import type { Story, StorySession, ChildProfile, Character, StoryBookPage as StoryBookPageType, StoryOutputType, ImageScene } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { logServerSessionEvent as logSessionEvent } from '@/lib/session-events.server';
 import {
@@ -173,6 +173,97 @@ function buildImagePrompt(
 
   // Return just the scene description - actor details are added by story-image-flow.ts
   return sceneDescription;
+}
+
+const CoverImageSceneOutputSchema = z.object({
+  imageScene: z.object({
+    locationKey: z.string(),
+    locationDescription: z.string(),
+    actors: z.array(z.object({
+      id: z.string(),
+      action: z.string(),
+      facing: z.string().optional(),
+    })),
+    atmosphere: z.string(),
+    sceneTag: z.enum(['indoor-day', 'outdoor-day', 'indoor-night', 'outdoor-night']),
+  }),
+});
+
+/**
+ * Call the AI to design a structured imageScene for the front cover.
+ * Runs concurrently with storyPaginationFlow so it adds no sequential latency.
+ * Returns null on failure — the cover page falls back to imagePrompt (synopsis) in that case.
+ */
+async function generateCoverImageScene(
+  title: string,
+  synopsis: string | null | undefined,
+  allActors: (Character | ChildProfile)[],
+): Promise<ImageScene | null> {
+  if (!synopsis || synopsis.trim().length === 0 || allActors.length === 0) return null;
+
+  const actorLines = allActors.map(a => {
+    const desc = a.description ? ` — ${a.description}` : '';
+    return `- ${a.id}: ${a.displayName}${desc}`;
+  }).join('\n');
+
+  const prompt = `You are an art director designing the FRONT COVER illustration for a personalized children's storybook.
+
+A great book cover:
+- Features the main character(s) in a dynamic, iconic pose that immediately draws children in
+- Conveys the adventure, magic, or emotion of the story at a single glance
+- Has one clear focal composition — characters are large, prominent, and engaging
+- Creates an emotional hook that makes a child want to read the book
+
+STORY TITLE: "${title}"
+
+SYNOPSIS:
+${synopsis}
+
+CHARACTERS (use these exact IDs — do NOT substitute display names):
+${actorLines}
+
+Design the cover illustration scene. Choose the most visually compelling setting and hero moment from the story. For each character, write a specific, dynamic action and expression that works as a book cover pose — not just a scene from the text, but an iconic, inviting image.
+
+Use the \`atmosphere\` field for rich composition guidance: describe the focal point, character positions in the frame (foreground/mid/background, left/right/centre), camera framing (wide shot, medium, close-up), and the emotional tone the cover should convey.
+
+Return JSON only:
+{
+  "imageScene": {
+    "locationKey": "short-label",
+    "locationDescription": "detailed visual description of the setting",
+    "actors": [
+      { "id": "exact-actor-id", "action": "specific dynamic action and expression for the cover pose" }
+    ],
+    "atmosphere": "Cover composition: [describe framing and focal point]; [character positions in frame]; [mood, lighting, emotional tone]",
+    "sceneTag": "one of: indoor-day, outdoor-day, indoor-night, outdoor-night"
+  }
+}`;
+
+  try {
+    const response = await ai.generate({
+      model: 'googleai/gemini-2.5-flash',
+      prompt,
+      output: { schema: CoverImageSceneOutputSchema },
+      config: {
+        temperature: 0.7,
+        maxOutputTokens: 800,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+
+    const output = response.output;
+    if (!output?.imageScene) return null;
+
+    // Strip any actor IDs the AI invented that aren't in our cast
+    const knownIds = new Set(allActors.map(a => a.id));
+    const validActors = output.imageScene.actors.filter(a => knownIds.has(a.id));
+    if (validActors.length === 0) return null;
+
+    return { ...output.imageScene, actors: validActors } as ImageScene;
+  } catch (err: any) {
+    console.warn('[storyPageFlow] Cover image scene generation failed, using static fallback:', err?.message ?? err);
+    return null;
+  }
 }
 
 /**
@@ -412,6 +503,9 @@ export const storyPageFlow = ai.defineFlow(
         },
       };
 
+      // Start cover image scene generation now — runs concurrently with pagination below
+      const coverImageScenePromise = generateCoverImageScene(derivedTitle, story.synopsis, allActors);
+
       // Use AI-driven pagination if we have a storyOutputTypeId
       // This replaces the old chunkSentences algorithm
       let chunks: string[][] = [];
@@ -474,16 +568,19 @@ export const storyPageFlow = ai.defineFlow(
       // =================================================================
       // FRONT COVER (page 0)
       // - Text: Title / by / Child name (three lines, centered)
-      // - Image: Derived from synopsis + full list of actors
+      // - Image: AI-designed scene (falls back to synopsis-based prompt)
       // =================================================================
       const frontCoverText = `${derivedTitle}\nby\n${childName}`;
+      // Await the cover scene that was started concurrently with pagination above
+      const coverImageScene = await coverImageScenePromise.catch(() => null);
       pages.push({
         pageNumber: pageNumber++,
         kind: 'cover_front',
         title: derivedTitle,
         bodyText: frontCoverText,
         displayText: frontCoverText,
-        entityIds: allActorIds, // All actors for the cover image
+        entityIds: allActorIds,
+        imageScene: coverImageScene ?? undefined,
         imagePrompt: buildFrontCoverImagePrompt(story.synopsis, derivedTitle, child, allActors),
         imageUrl: choosePlaceholderImage(0),
         layoutHints: { aspectRatio: 'portrait', textPlacement: 'bottom' },
