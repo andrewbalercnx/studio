@@ -16,6 +16,23 @@
 
 ## Changes
 
+### 2026-05-31
+
+#### `af41ba6` - Switch story beat and compile flows to Gemini Flash, disable thinking, fix world state ID double-wrapping
+
+**Type**: Performance Optimisation / Bug Fix
+
+**Summary**: Three independent changes to reduce story beat latency and cost. (1) Both `storyBeatFlow` and `storyTextCompileFlow` now default to `gemini-2.5-flash` instead of `gemini-2.5-pro`, reducing per-beat cost ~65% and latency from ~10s to ~3-4s. (2) `thinkingConfig: { thinkingBudget: 0 }` is set for all Gemini 2.5 calls in both flows, eliminating thinking tokens which were 28% of total cost with no quality benefit for story generation. (3) The world state `presentActorIds` storage now strips `$$…$$` wrappers that the AI model echoes back from the prompt — without this strip, the second beat onwards would double-wrap IDs to `$$$$id$$$$`, breaking cross-beat character continuity.
+
+**Changes**:
+- `src/ai/flows/story-beat-flow.ts` (MODIFIED): Default model `gemini-2.5-pro` → `gemini-2.5-flash`; added `beatGenConfig` with `thinkingConfig: { thinkingBudget: 0 }` applied to both new-system and legacy `ai.generate` calls; strip `$$` from `scene.presentActors` before storing in `worldState.presentActorIds`
+- `src/ai/flows/story-text-compile-flow.ts` (MODIFIED): Model `gemini-2.5-pro` → `gemini-2.5-flash`; added `thinkingConfig: { thinkingBudget: 0 }` to both the primary and retry `ai.generate` calls
+
+**Pending dev todos (network blocked, add manually)**:
+- Streaming story beat responses (high priority, performance)
+- Scene-filtered character context per beat (medium, performance)
+- Beat 1 cold-start prefetch / connection warm-up (medium, performance)
+
 ### 2026-05-30
 
 #### `d9e49bb` - Fix logAICallToTrace silent failures due to undefined values

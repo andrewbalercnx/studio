@@ -308,8 +308,15 @@ ${generateStoryBeatOutputDescription()}
             // 6. Call Genkit AI
             debug.stage = 'ai_generate';
 
-            // Determine model name from storyType or use default
-            const modelName = storyType.promptConfig?.model?.name || 'googleai/gemini-2.5-pro';
+            // Determine model name from storyType or use default (flash for low latency)
+            const modelName = storyType.promptConfig?.model?.name || 'googleai/gemini-2.5-flash';
+            // Disable thinking for beat generation — story beats don't benefit from extended reasoning,
+            // and thinking tokens represent ~28% of cost with no quality gain for this task.
+            const beatGenConfig = {
+                temperature: modelTemperature,
+                maxOutputTokens: maxOutputTokens,
+                ...(modelName.includes('gemini-2.5') && { thinkingConfig: { thinkingBudget: 0 } }),
+            };
 
             let llmResponse;
             const startTime = Date.now();
@@ -336,10 +343,7 @@ ${generateStoryBeatOutputDescription()}
                         system: finalPrompt,
                         messages: conversationMessages,
                         output: { schema: StoryBeatOutputSchema },
-                        config: {
-                            temperature: modelTemperature,
-                            maxOutputTokens: maxOutputTokens,
-                        }
+                        config: beatGenConfig,
                     });
                 } else {
                     // LEGACY SYSTEM: Use prompt with embedded STORY SO FAR
@@ -348,10 +352,7 @@ ${generateStoryBeatOutputDescription()}
                         model: modelName,
                         prompt: finalPrompt,
                         output: { schema: StoryBeatOutputSchema },
-                        config: {
-                            temperature: modelTemperature,
-                            maxOutputTokens: maxOutputTokens,
-                        }
+                        config: beatGenConfig,
                     });
                 }
 
@@ -524,7 +525,11 @@ ${generateStoryBeatOutputDescription()}
             // Fire-and-forget: persist world state from this beat for next beat's context
             if (structuredOutput.scene) {
                 const newWorldState: WorldState = {
-                    presentActorIds: structuredOutput.scene.presentActors || [],
+                    // Strip any $$…$$ wrappers the model may have echoed back from the prompt;
+                    // worldState stores plain IDs and the prompt builder re-wraps them.
+                    presentActorIds: (structuredOutput.scene.presentActors || []).map(id =>
+                        id.replace(/^\$\$|\$\$$/g, '')
+                    ),
                     currentLocation: structuredOutput.scene.location ?? undefined,
                 };
                 firestore.collection('storySessions').doc(sessionId).update({ worldState: newWorldState })

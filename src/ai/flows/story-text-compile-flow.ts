@@ -277,7 +277,8 @@ Respond with only the JSON object now.`;
             // The story text + synopsis JSON can exceed 4000 tokens for longer narratives
             const maxOutputTokens = 8192;
             const temperature = 0.5;
-            const modelName = 'googleai/gemini-2.5-pro';
+            const modelName = 'googleai/gemini-2.5-flash';
+            const compileGenConfig = { temperature, maxOutputTokens, thinkingConfig: { thinkingBudget: 0 } };
 
             let llmResponse;
             let structuredOutput;
@@ -288,7 +289,7 @@ Respond with only the JSON object now.`;
                     model: modelName,
                     prompt: systemPrompt,
                     output: { schema: StoryTextCompileResultSchema },
-                    config: { temperature, maxOutputTokens },
+                    config: compileGenConfig,
                 });
                 await logAIFlow({ flowName: 'storyTextCompileFlow', sessionId, parentId: parentUid, prompt: systemPrompt, response: llmResponse, startTime, modelName });
                 await logAICallToTrace({
@@ -332,7 +333,7 @@ Respond with only the JSON object now.`;
                         llmResponse = await ai.generate({
                             model: modelName,
                             prompt: systemPrompt,
-                            config: { temperature, maxOutputTokens },
+                            config: compileGenConfig,
                         });
                         await logAIFlow({ flowName: 'storyTextCompileFlow:retry', sessionId, parentId: parentUid, prompt: systemPrompt, response: llmResponse, startTime: retryStartTime, modelName });
                         await logAICallToTrace({
