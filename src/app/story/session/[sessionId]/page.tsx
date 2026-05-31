@@ -317,6 +317,13 @@ export default function StorySessionPage() {
         }
     }, [session?.storyOutputTypeId, session?.status, storyBook?.pageGeneration?.status, storyBook?.selectedImageStyleId, storyBook?.imageGeneration?.status, sessionId, router, storyBook]);
 
+    // AI connection warm-up: fire a minimal 1-token call on mount so the TCP/TLS connection
+    // and HTTP/2 session to Google AI are established before the child selects a story type.
+    // The first story beat then runs on a warm connection instead of paying cold-start overhead.
+    useEffect(() => {
+        fetch('/api/ai-warmup', { method: 'POST' }).catch(() => {});
+    }, []);
+
     const latestOptionsMessage = useMemo(() => {
         if (!messages) return null;
         // Find the most recent message that has interactive options

@@ -18,6 +18,18 @@
 
 ### 2026-05-31
 
+#### `977e6d5` - AI connection warm-up on session page mount
+
+**Type**: Performance Optimisation
+
+**Summary**: Added a fire-and-forget `/api/ai-warmup` endpoint that makes a 1-token `gemini-2.5-flash` call. The story session page triggers this on mount — during the story type selection phase (10–30 seconds of user think-time) — so the TCP/TLS connection and HTTP/2 session to the Google AI API are established before the first story beat fires. Eliminates the cold-start overhead that made beat 1 consistently ~2× slower than subsequent beats.
+
+**Changes**:
+- `src/app/api/ai-warmup/route.ts` (NEW): Minimal warm-up endpoint; 1-token Flash generation, no auth required, cost ~$0.000001 per call
+- `src/app/story/session/[sessionId]/page.tsx` (MODIFIED): `useEffect` fires `/api/ai-warmup` once on mount
+
+---
+
 #### `af41ba6` - Switch story beat and compile flows to Gemini Flash, disable thinking, fix world state ID double-wrapping
 
 **Type**: Performance Optimisation / Bug Fix
