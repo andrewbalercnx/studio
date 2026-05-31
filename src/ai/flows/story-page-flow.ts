@@ -199,6 +199,7 @@ async function generateCoverImageScene(
   title: string,
   synopsis: string | null | undefined,
   allActors: (Character | ChildProfile)[],
+  mainChildId?: string,
 ): Promise<ImageScene | null> {
   if (!synopsis || synopsis.trim().length === 0 || allActors.length === 0) return null;
 
@@ -213,8 +214,12 @@ async function generateCoverImageScene(
   // Any actor whose display name appears in the title must be on the cover
   const titleLower = title.toLowerCase();
   const titleActors = allActors.filter(a => titleLower.includes(a.displayName.toLowerCase()));
-  const requiredSection = titleActors.length > 0
-    ? `\nREQUIRED ACTORS — named in the title, MUST appear in the actors array:\n${titleActors.map(a => `- ${a.id}: ${a.displayName}`).join('\n')}\n`
+  // The main child must always be on the front cover, plus any actor named in the title
+  const requiredIds = new Set<string>(titleActors.map(a => a.id));
+  if (mainChildId) requiredIds.add(mainChildId);
+  const requiredActors = allActors.filter(a => requiredIds.has(a.id));
+  const requiredSection = requiredActors.length > 0
+    ? `\nREQUIRED ACTORS — MUST appear in the actors array:\n${requiredActors.map(a => `- ${a.id}: ${a.displayName}`).join('\n')}\n`
     : '';
 
   const prompt = `You are an art director designing the FRONT COVER illustration for a personalized children's storybook.
@@ -270,10 +275,10 @@ Return JSON only:
     const presentIds = new Set(output.imageScene.actors.map(a => a.id));
     const validActors = output.imageScene.actors.filter(a => knownIds.has(a.id));
 
-    // Guarantee any title-named actor is included even if the AI omitted them
-    for (const ta of titleActors) {
-      if (!presentIds.has(ta.id)) {
-        validActors.push({ id: ta.id, action: 'featured prominently, looking adventurous and inviting' });
+    // Guarantee all required actors appear (main child + title-named characters)
+    for (const ra of requiredActors) {
+      if (!presentIds.has(ra.id)) {
+        validActors.push({ id: ra.id, action: 'featured prominently, looking adventurous and inviting' });
       }
     }
 
@@ -346,6 +351,7 @@ async function generateBackCoverImageScene(
   title: string,
   synopsis: string | null | undefined,
   allActors: (Character | ChildProfile)[],
+  mainChildId?: string,
 ): Promise<ImageScene | null> {
   if (allActors.length === 0) return null;
 
@@ -359,6 +365,12 @@ async function generateBackCoverImageScene(
 
   const synopsisLine = synopsis ? `\n\nSTORY SYNOPSIS:\n${synopsis}` : '';
 
+  // The main child must always appear on the back cover
+  const mainChild = mainChildId ? allActors.find(a => a.id === mainChildId) : undefined;
+  const requiredSection = mainChild
+    ? `\nREQUIRED ACTOR — MUST appear in the actors array:\n- ${mainChild.id}: ${mainChild.displayName}\n`
+    : '';
+
   const prompt = `You are designing the BACK COVER illustration for a personalized children's storybook titled "${title}".${synopsisLine}
 
 The back cover should:
@@ -366,7 +378,7 @@ The back cover should:
 - Feel like a satisfying conclusion: characters together, relaxed, celebrating or reflecting
 - Contain NO text or words in the illustration
 - Be warm, cosy, and emotionally satisfying — the perfect final image for a child's book
-
+${requiredSection}
 CHARACTERS (use these exact IDs — do NOT substitute display names):
 ${actorLines}
 
@@ -401,7 +413,14 @@ Return JSON only:
     if (!output?.imageScene) return null;
 
     const knownIds = new Set(allActors.map(a => a.id));
+    const presentIds = new Set(output.imageScene.actors.map(a => a.id));
     const validActors = output.imageScene.actors.filter(a => knownIds.has(a.id));
+
+    // Guarantee the main child always appears on the back cover
+    if (mainChild && !presentIds.has(mainChild.id)) {
+      validActors.push({ id: mainChild.id, action: 'smiling warmly, looking happy and content at the end of the adventure' });
+    }
+
     if (validActors.length === 0) return null;
 
     return { ...output.imageScene, actors: validActors } as ImageScene;
@@ -605,8 +624,10 @@ export const storyPageFlow = ai.defineFlow(
       };
 
       // Start front and back cover scene generation now — both run concurrently with pagination below
-      const coverImageScenePromise = generateCoverImageScene(derivedTitle, story.synopsis, allActors);
-      const backCoverImageScenePromise = generateBackCoverImageScene(derivedTitle, story.synopsis, allActors);
+      // Include the main child in coverActors so they always appear on front and back covers
+      const coverActors = child ? [child, ...allActors] : allActors;
+      const coverImageScenePromise = generateCoverImageScene(derivedTitle, story.synopsis, coverActors, child?.id);
+      const backCoverImageScenePromise = generateBackCoverImageScene(derivedTitle, story.synopsis, coverActors, child?.id);
 
       // Use AI-driven pagination if we have a storyOutputTypeId
       // This replaces the old chunkSentences algorithm

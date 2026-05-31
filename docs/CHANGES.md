@@ -18,6 +18,22 @@
 
 ### 2026-05-31
 
+#### `55f6daf` - Guarantee main child appears on front and back covers
+
+**Type**: Bug Fix
+
+**Summary**: The main child was missing from both cover illustrations because `allActors` was built from `otherActorIds` (supporting cast only) — the main child was loaded separately but never included. The AI art director therefore designed covers with only the supporting cast.
+
+Three-layer fix:
+1. `coverActors = [child, ...allActors]` — child now fed into both cover AI calls
+2. Front cover: child added to `requiredActors` unconditionally (alongside title-named characters); hard fallback inserts them if the AI still omits them
+3. Back cover: `mainChildId` parameter + `REQUIRED ACTOR` prompt section + hard fallback insertion
+
+**Changes**:
+- `src/ai/flows/story-page-flow.ts` (MODIFIED): `coverActors` includes main child; `generateCoverImageScene` and `generateBackCoverImageScene` both accept `mainChildId` and enforce child presence in prompt and post-processing
+
+---
+
 #### `e73746f` - Guarantee title-named characters appear on the front cover
 
 **Type**: Bug Fix
