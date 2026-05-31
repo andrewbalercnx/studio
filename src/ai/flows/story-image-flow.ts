@@ -773,18 +773,11 @@ async function uploadImageToStorage(params: {
 function buildMechanicalScenePrompt(
   imageScene: ImageScene,
   canonicalLocation: string,
-  actorMap: Map<string, Character | ChildProfile>,
-  mainChildId?: string,
-  childProfile?: ChildProfile
 ): string {
   const count = imageScene.actors.length;
   const actorLines = imageScene.actors.map(a => {
-    const entity = actorMap.get(a.id);
-    const name = entity?.displayName
-      ?? (a.id === mainChildId ? childProfile?.displayName : undefined)
-      ?? a.id;
     const facing = a.facing ? `, ${a.facing}` : '';
-    return `• ${name} ($$${a.id}$$): ${a.action}${facing}`;
+    return `• $$${a.id}$$: ${a.action}${facing}`;
   }).join('\n');
 
   const countWord = count === 1 ? '1 character' : `${count} characters`;
@@ -1012,7 +1005,7 @@ REQUIREMENTS FOR THE BACK COVER:
 
       // Build the explicit image-to-actor mapping
       const imageMapping = loadedExemplars.map((e, idx) =>
-        `- Image ${styleCount + idx + 1}: Reference sheet for "${e.displayName}" ($$${e.actorId}$$)`
+        `- Image ${styleCount + idx + 1}: $$${e.actorId}$$`
       ).join('\n');
 
       structuredPrompt += `IMPORTANT: The images provided after the style examples are CHARACTER REFERENCE SHEETS.
@@ -1566,9 +1559,6 @@ export const storyImageFlow = ai.defineFlow(
           sceneText = buildMechanicalScenePrompt(
             page.imageScene,
             canonicalLocation,
-            entityData.actorMap,
-            storyData.childId,
-            childProfile ?? undefined
           );
           logs.push(`[scene] Using structured imageScene (locationKey="${page.imageScene.locationKey}", actors=${page.imageScene.actors.length})`);
         } else {

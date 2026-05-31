@@ -18,6 +18,17 @@
 
 ### 2026-05-31
 
+#### `30576eb` - Use $id$ only in image generation prompts (drop character names)
+
+**Type**: Image Quality / Prompt Engineering
+
+**Summary**: Image prompts previously mixed character names (e.g. "Nymira") with IDs (e.g. `$my-first-child-147343$`), creating dual-identity ambiguity. The image model derives all visual appearance from reference sheets, not from names. Switching to pure `$id$`-only format in actor bullet lines and image-to-sheet mapping makes the prompts self-consistent. The character JSON block (with `displayName`, `description`, personality fields) is unchanged — it provides Peppa Pig character selection context.
+
+**Changes**:
+- `src/ai/flows/story-image-flow.ts` (MODIFIED): `buildMechanicalScenePrompt` drops name from actor lines (was `• Name ($id$): action`, now `• $id$: action`); image mapping drops displayName (was `Reference sheet for "Name" ($id$)`, now `$id$`); removed unused `actorMap`, `mainChildId`, `childProfile` params from function signature and call site
+
+---
+
 #### `977e6d5` - AI connection warm-up on session page mount
 
 **Type**: Performance Optimisation
