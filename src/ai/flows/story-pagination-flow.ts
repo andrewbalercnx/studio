@@ -276,7 +276,7 @@ IMPORTANT:
 - actors is an array of actor IDs (without the $$ markers) that appear on that page
 - imageScene describes the illustration for this page in structured form:
   * locationKey: a short, consistent label for the setting (e.g., "kitchen", "garden", "bedroom"). Use the EXACT same key for the same location across pages — this enforces visual consistency
-  * locationDescription: a detailed visual description of the environment. For the FIRST use of a locationKey, describe it fully. For subsequent pages at the same location, use the identical description
+  * locationDescription: a detailed visual description of the environment. For the FIRST use of a locationKey, describe it fully. For SUBSEQUENT pages at the SAME locationKey, set locationDescription to an empty string ("") — the system stores the first description in a registry and fills it in automatically
   * actors: list EVERY actor from the actors array above — no more, no fewer. Each entry must have the actor's ID (without $$) and a specific action describing what they are physically doing and their expression/pose. Do NOT use vague phrases like "standing nearby" or "in the background" — be explicit
   * atmosphere: mood, lighting, time of day, and emotional tone of the scene
   * sceneTag: classify the scene as exactly one of: indoor-day (interior in daylight/morning), outdoor-day (outside in daylight), indoor-night (interior at night/bedtime with lamp or moonlight), outdoor-night (outside at night/twilight/magical setting)

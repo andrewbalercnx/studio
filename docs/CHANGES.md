@@ -18,6 +18,23 @@
 
 ### 2026-05-31
 
+#### `3f7b790` - Fix back cover scene, location redundancy, and stage direction leak
+
+**Type**: Bug Fix / Image Quality / Performance
+
+**Summary**: Three fixes in one commit:
+1. **Back cover imageScene** — `generateBackCoverImageScene()` added alongside `generateCoverImageScene()`. Both fire concurrently with pagination (zero added latency). The AI designs a warm, joyful, concluding scene with specific actor poses and composition guidance, replacing the previous single-line generic prompt.
+2. **Location description redundancy** — Pagination prompt updated to instruct the AI to use an empty `locationDescription` string on repeated `locationKey` references (the registry holds the canonical description). `canonicalLocation` resolution in the image flow updated to use `||` so empty strings fall through to `locationKey` as a last resort.
+3. **Stage direction leak** — Compiled story text now has `[Word]` / `[Short phrase]` bracket stage directions stripped (regex `/\[[A-Za-z][^\[\]]*\]\s*/g`) before being stored to Firestore. These TTS/emotion cues from the beat AI (e.g. `[Happily]`, `[whispering softly]`) were appearing in visual page text and being read verbatim by TTS.
+
+**Changes**:
+- `src/ai/flows/story-page-flow.ts` (MODIFIED): Added `BackCoverImageSceneOutputSchema`, `generateBackCoverImageScene()`, back cover Promise started concurrently, result attached as `page.imageScene`; simplified `buildBackCoverImagePrompt()` signature
+- `src/ai/flows/story-pagination-flow.ts` (MODIFIED): Updated `locationDescription` instruction in pagination prompt
+- `src/ai/flows/story-image-flow.ts` (MODIFIED): `canonicalLocation` uses `||` (not `??`) to treat empty string as a miss
+- `src/ai/flows/story-text-compile-flow.ts` (MODIFIED): Strip stage-direction brackets from compiled `storyText` before storing
+
+---
+
 #### `4ce1fe1` - Include imageDescription in cover scene generation actor roster
 
 **Type**: Bug Fix

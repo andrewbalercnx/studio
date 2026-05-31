@@ -300,17 +300,98 @@ VISUAL DIRECTION:
 }
 
 /**
- * Build image prompt for the back cover
- * Note: Actor details are added by story-image-flow.ts via buildActorsJson,
- * so this function only provides the scene description context.
+ * Build image prompt for the back cover (fallback when AI scene generation fails).
  */
-function buildBackCoverImagePrompt(
-  _storyTitle: string,
-  _child?: ChildProfile | null,
-  _allActors: (Character | ChildProfile)[] = []
-): string {
-  // Return scene description - actor details are added by story-image-flow.ts
+function buildBackCoverImagePrompt(): string {
   return `Create an image for the back cover of a storybook, with no text or words in the image.\n\nShow the characters celebrating together in a joyful scene.`;
+}
+
+const BackCoverImageSceneOutputSchema = z.object({
+  imageScene: z.object({
+    locationKey: z.string(),
+    locationDescription: z.string(),
+    actors: z.array(z.object({
+      id: z.string(),
+      action: z.string(),
+      facing: z.string().optional(),
+    })),
+    atmosphere: z.string(),
+    sceneTag: z.enum(['indoor-day', 'outdoor-day', 'indoor-night', 'outdoor-night']),
+  }),
+});
+
+/**
+ * Call the AI to design a structured imageScene for the back cover.
+ * Runs concurrently with pagination and front cover generation.
+ * Returns null on failure — falls back to the generic imagePrompt.
+ */
+async function generateBackCoverImageScene(
+  title: string,
+  synopsis: string | null | undefined,
+  allActors: (Character | ChildProfile)[],
+): Promise<ImageScene | null> {
+  if (allActors.length === 0) return null;
+
+  const actorLines = allActors.map(a => {
+    const parts: string[] = [];
+    if (a.description) parts.push(a.description);
+    if (a.imageDescription) parts.push(`Appearance: ${a.imageDescription}`);
+    const detail = parts.length > 0 ? ` — ${parts.join('. ')}` : '';
+    return `- ${a.id}: ${a.displayName}${detail}`;
+  }).join('\n');
+
+  const synopsisLine = synopsis ? `\n\nSTORY SYNOPSIS:\n${synopsis}` : '';
+
+  const prompt = `You are designing the BACK COVER illustration for a personalized children's storybook titled "${title}".${synopsisLine}
+
+The back cover should:
+- Show all the main characters in a warm, joyful, celebratory scene — the story is over and everyone is happy
+- Feel like a satisfying conclusion: characters together, relaxed, celebrating or reflecting
+- Contain NO text or words in the illustration
+- Be warm, cosy, and emotionally satisfying — the perfect final image for a child's book
+
+CHARACTERS (use these exact IDs — do NOT substitute display names):
+${actorLines}
+
+Design a specific back cover scene. Write a concrete action and expression for each character. Use the \`atmosphere\` field for composition guidance: describe character positions in frame, the mood, and lighting.
+
+Return JSON only:
+{
+  "imageScene": {
+    "locationKey": "short-label",
+    "locationDescription": "detailed visual description of the setting",
+    "actors": [
+      { "id": "exact-actor-id", "action": "specific joyful action and expression" }
+    ],
+    "atmosphere": "Warm, celebratory composition: [character positions]; [mood and lighting]",
+    "sceneTag": "one of: indoor-day, outdoor-day, indoor-night, outdoor-night"
+  }
+}`;
+
+  try {
+    const response = await ai.generate({
+      model: 'googleai/gemini-2.5-flash',
+      prompt,
+      output: { schema: BackCoverImageSceneOutputSchema },
+      config: {
+        temperature: 0.7,
+        maxOutputTokens: 600,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+
+    const output = response.output;
+    if (!output?.imageScene) return null;
+
+    const knownIds = new Set(allActors.map(a => a.id));
+    const validActors = output.imageScene.actors.filter(a => knownIds.has(a.id));
+    if (validActors.length === 0) return null;
+
+    return { ...output.imageScene, actors: validActors } as ImageScene;
+  } catch (err: any) {
+    console.warn('[storyPageFlow] Back cover image scene generation failed, using static fallback:', err?.message ?? err);
+    return null;
+  }
 }
 
 
@@ -506,8 +587,9 @@ export const storyPageFlow = ai.defineFlow(
         },
       };
 
-      // Start cover image scene generation now — runs concurrently with pagination below
+      // Start front and back cover scene generation now — both run concurrently with pagination below
       const coverImageScenePromise = generateCoverImageScene(derivedTitle, story.synopsis, allActors);
+      const backCoverImageScenePromise = generateBackCoverImageScene(derivedTitle, story.synopsis, allActors);
 
       // Use AI-driven pagination if we have a storyOutputTypeId
       // This replaces the old chunkSentences algorithm
@@ -682,16 +764,17 @@ export const storyPageFlow = ai.defineFlow(
 
       // =================================================================
       // BACK COVER (last page)
-      // - Image derived ONLY from the list of actors (their avatars)
-      // - No synopsis used for back cover
+      // - Image: AI-designed warm concluding scene (falls back to generic prompt)
       // =================================================================
+      const backCoverImageScene = await backCoverImageScenePromise.catch(() => null);
       pages.push({
         pageNumber: pageNumber++,
         kind: 'cover_back',
         bodyText: '',
         displayText: '',
-        entityIds: allActorIds, // All actors for the back cover image
-        imagePrompt: buildBackCoverImagePrompt(derivedTitle, child, allActors),
+        entityIds: allActorIds,
+        imageScene: backCoverImageScene ?? undefined,
+        imagePrompt: buildBackCoverImagePrompt(),
         imageUrl: choosePlaceholderImage(pages.length),
         layoutHints: { aspectRatio: 'portrait', textPlacement: 'bottom' },
       });

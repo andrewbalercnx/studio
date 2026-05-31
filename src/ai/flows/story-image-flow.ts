@@ -1554,8 +1554,12 @@ export const storyImageFlow = ai.defineFlow(
         // otherwise fall back to freeform imageDescription / bodyText / imagePrompt for older pages
         let sceneText: string | undefined;
         if (page.imageScene) {
+          // Use locationRegistry first; fall back to page's locationDescription if non-empty;
+          // finally fall back to the locationKey itself (for pages that omit the description
+          // on repeated locations per the pagination prompt instruction)
           const canonicalLocation = storyData.locationRegistry?.[page.imageScene.locationKey]
-            ?? page.imageScene.locationDescription;
+            || page.imageScene.locationDescription
+            || page.imageScene.locationKey;
           sceneText = buildMechanicalScenePrompt(
             page.imageScene,
             canonicalLocation,
