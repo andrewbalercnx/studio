@@ -18,6 +18,18 @@
 
 ### 2026-05-31
 
+#### `646984e` - Parallelize Firestore queries on my-books page for faster load
+
+**Type**: Performance Optimisation
+
+**Summary**: The "my books" page was making all Firestore reads sequentially. Four bottlenecks parallelized: (1) `children` + `stories` queries in the list endpoint now run concurrently; (2) storybook subcollection queries — one per story, the main bottleneck — now run via `Promise.all` instead of a sequential `for` loop; (3) story ownership verification in the thumbnails endpoint is now deduplicated by `storyId` (many storybooks share the same story) and fetched in parallel; (4) pages queries in the thumbnails endpoint are now parallel; (5) thumbnail cache writes are fire-and-forget and no longer block the response.
+
+**Changes**:
+- `src/app/api/parent/storybooks/route.ts` (MODIFIED): Parallelize children+stories queries; parallelize storybook subcollection queries; parallelize pages queries in `includeThumbnails` path
+- `src/app/api/parent/storybooks/thumbnails/route.ts` (MODIFIED): Deduplicate + parallelize story ownership checks; parallelize pages queries; make thumbnail cache writes non-blocking
+
+---
+
 #### `30576eb` - Use $id$ only in image generation prompts (drop character names)
 
 **Type**: Image Quality / Prompt Engineering

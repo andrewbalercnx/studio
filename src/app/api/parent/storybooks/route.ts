@@ -62,11 +62,11 @@ export async function GET(request: NextRequest) {
     await initFirebaseAdminApp();
     const firestore = getFirestore();
 
-    // Step 1: Get all children for this parent
-    const childrenSnapshot = await firestore
-      .collection('children')
-      .where('ownerParentUid', '==', parentUid)
-      .get();
+    // Step 1+2: Get children and stories in parallel — both queries are independent
+    const [childrenSnapshot, storiesSnapshot] = await Promise.all([
+      firestore.collection('children').where('ownerParentUid', '==', parentUid).get(),
+      firestore.collection('stories').where('parentUid', '==', parentUid).get(),
+    ]);
 
     const childrenMap = new Map<string, { displayName: string; avatarUrl?: string | null }>();
     for (const doc of childrenSnapshot.docs) {
@@ -86,31 +86,22 @@ export async function GET(request: NextRequest) {
       } satisfies StorybooksResponse);
     }
 
-    // Step 2: Get all stories for these children
-    // We query by parentUid for efficiency (single query vs. multiple child queries)
-    const storiesSnapshot = await firestore
-      .collection('stories')
-      .where('parentUid', '==', parentUid)
-      .get();
-
     // Group storybooks by child
     const storybooksByChild = new Map<string, StorybookListItem[]>();
     for (const childId of childrenMap.keys()) {
       storybooksByChild.set(childId, []);
     }
 
-    // Process each story
-    for (const storyDoc of storiesSnapshot.docs) {
+    // Filter to active stories belonging to known children before firing subcollection queries
+    const activeStoryDocs = storiesSnapshot.docs.filter(doc => {
+      const story = doc.data();
+      return !story.deletedAt && childrenMap.has(story.childId);
+    });
+
+    // Process legacy storybooks (stored on story document itself) — no extra query needed
+    for (const storyDoc of activeStoryDocs) {
       const story = storyDoc.data();
       const storyId = storyDoc.id;
-
-      // Skip deleted stories
-      if (story.deletedAt) continue;
-
-      // Skip if child not in our list (shouldn't happen, but defensive)
-      if (!childrenMap.has(story.childId)) continue;
-
-      // Check legacy model storybooks (stored on story document itself)
       if (story.pageGeneration?.status === 'ready' || story.imageGeneration?.status === 'ready') {
         const item: StorybookListItem = {
           storybookId: storyId,
@@ -125,13 +116,17 @@ export async function GET(request: NextRequest) {
                      new Date().toISOString(),
           imageGenerationStatus: story.imageGeneration?.status || 'pending',
           pageGenerationStatus: story.pageGeneration?.status || 'pending',
-          audioStatus: 'none', // Will be filled if includeThumbnails
+          audioStatus: 'none',
           isNewModel: false,
         };
         storybooksByChild.get(story.childId)?.push(item);
       }
+    }
 
-      // Check new model storybooks (subcollection)
+    // Fetch all storybook subcollections in parallel (was sequential — the main bottleneck)
+    await Promise.all(activeStoryDocs.map(async storyDoc => {
+      const story = storyDoc.data();
+      const storyId = storyDoc.id;
       try {
         const storybooksSnapshot = await firestore
           .collection('stories')
@@ -155,15 +150,14 @@ export async function GET(request: NextRequest) {
             storyId: storyId,
             childId: story.childId,
             title: sb.title || story.metadata?.title,
-            thumbnailUrl: sb.thumbnailUrl || null, // Use cached thumbnail if available
+            thumbnailUrl: sb.thumbnailUrl || null,
             imageStyleId: sb.imageStyleId || '',
             printLayoutId: sb.printLayoutId || null,
             createdAt: sb.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
             imageGenerationStatus: sb.imageGeneration?.status || 'pending',
             pageGenerationStatus: sb.pageGeneration?.status || 'pending',
-            audioStatus: 'none', // Will be calculated if includeThumbnails
+            audioStatus: 'none',
             isNewModel: true,
-            // Print URLs from finalization
             printablePdfUrl: sb.finalization?.printablePdfUrl || null,
             printableCoverPdfUrl: sb.finalization?.printableCoverPdfUrl || null,
             printableInteriorPdfUrl: sb.finalization?.printableInteriorPdfUrl || null,
@@ -173,53 +167,46 @@ export async function GET(request: NextRequest) {
       } catch (err) {
         console.error(`[GET /api/parent/storybooks] Error loading storybooks for story ${storyId}:`, err);
       }
-    }
+    }));
 
-    // If includeThumbnails is true, fetch thumbnails and audio status from pages
-    // This is slower but provides complete data
+    // If includeThumbnails is true, fetch thumbnails and audio status from pages in parallel
     if (includeThumbnails) {
-      for (const [childId, storybooks] of storybooksByChild) {
-        for (const sb of storybooks) {
-          try {
-            const pagesPath = sb.isNewModel
-              ? `stories/${sb.storyId}/storybooks/${sb.storybookId}/pages`
-              : `stories/${sb.storyId}/outputs/storybook/pages`;
+      const allStorybooks = [...storybooksByChild.values()].flat();
+      await Promise.all(allStorybooks.map(async sb => {
+        try {
+          const pagesPath = sb.isNewModel
+            ? `stories/${sb.storyId}/storybooks/${sb.storybookId}/pages`
+            : `stories/${sb.storyId}/outputs/storybook/pages`;
 
-            const pagesSnapshot = await firestore
-              .collection(pagesPath)
-              .orderBy('pageNumber', 'asc')
-              .get();
+          const pagesSnapshot = await firestore
+            .collection(pagesPath)
+            .orderBy('pageNumber', 'asc')
+            .get();
 
-            let pagesWithAudio = 0;
-            const totalPages = pagesSnapshot.size;
+          let pagesWithAudio = 0;
+          const totalPages = pagesSnapshot.size;
 
-            for (const pageDoc of pagesSnapshot.docs) {
-              const page = pageDoc.data();
-
-              // Get thumbnail from page 0 if not already set
-              if (page.pageNumber === 0 && !sb.thumbnailUrl) {
-                if (page.imageUrl && page.imageStatus === 'ready') {
-                  sb.thumbnailUrl = page.imageUrl;
-                }
-              }
-
-              // Count audio status
-              if (page.audioStatus === 'ready' && page.audioUrl) {
-                pagesWithAudio++;
+          for (const pageDoc of pagesSnapshot.docs) {
+            const page = pageDoc.data();
+            if (page.pageNumber === 0 && !sb.thumbnailUrl) {
+              if (page.imageUrl && page.imageStatus === 'ready') {
+                sb.thumbnailUrl = page.imageUrl;
               }
             }
-
-            // Calculate audio status
-            sb.audioStatus = pagesWithAudio === 0
-              ? 'none'
-              : pagesWithAudio === totalPages
-                ? 'ready'
-                : 'partial';
-          } catch (err) {
-            console.error(`[GET /api/parent/storybooks] Error loading pages for storybook ${sb.storybookId}:`, err);
+            if (page.audioStatus === 'ready' && page.audioUrl) {
+              pagesWithAudio++;
+            }
           }
+
+          sb.audioStatus = pagesWithAudio === 0
+            ? 'none'
+            : pagesWithAudio === totalPages
+              ? 'ready'
+              : 'partial';
+        } catch (err) {
+          console.error(`[GET /api/parent/storybooks] Error loading pages for storybook ${sb.storybookId}:`, err);
         }
-      }
+      }));
     }
 
     // Build response, sorted by storybooks count (descending)

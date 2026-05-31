@@ -76,24 +76,24 @@ export async function POST(request: NextRequest) {
     await initFirebaseAdminApp();
     const firestore = getFirestore();
 
-    const results: ThumbnailResult[] = [];
+    // Ownership check: deduplicate by storyId (many storybooks share the same story)
+    // and fetch all unique stories in parallel rather than one-per-storybook sequentially
+    const uniqueStoryIds = [...new Set(body.storybooks.map(sb => sb.storyId))];
+    const storyOwnershipMap = new Map<string, boolean>();
+    await Promise.all(uniqueStoryIds.map(async storyId => {
+      const storyDoc = await firestore.collection('stories').doc(storyId).get();
+      storyOwnershipMap.set(storyId, storyDoc.exists && storyDoc.data()?.parentUid === parentUid);
+    }));
 
-    // Process each storybook
-    for (const sb of body.storybooks) {
+    // Process all storybooks in parallel — pages queries are independent of each other
+    const cacheWrites: Promise<void>[] = [];
+
+    const results: ThumbnailResult[] = await Promise.all(body.storybooks.map(async sb => {
       try {
-        // Verify ownership by checking the story belongs to this parent
-        const storyDoc = await firestore.collection('stories').doc(sb.storyId).get();
-        if (!storyDoc.exists || storyDoc.data()?.parentUid !== parentUid) {
-          // Skip - not authorized to access this storybook
-          results.push({
-            storybookId: sb.storybookId,
-            thumbnailUrl: null,
-            audioStatus: 'none',
-          });
-          continue;
+        if (!storyOwnershipMap.get(sb.storyId)) {
+          return { storybookId: sb.storybookId, thumbnailUrl: null, audioStatus: 'none' as const };
         }
 
-        // Determine pages path based on model type
         const pagesPath = sb.isNewModel
           ? `stories/${sb.storyId}/storybooks/${sb.storybookId}/pages`
           : `stories/${sb.storyId}/outputs/storybook/pages`;
@@ -105,17 +105,14 @@ export async function POST(request: NextRequest) {
 
         let thumbnailUrl: string | null = null;
         let pagesWithAudio = 0;
-        const totalPages = pagesSnapshot.size;
-
-        // Track image status for pages that require images
         let pagesRequiringImages = 0;
         let pagesWithReadyImages = 0;
         let pagesWithErrorImages = 0;
+        const totalPages = pagesSnapshot.size;
 
         for (const pageDoc of pagesSnapshot.docs) {
           const page = pageDoc.data();
 
-          // Get thumbnail from page 0 (cover page)
           if (page.pageNumber === 0) {
             console.log(`[thumbnails] Page 0 for ${sb.storybookId}: imageUrl=${page.imageUrl ? 'yes' : 'no'}, imageStatus=${page.imageStatus}`);
             if (page.imageUrl && page.imageStatus === 'ready') {
@@ -123,32 +120,21 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Count audio status
           if (page.audioStatus === 'ready' && page.audioUrl) {
             pagesWithAudio++;
           }
 
-          // Calculate image status - exclude title_page and blank pages
           const needsImage = page.kind !== 'title_page' && page.kind !== 'blank' && !!page.imagePrompt;
           if (needsImage) {
             pagesRequiringImages++;
-            if (page.imageStatus === 'ready') {
-              pagesWithReadyImages++;
-            } else if (page.imageStatus === 'error') {
-              pagesWithErrorImages++;
-            }
+            if (page.imageStatus === 'ready') pagesWithReadyImages++;
+            else if (page.imageStatus === 'error') pagesWithErrorImages++;
           }
         }
 
-        // Calculate audio status
         const audioStatus: 'none' | 'partial' | 'ready' =
-          pagesWithAudio === 0
-            ? 'none'
-            : pagesWithAudio === totalPages
-              ? 'ready'
-              : 'partial';
+          pagesWithAudio === 0 ? 'none' : pagesWithAudio === totalPages ? 'ready' : 'partial';
 
-        // Calculate actual image generation status from page data
         const calculatedImageStatus: string =
           pagesRequiringImages > 0 && pagesWithReadyImages === pagesRequiringImages
             ? 'ready'
@@ -156,42 +142,28 @@ export async function POST(request: NextRequest) {
               ? 'error'
               : 'pending';
 
-        // Cache the thumbnail on the storybook document if we found one and it's a new model
+        // Queue thumbnail cache write as fire-and-forget — don't block the response
         if (thumbnailUrl && sb.isNewModel && sb.storybookId !== sb.storyId) {
-          try {
-            await firestore
-              .collection('stories')
-              .doc(sb.storyId)
-              .collection('storybooks')
-              .doc(sb.storybookId)
-              .update({
-                thumbnailUrl,
-                updatedAt: new Date(),
-              });
-          } catch (cacheError) {
-            // Non-fatal - just log and continue
-            console.warn(`[POST /api/parent/storybooks/thumbnails] Failed to cache thumbnail for ${sb.storybookId}:`, cacheError);
-          }
+          cacheWrites.push(
+            firestore
+              .collection('stories').doc(sb.storyId)
+              .collection('storybooks').doc(sb.storybookId)
+              .update({ thumbnailUrl, updatedAt: new Date() })
+              .then(() => undefined)
+              .catch(err => console.warn(`[thumbnails] Failed to cache thumbnail for ${sb.storybookId}:`, err))
+          );
         }
 
         console.log(`[thumbnails] Result for ${sb.storybookId}: thumbnailUrl=${thumbnailUrl ? 'found' : 'null'}, totalPages=${totalPages}`);
-        results.push({
-          storybookId: sb.storybookId,
-          thumbnailUrl,
-          audioStatus,
-          pagesWithAudio,
-          totalPages,
-          calculatedImageStatus,
-        });
+        return { storybookId: sb.storybookId, thumbnailUrl, audioStatus, pagesWithAudio, totalPages, calculatedImageStatus };
       } catch (err) {
         console.error(`[POST /api/parent/storybooks/thumbnails] Error processing storybook ${sb.storybookId}:`, err);
-        results.push({
-          storybookId: sb.storybookId,
-          thumbnailUrl: null,
-          audioStatus: 'none',
-        });
+        return { storybookId: sb.storybookId, thumbnailUrl: null, audioStatus: 'none' as const };
       }
-    }
+    }));
+
+    // Fire thumbnail cache writes after building the response (non-blocking)
+    void Promise.all(cacheWrites);
 
     return NextResponse.json({
       thumbnails: results,
