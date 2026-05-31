@@ -273,11 +273,11 @@ IMPORTANT:
 - pageNumber starts at 1 and increments sequentially
 - text is copied verbatim from the story — do NOT rewrite, summarise, or add content
 - each page should have at least 2 sentences; avoid pages with fewer than 10 words
-- actors is an array of actor IDs (without the $$ markers) that appear on that page
+- actors is an array of actor IDs (without the $$ markers) for ALL characters physically present on this page — include everyone who is visible in the scene, whether they are the active subject, watching, observing, reacting, or otherwise present. Only exclude a character if they are genuinely absent (e.g., not yet introduced, or they left the location)
 - imageScene describes the illustration for this page in structured form:
   * locationKey: a short, consistent label for the setting (e.g., "kitchen", "garden", "bedroom"). Use the EXACT same key for the same location across pages — this enforces visual consistency
   * locationDescription: a detailed visual description of the environment. For the FIRST use of a locationKey, describe it fully. For SUBSEQUENT pages at the SAME locationKey, set locationDescription to an empty string ("") — the system stores the first description in a registry and fills it in automatically
-  * actors: list EVERY actor from the actors array above — no more, no fewer. Each entry must have the actor's ID (without $$) and a specific action describing what they are physically doing and their expression/pose. Do NOT use vague phrases like "standing nearby" or "in the background" — be explicit
+  * actors: list EVERY character from the actors array above — no more, no fewer. Each entry must have the actor's ID (without $$) and a vivid, specific action. For observers and bystanders, describe exactly how they are watching or reacting (e.g., "eyes wide, mouth open in amazement, leaning forward to look" is correct; vague entries like "standing nearby" are not)
   * atmosphere: mood, lighting, time of day, and emotional tone of the scene
   * sceneTag: classify the scene as exactly one of: indoor-day (interior in daylight/morning), outdoor-day (outside in daylight), indoor-night (interior at night/bedtime with lamp or moonlight), outdoor-night (outside at night/twilight/magical setting)
   * CRITICAL: actors in imageScene MUST exactly match the actors array. If actors has 2 IDs, imageScene.actors must have exactly 2 entries with those same IDs.

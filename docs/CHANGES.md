@@ -18,6 +18,22 @@
 
 ### 2026-05-31
 
+#### `cd7e3de` - Fix observing characters dropped from pages; reorder beat prompt for prefix caching
+
+**Type**: Bug Fix / Performance
+
+**Summary**:
+
+*Pagination actors instruction*: The `actors` field was described as "actor IDs that appear on that page", which the model interpreted as the active subject only. Characters who were watching, observing, or reacting were silently dropped, causing them to be absent from illustrations. Updated to explicitly include all physically present characters — including observers — with specific reaction descriptions rather than vague placeholders.
+
+*Beat prompt prefix caching*: NARRATIVE GUIDANCE was placed after CURRENT BEAT in the system prompt, limiting Gemini's auto-cached prefix to ~800 tokens (below the 1024-token threshold). Moved NARRATIVE GUIDANCE before CURRENT BEAT so the stable prefix spans ~1500 tokens across all 8 beats of a session, enabling Gemini 2.5 Flash's automatic prefix cache.
+
+**Modified files**:
+- `src/ai/flows/story-pagination-flow.ts` — actors inclusion instruction
+- `src/lib/prompt-builders/story-beat-prompt-builder.ts` — section ordering
+
+---
+
 #### `cc362bd` - Fix beat conversation duplicates and pagination minimum contradiction
 
 **Type**: Bug Fix / Efficiency

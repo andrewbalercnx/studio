@@ -43,12 +43,15 @@ export function buildStoryBeatPrompt(ctx: StoryBeatPromptContext): string {
   const overrides = levelBand ? storyType.levelBandOverrides?.[levelBand] : undefined;
   const config = overrides ? { ...baseConfig, ...overrides } : baseConfig;
 
+  // ORDERING NOTE: stable sections (1-4) come before dynamic sections (5+).
+  // Gemini 2.5 Flash auto-caches prompt prefixes > 1024 tokens. Keeping all stable
+  // content before CURRENT BEAT (which changes every beat) maximises the cached prefix.
   const sections = [
     buildObjectiveSection(storyType),
     buildRoleSection(config),
     buildContextSection(ctx.formattedContext, ctx.childAge),
-    buildCurrentBeatSection(storyType, ctx.arcStep, ctx.arcProgress),
     buildNarrativeGuidanceSection(config, ctx.childPreferenceSummary),
+    buildCurrentBeatSection(storyType, ctx.arcStep, ctx.arcProgress),
   ];
 
   // Add newly introduced characters section if there are any
