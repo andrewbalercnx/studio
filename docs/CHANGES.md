@@ -18,6 +18,17 @@
 
 ### 2026-05-31
 
+#### `4ce1fe1` - Include imageDescription in cover scene generation actor roster
+
+**Type**: Bug Fix
+
+**Summary**: `generateCoverImageScene()` was only passing `a.description` (user-provided general description) to the art director AI. Fixed to also include `a.imageDescription` (the AI-generated physical appearance description: hair, skin tone, eye colour, distinctive features from photos), giving the AI full visual context when writing cover poses.
+
+**Changes**:
+- `src/ai/flows/story-page-flow.ts` (MODIFIED): Actor lines in cover scene prompt now include both `description` and `imageDescription`
+
+---
+
 #### `4eda4ee` - Generate AI-designed cover imageScene for front cover page
 
 **Type**: Feature / Image Quality

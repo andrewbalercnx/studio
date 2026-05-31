@@ -202,8 +202,11 @@ async function generateCoverImageScene(
   if (!synopsis || synopsis.trim().length === 0 || allActors.length === 0) return null;
 
   const actorLines = allActors.map(a => {
-    const desc = a.description ? ` — ${a.description}` : '';
-    return `- ${a.id}: ${a.displayName}${desc}`;
+    const parts: string[] = [];
+    if (a.description) parts.push(a.description);
+    if (a.imageDescription) parts.push(`Appearance: ${a.imageDescription}`);
+    const detail = parts.length > 0 ? ` — ${parts.join('. ')}` : '';
+    return `- ${a.id}: ${a.displayName}${detail}`;
   }).join('\n');
 
   const prompt = `You are an art director designing the FRONT COVER illustration for a personalized children's storybook.
