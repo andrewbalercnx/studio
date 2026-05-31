@@ -2,7 +2,7 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, ChevronDown, ChevronRight, DollarSign, Clock, Zap, MessageSquare, Copy, Check, BarChart3, List } from 'lucide-react';
+import { LoaderCircle, ChevronDown, ChevronRight, DollarSign, Clock, Zap, MessageSquare, Copy, Check, BarChart3, List, Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useFirestore } from '@/firebase';
 import { collection, onSnapshot, query, orderBy, limit, doc, getDoc } from 'firebase/firestore';
@@ -512,7 +512,18 @@ function CallTraceCard({ call, index }: { call: AICallTrace; index: number }) {
   );
 }
 
-function RunTraceDetail({ trace }: { trace: AIRunTrace }) {
+function downloadTraceJson(trace: AIRunTrace & { id: string }) {
+  const json = JSON.stringify(trace, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `trace-${trace.id}-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function RunTraceDetail({ trace }: { trace: AIRunTrace & { id: string } }) {
   const [showAllCalls, setShowAllCalls] = useState(false);
   const [view, setView] = useState<'pipeline' | 'calls'>('pipeline');
   const calls = trace.calls || [];
@@ -566,8 +577,8 @@ function RunTraceDetail({ trace }: { trace: AIRunTrace }) {
         </Card>
       </div>
 
-      {/* View toggle */}
-      <div className="flex gap-2 border-b pb-2">
+      {/* View toggle + download */}
+      <div className="flex items-center gap-2 border-b pb-2">
         <Button
           variant={view === 'pipeline' ? 'default' : 'ghost'}
           size="sm"
@@ -585,6 +596,16 @@ function RunTraceDetail({ trace }: { trace: AIRunTrace }) {
         >
           <List className="h-3.5 w-3.5" />
           Calls ({calls.length})
+        </Button>
+        <div className="flex-1" />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => downloadTraceJson(trace)}
+          className="gap-1.5"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Download JSON
         </Button>
       </div>
 
