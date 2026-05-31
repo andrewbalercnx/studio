@@ -27,7 +27,7 @@ import {
     buildPageCountInstruction,
     type ResolvedPageConstraints,
 } from '@/lib/print-constraints';
-import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
+import { replacePlaceholdersWithDescriptions, stripTTSDirectiveTags } from '@/lib/resolve-placeholders.server';
 import { extractEntityIds } from '@/lib/entity-utils';
 
 // Schema for the AI's paginated output
@@ -408,7 +408,7 @@ Generate the paginated output now.`;
                     return {
                         pageNumber: page.pageNumber,
                         bodyText: page.text,
-                        displayText: await replacePlaceholdersWithDescriptions(page.text),
+                        displayText: await stripTTSDirectiveTags(await replacePlaceholdersWithDescriptions(page.text)),
                         entityIds: page.actors,
                         // Apply canonical location description from registry
                         imageScene: imageScene ? {

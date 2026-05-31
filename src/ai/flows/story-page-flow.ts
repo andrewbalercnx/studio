@@ -12,6 +12,7 @@ import { logServerSessionEvent as logSessionEvent } from '@/lib/session-events.s
 import {
   resolveEntitiesInText,
   replacePlaceholdersInText as replacePlaceholders,
+  stripTTSDirectiveTags,
   getEntitiesInText,
 } from '@/lib/resolve-placeholders.server';
 import { extractEntityIds } from '@/lib/entity-utils';
@@ -696,7 +697,7 @@ export const storyPageFlow = ai.defineFlow(
       // =================================================================
       for (const [index, chunk] of chunks.entries()) {
         const text = chunk.join(' ').trim();
-        const displayText = await replacePlaceholders(text, entityMap);
+        const displayText = await stripTTSDirectiveTags(await replacePlaceholders(text, entityMap));
         // Use AI-provided entityIds if available, otherwise extract from text
         // Filter out empty/invalid IDs to prevent Firestore errors
         const rawPageEntityIds = usedAIPagination && aiPaginatedEntityIds[index]

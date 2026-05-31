@@ -18,6 +18,19 @@
 
 ### 2026-05-31
 
+#### `f209923` - Strip stage directions from displayText only; preserve in bodyText for ElevenLabs v3
+
+**Type**: Bug Fix
+
+**Summary**: Corrects the stage direction fix from `3f7b790`. Compile-time stripping was the wrong layer — it removed brackets before TTS could use them. Stage directions are now stripped only from `displayText` (visual page text) using the existing `stripTTSDirectiveTags()`, while `bodyText` is preserved intact for TTS. `replacePlaceholdersForTTS()` already handles the v2/v3 split correctly: `eleven_v3` keeps `[...]` tags and prepends `[British accent]`; `eleven_v2` strips them. `eleven_v3` is already the system default (`DEFAULT_DIAGNOSTICS_CONFIG.elevenLabsApiVersion = 'v3'`).
+
+**Changes**:
+- `src/ai/flows/story-text-compile-flow.ts` (MODIFIED): Reverted — compile-time stripping removed
+- `src/ai/flows/story-pagination-flow.ts` (MODIFIED): `displayText` now piped through `stripTTSDirectiveTags()`
+- `src/ai/flows/story-page-flow.ts` (MODIFIED): `displayText` now piped through `stripTTSDirectiveTags()`
+
+---
+
 #### `3f7b790` - Fix back cover scene, location redundancy, and stage direction leak
 
 **Type**: Bug Fix / Image Quality / Performance
