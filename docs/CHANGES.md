@@ -18,6 +18,17 @@
 
 ### 2026-06-01
 
+#### `054264d` - Mount FAL_KEY secret in apphosting.yaml
+
+**Type**: Configuration
+
+**Summary**: Adds `FAL_KEY` to `apphosting.yaml` so Firebase App Hosting exposes the secret at runtime, enabling the fal.ai Kling image-to-video animation path in `avatar-animation-flow.ts`.
+
+**Modified files**:
+- `apphosting.yaml`
+
+---
+
 #### `162ca00` - Add fal.ai Kling as primary animation path; Veo kept as secondary
 
 **Type**: Feature / Bug Fix

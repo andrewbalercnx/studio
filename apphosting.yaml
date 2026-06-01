@@ -94,6 +94,12 @@ env:
     availability:
       - RUNTIME
 
+  # fal.ai API key for Kling image-to-video animation
+  - variable: FAL_KEY
+    secret: FAL_KEY
+    availability:
+      - RUNTIME
+
   # Enable server-side log buffer surfaced in /api/healthz as recentLogs.
   # Remove this entry when no longer needed.
   - variable: ENABLE_DEV_LOGS
