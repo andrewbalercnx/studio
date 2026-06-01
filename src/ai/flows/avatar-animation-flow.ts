@@ -383,7 +383,14 @@ Generate a short animated loop of this character dancing happily.`;
           return { ok: true, animationUrl, outputType: 'video' as const, debugInfo };
 
         } catch (falError: any) {
-          const rawMessage = falError.message || String(falError);
+          const status = falError.response?.status;
+          const failedUrl: string | undefined = falError.config?.url ?? falError.response?.config?.url;
+          const failedMethod: string | undefined = falError.config?.method ?? falError.response?.config?.method;
+          const rawBody = falError.response?.data;
+          const bodySnippet = typeof rawBody === 'string'
+            ? rawBody.substring(0, 200)
+            : JSON.stringify(rawBody ?? '').substring(0, 200);
+          const rawMessage = `${falError.message || String(falError)} | ${failedMethod ?? '?'} ${failedUrl ?? '?'} -> ${status ?? '?'} | body: ${bodySnippet}`;
           const safeMessage = falKey ? rawMessage.replaceAll(falKey, '[REDACTED]') : rawMessage;
           console.error('[avatarAnimationFlow] fal.ai error:', safeMessage);
           debugInfo.falError = safeMessage;
