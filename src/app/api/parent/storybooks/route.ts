@@ -58,25 +58,45 @@ export async function GET(request: NextRequest) {
     const parentUid = authResult.uid;
     const { searchParams } = new URL(request.url);
     const includeThumbnails = searchParams.get('includeThumbnails') === 'true';
+    const childIdFilter = searchParams.get('childId');
 
     await initFirebaseAdminApp();
     const firestore = getFirestore();
 
-    // Step 1+2: Get children and stories in parallel — both queries are independent
-    const [childrenSnapshot, storiesSnapshot] = await Promise.all([
-      firestore.collection('children').where('ownerParentUid', '==', parentUid).get(),
+    // Build the children map and fetch stories in parallel.
+    // When childId is provided we use a single-document read (fast) instead of a full
+    // collection scan, and the stories query naturally filters to only that child's
+    // subcollections because childrenMap will only contain one entry.
+    const childrenMapPromise = childIdFilter
+      ? (async () => {
+          const snap = await firestore.collection('children').doc(childIdFilter).get();
+          const map = new Map<string, { displayName: string; avatarUrl?: string | null }>();
+          if (!snap.exists) return map;
+          const data = snap.data()!;
+          if (data.ownerParentUid === parentUid && !data.deletedAt) {
+            map.set(snap.id, { displayName: data.displayName || 'Child', avatarUrl: data.avatarUrl || null });
+          }
+          return map;
+        })()
+      : (async () => {
+          const snapshot = await firestore.collection('children').where('ownerParentUid', '==', parentUid).get();
+          const map = new Map<string, { displayName: string; avatarUrl?: string | null }>();
+          for (const doc of snapshot.docs) {
+            const data = doc.data();
+            if (!data.deletedAt) {
+              map.set(doc.id, { displayName: data.displayName || 'Child', avatarUrl: data.avatarUrl || null });
+            }
+          }
+          return map;
+        })();
+
+    const [childrenMap, storiesSnapshot] = await Promise.all([
+      childrenMapPromise,
       firestore.collection('stories').where('parentUid', '==', parentUid).get(),
     ]);
 
-    const childrenMap = new Map<string, { displayName: string; avatarUrl?: string | null }>();
-    for (const doc of childrenSnapshot.docs) {
-      const data = doc.data();
-      // Skip deleted children
-      if (data.deletedAt) continue;
-      childrenMap.set(doc.id, {
-        displayName: data.displayName || 'Child',
-        avatarUrl: data.avatarUrl || null,
-      });
+    if (childIdFilter && childrenMap.size === 0) {
+      return NextResponse.json({ error: 'Child not found' }, { status: 404 });
     }
 
     if (childrenMap.size === 0) {

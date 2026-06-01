@@ -16,6 +16,30 @@
 
 ## Changes
 
+### 2026-06-01
+
+#### `4ce6b06` - Replace storybooks page with children list + per-child detail pages
+
+**Type**: Feature / Performance
+
+**Summary**:
+
+`/parent/storybooks` now shows a responsive children grid. Tapping a child navigates to `/parent/storybooks/[childId]`, which loads only that child's books.
+
+**Firestore optimisations on the per-child page**:
+- New `?childId=` param on `GET /api/parent/storybooks` triggers a single-document child read instead of a full collection scan across all children.
+- `childrenMap` contains one entry, so storybook subcollection reads fire only for that child's stories — not every story the parent owns.
+- Storybooks whose `thumbnailUrl` is already cached on the doc display immediately on first render; only new books (no cached URL) trigger the slower page subcollection fetch.
+
+**State simplification**: Per-child page uses a flat `storybooks[]` array instead of the nested `childrenWithStorybooks[]` structure, making all state updates (delete, undo, thumbnail merge, PDF update) straightforward `prev.map(...)` calls with no child-level iteration.
+
+**Modified files**:
+- `src/app/parent/storybooks/page.tsx` — rewritten as lightweight children grid
+- `src/app/parent/storybooks/[childId]/page.tsx` — new per-child storybooks page
+- `src/app/api/parent/storybooks/route.ts` — added `?childId=` filter
+
+---
+
 ### 2026-05-31
 
 #### `cd7e3de` - Fix observing characters dropped from pages; reorder beat prompt for prefix caching
