@@ -209,21 +209,25 @@ function AvatarGenerator({ child, onAvatarUpdate }: { child: ChildProfile, onAva
             });
             const result = await res.json();
             console.log('[AvatarGenerator] Animation generation result:', result);
-            // Log debug info prominently for Veo troubleshooting
             if (result.debugInfo) {
-                console.log('[AvatarGenerator] === VEO DEBUG INFO ===');
-                console.log('[AvatarGenerator] Veo Attempted:', result.debugInfo.veoAttempted);
-                console.log('[AvatarGenerator] Fallback Used:', result.debugInfo.fallbackUsed);
+                console.log('[AvatarGenerator] === ANIMATION DEBUG INFO ===');
+                if (result.debugInfo.falAttempted !== undefined) {
+                    console.log('[AvatarGenerator] fal.ai Attempted:', result.debugInfo.falAttempted);
+                }
+                if (result.debugInfo.falError) {
+                    console.log('[AvatarGenerator] fal.ai Error:', result.debugInfo.falError);
+                }
+                if (result.debugInfo.veoAttempted !== undefined) {
+                    console.log('[AvatarGenerator] Veo Attempted:', result.debugInfo.veoAttempted);
+                }
                 if (result.debugInfo.veoError) {
                     console.log('[AvatarGenerator] Veo Error:', result.debugInfo.veoError);
                 }
                 if (result.debugInfo.veoErrorCode) {
                     console.log('[AvatarGenerator] Veo Error Code:', result.debugInfo.veoErrorCode);
                 }
-                if (result.debugInfo.veoResponse) {
-                    console.log('[AvatarGenerator] Veo Response:', result.debugInfo.veoResponse);
-                }
-                console.log('[AvatarGenerator] === END VEO DEBUG INFO ===');
+                console.log('[AvatarGenerator] Fallback Used:', result.debugInfo.fallbackUsed);
+                console.log('[AvatarGenerator] === END ANIMATION DEBUG INFO ===');
             }
             if (!res.ok || !result.ok) {
                 throw new Error(result.errorMessage || 'Failed to generate animation.');

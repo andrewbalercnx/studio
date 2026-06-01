@@ -18,7 +18,19 @@
 
 ### 2026-06-01
 
-#### `4c5d889` - Switch avatar animation to direct Google AI REST API for Veo 2
+#### `162ca00` - Add fal.ai Kling as primary animation path; Veo kept as secondary
+
+**Type**: Feature / Bug Fix
+
+**Summary**: Veo 2 via Google AI REST returns 404 on the current API key. Added fal.ai Kling v1.6 image-to-video as the primary animation generator. When `FAL_KEY` is set in the environment, it calls `queue.fal.run/fal-ai/kling-video/v1.6/standard/image-to-video`, passing the Firebase Storage URL directly and polling for a real MP4 video. Veo remains as a secondary path (skipped when `FAL_KEY` is present). Static dance-pose image stays as final fallback. No new npm dependencies — uses the existing Gaxios client.
+
+**Modified files**:
+- `src/ai/flows/avatar-animation-flow.ts`
+- `src/app/parent/children/page.tsx` — debug logging updated
+
+---
+
+#### `66cdbfb` - Switch avatar animation to direct Google AI REST API for Veo 2
 
 **Type**: Bug Fix
 

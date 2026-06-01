@@ -35,11 +35,11 @@ export type AvatarAnimationFlowInput = z.infer<typeof AvatarAnimationFlowInputSc
 const AvatarAnimationFlowOutputSchema = z.object({
   ok: z.boolean(),
   animationUrl: z.string().optional(),
-  // Output type: 'video' for Veo-generated MP4/WebM, 'image' for static dance pose fallback
   outputType: z.enum(['video', 'image']).optional(),
   errorMessage: z.string().optional(),
-  // Debug info for diagnosing Veo issues
   debugInfo: z.object({
+    falAttempted: z.boolean().optional(),
+    falError: z.string().optional(),
     veoAttempted: z.boolean().optional(),
     veoError: z.string().optional(),
     veoErrorCode: z.string().optional(),
@@ -262,11 +262,11 @@ The character should:
 
 Generate a short animated loop of this character dancing happily.`;
 
-      // Try to generate animation using Veo 2 via the Google AI REST API, falling
-      // back to a static dance-pose image if Veo is unavailable or fails.
       let llmResponse;
       let animationUrl: string;
       const debugInfo: {
+        falAttempted?: boolean;
+        falError?: string;
         veoAttempted?: boolean;
         veoError?: string;
         veoErrorCode?: string;
@@ -274,12 +274,125 @@ Generate a short animated loop of this character dancing happily.`;
         fallbackUsed?: boolean;
       } = {};
 
-      // Veo 2 is called via the Google AI REST API (generativelanguage.googleapis.com)
-      // using the same GEMINI_API_KEY used for all other AI calls — no Vertex AI / GCP
-      // project required. This avoids the Genkit operation-polling abstraction which
-      // was silently falling through because (veoResult as any).operation was undefined.
+      // ── PRIMARY: fal.ai Kling image-to-video ─────────────────────────────────
+      // Accepts the Firebase Storage URL directly — no base64 conversion needed.
+      // Add FAL_KEY to the environment to enable this path.
+      const falKey = process.env.FAL_KEY;
+      if (falKey) {
+        console.log('[avatarAnimationFlow] Attempting fal.ai Kling image-to-video');
+        debugInfo.falAttempted = true;
+        const falStartTime = Date.now();
+
+        try {
+          const falGaxios = new Gaxios();
+          const falModel = 'fal-ai/kling-video/v1.6/standard/image-to-video';
+          const falQueueBase = `https://queue.fal.run/${falModel}`;
+
+          const animPrompt = `A cute cartoon character dancing joyfully. The character sways side to side, waves their arms, and bobs gently up and down in a happy dance. They stay in place. Smooth looping motion appropriate for young children.`;
+
+          // Submit the job — pass the original avatar URL, fal.ai fetches it directly
+          const submitResp = await falGaxios.request<{ request_id: string }>({
+            url: falQueueBase,
+            method: 'POST',
+            headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
+            data: {
+              image_url: avatarUrl,
+              prompt: animPrompt,
+              duration: '5',
+              aspect_ratio: '1:1',
+            },
+          });
+
+          const requestId = submitResp.data?.request_id;
+          if (!requestId) {
+            throw new Error(`fal.ai returned no request_id. Response: ${JSON.stringify(submitResp.data).substring(0, 200)}`);
+          }
+          console.log('[avatarAnimationFlow] fal.ai request_id:', requestId);
+
+          // Poll status (max 3 minutes — 36 × 5 s)
+          let videoBuffer: Buffer | null = null;
+          for (let poll = 0; poll < 36 && !videoBuffer; poll++) {
+            await new Promise(r => setTimeout(r, 5000));
+
+            const statusResp = await falGaxios.request<{ status: string; error?: any }>({
+              url: `${falQueueBase}/requests/${requestId}/status`,
+              method: 'GET',
+              headers: { Authorization: `Key ${falKey}` },
+            });
+
+            const status = statusResp.data?.status;
+            console.log(`[avatarAnimationFlow] fal.ai poll ${poll + 1}/36: ${status}`);
+
+            if (status === 'FAILED') {
+              throw new Error(`fal.ai job failed: ${JSON.stringify(statusResp.data?.error ?? 'unknown')}`);
+            }
+
+            if (status === 'COMPLETED') {
+              const resultResp = await falGaxios.request<{ video: { url: string } }>({
+                url: `${falQueueBase}/requests/${requestId}`,
+                method: 'GET',
+                headers: { Authorization: `Key ${falKey}` },
+              });
+
+              const videoUrl = resultResp.data?.video?.url;
+              if (!videoUrl) {
+                throw new Error(`fal.ai COMPLETED but no video URL. Shape: ${JSON.stringify(resultResp.data).substring(0, 200)}`);
+              }
+              console.log('[avatarAnimationFlow] fal.ai video URL received');
+
+              const videoResp = await falGaxios.request<ArrayBuffer>({
+                url: videoUrl,
+                responseType: 'arraybuffer',
+              });
+              videoBuffer = Buffer.from(videoResp.data);
+              console.log('[avatarAnimationFlow] fal.ai video fetched, size:', videoBuffer.length);
+            }
+          }
+
+          if (!videoBuffer) throw new Error('fal.ai timed out after 3 minutes with no video');
+
+          await logAIFlow({
+            flowName: 'avatarAnimationFlow',
+            sessionId: entityId,
+            parentId: entity.ownerParentUid,
+            prompt: animPrompt,
+            response: { text: `fal.ai video — ${videoBuffer.length} bytes` },
+            startTime: falStartTime,
+            modelName: falModel,
+          });
+
+          animationUrl = await uploadAnimationToStorage({
+            buffer: videoBuffer,
+            mimeType: 'video/mp4',
+            entityType,
+            entityId,
+            parentUid: entity.ownerParentUid,
+          });
+
+          console.log('[avatarAnimationFlow] fal.ai video uploaded:', animationUrl);
+
+          await entityRef.update({
+            avatarAnimationUrl: animationUrl,
+            'avatarAnimationGeneration.status': 'ready',
+            'avatarAnimationGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
+            'avatarAnimationGeneration.lastErrorMessage': null,
+            'avatarAnimationGeneration.generatedWith': 'fal-kling',
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+
+          return { ok: true, animationUrl, outputType: 'video' as const, debugInfo };
+
+        } catch (falError: any) {
+          console.error('[avatarAnimationFlow] fal.ai error:', falError.message || falError);
+          debugInfo.falError = falError.message || String(falError);
+          // Fall through to Veo, then static image
+        }
+      }
+
+      // ── SECONDARY: Veo 2 via Google AI REST API ───────────────────────────────
+      // Kept as a fallback in case Veo access is enabled on the GEMINI_API_KEY.
       const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-      const useVeo = !!geminiApiKey;
+      const useVeo = !!geminiApiKey && !falKey; // skip Veo if fal.ai is configured (already succeeded or failed)
 
       let veoStartTime: number | undefined;
       if (useVeo) {
