@@ -78,6 +78,18 @@ The regression test page contains automated tests for API routes and data access
 3. **Computed fields**: Add computed/derived fields (e.g., `hasBook`, `isReady`) to the API response rather than computing them client-side
 4. **Status logic**: Business logic determining states/statuses should be in API routes
 
+### Character Appearance Descriptions Must Come From Original Photos
+
+**Principle**: `imageDescriptionFlow` reads from `entity.photos` (raw uploaded originals). Never change it to read from `entity.canonicalImageUrl` or any other AI-generated image.
+
+**Rationale**: The canonical image is an AI reinterpretation of the child — cleaner and more consistent, but lossy. A description derived from the canonical describes Gemini's version of the child, not the actual child. The original photos are the ground truth, even if imperfect.
+
+**Pipeline design intent**:
+- `canonicalImageFlow` → `actorExemplarFlow`: serves *visual consistency* across illustrations (same art style, consistent pose/framing)
+- `imageDescriptionFlow` (from originals): serves as an independent *verbal anchor* to the real child's appearance
+
+These two signals are complementary precisely because they come from different sources. Do not collapse them.
+
 **Example - Bad (client-side filtering)**:
 ```typescript
 // In client code
