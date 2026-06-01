@@ -262,7 +262,8 @@ The character should:
 
 Generate a short animated loop of this character dancing happily.`;
 
-      // Try to generate animation using Veo 2 via Vertex AI or fall back to animated image
+      // Try to generate animation using Veo 2 via the Google AI REST API, falling
+      // back to a static dance-pose image if Veo is unavailable or fails.
       let llmResponse;
       let animationUrl: string;
       const debugInfo: {
@@ -273,20 +274,21 @@ Generate a short animated loop of this character dancing happily.`;
         fallbackUsed?: boolean;
       } = {};
 
-      // Check if Vertex AI is configured (needed for Veo)
-      const gcpProject = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT_ID;
-      const useVeo = !!gcpProject;
+      // Veo 2 is called via the Google AI REST API (generativelanguage.googleapis.com)
+      // using the same GEMINI_API_KEY used for all other AI calls — no Vertex AI / GCP
+      // project required. This avoids the Genkit operation-polling abstraction which
+      // was silently falling through because (veoResult as any).operation was undefined.
+      const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      const useVeo = !!geminiApiKey;
 
       let veoStartTime: number | undefined;
       if (useVeo) {
-        console.log('[avatarAnimationFlow] Attempting Veo video generation via Vertex AI');
+        console.log('[avatarAnimationFlow] Attempting Veo 2 via Google AI REST API');
         debugInfo.veoAttempted = true;
         veoStartTime = Date.now();
 
         try {
-          // Use Veo 2 for video generation via Vertex AI
-          // Veo requires async operation handling with polling
-          const veoPrompt = `Create a short 5 second looping animation of this cartoon character doing a cute, simple dance.
+          const veoPrompt = `Create a short 5-second looping animation of this cartoon character doing a cute, simple dance.
 The character should:
 - Sway side to side or bounce gently
 - Wave their arms or do a simple dance move
@@ -297,124 +299,139 @@ The character should:
 
 Output a smooth, looping video suitable for a profile animation.`;
 
-          // Use Vertex AI model for Veo (veo-2.0-generate-exp is the recommended model ID)
-          const veoModelName = 'vertexai/veo-2.0-generate-exp';
-          const veoResult = await ai.generate({
-            model: veoModelName,
-            prompt: [
-              { media: { url: avatarDataUri } },
-              { text: veoPrompt },
-            ],
+          // Extract base64 and MIME type from the data URI fetched earlier
+          const dataUriMatch = /^data:(.+);base64,(.+)$/i.exec(avatarDataUri);
+          if (!dataUriMatch) throw new Error('Could not parse avatar data URI for Veo');
+          const imageMimeType = dataUriMatch[1];
+          const imageBase64 = dataUriMatch[2];
+
+          const veoGaxios = new Gaxios();
+          const googleAIBase = 'https://generativelanguage.googleapis.com/v1beta';
+          const veoModel = 'veo-2.0-generate-exp';
+
+          // Step 1: Start the long-running Veo operation
+          console.log('[avatarAnimationFlow] Starting Veo operation...');
+          const startResp = await veoGaxios.request<{ name?: string }>({
+            url: `${googleAIBase}/models/${veoModel}:predictLongRunning?key=${geminiApiKey}`,
+            method: 'POST',
+            data: {
+              instances: [{
+                prompt: veoPrompt,
+                image: {
+                  bytesBase64Encoded: imageBase64,
+                  mimeType: imageMimeType,
+                },
+              }],
+              parameters: {
+                aspectRatio: '1:1',
+                sampleCount: 1,
+                durationSeconds: 5,
+              },
+            },
           });
 
-          // Veo returns an operation that needs polling
-          let operation = (veoResult as any).operation;
+          const operationName = startResp.data?.name;
+          if (!operationName) {
+            throw new Error(`Veo start returned no operation name. Response: ${JSON.stringify(startResp.data).substring(0, 300)}`);
+          }
+          console.log('[avatarAnimationFlow] Veo operation started:', operationName);
 
-          if (operation) {
-            console.log('[avatarAnimationFlow] Veo operation started, polling for completion...');
+          // Step 2: Poll until done (max 2 minutes, 5 s intervals)
+          let videoBuffer: Buffer | null = null;
+          for (let poll = 0; poll < 24 && !videoBuffer; poll++) {
+            await new Promise(r => setTimeout(r, 5000));
 
-            // Poll for up to 2 minutes (24 x 5 second intervals)
-            const maxPolls = 24;
-            for (let i = 0; i < maxPolls && !operation.done; i++) {
-              await new Promise((resolve) => setTimeout(resolve, 5000));
-              operation = await ai.checkOperation(operation);
-              console.log(`[avatarAnimationFlow] Poll ${i + 1}/${maxPolls}, done: ${operation.done}`);
+            const pollResp = await veoGaxios.request<any>({
+              url: `${googleAIBase}/${operationName}?key=${geminiApiKey}`,
+              method: 'GET',
+            });
+            const op = pollResp.data;
+            console.log(`[avatarAnimationFlow] Veo poll ${poll + 1}/24: done=${op.done}`);
+
+            if (op.error) {
+              throw new Error(`Veo operation error: ${op.error.message || JSON.stringify(op.error)}`);
             }
 
-            if (operation.error) {
-              throw new Error(`Veo operation failed: ${operation.error.message}`);
-            }
+            if (op.done) {
+              // Log full response shape for first successful completion (helps diagnose format)
+              const responsePreview = JSON.stringify(op.response).substring(0, 500);
+              console.log('[avatarAnimationFlow] Veo done. Response preview:', responsePreview);
+              debugInfo.veoResponse = responsePreview;
 
-            if (!operation.done) {
-              throw new Error('Veo operation timed out after 2 minutes');
-            }
+              // The response may nest the samples differently depending on API version
+              const samples =
+                op.response?.generatedSamples ??
+                op.response?.generateVideoResponse?.generatedSamples;
+              const videoData = samples?.[0]?.video;
 
-            // Extract video from completed operation
-            const videoContent = operation.output?.message?.content?.find((p: any) => !!p.media);
-            if (videoContent?.media?.url) {
-              const videoUrl = videoContent.media.url;
-              console.log('[avatarAnimationFlow] Veo video URL received');
-
-              await logAIFlow({ flowName: 'avatarAnimationFlow', sessionId: entityId, parentId: entity.ownerParentUid, prompt: veoPrompt, response: { media: { url: videoUrl } }, startTime: veoStartTime, modelName: veoModelName });
-
-              const { buffer, mimeType } = await parseMediaUrl(videoUrl);
-              console.log('[avatarAnimationFlow] Veo video buffer size:', buffer.length, 'mimeType:', mimeType);
-
-              animationUrl = await uploadAnimationToStorage({
-                buffer,
-                mimeType: mimeType.includes('mp4') ? 'video/mp4' : mimeType,
-                entityType,
-                entityId,
-                parentUid: entity.ownerParentUid,
-              });
-
-              console.log('[avatarAnimationFlow] Veo video uploaded:', animationUrl);
-              debugInfo.veoResponse = 'Video generated successfully';
-
-              // Update entity with generated animation
-              await entityRef.update({
-                avatarAnimationUrl: animationUrl,
-                'avatarAnimationGeneration.status': 'ready',
-                'avatarAnimationGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
-                'avatarAnimationGeneration.lastErrorMessage': null,
-                'avatarAnimationGeneration.generatedWith': 'veo',
-                updatedAt: FieldValue.serverTimestamp(),
-              });
-
-              return { ok: true, animationUrl, debugInfo };
+              if (videoData?.bytesBase64Encoded) {
+                videoBuffer = Buffer.from(videoData.bytesBase64Encoded, 'base64');
+                console.log('[avatarAnimationFlow] Veo video extracted from base64, size:', videoBuffer.length);
+              } else if (videoData?.uri) {
+                const uri = videoData.uri as string;
+                console.log('[avatarAnimationFlow] Fetching Veo video from URI:', uri.substring(0, 120));
+                // URI may be an HTTPS URL or a gs:// reference accessed via Files API
+                const fetchUrl = uri.startsWith('https://')
+                  ? uri
+                  : `${googleAIBase}/files/${uri.split('/').pop()}?key=${geminiApiKey}`;
+                const videoResp = await veoGaxios.request<ArrayBuffer>({
+                  url: fetchUrl,
+                  responseType: 'arraybuffer',
+                });
+                videoBuffer = Buffer.from(videoResp.data);
+                console.log('[avatarAnimationFlow] Veo video fetched from URI, size:', videoBuffer.length);
+              } else {
+                throw new Error(`Veo completed but no video in response. Shape: ${responsePreview}`);
+              }
             }
           }
 
-          // Check for direct media response (non-operation response)
-          const directVideoUrl = veoResult.media?.url;
-          if (directVideoUrl) {
-            console.log('[avatarAnimationFlow] Veo direct response received');
-            await logAIFlow({ flowName: 'avatarAnimationFlow', sessionId: entityId, parentId: entity.ownerParentUid, prompt: veoPrompt, response: veoResult, startTime: veoStartTime, modelName: veoModelName });
+          if (!videoBuffer) throw new Error('Veo timed out after 2 minutes with no video');
 
-            const { buffer, mimeType } = await parseMediaUrl(directVideoUrl);
-            console.log('[avatarAnimationFlow] Veo video buffer size:', buffer.length, 'mimeType:', mimeType);
+          await logAIFlow({
+            flowName: 'avatarAnimationFlow',
+            sessionId: entityId,
+            parentId: entity.ownerParentUid,
+            prompt: veoPrompt,
+            response: { text: `video/${videoBuffer.length} bytes` },
+            startTime: veoStartTime,
+            modelName: `googleai-rest/${veoModel}`,
+          });
 
-            animationUrl = await uploadAnimationToStorage({
-              buffer,
-              mimeType: mimeType.includes('mp4') ? 'video/mp4' : mimeType,
-              entityType,
-              entityId,
-              parentUid: entity.ownerParentUid,
-            });
+          animationUrl = await uploadAnimationToStorage({
+            buffer: videoBuffer,
+            mimeType: 'video/mp4',
+            entityType,
+            entityId,
+            parentUid: entity.ownerParentUid,
+          });
 
-            console.log('[avatarAnimationFlow] Veo video uploaded:', animationUrl);
-            debugInfo.veoResponse = 'Video generated successfully (direct)';
+          console.log('[avatarAnimationFlow] Veo video uploaded:', animationUrl);
 
-            await entityRef.update({
-              avatarAnimationUrl: animationUrl,
-              'avatarAnimationGeneration.status': 'ready',
-              'avatarAnimationGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
-              'avatarAnimationGeneration.lastErrorMessage': null,
-              'avatarAnimationGeneration.generatedWith': 'veo',
-              updatedAt: FieldValue.serverTimestamp(),
-            });
+          await entityRef.update({
+            avatarAnimationUrl: animationUrl,
+            'avatarAnimationGeneration.status': 'ready',
+            'avatarAnimationGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
+            'avatarAnimationGeneration.lastErrorMessage': null,
+            'avatarAnimationGeneration.generatedWith': 'veo',
+            updatedAt: FieldValue.serverTimestamp(),
+          });
 
-            return { ok: true, animationUrl, debugInfo };
-          }
-
-          // If no video in response, fall through to fallback
-          console.log('[avatarAnimationFlow] Veo did not return video, falling back to image');
-          debugInfo.veoError = 'Veo response did not contain video';
-          debugInfo.fallbackUsed = true;
+          return { ok: true, animationUrl, outputType: 'video' as const, debugInfo };
 
         } catch (veoError: any) {
-          console.error('[avatarAnimationFlow] Veo error:', veoError);
-          debugInfo.veoError = veoError.message || 'Unknown Veo error';
-          debugInfo.veoErrorCode = veoError.code ? String(veoError.code) : undefined;
+          console.error('[avatarAnimationFlow] Veo REST error:', veoError.message || veoError);
+          debugInfo.veoError = veoError.message || String(veoError);
+          debugInfo.veoErrorCode = veoError.response?.status ? String(veoError.response.status) : undefined;
           debugInfo.fallbackUsed = true;
-          // Fall through to fallback image generation
+          // Fall through to static image fallback
         }
       } else {
-        console.log('[avatarAnimationFlow] Vertex AI not configured (no GCP project), using image fallback');
+        console.log('[avatarAnimationFlow] No Gemini API key, skipping Veo');
         debugInfo.veoAttempted = false;
         debugInfo.fallbackUsed = true;
-        debugInfo.veoError = 'Vertex AI not configured - set GOOGLE_CLOUD_PROJECT environment variable';
       }
+
 
       // Fallback: Generate a dance pose image
       console.log('[avatarAnimationFlow] Using image-based animation fallback');

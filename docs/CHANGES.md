@@ -18,6 +18,19 @@
 
 ### 2026-06-01
 
+#### `4c5d889` - Switch avatar animation to direct Google AI REST API for Veo 2
+
+**Type**: Bug Fix
+
+**Summary**: The animation generator was producing a "bouncing static image" instead of a real video. Two root causes: (1) the old code used `ai.generate()` via the Genkit Vertex AI plugin and then accessed `(veoResult as any).operation` — an undocumented internal property that was `undefined`, so the polling loop never ran and execution fell through silently to the static image fallback; (2) `GOOGLE_CLOUD_PROJECT` may not be set, gating Veo entirely.
+
+New implementation calls `generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-exp:predictLongRunning` directly via Gaxios using the existing `GEMINI_API_KEY`. Polls the returned operation name properly. Falls back to static dance-pose image if Veo is unavailable or returns an error (with error details now captured in `debugInfo.veoError`).
+
+**Modified files**:
+- `src/ai/flows/avatar-animation-flow.ts`
+
+---
+
 #### `4ce6b06` - Replace storybooks page with children list + per-child detail pages
 
 **Type**: Feature / Performance
