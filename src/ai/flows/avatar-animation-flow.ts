@@ -277,7 +277,7 @@ Generate a short animated loop of this character dancing happily.`;
       // ── PRIMARY: fal.ai Kling image-to-video ─────────────────────────────────
       // Accepts the Firebase Storage URL directly — no base64 conversion needed.
       // Add FAL_KEY to the environment to enable this path.
-      const falKey = process.env.FAL_KEY;
+      const falKey = process.env.FAL_KEY?.trim();
       if (falKey) {
         console.log('[avatarAnimationFlow] Attempting fal.ai Kling image-to-video');
         debugInfo.falAttempted = true;
@@ -383,8 +383,10 @@ Generate a short animated loop of this character dancing happily.`;
           return { ok: true, animationUrl, outputType: 'video' as const, debugInfo };
 
         } catch (falError: any) {
-          console.error('[avatarAnimationFlow] fal.ai error:', falError.message || falError);
-          debugInfo.falError = falError.message || String(falError);
+          const rawMessage = falError.message || String(falError);
+          const safeMessage = falKey ? rawMessage.replaceAll(falKey, '[REDACTED]') : rawMessage;
+          console.error('[avatarAnimationFlow] fal.ai error:', safeMessage);
+          debugInfo.falError = safeMessage;
           // Fall through to Veo, then static image
         }
       }
