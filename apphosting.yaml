@@ -107,4 +107,4 @@ env:
     availability:
       - RUNTIME
 
-# Redeploy trigger: 2026-06-01
+# Redeploy trigger: 2026-06-02
