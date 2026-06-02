@@ -86,3 +86,21 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Hide Safari's overlay media controls on videos that opt out of controls.
+   Without these rules, hovering / focusing the avatar video reveals
+   ::-webkit-media-controls-overlay-play-button (play/pause overlay) and
+   ::-webkit-media-controls-start-playback-button (big initial play button),
+   which look like real UI but are unwanted browser chrome. */
+video:not([controls])::-webkit-media-controls,
+video:not([controls])::-webkit-media-controls-enclosure,
+video:not([controls])::-webkit-media-controls-overlay-enclosure,
+video:not([controls])::-webkit-media-controls-overlay-play-button,
+video:not([controls])::-webkit-media-controls-start-playback-button,
+video:not([controls])::-webkit-media-controls-panel {
+  display: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
