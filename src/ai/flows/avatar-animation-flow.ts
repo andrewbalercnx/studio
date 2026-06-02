@@ -285,7 +285,9 @@ Generate a short animated loop of this character dancing happily.`;
 
         try {
           const falGaxios = new Gaxios();
-          const falModel = 'fal-ai/kling-video/v1.6/standard/image-to-video';
+          // Pro variant accepts tail_image_url; passing the same image as head and
+          // tail produces a seamlessly looping video (last frame ~ first frame).
+          const falModel = 'fal-ai/kling-video/v1.6/pro/image-to-video';
           const falQueueBase = `https://queue.fal.run/${falModel}`;
 
           const animPrompt = `A cute cartoon character dancing joyfully. The character sways side to side, waves their arms, and bobs gently up and down in a happy dance. They stay in place. Smooth looping motion appropriate for young children.`;
@@ -304,6 +306,7 @@ Generate a short animated loop of this character dancing happily.`;
             headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
             data: {
               image_url: avatarUrl,
+              tail_image_url: avatarUrl,
               prompt: animPrompt,
               duration: '5',
               aspect_ratio: '1:1',
