@@ -317,10 +317,11 @@ ${generateStoryBeatOutputDescription()}
             const modelName = storyType.promptConfig?.model?.name || 'googleai/gemini-2.5-flash';
             // Disable thinking for beat generation — story beats don't benefit from extended reasoning,
             // and thinking tokens represent ~28% of cost with no quality gain for this task.
+            // Only Flash supports thinkingBudget: 0; Pro requires thinking mode and rejects the call.
             const beatGenConfig = {
                 temperature: modelTemperature,
                 maxOutputTokens: maxOutputTokens,
-                ...(modelName.includes('gemini-2.5') && { thinkingConfig: { thinkingBudget: 0 } }),
+                ...(modelName.includes('gemini-2.5-flash') && { thinkingConfig: { thinkingBudget: 0 } }),
             };
 
             let llmResponse;
