@@ -127,7 +127,7 @@ Reply with ONLY the title text, nothing else.`;
 
       let llmResponse;
       const startTime = Date.now();
-      const modelName = 'googleai/gemini-2.0-flash';
+      const modelName = 'googleai/gemini-2.5-flash';
       try {
         llmResponse = await ai.generate({
           model: modelName,
