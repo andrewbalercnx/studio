@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -44,6 +44,7 @@ export function ChildAvatarAnimation({
 }: ChildAvatarAnimationProps) {
   const [videoError, setVideoError] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   // Determine if the animation URL is a video
   const isVideo = avatarAnimationUrl &&
@@ -53,11 +54,23 @@ export function ChildAvatarAnimation({
   const handleVideoError = () => setVideoError(true);
   const handleImageError = () => setImageError(true);
 
+  // Safari evaluates autoplay against the HTML muted attribute at element creation
+  // time, but React's JSX `muted` sets the DOM property post-mount. Force-set the
+  // property and call play() ourselves so Safari doesn't fall back to its play-button
+  // overlay.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !avatarAnimationUrl || !isVideo) return;
+    el.muted = true;
+    el.play().catch(() => { /* autoplay blocked despite muted; leave element idle */ });
+  }, [avatarAnimationUrl, isVideo]);
+
   // Show video animation
   if (avatarAnimationUrl && isVideo && !videoError) {
     return (
       <div className={cn('relative', className)}>
         <video
+          ref={videoRef}
           src={avatarAnimationUrl}
           autoPlay
           loop
