@@ -290,8 +290,15 @@ Generate a short animated loop of this character dancing happily.`;
 
           const animPrompt = `A cute cartoon character dancing joyfully. The character sways side to side, waves their arms, and bobs gently up and down in a happy dance. They stay in place. Smooth looping motion appropriate for young children.`;
 
-          // Submit the job — pass the original avatar URL, fal.ai fetches it directly
-          const submitResp = await falGaxios.request<{ request_id: string }>({
+          // Submit the job — pass the original avatar URL, fal.ai fetches it directly.
+          // fal.ai's submit response returns status_url and response_url; use those
+          // directly rather than constructing them. For multi-segment app ids the
+          // hand-rolled paths 405 at the gateway.
+          const submitResp = await falGaxios.request<{
+            request_id: string;
+            status_url: string;
+            response_url: string;
+          }>({
             url: falQueueBase,
             method: 'POST',
             headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
@@ -303,9 +310,9 @@ Generate a short animated loop of this character dancing happily.`;
             },
           });
 
-          const requestId = submitResp.data?.request_id;
-          if (!requestId) {
-            throw new Error(`fal.ai returned no request_id. Response: ${JSON.stringify(submitResp.data).substring(0, 200)}`);
+          const { request_id: requestId, status_url: statusUrl, response_url: responseUrl } = submitResp.data ?? {};
+          if (!requestId || !statusUrl || !responseUrl) {
+            throw new Error(`fal.ai submit response missing fields. Response: ${JSON.stringify(submitResp.data).substring(0, 200)}`);
           }
           console.log('[avatarAnimationFlow] fal.ai request_id:', requestId);
 
@@ -315,7 +322,7 @@ Generate a short animated loop of this character dancing happily.`;
             await new Promise(r => setTimeout(r, 5000));
 
             const statusResp = await falGaxios.request<{ status: string; error?: any }>({
-              url: `${falQueueBase}/requests/${requestId}/status`,
+              url: statusUrl,
               method: 'GET',
               headers: { Authorization: `Key ${falKey}` },
             });
@@ -329,7 +336,7 @@ Generate a short animated loop of this character dancing happily.`;
 
             if (status === 'COMPLETED') {
               const resultResp = await falGaxios.request<{ video: { url: string } }>({
-                url: `${falQueueBase}/requests/${requestId}`,
+                url: responseUrl,
                 method: 'GET',
                 headers: { Authorization: `Key ${falKey}` },
               });
