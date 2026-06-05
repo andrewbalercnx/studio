@@ -302,6 +302,9 @@ export default function KidsCreateStoryPage() {
 
         setSessionId(newSessionId);
 
+        // Funnel: story creation started (wizard path).
+        track(ANALYTICS_EVENTS.storyStarted, { sessionId: newSessionId, storyTypeId: 'wizard' });
+
         // Start wizard flow
         setIsProcessing(true);
         const result = await storyWizardFlow({
@@ -335,6 +338,9 @@ export default function KidsCreateStoryPage() {
     if (!sessionId || !childId || !wizardState || isProcessing) return;
     if (wizardState.state !== 'asking') return;
 
+    // Kids telemetry (content-free): which step the child answered.
+    track(ANALYTICS_EVENTS.kidsAnswerSelected, { sessionId, stepIndex: currentAnswers.length });
+
     const newAnswers: StoryWizardAnswer[] = [
       ...currentAnswers,
       { question: wizardState.question!, answer: choice.text },
@@ -358,6 +364,7 @@ export default function KidsCreateStoryPage() {
 
       if (result.state === 'asking') {
         setCurrentAnswers(result.answers || []);
+        track(ANALYTICS_EVENTS.kidsBeatProgressed, { sessionId, stepIndex: result.answers?.length ?? 0 });
       } else if (result.state === 'finished' && result.storyText) {
         // Story is complete - update session and trigger storyCompile for post-generation tasks
         if (firestore) {
@@ -373,6 +380,13 @@ export default function KidsCreateStoryPage() {
             { merge: true }
           );
         }
+
+        // Funnel: narrative complete (ids/enums only — never the story text).
+        track(ANALYTICS_EVENTS.storyCompleted, {
+          sessionId,
+          storyTypeId: 'wizard',
+          beats: newAnswers.length,
+        });
 
         // Call storyCompile to trigger post-generation tasks (synopsis, audio, cast avatar, title)
         // This ensures wizard stories get the same treatment as other generator stories

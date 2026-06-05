@@ -156,6 +156,29 @@ describe('analytics core', () => {
   });
 });
 
+describe('pre-init buffer', () => {
+  afterEach(() => {
+    __resetAnalyticsForTest();
+    vi.restoreAllMocks();
+  });
+
+  it('buffers a valid event fired before init and flushes it on enable', () => {
+    __resetAnalyticsForTest(); // no sink attached
+    expect(track(ANALYTICS_EVENTS.loginCompleted, { method: 'password' })).toBe(false);
+    const sink = makeFakeSink();
+    initAnalytics({ sink, enabled: true });
+    expect(sink.capture).toHaveBeenCalledWith('login.completed', { method: 'password' });
+  });
+
+  it('does not flush buffered events when init is disabled', () => {
+    __resetAnalyticsForTest();
+    track(ANALYTICS_EVENTS.loginCompleted, { method: 'password' });
+    const sink = makeFakeSink();
+    initAnalytics({ sink, enabled: false });
+    expect(sink.capture).not.toHaveBeenCalled();
+  });
+});
+
 describe('findPiiViolation (pure)', () => {
   it('returns null for clean scalar props', () => {
     expect(findPiiViolation({ orderId: 'x', count: 3, ok: true, nothing: null })).toBeNull();

@@ -12,7 +12,7 @@
  */
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useDiagnostics } from '@/hooks/use-diagnostics';
 import {
@@ -23,6 +23,8 @@ import {
   type UserRole,
 } from '@/lib/analytics';
 import { createPostHogSink } from '@/lib/analytics/posthog-sink';
+import { captureFirstTouch } from '@/lib/analytics/attribution';
+import { getConsent, CONSENT_CHANGE_EVENT, type ConsentState } from '@/lib/analytics/consent';
 
 const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://eu.i.posthog.com';
@@ -38,8 +40,28 @@ function roleOf(claims: Record<string, unknown> | undefined): UserRole {
 export function PostHogAnalyticsProvider({ children }: { children: React.ReactNode }) {
   const { config } = useDiagnostics();
   const { user, idTokenResult } = useUser();
-  const enabled = !!POSTHOG_KEY && !ENV_HARD_OFF && !!config.enableAnalytics;
+  const [consent, setConsentState] = useState<ConsentState>('unset');
+  // Analytics runs only when admin-enabled AND the parent has granted consent (kids product).
+  const enabled = !!POSTHOG_KEY && !ENV_HARD_OFF && !!config.enableAnalytics && consent === 'granted';
   const initialisedRef = useRef(false);
+
+  // Track consent locally and react to changes without a reload.
+  useEffect(() => {
+    const read = () => setConsentState(getConsent());
+    read();
+    window.addEventListener(CONSENT_CHANGE_EVENT, read);
+    window.addEventListener('storage', read);
+    return () => {
+      window.removeEventListener(CONSENT_CHANGE_EVENT, read);
+      window.removeEventListener('storage', read);
+    };
+  }, []);
+
+  // Record first-touch attribution on landing (first-party cookie only — set once, independent of
+  // the analytics toggle; it's only *sent* later, gated, via signup.completed).
+  useEffect(() => {
+    captureFirstTouch();
+  }, []);
 
   // Attach / toggle the sink whenever the enabled state flips.
   useEffect(() => {

@@ -97,6 +97,20 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
     ? (storybook?.pageGeneration?.lastErrorMessage || storybook?.imageGeneration?.lastErrorMessage)
     : (story?.pageGeneration?.lastErrorMessage || story?.imageGeneration?.lastErrorMessage);
 
+  // Funnel: fire generation.failed once when a generation phase errors (coarse reason only — never
+  // the raw error message, which can contain PII; the no-PII guard would reject it anyway).
+  const failureFiredRef = useRef(false);
+  useEffect(() => {
+    if (hasError && !failureFiredRef.current) {
+      failureFiredRef.current = true;
+      track(ANALYTICS_EVENTS.generationFailed, {
+        flow: pageStatus === 'error' ? 'pages' : 'image',
+        reason: 'generation_error',
+        storybookId: storybookId ?? null,
+      });
+    }
+  }, [hasError, pageStatus, storybookId]);
+
   // Redirect if not set up
   useEffect(() => {
     if (!userLoading && (!user || !isLocked || !childId)) {
@@ -239,6 +253,8 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
 
   // Funnel: fire storybook.art_ready exactly once when images finish (guarded against re-renders).
   const artReadyFiredRef = useRef(false);
+  // Kids telemetry: rough generation duration from when this page mounts to art-ready.
+  const genStartRef = useRef<number>(Date.now());
 
   // Auto-redirect when complete
   useEffect(() => {
@@ -246,6 +262,10 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
     if (isNewModel && storybook?.imageGeneration?.status === 'ready') {
       if (!artReadyFiredRef.current) {
         artReadyFiredRef.current = true;
+        track(ANALYTICS_EVENTS.generationDuration, {
+          storybookId: storybookId ?? null,
+          durationMs: Date.now() - genStartRef.current,
+        });
         track(ANALYTICS_EVENTS.storybookArtReady, {
           storybookId: storybookId ?? null,
           pageCount: storybook?.imageGeneration?.pagesTotal ?? null,

@@ -15,6 +15,7 @@ import { HelpWizard } from '@/components/help-wizard';
 import { WizardTargetOverlay } from '@/components/wizard-target-overlay';
 import { StartupWizardTrigger } from '@/components/startup-wizard-trigger';
 import { PostHogAnalyticsProvider } from '@/components/analytics/posthog-provider';
+import { ConsentBanner } from '@/components/analytics/consent-banner';
 
 // Routes that should not show the standard header/chrome
 const PUBLIC_ROUTES = ['/storybook/share/'];
@@ -55,6 +56,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
               <HelpWizard />
               <WizardTargetOverlay />
               <StartupWizardTrigger />
+              <ConsentBanner />
             </ParentGuardProvider>
             </PathRecordingProvider>
           </WizardTargetDiagnosticsProvider>

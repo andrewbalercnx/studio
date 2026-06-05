@@ -175,7 +175,8 @@ Interactive story creation sessions.
 
 **Subcollections**:
 - `messages/{messageId}` - Chat messages (see `ChatMessage` type)
-- `events/{eventId}` - Session analytics events
+- `events/{eventId}` - Session operational/debug events (`event`, `status`, `source`, `attributes`, `createdAt`, `expireAt`). **Bounded by TTL**: each doc sets `expireAt = now + 90d`. A Firestore TTL policy must be enabled on the `events` collection-group keyed on `expireAt`:
+  `gcloud firestore fields ttls update expireAt --collection-group=events --enable-ttl`
 
 **Security**: Parents can CRUD their own sessions; admins have full access.
 

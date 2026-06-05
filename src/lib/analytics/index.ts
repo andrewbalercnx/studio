@@ -35,6 +35,15 @@ let configEnabled = false;
 
 const isStrict = process.env.NODE_ENV !== 'production';
 
+// Pre-init buffer: events validated before the sink attaches (e.g. `login.completed` fires the
+// instant after sign-in, before the provider has loaded the config + created the sink). We keep a
+// small ring of recent valid events and flush those within a short window on init, so the
+// top-of-funnel isn't lost to that race — without replaying a whole pre-consent browsing session.
+type BufferedEvent = { event: AnalyticsEventName; props: AnalyticsProps; t: number };
+const preInitBuffer: BufferedEvent[] = [];
+const BUFFER_MAX = 20;
+const BUFFER_WINDOW_MS = 30_000;
+
 function doNotTrack(): boolean {
   // Guard each global independently — Node defines `navigator` but not `window`.
   const nav = typeof navigator !== 'undefined' ? (navigator as any) : undefined;
@@ -56,6 +65,14 @@ export function isAnalyticsEnabled(): boolean {
 export function initAnalytics(opts: { sink: AnalyticsSink; enabled: boolean }): void {
   sink = opts.sink;
   configEnabled = opts.enabled;
+  // Flush recent buffered events (covers the pre-init race) if we're now sending.
+  if (isAnalyticsEnabled() && preInitBuffer.length) {
+    const now = Date.now();
+    for (const e of preInitBuffer) {
+      if (now - e.t <= BUFFER_WINDOW_MS) sink!.capture(e.event, e.props);
+    }
+  }
+  preInitBuffer.length = 0;
 }
 
 /** Flip the runtime kill-switch (e.g. when the diagnostics config doc changes). */
@@ -67,6 +84,7 @@ export function setAnalyticsEnabled(enabled: boolean): void {
 export function __resetAnalyticsForTest(): void {
   sink = null;
   configEnabled = false;
+  preInitBuffer.length = 0;
 }
 
 function reportProblem(message: string): void {
@@ -92,7 +110,12 @@ export function track(event: AnalyticsEventName, props: AnalyticsProps = {}): bo
     return false;
   }
 
-  if (!isAnalyticsEnabled()) return false;
+  if (!isAnalyticsEnabled()) {
+    // Buffer valid events so a pre-init race isn't lost; flushed (within a window) on init.
+    preInitBuffer.push({ event, props, t: Date.now() });
+    if (preInitBuffer.length > BUFFER_MAX) preInitBuffer.shift();
+    return false;
+  }
   sink!.capture(event, props);
   return true;
 }

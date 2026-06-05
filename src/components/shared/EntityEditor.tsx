@@ -58,6 +58,8 @@ type EntityEditorProps = {
   children?: ChildProfile[]; // For character editor to select childId
   onSave: () => void;
   onCancel?: () => void;
+  /** Fired once after a NEW entity is successfully created (not on edit/cancel). */
+  onCreated?: () => void;
 };
 
 export function EntityEditor({
@@ -66,7 +68,8 @@ export function EntityEditor({
   parentUid,
   children = [],
   onSave,
-  onCancel
+  onCancel,
+  onCreated
 }: EntityEditorProps) {
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -514,6 +517,7 @@ export function EntityEditor({
         }
       }
 
+      if (!isEditing) onCreated?.();
       onSave();
     } catch (err: any) {
       console.error('Error saving entity:', err);

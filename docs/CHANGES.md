@@ -18,6 +18,28 @@
 
 ### 2026-06-05
 
+#### `8f11ad4` — GTM Sprint 1 complete: funnel instrumentation, kids telemetry, consent, error boundaries
+
+**Type**: Feature
+
+**Summary**: Completes the Sprint 1 measurement spine (engineering). Analytics remains **disabled by
+default** and now additionally gated on parent consent.
+
+- **Pre-init event buffer**: valid `track()` calls fired before the sink attaches (e.g. `login.completed`) are buffered and flushed within a 30s window on init — fixes the dropped top-of-funnel observed in the live smoke test.
+- **Funnel events**: added wizard `story.started`, `story.completed`, `storybook.generation_started`, `storybook.art_ready`, parent `child.created` (new `EntityEditor.onCreated` callback), and `generation.failed`.
+- **Kids telemetry** (content-free): `kids.answer_selected`, `kids.beat_progressed`, `generation.duration`.
+- **Attribution**: first-touch utm/referrer cookie (`src/lib/analytics/attribution.ts`) attached to `signup.completed`.
+- **Error boundaries**: `app/global-error.tsx`, `app/error.tsx`, `app/kids/error.tsx` (kid-friendly) reporting via `captureException` (shared `ErrorFallback`).
+- **Consent**: `src/lib/analytics/consent.ts` + parent-facing `ConsentBanner`; analytics now requires admin-enable AND parent consent.
+- **TTL**: `expireAt` (90d) on session-event writes + documented Firestore TTL policy.
+- 73 unit tests (added pre-init buffer coverage).
+
+**Key files**: `src/lib/analytics/{index,attribution,consent}.ts`, `src/components/analytics/{consent-banner,error-fallback}.tsx`, `src/app/{error,global-error}.tsx`, `src/app/kids/error.tsx`, `src/components/shared/EntityEditor.tsx`, `src/lib/session-events*.ts`, `src/app/kids/create/**`, `src/app/{signup,parent/children}/page.tsx`.
+
+---
+
+### 2026-06-05
+
 #### `43360ce` — GTM Sprint 1 (measurement spine): PostHog analytics foundation + security remediation
 
 **Type**: Feature + Security

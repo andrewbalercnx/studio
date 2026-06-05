@@ -1,8 +1,19 @@
 # Sprint 1 — Measurement Spine (Detailed Plan, v2)
 
-> **Status**: Planned · **Priority**: High · **Effort**: ~2 weeks · **Depends on**: Secret rotation (pre-0)
+> **Status**: **Engineering complete (2026-06-05)** — shipped disabled-by-default. Remaining before
+> go-live: (your side) PostHog retention setting + sub-processor list in privacy policy; (post-enable)
+> build the funnel + `time_to_first_book` insights in PostHog and live-verify replay masking.
+> **Priority**: High · **Depends on**: Secret rotation (pre-0, done)
 > **Dev todo**: `[GTM Sprint 1/8]` (`nq1czfTGwg41IoyaF2L3`)
 > **v2** incorporates the five-lens plan review (simplicity, testability, security, scalability, UX).
+>
+> **Done:** analytics core (DI, no-PII guard, kill-switch, DNT, pre-init buffer); PostHog sink +
+> provider + Error Tracking; admin toggle; consent banner + consent gating; funnel events
+> (signup/login/child.created/story.started incl. wizard/story.completed/generation_started/art_ready);
+> `generation.failed`; kids telemetry (answer_selected/beat_progressed/generation.duration); attribution;
+> error boundaries (global + app + kids); session-events TTL. 73 unit tests.
+> **Deferred (light):** kids `step_viewed`/`stuck`/`abandoned` (dwell timers); `story.completed` for
+> legacy non-wizard modes; `checkout.*`/`print_order.*` (Stripe — Sprint 2/3).
 
 ## 1. Objective
 

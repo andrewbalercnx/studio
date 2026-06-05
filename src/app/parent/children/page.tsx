@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
 import { EntityEditor } from '@/components/shared/EntityEditor';
+import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import { VoiceSelector } from '@/components/parent/VoiceSelector';
 
 function slugify(text: string) {
@@ -124,6 +125,7 @@ function ChildForm({ parentUid, onSave, child }: { parentUid: string, onSave: ()
             parentUid={parentUid}
             onSave={onSave}
             onCancel={onSave}
+            onCreated={() => track(ANALYTICS_EVENTS.childCreated, { source: 'parent' })}
         />
     );
 }
