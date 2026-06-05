@@ -2270,3 +2270,72 @@ export type DevTodo = {
   updatedAt: any;
   completedAt?: any;
 };
+
+// ============================================================
+// Commercial Catalog — Products, Prices & Entitlements
+// Payment-agnostic. See docs/PRODUCTS.md.
+// ============================================================
+
+/** Code-defined entitlement components (the grantable building blocks). */
+export type EntitlementComponentKey = 'print_credit' | 'story_allowance' | 'storybook_allowance';
+export type EntitlementMeter = 'consumable' | 'quota' | 'boolean';
+export type EntitlementScope = 'family' | 'child';
+
+export type EntitlementComponentDef = {
+  key: EntitlementComponentKey;
+  label: string;
+  description: string;
+  meter: EntitlementMeter;
+  unit: string; // e.g. 'books', 'stories', 'storybooks'
+  defaultScope: EntitlementScope;
+};
+
+/** How a granted component behaves over time. */
+export type GrantReset = 'one_time' | 'per_period' | 'lifetime';
+
+/** A component included in a product, with how much and how it resets. */
+export type ProductGrant = {
+  component: EntitlementComponentKey;
+  quantity: number;
+  reset: GrantReset;
+};
+
+export type ProductKind = 'one_time' | 'subscription' | 'free';
+export type ProductScope = 'family' | 'child' | 'gift';
+export type BillingInterval = 'month' | 'year';
+
+/** An assembled, sellable offer. A purchasable SKU = an active Product + an active Price. */
+export type Product = {
+  id: string;
+  name: string;
+  description?: string;
+  kind: ProductKind;
+  scope: ProductScope;
+  interval?: BillingInterval | null; // subscriptions only
+  grants: ProductGrant[];
+  printProductId?: string | null; // link to manufacturing spec for printed-book products
+  active: boolean;
+  sortOrder?: number;
+  createdAt?: any;
+  updatedAt?: any;
+  updatedBy?: string;
+};
+
+export type Currency = 'GBP' | 'USD' | 'EUR';
+
+/** A money point on a product. amountMinor is in minor units (e.g. pence). £0 is valid (free). */
+export type Price = {
+  id: string;
+  productId: string;
+  currency: Currency;
+  amountMinor: number;
+  interval?: BillingInterval | null; // recurring cadence; null for one-time
+  active: boolean;
+  externalPriceId?: string | null; // reserved for Stripe price linkage
+  createdAt?: any;
+  updatedAt?: any;
+  updatedBy?: string;
+};
+
+/** Server-assembled catalog entry returned to clients (active product + its active prices). */
+export type CatalogEntry = Product & { prices: Price[] };

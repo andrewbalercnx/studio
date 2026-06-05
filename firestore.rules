@@ -251,6 +251,18 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ========== COMMERCIAL CATALOG (products + prices) ==========
+    // Readable by any authenticated user (catalog display); writes are admin-only and go through
+    // server-validated admin API routes. Pricing is server-authoritative. See docs/PRODUCTS.md.
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /prices/{priceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
     // ========== CONFIGURATION COLLECTIONS ==========
     match /promptConfigs/{document=**} {
       allow read: if isAuthenticated();

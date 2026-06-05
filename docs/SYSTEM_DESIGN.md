@@ -43,7 +43,8 @@ Model selection is centrally managed via Firestore (`systemConfig/aiModels`) and
 
 ### External Integrations
 - **Print-on-Demand**: Mixam API for book printing
-- **Payment**: (Future integration point)
+- **Commercial catalog**: payment-agnostic `products`/`prices` model + admin management (`/admin/products`). See `docs/PRODUCTS.md`.
+- **Payment**: (Future — Stripe; `prices.externalPriceId` is the reserved hook)
 
 ---
 

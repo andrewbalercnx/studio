@@ -18,6 +18,31 @@
 
 ### 2026-06-05
 
+#### `82e6ed1` — Commercial catalog: products, prices & entitlement components (payment-agnostic)
+
+**Type**: Feature
+
+**Summary**: A payment-agnostic commercial catalog letting a product manager assemble purchasable
+products ("SKUs") from a fixed set of entitlement components — printed books, family/child
+subscriptions, free tiers with story/storybook limits. No money moves yet (Stripe is a later sprint;
+`prices.externalPriceId` is the reserved hook).
+
+- **Model** (`src/lib/types.ts`): `Product`, `Price`, `ProductGrant`, `CatalogEntry` + entitlement types.
+- **Components** (`src/lib/catalog/entitlement-components.ts`): code-defined `print_credit`, `story_allowance`, `storybook_allowance`.
+- **Validation** (`src/lib/catalog/validate.ts`): `validateProduct`/`validatePrice`/`formatPrice` + 16 unit tests.
+- **Collections**: `products`, `prices` (Firestore rules: read authenticated, write admin-only).
+- **API**: `/api/admin/products` + `/api/admin/prices` (admin CRUD, server-validated, server-authoritative pricing); `/api/catalog` (active products+prices assembled server-side).
+- **Admin UI**: `/admin/products` — assemble components, set scope/kind/interval, attach prices, activate. Linked from the admin dashboard.
+- **Docs**: `docs/PRODUCTS.md` (design), SCHEMA/API/SYSTEM_DESIGN updated.
+
+**Deferred** (documented): entitlement ledger + enforcement; gifting/redeemable print tokens; Stripe.
+
+**Key files**: `src/lib/catalog/**`, `src/app/api/admin/{products,prices}/route.ts`, `src/app/api/catalog/route.ts`, `src/app/admin/products/page.tsx`, `firestore.rules`, `docs/PRODUCTS.md`.
+
+---
+
+### 2026-06-05
+
 #### `8f11ad4` — GTM Sprint 1 complete: funnel instrumentation, kids telemetry, consent, error boundaries
 
 **Type**: Feature

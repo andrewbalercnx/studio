@@ -413,6 +413,45 @@ Print fulfillment orders.
 
 ---
 
+### `products` (commercial catalog)
+
+Customer-facing commercial offers assembled from entitlement components. Distinct from `printProducts`
+(which is the manufacturing spec + Mixam cost). Payment-agnostic. See `docs/PRODUCTS.md`.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Document ID |
+| `name` | string | Yes | Product name |
+| `description` | string | No | Description |
+| `kind` | 'one_time' \| 'subscription' \| 'free' | Yes | Billing model |
+| `scope` | 'family' \| 'child' \| 'gift' | Yes | Who it applies to / gifting |
+| `interval` | 'month' \| 'year' \| null | No | Billing cadence (subscriptions only) |
+| `grants` | `ProductGrant[]` | Yes | `{ component, quantity, reset }` — entitlement components granted. `component`: `print_credit` \| `story_allowance` \| `storybook_allowance`; `reset`: `one_time` \| `per_period` \| `lifetime` |
+| `printProductId` | string \| null | No | Link to a `printProducts` doc for printed-book products |
+| `active` | boolean | Yes | Visible in the catalog |
+| `sortOrder` | number | No | Display order |
+| `createdAt` / `updatedAt` / `updatedBy` | — | No | Metadata |
+
+**Security**: read by authenticated users; write admin-only (via server-validated admin API).
+
+### `prices` (commercial catalog)
+
+Money points attached to a `products` doc. A purchasable SKU = active product + active price.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Document ID |
+| `productId` | string | Yes | Parent product |
+| `currency` | 'GBP' \| 'USD' \| 'EUR' | Yes | Currency |
+| `amountMinor` | number | Yes | Amount in minor units (e.g. pence). 0 = free |
+| `interval` | 'month' \| 'year' \| null | No | Recurring cadence; null for one-time |
+| `active` | boolean | Yes | Whether this price is for sale |
+| `externalPriceId` | string \| null | No | Reserved for Stripe price linkage |
+
+**Security**: read by authenticated users; write admin-only. Deleting a product deletes its prices.
+
+---
+
 ### `printProducts`
 
 Print product catalog.

@@ -1961,6 +1961,28 @@ Allow any authenticated parent or admin user to report an issue to maintenance u
 
 ---
 
+## Catalog Routes
+
+Commercial catalog (products + prices). Payment-agnostic. See `docs/PRODUCTS.md`.
+
+### GET `/api/catalog`
+Returns active products with their active prices, assembled server-side. Auth: any authenticated user.
+Response: `{ ok: true, catalog: CatalogEntry[] }` where `CatalogEntry = Product & { prices: Price[] }`.
+
+### `/api/admin/products` (admin only)
+- `GET` — list all products (incl. inactive), ordered by `sortOrder`.
+- `POST` — create. Body: Product fields (`name`, `kind`, `scope`, `interval?`, `grants[]`, `printProductId?`, `active`, `sortOrder?`). Server-validated (`validateProduct`).
+- `PUT` — update. Body as POST plus `productId`.
+- `DELETE` — `?productId=` — deletes the product and its prices.
+
+### `/api/admin/prices` (admin only)
+- `GET` — `?productId=` (optional) — list prices.
+- `POST` — create. Body: `{ productId, currency, amountMinor, interval?, active, externalPriceId? }`. Server-validated.
+- `PUT` — update. Body as POST plus `priceId`.
+- `DELETE` — `?priceId=`.
+
+---
+
 ## Admin Routes
 
 > All admin routes require `isAdmin` or `isWriter` role.
