@@ -19,6 +19,7 @@ interface DiagnosticsContextType {
   showApiDocumentation: boolean;
   enableMixamWebhookLogging: boolean;
   showReportIssueButton: boolean;
+  enableAnalytics: boolean;
   elevenLabsApiVersion: DiagnosticsConfig['elevenLabsApiVersion'];
   updateConfig: (updates: Partial<DiagnosticsConfig>) => Promise<void>;
   toggleDiagnosticsPanel: () => Promise<void>;
@@ -88,6 +89,7 @@ export function DiagnosticsProvider({ children }: { children: React.ReactNode })
     showApiDocumentation: config.showApiDocumentation,
     enableMixamWebhookLogging: config.enableMixamWebhookLogging,
     showReportIssueButton: config.showReportIssueButton,
+    enableAnalytics: config.enableAnalytics,
     elevenLabsApiVersion: config.elevenLabsApiVersion,
     updateConfig,
     toggleDiagnosticsPanel,

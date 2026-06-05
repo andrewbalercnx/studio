@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import Link from 'next/link';
 
 export default function LoginPage() {
@@ -34,6 +35,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      track(ANALYTICS_EVENTS.loginCompleted, { method: 'password' });
       toast({ title: 'Signed in successfully!' });
       router.push('/');
     } catch (error: any) {

@@ -107,4 +107,20 @@ env:
     availability:
       - RUNTIME
 
+  # PostHog product analytics (EU region). The project token is publishable and send-only
+  # (it cannot read data), so it is safe to ship in the client bundle. NEXT_PUBLIC_* must be
+  # available at BUILD so Next inlines it. Nothing is captured until the
+  # systemConfig/diagnostics.enableAnalytics toggle is turned on.
+  - variable: NEXT_PUBLIC_POSTHOG_KEY
+    value: "phc_srrWPHVFxZ57BeXcs6DNBS7bujqdmBcDTAiTtWcJS2uw"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_POSTHOG_HOST
+    value: "https://eu.i.posthog.com"
+    availability:
+      - BUILD
+      - RUNTIME
+
 # Redeploy trigger: 2026-06-02

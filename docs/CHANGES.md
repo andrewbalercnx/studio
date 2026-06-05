@@ -16,6 +16,41 @@
 
 ## Changes
 
+### 2026-06-05
+
+#### `43360ce` — GTM Sprint 1 (measurement spine): PostHog analytics foundation + security remediation
+
+**Type**: Feature + Security
+
+**Summary**: First increment of the go-to-market sprint program. Adds a privacy-first product-analytics
+foundation (PostHog, EU region — analytics + RUM + error tracking, one vendor) and removes committed
+credentials from the working tree. Analytics ships **disabled by default**.
+
+**Analytics**
+- New vendor-agnostic core `src/lib/analytics/` (`events.ts`, `index.ts`, `posthog-sink.ts`) with a
+  no-PII guard, runtime kill-switch, Do-Not-Track, identify-on-uid+role-only, and a fixed event taxonomy.
+- `PostHogAnalyticsProvider` (`src/components/analytics/`) wired into `src/app/providers.tsx`; PostHog
+  only initialises when enabled. Includes PostHog Error Tracking (`capture_exceptions` + `captureException`).
+- `enableAnalytics` kill-switch added to `systemConfig/diagnostics` (default false) + admin toggle.
+- Funnel events wired: `signup.completed`, `login.completed`, `child.created` (signup), `story.started`,
+  `storybook.generation_started`, `storybook.art_ready`.
+- 18 unit tests for the analytics core (no-PII contract, kill-switch, DNT, taxonomy, captureException).
+
+**Security remediation**
+- Untracked `serviceAccount.json` (leaked key already rotated/deleted in GCP) + added secret patterns to
+  `.gitignore`; redacted `INTERNAL_API_SECRET` from `CLAUDE.md` (rotated to v2 in Secret Manager).
+- Added `docs/SECURITY_REMEDIATION.md`. Remaining: optional git-history scrub (both secrets already dead).
+
+**Docs**: `docs/SPRINTS.md`, `docs/sprints/SPRINT-01-MEASUREMENT-SPINE.md`, SYSTEM_DESIGN + SCHEMA updates.
+
+**Other**: excluded stray `studio/` duplicate from `tsconfig.json` (was breaking build/typecheck).
+
+**Key files**: `src/lib/analytics/*`, `src/components/analytics/posthog-provider.tsx`, `src/app/providers.tsx`,
+`src/hooks/use-diagnostics.tsx`, `src/app/admin/page.tsx`, `src/lib/types.ts`, `apphosting.yaml`,
+`src/app/{login,signup}/page.tsx`, `src/app/kids/create/**`, `.gitignore`, `CLAUDE.md`, `tsconfig.json`.
+
+---
+
 ### 2026-06-01
 
 #### `054264d` - Mount FAL_KEY secret in apphosting.yaml

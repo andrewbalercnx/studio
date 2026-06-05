@@ -46,3 +46,9 @@ next-env.d.ts
 # firebase
 firebase-debug.log
 firestore-debug.log
+
+# secrets / credentials (never commit)
+serviceAccount.json
+*-service-account*.json
+*.key
+*.p12

@@ -346,6 +346,22 @@ Tracks work items that should be done for a production-ready system. Both admins
 
 ## Monitoring & Diagnostics
 
+### Product Analytics & Monitoring (PostHog)
+- **Single observability vendor**: PostHog (EU region) provides product analytics, funnel analysis,
+  session replay, Web Vitals/RUM, and error tracking. Chosen over Sentry (no usable free tier) to
+  consolidate to one vendor/DPA — see `docs/sprints/SPRINT-01-MEASUREMENT-SPINE.md`.
+- **Vendor-agnostic core** (`src/lib/analytics/`): `track` / `identify` / `captureException` behind an
+  injected sink. The PostHog SDK is isolated in `posthog-sink.ts`; the core enforces a **no-PII guard**
+  (`events.ts findPiiViolation`), a runtime kill-switch, Do-Not-Track, and identify-on-uid+role-only.
+  Event taxonomy is a fixed registry (`ANALYTICS_EVENTS`).
+- **Wiring**: `PostHogAnalyticsProvider` (`src/components/analytics/`) mounts inside `DiagnosticsProvider`
+  + `FirebaseClientProvider`. PostHog only initialises when enabled, so nothing loads/sends while dark.
+- **Kill-switch**: `systemConfig/diagnostics.enableAnalytics` (default **false**), toggled from the admin
+  dashboard. Off until the PostHog DPA + consent are in place (children's data / ICO Children's Code).
+  Build-time hard-off via `NEXT_PUBLIC_ANALYTICS_ENABLED=false`.
+- **Privacy**: autocapture off, session-replay masks all inputs/text, identify sends only uid + role,
+  events carry ids/counts/enums only (enforced by the no-PII guard).
+
 ### System Config
 - `systemConfig/diagnostics` controls logging levels
 - Toggle client/server/AI flow logging independently

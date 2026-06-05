@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import Link from 'next/link';
 
 function slugify(text: string) {
@@ -87,7 +88,11 @@ export default function SignUpPage() {
       
       // 3. Commit the batch
       await batch.commit();
-      
+
+      // Funnel: account created + default child provisioned (no PII — ids/counts only).
+      track(ANALYTICS_EVENTS.signupCompleted, { method: 'password' });
+      track(ANALYTICS_EVENTS.childCreated, { childCount: 1, source: 'signup_default' });
+
       // 4. Call the API to securely set the PIN hash
       const idToken = await user.getIdToken();
       const pinResponse = await fetch('/api/parent/set-pin', {

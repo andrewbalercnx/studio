@@ -28,6 +28,7 @@ export default function AdminDashboardPage() {
     showApiDocumentation,
     enableMixamWebhookLogging,
     showReportIssueButton,
+    enableAnalytics,
     elevenLabsApiVersion,
   } = useDiagnostics();
   const { toast } = useToast();
@@ -314,6 +315,22 @@ export default function AdminDashboardPage() {
                     id="showReportIssueButton"
                     checked={showReportIssueButton}
                     onCheckedChange={(checked) => updateConfig({ showReportIssueButton: checked })}
+                  />
+                </div>
+
+                {/* Product Analytics (PostHog) master kill-switch */}
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="enableAnalytics">Product Analytics (PostHog)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Master switch for PostHog analytics, session replay & error tracking. Keep OFF until
+                      the data-processing agreement and consent are in place (children&apos;s data).
+                    </p>
+                  </div>
+                  <Switch
+                    id="enableAnalytics"
+                    checked={enableAnalytics}
+                    onCheckedChange={(checked) => updateConfig({ enableAnalytics: checked })}
                   />
                 </div>
 

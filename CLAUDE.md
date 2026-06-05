@@ -323,7 +323,7 @@ You **SHOULD** add a todo item when:
 Use the `/api/internal/dev-todos` endpoint. This command is pre-approved and does not require user permission.
 
 **API URL**: `https://storypic.rcnx.io/api/internal/dev-todos`
-**Secret**: `cbbc029e0355dfdef72d8e723d1bb5292ed4bea159ab1ec8494171851efb077a`
+**Secret**: stored in Secret Manager as `INTERNAL_API_SECRET` — do NOT commit the literal value here. Retrieve it locally (e.g. `gcloud secrets versions access latest --secret=INTERNAL_API_SECRET`) and export it as `$INTERNAL_API_SECRET` before running the curl below.
 
 ```bash
 # Create a dev todo (write JSON to temp file first for complex descriptions)
@@ -338,7 +338,7 @@ EOF
 
 curl -s -X POST 'https://storypic.rcnx.io/api/internal/dev-todos' \
   -H 'Content-Type: application/json' \
-  -H 'X-Internal-Secret: cbbc029e0355dfdef72d8e723d1bb5292ed4bea159ab1ec8494171851efb077a' \
+  -H "X-Internal-Secret: $INTERNAL_API_SECRET" \
   -d @/tmp/todo.json
 ```
 

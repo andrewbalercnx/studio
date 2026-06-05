@@ -1618,6 +1618,7 @@ export type DiagnosticsConfig = {
   enableMixamWebhookLogging: boolean; // Debug logging for Mixam webhooks
   showReportIssueButton: boolean;    // Show "Report Issue" button in header
   elevenLabsApiVersion: ElevenLabsApiVersion; // ElevenLabs TTS model version
+  enableAnalytics: boolean;          // Master runtime kill-switch for product analytics (PostHog). Default off until consent/compliance is in place.
   updatedAt?: any;
   updatedBy?: string;
 };
@@ -1632,6 +1633,7 @@ export const DEFAULT_DIAGNOSTICS_CONFIG: DiagnosticsConfig = {
   enableMixamWebhookLogging: true, // Default on while testing
   showReportIssueButton: false,
   elevenLabsApiVersion: 'v3', // Default to latest v3 model (most expressive)
+  enableAnalytics: false, // Off by default — must be explicitly enabled after DPA/consent (see docs/sprints/SPRINT-01)
 };
 
 // Global prompt configuration - prepended to all AI prompts

@@ -13,6 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChildAvatarAnimation } from '@/components/child/child-avatar-animation';
+import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import Link from 'next/link';
 
 // Format retry time in a child-friendly way
@@ -236,10 +237,20 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
     }
   }, [isNewModel, story?.pageGeneration?.status, story?.audioGeneration?.status, sessionId, story]);
 
+  // Funnel: fire storybook.art_ready exactly once when images finish (guarded against re-renders).
+  const artReadyFiredRef = useRef(false);
+
   // Auto-redirect when complete
   useEffect(() => {
     // For new model: redirect to books list when images are ready
     if (isNewModel && storybook?.imageGeneration?.status === 'ready') {
+      if (!artReadyFiredRef.current) {
+        artReadyFiredRef.current = true;
+        track(ANALYTICS_EVENTS.storybookArtReady, {
+          storybookId: storybookId ?? null,
+          pageCount: storybook?.imageGeneration?.pagesTotal ?? null,
+        });
+      }
       router.push('/kids/books');
       return;
     }
@@ -254,11 +265,18 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
 
       // If everything is done, go to the read page (legacy path)
       if (story.pageGeneration?.status === 'ready' && story.imageGeneration?.status === 'ready') {
+        if (!artReadyFiredRef.current) {
+          artReadyFiredRef.current = true;
+          track(ANALYTICS_EVENTS.storybookArtReady, {
+            storybookId: storybookId ?? null,
+            pageCount: story.imageGeneration?.pagesTotal ?? null,
+          });
+        }
         router.push(`/kids/read/${sessionId}`);
         return;
       }
     }
-  }, [isNewModel, storybook?.imageGeneration?.status, story?.pageGeneration?.status, story?.imageGeneration?.status, story?.selectedImageStyleId, sessionId, router, story, storybook]);
+  }, [isNewModel, storybook?.imageGeneration?.status, story?.pageGeneration?.status, story?.imageGeneration?.status, story?.selectedImageStyleId, sessionId, router, story, storybook, storybookId]);
 
   // Loading state
   const isLoading = userLoading || storyLoading || (isNewModel ? storybookLoading : sessionLoading);

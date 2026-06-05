@@ -16,6 +16,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 
 // Helper to calculate age from date of birth
 function getChildAgeYears(child?: ChildProfile | null): number | null {
@@ -156,6 +157,13 @@ export default function KidsStyleSelectionPage({ params }: { params: Promise<{ s
         imageStyle.id,
         imageStyle.stylePrompt
       );
+
+      // Funnel: storybook generation kicked off (ids/enums only — no PII).
+      track(ANALYTICS_EVENTS.storybookGenerationStarted, {
+        storybookId,
+        outputTypeId: selectedOutputTypeId,
+        styleId: imageStyle.id,
+      });
 
       toast({
         title: 'Creating Your Book!',

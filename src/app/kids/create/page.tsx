@@ -13,6 +13,7 @@ import { LoaderCircle, ArrowLeft, Wand2, Sparkles, BookOpen, MessageCircle, User
 import Link from 'next/link';
 import { storyWizardFlow } from '@/ai/flows/story-wizard-flow';
 import { useToast } from '@/hooks/use-toast';
+import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 // Type for entity metadata included in resolved options
@@ -233,6 +234,12 @@ export default function KidsCreateStoryPage() {
         batch.set(childSessionRef, newSessionData);
 
         await batch.commit();
+
+        // Funnel: story creation started (ids/enums only — no PII).
+        track(ANALYTICS_EVENTS.storyStarted, {
+          sessionId: newSessionId,
+          storyTypeId: generator.id,
+        });
 
         // Redirect to play page which handles all these flows
         router.push(`/story/play/${newSessionId}`);
