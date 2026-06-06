@@ -15,6 +15,8 @@ import { logAICallToTrace } from '@/lib/ai-run-trace';
 import { notifyMaintenanceError } from '@/lib/email/notify-admins';
 import { getGlobalImagePrompt } from '@/lib/image-prompt-config.server';
 import { getImageGenerationModel } from '@/lib/ai-model-config';
+import { classifyError } from '@/lib/ai-retry';
+import { isTestMode, TEST_MODE_IMAGE_DATA_URL } from '@/lib/test-mode';
 // New actor utilities - available for future use alongside existing fetchEntityReferenceData
 import {
   getActorsDetailsWithImageData,
@@ -1201,22 +1203,18 @@ CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin 
       // Set retry reason for next attempt's log
       retryReason = `Exception: ${errorMessage.substring(0, 100)}`;
 
-      // Check if this is a retryable error
+      // Network/infra retry decision is delegated to the shared classifier
+      // (consolidates the previously hand-rolled rate-limit/transient detection).
+      const errorClass = classifyError(e);
+      const isRateLimitError = errorClass === 'rate_limit';
+      const isTransientError = errorClass === 'transient' || errorClass === 'rate_limit';
+
+      // Flow-specific retry triggers: these errors are "permanent" to the generic
+      // classifier, but THIS flow can sometimes recover by progressively
+      // simplifying the prompt, so we retry them locally.
       const isPatternError = errorMessage.includes('did not match the expected pattern');
-      // Note: Match 'rate limit' or 'rate_limit' but not just 'rate' (which matches 'aspect ratio')
-      const isRateLimitError = errorMessage.includes('RESOURCE_EXHAUSTED') ||
-                               errorMessage.includes('429') ||
-                               errorMessage.includes('quota') ||
-                               errorMessage.includes('rate limit') ||
-                               errorMessage.includes('rate_limit') ||
-                               errorMessage.includes('timed out');
-      // Check for model configuration errors (wrong model being used for image generation)
       const isModelConfigError = errorMessage.includes('Aspect ratio is not enabled') ||
                                  errorMessage.includes('INVALID_ARGUMENT');
-      const isTransientError = isRateLimitError ||
-                               errorMessage.includes('UNAVAILABLE') ||
-                               errorMessage.includes('DEADLINE_EXCEEDED') ||
-                               errorMessage.includes('temporarily');
 
       if (!isPatternError && !isTransientError && !isModelConfigError) {
         // Non-retryable error, throw immediately
@@ -1386,6 +1384,31 @@ export const storyImageFlow = ai.defineFlow(
       : storyRef.collection('outputs').doc('storybook').collection('pages').doc(pageId);
 
     logs.push(`[path] Using ${storybookId ? 'new' : 'legacy'} model path: ${pageRef.path}`);
+
+    // TEST_MODE seam: write a deterministic fixture image to the page and return
+    // ready without any model call (covers direct single-page regenerate calls;
+    // the images route short-circuits before this for the batch path). Default
+    // behaviour (flag unset) skips this block entirely.
+    if (isTestMode()) {
+      logs.push('[test-mode] Using fixture image (no model call)');
+      try {
+        await pageRef.update({
+          imageUrl: TEST_MODE_IMAGE_DATA_URL,
+          imageStatus: 'ready',
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } catch (updateErr: any) {
+        logs.push(`[test-mode] page update failed: ${updateErr?.message || updateErr}`);
+      }
+      return {
+        ok: true as const,
+        storyId,
+        pageId,
+        imageUrl: TEST_MODE_IMAGE_DATA_URL,
+        imageStatus: 'ready' as const,
+        logs,
+      };
+    }
 
     try {
       logs.push(`[step] Loading story document...`);

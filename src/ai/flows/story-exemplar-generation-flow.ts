@@ -16,6 +16,7 @@ import { randomUUID } from 'crypto';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { Gaxios, GaxiosError } from 'gaxios';
 import { getImageGenerationModel } from '@/lib/ai-model-config';
+import { isTestMode } from '@/lib/test-mode';
 
 /**
  * Extract all $$id$$ and $id$ placeholders from text
@@ -348,6 +349,24 @@ export const storyExemplarGenerationFlow = ai.defineFlow(
     try {
       await initFirebaseAdminApp();
       const firestore = getFirestore();
+
+      // TEST_MODE seam: skip all exemplar image generation and mark ready with no
+      // exemplars (the TEST_MODE image step does not need them). No model call.
+      // Default behaviour (flag unset) skips this block entirely.
+      if (isTestMode()) {
+        console.log('[story-exemplar-generation-flow] TEST_MODE active — skipping exemplar generation');
+        const storybookRef = firestore.collection('stories').doc(storyId).collection('storybooks').doc(storybookId);
+        await storybookRef.update({
+          'exemplarGeneration.status': 'ready',
+          'exemplarGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
+          'exemplarGeneration.lastErrorMessage': null,
+          'exemplarGeneration.actorsTotal': 0,
+          'exemplarGeneration.actorsReady': 0,
+          actorExemplarUrls: {},
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        return { ok: true, actorExemplarUrls: {} };
+      }
 
       // Load story to get actors list
       const storyRef = firestore.collection('stories').doc(storyId);

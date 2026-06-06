@@ -5,6 +5,8 @@ import { storyExemplarGenerationFlow } from '@/ai/flows/story-exemplar-generatio
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
+import { isTestMode, buildTestModePages } from '@/lib/test-mode';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 // Allow up to 2 minutes for page generation
 export const maxDuration = 120;
@@ -62,6 +64,59 @@ export async function POST(request: Request) {
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    // TEST_MODE seam: short-circuit to deterministic fixture pages without any
+    // model call, then advance the status state machine exactly as the real path
+    // would. Default behaviour (flag unset) skips this block entirely.
+    if (isTestMode()) {
+      logger.info('TEST_MODE active — using fixture pages', { storyId, storybookId });
+      const fixturePages = buildTestModePages(storyId);
+
+      const pagesCollection = storybookRef.collection('pages');
+      const existingPages = await pagesCollection.orderBy('pageNumber', 'asc').get();
+      const batch = firestore.batch();
+      existingPages.forEach((docSnap) => batch.delete(docSnap.ref));
+      fixturePages.forEach((page) => {
+        const pageId = `page-${String(page.pageNumber).padStart(3, '0')}`;
+        batch.set(pagesCollection.doc(pageId), {
+          ...page,
+          id: pageId,
+          imageStatus: 'pending',
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      });
+      await batch.commit();
+
+      await storybookRef.update({
+        'pageGeneration.status': 'ready',
+        'pageGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
+        'pageGeneration.lastErrorMessage': null,
+        'pageGeneration.pagesCount': fixturePages.length,
+        'imageGeneration.status': 'idle',
+        'imageGeneration.pagesReady': 0,
+        'imageGeneration.pagesTotal': fixturePages.length,
+        'imageGeneration.lastErrorMessage': null,
+        'audioGeneration.status': 'pending',
+        'audioGeneration.pagesReady': 0,
+        'audioGeneration.pagesTotal': fixturePages.length,
+        'exemplarGeneration.status': 'pending',
+        'exemplarGeneration.actorsReady': 0,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // Background flows are TEST_MODE-aware and will fast-advance their own status.
+      storyPageAudioFlow({ storyId, storybookId }).catch((err) => {
+        logger.error('Background page audio generation failed', err, { storyId, storybookId });
+      });
+      storyExemplarGenerationFlow({ storyId, storybookId }).catch((err) => {
+        logger.error('Background exemplar generation failed', err, { storyId, storybookId });
+      });
+
+      const durationMs = Date.now() - startTime;
+      logger.info('TEST_MODE page generation completed', { storyId, storybookId, pagesCount: fixturePages.length, durationMs });
+      return NextResponse.json({ ok: true, storyId, storybookId, pagesCount: fixturePages.length, testMode: true });
+    }
+
     // Step 4: Run page generation flow
     // Pass storyOutputTypeId from the storybook so the flow can use AI pagination
     const flowResult = await storyPageFlow({
@@ -73,14 +128,16 @@ export async function POST(request: Request) {
       const errorMessage = !flowResult.ok ? flowResult.errorMessage : 'storyPageFlow returned no pages.';
       const durationMs = Date.now() - startTime;
       logger.error('storyPageFlow failed', new Error(errorMessage ?? 'Unknown error'), { storyId, storybookId, durationMs });
+      // Persist a user-safe message for the client; the raw string stays in logs.
+      const userSafeMessage = toUserSafeMessage(errorMessage);
       await storybookRef.update({
         'pageGeneration.status': 'error',
         'pageGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
-        'pageGeneration.lastErrorMessage': errorMessage,
+        'pageGeneration.lastErrorMessage': userSafeMessage,
         'pageGeneration.diagnostics': flowResult.diagnostics ?? null,
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return NextResponse.json({ ok: false, errorMessage, diagnostics: flowResult.diagnostics ?? null, requestId }, { status: 500 });
+      return NextResponse.json({ ok: false, errorMessage: userSafeMessage, diagnostics: flowResult.diagnostics ?? null, requestId }, { status: 500 });
     }
 
     // Step 5: Write pages to storybook subcollection
@@ -151,13 +208,15 @@ export async function POST(request: Request) {
   } catch (error: any) {
     const durationMs = Date.now() - startTime;
     logger.error('Unhandled exception in route', error, { storyId, storybookId, durationMs });
+    // Never surface the raw error to the user; the raw string stays in logs above.
+    const userSafeMessage = toUserSafeMessage(error);
 
     // Try to update status to error
     try {
       const storybookRef = firestore.collection('stories').doc(storyId).collection('storybooks').doc(storybookId);
       await storybookRef.update({
         'pageGeneration.status': 'error',
-        'pageGeneration.lastErrorMessage': error?.message ?? 'Unknown error',
+        'pageGeneration.lastErrorMessage': userSafeMessage,
         updatedAt: FieldValue.serverTimestamp(),
       });
     } catch (updateError) {
@@ -165,7 +224,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { ok: false, errorMessage: error?.message ?? 'Unexpected /api/storybook/pages error.', requestId },
+      { ok: false, errorMessage: userSafeMessage, requestId },
       { status: 500 }
     );
   }
