@@ -18,6 +18,31 @@
 
 ### 2026-06-06
 
+#### `73735cc` — Generation reliability: stop interactive routes leaking raw errors
+
+**Type**: Reliability (Sprint 5 slice — user-safe error messaging)
+
+**Summary**: Extended the "no raw API/model string ever reaches a child/parent" guarantee from the
+`storybookV2/*` routes to **every interactive generation route**. Each catch block now returns
+`toUserSafeMessage(err)` (kid-safe copy) while the raw error stays in the logs for operators.
+Controlled auth/validation messages are unchanged. Typecheck + build green; 194 tests pass (+7).
+
+- **Routes mapped** (`src/app/api/*/route.ts`): `tts`, `storyWizard`, `storyFriends`, `storyArc`,
+  `storyEnding`, `storyBeat`, `gemini3`, `gemini4`, `warmupReply`, `storyCompile`. Removed the
+  `API /X route error: <raw>` and `e.message` client leaks; added raw `console.error` logging where a
+  route previously only returned the error.
+- **Tests**: extended `ai-error-map.test.ts` with realistic interactive-route exceptions (ElevenLabs
+  429 with a key, Gemini DEADLINE_EXCEEDED, ECONNRESET, PERMISSION_DENIED, SAFETY block, stack
+  traces) asserting each maps to a known safe message and leaks no secrets/paths/internal tokens.
+- **Docs**: SYSTEM_DESIGN (Error Handling), SPRINTS (generation-reliability slice).
+- **Remaining**: map *flow-result* error messages too, graceful degradation UI + kid-safe empty
+  states, broader `withRetry` adoption, systemConfig-backed breaker.
+
+**Modified**: `src/app/api/{tts,storyWizard,storyFriends,storyArc,storyEnding,storyBeat,gemini3,gemini4,warmupReply,storyCompile}/route.ts`,
+`src/lib/__tests__/ai-error-map.test.ts`, `docs/{SYSTEM_DESIGN,SPRINTS}.md`.
+
+---
+
 #### `2fdb691` — Surface entitlements in the UI (remaining counts)
 
 **Type**: Feature (entitlements UX — makes the now-live enforcement visible)

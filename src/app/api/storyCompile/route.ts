@@ -7,6 +7,7 @@ import { createLogger, generateRequestId, createTimeoutController } from '@/lib/
 import { getServerFirestore } from '@/lib/server-firestore';
 import { FieldValue } from 'firebase-admin/firestore';
 import { checkEntitlement, consumeEntitlement } from '@/lib/entitlements/ledger.server';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 // Request timeout for story compile (3 minutes - longer due to complexity)
 const COMPILE_TIMEOUT_MS = 180000;
@@ -270,7 +271,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
             {
                 ok: false,
-                errorMessage: `API /storyCompile route error: ${errorMessage}`,
+                errorMessage: toUserSafeMessage(e),
                 requestId,
             },
             { status: 500 }

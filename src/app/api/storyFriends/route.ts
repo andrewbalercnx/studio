@@ -4,6 +4,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { requireAuthenticatedUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
 import { friendsFlow } from '@/ai/flows/friends-flow';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import type { StorySession, StoryGeneratorResponse, StoryGeneratorResponseOption } from '@/lib/types';
 
 /**
@@ -194,7 +195,7 @@ export async function POST(request: Request) {
         sessionId: '',
         question: '',
         options: [],
-        errorMessage: error?.message || 'Unexpected error',
+        errorMessage: toUserSafeMessage(error),
       } as StoryGeneratorResponse,
       { status: 500 }
     );

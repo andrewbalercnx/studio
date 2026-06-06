@@ -1,6 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { storyArcEngineFlow } from '@/ai/flows/story-arc-flow';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 export async function POST(request: Request) {
     try {
@@ -26,10 +27,10 @@ export async function POST(request: Request) {
     } catch (e: any) {
         console.error('Error in /api/storyArc:', e);
         return NextResponse.json(
-            { 
-                ok: false, 
-                errorMessage: `API /storyArc route error: ${e.message || 'An unexpected error occurred.'}` 
-            }, 
+            {
+                ok: false,
+                errorMessage: toUserSafeMessage(e),
+            },
             { status: 500 }
         );
     }

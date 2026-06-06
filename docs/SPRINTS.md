@@ -30,8 +30,12 @@
   Playwright scaffold + one smoke spec + report-only CI `e2e` job + `TEST_MODE` AI seam (deterministic
   fixtures, default off). *Remaining: the actual funnel E2E specs + a11y/Lighthouse/visual.*
 - **Generation reliability (slice)**: retry+jitter util, error classifier, circuit-breaker scaffold,
-  raw→user-safe error mapping (storybookV2 routes no longer leak raw errors). *Remaining: graceful
-  degradation UI, kid-safe states, broader flow adoption, systemConfig-backed breaker.*
+  raw→user-safe error mapping. **No raw error reaches a child/parent**: the `storybookV2/*` routes
+  plus every interactive generation route (`tts`, `storyWizard`, `storyFriends`, `storyArc`,
+  `storyEnding`, `storyBeat`, `gemini3`, `gemini4`, `warmupReply`, `storyCompile`) now map catch-block
+  messages through `toUserSafeMessage` (raw stays in logs). *Remaining: map flow-result error messages
+  too, graceful degradation UI, kid-safe empty states, broader `withRetry` adoption, systemConfig-backed
+  breaker.*
 - **Entitlement ledger model**: `entitlementLedgers` collection + grant/check/consume (scope-resolved)
   + server reader + free-tier + rules + tests.
 - **Entitlement enforcement (story + storybook)**: transaction-wrapped `consumeEntitlement` +

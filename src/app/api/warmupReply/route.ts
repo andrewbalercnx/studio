@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { warmupReplyFlow } from '@/ai/flows/warmup-reply-flow';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 export async function POST(request: Request) {
     const requestId = generateRequestId();
@@ -36,8 +37,7 @@ export async function POST(request: Request) {
         }
 
     } catch (e: any) {
-        const errorMessage = e.message || 'An unexpected error occurred in the API route.';
         logger.error('Unhandled exception in route', e);
-        return NextResponse.json({ ok: false, errorMessage: `API /warmupReply route error: ${errorMessage}`, requestId }, { status: 500 });
+        return NextResponse.json({ ok: false, errorMessage: toUserSafeMessage(e), requestId }, { status: 500 });
     }
 }

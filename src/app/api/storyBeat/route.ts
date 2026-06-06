@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { storyBeatFlow } from '@/ai/flows/story-beat-flow';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import type { StoryGeneratorResponse, StoryGeneratorResponseOption } from '@/lib/types';
 
 /**
@@ -70,13 +71,13 @@ export async function POST(request: Request) {
         return NextResponse.json(response, { status: 200 });
 
     } catch (e: any) {
-        const errorMessage = e.message || 'An unexpected error occurred in the API route.';
+        console.error('[api/storyBeat] Error:', e);
         const errorResponse: StoryGeneratorResponse = {
             ok: false,
             sessionId: '',
             question: '',
             options: [],
-            errorMessage: `API /storyBeat route error: ${errorMessage}`,
+            errorMessage: toUserSafeMessage(e),
         };
         return NextResponse.json(errorResponse, { status: 500 });
     }
