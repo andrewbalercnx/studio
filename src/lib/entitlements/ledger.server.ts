@@ -19,8 +19,13 @@ import type {
 import { buildFreeTierLedger, ensureFreeTier } from './grant';
 import { canConsume, consume } from './check';
 
-/** Firestore collection holding one ledger document per family, keyed by parentUid. */
-export const ENTITLEMENT_LEDGERS_COLLECTION = 'entitlementLedgers';
+/**
+ * Firestore collection holding one ledger document per family, keyed by parentUid.
+ * Module-local (not exported): this file carries the `'use server'` directive, under which Next
+ * only permits async-function exports. Keep it internal; if another module needs the name, lift it
+ * into a plain (non-'use server') constants module rather than exporting it here.
+ */
+const ENTITLEMENT_LEDGERS_COLLECTION = 'entitlementLedgers';
 
 function ledgerDocPath(parentUid: string): string {
   return `${ENTITLEMENT_LEDGERS_COLLECTION}/${parentUid}`;
