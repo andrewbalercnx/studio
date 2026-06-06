@@ -337,6 +337,22 @@ Tracks work items that should be done for a production-ready system. Both admins
 - Logged to `aiFlowLogs` collection
 - Rate limit errors trigger retry with backoff
 - User-facing errors provide actionable messages
+- Shared reliability utilities (`src/lib/ai-retry.ts`, `src/lib/ai-error-map.ts`): retry with
+  exponential backoff + jitter, a transient/permanent error classifier, a per-provider circuit-breaker
+  scaffold, and a raw→user-safe message map so the storybook generation routes never leak raw API
+  errors. (Broader flow adoption + a systemConfig-backed breaker are follow-ups.)
+
+### Testing seam (`TEST_MODE`)
+- `src/lib/test-mode.ts` (`TEST_MODE`/`E2E_FAKE_AI`): when set, the storybook generation flows/routes
+  short-circuit to deterministic fixtures and advance Firestore `*Generation.status` without calling
+  Gemini/ElevenLabs/fal — enabling deterministic E2E. Default (unset) behaviour is unchanged.
+- Firebase client config is emulator-aware via `NEXT_PUBLIC_FIREBASE_USE_EMULATOR` (+ host/port vars);
+  default points at prod. Playwright E2E lives in `e2e/` (report-only CI job).
+
+### Entitlements
+- `src/lib/entitlements/` + `entitlementLedgers` collection model per-family balances granted by the
+  catalog (purchase/free-tier/gift) and consumed at creation. Server-authoritative; enforcement
+  insertion into creation flows is a follow-up. See `docs/PRODUCTS.md`.
 
 ### Order Errors
 - Status history tracks all state changes

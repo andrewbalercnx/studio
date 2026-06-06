@@ -18,6 +18,40 @@
 
 ### 2026-06-06
 
+#### `424e7fc` — Parallel streams: usability fixes, 3A test foundation, generation reliability, entitlement ledger
+
+**Type**: Feature (4 parallel worktree streams, merged)
+
+**Summary**: Four independent, file-disjoint streams built in parallel and merged. Integrated: 0
+typecheck errors, 179 tests pass, build green. Risk-controlled — new behaviour is behind flags or
+unwired; the one user-facing change is the 3 usability fixes.
+
+- **Stream A — usability fixes** (3 high probe findings): "End Tour" returns home (not /signup);
+  "Play as <child>" button on child cards; "Switch child" nav control. Files: `header.tsx`,
+  `parent/children/page.tsx`, `help-wizard.tsx`.
+- **Stream B — Sprint 3A infra**: emulator-aware Firebase config (`NEXT_PUBLIC_FIREBASE_USE_EMULATOR`
+  + host/port vars; default unchanged), `playwright.config.ts` + `e2e/` smoke spec, report-only CI
+  `e2e` job, `firebase.json` emulators block.
+- **Stream C — TEST_MODE seam + generation reliability**: `src/lib/test-mode.ts` (deterministic
+  fixtures, default off), `ai-retry.ts` (backoff+jitter, error classifier, circuit-breaker),
+  `ai-error-map.ts` (raw→user-safe); storybookV2 routes no longer leak raw errors. +62 tests.
+- **Stream D — entitlement ledger model**: `entitlementLedgers` collection + `src/lib/entitlements/`
+  (grant/check/consume with scope resolution + free-tier) + admin-only rules. Model only; enforcement
+  not yet wired. +28 tests.
+
+**Docs**: SCHEMA (`entitlementLedgers`), SYSTEM_DESIGN (reliability/TEST_MODE/entitlements), SPRINTS
+(Program status). **Follow-ups**: wire entitlement enforcement; build funnel E2E specs; finish graceful
+degradation. **Post-deploy**: smoke the generation pipeline (Stream C touched live routes) + eyeball the
+usability fixes.
+
+**Key files**: `src/lib/{test-mode,ai-retry,ai-error-map}.ts`, `src/lib/entitlements/**`,
+`src/app/api/storybookV2/**`, `src/ai/flows/**`, `src/firebase/{config,index}.ts`, `playwright.config.ts`,
+`e2e/**`, `firestore.rules`, `src/components/header.tsx`, `src/app/parent/children/page.tsx`.
+
+---
+
+### 2026-06-06
+
 #### `21287bc` — Sprint 3 UX testing: plan v2 + validated naive-agent probe POC
 
 **Type**: Docs + Tooling (no app code change)

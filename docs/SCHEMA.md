@@ -450,6 +450,25 @@ Money points attached to a `products` doc. A purchasable SKU = active product + 
 
 **Security**: read by authenticated users; write admin-only. Deleting a product deletes its prices.
 
+### `entitlementLedgers`
+
+Per-family entitlement balances (one doc per family, id = `parentUid`). Server-authoritative — granted
+by purchase/free-tier/gift, consumed at story/storybook/print creation (enforcement wiring is a
+follow-up; the model + helpers exist in `src/lib/entitlements/`). See `docs/PRODUCTS.md`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `family` | `EntitlementBalances` | Family-pool balances |
+| `children` | `Record<childId, EntitlementBalances>` | Per-child balances (consumed before the family pool) |
+| `freeTierGranted` | boolean | Idempotency guard for one-time free-tier seeding |
+| `createdAt` / `updatedAt` | timestamp | Metadata |
+
+`EntitlementBalances` keys by `EntitlementComponentKey`: consumables (`print_credit`) hold
+`{ granted, consumed, balance }`; quotas (`story_allowance`, `storybook_allowance`) hold
+`{ allowance, used, reset, periodStart? }`.
+
+**Security**: `read: owner(parentUid) or admin`; **`write: admin-only`** (clients cannot self-grant).
+
 ---
 
 ### `printProducts`

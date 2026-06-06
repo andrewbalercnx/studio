@@ -23,23 +23,32 @@
   PostHog (EU) analytics + RUM + Error Tracking; vendor-agnostic core with no-PII guard, kill-switch,
   consent gating, pre-init buffer; funnel events; admin toggle. *Not yet live* — see compliance gate.
 - **Commercial catalog** (Monetisation I-b, payment-agnostic): `products`/`prices` model + entitlement
-  components + admin `/admin/products` + APIs. Ledger/enforcement, gifting, Stripe still outstanding.
+  components + admin `/admin/products` + APIs.
+- **3 high-severity usability fixes** (probe findings): End-Tour→home, "Play as child" button, "Switch
+  child" nav. *Merged; needs a manual/probe smoke post-deploy.*
+- **Sprint 3A foundation (partial)**: emulator-aware Firebase config (env-gated, default unchanged) +
+  Playwright scaffold + one smoke spec + report-only CI `e2e` job + `TEST_MODE` AI seam (deterministic
+  fixtures, default off). *Remaining: the actual funnel E2E specs + a11y/Lighthouse/visual.*
+- **Generation reliability (slice)**: retry+jitter util, error classifier, circuit-breaker scaffold,
+  raw→user-safe error mapping (storybookV2 routes no longer leak raw errors). *Remaining: graceful
+  degradation UI, kid-safe states, broader flow adoption, systemConfig-backed breaker.*
+- **Entitlement ledger model**: `entitlementLedgers` collection + grant/check/consume (scope-resolved)
+  + server reader + free-tier + rules + tests. *Model only — enforcement not yet wired into flows.*
 
-### Outstanding sprints (recommended order)
-1. **High-severity usability fixes** — the 3 high findings from the naive-agent probe (filed as
-   `usability` dev-todos): End-Tour→/signup, no "play as child", hidden child switching. Quick wins.
-2. **Sprint 3A — Test foundation + deterministic E2E** (`[GTM 3/8]`): Firebase Emulator + `TEST_MODE`
-   AI seam + Playwright funnel + a11y/Lighthouse/visual. *Planned v2.* Unblocks all E2E and 3B.
-3. **Sprint 3B — Naive-agent usability probe (productionised)** (`[GTM 3/8]`): expert baseline,
-   mechanical personas, codable fix-records, PostHog concordance, PM report. *POC validated.*
-4. **Generation reliability** (`[GTM 5/8]`): auto-retry + circuit breaker, friendly errors, graceful
-   degradation, kid-safe states. *Biggest funnel leak.* Not started.
-5. **First-run usability** (`[GTM 4/8]`): onboarding + empty states + the 7 probe findings. Not started.
-6. **Monetisation II** (`[GTM 6/8]`): entitlement **ledger + enforcement** (makes catalog limits real),
-   subscriptions, gifting. Not started.
+### Outstanding (recommended order)
+1. **Wire entitlement enforcement** into creation flows (kids/create, storybookV2 routes, print) using
+   the ledger model — make catalog/free-tier limits actually take effect. (Transaction-wrap consume.)
+2. **Sprint 3A E2E specs**: build the deterministic funnel specs on emulator + `TEST_MODE`; add
+   a11y/Lighthouse/visual (report-only). Promote happy-path to blocking after it's green.
+3. **Sprint 3B — Naive-agent probe (productionised)** (`[GTM 3/8]`): expert baseline, mechanical
+   personas, codable fix-records, PostHog concordance, PM report. *POC validated.*
+4. **Generation reliability — finish**: graceful degradation + kid-safe error/empty states; migrate
+   remaining flow retry loops onto the shared util.
+5. **First-run usability** (`[GTM 4/8]`): onboarding + empty states + the medium/low probe findings.
+6. **Monetisation II** (`[GTM 6/8]`): subscriptions (recurring prices) + gifting redemption; uses the ledger.
 7. **Admin UX-monitoring dashboard** (`[GTM 7/8]`): KPIs/funnel from PostHog + stuck-job/health alerts.
 8. **Feedback & conversion polish** (`[GTM 8/8]`): NPS/ratings, testimonials, order transparency, tickets.
-9. **Monetisation I — payments/Stripe** (`[GTM 2/8]`): **deferred by owner** (not a near-term priority).
+9. **Monetisation I — payments/Stripe** (`[GTM 2/8]`): **deferred by owner**.
 
 ### Open non-sprint gates / follow-ups
 - **Sprint 1 compliance gate (to flip analytics ON)**: set PostHog retention; add EU sub-processor list
