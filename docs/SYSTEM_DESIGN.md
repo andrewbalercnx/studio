@@ -371,6 +371,10 @@ Tracks work items that should be done for a production-ready system. Both admins
   - **`print_credit` is intentionally NOT enforced yet**: the free tier grants none and there is no
     purchase flow to grant it (Stripe is a later sprint), so enforcing it would block *every* print
     order. It lands with the purchase/grant work. See `docs/PRODUCTS.md`.
+  - **Visibility (UI)**: `GET /api/entitlements/summary` is a read-only roll-up (server-resolved
+    child + family remaining) consumed by `src/components/entitlements/entitlement-summary.tsx` —
+    a "Your plan" card on the parent overview and a "N stories left" badge on the kids create
+    screen, so the limits are visible before a user hits a `402`.
 
 ### Order Errors
 - Status history tracks all state changes

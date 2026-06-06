@@ -77,6 +77,25 @@ function balancesForScope(
 }
 
 /**
+ * Total redeemable units of `component` available under this scope, summed across the pools that
+ * consumption would draw from. With a childId that is child-pool + family-pool (consume() spends the
+ * child's first, then falls back to family, so both are spendable); without one, just the family
+ * pool. This is the "how many more can I make" number for display — distinct from canConsume, which
+ * only asks whether a single pool can satisfy one unit.
+ */
+export function remainingForScope(
+  ledger: EntitlementLedger,
+  component: EntitlementComponentKey,
+  scope: LedgerScope,
+): number {
+  return resolveScopeOrder(scope).reduce(
+    (total, which) =>
+      total + remainingInBalances(balancesForScope(ledger, which, scope.childId), component),
+    0,
+  );
+}
+
+/**
  * Non-mutating check: can `amount` (default 1) of `component` be consumed under this scope?
  * Returns allowed + which scope would satisfy it + remaining in that scope.
  */

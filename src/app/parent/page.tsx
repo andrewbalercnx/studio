@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
 import { useParentGuard } from '@/hooks/use-parent-guard';
+import { EntitlementSummaryCard } from '@/components/entitlements/entitlement-summary';
 
 function ChildIcon({ profile }: { profile: ChildProfile }) {
   const router = useRouter();
@@ -115,6 +116,8 @@ export default function ParentOverviewPage() {
           {renderContent()}
         </CardContent>
       </Card>
+
+      <EntitlementSummaryCard />
     </div>
   );
 }

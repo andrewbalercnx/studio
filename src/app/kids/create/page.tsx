@@ -15,6 +15,7 @@ import { storyWizardFlow } from '@/ai/flows/story-wizard-flow';
 import { useToast } from '@/hooks/use-toast';
 import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { StoriesLeftBadge } from '@/components/entitlements/entitlement-summary';
 
 // Type for entity metadata included in resolved options
 type EntityMetadata = {
@@ -521,6 +522,9 @@ export default function KidsCreateStoryPage() {
               <p className="text-amber-700">
                 Pick your favorite way to begin!
               </p>
+              <div className="flex justify-center pt-1">
+                <StoriesLeftBadge childId={childId ?? undefined} />
+              </div>
             </div>
 
             <div className="space-y-4">
