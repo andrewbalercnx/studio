@@ -540,6 +540,8 @@ export default function ManageChildrenPage() {
     const { isAdmin, loading: adminLoading } = useAdminStatus();
     const firestore = useFirestore();
     const { toast } = useToast();
+    const router = useRouter();
+    const { setActiveChildId } = useAppContext();
 
     const [children, setChildren] = useState<ChildProfile[]>([]);
     const [loading, setLoading] = useState(true);
@@ -592,6 +594,14 @@ export default function ManageChildrenPage() {
             unsubscribe();
         };
     }, [childrenQuery, firestore]);
+
+    // Select this child and drop into their experience (same flow as the
+    // "Who is playing?" home screen). This is the primary action: it lets a
+    // parent go straight from "I have a profile" to "start a story for them".
+    const handlePlayAsChild = (child: ChildProfile) => {
+        setActiveChildId(child.id);
+        router.push(`/child/${child.id}`);
+    }
 
     const handleManagePhotos = (child: ChildProfile) => {
         setSelectedChild(child);
@@ -749,6 +759,10 @@ export default function ManageChildrenPage() {
                                 )}
                             </CardContent>
                             <CardFooter className="flex flex-wrap justify-end gap-2">
+                                <Button size="sm" className="mr-auto" onClick={() => handlePlayAsChild(child)} data-wiz-target={`child-play-${child.id}`}>
+                                    <Sparkles className="mr-2 h-4 w-4" />
+                                    Play as {child.displayName}
+                                </Button>
                                 <Button variant="outline" size="sm" onClick={() => handleEditChild(child)} data-wiz-target={`child-edit-${child.id}`}>
                                     <Pencil className="mr-2 h-4 w-4" />
                                     Edit
