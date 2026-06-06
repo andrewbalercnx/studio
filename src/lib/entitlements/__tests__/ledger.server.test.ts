@@ -7,7 +7,11 @@ vi.mock('firebase-admin/firestore', () => ({
 }));
 
 import { getServerFirestore } from '@/lib/server-firestore';
-import { checkEntitlement, consumeEntitlement } from '@/lib/entitlements/ledger.server';
+import {
+  checkEntitlement,
+  consumeEntitlement,
+  summarizeEntitlements,
+} from '@/lib/entitlements/ledger.server';
 
 type Doc = Record<string, any> | undefined;
 
@@ -145,5 +149,40 @@ describe('checkEntitlement — read-only pre-flight', () => {
     const r = await checkEntitlement('p1', 'storybook_allowance', { parentUid: 'p1' });
     expect(r.allowed).toBe(false);
     expect(r.remaining).toBe(0);
+  });
+});
+
+describe('summarizeEntitlements — read-only remaining roll-up', () => {
+  it('reports free-tier remaining for a new family without writing', async () => {
+    const fs = makeFirestore({});
+    vi.mocked(getServerFirestore).mockResolvedValue(fs as any);
+
+    const summary = await summarizeEntitlements('p1');
+
+    expect(summary).toEqual({ story: { remaining: 1 }, storybook: { remaining: 2 } });
+    expect(fs.__writes).toHaveLength(0);
+    expect(fs.__store[LEDGER('p1')]).toBeUndefined();
+  });
+
+  it('sums the child pool and the family pool for a child scope', async () => {
+    const fs = makeFirestore({
+      [LEDGER('p1')]: {
+        family: {
+          story_allowance: { allowance: 5, used: 4, reset: 'per_period' }, // 1 left
+          storybook_allowance: { allowance: 2, used: 2, reset: 'lifetime' }, // 0 left
+        },
+        children: {
+          c1: { story_allowance: { allowance: 3, used: 1, reset: 'per_period' } }, // 2 left
+        },
+        freeTierGranted: true,
+      },
+    });
+    vi.mocked(getServerFirestore).mockResolvedValue(fs as any);
+
+    const summary = await summarizeEntitlements('p1', 'c1');
+
+    // story: child 2 + family 1 = 3; storybook: child 0 + family 0 = 0
+    expect(summary).toEqual({ story: { remaining: 3 }, storybook: { remaining: 0 } });
+    expect(fs.__writes).toHaveLength(0);
   });
 });

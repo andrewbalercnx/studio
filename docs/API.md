@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-06-06 (entitlement enforcement: `/api/entitlements/check` pre-flight + `story_allowance` consume-on-completion in `/api/storyCompile`; `storybookV2/create` quota gate)
+> **Last Updated**: 2026-06-06 (entitlements UI: `GET /api/entitlements/summary`; enforcement: `/api/entitlements/check` pre-flight + `story_allowance` consume-on-completion in `/api/storyCompile`; `storybookV2/create` quota gate)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -1372,6 +1372,34 @@ enforced — see `docs/PRODUCTS.md`).
 - `400 Bad Request`: Missing/unsupported `component` (only `story_allowance` is permitted)
 - `401 Unauthorized`: Missing or invalid token
 - `402 Payment Required`: Story allowance exhausted (`allowed: false`, `code: "ENTITLEMENT_LIMIT"`, `remaining`)
+- `403 Forbidden`: `childId` does not belong to the caller
+
+---
+
+### GET `/api/entitlements/summary`
+
+Read-only roll-up of how much the caller's family has left to create, for "X stories left" UI
+(parent overview card + kids create badge). Server-first: remaining counts are resolved server-side
+(child pool + family pool — see `docs/PRODUCTS.md`) so every client renders the same numbers. Never
+writes the ledger; a brand-new family is treated as free-tier seeded in memory.
+
+**Auth**: Bearer ID token required.
+
+**Query params**:
+- `childId?` — when supplied (and owned by the caller), the counts include that child's own pool
+  plus the family pool; otherwise only the family pool is reported.
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "story": { "remaining": 1 },
+  "storybook": { "remaining": 2 }
+}
+```
+
+**Errors**:
+- `401 Unauthorized`: Missing or invalid token
 - `403 Forbidden`: `childId` does not belong to the caller
 
 ---

@@ -2405,6 +2405,16 @@ export type LedgerScope = {
   childId?: string;
 };
 
+/**
+ * A read-only, client-facing roll-up of how much a family (optionally for one child) has left to
+ * create. `remaining` is the total spendable across the child pool + family pool (see
+ * remainingForScope). Surfaced by GET /api/entitlements/summary for "X stories left" UI.
+ */
+export type EntitlementSummary = {
+  story: { remaining: number };
+  storybook: { remaining: number };
+};
+
 /** Result of a canConsume/consume check: whether it is allowed and the remaining amount after. */
 export type EntitlementCheck = {
   allowed: boolean;

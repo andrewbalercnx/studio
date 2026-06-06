@@ -18,6 +18,35 @@
 
 ### 2026-06-06
 
+#### `2fdb691` — Surface entitlements in the UI (remaining counts)
+
+**Type**: Feature (entitlements UX — makes the now-live enforcement visible)
+
+**Summary**: Enforcement was live but invisible — users hit a `402` with no warning. Added a
+read-only remaining-counts roll-up and surfaced it in both the parent app and the kids create
+screen, so "how many stories/storybooks are left" is visible before the limit is reached.
+Typecheck + build green; 187 tests pass (+2).
+
+- **Server**: `remainingForScope` pure helper (child pool + family pool) in
+  `src/lib/entitlements/check.ts`; `summarizeEntitlements` (read-only, free-tier-seeded in memory) in
+  `ledger.server.ts`; new `EntitlementSummary` type; `GET /api/entitlements/summary[?childId=]`
+  (server-first, child-ownership-verified).
+- **Client**: `src/components/entitlements/entitlement-summary.tsx` — `useEntitlementSummary` hook +
+  `EntitlementSummaryCard` ("Your plan" card on the parent overview) + `StoriesLeftBadge`
+  ("N stories left" on the kids create generator screen). Both stay silent on error/loading
+  (supplementary info, never a blocker).
+- **Tests**: `summarizeEntitlements` coverage (free-tier roll-up; child+family sum) in
+  `ledger.server.test.ts`.
+- **Docs**: API (new endpoint), SYSTEM_DESIGN.
+
+**Created**: `src/app/api/entitlements/summary/route.ts`,
+`src/components/entitlements/entitlement-summary.tsx`.
+**Modified**: `src/lib/entitlements/check.ts`, `src/lib/entitlements/ledger.server.ts`,
+`src/lib/types.ts`, `src/app/parent/page.tsx`, `src/app/kids/create/page.tsx`,
+`src/lib/entitlements/__tests__/ledger.server.test.ts`, `docs/{API,SYSTEM_DESIGN}.md`.
+
+---
+
 #### `8df5ccf` — Finish story_allowance enforcement: all flows + consume-on-completion
 
 **Type**: Feature (entitlement enforcement — GTM outstanding item #1, continued)

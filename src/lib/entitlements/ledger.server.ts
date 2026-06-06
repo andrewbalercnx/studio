@@ -14,10 +14,11 @@ import type {
   EntitlementLedger,
   EntitlementCheck,
   EntitlementComponentKey,
+  EntitlementSummary,
   LedgerScope,
 } from '@/lib/types';
 import { buildFreeTierLedger, ensureFreeTier } from './grant';
-import { canConsume, consume } from './check';
+import { canConsume, consume, remainingForScope } from './check';
 
 /**
  * Firestore collection holding one ledger document per family, keyed by parentUid.
@@ -97,6 +98,24 @@ export async function checkEntitlement(
   const stored = await getLedger(parentUid);
   const ledger = stored ? ensureFreeTier(stored) : buildFreeTierLedger(parentUid);
   return canConsume(ledger, component, scope, amount);
+}
+
+/**
+ * Read-only roll-up of remaining story/storybook capacity for display ("X stories left"). Like
+ * checkEntitlement it treats a missing ledger as free-tier-seeded in memory and never writes. The
+ * numbers are the total spendable across the child pool + family pool for the given scope.
+ */
+export async function summarizeEntitlements(
+  parentUid: string,
+  childId?: string,
+): Promise<EntitlementSummary> {
+  const stored = await getLedger(parentUid);
+  const ledger = stored ? ensureFreeTier(stored) : buildFreeTierLedger(parentUid);
+  const scope: LedgerScope = { parentUid, childId };
+  return {
+    story: { remaining: remainingForScope(ledger, 'story_allowance', scope) },
+    storybook: { remaining: remainingForScope(ledger, 'storybook_allowance', scope) },
+  };
 }
 
 /**
