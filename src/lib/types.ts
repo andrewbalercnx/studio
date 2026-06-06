@@ -2339,3 +2339,80 @@ export type Price = {
 
 /** Server-assembled catalog entry returned to clients (active product + its active prices). */
 export type CatalogEntry = Product & { prices: Price[] };
+
+// ============================================================
+// Entitlement Ledger (runtime balances) — Stream D
+// Per-family / per-child balances that product grants top up and that
+// story/storybook/print creation consume. Server-authoritative: clients
+// may read their own ledger but only the server (admin SDK) may write it.
+// Pure granting/checking logic lives in src/lib/entitlements/**. See docs/PRODUCTS.md.
+// ============================================================
+
+/** Where a grant came from, for auditing and (later) refund/expiry handling. */
+export type GrantSource = 'free_tier' | 'purchase' | 'gift' | 'manual';
+
+/**
+ * A consumable balance (e.g. print_credit). Decrements on use; topped up by grants.
+ * `granted` and `consumed` are cumulative lifetime counters; `balance = granted - consumed`
+ * is the redeemable amount and is stored explicitly for cheap reads and rule checks.
+ */
+export type ConsumableBalance = {
+  granted: number; // cumulative units ever granted
+  consumed: number; // cumulative units ever consumed
+  balance: number; // granted - consumed; never negative
+};
+
+/**
+ * A quota balance (e.g. story_allowance, storybook_allowance). `allowance` is the cap for
+ * the current window; `used` is consumption within that window. `reset` records how the
+ * allowance behaves over time and (for per_period) when the current window began so the
+ * server can roll it over. `remaining = max(0, allowance - used)`.
+ */
+export type QuotaBalance = {
+  allowance: number; // cap for the current window
+  used: number; // consumed within the current window
+  reset: GrantReset; // one_time | per_period | lifetime
+  periodStart?: any; // window start (Firestore Timestamp); set for per_period quotas
+};
+
+/**
+ * The set of balances held for a single scope (a family pool, or one child's own allowance).
+ * Component keys map to either a consumable or quota balance depending on the component's meter.
+ */
+export type EntitlementBalances = {
+  print_credit?: ConsumableBalance;
+  story_allowance?: QuotaBalance;
+  storybook_allowance?: QuotaBalance;
+};
+
+/**
+ * A family's entitlement ledger document. Keyed by parentUid. Holds the family-pool balances
+ * plus an optional per-child map for child-scoped allowances. Scope resolution at consume time
+ * draws from a child's own balances first, then the family pool. See docs/PRODUCTS.md.
+ */
+export type EntitlementLedger = {
+  parentUid: string; // document id = parentUid
+  family: EntitlementBalances; // family-pool balances (scope: 'family')
+  children?: Record<string, EntitlementBalances>; // childId -> that child's own balances (scope: 'child')
+  freeTierGranted?: boolean; // guards one-time free-tier seeding (idempotency)
+  createdAt?: any;
+  updatedAt?: any;
+};
+
+/** Identifies which balances to consult/charge. childId optional (omit => family pool only). */
+export type LedgerScope = {
+  parentUid: string;
+  childId?: string;
+};
+
+/** Result of a canConsume/consume check: whether it is allowed and the remaining amount after. */
+export type EntitlementCheck = {
+  allowed: boolean;
+  /** Remaining units in the relevant scope. For a passed canConsume this is current remaining;
+   *  after a successful consume it is the post-decrement remaining. */
+  remaining: number;
+  /** Which scope satisfied the request ('child' or 'family'), when allowed. */
+  source?: EntitlementScope;
+  /** Human-readable reason when denied. */
+  reason?: string;
+};

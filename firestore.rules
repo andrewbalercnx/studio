@@ -263,6 +263,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ========== ENTITLEMENT LEDGERS (runtime balances) ==========
+    // One document per family, keyed by parentUid. Readable by the owning parent (own ledger)
+    // and admins. Writes are ADMIN-ONLY: entitlements are server-authoritative and granted/consumed
+    // exclusively via the admin SDK (server). Clients must never self-grant. See docs/PRODUCTS.md.
+    match /entitlementLedgers/{parentUid} {
+      allow read: if isAdmin() || owns(parentUid);
+      allow write: if isAdmin();
+    }
+
     // ========== CONFIGURATION COLLECTIONS ==========
     match /promptConfigs/{document=**} {
       allow read: if isAuthenticated();
