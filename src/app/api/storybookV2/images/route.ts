@@ -7,6 +7,8 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue, Firestore } from 'firebase-admin/firestore';
 import { mapPageKindToLayoutType, calculateImageDimensionsForPageType, getAspectRatioForPageType } from '@/lib/print-layout-utils';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
+import { isTestMode, TEST_MODE_IMAGE_DATA_URL } from '@/lib/test-mode';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 /**
  * Validate that a value is a valid Firestore document ID.
@@ -194,6 +196,47 @@ export async function POST(request: Request) {
       'imageGeneration.lastErrorMessage': null,
       updatedAt: FieldValue.serverTimestamp(),
     });
+
+    // TEST_MODE seam: mark every illustratable page ready with a deterministic
+    // fixture image (no model call, no fal), then advance imageGeneration to
+    // ready. Default behaviour (flag unset) skips this block entirely.
+    if (isTestMode()) {
+      logger.info('TEST_MODE active — using fixture images', { storyId, storybookId });
+      const allPages = await loadPages(firestore, storyId, storybookId, pageId);
+      const batch = firestore.batch();
+      let total = 0;
+      let ready = 0;
+      for (const page of allPages) {
+        if (!isValidDocumentId(page.id)) continue;
+        const needsImage = !!page.imagePrompt && page.imagePrompt.trim().length > 0 && page.kind !== 'blank';
+        const pageRef = storybookRef.collection('pages').doc(page.id);
+        if (needsImage) {
+          total += 1;
+          ready += 1;
+          batch.update(pageRef, {
+            imageStatus: 'ready',
+            imageUrl: TEST_MODE_IMAGE_DATA_URL,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        } else {
+          batch.update(pageRef, { imageStatus: 'ready', updatedAt: FieldValue.serverTimestamp() });
+        }
+      }
+      await batch.commit();
+
+      await storybookRef.update({
+        'imageGeneration.status': 'ready',
+        'imageGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
+        'imageGeneration.lastErrorMessage': null,
+        'imageGeneration.pagesReady': ready,
+        'imageGeneration.pagesTotal': total,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      const durationMs = Date.now() - startTime;
+      logger.info('TEST_MODE image generation completed', { storyId, storybookId, ready, total, durationMs });
+      return NextResponse.json({ ok: true, storyId, storybookId, status: 'ready', ready, total, testMode: true });
+    }
 
     // Get actor exemplar URLs from storybook (generated after pagination, in parallel with audio)
     // actorExemplarUrls is a map of actorId -> exemplarImageUrl
@@ -582,6 +625,9 @@ export async function POST(request: Request) {
     logger.error('Unhandled exception in route', error, { storyId: storyIdFromRequest, storybookId: storybookIdFromRequest, durationMs });
     const errorMessage = error?.message ?? 'Unknown error';
     const isRateLimit = isRateLimitError(errorMessage);
+    // Never surface the raw API string to the user — map it to a kid-safe message.
+    // The raw string stays in logs above for operators.
+    const userSafeMessage = toUserSafeMessage(error);
 
     // Try to update status
     if (storyIdFromRequest && storybookIdFromRequest) {
@@ -610,7 +656,7 @@ export async function POST(request: Request) {
         } else {
           await storybookRef.update({
             'imageGeneration.status': 'error',
-            'imageGeneration.lastErrorMessage': errorMessage,
+            'imageGeneration.lastErrorMessage': userSafeMessage,
             updatedAt: FieldValue.serverTimestamp(),
           });
         }
@@ -622,9 +668,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        errorMessage: isRateLimit
-          ? 'The Story Wizard is taking a nap! We\'ll try again soon.'
-          : errorMessage,
+        errorMessage: userSafeMessage,
         rateLimited: isRateLimit,
         retryAt: isRateLimit ? calculateRetryTime().toISOString() : undefined,
         logs: allLogs,

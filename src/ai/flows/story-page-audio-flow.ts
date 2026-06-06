@@ -19,6 +19,7 @@ import {
 } from '@/lib/resolve-placeholders.server';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { getElevenLabsModelId } from '@/lib/get-elevenlabs-config.server';
+import { isTestMode, TEST_MODE_AUDIO_DATA_URL } from '@/lib/test-mode';
 
 export type PageAudioFlowInput = {
   storyId: string;
@@ -215,6 +216,40 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
     await initFirebaseAdminApp();
     const firestore = getFirestore();
     console.log(`[page-audio-flow] Firebase Admin initialized successfully`);
+
+    // TEST_MODE seam: stamp a deterministic fixture audio URL on every page with
+    // text and advance audioGeneration to ready — no ElevenLabs call. Only the
+    // new (storybook) model is short-circuited; the legacy path is untouched.
+    // Default behaviour (flag unset) skips this block entirely.
+    if (isTestMode() && isNewModel) {
+      console.log('[page-audio-flow] TEST_MODE active — using fixture audio');
+      const storybookRef = firestore.collection('stories').doc(storyId).collection('storybooks').doc(storybookId!);
+      await storybookRef.update({
+        'audioGeneration.status': 'running',
+        'audioGeneration.lastRunAt': FieldValue.serverTimestamp(),
+        'audioGeneration.lastErrorMessage': null,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      const pagesSnap = await storybookRef.collection('pages').orderBy('pageNumber', 'asc').get();
+      const batch = firestore.batch();
+      let processed = 0;
+      pagesSnap.forEach((docSnap) => {
+        const page = docSnap.data() as StoryOutputPage;
+        const narratable = (page.bodyText ?? page.displayText ?? '').trim();
+        if (narratable.length > 0) {
+          processed += 1;
+          batch.update(docSnap.ref, { audioUrl: TEST_MODE_AUDIO_DATA_URL, updatedAt: FieldValue.serverTimestamp() });
+        }
+      });
+      await batch.commit();
+      await storybookRef.update({
+        'audioGeneration.status': 'ready',
+        'audioGeneration.pagesReady': processed,
+        'audioGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { ok: true, results: [], pagesProcessed: processed, pagesSkipped: 0 };
+    }
 
     // Load story document
     const storyRef = firestore.collection('stories').doc(storyId);

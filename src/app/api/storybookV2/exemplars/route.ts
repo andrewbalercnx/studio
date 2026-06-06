@@ -4,6 +4,7 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
 import type { StoryOutputPage, ActorExemplar } from '@/lib/types';
+import { isTestMode } from '@/lib/test-mode';
 
 // Allow up to 5 minutes for exemplar generation (multiple actors)
 export const maxDuration = 300;
@@ -202,6 +203,33 @@ export async function POST(request: Request) {
       'exemplarGeneration.lastErrorMessage': null,
       updatedAt: FieldValue.serverTimestamp(),
     });
+
+    // TEST_MODE seam: skip exemplar generation entirely (no model call) and mark
+    // it ready with no exemplars. The image step (also short-circuited in
+    // TEST_MODE) does not need them. Default behaviour (flag unset) skips this.
+    if (isTestMode()) {
+      logger.info('TEST_MODE active — skipping exemplar generation', { storyId, storybookId });
+      await storybookRef.update({
+        'exemplarGeneration.status': 'ready',
+        'exemplarGeneration.lastCompletedAt': FieldValue.serverTimestamp(),
+        'exemplarGeneration.lastErrorMessage': null,
+        'exemplarGeneration.actorsTotal': 0,
+        'exemplarGeneration.actorsReady': 0,
+        actorExemplars: {},
+        actorExemplarUrls: {},
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return NextResponse.json({
+        ok: true,
+        storyId,
+        storybookId,
+        status: 'ready',
+        actorExemplars: {},
+        logs: allLogs,
+        requestId,
+        testMode: true,
+      });
+    }
 
     // Extract all unique actor IDs from the storybook
     const actorIds = await extractActorIds(firestore, storyId, storybookId, mainChildId);
