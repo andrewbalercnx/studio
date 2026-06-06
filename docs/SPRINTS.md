@@ -35,16 +35,18 @@
 - **Entitlement ledger model**: `entitlementLedgers` collection + grant/check/consume (scope-resolved)
   + server reader + free-tier + rules + tests.
 - **Entitlement enforcement (story + storybook)**: transaction-wrapped `consumeEntitlement` +
-  read-only `checkEntitlement` server helpers; `story_allowance` gated at story creation via new
-  `POST /api/entitlements/consume` (called pre-flight by `kids/create`), `storybook_allowance`
-  gated inside `POST /api/storybookV2/create`. Both return `402`/kid-friendly copy at the limit;
-  free-tier seeded on first use. *Remaining: print_credit at print time; parent-app story entry
-  points; consume-on-completion vs. on-start; fail-open-on-error hardening.*
+  read-only `checkEntitlement` server helpers. `story_allowance` is enforced at the shared
+  **completion chokepoint** `POST /api/storyCompile` (covers kids + all parent flows): pre-flight
+  `402` block at the limit, plus **consume-on-completion** (idempotent via `storyAllowanceConsumed`,
+  so abandoned creates never charge). `kids/create` also calls the non-consuming
+  `POST /api/entitlements/check` at start for an early friendly block. `storybook_allowance` gated
+  inside `POST /api/storybookV2/create`. Free-tier seeded on first use. *Remaining: `print_credit`
+  at print time — deliberately deferred until purchase grants exist (no grant path today; enforcing
+  now would block all orders).*
 
 ### Outstanding (recommended order)
-1. **Wire entitlement enforcement** — *story + storybook done* (see Done). Remaining: `print_credit`
-   at print time, parent-app story entry points, and the consume-on-completion / fail-open-hardening
-   follow-ups.
+1. **Wire entitlement enforcement** — *story + storybook done, incl. parent flows + consume-on-completion*
+   (see Done). Remaining: `print_credit` at print time, deferred until purchase grants exist.
 2. **Sprint 3A E2E specs**: build the deterministic funnel specs on emulator + `TEST_MODE`; add
    a11y/Lighthouse/visual (report-only). Promote happy-path to blocking after it's green.
 3. **Sprint 3B — Naive-agent probe (productionised)** (`[GTM 3/8]`): expert baseline, mechanical

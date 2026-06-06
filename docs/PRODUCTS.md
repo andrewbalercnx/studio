@@ -44,12 +44,17 @@ A **purchasable SKU = an active product + an active price.**
 
 ### 3. Entitlement ledger (runtime)
 Per-family / per-child balances that a grant tops up and that story/storybook/print creation consume.
-Modelled in `src/lib/entitlements/` (`entitlementLedgers` collection). **Enforcement is now wired for
-story and storybook creation**: `story_allowance` is gated at story creation via the server route
-`POST /api/entitlements/consume` (called by `kids/create`), and `storybook_allowance` is consumed
-inside `POST /api/storybookV2/create`. The decrement runs in a Firestore transaction
-(`consumeEntitlement`) so concurrent creates cannot double-spend. `print_credit` enforcement at print
-time is still outstanding.
+Modelled in `src/lib/entitlements/` (`entitlementLedgers` collection). **Enforcement is wired for
+story and storybook creation**:
+- `story_allowance` is enforced at the shared **completion chokepoint** `POST /api/storyCompile`
+  (covers kids and all parent flows): it pre-flight-blocks at the limit and **consumes on
+  completion** (idempotent via a `storyAllowanceConsumed` flag, so abandoned creates never burn
+  quota). `kids/create` also calls the non-consuming `POST /api/entitlements/check` at start for an
+  early friendly block.
+- `storybook_allowance` is consumed inside `POST /api/storybookV2/create`.
+
+The decrement runs in a Firestore transaction (`consumeEntitlement`) so concurrent creates cannot
+double-spend. `print_credit` enforcement is deliberately deferred — see Deferred, below.
 
 ## How the example cases assemble
 
@@ -81,8 +86,10 @@ time is still outstanding.
 
 ## Deferred (clearly out of this build)
 
-- **Print-credit enforcement** — consuming/blocking `print_credit` at print time (story and
-  storybook enforcement are now wired — see §3).
+- **Print-credit enforcement** — consuming/blocking `print_credit` at print time. **Blocked on
+  grants**: the free tier grants no `print_credit` and there is no purchase flow to grant it yet, so
+  enforcing it now would reject *every* print order. It lands together with the purchase/grant work
+  (Stripe sprint). Story and storybook enforcement are wired — see §3.
 - **Granting on purchase** — topping the ledger up from a completed purchase (free-tier seeding is
   wired; purchase grants land with payment).
 - **Gifting / redeemable print tokens** — `scope: 'gift'` is modelled in the type but the

@@ -18,6 +18,36 @@
 
 ### 2026-06-06
 
+#### `8df5ccf` — Finish story_allowance enforcement: all flows + consume-on-completion
+
+**Type**: Feature (entitlement enforcement — GTM outstanding item #1, continued)
+
+**Summary**: Closed the gaps left by the first enforcement pass. `story_allowance` is now enforced
+for **every** story flow (kids + the six parent `/story/start/*` flows) at the shared server
+completion chokepoint, and switched to **consume-on-completion** so abandoned creates no longer burn
+quota. `print_credit` enforcement is explicitly deferred (no grant path yet — would block all
+orders). Typecheck + build green; 185 tests pass.
+
+- **Completion chokepoint** (`src/app/api/storyCompile/route.ts`): every flow finishes a story here,
+  so it now (a) **pre-flight blocks** with `402` when the family is at its `story_allowance` limit
+  (no story doc produced → whole funnel blocked) and (b) **consumes one `story_allowance` on
+  success**, idempotent via a `storyAllowanceConsumed` flag (retry/timeout-safe), non-blocking on
+  ledger error. This replaces the kids-only consume-at-start and covers parent flows for free.
+- **Start gate → non-consuming check**: renamed `POST /api/entitlements/consume` →
+  `POST /api/entitlements/check` (reads only; `checkEntitlement`). `kids/create` calls it for an
+  early, friendly block before the wizard; fails *open* on transport errors (enforcement still holds
+  at compile).
+- **`print_credit` deferred**: documented rationale — the free tier grants none and no purchase flow
+  grants it yet, so enforcing now would reject every print order. Lands with the Stripe/grant sprint.
+- **Docs**: API, SYSTEM_DESIGN, PRODUCTS, SPRINTS.
+
+**Created**: (route moved) `src/app/api/entitlements/check/route.ts`.
+**Modified**: `src/app/api/storyCompile/route.ts`, `src/app/kids/create/page.tsx`,
+`docs/{API,SYSTEM_DESIGN,PRODUCTS,SPRINTS}.md`.
+**Removed**: `src/app/api/entitlements/consume/route.ts` (renamed to `check`).
+
+---
+
 #### `afa4492` — Wire entitlement enforcement into story + storybook creation
 
 **Type**: Feature (entitlement enforcement — GTM outstanding item #1, partial)
