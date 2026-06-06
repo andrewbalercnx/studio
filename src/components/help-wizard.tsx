@@ -197,8 +197,15 @@ export function HelpWizard() {
   }, [currentPage?.wizardTargetId, currentPage?.highlightSelector, currentPage?.route]);
 
   const handleClose = () => {
-    if (returnUrl) {
+    // Avoid dumping the user back on an auth page (e.g. the startup wizard begins
+    // right after signup, so returnUrl can be /signup or /login). Returning a
+    // logged-in user there is alarming ("did I get logged out?"). Send them to
+    // the "Who is playing?" home screen instead.
+    const AUTH_ROUTES = ['/signup', '/login'];
+    if (returnUrl && !AUTH_ROUTES.includes(returnUrl)) {
       router.push(returnUrl);
+    } else {
+      router.push('/');
     }
     closeWizard();
   };

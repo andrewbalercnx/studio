@@ -22,7 +22,7 @@ import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
 import { useAuth, useFirestore } from '@/firebase';
 import { Badge } from './ui/badge';
-import { Shield, Pen, User as UserIcon, HelpCircle, BookOpen, Target, Circle, CircleDot, Download } from 'lucide-react';
+import { Shield, Pen, User as UserIcon, HelpCircle, BookOpen, Target, Circle, CircleDot, Download, Users } from 'lucide-react';
 import { useParentGuard } from '@/hooks/use-parent-guard';
 import { useWizardTargetDiagnosticsOptional } from '@/hooks/use-wizard-target-diagnostics';
 import { usePathRecordingOptional } from '@/hooks/use-path-recording';
@@ -46,7 +46,7 @@ export default function Header() {
   const firestore = useFirestore();
   const router = useRouter();
   const { user, idTokenResult } = useUser();
-  const { roleMode, switchToParentMode, activeChildId, startWizard } = useAppContext();
+  const { roleMode, switchToParentMode, setActiveChildId, activeChildId, startWizard } = useAppContext();
   const { showPinModal } = useParentGuard();
   const wizardTargetDiagnostics = useWizardTargetDiagnosticsOptional();
   const pathRecording = usePathRecordingOptional();
@@ -100,6 +100,14 @@ export default function Header() {
     switchToParentMode();
     showPinModal();
     router.push('/parent');
+  };
+
+  // Switch to a different child: clear the pinned child so the logo/nav stop
+  // returning to the previously-selected child, then show the "Who is playing?"
+  // selector. Previously this was only reachable by reloading the site root URL.
+  const handleSwitchChild = () => {
+    setActiveChildId(null);
+    router.push('/');
   };
 
   const handleToggleRecording = () => {
@@ -179,11 +187,17 @@ export default function Header() {
           </Link>
         </div>
         <nav className="flex items-center gap-4">
-          {/* Show "Return to Parent" for child mode */}
+          {/* Show "Switch child" + "Return to Parent" for child mode */}
           {roleMode === 'child' && (
-            <Button asChild variant="ghost" data-wiz-target="nav-return-to-parent">
-              <Link href="/parent/children">Return to Parent</Link>
-            </Button>
+            <>
+              <Button variant="ghost" onClick={handleSwitchChild} data-wiz-target="nav-switch-child">
+                <Users className="mr-2 h-4 w-4" />
+                Switch child
+              </Button>
+              <Button asChild variant="ghost" data-wiz-target="nav-return-to-parent">
+                <Link href="/parent/children">Return to Parent</Link>
+              </Button>
+            </>
           )}
           {/* Show "Switch to Parent" for parent mode */}
           {roleMode === 'parent' && (
