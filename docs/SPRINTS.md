@@ -1,6 +1,6 @@
 # Go-to-Market Sprint Program
 
-> **Last Updated**: 2026-06-05
+> **Last Updated**: 2026-06-06
 >
 > This document defines the engineering program that closes the go-to-market (GTM) functionality
 > gaps identified against `docs/SALES_MARKETING.md`. It focuses on the two areas that block GTM
@@ -11,6 +11,43 @@
 >
 > Each sprint is also tracked as a `[GTM Sprint N/8]` item in the Development Todo List
 > (Admin → Development).
+
+---
+
+## Program status (single source of truth — update on every change)
+
+> This is the authoritative done/outstanding rollup so it survives context resets. As of **2026-06-06**.
+
+### Done
+- **Sprint 1 — Measurement spine** (`[GTM 1/8]`): engineering complete, **shipped disabled-by-default**.
+  PostHog (EU) analytics + RUM + Error Tracking; vendor-agnostic core with no-PII guard, kill-switch,
+  consent gating, pre-init buffer; funnel events; admin toggle. *Not yet live* — see compliance gate.
+- **Commercial catalog** (Monetisation I-b, payment-agnostic): `products`/`prices` model + entitlement
+  components + admin `/admin/products` + APIs. Ledger/enforcement, gifting, Stripe still outstanding.
+
+### Outstanding sprints (recommended order)
+1. **High-severity usability fixes** — the 3 high findings from the naive-agent probe (filed as
+   `usability` dev-todos): End-Tour→/signup, no "play as child", hidden child switching. Quick wins.
+2. **Sprint 3A — Test foundation + deterministic E2E** (`[GTM 3/8]`): Firebase Emulator + `TEST_MODE`
+   AI seam + Playwright funnel + a11y/Lighthouse/visual. *Planned v2.* Unblocks all E2E and 3B.
+3. **Sprint 3B — Naive-agent usability probe (productionised)** (`[GTM 3/8]`): expert baseline,
+   mechanical personas, codable fix-records, PostHog concordance, PM report. *POC validated.*
+4. **Generation reliability** (`[GTM 5/8]`): auto-retry + circuit breaker, friendly errors, graceful
+   degradation, kid-safe states. *Biggest funnel leak.* Not started.
+5. **First-run usability** (`[GTM 4/8]`): onboarding + empty states + the 7 probe findings. Not started.
+6. **Monetisation II** (`[GTM 6/8]`): entitlement **ledger + enforcement** (makes catalog limits real),
+   subscriptions, gifting. Not started.
+7. **Admin UX-monitoring dashboard** (`[GTM 7/8]`): KPIs/funnel from PostHog + stuck-job/health alerts.
+8. **Feedback & conversion polish** (`[GTM 8/8]`): NPS/ratings, testimonials, order transparency, tickets.
+9. **Monetisation I — payments/Stripe** (`[GTM 2/8]`): **deferred by owner** (not a near-term priority).
+
+### Open non-sprint gates / follow-ups
+- **Sprint 1 compliance gate (to flip analytics ON)**: set PostHog retention; add EU sub-processor list
+  to privacy policy; consent-basis sign-off. *(Owner/legal.)*
+- **Catalog rules deploy**: `firebase deploy --only firestore:rules` (products/prices rules not yet deployed).
+- **Secret remediation tail** (non-blocking, secrets already dead): optional git-history scrub;
+  `crypto.timingSafeEqual`; ADC/workload-identity migration. See `docs/SECURITY_REMEDIATION.md` + memory.
+- **Firestore TTL on `events`**: ✅ enabled (2026-06-05).
 
 ---
 
