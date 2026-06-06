@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-01-17 (added storybooks subcollection schema with thumbnailUrl field)
+> **Last Updated**: 2026-06-06 (added storySessions story_allowance consume fields)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -170,6 +170,9 @@ Interactive story creation sessions.
 | `friendsSynopses` | FriendsSynopsis[] | No | Friends mode: generated synopsis options |
 | `friendsSelectedSynopsisId` | string | No | Friends mode: selected synopsis ID |
 | `progress` | object | No | Phase completion timestamps |
+| `storyAllowanceConsumed` | boolean | No | Set true once `story_allowance` has been consumed for this session at compile time (idempotency guard; prevents double-charging on retried/timed-out compiles) |
+| `storyAllowanceConsumedAt` | timestamp | No | When `story_allowance` was consumed for this session |
+| `storyAllowanceRemaining` | number | No | Remaining `story_allowance` (in the satisfying scope) recorded at consume time, for diagnostics |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
 

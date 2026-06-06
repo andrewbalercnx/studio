@@ -358,14 +358,19 @@ Tracks work items that should be done for a production-ready system. Both admins
   `checkEntitlement` (read-only pre-flight, treats a missing ledger as free-tier-seeded in memory)
   and `consumeEntitlement` (the authoritative decrement — a Firestore **transaction** read-modify-
   writes the ledger so concurrent creates cannot double-spend, seeding the free tier on first use).
-  - **Story creation**: `kids/create` writes `storySessions` via the client SDK, so it calls the
-    dedicated server gate `POST /api/entitlements/consume` (allowlisted to `story_allowance`) before
-    creating a session; a `402` shows kid-friendly copy. The gate fails *open* on unexpected/
-    transport errors (quota gate, not a security boundary — the ledger write stays authoritative).
-  - **Storybook creation**: `POST /api/storybookV2/create` consumes `storybook_allowance` inline,
+  - **Story creation (`story_allowance`)**: enforced at the **completion chokepoint**. Every flow
+    (kids and the six parent `/story/start/*` flows) finishes a story through `POST /api/storyCompile`,
+    so that route both (a) **pre-flight blocks** with a `402` when the family is at its limit (no
+    story doc is produced → the whole funnel is blocked) and (b) **consumes one `story_allowance` on
+    success**, idempotently via a `storyAllowanceConsumed` flag. This is *consume-on-completion*:
+    abandoned creates never burn quota. `kids/create` additionally calls the non-consuming
+    `POST /api/entitlements/check` at start purely for an early, friendly block (fails *open* on
+    transport errors — enforcement still holds at compile).
+  - **Storybook creation (`storybook_allowance`)**: `POST /api/storybookV2/create` consumes inline,
     after validation and immediately before the create, returning `402` at the limit.
-  - Remaining: `print_credit` at print time, parent-app story entry points, and a
-    consume-on-completion option. See `docs/PRODUCTS.md`.
+  - **`print_credit` is intentionally NOT enforced yet**: the free tier grants none and there is no
+    purchase flow to grant it (Stripe is a later sprint), so enforcing it would block *every* print
+    order. It lands with the purchase/grant work. See `docs/PRODUCTS.md`.
 
 ### Order Errors
 - Status history tracks all state changes

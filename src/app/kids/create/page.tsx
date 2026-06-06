@@ -178,16 +178,17 @@ export default function KidsCreateStoryPage() {
     fetchGenerators();
   }, []);
 
-  // Server-authoritative pre-flight: atomically consume one story_allowance unit before a session
-  // is created. Returns ok:false (with a kid-friendly message) only when the family is genuinely at
-  // its limit (HTTP 402). On unexpected/transport errors we fail OPEN so a flaky network or a
-  // gate-route hiccup never traps a child mid-create — enforcement here is a quota gate, not a
-  // security boundary (the ledger write itself is server-authoritative and atomic).
-  const consumeStoryAllowance = useCallback(async (): Promise<{ ok: boolean; message?: string }> => {
+  // Server-authoritative pre-flight: a NON-consuming check that blocks a child who is already at
+  // the family's story limit before they invest time in the wizard. The actual decrement happens
+  // server-side at completion (`/api/storyCompile` consumes one story_allowance), so this call only
+  // reads. Returns ok:false (with a kid-friendly message) when at the limit (HTTP 402). On
+  // unexpected/transport errors we fail OPEN so a flaky network never traps a child mid-create —
+  // enforcement still holds at the compile chokepoint regardless.
+  const checkStoryAllowance = useCallback(async (): Promise<{ ok: boolean; message?: string }> => {
     if (!user || !childId) return { ok: true };
     try {
       const token = await user.getIdToken();
-      const res = await fetch('/api/entitlements/consume', {
+      const res = await fetch('/api/entitlements/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ component: 'story_allowance', childId }),
@@ -198,11 +199,11 @@ export default function KidsCreateStoryPage() {
       }
       if (!res.ok) {
         // Unexpected server/auth error — don't block creation on it.
-        console.warn('[KidsCreate] entitlement gate error, allowing:', res.status, data?.errorMessage);
+        console.warn('[KidsCreate] entitlement check error, allowing:', res.status, data?.errorMessage);
       }
       return { ok: true };
     } catch (err) {
-      console.warn('[KidsCreate] entitlement gate failed, allowing:', err);
+      console.warn('[KidsCreate] entitlement check failed, allowing:', err);
       return { ok: true };
     }
   }, [user, childId]);
@@ -219,7 +220,7 @@ export default function KidsCreateStoryPage() {
       setIsProcessing(true);
       try {
         // Entitlement gate: stop here if the family is out of story allowance.
-        const gate = await consumeStoryAllowance();
+        const gate = await checkStoryAllowance();
         if (!gate.ok) {
           setError(gate.message || 'Something went wrong');
           setSelectedGenerator(null);
@@ -289,7 +290,7 @@ export default function KidsCreateStoryPage() {
       }
     }
     // For wizard generator, the existing useEffect will handle initialization
-  }, [user, firestore, childId, router, consumeStoryAllowance]);
+  }, [user, firestore, childId, router, checkStoryAllowance]);
 
   // Create story session and start wizard (only when wizard generator is selected)
   useEffect(() => {
@@ -302,7 +303,7 @@ export default function KidsCreateStoryPage() {
         setError(null);
 
         // Entitlement gate: stop before creating the session / running the wizard if out of allowance.
-        const gate = await consumeStoryAllowance();
+        const gate = await checkStoryAllowance();
         if (!gate.ok) {
           setError(gate.message || 'Something went wrong');
           return; // finally resets the loading flags
@@ -376,7 +377,7 @@ export default function KidsCreateStoryPage() {
     };
 
     initializeWizard();
-  }, [userLoading, user, firestore, childId, selectedGenerator, sessionId, consumeStoryAllowance]);
+  }, [userLoading, user, firestore, childId, selectedGenerator, sessionId, checkStoryAllowance]);
 
   // Handle choice selection (wizard flow)
   const handleSelectChoice = useCallback(async (choice: StoryWizardChoice) => {

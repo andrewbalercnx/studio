@@ -6,6 +6,7 @@ import { storyActorAvatarFlow } from '@/ai/flows/story-actor-avatar-flow';
 import { createLogger, generateRequestId, createTimeoutController } from '@/lib/server-logger';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { FieldValue } from 'firebase-admin/firestore';
+import { checkEntitlement, consumeEntitlement } from '@/lib/entitlements/ledger.server';
 
 // Request timeout for story compile (3 minutes - longer due to complexity)
 const COMPILE_TIMEOUT_MS = 180000;
@@ -35,9 +36,10 @@ export async function POST(request: Request) {
         const firestore = await getServerFirestore();
         const sessionRef = firestore.collection('storySessions').doc(sessionId);
         const sessionDoc = await sessionRef.get();
+        // Hoisted so the success path (entitlement consume) can read parentUid/childId/flags.
+        const sessionData = sessionDoc.exists ? sessionDoc.data() : undefined;
 
         if (sessionDoc.exists) {
-            const sessionData = sessionDoc.data();
             const compileInProgress = sessionData?.compileInProgress;
             const compileStartedAt = sessionData?.compileStartedAt;
 
@@ -74,6 +76,37 @@ export async function POST(request: Request) {
                         storyId: sessionId,
                         alreadyCompiled: true
                     }, { status: 200 });
+                }
+            }
+
+            // Entitlement enforcement (story_allowance) — the shared completion chokepoint for
+            // BOTH the kids and parent story flows, so blocking here closes every entry point at
+            // once (server-first). Pre-flight CHECK only: if the family is already at its limit and
+            // this story hasn't already been counted, refuse to compile — no story doc is produced,
+            // which blocks the whole downstream funnel. The decrement happens on success, below.
+            const parentUid: string | undefined = sessionData?.parentUid;
+            if (parentUid && !sessionData?.storyAllowanceConsumed) {
+                const check = await checkEntitlement(parentUid, 'story_allowance', {
+                    parentUid,
+                    childId: sessionData?.childId,
+                });
+                if (!check.allowed) {
+                    logger.info('Story compile blocked by story_allowance limit', {
+                        sessionId,
+                        parentUid,
+                        remaining: check.remaining,
+                    });
+                    return NextResponse.json(
+                        {
+                            ok: false,
+                            errorMessage:
+                                "You've used all your stories. Ask a grown-up to add more to keep creating!",
+                            code: 'ENTITLEMENT_LIMIT',
+                            remaining: check.remaining,
+                            requestId,
+                        },
+                        { status: 402 },
+                    );
                 }
             }
 
@@ -124,6 +157,38 @@ export async function POST(request: Request) {
                 // Note: storyTitleFlow now reads the already-generated synopsis
 
                 const storyId = result.storyId;
+
+                // Decrement story_allowance exactly once, now that a story has actually been
+                // produced (consume-on-completion: abandoned creates never burn quota). Idempotent
+                // via the storyAllowanceConsumed flag so a timed-out-then-retried compile can't
+                // double-charge. Non-blocking: a ledger hiccup must never fail a finished story
+                // (the limit was already enforced by the pre-flight CHECK above).
+                const consumeParentUid: string | undefined = sessionData?.parentUid;
+                if (consumeParentUid && !sessionData?.storyAllowanceConsumed) {
+                    try {
+                        const ent = await consumeEntitlement(consumeParentUid, 'story_allowance', {
+                            parentUid: consumeParentUid,
+                            childId: sessionData?.childId,
+                        });
+                        await sessionRef.update({
+                            storyAllowanceConsumed: true,
+                            storyAllowanceConsumedAt: FieldValue.serverTimestamp(),
+                            storyAllowanceRemaining: ent.remaining,
+                        });
+                        logger.info('Consumed story_allowance at completion', {
+                            sessionId,
+                            storyId,
+                            remaining: ent.remaining,
+                            allowed: ent.allowed,
+                        });
+                    } catch (entErr) {
+                        logger.error(
+                            'Failed to consume story_allowance at completion (non-blocking)',
+                            entErr as Error,
+                            { sessionId, storyId },
+                        );
+                    }
+                }
 
                 // Use after() to ensure background tasks complete on serverless
                 after(async () => {

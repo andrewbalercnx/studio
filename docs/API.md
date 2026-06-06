@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-06-06 (added entitlement enforcement: `/api/entitlements/consume` + storybookV2/create quota gate)
+> **Last Updated**: 2026-06-06 (entitlement enforcement: `/api/entitlements/check` pre-flight + `story_allowance` consume-on-completion in `/api/storyCompile`; `storybookV2/create` quota gate)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -718,7 +718,17 @@ Generate story ending options.
 
 ### POST `/api/storyCompile`
 
-Compile story session into final story text.
+Compile story session into final story text. This is the shared completion chokepoint for **all**
+story flows (kids and parent), so it is where `story_allowance` is enforced:
+
+- **Pre-flight block**: before compiling, if the family is already at its `story_allowance` limit
+  (and this session hasn't already been counted), the route returns `402` and produces no story doc
+  — which blocks the entire downstream funnel (storybook, print).
+- **Consume-on-completion**: on a successful compile it decrements one `story_allowance`, scoped to
+  the session's child then family pool. Idempotent via a `storyAllowanceConsumed` flag on the
+  session, so a retried/timed-out compile never double-charges, and an *abandoned* create (no
+  compile) never burns quota. The decrement is non-blocking — a ledger hiccup never fails an
+  already-generated story.
 
 **Request Body**:
 ```json
@@ -736,6 +746,10 @@ Compile story session into final story text.
   "title": "The Great Adventure"
 }
 ```
+
+**Errors**:
+- `402 Payment Required`: Story allowance exhausted (`code: "ENTITLEMENT_LIMIT"`, `remaining`)
+- `409 Conflict`: A compile is already in progress for this session
 
 ---
 
@@ -1319,17 +1333,20 @@ Get pages for a specific storybook with placeholders resolved.
 
 ## Entitlement Routes
 
-### POST `/api/entitlements/consume`
+### POST `/api/entitlements/check`
 
-Server-authoritative pre-flight gate for **story creation**. The kids/parent clients create the
-`storySessions` document directly via the client SDK, so this dedicated route is the only place the
-`story_allowance` quota can be enforced. It atomically checks-and-consumes one allowance unit from
-the caller's entitlement ledger, scoped to the named child (child pool first, then the family pool
-— see `docs/PRODUCTS.md`). A brand-new family is seeded with the free tier (1 story) on first use.
+Non-consuming **pre-flight** gate for story creation. The kids/parent clients create the
+`storySessions` document directly via the client SDK; this route lets a client block a user who is
+already at their `story_allowance` limit *before* they invest time in the wizard. It **only reads**
+the ledger (never writes) and reports remaining capacity, scoped to the named child (child pool
+first, then the family pool — see `docs/PRODUCTS.md`). A brand-new family is treated as free-tier
+seeded (1 story) in memory.
 
-Only `story_allowance` may be consumed here; `storybook_allowance` is consumed server-internally by
-`/api/storybookV2/create`, and `print_credit` at print time — these must never be drainable from an
-arbitrary client call.
+The authoritative **decrement** happens server-side at completion — `/api/storyCompile` consumes one
+`story_allowance` when a story is compiled (covering kids and parent flows alike), so enforcement
+holds even if a client skips this check. Only `story_allowance` may be checked here; `storybook_allowance`
+is enforced inside `/api/storybookV2/create`, and `print_credit` is reserved for print time (not yet
+enforced — see `docs/PRODUCTS.md`).
 
 **Auth**: Bearer ID token required.
 
@@ -1346,7 +1363,7 @@ arbitrary client call.
 {
   "ok": true,
   "allowed": true,
-  "remaining": 0,
+  "remaining": 1,
   "source": "child"
 }
 ```

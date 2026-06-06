@@ -3,40 +3,41 @@ import { createLogger, generateRequestId } from '@/lib/server-logger';
 import { requireAuthenticatedUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
 import { getServerFirestore } from '@/lib/server-firestore';
-import { consumeEntitlement } from '@/lib/entitlements/ledger.server';
+import { checkEntitlement } from '@/lib/entitlements/ledger.server';
 import type { EntitlementComponentKey } from '@/lib/types';
 
 /**
- * POST /api/entitlements/consume
+ * POST /api/entitlements/check
  *
- * Server-authoritative pre-flight gate for story creation. The kids/parent clients create the
- * storySession document directly (client SDK), so the only place to enforce the story_allowance
- * quota is a dedicated server route they call first. This atomically checks-and-consumes one unit
- * of the requested allowance under the caller's ledger, scoped to the given child (child pool
- * first, then the family pool — see docs/PRODUCTS.md).
+ * Non-consuming pre-flight gate for story creation. The actual decrement happens server-side at
+ * the shared completion chokepoint (`/api/storyCompile`, which consumes one `story_allowance` when
+ * a story is compiled — covering kids and parent flows alike). This route exists purely so a client
+ * can block a user who is already at their limit *before* they invest time in the wizard, giving a
+ * friendly early message instead of a dead end at the end.
  *
- * Only client-consumable components are permitted here: `story_allowance`. The other components
- * are consumed server-internally (storybook_allowance in /api/storybookV2/create; print_credit at
- * print time) and must never be drainable from an arbitrary client call.
+ * It reads the ledger and reports remaining capacity; it never writes. Because it does not mutate
+ * anything, calling it is harmless and idempotent.
+ *
+ * Only `story_allowance` may be checked here; storybook/print enforcement live in their own routes.
  *
  * Request body:
  * - component: 'story_allowance'  (allowlisted)
- * - childId?: string              (the locked/selected child; resolves the consume scope)
+ * - childId?: string              (resolves the scope: child pool first, then family)
  *
  * Response:
  * - ok: boolean
  * - allowed: boolean              (false + 402 when at the limit)
- * - remaining: number             (units left in the satisfying scope after the decrement)
+ * - remaining: number
  * - source?: 'child' | 'family'
  * - errorMessage?: string
  */
 
-/** Components a client is allowed to self-consume via this endpoint. */
-const CLIENT_CONSUMABLE: ReadonlySet<EntitlementComponentKey> = new Set(['story_allowance']);
+/** Components a client is allowed to pre-flight-check via this endpoint. */
+const CLIENT_CHECKABLE: ReadonlySet<EntitlementComponentKey> = new Set(['story_allowance']);
 
 export async function POST(request: Request) {
   const requestId = generateRequestId();
-  const logger = createLogger({ route: '/api/entitlements/consume', method: 'POST', requestId });
+  const logger = createLogger({ route: '/api/entitlements/check', method: 'POST', requestId });
 
   try {
     const user = await requireAuthenticatedUser(request);
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
     const component = body?.component as EntitlementComponentKey | undefined;
     const childId = typeof body?.childId === 'string' ? (body.childId as string) : undefined;
 
-    if (!component || !CLIENT_CONSUMABLE.has(component)) {
+    if (!component || !CLIENT_CHECKABLE.has(component)) {
       return NextResponse.json(
         { ok: false, errorMessage: 'Unsupported entitlement component', requestId },
         { status: 400 },
@@ -55,8 +56,7 @@ export async function POST(request: Request) {
 
     const firestore = await getServerFirestore();
 
-    // If a child is named, verify it belongs to the caller so the consume is charged to the right
-    // scope (a child the caller does not own would otherwise seed a stray bucket in their ledger).
+    // If a child is named, verify it belongs to the caller so the check resolves the right scope.
     if (childId) {
       const childSnap = await firestore.collection('children').doc(childId).get();
       if (!childSnap.exists || childSnap.data()?.ownerParentUid !== uid) {
@@ -68,10 +68,10 @@ export async function POST(request: Request) {
       }
     }
 
-    const result = await consumeEntitlement(uid, component, { parentUid: uid, childId });
+    const result = await checkEntitlement(uid, component, { parentUid: uid, childId });
 
     if (!result.allowed) {
-      logger.info('Entitlement consume denied', { uid, component, remaining: result.remaining });
+      logger.info('Entitlement check denied', { uid, component, remaining: result.remaining });
       return NextResponse.json(
         {
           ok: false,
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
 
     logger.error('Unhandled exception', error);
     return NextResponse.json(
-      { ok: false, errorMessage: error?.message || 'Failed to consume entitlement', requestId },
+      { ok: false, errorMessage: error?.message || 'Failed to check entitlement', requestId },
       { status: 500 },
     );
   }
