@@ -16,6 +16,32 @@
 
 ## Changes
 
+### 2026-06-06
+
+#### `21287bc` — Sprint 3 UX testing: plan v2 + validated naive-agent probe POC
+
+**Type**: Docs + Tooling (no app code change)
+
+**Summary**: Planned the end-to-end UX testing framework and proved the novel "naive-agent usability
+probe" works against the live app. No product code changed; analytics/app unaffected.
+
+- **Naive-agent probe POC**: `tools/probe/server.mjs` — a constrained Playwright driver exposing only
+  accessibility-tree + screenshot perception and label-based actions (no DOM/test-ids). A
+  knowledge-isolated agent drove the live app end-to-end and surfaced real, codable friction.
+- **Findings**: `docs/usability/UX-PROBE-FINDINGS-2026-06-05.md` — 7 issues (3 high), filed as
+  `usability` dev-todos (e.g. "End Tour → /signup", no "play as child" control, hidden child switching).
+- **Sprint 3 plan v2**: `docs/sprints/SPRINT-03-UX-TESTING.md` — incorporates a five-lens review; split
+  into 3A (Firebase Emulator + TEST_MODE seam + deterministic Playwright E2E + a11y/Lighthouse/visual)
+  and 3B (productionised probe: expert baseline, mechanical personas, codable fix-records, PostHog
+  concordance, PM report).
+- **Tooling**: added `playwright` devDependency; `tools/probe/cleanup-probe-account.mjs` (targeted
+  test-account cleanup via ADC).
+
+**Key files**: `tools/probe/*`, `docs/usability/UX-PROBE-FINDINGS-2026-06-05.md`,
+`docs/sprints/SPRINT-03-UX-TESTING.md`, `package.json`.
+
+---
+
 ### 2026-06-05
 
 #### `82e6ed1` — Commercial catalog: products, prices & entitlement components (payment-agnostic)
