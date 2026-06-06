@@ -178,6 +178,35 @@ export default function KidsCreateStoryPage() {
     fetchGenerators();
   }, []);
 
+  // Server-authoritative pre-flight: atomically consume one story_allowance unit before a session
+  // is created. Returns ok:false (with a kid-friendly message) only when the family is genuinely at
+  // its limit (HTTP 402). On unexpected/transport errors we fail OPEN so a flaky network or a
+  // gate-route hiccup never traps a child mid-create — enforcement here is a quota gate, not a
+  // security boundary (the ledger write itself is server-authoritative and atomic).
+  const consumeStoryAllowance = useCallback(async (): Promise<{ ok: boolean; message?: string }> => {
+    if (!user || !childId) return { ok: true };
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/entitlements/consume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ component: 'story_allowance', childId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 402 || data?.allowed === false) {
+        return { ok: false, message: data?.errorMessage || "You've used all your stories." };
+      }
+      if (!res.ok) {
+        // Unexpected server/auth error — don't block creation on it.
+        console.warn('[KidsCreate] entitlement gate error, allowing:', res.status, data?.errorMessage);
+      }
+      return { ok: true };
+    } catch (err) {
+      console.warn('[KidsCreate] entitlement gate failed, allowing:', err);
+      return { ok: true };
+    }
+  }, [user, childId]);
+
   // Handle generator selection
   const handleSelectGenerator = useCallback(async (generator: StoryGenerator) => {
     if (!user || !firestore || !childId) return;
@@ -189,6 +218,15 @@ export default function KidsCreateStoryPage() {
     if (generator.id !== 'wizard') {
       setIsProcessing(true);
       try {
+        // Entitlement gate: stop here if the family is out of story allowance.
+        const gate = await consumeStoryAllowance();
+        if (!gate.ok) {
+          setError(gate.message || 'Something went wrong');
+          setSelectedGenerator(null);
+          setIsProcessing(false);
+          return;
+        }
+
         // Verify child profile
         const childRef = doc(firestore, 'children', childId);
         const childDoc = await getDoc(childRef);
@@ -251,7 +289,7 @@ export default function KidsCreateStoryPage() {
       }
     }
     // For wizard generator, the existing useEffect will handle initialization
-  }, [user, firestore, childId, router]);
+  }, [user, firestore, childId, router, consumeStoryAllowance]);
 
   // Create story session and start wizard (only when wizard generator is selected)
   useEffect(() => {
@@ -262,6 +300,13 @@ export default function KidsCreateStoryPage() {
       try {
         setIsInitializing(true);
         setError(null);
+
+        // Entitlement gate: stop before creating the session / running the wizard if out of allowance.
+        const gate = await consumeStoryAllowance();
+        if (!gate.ok) {
+          setError(gate.message || 'Something went wrong');
+          return; // finally resets the loading flags
+        }
 
         // Verify child profile
         const childRef = doc(firestore, 'children', childId);
@@ -331,7 +376,7 @@ export default function KidsCreateStoryPage() {
     };
 
     initializeWizard();
-  }, [userLoading, user, firestore, childId, selectedGenerator, sessionId]);
+  }, [userLoading, user, firestore, childId, selectedGenerator, sessionId, consumeStoryAllowance]);
 
   // Handle choice selection (wizard flow)
   const handleSelectChoice = useCallback(async (choice: StoryWizardChoice) => {

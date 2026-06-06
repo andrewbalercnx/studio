@@ -10,8 +10,14 @@
  */
 import { getServerFirestore } from '@/lib/server-firestore';
 import { FieldValue } from 'firebase-admin/firestore';
-import type { EntitlementLedger } from '@/lib/types';
+import type {
+  EntitlementLedger,
+  EntitlementCheck,
+  EntitlementComponentKey,
+  LedgerScope,
+} from '@/lib/types';
 import { buildFreeTierLedger, ensureFreeTier } from './grant';
+import { canConsume, consume } from './check';
 
 /** Firestore collection holding one ledger document per family, keyed by parentUid. */
 export const ENTITLEMENT_LEDGERS_COLLECTION = 'entitlementLedgers';
@@ -68,6 +74,79 @@ export async function getOrCreateLedger(parentUid: string): Promise<EntitlementL
       );
     }
     return ensured;
+  });
+}
+
+/**
+ * Read-only pre-flight check: would consuming `amount` of `component` under `scope` be allowed?
+ * Treats a missing ledger as a freshly free-tier-seeded one (in memory only — does NOT persist),
+ * so a brand-new family is correctly granted its free allowance. Use this to gate the UI before
+ * doing expensive work; the authoritative decrement is consumeEntitlement (below).
+ */
+export async function checkEntitlement(
+  parentUid: string,
+  component: EntitlementComponentKey,
+  scope: LedgerScope,
+  amount = 1,
+): Promise<EntitlementCheck> {
+  const stored = await getLedger(parentUid);
+  const ledger = stored ? ensureFreeTier(stored) : buildFreeTierLedger(parentUid);
+  return canConsume(ledger, component, scope, amount);
+}
+
+/**
+ * Authoritative consume: atomically check-and-decrement `amount` of `component` under `scope`.
+ *
+ * The whole read-modify-write runs inside a Firestore transaction so concurrent creation requests
+ * cannot double-spend the same allowance/credit. A missing ledger is seeded with the free tier
+ * first (so a new family gets its free allowance), and a legacy un-seeded ledger is seeded
+ * idempotently — both persisted even when the request is ultimately denied, matching
+ * getOrCreateLedger's semantics.
+ *
+ * Returns the EntitlementCheck decision: `allowed` plus post-decrement `remaining` (and `source`
+ * scope) on success, or `allowed: false` with a `reason` when at the limit. The ledger is only
+ * decremented when allowed. Server-authoritative; never call from client code.
+ */
+export async function consumeEntitlement(
+  parentUid: string,
+  component: EntitlementComponentKey,
+  scope: LedgerScope,
+  amount = 1,
+): Promise<EntitlementCheck> {
+  const firestore = await getServerFirestore();
+  const ref = firestore.doc(ledgerDocPath(parentUid));
+
+  return firestore.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const isNew = !snap.exists;
+
+    const stored: EntitlementLedger | null = isNew
+      ? null
+      : { parentUid, ...(snap.data() as Omit<EntitlementLedger, 'parentUid'>) };
+    const ensured = stored ? ensureFreeTier(stored) : buildFreeTierLedger(parentUid);
+    const seededChanged = isNew || ensured !== stored;
+
+    const result = consume(ensured, component, scope, amount);
+    const finalLedger = result.allowed ? result.ledger : ensured;
+
+    // Persist when we actually decremented, or when free-tier seeding produced new state we
+    // want durable even on denial (so the next read is consistent and cheap).
+    if (result.allowed || seededChanged) {
+      const { parentUid: _omit, createdAt: _c, ...toWrite } = finalLedger;
+      tx.set(
+        ref,
+        {
+          ...toWrite,
+          ...(isNew ? { createdAt: FieldValue.serverTimestamp() } : {}),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
+    return result.allowed
+      ? { allowed: true, remaining: result.remaining, source: result.source }
+      : { allowed: false, remaining: result.remaining, reason: result.reason };
   });
 }
 

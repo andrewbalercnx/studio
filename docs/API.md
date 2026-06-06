@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-02-05 (added confirm endpoint using Mixam Public API)
+> **Last Updated**: 2026-06-06 (added entitlement enforcement: `/api/entitlements/consume` + storybookV2/create quota gate)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -81,6 +81,7 @@ The `StoryPicClient` provides typed methods for child-facing operations:
 - [Characters Routes](#characters-routes)
 - [Story Session Routes](#story-session-routes)
 - [Storybook Routes](#storybook-routes)
+- [Entitlement Routes](#entitlement-routes)
 - [Print Routes](#print-routes)
 - [Admin Routes](#admin-routes)
 - [Voice Routes](#voice-routes)
@@ -1152,9 +1153,16 @@ Create a new StoryBookOutput document for a story. The server handles print layo
 }
 ```
 
+**Entitlement enforcement**: Before the storybook document is created, the server atomically
+checks-and-consumes one `storybook_allowance` unit from the caller's entitlement ledger (the
+story's child pool first, then the family pool — see `docs/PRODUCTS.md`). A brand-new family is
+seeded with the free tier (2 storybooks) on first use. When the allowance is exhausted the route
+returns `402` and creates nothing.
+
 **Errors**:
 - `400 Bad Request`: Missing required fields
 - `401 Unauthorized`: Missing or invalid token
+- `402 Payment Required`: Storybook allowance exhausted (`code: "ENTITLEMENT_LIMIT"`, `remaining`)
 - `403 Forbidden`: Story doesn't belong to user
 - `404 Not Found`: Story or output type not found
 
@@ -1306,6 +1314,48 @@ Get pages for a specific storybook with placeholders resolved.
 - Server-side filtering: Pages with `kind === 'blank'` or `kind === 'title_page'` are excluded (these are for print only)
 - Server-side sorting: Results sorted by `pageNumber` ascending
 - Placeholder resolution: `displayText` field contains resolved placeholders (child/character names)
+
+---
+
+## Entitlement Routes
+
+### POST `/api/entitlements/consume`
+
+Server-authoritative pre-flight gate for **story creation**. The kids/parent clients create the
+`storySessions` document directly via the client SDK, so this dedicated route is the only place the
+`story_allowance` quota can be enforced. It atomically checks-and-consumes one allowance unit from
+the caller's entitlement ledger, scoped to the named child (child pool first, then the family pool
+— see `docs/PRODUCTS.md`). A brand-new family is seeded with the free tier (1 story) on first use.
+
+Only `story_allowance` may be consumed here; `storybook_allowance` is consumed server-internally by
+`/api/storybookV2/create`, and `print_credit` at print time — these must never be drainable from an
+arbitrary client call.
+
+**Auth**: Bearer ID token required.
+
+**Request Body**:
+```json
+{
+  "component": "story_allowance",
+  "childId": "child-id"
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "allowed": true,
+  "remaining": 0,
+  "source": "child"
+}
+```
+
+**Errors**:
+- `400 Bad Request`: Missing/unsupported `component` (only `story_allowance` is permitted)
+- `401 Unauthorized`: Missing or invalid token
+- `402 Payment Required`: Story allowance exhausted (`allowed: false`, `code: "ENTITLEMENT_LIMIT"`, `remaining`)
+- `403 Forbidden`: `childId` does not belong to the caller
 
 ---
 

@@ -18,6 +18,38 @@
 
 ### 2026-06-06
 
+#### `afa4492` — Wire entitlement enforcement into story + storybook creation
+
+**Type**: Feature (entitlement enforcement — GTM outstanding item #1, partial)
+
+**Summary**: Made the entitlement ledger actually take effect at creation time. Pre-flight
+quota/credit checks now gate story and storybook creation, with the authoritative decrement wrapped
+in a Firestore transaction so concurrent creates cannot double-spend. Free tier is seeded on first
+use. Typecheck clean; 185 tests pass (+6).
+
+- **Server helpers** (`src/lib/entitlements/ledger.server.ts`): `consumeEntitlement` — atomic
+  check-and-decrement inside `runTransaction` (seeds free tier on first use, persists seeding even on
+  denial); `checkEntitlement` — read-only pre-flight that treats a missing ledger as free-tier-seeded
+  in memory.
+- **Story creation** (`src/app/kids/create/page.tsx` + new `src/app/api/entitlements/consume/route.ts`):
+  the client SDK creates `storySessions`, so a dedicated server gate (allowlisted to `story_allowance`,
+  verifies child ownership) is called pre-flight in both the generator and wizard paths. A `402`
+  surfaces kid-friendly copy; the gate fails *open* on unexpected/transport errors.
+- **Storybook creation** (`src/app/api/storybookV2/create/route.ts`): consumes `storybook_allowance`
+  after validation and immediately before the create; `402` (`code: ENTITLEMENT_LIMIT`) at the limit.
+- **Tests**: `src/lib/entitlements/__tests__/ledger.server.test.ts` (Firestore-double mock) covering
+  seed-and-consume, denial without write, partial decrement, child-first scope, and read-only check.
+- **Docs**: `API.md` (new route + storybookV2 402), `SYSTEM_DESIGN.md`, `PRODUCTS.md`, `SPRINTS.md`.
+- **Remaining**: `print_credit` at print time, parent-app story entry points, consume-on-completion
+  option, and fail-open-on-error hardening.
+
+**Created**: `src/app/api/entitlements/consume/route.ts`,
+`src/lib/entitlements/__tests__/ledger.server.test.ts`.
+**Modified**: `src/lib/entitlements/ledger.server.ts`, `src/app/api/storybookV2/create/route.ts`,
+`src/app/kids/create/page.tsx`, `docs/{API,SYSTEM_DESIGN,PRODUCTS,SPRINTS}.md`.
+
+---
+
 #### `424e7fc` — Parallel streams: usability fixes, 3A test foundation, generation reliability, entitlement ledger
 
 **Type**: Feature (4 parallel worktree streams, merged)

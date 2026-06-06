@@ -33,11 +33,18 @@
   raw→user-safe error mapping (storybookV2 routes no longer leak raw errors). *Remaining: graceful
   degradation UI, kid-safe states, broader flow adoption, systemConfig-backed breaker.*
 - **Entitlement ledger model**: `entitlementLedgers` collection + grant/check/consume (scope-resolved)
-  + server reader + free-tier + rules + tests. *Model only — enforcement not yet wired into flows.*
+  + server reader + free-tier + rules + tests.
+- **Entitlement enforcement (story + storybook)**: transaction-wrapped `consumeEntitlement` +
+  read-only `checkEntitlement` server helpers; `story_allowance` gated at story creation via new
+  `POST /api/entitlements/consume` (called pre-flight by `kids/create`), `storybook_allowance`
+  gated inside `POST /api/storybookV2/create`. Both return `402`/kid-friendly copy at the limit;
+  free-tier seeded on first use. *Remaining: print_credit at print time; parent-app story entry
+  points; consume-on-completion vs. on-start; fail-open-on-error hardening.*
 
 ### Outstanding (recommended order)
-1. **Wire entitlement enforcement** into creation flows (kids/create, storybookV2 routes, print) using
-   the ledger model — make catalog/free-tier limits actually take effect. (Transaction-wrap consume.)
+1. **Wire entitlement enforcement** — *story + storybook done* (see Done). Remaining: `print_credit`
+   at print time, parent-app story entry points, and the consume-on-completion / fail-open-hardening
+   follow-ups.
 2. **Sprint 3A E2E specs**: build the deterministic funnel specs on emulator + `TEST_MODE`; add
    a11y/Lighthouse/visual (report-only). Promote happy-path to blocking after it's green.
 3. **Sprint 3B — Naive-agent probe (productionised)** (`[GTM 3/8]`): expert baseline, mechanical
