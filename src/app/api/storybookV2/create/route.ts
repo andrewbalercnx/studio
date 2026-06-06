@@ -4,6 +4,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
 import { requireAuthenticatedUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
+import { consumeEntitlement } from '@/lib/entitlements/ledger.server';
 
 /**
  * POST /api/storybookV2/create
@@ -112,6 +113,33 @@ export async function POST(request: Request) {
       imageWidthPx = 1024;
       imageHeightPx = 1024;
       logger.info('Using default image dimensions', { imageWidthPx, imageHeightPx });
+    }
+
+    // Entitlement enforcement: atomically check-and-consume one storybook_allowance unit before
+    // committing to creation. Scoped to the story's child first, then the family pool. Done after
+    // all validation (so we never charge for a request that would have failed) and immediately
+    // before the create (so a denial blocks here and a success is followed straight away by the
+    // write, minimising the window for an orphaned consume).
+    const childId: string | undefined = storyData?.childId;
+    const entitlement = await consumeEntitlement(uid, 'storybook_allowance', { parentUid: uid, childId });
+    if (!entitlement.allowed) {
+      logger.info('Storybook creation blocked by entitlement limit', {
+        uid,
+        storyId,
+        remaining: entitlement.remaining,
+        reason: entitlement.reason,
+      });
+      return NextResponse.json(
+        {
+          ok: false,
+          errorMessage:
+            "You've used all your storybooks. Ask a grown-up to add more to keep creating!",
+          code: 'ENTITLEMENT_LIMIT',
+          remaining: entitlement.remaining,
+          requestId,
+        },
+        { status: 402 },
+      );
     }
 
     // Create the StoryBookOutput document

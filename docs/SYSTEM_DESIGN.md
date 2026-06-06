@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-01-17
+> **Last Updated**: 2026-06-06
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -351,8 +351,21 @@ Tracks work items that should be done for a production-ready system. Both admins
 
 ### Entitlements
 - `src/lib/entitlements/` + `entitlementLedgers` collection model per-family balances granted by the
-  catalog (purchase/free-tier/gift) and consumed at creation. Server-authoritative; enforcement
-  insertion into creation flows is a follow-up. See `docs/PRODUCTS.md`.
+  catalog (purchase/free-tier/gift) and consumed at creation. Server-authoritative — only the admin
+  SDK ever writes a ledger.
+- **Enforcement (wired for story + storybook).** Pure `canConsume`/`consume` (scope-resolved: child
+  pool first, then family) are wrapped by two server helpers in `ledger.server.ts`:
+  `checkEntitlement` (read-only pre-flight, treats a missing ledger as free-tier-seeded in memory)
+  and `consumeEntitlement` (the authoritative decrement — a Firestore **transaction** read-modify-
+  writes the ledger so concurrent creates cannot double-spend, seeding the free tier on first use).
+  - **Story creation**: `kids/create` writes `storySessions` via the client SDK, so it calls the
+    dedicated server gate `POST /api/entitlements/consume` (allowlisted to `story_allowance`) before
+    creating a session; a `402` shows kid-friendly copy. The gate fails *open* on unexpected/
+    transport errors (quota gate, not a security boundary — the ledger write stays authoritative).
+  - **Storybook creation**: `POST /api/storybookV2/create` consumes `storybook_allowance` inline,
+    after validation and immediately before the create, returning `402` at the limit.
+  - Remaining: `print_credit` at print time, parent-app story entry points, and a
+    consume-on-completion option. See `docs/PRODUCTS.md`.
 
 ### Order Errors
 - Status history tracks all state changes

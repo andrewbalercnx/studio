@@ -1,7 +1,8 @@
 # Commercial Catalog — Products, Prices & Entitlements
 
-> **Last Updated**: 2026-06-05 · **Status**: catalog + admin management built (payment-agnostic).
-> Ledger/enforcement and gifting are deferred (see end). No money moves yet — Stripe is a later sprint.
+> **Last Updated**: 2026-06-06 · **Status**: catalog + admin management built (payment-agnostic);
+> entitlement enforcement wired for story + storybook creation. Print-credit enforcement, purchase
+> grants and gifting are deferred (see end). No money moves yet — Stripe is a later sprint.
 
 This describes the payment-agnostic commercial catalog that lets a product manager assemble and manage
 purchasable products ("SKUs") from a fixed set of entitlement components, independent of any payment
@@ -41,9 +42,14 @@ Each grant in a product also has a **reset rule**: `one_time` (a print credit), 
 
 A **purchasable SKU = an active product + an active price.**
 
-### 3. Entitlement ledger (runtime — modelled later)
+### 3. Entitlement ledger (runtime)
 Per-family / per-child balances that a grant tops up and that story/storybook/print creation consume.
-Config + catalog land now; ledger and enforcement (blocking at the limit) are a deferred follow-up.
+Modelled in `src/lib/entitlements/` (`entitlementLedgers` collection). **Enforcement is now wired for
+story and storybook creation**: `story_allowance` is gated at story creation via the server route
+`POST /api/entitlements/consume` (called by `kids/create`), and `storybook_allowance` is consumed
+inside `POST /api/storybookV2/create`. The decrement runs in a Firestore transaction
+(`consumeEntitlement`) so concurrent creates cannot double-spend. `print_credit` enforcement at print
+time is still outstanding.
 
 ## How the example cases assemble
 
@@ -75,8 +81,10 @@ Config + catalog land now; ledger and enforcement (blocking at the limit) are a 
 
 ## Deferred (clearly out of this build)
 
-- **Entitlement ledger + enforcement** — granting on purchase/free-tier assignment, and
-  consuming/blocking at story/storybook/print creation.
+- **Print-credit enforcement** — consuming/blocking `print_credit` at print time (story and
+  storybook enforcement are now wired — see §3).
+- **Granting on purchase** — topping the ledger up from a completed purchase (free-tier seeding is
+  wired; purchase grants land with payment).
 - **Gifting / redeemable print tokens** — `scope: 'gift'` is modelled in the type but the
   purchaser→recipient redemption flow is phase 2.
 - **Payment** — Stripe Checkout/webhooks (separate sprint); `externalPriceId` is the reserved hook.
