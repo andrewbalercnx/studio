@@ -6,6 +6,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { resolveEntitiesInText, replacePlaceholdersForTTS } from '@/lib/resolve-placeholders.server';
 import { getElevenLabsModelId } from '@/lib/get-elevenlabs-config.server';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 // Valid preset voice IDs from shared config
 const VALID_PRESET_VOICE_IDS = ELEVENLABS_TTS_VOICES.map(v => v.id);
@@ -177,8 +178,9 @@ export async function POST(request: Request) {
     });
   } catch (e: any) {
     console.error('[api/tts] Error:', e);
+    // User-safe copy only — the raw provider error stays in the log above.
     return NextResponse.json(
-      { ok: false, errorMessage: e.message || 'Failed to generate speech' },
+      { ok: false, errorMessage: toUserSafeMessage(e) },
       { status: 500 }
     );
   }

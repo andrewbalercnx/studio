@@ -1,6 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { endingFlow } from '@/ai/flows/ending-flow';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 export async function POST(request: Request) {
     try {
@@ -26,12 +27,12 @@ export async function POST(request: Request) {
         }
 
     } catch (e: any) {
-        const errorMessage = e.message || 'An unexpected error occurred in the API route.';
+        console.error('[api/storyEnding] Error:', e);
         return NextResponse.json(
-            { 
-                ok: false, 
-                errorMessage: `API /storyEnding route error: ${errorMessage}` 
-            }, 
+            {
+                ok: false,
+                errorMessage: toUserSafeMessage(e),
+            },
             { status: 500 }
         );
     }

@@ -339,8 +339,14 @@ Tracks work items that should be done for a production-ready system. Both admins
 - User-facing errors provide actionable messages
 - Shared reliability utilities (`src/lib/ai-retry.ts`, `src/lib/ai-error-map.ts`): retry with
   exponential backoff + jitter, a transient/permanent error classifier, a per-provider circuit-breaker
-  scaffold, and a raw→user-safe message map so the storybook generation routes never leak raw API
-  errors. (Broader flow adoption + a systemConfig-backed breaker are follow-ups.)
+  scaffold, and a raw→user-safe message map.
+- **No raw error reaches a child/parent.** The `storybookV2/*` routes and now every interactive
+  generation route — `tts`, `storyWizard`, `storyFriends`, `storyArc`, `storyEnding`, `storyBeat`,
+  `gemini3`, `gemini4`, `warmupReply`, `storyCompile` — route their catch-block message through
+  `toUserSafeMessage` (kid-safe copy), while the raw error stays in the logs for operators. Controlled
+  messages (auth/validation) are unchanged. (Remaining follow-ups: mapping *flow-result* error
+  messages too, graceful degradation UI / kid-safe empty states, broader `withRetry` adoption, and a
+  systemConfig-backed breaker.)
 
 ### Testing seam (`TEST_MODE`)
 - `src/lib/test-mode.ts` (`TEST_MODE`/`E2E_FAKE_AI`): when set, the storybook generation flows/routes

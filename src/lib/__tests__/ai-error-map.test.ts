@@ -90,3 +90,30 @@ describe('toUserSafeMessage', () => {
     expect(Object.keys(USER_SAFE_MESSAGES).sort()).toEqual([...expectedCategories].sort());
   });
 });
+
+describe('toUserSafeMessage — realistic interactive-route exceptions never leak', () => {
+  // Representative raw errors thrown out of the kid/parent-facing generation routes
+  // (tts, storyWizard, storyFriends, storyArc/Ending/Beat, gemini3/4, warmupReply,
+  // storyCompile) whose catch blocks now map through toUserSafeMessage. Each must
+  // resolve to one of the known safe messages and never echo raw provider/internal text.
+  const SAFE = new Set(Object.values(USER_SAFE_MESSAGES));
+  const rawErrors: string[] = [
+    'ElevenLabs API error: 429 too many requests (voiceId=abc, key=sk_live_secret)',
+    'GoogleGenerativeAI Error: [GoogleGenerativeAI Error]: DEADLINE_EXCEEDED',
+    'fetch failed: ECONNRESET at TLSSocket.onSocketClose (node:net:1234)',
+    'FirebaseError: 7 PERMISSION_DENIED: Missing or insufficient permissions',
+    'Candidate was blocked due to SAFETY',
+    'storyPageFlow returned no pages.',
+    'TypeError: Cannot read properties of undefined (reading text) at /var/task/route.js:42',
+  ];
+
+  it.each(rawErrors)('maps %j to a safe message with no raw fragments', (raw) => {
+    const safe = toUserSafeMessage(new Error(raw));
+    expect(SAFE.has(safe)).toBe(true);
+    // No secrets / internal tokens / stack paths leak through.
+    expect(safe).not.toContain('sk_live');
+    expect(safe).not.toContain('node:');
+    expect(safe).not.toContain('/var/task');
+    expect(safe).not.toContain('PERMISSION_DENIED');
+  });
+});

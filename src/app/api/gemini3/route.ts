@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { gemini3Flow } from '@/ai/flows/gemini3-flow';
 import { createLogger, generateRequestId, createTimeoutController } from '@/lib/server-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import type { StoryGeneratorResponse, StoryGeneratorResponseOption } from '@/lib/types';
 
 // Request timeout for AI flows (2 minutes)
@@ -100,14 +101,13 @@ export async function POST(request: Request) {
         }
 
     } catch (e: any) {
-        const errorMessage = e.message || 'An unexpected error occurred in the API route.';
         logger.error('Unhandled exception in route', e);
         const errorResponse: StoryGeneratorResponse = {
             ok: false,
             sessionId: '',
             question: '',
             options: [],
-            errorMessage: `API /gemini3 route error: ${errorMessage}`,
+            errorMessage: toUserSafeMessage(e),
         };
         return NextResponse.json(errorResponse, { status: 500 });
     }
