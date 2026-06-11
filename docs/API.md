@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-06-11 (W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-06-11 (Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -1217,6 +1217,11 @@ returns `402` and creates nothing.
 
 Generate storybook pages from story.
 
+**Authentication**: Required (Bearer token). Any authenticated Firebase user; ownership is
+enforced against `story.parentUid` (admins/writers via custom claims bypass ownership). This is a
+cost-bearing AI endpoint — unauthenticated requests are rejected before any generation state is
+written.
+
 **Request Body**:
 ```json
 {
@@ -1234,11 +1239,23 @@ Generate storybook pages from story.
 }
 ```
 
+**Errors**:
+- `400 Bad Request`: Missing `storyId` or `storybookId`
+- `401 Unauthorized`: Missing or invalid token
+- `403 Forbidden`: Story doesn't belong to user
+- `404 Not Found`: Story or storybook not found
+- `409 Conflict`: Storybook is locked
+
 ---
 
 ### POST `/api/storybookV2/images`
 
 Generate images for storybook pages.
+
+**Authentication**: Required (Bearer token). Any authenticated Firebase user; ownership is
+enforced against `story.parentUid` (admins/writers via custom claims bypass ownership). This is a
+cost-bearing AI endpoint — unauthenticated requests are rejected before any generation state is
+written.
 
 **Request Body**:
 ```json
@@ -1278,6 +1295,14 @@ Generate images for storybook pages.
 route with `pageId` + `forceRegenerate: true` (+ optional `additionalPrompt`). Single-page
 regeneration does **not** consume any entitlement — `storybook_allowance` is only consumed at
 `POST /api/storybookV2/create`.
+
+**Errors**:
+- `400 Bad Request`: Missing `storyId` or `storybookId`, or no pages available
+- `401 Unauthorized`: Missing or invalid token
+- `403 Forbidden`: Story doesn't belong to user
+- `404 Not Found`: Story or storybook not found
+- `409 Conflict`: Storybook is locked, or generation already in progress
+- `429 Too Many Requests`: Upstream model rate limit (`rateLimited: true`, `retryAt`)
 
 ---
 
