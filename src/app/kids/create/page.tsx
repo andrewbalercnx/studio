@@ -6,7 +6,8 @@ import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, writeBatch } from 'firebase/firestore';
 import { useKidsPWA } from '../layout';
-import type { ChildProfile, StoryWizardChoice, StoryWizardOutput, StoryWizardAnswer, StoryGenerator } from '@/lib/types';
+import type { ChildProfile, StoryWizardChoice, StoryWizardOutput, StoryWizardAnswer } from '@/lib/types';
+import type { KidsGeneratorView } from '@/lib/kids-generator-presentation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoaderCircle, ArrowLeft, Wand2, Sparkles, BookOpen, MessageCircle, Users, Star } from 'lucide-react';
@@ -105,7 +106,7 @@ function GeneratorCard({
   onClick,
   disabled,
 }: {
-  generator: StoryGenerator;
+  generator: KidsGeneratorView;
   onClick: () => void;
   disabled?: boolean;
 }) {
@@ -123,6 +124,12 @@ function GeneratorCard({
           <GeneratorIcon iconName={generator.styling?.icon} className="h-8 w-8 text-white" />
         </div>
         <div className="flex-1">
+          {generator.recommended && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-xs font-semibold text-amber-800 mb-1">
+              <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+              Recommended for first-timers
+            </span>
+          )}
           <h3 className="text-xl font-bold text-gray-900">{generator.name}</h3>
           <p className="text-gray-600 text-sm mt-1">{generator.description}</p>
         </div>
@@ -138,9 +145,9 @@ export default function KidsCreateStoryPage() {
   const { childId, childProfile, isLocked } = useKidsPWA();
   const { toast } = useToast();
 
-  // Generator selection state - now uses StoryGenerator from the collection
-  const [selectedGenerator, setSelectedGenerator] = useState<StoryGenerator | null>(null);
-  const [generators, setGenerators] = useState<StoryGenerator[]>([]);
+  // Generator selection state - uses the user-safe KidsGeneratorView from /api/kids-generators
+  const [selectedGenerator, setSelectedGenerator] = useState<KidsGeneratorView | null>(null);
+  const [generators, setGenerators] = useState<KidsGeneratorView[]>([]);
   const [generatorsLoading, setGeneratorsLoading] = useState(true);
 
   // Wizard-specific state
@@ -210,7 +217,7 @@ export default function KidsCreateStoryPage() {
   }, [user, childId]);
 
   // Handle generator selection
-  const handleSelectGenerator = useCallback(async (generator: StoryGenerator) => {
+  const handleSelectGenerator = useCallback(async (generator: KidsGeneratorView) => {
     if (!user || !firestore || !childId) return;
 
     setSelectedGenerator(generator);

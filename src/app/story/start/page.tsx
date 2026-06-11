@@ -6,9 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { LoaderCircle, MessageCircle, Wand2, Sparkles, BookOpen, Users, Star } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { useFirestore } from '@/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import type { StoryGenerator } from '@/lib/types';
+import type { KidsGeneratorView } from '@/lib/kids-generator-presentation';
 
 /**
  * Icon mapping from generator styling.icon string to Lucide component.
@@ -42,42 +40,24 @@ function GeneratorIcon({ iconName, className }: { iconName?: string; className?:
 
 export default function StartStoryChoicePage() {
   const { activeChildProfile, activeChildProfileLoading } = useAppContext();
-  const firestore = useFirestore();
 
-  const [generators, setGenerators] = useState<StoryGenerator[]>([]);
+  const [generators, setGenerators] = useState<KidsGeneratorView[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch generators that are live and enabled for kids
+  // Fetch generators from the API (server-first: filtering, sorting and the
+  // user-safe presentation — no model jargon, `recommended` flag — all happen
+  // in /api/kids-generators, shared with the kids PWA and the mobile app).
   useEffect(() => {
     const fetchGenerators = async () => {
-      if (!firestore) {
-        setLoading(false);
-        return;
-      }
-
       try {
-        // Query for live generators that are enabled for kids
-        const generatorsQuery = query(
-          collection(firestore, 'storyGenerators'),
-          where('status', '==', 'live'),
-          where('enabledForKids', '==', true)
-        );
-        const snapshot = await getDocs(generatorsQuery);
-
-        const generatorList: StoryGenerator[] = [];
-        snapshot.forEach((doc) => {
-          generatorList.push({ ...doc.data(), id: doc.id } as StoryGenerator);
-        });
-
-        // Sort by order field (lower first), then alphabetically by name
-        generatorList.sort((a, b) => {
-          const orderA = a.order ?? 0;
-          const orderB = b.order ?? 0;
-          if (orderA !== orderB) return orderA - orderB;
-          return a.name.localeCompare(b.name);
-        });
-
-        setGenerators(generatorList);
+        const response = await fetch('/api/kids-generators');
+        const result = await response.json();
+        if (result.ok && result.generators) {
+          setGenerators(result.generators);
+        } else {
+          console.error('[story/start] API returned error:', result.errorMessage);
+          setGenerators([]);
+        }
       } catch (err) {
         console.error('[story/start] Error fetching generators:', err);
       } finally {
@@ -86,7 +66,7 @@ export default function StartStoryChoicePage() {
     };
 
     fetchGenerators();
-  }, [firestore]);
+  }, []);
 
   if (activeChildProfileLoading || loading) {
     return (
@@ -149,6 +129,12 @@ export default function StartStoryChoicePage() {
                 <div className={`flex h-32 w-32 items-center justify-center rounded-full ${gradient} ${textColorClass}`}>
                   <GeneratorIcon iconName={iconName} className="h-16 w-16" />
                 </div>
+                {generator.recommended && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/30 px-3 py-1 text-xs font-semibold text-primary">
+                    <Star className="h-3 w-3 fill-current" />
+                    Recommended for first-timers
+                  </span>
+                )}
                 <h2 className="text-2xl font-semibold">{generator.name}</h2>
                 <p className="max-w-xs text-muted-foreground">{generator.description}</p>
               </div>
