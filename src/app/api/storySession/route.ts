@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { verifyAuthToken } from '@/lib/auth-utils';
+import { enforcePersonaScope } from '@/lib/persona.server';
 
 /**
  * POST /api/storySession
@@ -32,6 +33,20 @@ export async function POST(request: NextRequest) {
     const childDoc = await firestore.collection('children').doc(childId).get();
     if (!childDoc.exists || childDoc.data()?.ownerParentUid !== authResult.uid) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Persona scope: a valid child-persona cookie must match the child this
+    // session is being created for. No cookie (mobile app) = legacy behaviour
+    // — see src/lib/persona.ts.
+    const personaCheck = await enforcePersonaScope({
+      expectedUid: authResult.uid,
+      effectiveChildId: childId,
+    });
+    if (!personaCheck.ok) {
+      return NextResponse.json(
+        { error: personaCheck.message, code: personaCheck.code },
+        { status: personaCheck.status }
+      );
     }
 
     // Load the generator to get its flowType

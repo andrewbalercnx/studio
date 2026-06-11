@@ -6,6 +6,7 @@ import { AuthError } from '@/lib/auth-error';
 import { storyWizardFlow } from '@/ai/flows/story-wizard-flow';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { resolveEntitiesInText, replacePlaceholdersInText } from '@/lib/resolve-placeholders.server';
+import { enforcePersonaScope } from '@/lib/persona.server';
 import type { StorySession, StoryWizardAnswer, StoryGeneratorResponse, StoryGeneratorResponseOption } from '@/lib/types';
 
 /**
@@ -54,6 +55,20 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { ok: false, errorMessage: 'Unauthorized' } as StoryGeneratorResponse,
         { status: 403 }
+      );
+    }
+
+    // Persona scope: a valid child-persona cookie must match the session's
+    // child. No cookie (mobile app) = legacy behaviour — see src/lib/persona.ts.
+    const personaCheck = await enforcePersonaScope({
+      expectedUid: user.uid,
+      effectiveChildId: session.childId,
+      claims: user.claims,
+    });
+    if (!personaCheck.ok) {
+      return NextResponse.json(
+        { ok: false, errorMessage: personaCheck.message } as StoryGeneratorResponse,
+        { status: personaCheck.status }
       );
     }
 

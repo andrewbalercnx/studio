@@ -1,11 +1,54 @@
 import { NextResponse } from 'next/server';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import type { DocumentReference } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { headers } from 'next/headers';
 import { auth } from 'firebase-admin';
 import { scryptSync, timingSafeEqual } from 'crypto';
+import {
+  LOCKOUT_MS,
+  MAX_FAILED_ATTEMPTS,
+  applyFailedAttempt,
+  lockoutRemainingMs,
+} from '@/lib/pin-lockout';
 
 const KEY_LENGTH = 64;
+
+function lockedResponse(remainingMs: number) {
+  const minutes = Math.max(1, Math.ceil(remainingMs / 60_000));
+  return NextResponse.json(
+    {
+      ok: false,
+      code: 'PIN_LOCKED',
+      message: `Too many incorrect attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+      retryAfterMs: remainingMs,
+    },
+    { status: 429 },
+  );
+}
+
+/**
+ * Atomically record a failed attempt; returns the lock duration when this
+ * failure tripped (or found) a lock, else null. Transactional so concurrent
+ * guesses cannot bypass the counter. Decisions live in src/lib/pin-lockout.ts
+ * (pure, unit-tested); this is just the Firestore plumbing.
+ */
+async function recordFailedAttempt(userRef: DocumentReference): Promise<number | null> {
+  const firestore = getFirestore();
+  return firestore.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    const transition = applyFailedAttempt(snap.data(), Date.now());
+    if (transition.update) {
+      tx.update(userRef, {
+        pinFailedAttempts: transition.update.pinFailedAttempts,
+        ...(transition.update.pinLockedUntilMs !== undefined
+          ? { pinLockedUntil: Timestamp.fromMillis(transition.update.pinLockedUntilMs) }
+          : {}),
+      });
+    }
+    return transition.lockedForMs;
+  });
+}
 
 type UnauthorizedReason =
   | 'MISSING_TOKEN'
@@ -76,7 +119,11 @@ export async function POST(request: Request) {
       body = {};
     }
     const { pin, idToken: bodyToken } = body;
-    if (typeof pin !== 'string' || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+    // dryRun: validation-only introspection path for the regression suite —
+    // reports the lockout configuration and current state WITHOUT comparing a
+    // PIN or recording an attempt (non-destructive by design).
+    const isDryRun = body?.dryRun === true;
+    if (!isDryRun && (typeof pin !== 'string' || pin.length !== 4 || !/^\d{4}$/.test(pin))) {
       return NextResponse.json({ ok: false, code: 'INVALID_PIN_FORMAT', message: 'Invalid PIN format. Must be 4 digits.' }, { status: 400 });
     }
 
@@ -122,6 +169,26 @@ export async function POST(request: Request) {
     }
 
     const userData = userSnap.data() || {};
+
+    if (isDryRun) {
+      const remainingDry = lockoutRemainingMs(userData, Date.now());
+      return NextResponse.json({
+        ok: true,
+        dryRun: true,
+        lockout: { maxAttempts: MAX_FAILED_ATTEMPTS, lockoutMs: LOCKOUT_MS },
+        locked: remainingDry > 0,
+        retryAfterMs: remainingDry > 0 ? remainingDry : undefined,
+        failedAttempts: typeof userData.pinFailedAttempts === 'number' ? userData.pinFailedAttempts : 0,
+      });
+    }
+
+    // Lockout gate BEFORE any comparison: a locked account reveals nothing
+    // about whether the supplied PIN was right.
+    const remainingLockMs = lockoutRemainingMs(userData, Date.now());
+    if (remainingLockMs > 0) {
+      return lockedResponse(remainingLockMs);
+    }
+
     const pinHash: string | undefined = userData.pinHash;
     const pinSalt: string | undefined = userData.pinSalt;
 
@@ -132,13 +199,28 @@ export async function POST(request: Request) {
     const computedHash = derivePinHash(pin, pinSalt);
     const storedHashBuffer = Buffer.from(pinHash, 'hex');
 
-    if (storedHashBuffer.length !== computedHash.length) {
-      return NextResponse.json({ ok: false, code: 'PIN_MISMATCH', message: 'PIN verification failed.' }, { status: 401 });
+    // Length mismatch (corrupt stored hash) and a wrong PIN take the same
+    // failure path: both count toward the lockout and return the same
+    // user-facing code, so neither leaks which case occurred. The comparison
+    // itself is timing-safe (scrypt output is fixed-length; see also
+    // src/lib/internal-secret.ts for the shared-secret variant).
+    const isMatch =
+      storedHashBuffer.length === computedHash.length &&
+      timingSafeEqual(computedHash, storedHashBuffer);
+    if (!isMatch) {
+      const lockedForMs = await recordFailedAttempt(userRef);
+      if (lockedForMs !== null) {
+        return lockedResponse(lockedForMs);
+      }
+      return NextResponse.json({ ok: false, code: 'INCORRECT_PIN', message: 'Incorrect PIN. Please try again.' }, { status: 401 });
     }
 
-    const isMatch = timingSafeEqual(computedHash, storedHashBuffer);
-    if (!isMatch) {
-      return NextResponse.json({ ok: false, code: 'INCORRECT_PIN', message: 'Incorrect PIN. Please try again.' }, { status: 401 });
+    // Success: reset the failure counter / any expired lock marker.
+    if (userData.pinFailedAttempts || userData.pinLockedUntil) {
+      await userRef.update({
+        pinFailedAttempts: 0,
+        pinLockedUntil: FieldValue.delete(),
+      });
     }
 
     return NextResponse.json({ ok: true, message: 'PIN verified.' });

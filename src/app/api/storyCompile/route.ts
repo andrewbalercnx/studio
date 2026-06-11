@@ -8,6 +8,7 @@ import { getServerFirestore } from '@/lib/server-firestore';
 import { FieldValue } from 'firebase-admin/firestore';
 import { checkEntitlement, consumeEntitlement } from '@/lib/entitlements/ledger.server';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
+import { enforcePersonaScope } from '@/lib/persona.server';
 
 // Request timeout for story compile (3 minutes - longer due to complexity)
 const COMPILE_TIMEOUT_MS = 180000;
@@ -41,6 +42,22 @@ export async function POST(request: Request) {
         const sessionData = sessionDoc.exists ? sessionDoc.data() : undefined;
 
         if (sessionDoc.exists) {
+            // Persona scope: if this browser carries a valid child-persona
+            // cookie for the owning family, the session must belong to that
+            // child. Absent/invalid cookie (mobile app, api-client) = legacy
+            // behaviour — see src/lib/persona.ts.
+            const personaCheck = await enforcePersonaScope({
+                expectedUid: sessionData?.parentUid,
+                effectiveChildId: sessionData?.childId,
+            });
+            if (!personaCheck.ok) {
+                logger.warn('Persona scope mismatch', { sessionId });
+                return NextResponse.json(
+                    { ok: false, errorMessage: personaCheck.message, code: personaCheck.code, requestId },
+                    { status: personaCheck.status },
+                );
+            }
+
             const compileInProgress = sessionData?.compileInProgress;
             const compileStartedAt = sessionData?.compileStartedAt;
 

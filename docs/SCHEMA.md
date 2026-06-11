@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-06-11 (W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -28,6 +28,8 @@ User profiles with authentication and role information.
 | `pinHash` | string | No | Hashed parent PIN |
 | `pinSalt` | string | No | Salt for PIN hash |
 | `pinUpdatedAt` | timestamp | No | Last PIN update time |
+| `pinFailedAttempts` | number | No | Consecutive failed PIN verifications (brute-force lockout counter; reset on success and when a lock is set) |
+| `pinLockedUntil` | timestamp | No | PIN verification refused (`429 PIN_LOCKED`) until this time; set for 5 minutes after 5 consecutive failures, removed on the next successful verification |
 | `savedShippingAddress` | PrintOrderAddress | No | Default shipping address |
 | `canShowWizardTargets` | boolean | No | Allow wizard target overlays |
 | `hasCompletedStartupWizard` | boolean | No | True after user has seen default startup wizard |

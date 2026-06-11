@@ -5,6 +5,7 @@ import { createLogger, generateRequestId } from '@/lib/server-logger';
 import { requireAuthenticatedUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
 import { consumeEntitlement } from '@/lib/entitlements/ledger.server';
+import { enforcePersonaScope } from '@/lib/persona.server';
 
 /**
  * POST /api/storybookV2/create
@@ -69,6 +70,21 @@ export async function POST(request: Request) {
     if (storyData?.parentUid !== uid) {
       logger.warn('Ownership verification failed', { storyParentUid: storyData?.parentUid, requestUid: uid });
       return NextResponse.json({ ok: false, errorMessage: 'Unauthorized', requestId }, { status: 403 });
+    }
+
+    // Persona scope: a valid child-persona cookie must match the story's
+    // child. No cookie (mobile app) = legacy behaviour — see src/lib/persona.ts.
+    const personaCheck = await enforcePersonaScope({
+      expectedUid: uid,
+      effectiveChildId: storyData?.childId,
+      claims: user.claims,
+    });
+    if (!personaCheck.ok) {
+      logger.warn('Persona scope mismatch', { storyId, uid });
+      return NextResponse.json(
+        { ok: false, errorMessage: personaCheck.message, code: personaCheck.code, requestId },
+        { status: personaCheck.status },
+      );
     }
 
     // Get the output type to find the print layout

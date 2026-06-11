@@ -55,6 +55,11 @@ const env = {
   // The TEST_MODE AI seam: deterministic fixtures, zero model calls.
   TEST_MODE: '1',
 
+  // Persona cookie signing key (prod uses PERSONA_COOKIE_SECRET or the
+  // Secret Manager INTERNAL_API_SECRET). A fixed value here lets the funnel
+  // exercise the real set-cookie + chokepoint-enforcement path.
+  PERSONA_COOKIE_SECRET: process.env.PERSONA_COOKIE_SECRET || 'e2e-persona-cookie-secret',
+
   // Admin SDK + client SDK emulator targeting (server side).
   FIRESTORE_EMULATOR_HOST: `${EMULATOR_HOST}:${FIRESTORE_PORT}`,
   FIREBASE_AUTH_EMULATOR_HOST: `${EMULATOR_HOST}:${AUTH_PORT}`,

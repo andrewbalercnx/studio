@@ -7,6 +7,7 @@ import { AuthError } from '@/lib/auth-error';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { validatePageEdit, type PageEditRequestBody } from '@/lib/storybook-page-edit';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
+import { enforcePersonaScope } from '@/lib/persona.server';
 
 function respondError(status: number, message: string) {
   return NextResponse.json({ ok: false, errorMessage: message }, { status });
@@ -57,6 +58,17 @@ export async function POST(request: Request) {
     const isPrivileged = user.claims.isAdmin || user.claims.isWriter;
     if (!isPrivileged && storyData.parentUid && storyData.parentUid !== user.uid) {
       return respondError(403, 'You do not own this story.');
+    }
+
+    // Persona scope: a valid child-persona cookie must match the story's
+    // child. No cookie (mobile app) = legacy behaviour — see src/lib/persona.ts.
+    const personaCheck = await enforcePersonaScope({
+      expectedUid: user.uid,
+      effectiveChildId: storyData.childId,
+      claims: user.claims,
+    });
+    if (!personaCheck.ok) {
+      return respondError(personaCheck.status, personaCheck.message);
     }
 
     const storybookRef = storyRef.collection('storybooks').doc(storybookId);

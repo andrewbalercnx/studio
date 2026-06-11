@@ -20,9 +20,23 @@ Use this checklist after making changes to the parent security flow to confirm t
 - Remove the PIN in Firestore → reopening the modal should show the “Parent PIN Required” warning that links to settings.
 - Sign out or switch browser profiles → the modal should appear again because the guard state is reset.
 
+## 3b. Brute-Force Lockout (Sprint W4-A)
+- Enter a wrong PIN **5 times in a row** → the 5th failure returns `429 PIN_LOCKED` and the UI shows “Too many incorrect attempts. Try again in N minute(s).”
+- While locked, **every** attempt (even the correct PIN) returns the same 429 — the server refuses to compare PINs until the lock expires.
+- In Firestore, the user doc shows `pinFailedAttempts` counting up (1–4) and then `pinLockedUntil` (~5 minutes ahead) with the counter reset to 0.
+- After the lock expires you get a fresh window of 5 attempts; a successful verification removes both fields.
+- The kids-PWA setup screen (`/kids/setup` switch-profile and “Return to Parent Mode”) verifies against the same endpoint and shows the same lockout message. There is **no offline fallback PIN** — a network failure shows an error, never accepts a default.
+- Regression coverage: `API_VERIFY_PIN_LOCKOUT` on `/admin/regression` uses the endpoint’s `dryRun` flag (reports the policy without recording attempts — it can never lock the admin out).
+
 ## 4. Auto-Lock
 - After unlocking, wait five minutes (or manually edit `sessionStorage["storypic.parentGuard.lastValidatedAt:<uid>"]` to a timestamp older than five minutes) and confirm the modal reappears automatically.
 - Check that the guard state persists across page refreshes *within* the five-minute window.
+
+## 4b. Reload Grace (Sprint W4-A fix)
+- Unlock any parent page (or sign up, which primes the grace window), then **hard-reload** the page (Cmd-Shift-R / F5).
+- The page content must render WITHOUT the PIN dialog: the guard defers its modal-open decision until the persisted `lastValidatedAt` has hydrated (`isGuardHydrated` in `use-parent-guard`), so an unexpired window survives a full reload.
+- A reload *after* the window has expired must still re-prompt.
+- Automated coverage: `e2e/pin-guard.spec.ts` (blocking) and the W1C-6 adjacent probe in `e2e/probe/w1c-regression.spec.ts` (report-only; the `pin-guard--grace-lost-on-full-reload` finding has been removed from the probe baseline and must not reappear).
 
 ## 5. API Verification
 - `POST /api/parent/set-pin` should reject non-authenticated calls (401) and enforce 4-digit input (400).
