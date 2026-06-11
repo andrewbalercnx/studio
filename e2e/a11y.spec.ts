@@ -9,6 +9,7 @@ import {
   seedReadyStorybook,
 } from './helpers/emulator';
 import {
+  createChildViaParentUI,
   lockKidsModeToChild,
   passParentPinGuard,
   signUpNewParent,
@@ -72,16 +73,21 @@ test.describe('accessibility scans @a11y', () => {
       }
     });
 
+    // Signup no longer seeds a default child (515c81b) — surfaces that need a
+    // child create one through the parent UI first.
+    const A11Y_CHILD = 'Ada Test';
+
     test('who-is-playing page', async ({ page }, testInfo) => {
       account = await signUpNewParent(page, 'a11y-who');
-      await expect(page.getByText('My First Child')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Add your first child' })).toBeVisible();
       await runAxe(page, testInfo, 'who-is-playing');
     });
 
     test('story creation page', async ({ page }, testInfo) => {
       await seedCatalog();
       account = await signUpNewParent(page, 'a11y-create');
-      await lockKidsModeToChild(page, 'My First Child');
+      await createChildViaParentUI(page, account, A11Y_CHILD);
+      await lockKidsModeToChild(page, A11Y_CHILD);
       await page.goto('/kids/create');
       await expect(page.getByText(SEED.generatorName)).toBeVisible({ timeout: 30_000 });
       await runAxe(page, testInfo, 'story-creation');
@@ -90,10 +96,11 @@ test.describe('accessibility scans @a11y', () => {
     test('storybook view page', async ({ page }, testInfo) => {
       await seedCatalog();
       account = await signUpNewParent(page, 'a11y-books');
-      const childId = await findChildId(account.uid, 'My First Child');
+      await createChildViaParentUI(page, account, A11Y_CHILD);
+      const childId = await findChildId(account.uid, A11Y_CHILD);
       const { sessionId } = await seedCompletedStory({ parentUid: account.uid, childId });
       await seedReadyStorybook({ storyId: sessionId });
-      await lockKidsModeToChild(page, 'My First Child');
+      await lockKidsModeToChild(page, A11Y_CHILD);
 
       // Client-side navigation — kids surfaces crash on cold deep-links while
       // auth hydrates (known app issue, see docs/testing/e2e.md).

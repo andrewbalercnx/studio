@@ -1,6 +1,6 @@
 import { test, expect } from 'playwright/test';
 import { cleanupFunnelAccount, seedCatalog } from './helpers/emulator';
-import { lockKidsModeToChild, signUpNewParent, type ParentAccount } from './helpers/flows';
+import { createChildViaParentUI, lockKidsModeToChild, signUpNewParent, type ParentAccount } from './helpers/flows';
 
 /**
  * @visual — screenshot regression of key surfaces.
@@ -42,13 +42,15 @@ test.describe('visual regression @visual', () => {
     test('kids home', async ({ page }) => {
       await seedCatalog();
       account = await signUpNewParent(page, 'visual-kids');
-      await lockKidsModeToChild(page, 'My First Child');
+      // Signup no longer seeds a default child (515c81b) — create one first.
+      await createChildViaParentUI(page, account, 'Vera Test');
+      await lockKidsModeToChild(page, 'Vera Test');
 
       await expect(page.getByText('Create New Story')).toBeVisible();
       await expect(page).toHaveScreenshot('kids-home.png', {
         fullPage: true,
         // Mask the avatar (remote picsum image, varies per child id).
-        mask: [page.locator('img[alt="My First Child"]'), page.locator('span:has(> img)')],
+        mask: [page.locator('img[alt="Vera Test"]'), page.locator('span:has(> img)')],
       });
     });
   });

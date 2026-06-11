@@ -51,9 +51,11 @@ test.describe('parent activation funnel @funnel', () => {
   test('signup → create child → story → storybook generation → book ready', async ({ page }) => {
     test.setTimeout(180_000);
 
-    // ── 1. Signup (creates account + default child + PIN, lands on selector) ──
+    // ── 1. Signup (creates account + PIN, lands on selector) ──
+    // Signup no longer seeds a default child (515c81b): the selector shows the
+    // explicit "Add your first child" empty state instead.
     account = await signUpNewParent(page, 'funnel');
-    await expect(page.getByText('My First Child')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Add your first child' })).toBeVisible();
 
     // ── 2. Parent creates a child (PIN guard + create dialog) ──
     await createChildViaParentUI(page, account, CHILD_NAME);
