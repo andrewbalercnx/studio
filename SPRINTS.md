@@ -1,37 +1,107 @@
-# StoryPic Kids — Execution Roadmap (Worktree-Parallelised)
+# StoryPic Kids — Sprint Roadmap (GTM Program + Execution)
 
-> **Last updated:** 2026-06-11
+> **Last Updated**: 2026-06-11
 >
-> The GTM **program** definition and its authoritative done/outstanding rollup live in
-> [`docs/SPRINTS.md`](docs/SPRINTS.md). This file is the **execution roadmap**: it sequences the
-> outstanding program items plus the non-GTM `devTodos` items into waves of parallel sprints, each
-> running in its own git worktree. Say "Sprint W1-A" (etc.) to begin a sprint. When a sprint
-> completes, update this file, `docs/SPRINTS.md`'s rollup, and mark the cited dev todos completed
-> in the admin UI.
+> **This is the single source of truth** for the GTM sprint program: its rationale, the
+> authoritative done/outstanding rollup, and the worktree-parallelised execution plan.
+> It supersedes the former `docs/SPRINTS.md` (now a pointer stub) and merges the program
+> definition with the execution roadmap. Detailed per-sprint implementation plans live under
+> [`docs/sprints/`](docs/sprints/).
+>
+> Say "Sprint W1-A" (etc.) to begin a sprint. On every change: update the rollup below, the
+> sprint's Status line, and mark the cited dev todos completed in the admin UI
+> (Admin → Development).
 
 ---
 
-## Where things stand (from `docs/SPRINTS.md` rollup, 2026-06-06)
+## Program status (single source of truth — update on every change)
 
-Already **done**: measurement spine (shipped disabled-by-default behind the compliance gate);
-payment-agnostic product catalog + `/admin/products`; entitlement ledger + transaction-wrapped
-enforcement (story + storybook) + summary UI; the 3 high-severity probe fixes (End Tour, Play-as,
-Switch child); user-safe error mapping across all interactive generation routes; Playwright
-scaffold + TEST_MODE seam + report-only CI e2e job; secret rotation (old keys dead).
+> The authoritative done/outstanding rollup so it survives context resets. As of **2026-06-11**.
 
-**Owner-gated** (not scheduled below until unblocked):
-- **Stripe take-money** — deferred by owner. Unblocks: subscriptions (Monetisation II), gifting
-  redemption, `print_credit` enforcement, full ledger hardening.
-- **Compliance gate** to flip analytics ON (PostHog retention, sub-processor list, consent
-  sign-off) — owner/legal. Until flipped, sprint exit criteria that read "measurable lift" are
-  judged from session-events/logs instead.
-- **Catalog rules deploy**: `firebase deploy --only firestore:rules`.
+### Done
+- **Sprint 1 — Measurement spine** (`[GTM 1/8]`): engineering complete, **shipped disabled-by-default**.
+  PostHog (EU) analytics + RUM + Error Tracking; vendor-agnostic core with no-PII guard, kill-switch,
+  consent gating, pre-init buffer; funnel events; admin toggle. *Not yet live* — see compliance gate.
+- **Commercial catalog** (Monetisation I-b, payment-agnostic): `products`/`prices` model + entitlement
+  components + admin `/admin/products` + APIs.
+- **3 high-severity usability fixes** (probe findings): End-Tour→home, "Play as child" button, "Switch
+  child" nav. *Merged; needs a manual/probe smoke post-deploy (owed by Sprint W1-C).*
+- **Sprint 3A foundation (partial)**: emulator-aware Firebase config (env-gated, default unchanged) +
+  Playwright scaffold + one smoke spec + report-only CI `e2e` job + `TEST_MODE` AI seam (deterministic
+  fixtures, default off). *Remaining: the actual funnel E2E specs + a11y/Lighthouse/visual → Sprint W1-B.*
+- **Generation reliability (slice)**: retry+jitter util, error classifier, circuit-breaker scaffold,
+  raw→user-safe error mapping. **No raw error reaches a child/parent**: the `storybookV2/*` routes
+  plus every interactive generation route (`tts`, `storyWizard`, `storyFriends`, `storyArc`,
+  `storyEnding`, `storyBeat`, `gemini3`, `gemini4`, `warmupReply`, `storyCompile`) now map catch-block
+  messages through `toUserSafeMessage` (raw stays in logs). *Remaining → Sprint W1-A.*
+- **Entitlement ledger model**: `entitlementLedgers` collection + grant/check/consume (scope-resolved)
+  + server reader + free-tier + rules + tests.
+- **Entitlement enforcement (story + storybook)**: transaction-wrapped `consumeEntitlement` +
+  read-only `checkEntitlement` server helpers. `story_allowance` is enforced at the shared
+  **completion chokepoint** `POST /api/storyCompile` (covers kids + all parent flows): pre-flight
+  `402` block at the limit, plus **consume-on-completion** (idempotent via `storyAllowanceConsumed`,
+  so abandoned creates never charge). `kids/create` also calls the non-consuming
+  `POST /api/entitlements/check` at start for an early friendly block. `storybook_allowance` gated
+  inside `POST /api/storybookV2/create`. Free-tier seeded on first use. *Remaining: `print_credit`
+  at print time — deliberately deferred until purchase grants exist → Sprint WG-2.*
+
+### Outstanding (mapped to execution sprints below)
+| # | Item | Sprint |
+|---|------|--------|
+| 1 | Sprint 3A E2E specs: deterministic funnel specs on emulator + `TEST_MODE`; a11y/Lighthouse/visual; promote happy-path to blocking | **W1-B** |
+| 2 | Generation reliability — finish: flow-result error mapping, graceful degradation, kid-safe states, `withRetry` adoption, systemConfig breaker | **W1-A** |
+| 3 | Remaining medium/low probe findings (placeholder child, model jargon, PIN re-entry) | **W1-C** |
+| 4 | Naive-agent probe, productionised (`[GTM 3/8]` second half; POC validated) | **W2-A** |
+| 5 | First-run usability (`[GTM 4/8]`): onboarding checklist + tips + time-to-first-book | **W2-B** |
+| 6 | Parent storybook view & ordering flow: simplified view + per-page edit/regenerate; print-flow split; save address; incremental loading | **W2-C** |
+| 7 | Admin UX-monitoring dashboard (`[GTM 7/8]`) + Mixam webhook automation | **W3-A** |
+| 8 | Deployment strategy: canary, flags, rollback | **W3-B** |
+| 9 | Feedback & conversion polish (`[GTM 8/8]`) | **W3-C** |
+| 10 | Monetisation I — payments/Stripe (`[GTM 2/8]`): **deferred by owner** | **WG-1** |
+| 11 | Monetisation II (`[GTM 6/8]`): subscriptions + gifting + `print_credit` + ledger hardening | **WG-2** |
+
+### Open non-sprint gates / follow-ups
+- **Sprint 1 compliance gate (to flip analytics ON)**: set PostHog retention; add EU sub-processor list
+  to privacy policy; consent-basis sign-off. *(Owner/legal.)* Until flipped, "measurable lift" exit
+  criteria are judged from session-events/logs instead.
+- **Catalog rules deploy**: `firebase deploy --only firestore:rules` (products/prices rules not yet deployed).
+- **Secret remediation tail** (non-blocking, secrets already dead): optional git-history scrub;
+  `crypto.timingSafeEqual`; ADC/workload-identity migration. See `docs/SECURITY_REMEDIATION.md`.
+  *(timingSafeEqual + scrub scheduled in W1-B.)*
+- **Firestore TTL on `events`**: ✅ enabled (2026-06-05).
+
+---
+
+## Why this program exists
+
+`docs/SALES_MARKETING.md` is the demand plan (ads, influencers, PR). It assumes the product can
+(a) measure a funnel, (b) take payment, and (c) reliably convert a stranger into a finished book.
+As assessed at program start (2026-06-05) it could do none of these robustly: no product analytics,
+a stub `pay` route, greenfield subscriptions, raw generation failures, buried onboarding, ~5 unit
+tests with no E2E, and no production error tracking. The rollup above tracks how far that has moved.
+
+**Decisions locked:** analytics/RUM/errors = **PostHog** (EU region, one vendor/DPA — not Sentry,
+which has no usable free tier; GlitchTip is the fallback); payments = **Stripe** (hosted Checkout,
+SAQ-A); browser tests = **Playwright**.
+
+**Cross-cutting rules from the five-lens review (apply to every sprint):**
+- **No Firestore dual-write of analytics** — PostHog is the system of record; `session-events`
+  stays only as a narrow operational debug trail.
+- **Test per sprint, not just in the testing sprint** — every sprint ships its own Tests/DoD;
+  extend the existing CI rather than re-create it.
+- **Compliance scaffolding (kids product)** — signed DPA, EU/UK residency, consent banner + lawful
+  basis, retention limits, **content-based** (not just route-based) replay masking.
+- **Stripe webhook must not inherit the Mixam bypass pattern** — hard-fail on bad signature,
+  idempotent dedupe on `event.id`, reconciliation job; server-authoritative pricing.
+- **Bound new data** — Firestore TTL on event-like collections; composite index definitions ship
+  with every new collection.
+- **Dashboards read from PostHog** (query API, cached), not Firestore collection-group scans.
 
 ---
 
 ## Parallelisation Model — Worktrees
 
-Three tracks, each in its own worktree, chosen so their primary file territory is disjoint:
+Three tracks, each in its own git worktree, chosen so their primary file territory is disjoint:
 
 | Track | Worktree | Branch | Owns (primary file territory) |
 |-------|----------|--------|-------------------------------|
@@ -53,15 +123,15 @@ git worktree add ../studio-ux          -b track/ux
 2. **Shared-file ownership.** `src/lib/types.ts`, `firestore.rules`: Track A has write priority;
    B/C append-only and rebase. Global providers/`layout.tsx` are already settled — tracks should
    rarely touch them.
-3. **Docs merge last.** `docs/CHANGES.md`, `docs/SCHEMA.md`, `docs/API.md`, `docs/SPRINTS.md` are
+3. **Docs merge last.** `docs/CHANGES.md`, `docs/SCHEMA.md`, `docs/API.md`, and this file are
    append-conflict magnets — keep doc edits in a final commit per track and resolve at the wave
    merge, per the CLAUDE.md single-push workflow.
 4. **Cross-track contracts.** Where one track consumes another's output mid-wave (e.g. UX renders
    Reliability's degraded-book states), the producing track merges a types/interface stub to
    `main` early and both sides build against it.
-5. **Cloud agents count as a track.** Work is also landing via web-agent PRs (e.g.
-   `claude/...` branches). Before starting any sprint, `git fetch` and re-read
-   `docs/SPRINTS.md`'s rollup — do not assume this file's status column is current.
+5. **Cloud agents count as a track.** Work also lands via web-agent PRs (`claude/...` branches).
+   Before starting any sprint, `git fetch` and re-read the rollup above — do not assume the
+   status column is current.
 
 ---
 
@@ -90,28 +160,47 @@ git worktree add ../studio-ux          -b track/ux
 **Track:** A — Reliability
 **Dev todos:** `TFBfyjJFshsZOWndUi4W` [GTM 5/8], `yYCCsnDkZZZbmBfzcQrN` [circuit breaker +
 withRetry], `wWoz8bF8U5Bx1F7trt5Q` [wizard wait progress — perceived latency]
-**Program ref:** docs/SPRINTS.md Sprint 5; rollup "Generation reliability — finish"
 
 **Goal:** The magic moment survives transient failure end-to-end — the route-level user-safe
-error slice is done; finish the flow, UI, and infrastructure layers.
+error slice is done; finish the flow, UI, and infrastructure layers. Generation failure is fatal
+for word-of-mouth and paid traffic.
 
 ### Deliverables
 - Map **flow-result** error messages through `toUserSafeMessage` (routes are done; flow results
   still leak).
 - Migrate remaining bespoke retry loops in `src/ai/flows/*` onto the shared `withRetry` util
-  (only `story-image-flow` consolidated so far); low cap (2–3), transient-only.
+  (only `story-image-flow` consolidated so far). Exponential backoff + jitter, **low cap (2–3)**,
+  only for *classified transient* errors (5xx/timeout), never 4xx/quota.
 - Make the circuit breaker systemConfig-backed (or per-provider Firestore counter) so it trips
-  consistently across serverless instances; fast-fail to degradation, no retry storms.
+  consistently across serverless instances; on sustained error rate it fast-fails to graceful
+  degradation instead of retrying — a provider outage must not become a self-inflicted retry
+  storm that burns AI tokens.
 - Graceful degradation: a text + partial-art book is viewable/orderable instead of a dead Error
-  badge; notify the user when a failed generation later recovers.
-- Kid-safe, age-appropriate (possibly non-textual) error/empty/loading states on `/kids/*`.
-- Perceived latency: "Question N of 4" wizard progress + reassurance copy during slow generation.
-- Tests: backoff schedule, transient-retried/permanent-not, breaker trip/reset (per-sprint DoD).
+  badge; notify the user when a previously failed generation recovers.
+- Kid-safe, age-appropriate (possibly non-textual) error/empty/loading states on `/kids/*`
+  (mascot/icon/audio).
+- Perceived latency: "Question N of 4" wizard progress + reassurance copy during slow generation
+  (uses the `generation.duration` instrumentation from Sprint 1).
 - Merge the degraded-book status contract to `main` early for W2-C's parent view.
 
+### Technical approach
+Consolidate the retry/backoff logic already scattered across the flows (don't build a parallel
+mechanism); reuse the existing `ai-flow-logger` seam (it already captures `failureReason` and
+calls `notifyMaintenanceError`). Map raw errors via the exhaustive, unit-tested table in
+`ai-error-map`. For long generations, note a durable queue (Cloud Tasks) as the at-scale
+follow-up.
+
+### Tests / DoD
+Backoff-schedule test; transient-retried / permanent-not-retried test; circuit-breaker trip/reset
+test; error-mapping table stays exhaustive.
+
+### Files
+Changed: AI flows, `src/app/storybook/[bookId]/page.tsx`, status components,
+`src/lib/ai-flow-logger.ts`, `src/lib/ai-retry.ts`. Docs: SYSTEM_DESIGN (error handling).
+
 ### Exit criteria
-- No raw API strings from flows or routes; transient failures self-heal; a partial-art book can
-  be viewed and ordered; breaker trips consistently across instances.
+No raw API strings from flows or routes; transient failures self-heal; a partial-art book can be
+viewed and ordered; breaker trips consistently across instances.
 
 **Status:** PENDING
 
@@ -121,24 +210,36 @@ error slice is done; finish the flow, UI, and infrastructure layers.
 
 **Track:** B — Ops/Testing
 **Dev todos:** `LwQBiYIctkd7CJe1Svnl` [GTM 3/8], tail of `wkcM2eWHI6wm4aiLtXfp` [security]
-**Program ref:** rollup item 2 "Sprint 3A E2E specs"; `docs/SECURITY_REMEDIATION.md`
+**See also:** `docs/sprints/SPRINT-03-UX-TESTING.md`, `docs/SECURITY_REMEDIATION.md`
 
-**Goal:** Turn the existing Playwright scaffold + TEST_MODE seam into a real CI safety net, and
-close the non-blocking security tail.
+**Goal:** Turn the existing Playwright scaffold + TEST_MODE seam into a real CI safety net —
+an automated gate that exercises real UX, not just units — and close the non-blocking security
+tail.
 
 ### Deliverables
 - Deterministic funnel E2E specs on emulator + TEST_MODE: signup → child → story → storybook
-  generation (checkout spec lands with WG-1 when Stripe is unblocked).
-- axe-core assertions on key pages; Lighthouse CI with Core Web Vitals budgets; visual regression
-  snapshots (all report-only first).
-- Promote the happy-path spec from report-only to a blocking merge gate once green.
+  generation. (The checkout/pay spec lands with WG-1 when Stripe is unblocked.)
+- axe-core accessibility assertions on key pages; Lighthouse CI with Core Web Vitals budgets;
+  visual regression snapshots for key surfaces (all report-only first).
+- Promote the happy-path spec from report-only to a blocking merge gate once green; add a
+  `test:e2e` script.
 - Security tail: `crypto.timingSafeEqual` on internal-secret comparisons
   (`src/app/api/internal/*`); optional git-history scrub (old secrets already rotated/dead);
   note ADC/workload-identity migration as follow-up.
 
+### Technical approach
+Playwright projects for desktop + mobile viewports; seed a disposable test account; reuse the
+cleanup pattern from `scripts/cleanup-regression-data.mjs`. Keep flaky AI-generation steps behind
+the TEST_MODE deterministic fixtures. Pair with the real-user half: PostHog session replay
+(Sprint 1) once the compliance gate flips.
+
+### Files
+New: `e2e/` specs, Lighthouse config. Changed: `playwright.config.ts`, `package.json`,
+`.github/` workflow, `src/app/api/internal/*`. Docs: `docs/testing/`.
+
 ### Exit criteria
-- CI fails on a broken funnel; a11y/perf/visual reports produced on every PR; internal routes use
-  constant-time comparison.
+CI fails on a broken funnel; a11y/perf/visual reports produced on every PR; internal routes use
+constant-time comparison.
 
 **Status:** PENDING
 
@@ -149,8 +250,8 @@ close the non-blocking security tail.
 **Track:** C — UX
 **Dev todos:** `bjnUyxz7wbOxZqkhXet9` [placeholder child], `MnAEg1usKm7vmsuM5WrW` [story-method
 jargon], `9wuCAy5kThfyNRXLVvaM` [PIN re-entry]
-**Program ref:** probe findings `docs/usability/UX-PROBE-FINDINGS-2026-06-05.md` (3 of 7 already
-fixed in `0efa328`)
+**See also:** `docs/usability/UX-PROBE-FINDINGS-2026-06-05.md` (3 of 7 findings already fixed
+in `0efa328`)
 
 **Goal:** Clear the remaining medium/low activation friction from the naive-agent probe.
 
@@ -160,10 +261,10 @@ fixed in `0efa328`)
 - Story-method chooser: hide model names from end users; "Recommended for first-timers" badge.
 - Skip/confirm the redundant PIN prompt immediately after signup.
 - Manual/probe smoke of the three already-merged high-severity fixes (End Tour, Play-as, Switch
-  child) — the rollup notes this is still owed.
+  child) — owed per the rollup.
 
 ### Exit criteria
-- A probe re-run hits none of the seven findings; no placeholder children appear in any story cast.
+A probe re-run hits none of the seven findings; no placeholder children appear in any story cast.
 
 **Status:** PENDING
 
@@ -174,9 +275,8 @@ fixed in `0efa328`)
 ## Sprint W2-A: Naive-Agent Probe, Productionised
 
 **Track:** A capacity moves here post-W1; runs in the ops worktree
-**Dev todos:** — (program item; consider filing one when started)
-**Program ref:** rollup item 3 "Sprint 3B — Naive-agent probe (productionised)" (POC validated)
-**Depends on:** W1-B (E2E infra), W1-C (so the probe measures a clean baseline)
+**Dev todos:** — (program item; file one when started)
+**Depends on:** W1-B (E2E infra), W1-C (so the probe measures a clean baseline). POC validated.
 
 **Goal:** A repeatable, mechanical UX probe that finds regressions before users do.
 
@@ -186,8 +286,8 @@ fixed in `0efa328`)
 - PM-readable report artifact per run; runnable on demand and on a schedule.
 
 ### Exit criteria
-- One command produces a persona-run report; findings file as codable records; a deliberately
-  reintroduced W1-C bug is caught.
+One command produces a persona-run report; findings file as codable records; a deliberately
+reintroduced W1-C bug is caught.
 
 **Status:** PENDING
 
@@ -197,20 +297,30 @@ fixed in `0efa328`)
 
 **Track:** C — UX
 **Dev todos:** `qP9EhmT6Y8PwwpYyl7k0` [GTM 4/8]
-**Program ref:** docs/SPRINTS.md Sprint 4
 
-**Goal:** A new family reaches a finished book unaided.
+**Goal:** A new family reaches a finished book unaided — the biggest Phase-1 risk is
+friends-and-family users stalling before the "wow".
 
 ### Deliverables
 - First-run detection + guided "create your first book" checklist (upload photo → create child →
-  start story → generate art → preview); `onboardingState` per user.
-- Auto-triggered in-context tips on first story creation and art generation (reuse help-wizard
-  infra).
-- Deepen empty states where the checklist reveals gaps; instrument time-to-first-book.
+  start story → generate art → preview).
+- Strong empty states on child/character/storybook lists pointing to the next action (deepen the
+  thin slice already shipped where the checklist reveals gaps).
+- Auto-triggered in-context tips on first use of story creation and art generation.
+- Instrument time-to-first-book.
+
+### Technical approach
+Reuse `src/components/help-wizard.tsx`, `startup-wizard-trigger.tsx`, and
+`wizard-target-overlay.tsx` rather than building anew; add an `onboardingState` per user (steps
+completed) in Firestore.
+
+### Files
+Changed: provider/wizard components, parent/kids list pages, `src/app/signup/page.tsx`.
+New: onboarding checklist component + `onboardingState` field. Docs: SCHEMA, SYSTEM_DESIGN.
 
 ### Exit criteria
-- Measurable lift in signup → story-completed vs baseline (PostHog once live; session-events
-  otherwise); a fresh account reaches a finished book unaided.
+Measurable lift in signup → story-completed vs baseline (PostHog once live; session-events
+otherwise); a fresh account reaches a finished book unaided.
 
 **Status:** PENDING
 
@@ -242,9 +352,9 @@ power where it belongs, and the path to a printed book stops being overcomplex.
   fill images afterwards — filtering/sorting server-side per the server-first principle.
 
 ### Exit criteria
-- Parent and child book views share components; a parent can edit prompt/text and regenerate a
-  single page without leaving the book; clean-up and ordering are distinct steps; a second order
-  reuses a saved address; `/parent/storybooks` renders its list without waiting on images.
+Parent and child book views share components; a parent can edit prompt/text and regenerate a
+single page without leaving the book; clean-up and ordering are distinct steps; a second order
+reuses a saved address; `/parent/storybooks` renders its list without waiting on images.
 
 **Status:** PENDING
 
@@ -256,23 +366,29 @@ power where it belongs, and the path to a printed book stops being overcomplex.
 
 **Track:** B — Ops
 **Dev todos:** `N0Bx3q1bFTXiw17og6hz` [GTM 7/8], `EzfeQDmgA3upALePJMFy` [Mixam webhooks]
-**Program ref:** docs/SPRINTS.md Sprint 7
 
-**Goal:** One page answers "where are users dropping off and what's broken now?", and Mixam
-order progression drives admin state automatically.
+**Goal:** One page answers "where are users dropping off and what's broken now?" — 44 admin
+config pages exist but none show user health — and Mixam order progression drives admin state
+automatically.
 
 ### Deliverables
-- Ops/KPI dashboard (`src/app/admin/ops/page.tsx`): DAU/MAU, funnel, print-order conversion,
-  generation error rate — reading from PostHog's query API (cached), not collection-group scans.
-- Health checks + alerts (art pending > N hours, orders un-reviewed > 24h, error-rate spikes) via
-  `notifyMaintenanceError`.
-- Failure reasons at a glance in print-order and sessions admin views.
+- Ops/KPI dashboard: DAU/MAU, the Sprint-1 funnel, print-order conversion, generation error rate
+  — reading from PostHog's query API (cached), not Firestore collection-group scans.
+- Health checks + alerts: art pending > N hours, orders un-reviewed > 24h, error-rate spikes →
+  notify maintenance (reuse `notifyMaintenanceError`).
+- Surface failure reasons at a glance in print-order and sessions admin views (currently must
+  open each record).
 - Mixam webhook automation: each webhook advances the admin order state / queues the next admin
   action — toward driving the full Mixam interaction from the StoryPic console.
 
+### Files
+New: `src/app/admin/ops/page.tsx`, health-check job(s). Changed:
+`src/app/admin/sessions/page.tsx`, `src/app/admin/print-orders/page.tsx`,
+`src/app/admin/page.tsx`, `src/app/api/webhooks/mixam/route.ts`. Docs: SYSTEM_DESIGN, API.
+
 ### Exit criteria
-- The drop-off/broken-now question is answerable from one page; alerts fire on synthetic stuck-job
-  conditions; a Mixam status webhook visibly advances the order in admin without manual refresh.
+The drop-off/broken-now question is answerable from one page; alerts fire on synthetic stuck-job
+conditions; a Mixam status webhook visibly advances the order in admin without manual refresh.
 
 **Status:** PENDING
 
@@ -292,10 +408,11 @@ order progression drives admin state automatically.
   rollback to a known-good revision.
 - Feature flags via Firebase Remote Config (UID / email-domain / percentage conditions);
   app-level health endpoint.
+- Optional: Firebase Hosting preview channels for feature-branch QA.
 
 ### Exit criteria
-- A release ships to a canary %, promotes, and rolls back — each without a rebuild; a flag
-  disables a feature in production without a deploy.
+A release ships to a canary %, promotes, and rolls back — each without a rebuild; a flag disables
+a feature in production without a deploy.
 
 **Status:** PENDING
 
@@ -305,21 +422,26 @@ order progression drives admin state automatically.
 
 **Track:** C — UX
 **Dev todos:** `bRfMxYLwnsTCExVYpcDA` [GTM 8/8]
-**Program ref:** docs/SPRINTS.md Sprint 8
 
-**Goal:** Satisfaction becomes a tracked metric and the marketing flywheel gets fed (Phase 1:
-10+ testimonials, 4.5★).
+**Goal:** Close the loop — satisfaction becomes a tracked metric and testimonials are captured
+(Phase 1 targets: 10+ testimonials, 4.5★). Today there is only an email-only, untracked
+issue-report button.
 
 ### Deliverables
-- Post-book / post-order rating + NPS prompt piped to analytics; `feedback` collection.
-- Lightweight testimonial capture (consent + quote/photo).
+- Post-book / post-order rating + NPS prompt piped to analytics; new `feedback` collection.
+- Lightweight testimonial capture (consent + quote/photo) feeding the marketing flywheel.
 - Order pipeline transparency: estimated turnaround/delivery, progress indicator, confirmation
   (builds on W2-C's simplified ordering flow).
-- Issue-reports become tracked tickets with status visible to the user.
+- Turn issue-reports into tracked tickets with status back to the user.
+
+### Files
+Changed: `src/components/report-issue-button.tsx`, `src/app/api/report-issue/route.ts`,
+`src/app/parent/orders/page.tsx`, order pages. New: NPS/rating component + `feedback`
+collection, testimonial capture. Docs: SCHEMA, API, SYSTEM_DESIGN.
 
 ### Exit criteria
-- NPS/satisfaction live on the W3-A dashboard; testimonials captured in-product; order status
-  transparent to parents.
+NPS/satisfaction live on the W3-A dashboard; testimonials captured in-product; order status
+transparent to parents.
 
 **Status:** PENDING
 
@@ -331,15 +453,35 @@ order progression drives admin state automatically.
 
 **Dev todos:** `uRwu8VlWyyhqPgh51N7G` [GTM 2/8 — critical-path half], `0RewpFrqxoJtYnQLGw2f`
 (umbrella: one-time purchases)
-**Blocked by:** owner decision (Stripe deferred — docs/SPRINTS.md rollup item 9)
+**Blocked by:** owner decision (Stripe deferred)
 
-Stripe hosted Checkout + customer creation; webhook as source of truth (hard-fail on bad
-signature, dedupe on `event.id`, reconciliation job — do **not** copy the Mixam bypass pattern);
-replace the stub `pay` route; server-authoritative pricing; Stripe Tax/refunds/receipts;
-rate-limiting; Playwright checkout smoke in test mode (extends W1-B's specs). Catalog and
-admin products UI already exist.
+**Goal:** Take real card payment for a printed book. Phase 1's "50–100 paying customers /
+£2–5K revenue" is impossible while `pay` is a stub. The catalog half (Monetisation I-b) is
+already done.
+
+### Deliverables
+- Stripe hosted Checkout + customer creation; **webhooks as the source of truth** for
+  `paymentStatus`.
+- New `src/app/api/webhooks/stripe/route.ts` — hard-fail on bad/missing signature, idempotent
+  dedupe on Stripe `event.id`, reconciliation job (do **not** copy the Mixam handler's
+  signature-bypass). Pricing is server-authoritative (client never sends amount).
+- Replace the stub `src/app/api/printOrders/[orderId]/pay/route.ts` → real payment → existing
+  `printOrders` fulfilment flow; keep `productSnapshot` on the order for an immutable record.
+- Stripe Tax/VAT, refunds, receipts; rate-limiting on checkout/pay; minimum post-payment
+  transparency (confirmation + turnaround/status).
+
+### Tests / DoD
+Webhook signature (valid passes / tampered 400s); idempotency (duplicate event → one update);
+atomic order/payment write; Playwright happy-path checkout smoke in Stripe test mode (extends
+W1-B's specs).
+
+### Exit criteria
+A parent pays by card; webhook confirms; order proceeds to admin/Mixam fulfilment; conversion
+event fires.
 
 **Status:** BLOCKED (owner)
+
+---
 
 ## Sprint WG-2: Monetisation II — Subscriptions, Gifting, print_credit, Ledger Hardening
 
@@ -347,12 +489,37 @@ admin products UI already exist.
 remainder of `0RewpFrqxoJtYnQLGw2f` (free-tier boundary, token gifts)
 **Blocked by:** WG-1
 
-Recurring prices on the existing catalog; Stripe subscriptions + billing portal; lifecycle
-webhooks + dunning; `print_credit` enforcement at print time (deferred until purchase grants
-exist); ledger hardening — per_period rollover wired to renewal events, gift redemption resolving
-the real target ledger, child-deletion cleanup hook; define the free-tier boundary.
+**Goal:** Recurring revenue ("Story of the Month", Phase 3 target ~£60K/yr) with self-serve
+billing, reusing the existing catalog and ledger.
+
+### Deliverables
+- Recurring prices in the catalog + subscription plan management in the admin pricing UI.
+- Stripe subscriptions + customer billing portal (self-serve upgrade/cancel); lifecycle webhooks
+  (created/updated/cancelled/past_due) + dunning.
+- Entitlements: a subscription grants N books/month or unlocks premium features; enforced in
+  Firestore rules + API (the ledger and enforcement chokepoints already exist).
+- `print_credit` enforcement at print time (deferred until these purchase grants exist).
+- Ledger hardening: per_period rollover wired to renewal events (grant-triggered today, needs
+  the renewal webhook or a sweep); gift redemption resolving the real target ledger (not the
+  family pool); child-deletion cleanup hook pruning `children[childId]`.
+- Define the free-tier boundary: what a non-paying family can do; chargeable vs non-chargeable
+  items; one-time token purchases + gift/donation payment links.
+
+### Exit criteria
+A parent subscribes, receives entitlements, and manages billing via the portal; lifecycle events
+update Firestore via webhook; free-tier limits enforced; the three ledger gaps have regression
+tests.
 
 **Status:** BLOCKED (WG-1)
+
+---
+
+## Completed sprint record
+
+Engineering detail for completed work lives in `docs/CHANGES.md`; the rollup at the top is the
+status summary. Detailed plans for completed sprints:
+- **Sprint 1 — Measurement spine**: [`docs/sprints/SPRINT-01-MEASUREMENT-SPINE.md`](docs/sprints/SPRINT-01-MEASUREMENT-SPINE.md)
+- **UX testing framework (foundation)**: [`docs/sprints/SPRINT-03-UX-TESTING.md`](docs/sprints/SPRINT-03-UX-TESTING.md)
 
 ---
 
@@ -360,7 +527,7 @@ the real target ledger, child-deletion cleanup hook; define the free-tier bounda
 
 | Dev todo | Disposition |
 |----------|-------------|
-| `q0wKiqL6Ur7o213Zeq0E` [GTM Plan v2] | **Resolved** — revisions already reconciled into `docs/SPRINTS.md`; this roadmap sequences them |
+| `q0wKiqL6Ur7o213Zeq0E` [GTM Plan v2] | **Resolved** — five-lens revisions reconciled into this roadmap |
 | `nK75xl1II15x5a0wUV21` [Mixam confirm investigation] | **Done** — commit `53fd827` implemented confirmation via the Public API |
 | `hxEIiRQz14NwGZI0IAX5` [transaction-wrapped consume] | **Done** — `consumeEntitlement` is transaction-wrapped (verify, then close) |
 | `jPNbZXSrOxnIpYVnZQSU` / `ljTPITfNev96EtxNNvZm` / `qlEJklsBbK2LaQHttESN` [3 high-sev UX] | **Merged** (`0efa328`) — close after the W1-C probe smoke |
@@ -375,13 +542,12 @@ the real target ledger, child-deletion cleanup hook; define the free-tier bounda
 
 ---
 
-## Cross-Sprint Concerns
+## Cross-Sprint Concerns (per `CLAUDE.md`)
 
-- **Docs discipline:** every sprint updates `docs/SCHEMA.md` / `docs/API.md` /
-  `docs/SYSTEM_DESIGN.md` / `docs/CHANGES.md` and the `docs/SPRINTS.md` rollup before its wave
-  merge.
+- **Docs discipline:** every sprint that touches schema/API/architecture updates
+  `docs/SCHEMA.md` / `docs/API.md` / `docs/SYSTEM_DESIGN.md`, appends to `docs/CHANGES.md` on
+  push, and updates the rollup at the top of this file before its wave merge.
 - **Regression page:** API-touching sprints add cases to `src/app/admin/regression/page.tsx`.
-- **Tests per sprint** (5-lens review): each sprint ships its own tests; W1-B's gate is not a
-  substitute.
+- **Playwright coverage:** from W1-B onward, new flows should ship Playwright coverage.
 - **Server-first principle** throughout: filtering/sorting/computed fields in API routes, not
   clients (especially W2-C).

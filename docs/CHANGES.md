@@ -18,6 +18,18 @@
 
 ### 2026-06-11
 
+#### `54b4d90` - Reconcile the two SPRINTS.md files into one source of truth
+
+**Type**: Documentation / Planning
+
+**Summary**: Merged the GTM program definition (`docs/SPRINTS.md`) and the worktree execution roadmap (root `SPRINTS.md`) into a single root `SPRINTS.md`: the authoritative done/outstanding status rollup, program rationale, locked decisions, cross-cutting review rules, and per-sprint technical detail (approach, files, Tests/DoD from the program write-ups) now sit alongside the wave/worktree execution plan. The outstanding list is mapped item-by-item to execution sprints (W1-A … W3-C, WG-1/WG-2). `docs/SPRINTS.md` is now a pointer stub directing all status updates to the root file, preserving links to the detailed plans under `docs/sprints/`.
+
+**Modified files**:
+- `SPRINTS.md` — consolidated program + execution roadmap
+- `docs/SPRINTS.md` — reduced to pointer stub
+
+---
+
 #### `c252803` - SPRINTS.md: cite devTodo ID for parent storybook view sprint
 
 **Type**: Documentation
