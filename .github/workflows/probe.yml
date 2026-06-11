@@ -1,0 +1,111 @@
+name: UX Probe (nightly)
+
+# The mechanical UX probe (Sprint W2-A): report-only, deliberately OUT of the
+# blocking PR path. It runs the persona goals + W1-C regression checks against
+# the emulator + TEST_MODE stack and uploads probe-results/ (findings.json +
+# report.md) as an artifact for triage. A FAIL verdict or new finding never
+# fails the job — `npm run probe` exits non-zero only on harness errors.
+#
+# See docs/testing/probe.md.
+
+on:
+  schedule:
+    # Nightly at 03:17 UTC (off the :00 spike).
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+env:
+  FIREBASE_TOOLS_VERSION: 15.20.0
+  E2E_BASE_URL: http://127.0.0.1:9002
+
+jobs:
+  probe:
+    name: UX probe (emulator + TEST_MODE)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # firebase-tools 15 requires Java 21 for the emulators.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      - name: Install Playwright browser (chromium)
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Cache Firebase emulator binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ env.FIREBASE_TOOLS_VERSION }}
+
+      - name: Build app (E2E config — emulator client flags baked in)
+        run: npm run build:e2e
+
+      - name: Start Firebase emulators
+        run: |
+          npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} emulators:start \
+            --only auth,firestore,storage --project demo-storypic-e2e &
+          npx --yes wait-on tcp:127.0.0.1:9099 tcp:127.0.0.1:8080 tcp:127.0.0.1:9199 --timeout 120000
+
+      - name: Start app (standalone build, TEST_MODE)
+        run: |
+          node scripts/start-e2e-server.mjs &
+          npx --yes wait-on ${{ env.E2E_BASE_URL }}/login --timeout 120000
+
+      - name: Run UX probe (report-only)
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ env.E2E_BASE_URL }}
+        run: npm run probe
+
+      - name: Surface the report in the job summary
+        if: always()
+        run: |
+          if [ -f probe-results/report.md ]; then
+            cat probe-results/report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Findings + step logs; may reference synthetic child-like content —
+      # short retention, same policy as the E2E artifacts.
+      - name: Upload probe results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-results
+          path: probe-results/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload Playwright report (harness diagnostics)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-playwright-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
