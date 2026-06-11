@@ -310,6 +310,55 @@ Gets a brand-new family from an empty account to a finished book unaided. The bi
 
 ---
 
+### 10. Feedback Loop & Order Transparency (Sprint W3-C)
+
+Closes the satisfaction loop: ratings/NPS become tracked metrics, testimonials feed the
+marketing flywheel, issue reports become tickets with visible status, and parents can see
+where a print order actually is.
+
+**Post-moment rating prompts**:
+- **`RatingPrompt`** (`src/components/feedback/rating-prompt.tsx`): non-modal, dismissible
+  card (floating or inline) collecting 1–5 stars + optional NPS 0–10 + optional comment.
+  Parent surfaces only — never mounted under `/kids/*`. Mounted on `/storybook/[bookId]`
+  (trigger `book_first_view`, fires when a fully illustrated book is viewed) and on the
+  post-order confirmation (`order_placed`).
+- **Trigger/suppression logic** (`src/lib/feedback/triggers.ts`): pure, unit-tested
+  `shouldShowFeedbackPrompt` — requires a signed-in parent, the moment actually reached, and a
+  positive server eligibility check; anything unknown suppresses (a missed prompt is cheap, an
+  annoying one is not). Suppression is **server-backed**: one `feedback` doc per
+  parent+trigger+subject (dismissals included) means "never shown twice" holds across devices.
+- **API** (`POST /api/feedback`, `GET /api/feedback/eligibility`): server-first — clients never
+  write the `feedback` collection directly; validation is shared with the client via the same
+  lib. Scalar-only analytics events (`feedback.*`) are emitted alongside; free text stays in
+  Firestore.
+
+**Testimonial capture**: ratings ≥4 unlock an optional "share your story" step — explicit
+consent checkbox, quote, optional photo (uploaded server-side via
+`POST /api/feedback/testimonial`, reusing the children-photos Storage pattern). Stored with
+`consent`/`consentedAt` on the feedback doc. Capture only; no public display yet.
+
+**Tracked support tickets**: `POST /api/report-issue` now persists a `tickets` doc
+(`open` → `in_progress` → `resolved`) before sending the maintenance email (email is
+best-effort). Parents see their tickets and status in the Support Tickets section of
+`/parent/orders` (`GET /api/tickets`); status transitions are admin-side. Ticket shaping is
+pure and unit-tested (`src/lib/tickets.ts`).
+
+**Order pipeline transparency**: `src/lib/order-timeline.ts` derives a five-step parent-facing
+timeline (placed → quality review → sent to printer → printing → shipped) from the fifteen
+internal `MixamOrderStatus` values, plus filter buckets and an honestly-labelled turnaround
+estimate (`systemConfig/orderTransparency`, default 10–15 business days). Per the server-first
+principle the derivation runs **in the API** (`GET /api/printOrders/my-orders`, and the initial
+timeline in the `POST /api/printOrders/mixam` response for the new confirmation screen);
+`OrderTimelineView` only renders. Unknown future statuses degrade gracefully to "just placed";
+`on_hold`/`validation_failed` surface as a calm attention note rather than raw status strings.
+
+**Rationale**: prompts are deliberately non-blocking (no modals, no required interaction) so
+the activation funnel is untouched; suppression lives server-side so prompt-fatigue rules can
+change without client updates; status mapping lives server-side so new Mixam states never
+require a client release.
+
+---
+
 ## Data Flow Diagrams
 
 ### Story Creation Flow

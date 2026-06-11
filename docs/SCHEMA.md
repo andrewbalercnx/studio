@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-06-11 (W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-06-11 (W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -1011,6 +1011,20 @@ Mixam API configuration settings.
 
 **Security**: Admin only.
 
+#### `systemConfig/orderTransparency`
+Parent-facing turnaround estimate shown on order surfaces (Sprint W3-C). Read via
+`getOrderTransparencyConfig` (60s cache, code defaults when the doc is missing); the API
+formats it with honest "estimate" labelling (`formatEstimatedTurnaround`).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `turnaroundMinBusinessDays` | number | Yes | Lower bound of order→delivery estimate (default 10) |
+| `turnaroundMaxBusinessDays` | number | Yes | Upper bound of order→delivery estimate (default 15) |
+| `updatedAt` | timestamp | No | Last update time |
+| `updatedBy` | string | No | Email/UID of last updater |
+
+**Security**: Authenticated read; Admin write (standard systemConfig rules).
+
 ---
 
 ### `shareLinks`
@@ -1156,6 +1170,69 @@ Development todo items for tracking work that should be done for a production-re
 - The `completionSummary` field should contain a summary of what was accomplished, useful for audit trail.
 
 **Security**: Admin only.
+
+---
+
+### `feedback`
+
+Parent satisfaction signals (Sprint W3-C): post-moment ratings, NPS and consented
+testimonials. One document per parent+trigger+subject — a dismissal is stored too, which is
+what suppresses the prompt from ever being shown again (cross-device). Created server-side by
+`POST /api/feedback`; testimonials attached by `POST /api/feedback/testimonial`.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Document ID |
+| `parentUid` | string | Yes | Owning parent |
+| `trigger` | 'book_first_view' \| 'order_placed' | Yes | The moment the prompt was offered |
+| `subjectId` | string | Yes | Storybook id (book_first_view) or print order id (order_placed) |
+| `action` | 'submitted' \| 'dismissed' | Yes | Dismissals carry no rating |
+| `rating` | number \| null | No | 1–5 stars (when submitted) |
+| `nps` | number \| null | No | NPS 0–10 (optional) |
+| `comment` | string \| null | No | Free-text comment (≤2000 chars; never sent to analytics) |
+| `testimonial` | FeedbackTestimonial \| null | No | Consented marketing quote, see below |
+| `pagePath` | string \| null | No | Page the prompt was shown on |
+| `source` | 'web' | Yes | Capture surface |
+| `createdAt` | timestamp | Yes | Creation time |
+| `updatedAt` | timestamp | Yes | Last update (testimonial attachment) |
+
+**`FeedbackTestimonial`** (embedded):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `consent` | boolean | Explicit checkbox consent for marketing use — always `true` when stored |
+| `quote` | string | Parent's quote (≤1000 chars) |
+| `photoUrl` | string \| null | Tokenised download URL of optional photo (`users/{uid}/feedback/{feedbackId}/…`) |
+| `photoPath` | string \| null | Storage object path |
+| `consentedAt` | string \| null | ISO timestamp consent was recorded |
+
+**Security**: Owner read; owner append-only create (defence in depth — writes normally go via
+the API/Admin SDK); update/delete admin only (ratings and consent flags are immutable to clients).
+
+---
+
+### `tickets`
+
+Tracked support tickets (Sprint W3-C). Created server-side by `POST /api/report-issue`
+(alongside the maintenance email); parents follow status via `GET /api/tickets`
+(Support Tickets section on `/parent/orders`). Status transitions are admin-side.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Document ID |
+| `parentUid` | string | Yes | Reporting parent |
+| `contactEmail` | string \| null | No | Reporter's email at creation time |
+| `message` | string | Yes | Issue description (≤5000 chars) |
+| `pagePath` | string | Yes | Page the issue was reported from |
+| `status` | 'open' \| 'in_progress' \| 'resolved' | Yes | Ticket lifecycle (starts 'open') |
+| `statusHistory` | array | Yes | `{ status, timestamp (ISO), note?, source: 'parent'\|'admin'\|'system' }` |
+| `resolutionNote` | string \| null | No | Admin note shown to the parent when resolved |
+| `diagnostics` | map \| null | No | Sanitised client diagnostics (scalar values, capped) |
+| `createdAt` | timestamp | Yes | Creation time |
+| `updatedAt` | timestamp | Yes | Last update time |
+
+**Security**: Owner read; create/update/delete admin only (creation happens via the
+report-issue API using the Admin SDK).
 
 ---
 
@@ -1313,6 +1390,8 @@ Extends `PrintOrderAddress` with metadata for address book management.
 | `helpWizards` | Writer, Admin | Writer, Admin | help-* readable by authenticated |
 | `answerAnimations` | Authenticated | Writer, Admin | Q&A card animations |
 | `devTodos` | Admin | Admin | Development work items |
+| `feedback` | Owner, Admin | Owner (append-only create), Admin (update/delete) | Ratings/NPS/testimonials — written via API |
+| `tickets` | Owner, Admin | Admin | Support tickets — created via report-issue API |
 
 ---
 
@@ -1320,6 +1399,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-06-11 | Sprint W3-C: new `feedback` collection (ratings/NPS + consented testimonials; one doc per parent+trigger+subject, dismissals included for prompt suppression); new `tickets` collection (tracked issue reports, status open/in_progress/resolved); new `systemConfig/orderTransparency` (turnaround estimate); security rules for feedback (owner read, append-only create) and tickets (owner read, server-only create) |
 | 2026-06-11 | Sprint W2-C: `lastEditedAt`/`lastEditedBy` on storybook pages + audio-reset semantics for parent page edits via `/api/storybookV2/pageEdit`; `artStatusSnapshot` + `degradedArtAcknowledged` on printOrders (degraded-order audit); checkout `saveAddress` write path into `users/{uid}/addresses` |
 | 2026-06-11 | Added `artStatus` (StoryBookArtStatus degraded-book rollup + recovery fields) to storybook subcollection docs; Added `systemConfig/circuitBreakers` (cross-instance AI provider breaker state); `*.lastErrorMessage` fields now always contain user-safe copy (raw errors stay in `aiFlowLogs`); storybook pages no longer store `imageMetadata.errorStack`; wizard StoryGeneratorResponse gains `questionNumber`/`totalQuestions` |
 | 2026-01-17 | Added `devTodos` collection for development work tracking |
