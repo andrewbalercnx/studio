@@ -319,6 +319,9 @@ const initialTests: TestResult[] = [
   { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
   { id: 'API_USER_ONBOARDING_GET', name: 'API: /api/user/onboarding (GET shape)', status: 'PENDING', message: '' },
   { id: 'API_USER_ONBOARDING_POST', name: 'API: /api/user/onboarding (POST validation)', status: 'PENDING', message: '' },
+  { id: 'API_ADMIN_OPS_METRICS', name: 'API: /api/admin/ops/metrics (GET shape)', status: 'PENDING', message: '' },
+  { id: 'API_ADMIN_OPS_HEALTH_CHECK', name: 'API: /api/admin/ops/health-check (POST dry-run)', status: 'PENDING', message: '' },
+  { id: 'API_ADMIN_SESSIONS', name: 'API: /api/admin/sessions (GET shape + lastError)', status: 'PENDING', message: '' },
   { id: 'API_STORY_BEAT', name: 'API: /api/storyBeat (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure (Input)', status: 'PENDING', message: '' },
@@ -2289,6 +2292,84 @@ export default function AdminRegressionPage() {
         updateTestResult('API_USER_ONBOARDING_POST', { status: 'PASS', message: 'Unknown action correctly rejected with 400.' });
     } catch (e: any) {
         updateTestResult('API_USER_ONBOARDING_POST', { status: 'FAIL', message: e.message });
+    }
+
+    // Test: API_ADMIN_OPS_METRICS — ops dashboard metrics shape (read-only).
+    try {
+        const opsToken = await auth?.currentUser?.getIdToken?.();
+        if (!opsToken) throw new Error('Authentication required.');
+        const response = await fetch('/api/admin/ops/metrics', {
+            headers: { Authorization: `Bearer ${opsToken}` },
+        });
+        const result = await response.json();
+        if (response.status !== 200) {
+            throw new Error(`API returned status ${response.status}: ${result.errorMessage || 'Unknown error'}`);
+        }
+        if (result.ok !== true) throw new Error('API response missing ok:true.');
+        if (typeof result.analytics?.activeUsers?.available !== 'boolean') {
+            throw new Error('analytics.activeUsers missing available flag.');
+        }
+        if (typeof result.analytics?.funnel?.available !== 'boolean') {
+            throw new Error('analytics.funnel missing available flag.');
+        }
+        if (typeof result.generation?.total !== 'number' || typeof result.generation?.errorRate !== 'number') {
+            throw new Error('generation section missing total/errorRate numbers.');
+        }
+        if (typeof result.printOrders?.placed !== 'number' || !result.printOrders?.conversion) {
+            throw new Error('printOrders section missing placed/conversion.');
+        }
+        const phState = result.analytics.activeUsers.available ? 'PostHog live' : 'PostHog gated';
+        updateTestResult('API_ADMIN_OPS_METRICS', { status: 'PASS', message: `Metrics OK (${phState}); ${result.generation.total} flow runs, ${result.printOrders.placed} orders in window.` });
+    } catch (e: any) {
+        updateTestResult('API_ADMIN_OPS_METRICS', { status: 'FAIL', message: e.message });
+    }
+
+    // Test: API_ADMIN_OPS_HEALTH_CHECK — dry-run evaluates checks without alerting/persisting.
+    try {
+        const opsToken = await auth?.currentUser?.getIdToken?.();
+        if (!opsToken) throw new Error('Authentication required.');
+        const response = await fetch('/api/admin/ops/health-check?dryRun=1', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${opsToken}` },
+        });
+        const result = await response.json();
+        if (response.status !== 200) {
+            throw new Error(`API returned status ${response.status}: ${result.errorMessage || 'Unknown error'}`);
+        }
+        if (result.ok !== true) throw new Error('API response missing ok:true.');
+        if (result.dryRun !== true) throw new Error('Expected dryRun:true in response.');
+        if (!Array.isArray(result.results) || result.results.length !== 3) {
+            throw new Error(`Expected 3 health-check results, got ${Array.isArray(result.results) ? result.results.length : typeof result.results}.`);
+        }
+        const badCheck = result.results.find((r: any) => !r.id || typeof r.breached !== 'boolean' || !r.summary);
+        if (badCheck) throw new Error('A health-check result is missing id/breached/summary.');
+        if (!Array.isArray(result.alertsSent) || result.alertsSent.length !== 0) {
+            throw new Error('Dry run must not send alerts.');
+        }
+        updateTestResult('API_ADMIN_OPS_HEALTH_CHECK', { status: 'PASS', message: `3 checks evaluated (healthy=${result.healthy}); no alerts on dry run.` });
+    } catch (e: any) {
+        updateTestResult('API_ADMIN_OPS_HEALTH_CHECK', { status: 'FAIL', message: e.message });
+    }
+
+    // Test: API_ADMIN_SESSIONS — sessions list with server-computed lastError (read-only).
+    try {
+        const opsToken = await auth?.currentUser?.getIdToken?.();
+        if (!opsToken) throw new Error('Authentication required.');
+        const response = await fetch('/api/admin/sessions', {
+            headers: { Authorization: `Bearer ${opsToken}` },
+        });
+        const result = await response.json();
+        if (response.status !== 200) {
+            throw new Error(`API returned status ${response.status}: ${result.errorMessage || 'Unknown error'}`);
+        }
+        if (result.ok !== true) throw new Error('API response missing ok:true.');
+        if (!Array.isArray(result.sessions)) throw new Error('Response missing sessions array.');
+        const badSession = result.sessions.find((s: any) => !s.id || !('lastError' in s));
+        if (badSession) throw new Error('A session row is missing id or the lastError field.');
+        const withErrors = result.sessions.filter((s: any) => s.lastError).length;
+        updateTestResult('API_ADMIN_SESSIONS', { status: 'PASS', message: `${result.sessions.length} session(s) returned; ${withErrors} with a lastError summary.` });
+    } catch (e: any) {
+        updateTestResult('API_ADMIN_SESSIONS', { status: 'FAIL', message: e.message });
     }
 
     const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary, storyCompile: storyCompileScenarioSummary, phaseState: phaseStateScenarioSummary, childStoryList: childStoryListScenarioSummary };

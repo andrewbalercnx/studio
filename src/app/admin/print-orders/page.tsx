@@ -17,14 +17,18 @@ export default function PrintOrdersPage() {
   useEffect(() => {
     if (!userLoading && user) {
       loadOrders();
+      // Poll so webhook-driven state changes (e.g. Mixam status updates) appear without a
+      // manual refresh. Background refreshes don't toggle the loading state.
+      const interval = setInterval(() => loadOrders(true), 30_000);
+      return () => clearInterval(interval);
     }
   }, [filter, user, userLoading]);
 
-  async function loadOrders() {
+  async function loadOrders(background = false) {
     if (!user) return;
 
     try {
-      setLoading(true);
+      if (!background) setLoading(true);
       setError(null);
 
       const idToken = await user.getIdToken();
@@ -183,7 +187,25 @@ export default function PrintOrdersPage() {
                         >
                           {order.fulfillmentStatus.replace(/_/g, ' ').toUpperCase()}
                         </span>
+                        {order.adminNextAction && order.adminNextAction.action !== 'none' && (
+                          <span
+                            title={order.adminNextAction.label}
+                            className={`px-3 py-1 text-xs font-medium rounded-full ${
+                              order.adminNextAction.urgent
+                                ? 'bg-amber-200 text-amber-900 border border-amber-400'
+                                : 'bg-gray-100 text-gray-600 border border-gray-200'
+                            }`}
+                          >
+                            {order.adminNextAction.urgent ? '⚠ ' : ''}
+                            {order.adminNextAction.action.replace(/_/g, ' ').toUpperCase()}
+                          </span>
+                        )}
                       </div>
+                      {order.adminNextAction && order.adminNextAction.urgent && (
+                        <p className="text-sm text-amber-800 mb-1">
+                          Next: {order.adminNextAction.label}
+                        </p>
+                      )}
                       <p className="text-sm text-gray-600">
                         Created: {formatDate(order.createdAt)}
                       </p>
@@ -220,6 +242,15 @@ export default function PrintOrdersPage() {
                       </p>
                     </div>
                   </div>
+
+                  {order.failureSummary && (
+                    <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+                      <p className="text-sm text-red-800">
+                        <span className="font-medium">Failure: </span>
+                        {order.failureSummary}
+                      </p>
+                    </div>
+                  )}
 
                   {order.validationResult && !order.validationResult.valid && (
                     <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">

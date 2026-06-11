@@ -6,6 +6,7 @@ import { DEFAULT_DIAGNOSTICS_CONFIG } from '@/lib/types';
 import { notifyOrderStatusChanged } from '@/lib/email/notify-admins';
 import { logMixamInteraction, logMixamInteractions, createWebhookInteraction, toMixamInteractions } from '@/lib/mixam/interaction-logger';
 import { mixamClient } from '@/lib/mixam/client';
+import { deriveAdminNextAction, buildFailureSummary } from '@/lib/mixam/order-state';
 
 // Helper to check if debug logging is enabled
 async function isDebugLoggingEnabled(firestore: FirebaseFirestore.Firestore): Promise<boolean> {
@@ -366,6 +367,33 @@ export async function POST(request: Request) {
       // Store all shipments for reference
       updateData.mixamShipments = webhook.shipments;
     }
+
+    // Advance the admin-facing order state machine: record the next required admin action
+    // directly on the order doc so the admin list shows it without opening the record.
+    // Conservative by design — the webhook only updates state and flags/queues actions for a
+    // human; it never triggers irreversible operations (no auto-confirm, no auto-cancel).
+    const nextAction = deriveAdminNextAction({
+      fulfillmentStatus: newStatus,
+      hasArtworkErrors: webhook.hasErrors,
+      statusReason: webhook.statusReason ?? null,
+    });
+    updateData.adminNextAction = {
+      ...nextAction,
+      setAt: FieldValue.serverTimestamp(),
+      source: 'webhook',
+    };
+    updateData.needsAdminAttention = nextAction.urgent;
+
+    // Persist a one-line failure summary (null clears a stale summary once resolved).
+    updateData.failureSummary = buildFailureSummary({
+      fulfillmentStatus: newStatus,
+      validationResult: order.validationResult ?? null,
+      mixamArtworkErrors:
+        (updateData.mixamArtworkErrors as any) ?? (order as any).mixamArtworkErrors ?? null,
+      mixamStatusReason: webhook.statusReason ?? (order as any).mixamStatusReason ?? null,
+      rejectedReason: order.rejectedReason ?? null,
+      fulfillmentNotes: (updateData.fulfillmentNotes as any) ?? order.fulfillmentNotes ?? null,
+    });
 
     // 7. Update order in Firestore
     await orderDoc.ref.update(updateData);

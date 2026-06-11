@@ -1116,6 +1116,22 @@ export type PrintOrder = {
 
   // Mixam API interaction log - tracks all API calls and webhook events
   mixamInteractions?: MixamInteraction[];
+
+  // Next required admin action (Sprint W3-A). Persisted by the Mixam webhook handler on each
+  // status change and derived server-side by the admin list API for older orders.
+  // The action ids and mapping live in src/lib/mixam/order-state.ts.
+  adminNextAction?: {
+    action: string;          // AdminNextActionId, e.g. 'confirm_order', 'fix_artwork'
+    label: string;           // Human-readable instruction for the admin
+    urgent: boolean;         // True when the order is blocked on an admin decision
+    setAt?: any;             // When this action was recorded
+    source?: 'webhook' | 'derived' | 'admin';
+  } | null;
+  // Rollup of adminNextAction.urgent for cheap "needs attention" queries/badges
+  needsAdminAttention?: boolean;
+  // One-line failure summary (computed server-side in the admin list API; also persisted by the
+  // webhook when Mixam reports errors). See buildFailureSummary in src/lib/mixam/order-state.ts.
+  failureSummary?: string | null;
 };
 
 // Tracks individual API calls to Mixam and webhook events received

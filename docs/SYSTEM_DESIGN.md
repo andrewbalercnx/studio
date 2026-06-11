@@ -515,8 +515,53 @@ Gets a brand-new family from an empty account to a finished book unaided. The bi
 - **Privacy**: autocapture off, session-replay masks all inputs/text, identify sends only uid + role,
   events carry ids/counts/enums only (enforced by the no-PII guard).
 
+### Ops/KPI Dashboard (`/admin/ops`)
+One admin page answers "where are users dropping off and what's broken now?" (Sprint W3-A).
+Backed by `GET /api/admin/ops/metrics`, which aggregates from two deliberately separate sources:
+
+- **User behaviour (DAU/WAU/MAU, signup→order funnel with drop-off)** — read from **PostHog's
+  query API** via a thin cached server module (`src/lib/posthog-query.server.ts`, HogQL queries,
+  5-minute in-memory cache, 15s timeout), NOT from Firestore collection-group scans.
+  *Rationale*: Firestore is the operational store; deriving behavioural metrics from it would
+  require unbounded scans and duplicate the analytics pipeline. While PostHog is dark behind the
+  compliance gate (no `POSTHOG_PERSONAL_API_KEY`/`POSTHOG_PROJECT_ID`), each analytics widget
+  shows an honest "analytics not yet enabled" state (`available: false`) rather than fake zeros —
+  the PostHog-backed path is fully implemented and lights up via env vars alone.
+- **Operational metrics** — where an operational Firestore source legitimately covers a metric,
+  bounded indexed queries are used (never unbounded scans): generation error rate from
+  `aiFlowLogs` (last 24h, limit 1000) and print-order pipeline/conversion from `printOrders`
+  (last 30 days, limit 500).
+
+### Health Checks & Alerts
+`POST /api/admin/ops/health-check` (admin token or `X-Internal-Secret` — callable from the ops
+dashboard, the daily system test, or a cron) runs three checks with pure, unit-tested logic in
+`src/lib/ops/health-checks.ts`:
+
+- `art_pending` — storybook art generation running/rate-limited > N hours (default 4). Scans the
+  storybooks of the 50 most recently updated stories; collection-group queries are deliberately
+  avoided because no collection-group indexes are deployed.
+- `orders_unreviewed` — print orders awaiting approval > N hours (default 24).
+- `error_rate_spike` — `aiFlowLogs` error rate over a recent window (default >30% over 60 min,
+  minimum 5 samples so low traffic doesn't false-positive).
+
+Thresholds live in `systemConfig/opsHealth.thresholds` (standard systemConfig pattern). Breaches
+fire `notifyMaintenanceError` (existing maintenance-email path) **deduped** via per-check
+`lastAlertedAt` + a cooldown (default 6h) stored on the same doc — a persistent condition alerts
+once per cooldown window, not on every run. Last run results are persisted for the dashboard.
+
+### Mixam Admin State Machine
+Each Mixam webhook advances the admin-facing order state: alongside the status update, the
+handler persists `adminNextAction` (`{ action, label, urgent }`), `needsAdminAttention`, and a
+one-line `failureSummary` on the order doc. The status→action mapping is a pure module
+(`src/lib/mixam/order-state.ts`) shared by the webhook (persist on change) and the admin list API
+(derive fresh on read, so actions stay correct after manual admin operations). **Conservative by
+design**: webhooks only update state and flag/queue actions — they never auto-confirm or
+auto-cancel. The admin print-orders list shows the action chips/failure summaries and polls every
+30s so webhook-driven changes appear without manual refresh.
+
 ### System Config
 - `systemConfig/diagnostics` controls logging levels
+- `systemConfig/opsHealth` holds health-check thresholds, per-check alert dedup state, and last run results
 - Toggle client/server/AI flow logging independently
 - API documentation exposed via diagnostic switch
 

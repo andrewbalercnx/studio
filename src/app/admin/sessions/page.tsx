@@ -3,84 +3,73 @@
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, RefreshCw } from 'lucide-react';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useEffect, useState } from 'react';
-import { useFirestore } from '@/firebase';
-import { collection, doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-import type { StorySession as StorySessionType } from '@/lib/types';
+import { useUser } from '@/firebase/auth/use-user';
 
-// Add the new fields to the local type for this page
-type StorySession = StorySessionType & {
-  promptConfigId?: string;
-  promptConfigLevelBand?: string;
-};
-
-
-const sampleSession: Omit<StorySession, 'createdAt' | 'updatedAt' | 'messages'> = {
-    id: "sample-session-1",
-    childId: "sample-child-1",
-    parentUid: "sample-parent-1",
-    status: "in_progress",
-    currentPhase: "warmup",
-    currentStepIndex: 0,
-    storyTitle: "Sample Story",
-    storyVibe: "funny",
-    promptConfigId: 'warmup_level_low_v1',
-    promptConfigLevelBand: 'low',
+// Shape returned by GET /api/admin/sessions (server-computed, including lastError summary)
+type AdminSessionRow = {
+  id: string;
+  childId: string | null;
+  status: string | null;
+  currentPhase: string | null;
+  storyTitle: string | null;
+  storyMode: string | null;
+  promptConfigId: string | null;
+  promptConfigLevelBand: string | null;
+  createdAtMs: number | null;
+  updatedAtMs: number | null;
+  lastError: {
+    flowName: string;
+    message: string;
+    status: string;
+    atMs: number | null;
+  } | null;
 };
 
 export default function AdminSessionsPage() {
   const { isAuthenticated, isAdmin, isWriter, email, loading: authLoading } = useAdminStatus();
-  const firestore = useFirestore();
-  const { toast } = useToast();
+  const { user } = useUser();
 
-  const [sessions, setSessions] = useState<StorySession[]>([]);
+  const [sessions, setSessions] = useState<AdminSessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!firestore || (!isAdmin && !isWriter)) {
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    const sessionsRef = collection(firestore, 'storySessions');
-    const unsubscribe = onSnapshot(sessionsRef,
-      (snapshot) => {
-        const sessionList = snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as StorySession);
-        setSessions(sessionList);
-        setLoading(false);
-        setError(null);
-      },
-      (err) => {
-        console.error("Error fetching story sessions:", err);
-        setError("Could not fetch story sessions.");
-        setSessions([]);
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [firestore, isAdmin, isWriter]);
-  
-  const handleCreateSampleSession = async () => {
-    if (!firestore) return;
+  const loadSessions = useCallback(async () => {
+    if (!user) return;
     try {
-        const docRef = doc(firestore, "storySessions", sampleSession.id);
-        const now = serverTimestamp();
-        await setDoc(docRef, { ...sampleSession, createdAt: now, updatedAt: now });
-        toast({ title: 'Success', description: 'Sample story session created.' });
+      setLoading(true);
+      setError(null);
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/admin/sessions', {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const data = await response.json();
+      if (!response.ok || data.ok !== true) {
+        throw new Error(data.errorMessage || 'Failed to load story sessions');
+      }
+      setSessions(data.sessions || []);
     } catch (e: any) {
-        console.error("Error creating sample session:", e);
-        toast({ title: 'Error', description: e.message, variant: 'destructive' });
+      console.error('Error fetching story sessions:', e);
+      setError(e.message || 'Could not fetch story sessions.');
+      setSessions([]);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [user]);
 
+  useEffect(() => {
+    if (!authLoading && user && (isAdmin || isWriter)) {
+      loadSessions();
+    } else if (!authLoading) {
+      setLoading(false);
+    }
+  }, [authLoading, user, isAdmin, isWriter, loadSessions]);
+
+  const formatTime = (ms: number | null) => (ms ? new Date(ms).toLocaleString() : '-');
 
   const diagnostics = {
     page: 'admin-sessions',
@@ -91,14 +80,14 @@ export default function AdminSessionsPage() {
       loading: authLoading,
       error: null,
     },
-    firestore: {
-        collection: 'storySessions',
-        count: sessions.length,
-        sampleIds: sessions.slice(0, 3).map(s => s.id),
+    api: {
+      endpoint: '/api/admin/sessions',
+      count: sessions.length,
+      sampleIds: sessions.slice(0, 3).map(s => s.id),
+      withErrors: sessions.filter(s => s.lastError).length,
     },
-    ...(error ? { firestoreErrorSessions: error } : {})
+    ...(error ? { apiErrorSessions: error } : {})
   };
-
 
   const renderContent = () => {
     if (authLoading || loading) {
@@ -116,8 +105,7 @@ export default function AdminSessionsPage() {
     if (sessions.length === 0) {
         return (
             <div className="text-center py-8 border-2 border-dashed rounded-lg">
-                <p className="text-muted-foreground mb-4">No story sessions found.</p>
-                <Button onClick={handleCreateSampleSession}>Create sample story session</Button>
+                <p className="text-muted-foreground">No story sessions found.</p>
             </div>
         )
     }
@@ -131,20 +119,35 @@ export default function AdminSessionsPage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Phase</TableHead>
                   <TableHead>Title</TableHead>
-                  <TableHead>Prompt Config ID</TableHead>
-                  <TableHead>Level Band</TableHead>
+                  <TableHead>Updated</TableHead>
+                  <TableHead>Last Error</TableHead>
               </TableRow>
           </TableHeader>
           <TableBody>
               {sessions.map((session) => (
-                  <TableRow key={session.id}>
+                  <TableRow key={session.id} className={session.lastError ? 'bg-red-50/50' : undefined}>
                       <TableCell className="font-mono text-xs">{session.id}</TableCell>
-                      <TableCell className="font-mono text-xs">{session.childId}</TableCell>
-                      <TableCell>{session.status}</TableCell>
-                      <TableCell>{session.currentPhase}</TableCell>
-                      <TableCell>{session.storyTitle}</TableCell>
-                      <TableCell className="font-mono text-xs">{session.promptConfigId || '-'}</TableCell>
-                      <TableCell>{session.promptConfigLevelBand || '-'}</TableCell>
+                      <TableCell className="font-mono text-xs">{session.childId || '-'}</TableCell>
+                      <TableCell>{session.status || '-'}</TableCell>
+                      <TableCell>{session.currentPhase || '-'}</TableCell>
+                      <TableCell>{session.storyTitle || '-'}</TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">{formatTime(session.updatedAtMs)}</TableCell>
+                      <TableCell className="max-w-md">
+                          {session.lastError ? (
+                              <div className="text-xs">
+                                  <span className="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-800 font-medium mr-1">
+                                      {session.lastError.flowName}
+                                  </span>
+                                  <span className="text-red-700" title={session.lastError.message}>
+                                      {session.lastError.message.length > 120
+                                        ? `${session.lastError.message.slice(0, 120)}…`
+                                        : session.lastError.message}
+                                  </span>
+                              </div>
+                          ) : (
+                              <span className="text-muted-foreground text-xs">-</span>
+                          )}
+                      </TableCell>
                   </TableRow>
               ))}
           </TableBody>
@@ -156,16 +159,23 @@ export default function AdminSessionsPage() {
     <div className="container mx-auto p-4 sm:p-6 md:p-8">
       <Card>
         <CardHeader>
-          <CardTitle>Story Sessions</CardTitle>
-          <CardDescription>
-            List of story sessions.
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Story Sessions</CardTitle>
+              <CardDescription>
+                Recent story sessions (latest 100) with failure reasons surfaced from the AI flow logs.
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={loadSessions} disabled={loading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {renderContent()}
         </CardContent>
       </Card>
-      
+
       <DiagnosticsPanel pageName="admin-sessions" data={diagnostics} className="mt-8" />
     </div>
   );
