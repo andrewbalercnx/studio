@@ -1,21 +1,31 @@
 import { defineConfig, devices } from 'playwright/test';
 
 /**
- * Playwright config for StoryPic Kids E2E (Sprint 3A foundation).
+ * Playwright config for StoryPic Kids E2E.
  *
- * baseURL comes from PLAYWRIGHT_BASE_URL and defaults to the local dev server
- * (`npm run dev` serves on :9002). Point it at a deployed/staging URL in CI by
- * setting PLAYWRIGHT_BASE_URL.
+ * Two modes:
+ *
+ *  1. Self-contained (default, no PLAYWRIGHT_BASE_URL): Playwright boots the
+ *     Firebase emulators (auth/firestore/storage, offline `demo-` project) and
+ *     the E2E app server (standalone build + TEST_MODE seam) itself via the
+ *     webServer entries below. Requires `npm run build:e2e` first.
+ *
+ *  2. External server (PLAYWRIGHT_BASE_URL set): no servers are started; point
+ *     it at whatever is already running (the CI workflow starts the emulators
+ *     and app itself so a11y/visual/Lighthouse steps can share one server).
  *
  * Projects:
  *  - desktop-chrome  : primary blocking surface
  *  - mobile-chrome   : the PWA / kids surface
  *  - webkit          : Safari autoplay class — present but report-only/optional
- *                      (run explicitly with `--project=webkit`; excluded from
- *                      the default run via grepInvert is not used — instead it
- *                      is simply not part of the default CI gate, see ci.yml).
+ *                      (run explicitly with `--project=webkit`; not part of the
+ *                      default CI gate, see ci.yml).
+ *
+ * Spec conventions: web-first assertions on user-visible state only; no
+ * waitForTimeout. See docs/testing/e2e.md.
  */
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:9002';
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL;
+const baseURL = externalBaseURL || 'http://127.0.0.1:9002';
 
 export default defineConfig({
   testDir: './e2e',
@@ -26,6 +36,19 @@ export default defineConfig({
   reporter: process.env.CI
     ? [['github'], ['html', { open: 'never' }]]
     : [['list'], ['html', { open: 'never' }]],
+
+  // Visual baselines live next to the specs, keyed by project + platform.
+  snapshotPathTemplate:
+    '{testDir}/__screenshots__/{testFilePath}/{arg}-{projectName}-{platform}{ext}',
+
+  expect: {
+    toHaveScreenshot: {
+      // Kill animation/caret noise; allow tiny anti-aliasing drift.
+      animations: 'disabled',
+      caret: 'hide',
+      maxDiffPixelRatio: 0.02,
+    },
+  },
 
   use: {
     baseURL,
@@ -52,4 +75,22 @@ export default defineConfig({
       use: { ...devices['Desktop Safari'] },
     },
   ],
+
+  // Self-contained mode only — skipped entirely when PLAYWRIGHT_BASE_URL is set.
+  webServer: externalBaseURL
+    ? undefined
+    : [
+        {
+          command: 'node scripts/start-e2e-emulators.mjs',
+          url: 'http://127.0.0.1:9099/',
+          reuseExistingServer: true,
+          timeout: 120_000,
+        },
+        {
+          command: 'node scripts/start-e2e-server.mjs',
+          url: 'http://127.0.0.1:9002/login',
+          reuseExistingServer: true,
+          timeout: 120_000,
+        },
+      ],
 });
