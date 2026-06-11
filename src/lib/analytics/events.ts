@@ -28,6 +28,12 @@ export const ANALYTICS_EVENTS = {
   generationFellBackPartial: 'generation.fell_back_partial',
   generationDuration: 'generation.duration',
 
+  // --- First-run onboarding (Sprint W2-B) ---
+  onboardingStepCompleted: 'onboarding.step_completed',
+  onboardingChecklistDismissed: 'onboarding.checklist_dismissed',
+  onboardingFirstBookReady: 'onboarding.first_book_ready',
+  onboardingTipShown: 'onboarding.tip_shown',
+
   // --- Kids telemetry (privacy-safe, content-free) ---
   kidsStepViewed: 'kids.step_viewed',
   kidsAnswerSelected: 'kids.answer_selected',
