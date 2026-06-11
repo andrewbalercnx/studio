@@ -20,6 +20,7 @@ import { randomUUID } from 'crypto';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { Gaxios, GaxiosError } from 'gaxios';
 import { getImageGenerationModel } from '@/lib/ai-model-config';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
 
@@ -259,7 +260,10 @@ export const canonicalImageFlow = ai.defineFlow(
       return { ok: true, canonicalImageUrl: imageUrl };
 
     } catch (e: any) {
+      // Raw error stays in server logs / aiFlowLogs; the doc field and result
+      // errorMessage are user-visible so they must be user-safe.
       console.error(`[canonicalImageFlow] Error for ${entityType} ${entityId}:`, e?.message ?? e);
+      const userSafeMessage = toUserSafeMessage(e);
 
       try {
         await initFirebaseAdminApp();
@@ -267,12 +271,12 @@ export const canonicalImageFlow = ai.defineFlow(
         const collectionName = entityType === 'child' ? 'children' : 'characters';
         await firestore.collection(collectionName).doc(entityId).update({
           'canonicalImageGeneration.status': 'error',
-          'canonicalImageGeneration.lastErrorMessage': e?.message || 'Unknown error',
+          'canonicalImageGeneration.lastErrorMessage': userSafeMessage,
           updatedAt: FieldValue.serverTimestamp(),
         });
       } catch (_) { /* best effort */ }
 
-      return { ok: false, errorMessage: e?.message || 'Unknown error' };
+      return { ok: false, errorMessage: userSafeMessage };
     }
   }
 );

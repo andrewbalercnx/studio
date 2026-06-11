@@ -15,6 +15,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { resolveEntitiesInText, replacePlaceholdersInText, extractEntityMetadataFromText } from '@/lib/resolve-placeholders.server';
 import { buildStoryContext } from '@/lib/story-context-builder';
 import { buildStorySystemMessage } from '@/lib/build-story-system-message';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import type { MessageData } from 'genkit';
 
 // Default prompts - used when no custom prompt is set in Firestore
@@ -372,11 +373,14 @@ export const gemini4Flow = ai.defineFlow(
       };
 
     } catch (e: any) {
+      // Raw error stays in debug (diagnostics-gated) and server logs; the
+      // result errorMessage reaches clients verbatim so it must be user-safe.
       debug.details.error = e.message || String(e);
+      console.error('[gemini4Flow] Unexpected error:', e);
       return {
         ok: false,
         sessionId,
-        errorMessage: `Unexpected error in gemini4Flow: ${e.message || String(e)}`,
+        errorMessage: toUserSafeMessage(e),
         debug,
       };
     }

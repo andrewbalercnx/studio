@@ -21,6 +21,7 @@ import { logServerSessionEvent } from '@/lib/session-events.server';
 import { summarizeChildPreferences } from '@/lib/child-preferences';
 import { replacePlaceholdersInText, extractEntityMetadataFromText } from '@/lib/resolve-placeholders.server';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { initializeRunTrace, logAICallToTrace } from '@/lib/ai-run-trace';
 import { buildStoryContext, buildEntityMapFromContext } from '@/lib/story-context-builder';
 import { buildStorySystemMessage } from '@/lib/build-story-system-message';
@@ -588,12 +589,15 @@ ${generateStoryBeatOutputDescription()}
             };
 
         } catch (e: any) {
+            // Raw error stays in debug (diagnostics-gated) and server logs; the
+            // result errorMessage reaches clients verbatim so it must be user-safe.
             const errorMessage = e instanceof Error ? e.message : JSON.stringify(e);
             debug.details.error = errorMessage;
+            console.error('[storyBeatFlow] Unexpected error:', e);
             return {
                 ok: false,
                 sessionId,
-                errorMessage: `Unexpected error in storyBeatFlow: ${errorMessage}`,
+                errorMessage: toUserSafeMessage(e),
                 debug,
             };
         }

@@ -15,6 +15,7 @@ import type { Story } from '@/lib/types';
 import { getStoryBucket } from '@/firebase/admin/storage';
 import { randomUUID } from 'crypto';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import {
   extractActorIdsFromText,
   getActorsDetailsWithImageData,
@@ -266,15 +267,18 @@ Requirements:
       return { ok: true, actorAvatarUrl };
 
     } catch (e: any) {
+      // Raw error stays in server logs / aiFlowLogs; the doc field and result
+      // errorMessage are user-visible so they must be user-safe.
       console.error('[storyActorAvatarFlow] Error:', e);
+      const userSafeMessage = toUserSafeMessage(e);
 
       // Mark as error
       await storyRef.update({
         'actorAvatarGeneration.status': 'error',
-        'actorAvatarGeneration.lastErrorMessage': e.message || 'Unknown error',
+        'actorAvatarGeneration.lastErrorMessage': userSafeMessage,
       });
 
-      return { ok: false, errorMessage: e.message || 'Failed to generate actor avatar.' };
+      return { ok: false, errorMessage: userSafeMessage };
     }
   }
 );

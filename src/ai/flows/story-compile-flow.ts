@@ -15,6 +15,7 @@ import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.
 import { extractEntityIds } from '@/lib/entity-utils';
 import { initializeRunTrace, completeRunTrace, logAICallToTrace } from '@/lib/ai-run-trace';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { storyTextCompileFlow } from './story-text-compile-flow';
 import { updateCharacterUsage } from '@/lib/character-usage';
 
@@ -656,11 +657,14 @@ export const storyCompileFlow = ai.defineFlow(
             };
 
         } catch (e: any) {
+            // Raw error stays in debug (diagnostics-gated) and server logs; the
+            // result errorMessage reaches clients verbatim so it must be user-safe.
             debug.details.error = e.message || String(e);
+            console.error('[storyCompileFlow] Unexpected error:', e);
             return {
                 ok: false,
                 sessionId,
-                errorMessage: `Unexpected error in storyCompileFlow: ${e.message || String(e)}`,
+                errorMessage: toUserSafeMessage(e),
                 debug,
             };
         }

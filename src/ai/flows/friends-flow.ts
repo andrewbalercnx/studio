@@ -17,6 +17,7 @@ import type {
   AIModelName,
 } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { replacePlaceholdersInText, type EntityMap } from '@/lib/resolve-placeholders.server';
 
 // ============================================================================
@@ -1230,8 +1231,10 @@ const friendsFlowInternal = ai.defineFlow(
 
       return { state: 'error', error: 'Unknown phase state', ok: false };
     } catch (e: any) {
+      // Raw error stays in server logs; the result error string reaches
+      // clients verbatim so it must be user-safe.
       console.error('Error in friendsFlow:', e);
-      return { state: 'error', error: e.message || 'An unexpected error occurred.', ok: false };
+      return { state: 'error', error: toUserSafeMessage(e), ok: false };
     }
   }
 );

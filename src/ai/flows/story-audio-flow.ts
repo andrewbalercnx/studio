@@ -15,6 +15,7 @@ import { DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 import type { StoryAudioFlowInput, StoryAudioFlowOutput } from '@/lib/tts-config';
 import { resolveEntitiesInText, replacePlaceholdersForTTS } from '@/lib/resolve-placeholders.server';
 import { getElevenLabsModelId } from '@/lib/get-elevenlabs-config.server';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 /**
  * Calculate child's age from date of birth
@@ -254,7 +255,10 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
       audioMetadata,
     };
   } catch (error: any) {
+    // Raw error stays in server logs; the doc field and result errorMessage
+    // are user-visible so they must be user-safe.
     console.error(`[story-audio-flow] Error:`, error);
+    const userSafeMessage = toUserSafeMessage(error);
 
     // Update story with error status
     try {
@@ -262,7 +266,7 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
       const firestore = getFirestore();
       await firestore.collection('stories').doc(storyId).update({
         'audioGeneration.status': 'error',
-        'audioGeneration.lastErrorMessage': error.message || 'Unknown error',
+        'audioGeneration.lastErrorMessage': userSafeMessage,
         updatedAt: FieldValue.serverTimestamp(),
       });
     } catch (updateError) {
@@ -271,7 +275,7 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
 
     return {
       ok: false,
-      errorMessage: error.message || 'Failed to generate audio',
+      errorMessage: userSafeMessage,
     };
   }
 }

@@ -15,6 +15,7 @@ import { z } from 'genkit';
 import type { Story, StoryOutputType, ChildProfile, PrintLayout, PrintProduct, ImageScene } from '@/lib/types';
 import { DEFAULT_PAGINATION_PROMPT } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { logAICallToTrace } from '@/lib/ai-run-trace';
 import { getPaginationPrompt } from '@/lib/pagination-prompt-config.server';
 import {
@@ -440,12 +441,15 @@ Generate the paginated output now.`;
             };
 
         } catch (e: any) {
+            // Raw error stays in debug (diagnostics-gated) and server logs; the
+            // result errorMessage reaches clients verbatim so it must be user-safe.
             debug.stage = 'error';
             debug.details.error = e.message || String(e);
+            console.error('[storyPaginationFlow] Unexpected error:', e);
             return {
                 ok: false,
                 storyId,
-                errorMessage: `Error in storyPaginationFlow: ${e.message || String(e)}`,
+                errorMessage: toUserSafeMessage(e),
                 debug,
             };
         }

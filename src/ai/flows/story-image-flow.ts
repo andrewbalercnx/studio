@@ -16,6 +16,7 @@ import { notifyMaintenanceError } from '@/lib/email/notify-admins';
 import { getGlobalImagePrompt } from '@/lib/image-prompt-config.server';
 import { getImageGenerationModel } from '@/lib/ai-model-config';
 import { classifyError } from '@/lib/ai-retry';
+import { toUserSafeMessage, categorizeError } from '@/lib/ai-error-map';
 import { isTestMode, TEST_MODE_IMAGE_DATA_URL } from '@/lib/test-mode';
 // New actor utilities - available for future use alongside existing fetchEntityReferenceData
 import {
@@ -83,7 +84,13 @@ const StoryImageFlowOutput = z.object({
     storyId: z.string(),
     pageId: z.string(),
     imageStatus: z.literal('error'),
+    /** User-safe message (already mapped via toUserSafeMessage — never raw). */
     errorMessage: z.string(),
+    /**
+     * Machine-readable error bucket (see UserSafeErrorCategory) so callers can
+     * classify (e.g. rate-limit handling) without parsing raw strings.
+     */
+    errorCategory: z.string().optional(),
     logs: z.array(z.string()).optional(),
   })
 );
@@ -1618,10 +1625,12 @@ export const storyImageFlow = ai.defineFlow(
         console.error('[story-image-flow] Image generation error for page', pageId, ':', errMessage);
         logs.push(`[warn] Image model failed for ${pageId}: ${errMessage}`);
 
-        // Update the page with the error details immediately so user can see it
+        // Update the page with a USER-SAFE error message immediately so the UI
+        // can show it. The raw message stays in server logs / aiFlowLogs —
+        // this doc field is client-readable and rendered to parents.
         await pageRef.update({
           imageStatus: 'error',
-          'imageMetadata.lastErrorMessage': errMessage,
+          'imageMetadata.lastErrorMessage': toUserSafeMessage(generationError),
           updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -1740,14 +1749,18 @@ export const storyImageFlow = ai.defineFlow(
     } catch (error: any) {
       const message = error?.message ?? 'storyImageFlow failed.';
       const stack = error?.stack ?? 'No stack trace available';
-      // Log the full stack trace for debugging
+      // The raw message/stack stay in server logs, aiFlowLogs, and the
+      // maintenance email below. The page document is client-readable, so it
+      // only ever receives the user-safe message (no raw strings, no stacks).
+      const userSafeMessage = toUserSafeMessage(error);
+      const errorCategory = categorizeError(error);
       console.error(`[storyImageFlow] Error for page ${pageId}:`, message);
       console.error(`[storyImageFlow] Stack trace:`, stack);
       try {
         await pageRef.update({
           imageStatus: 'error',
-          'imageMetadata.lastErrorMessage': message,
-          'imageMetadata.errorStack': stack.substring(0, 1000), // Store first 1000 chars of stack
+          'imageMetadata.lastErrorMessage': userSafeMessage,
+          'imageMetadata.errorStack': null,
           updatedAt: FieldValue.serverTimestamp(),
         });
       } catch (updateError) {
@@ -1827,7 +1840,8 @@ export const storyImageFlow = ai.defineFlow(
         storyId,
         pageId,
         imageStatus: 'error' as const,
-        errorMessage: message,
+        errorMessage: userSafeMessage,
+        errorCategory,
         logs,
       };
     }

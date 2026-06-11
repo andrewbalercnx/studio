@@ -14,6 +14,7 @@ import { z } from 'genkit';
 import type { ChildProfile, Character } from '@/lib/types';
 import { Gaxios, GaxiosError } from 'gaxios';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 const ImageDescriptionFlowInputSchema = z.object({
   entityId: z.string(),
@@ -200,10 +201,11 @@ Example: "A young child around 5 years old with curly brown hair and bright blue
         modelName,
       });
 
-      // Update status to error
+      // Update status to error (user-visible doc field — must be user-safe;
+      // raw error stays in aiFlowLogs above).
       await entityRef.update({
         'imageDescriptionGeneration.status': 'error',
-        'imageDescriptionGeneration.lastErrorMessage': e.message || 'Unknown error',
+        'imageDescriptionGeneration.lastErrorMessage': toUserSafeMessage(e),
         updatedAt: FieldValue.serverTimestamp(),
       });
       throw e;

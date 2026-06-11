@@ -17,6 +17,7 @@ import { randomUUID } from 'crypto';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { Gaxios } from 'gaxios';
 import { getImageGenerationModel } from '@/lib/ai-model-config';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 // Fallback model name if config fails to load
 const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
@@ -668,15 +669,18 @@ Output the generated image directly. Do not describe what you would create - act
       return { ok: true, animationUrl, debugInfo };
 
     } catch (e: any) {
+      // Raw error stays in server logs / debugInfo; the doc field and result
+      // errorMessage are user-visible so they must be user-safe.
       console.error('[avatarAnimationFlow] Error:', e);
+      const userSafeMessage = toUserSafeMessage(e);
 
       // Mark as error
       await entityRef.update({
         'avatarAnimationGeneration.status': 'error',
-        'avatarAnimationGeneration.lastErrorMessage': e.message || 'Unknown error',
+        'avatarAnimationGeneration.lastErrorMessage': userSafeMessage,
       });
 
-      return { ok: false, errorMessage: e.message || 'Failed to generate avatar animation.', debugInfo: { veoAttempted: true, veoError: e.message } };
+      return { ok: false, errorMessage: userSafeMessage, debugInfo: { veoAttempted: true, veoError: e.message } };
     }
   }
 );

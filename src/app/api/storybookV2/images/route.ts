@@ -8,7 +8,7 @@ import { getFirestore, FieldValue, Firestore } from 'firebase-admin/firestore';
 import { mapPageKindToLayoutType, calculateImageDimensionsForPageType, getAspectRatioForPageType } from '@/lib/print-layout-utils';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
 import { isTestMode, TEST_MODE_IMAGE_DATA_URL } from '@/lib/test-mode';
-import { toUserSafeMessage } from '@/lib/ai-error-map';
+import { toUserSafeMessage, categorizeError } from '@/lib/ai-error-map';
 
 /**
  * Validate that a value is a valid Firestore document ID.
@@ -524,7 +524,10 @@ export async function POST(request: Request) {
               storyId: job.flowInput!.storyId,
               pageId: job.page.id,
               imageStatus: 'error' as const,
-              errorMessage: flowError?.message || 'Unknown error in storyImageFlow',
+              // User-safe message + machine-readable category; raw stays in
+              // the server logs above and the diagnostics log lines.
+              errorMessage: toUserSafeMessage(flowError),
+              errorCategory: categorizeError(flowError),
               logs: [`Exception: ${flowError?.message || flowError}`, `Stack: ${errorStack.substring(0, 500)}`],
             },
           };
@@ -544,8 +547,14 @@ export async function POST(request: Request) {
       }
       if (!flowResult.ok) {
         allLogs.push(`[error] ${pageId}: ${flowResult.errorMessage}`);
-        // Check if this is a rate limit error
-        if (flowResult.errorMessage && isRateLimitError(flowResult.errorMessage)) {
+        // Check if this is a rate limit error. Prefer the machine-readable
+        // category (flow errorMessage is now user-safe, so string matching on
+        // it no longer works); keep the string fallback for older payloads.
+        const failedResult = flowResult as { errorMessage?: string; errorCategory?: string };
+        if (
+          failedResult.errorCategory === 'rate_limit' ||
+          (failedResult.errorMessage && isRateLimitError(failedResult.errorMessage))
+        ) {
           hasRateLimitError = true;
         }
       } else {

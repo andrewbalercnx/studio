@@ -37,11 +37,12 @@ function makeFakeFirestore() {
   }
 
   const firestore: BreakerFirestore = {
-    doc: (path: string) => ({
-      get: async () => snapshot(path),
-      // @ts-expect-error - path attached for the fake transaction
-      __path: path,
-    }),
+    doc: (path: string) =>
+      ({
+        get: async () => snapshot(path),
+        // Extra field used by the fake transaction to locate the doc.
+        __path: path,
+      }) as any,
     runTransaction: async (fn) =>
       fn({
         get: async (ref: any) => snapshot(ref.__path),
