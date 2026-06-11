@@ -1,17 +1,27 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useUser } from '@/firebase/auth/use-user';
 import { useDiagnosticsOptional } from '@/hooks/use-diagnostics';
 import type { PrintProduct, PrintOrderAddress, StoryOutput, SavedAddress, StoryBookArtStatus } from '@/lib/types';
+import type { EstimatedTurnaround, OrderTimeline } from '@/lib/order-timeline';
+import { OrderTimelineView } from '@/components/orders/order-timeline';
+import { RatingPrompt } from '@/components/feedback/rating-prompt';
 import { AddressSelector, PostcodeLookup } from '@/components/address';
+import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 
 type EndPaperColor = 'white' | 'cream' | 'black' | 'red' | 'blue' | 'green';
 
+/** Confirmation state after a successful order (Sprint W3-C). */
+type ConfirmedOrder = {
+  orderId: string;
+  timeline: OrderTimeline | null;
+  estimatedTurnaround: EstimatedTurnaround | null;
+};
+
 export default function OrderPrintBookPage() {
-  const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
   const { user } = useUser();
@@ -33,6 +43,10 @@ export default function OrderPrintBookPage() {
   const [artStatus, setArtStatus] = useState<StoryBookArtStatus | null>(null);
   // 409 degraded_confirmation_required -> explicit confirmation dialog state
   const [degradedConfirm, setDegradedConfirm] = useState<StoryBookArtStatus | null>(null);
+
+  // Clean post-order confirmation (Sprint W3-C): order placed -> show the
+  // server-derived timeline + honest turnaround estimate + rating prompt.
+  const [confirmedOrder, setConfirmedOrder] = useState<ConfirmedOrder | null>(null);
 
   // Order customization
   const [quantity, setQuantity] = useState(1);
@@ -220,8 +234,14 @@ export default function OrderPrintBookPage() {
         throw new Error(data.error || data.message || 'Failed to create order');
       }
 
-      alert('Order submitted successfully! An admin will review and approve your order.');
-      router.push(`/parent/orders`);
+      // Clean confirmation state (Sprint W3-C) instead of alert + redirect.
+      track(ANALYTICS_EVENTS.printOrderPlaced, { orderId: data.orderId, quantity });
+      setConfirmedOrder({
+        orderId: data.orderId,
+        timeline: data.timeline ?? null,
+        estimatedTurnaround: data.estimatedTurnaround ?? null,
+      });
+      window.scrollTo({ top: 0 });
 
     } catch (err: any) {
       console.error('[order] Error:', err);
@@ -358,6 +378,69 @@ export default function OrderPrintBookPage() {
               </div>
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Post-order confirmation (Sprint W3-C) ────────────────────────────────
+  if (confirmedOrder) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="max-w-2xl mx-auto space-y-6">
+          <div className="bg-white rounded-lg shadow p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-xl">
+                ✓
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Order placed!</h1>
+                <p className="text-sm text-gray-600">
+                  Order #{confirmedOrder.orderId.slice(-6)} · {story.title || 'Your storybook'}
+                </p>
+              </div>
+            </div>
+
+            {confirmedOrder.timeline && (
+              <OrderTimelineView timeline={confirmedOrder.timeline} className="pt-2" />
+            )}
+
+            {confirmedOrder.estimatedTurnaround && (
+              <p className="text-sm text-gray-600">{confirmedOrder.estimatedTurnaround.label}</p>
+            )}
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+              <p className="font-semibold">What happens next:</p>
+              <ul className="list-disc list-inside mt-2 space-y-1 text-blue-700">
+                <li>We review your book for quality, then send it to our print partner</li>
+                <li>You&apos;ll get an email at each step, plus tracking when it ships</li>
+                <li>You can follow progress any time on your Orders page</li>
+              </ul>
+            </div>
+
+            <div className="flex flex-wrap gap-3 pt-2">
+              <Link
+                href="/parent/orders"
+                className="px-5 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                View My Orders
+              </Link>
+              <Link
+                href="/stories"
+                className="px-5 py-2.5 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Back to Stories
+              </Link>
+            </div>
+          </div>
+
+          {/* Post-order rating prompt (Sprint W3-C): inline, non-modal, dismissible */}
+          <RatingPrompt
+            trigger="order_placed"
+            subjectId={confirmedOrder.orderId}
+            momentReached
+            variant="inline"
+          />
         </div>
       </div>
     );

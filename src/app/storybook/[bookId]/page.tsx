@@ -40,6 +40,7 @@ import { useDiagnosticsOptional } from '@/hooks/use-diagnostics';
 import { deriveStorybookArtStatus } from '@/lib/storybook-status';
 import { ParentBookView } from '@/components/book-reader';
 import { PageEditorDialog } from '@/components/storybook/page-editor-dialog';
+import { RatingPrompt } from '@/components/feedback/rating-prompt';
 import type { ActorNameMapping } from '@/lib/replace-names-with-placeholders';
 
 type StatusBadge = {label: string; variant: 'default' | 'secondary' | 'outline'};
@@ -911,6 +912,16 @@ export default function StorybookViewerPage() {
           });
         }}
         onRegenerate={handleRegenerateFromEditor}
+      />
+
+      {/* Post-book rating prompt (Sprint W3-C): floating, non-modal, dismissible.
+          Shown to parents the first time a finished (fully illustrated) book is
+          viewed; suppression is server-backed (one feedback doc per book). */}
+      <RatingPrompt
+        trigger="book_first_view"
+        subjectId={bookId}
+        momentReached={hasPages && allImagesReady}
+        variant="floating"
       />
     </div>
     </div>
