@@ -28,8 +28,16 @@ export async function signUpNewParent(page: Page, tag: string): Promise<ParentAc
   await page.getByLabel('Confirm PIN').fill(E2E_PIN);
   await page.getByRole('button', { name: 'Sign Up' }).click();
 
-  // Post-signup landing: the parent-mode "Who is playing?" selector.
-  await expect(page.getByText('Who is playing?')).toBeVisible({ timeout: 30_000 });
+  // Post-signup landing: the parent-mode "Who is playing?" selector. Race the
+  // failure toast so a signup error reports its actual message instead of a
+  // bare timeout (seen rarely under heavy local test parallelism).
+  const whoIsPlaying = page.getByText('Who is playing?');
+  const failureToast = page.getByText('Sign-up failed');
+  await expect(whoIsPlaying.or(failureToast).first()).toBeVisible({ timeout: 30_000 });
+  if (await failureToast.isVisible()) {
+    const toastText = await page.getByRole('region', { name: /notifications/i }).innerText();
+    throw new Error(`Signup failed for ${email}: ${toastText.replace(/\s+/g, ' ').trim()}`);
+  }
 
   const uid = await findUidByEmail(email);
   return { email, password: E2E_PASSWORD, pin: E2E_PIN, uid };

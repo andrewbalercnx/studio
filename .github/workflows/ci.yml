@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  FIREBASE_TOOLS_VERSION: 15.20.0
+  LHCI_VERSION: 0.15.1
+  E2E_BASE_URL: http://127.0.0.1:9002
+
 jobs:
   unit-tests:
     name: Typecheck & Unit Tests
@@ -28,12 +33,8 @@ jobs:
         run: npm run test
 
   e2e:
-    name: E2E Smoke (Playwright, report-only)
+    name: E2E (emulator + TEST_MODE)
     runs-on: ubuntu-latest
-    # Report-only for now: this job must NOT gate merges. It surfaces E2E health
-    # without blocking PRs until the suite proves stable (Sprint 3A promotion
-    # criterion). Remove continue-on-error to promote it to a blocking gate.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +42,12 @@ jobs:
         with:
           node-version: 20
           cache: npm
+
+      # firebase-tools 15 requires Java 21 for the emulators.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
 
       - name: Install dependencies
         run: npm ci
@@ -64,19 +71,58 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - name: Build app
-        run: npm run build
+      - name: Cache Firebase emulator binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ env.FIREBASE_TOOLS_VERSION }}
 
-      - name: Start app
-        run: npm run start -- -p 9002 &
+      - name: Build app (E2E config — emulator client flags baked in)
+        run: npm run build:e2e
 
-      - name: Wait for app
-        run: npx --yes wait-on http://localhost:9002 --timeout 120000
+      - name: Start Firebase emulators
+        run: |
+          npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} emulators:start \
+            --only auth,firestore,storage --project demo-storypic-e2e &
+          npx --yes wait-on tcp:127.0.0.1:9099 tcp:127.0.0.1:8080 tcp:127.0.0.1:9199 --timeout 120000
 
-      - name: Run E2E smoke (chromium projects only)
+      - name: Start app (standalone build, TEST_MODE)
+        run: |
+          node scripts/start-e2e-server.mjs &
+          npx --yes wait-on ${{ env.E2E_BASE_URL }}/login --timeout 120000
+
+      # ── BLOCKING GATE ───────────────────────────────────────────────────
+      # The funnel happy-path (+ login smoke) must pass for the job to pass.
+      # Promoted from report-only after 3 consecutive deterministic green
+      # runs locally (2026-06-11, see docs/testing/e2e.md).
+      - name: Funnel E2E (blocking)
         env:
-          PLAYWRIGHT_BASE_URL: http://localhost:9002
-        run: npx playwright test --project=desktop-chrome --project=mobile-chrome
+          PLAYWRIGHT_BASE_URL: ${{ env.E2E_BASE_URL }}
+        run: |
+          npx playwright test e2e/funnel.spec.ts e2e/login.smoke.spec.ts \
+            --project=desktop-chrome --project=mobile-chrome
+
+      # ── REPORT-ONLY (promotion criteria in docs/testing/e2e.md) ────────
+      - name: Accessibility scans (report-only)
+        continue-on-error: true
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ env.E2E_BASE_URL }}
+        run: |
+          npx playwright test e2e/a11y.spec.ts --project=desktop-chrome \
+            --reporter=list --output=test-results-a11y
+
+      - name: Visual regression (report-only)
+        continue-on-error: true
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ env.E2E_BASE_URL }}
+        run: |
+          npx playwright test e2e/visual.spec.ts \
+            --project=desktop-chrome --project=mobile-chrome \
+            --reporter=list --output=test-results-visual
+
+      - name: Lighthouse CI (report-only)
+        continue-on-error: true
+        run: npx --yes @lhci/cli@${{ env.LHCI_VERSION }} autorun
 
       - name: Upload Playwright report
         if: always()
@@ -85,3 +131,26 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+      # May contain screenshots of synthetic child-like content — short
+      # retention, failure diagnostics only.
+      - name: Upload test results (a11y attachments, visual candidates)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: |
+            test-results/
+            test-results-a11y/
+            test-results-visual/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: .lighthouseci/reports/
+          retention-days: 7
+          if-no-files-found: ignore

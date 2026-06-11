@@ -95,7 +95,9 @@ test.describe('accessibility scans @a11y', () => {
       await seedReadyStorybook({ storyId: sessionId });
       await lockKidsModeToChild(page, 'My First Child');
 
-      await page.goto('/kids/books');
+      // Client-side navigation — kids surfaces crash on cold deep-links while
+      // auth hydrates (known app issue, see docs/testing/e2e.md).
+      await page.getByText('My Books').click();
       await expect(page.getByText(SEED.storyTitle)).toBeVisible({ timeout: 30_000 });
       await runAxe(page, testInfo, 'storybook-view');
     });

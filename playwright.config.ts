@@ -85,6 +85,9 @@ export default defineConfig({
           url: 'http://127.0.0.1:9099/',
           reuseExistingServer: true,
           timeout: 120_000,
+          // SIGINT lets the firebase CLI stop its java emulator children; the
+          // default SIGKILL orphans them and the next run finds ports taken.
+          gracefulShutdown: { signal: 'SIGINT', timeout: 15_000 },
         },
         {
           command: 'node scripts/start-e2e-server.mjs',
