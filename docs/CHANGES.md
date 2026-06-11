@@ -16,6 +16,22 @@
 
 ## Changes
 
+### 2026-06-11
+
+#### `bad8564` - Add root SPRINTS.md: worktree-parallelised execution roadmap
+
+**Type**: Planning / Documentation
+
+**Summary**: Added a root `SPRINTS.md` that layers a worktree-parallelised execution plan over the authoritative GTM program in `docs/SPRINTS.md`. Reconciled against the program's done/outstanding rollup (measurement spine, catalog, entitlement enforcement, high-severity UX fixes and the reliability slice are already complete; Stripe is owner-deferred) and against the open `devTodos` items, including the non-GTM ones (deployment strategy, parent flow polish, incremental loading, Mixam webhooks, simplified parent storybook view with per-page editing).
+
+**Changes**:
+- New `SPRINTS.md`: three waves of parallel worktree tracks (Ops/Testing, Reliability, UX) with goals, deliverables, exit criteria, dev-todo ID traceability, merge-order rules, owner-gated items, and backlog
+
+**Created files**:
+- `SPRINTS.md`
+
+---
+
 ### 2026-06-06
 
 #### `73735cc` — Generation reliability: stop interactive routes leaking raw errors
