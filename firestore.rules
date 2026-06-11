@@ -340,6 +340,34 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ========== FEEDBACK (Sprint W3-C) ==========
+    // Ratings/NPS/testimonials. Written server-side via POST /api/feedback
+    // (Admin SDK). Client rules are defence in depth: read-own plus
+    // append-only create (own uid); never update/delete from clients —
+    // consent flags and ratings are immutable once recorded.
+    match /feedback/{feedbackId} {
+      allow get: if isAdmin()
+                 || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
+      allow list: if isAdmin()
+                  || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
+      allow create: if isAdmin()
+                    || (isAuthenticated() && request.resource.data.parentUid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    // ========== SUPPORT TICKETS (Sprint W3-C) ==========
+    // Tracked issue reports. Created server-side by POST /api/report-issue;
+    // parents read their own tickets (status surfaced via GET /api/tickets);
+    // status transitions are admin-side only.
+    match /tickets/{ticketId} {
+      allow get: if isAdmin()
+                 || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
+      allow list: if isAdmin()
+                  || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
     // ========== DENY ALL OTHER COLLECTIONS ==========
     match /{document=**} {
       allow read, write: if false;
