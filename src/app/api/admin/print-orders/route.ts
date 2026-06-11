@@ -3,6 +3,7 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import type { PrintOrder } from '@/lib/types';
+import { deriveAdminNextAction, buildFailureSummary } from '@/lib/mixam/order-state';
 
 /**
  * GET /api/admin/print-orders
@@ -114,9 +115,33 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Server-side computed fields (server-first principle): the next required admin action
+      // and a one-line failure summary, so the list view answers "what do I do?" without
+      // opening each record. Always derived fresh from current state — the persisted
+      // webhook-written values may predate an admin action taken since.
+      const adminNextAction = {
+        ...deriveAdminNextAction({
+          fulfillmentStatus: data.fulfillmentStatus,
+          hasArtworkErrors: data.mixamHasErrors === true,
+          statusReason: data.mixamStatusReason ?? null,
+        }),
+        source: 'derived' as const,
+      };
+      const failureSummary = buildFailureSummary({
+        fulfillmentStatus: data.fulfillmentStatus,
+        validationResult: data.validationResult ?? null,
+        mixamArtworkErrors: data.mixamArtworkErrors ?? null,
+        mixamStatusReason: data.mixamStatusReason ?? null,
+        rejectedReason: data.rejectedReason ?? null,
+        fulfillmentNotes: data.fulfillmentNotes ?? null,
+      });
+
       orders.push({
         id: doc.id,
         ...data,
+        adminNextAction,
+        needsAdminAttention: adminNextAction.urgent,
+        failureSummary,
         // Ensure timestamps are properly serializable
         createdAt,
         updatedAt: convertTimestamp(data.updatedAt),
