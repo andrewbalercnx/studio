@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAuth, useFirestore } from '@/firebase';
-import { doc, setDoc, serverTimestamp, collection, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,14 +13,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import { getAttribution } from '@/lib/analytics/attribution';
+import { useParentGuard } from '@/hooks/use-parent-guard';
 import Link from 'next/link';
-
-function slugify(text: string) {
-    return text
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-}
 
 export default function SignUpPage() {
   const [email, setEmail] = useState('');
@@ -32,6 +26,7 @@ export default function SignUpPage() {
   const router = useRouter();
   const auth = useAuth();
   const firestore = useFirestore();
+  const { validateGuard } = useParentGuard();
 
   const handleSignUp = async () => {
     if (!auth || !firestore) {
@@ -57,12 +52,13 @@ export default function SignUpPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // 2. Prepare user profile and first child in a batch write
-      const batch = writeBatch(firestore);
-
-      // User profile doc
+      // 2. Create the user profile doc.
+      // Note: we deliberately do NOT auto-seed a placeholder child here.
+      // The home screen prompts the parent to add their first child instead —
+      // a UX probe found the old "My First Child" dummy profile confusing and
+      // it leaked into real children's stories as a cast member.
       const userDocRef = doc(firestore, 'users', user.uid);
-      batch.set(userDocRef, {
+      await setDoc(userDocRef, {
         id: user.uid,
         email: user.email,
         roles: {
@@ -73,28 +69,10 @@ export default function SignUpPage() {
         createdAt: serverTimestamp(),
       });
 
-      // Default child doc
-      const childName = "My First Child";
-      const childId = `${slugify(childName)}-${Date.now().toString().slice(-6)}`;
-      const childDocRef = doc(firestore, 'children', childId);
-      batch.set(childDocRef, {
-        id: childId,
-        displayName: childName,
-        ownerParentUid: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        avatarUrl: `https://picsum.photos/seed/${childId}/200/200`,
-        photos: [],
-      });
-      
-      // 3. Commit the batch
-      await batch.commit();
-
-      // Funnel: account created + default child provisioned (no PII — ids/counts only).
+      // Funnel: account created (no PII — ids/counts only).
       track(ANALYTICS_EVENTS.signupCompleted, { method: 'password', ...getAttribution() });
-      track(ANALYTICS_EVENTS.childCreated, { childCount: 1, source: 'signup_default' });
 
-      // 4. Call the API to securely set the PIN hash
+      // 3. Call the API to securely set the PIN hash
       const idToken = await user.getIdToken();
       const pinResponse = await fetch('/api/parent/set-pin', {
           method: 'POST',
@@ -113,9 +91,19 @@ export default function SignUpPage() {
             description: errorResult.message || 'Please try setting your PIN from the settings page.',
             variant: 'destructive',
           });
+          toast({ title: 'Account created successfully!' });
+      } else {
+          // Fresh-PIN grace: the parent typed (and confirmed) this PIN seconds
+          // ago, so treat the guard as just-verified instead of immediately
+          // re-prompting for the same PIN. Uses the existing guard window —
+          // no change to PIN storage or verification.
+          validateGuard();
+          toast({
+            title: 'Account created!',
+            description: 'Your Parent PIN is saved.',
+          });
       }
 
-      toast({ title: 'Account created successfully!' });
       router.push('/');
     } catch (error: any) {
       toast({

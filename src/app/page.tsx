@@ -92,11 +92,19 @@ export default function HomePage() {
     }
 
     if (visibleChildren.length === 0) {
+      // Explicit first-run prompt: accounts no longer get a placeholder child
+      // seeded at signup, so guide the parent to create the first real profile.
       return (
-        <div className="text-center py-8">
-          <p className="text-muted-foreground mb-4">No children profiles found.</p>
+        <div className="text-center py-10 border-2 border-dashed rounded-lg" data-wiz-target="add-first-child">
+          <h2 className="text-xl font-semibold mb-2">Add your first child</h2>
+          <p className="text-muted-foreground mb-4 max-w-sm mx-auto">
+            Create a profile for your child to start making personalised stories starring them.
+          </p>
           <Button asChild>
-            <Link href="/parent/children">Create a Profile</Link>
+            <Link href="/parent/children">
+              <Plus className="mr-2 h-4 w-4" />
+              Add your first child
+            </Link>
           </Button>
         </div>
       );

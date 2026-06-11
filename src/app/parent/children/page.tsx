@@ -707,9 +707,15 @@ export default function ManageChildrenPage() {
         }
         if (visibleChildren.length === 0) {
             return (
-                <div className="text-center py-8 border-2 border-dashed rounded-lg">
-                    <p className="text-muted-foreground mb-4">No children found.</p>
-                    <Button onClick={() => setIsCreateOpen(true)}>Create a child profile</Button>
+                <div className="text-center py-8 border-2 border-dashed rounded-lg" data-wiz-target="add-first-child">
+                    <h2 className="text-xl font-semibold mb-2">Add your first child</h2>
+                    <p className="text-muted-foreground mb-4 max-w-sm mx-auto">
+                        Create a profile for your child to start making personalised stories starring them.
+                    </p>
+                    <Button onClick={() => setIsCreateOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add your first child
+                    </Button>
                 </div>
             )
         }

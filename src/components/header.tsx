@@ -47,7 +47,7 @@ export default function Header() {
   const router = useRouter();
   const { user, idTokenResult } = useUser();
   const { roleMode, switchToParentMode, setActiveChildId, activeChildId, startWizard } = useAppContext();
-  const { showPinModal } = useParentGuard();
+  const { showPinModal, isParentGuardValidated } = useParentGuard();
   const wizardTargetDiagnostics = useWizardTargetDiagnosticsOptional();
   const pathRecording = usePathRecordingOptional();
   const { canShowWizardTargets } = useAdminStatus();
@@ -98,7 +98,11 @@ export default function Header() {
 
   const handleSwitchToParent = () => {
     switchToParentMode();
-    showPinModal();
+    // Only prompt for the PIN when the guard window has lapsed — re-asking a
+    // parent who validated (or set their PIN) moments ago is redundant.
+    if (!isParentGuardValidated) {
+      showPinModal();
+    }
     router.push('/parent');
   };
 
