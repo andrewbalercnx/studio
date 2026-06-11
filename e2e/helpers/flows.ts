@@ -14,9 +14,10 @@ export type ParentAccount = {
 };
 
 /**
- * Drive the real signup UI: creates the auth user, the users/{uid} profile,
- * the default child ("My First Child") and sets the parent PIN, then lands on
- * the "Who is playing?" page. Returns the new account incl. its emulator uid.
+ * Drive the real signup UI: creates the auth user and the users/{uid} profile
+ * and sets the parent PIN, then lands on the "Who is playing?" page. No child
+ * is seeded (the first-run UI prompts for one) — use createChildViaParentUI.
+ * Returns the new account incl. its emulator uid.
  */
 export async function signUpNewParent(page: Page, tag: string): Promise<ParentAccount> {
   const email = uniqueEmail(tag);
