@@ -18,6 +18,21 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Build metadata baked into the image (immutable artifact identity).
+# next.config.ts exposes this as NEXT_PUBLIC_GIT_COMMIT_SHA, surfaced by
+# GET /api/health as `version` — the canary scripts rely on it to prove
+# which build a revision is serving.
+ARG GIT_COMMIT_SHA=unknown
+ENV GIT_COMMIT_SHA=$GIT_COMMIT_SHA
+
+# NEXT_PUBLIC_* values must exist at build time so Next.js inlines them.
+# The PostHog token is publishable/send-only (safe in the client bundle);
+# defaults match apphosting.yaml.
+ARG NEXT_PUBLIC_POSTHOG_KEY="phc_srrWPHVFxZ57BeXcs6DNBS7bujqdmBcDTAiTtWcJS2uw"
+ARG NEXT_PUBLIC_POSTHOG_HOST="https://eu.i.posthog.com"
+ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
+ENV NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST
+
 # Build the application
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
