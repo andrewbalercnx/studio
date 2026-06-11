@@ -9,6 +9,8 @@ import { mapPageKindToLayoutType, calculateImageDimensionsForPageType, getAspect
 import { createLogger, generateRequestId } from '@/lib/server-logger';
 import { isTestMode, TEST_MODE_IMAGE_DATA_URL } from '@/lib/test-mode';
 import { toUserSafeMessage, categorizeError } from '@/lib/ai-error-map';
+import { deriveStorybookArtStatus } from '@/lib/storybook-status';
+import type { StoryBookArtStatus } from '@/lib/types';
 
 /**
  * Validate that a value is a valid Firestore document ID.
@@ -583,9 +585,35 @@ export async function POST(request: Request) {
       finalStatus = 'rate_limited';
       finalErrorMessage = 'The Story Wizard is taking a nap! We\'ll try again soon.';
       allLogs.push(`[rate_limited] Detected rate limit error, scheduling retry in 1 hour`);
+    } else if (counts.ready > 0) {
+      // Degraded, not dead: the book stays viewable/orderable with partial art.
+      finalStatus = 'error';
+      finalErrorMessage =
+        "Some pictures couldn't be painted this time. You can still read the book and retry the missing pictures.";
     } else {
       finalStatus = 'error';
-      finalErrorMessage = 'One or more pages failed to render.';
+      finalErrorMessage = "The pictures couldn't be painted this time. Please try again.";
+    }
+
+    // Degraded-book rollup (shared contract — see src/lib/storybook-status.ts).
+    // Persist it on the storybook so every surface (parent viewer, kids PWA,
+    // future parent view) can answer viewable/orderable/degraded consistently,
+    // and detect RECOVERY: a previously degraded/failed book whose retry just
+    // completed gets recoveredAt + recoveryNotified=false so the UI can tell
+    // the user their book finished after the earlier failure.
+    const artStatus = deriveStorybookArtStatus(refreshedPages);
+    const prevArtStatus = storybookData?.artStatus as StoryBookArtStatus | undefined;
+    const wasBroken =
+      prevArtStatus?.completeness === 'degraded' || prevArtStatus?.completeness === 'failed';
+    const artStatusUpdate: Record<string, any> = { ...artStatus };
+    if (artStatus.completeness === 'complete' && wasBroken) {
+      artStatusUpdate.recoveredAt = FieldValue.serverTimestamp();
+      artStatusUpdate.recoveryNotified = false;
+      allLogs.push('[recovery] Book recovered from a previously degraded/failed art run');
+    } else if (prevArtStatus?.recoveredAt && artStatus.completeness === 'complete') {
+      // Preserve an unacknowledged recovery marker across no-op re-runs.
+      artStatusUpdate.recoveredAt = prevArtStatus.recoveredAt;
+      artStatusUpdate.recoveryNotified = prevArtStatus.recoveryNotified ?? false;
     }
 
     // Build the update object
@@ -595,6 +623,7 @@ export async function POST(request: Request) {
       'imageGeneration.lastErrorMessage': finalErrorMessage,
       'imageGeneration.pagesReady': counts.ready,
       'imageGeneration.pagesTotal': counts.total,
+      artStatus: artStatusUpdate,
       updatedAt: FieldValue.serverTimestamp(),
     };
 
@@ -625,6 +654,9 @@ export async function POST(request: Request) {
       status: finalStatus,
       ready: counts.ready,
       total: counts.total,
+      // Degraded-book contract rollup so clients don't re-derive policy.
+      artStatus,
+      errorMessage: finalErrorMessage ?? undefined,
       rateLimited: hasRateLimitError,
       retryAt: hasRateLimitError ? calculateRetryTime().toISOString() : undefined,
       logs: allLogs,

@@ -47,6 +47,8 @@ import { Label } from '@/components/ui/label';
 import { useResolvePlaceholders } from '@/hooks/use-resolve-placeholders';
 import { useDiagnosticsOptional } from '@/hooks/use-diagnostics';
 import { replaceNamesWithPlaceholders } from '@/lib/replace-names-with-placeholders';
+import { deriveStorybookArtStatus } from '@/lib/storybook-status';
+import { updateDoc } from 'firebase/firestore';
 
 type StatusBadge = {label: string; variant: 'default' | 'secondary' | 'outline'};
 
@@ -193,6 +195,23 @@ export default function StorybookViewerPage() {
     setAbsoluteShareUrl(formatShareUrl(finalization?.shareLink ?? null));
   }, [finalization?.shareLink]);
 
+  // Recovery notification: when a previously failed/degraded generation later
+  // completed (server sets artStatus.recoveredAt + recoveryNotified=false),
+  // tell the user once and acknowledge it on the document.
+  const persistedArtStatus = storybookOutput?.artStatus;
+  useEffect(() => {
+    if (!storybookRef) return;
+    if (persistedArtStatus?.recoveredAt && persistedArtStatus?.recoveryNotified === false) {
+      toast({
+        title: 'Good news — your book is complete!',
+        description: 'The pictures that failed earlier have now finished. Every page is ready.',
+      });
+      updateDoc(storybookRef, { 'artStatus.recoveryNotified': true }).catch(() => {
+        // Best effort: if the ack write fails we may toast again next visit.
+      });
+    }
+  }, [persistedArtStatus?.recoveredAt, persistedArtStatus?.recoveryNotified, storybookRef, toast]);
+
   // Load actors from story.actors array
   useEffect(() => {
     async function loadActors() {
@@ -289,6 +308,10 @@ export default function StorybookViewerPage() {
 
   const isLocked = storyBook?.isLocked ?? false;
   const allImagesReady = calculatedImageStatus === 'ready';
+  // Degraded-book contract: live rollup from the pages themselves (the same
+  // derivation the server persists as storybook.artStatus).
+  const artStatus = useMemo(() => deriveStorybookArtStatus(pages ?? []), [pages]);
+  const isDegraded = artStatus.completeness === 'degraded';
   const finalizationBadge = deriveFinalizationBadge(storyBook, readyCount, totalPages);
   const printableReady = finalization?.printableStatus === 'ready' && !!finalization?.printablePdfUrl;
   const shareExpiresAt = formatTimestamp(finalization?.shareExpiresAt);
@@ -569,6 +592,10 @@ export default function StorybookViewerPage() {
     ? 'This storybook is locked for printing. Unlock it to regenerate pages or art.'
     : calculatedImageStatus === 'running'
     ? 'Illustrations are currently generating. You can keep browsing while we finish each page.'
+    : isDegraded
+    ? `${artStatus.pagesReady} of ${artStatus.pagesTotal} illustrations are ready — ${artStatus.pagesFailed} didn't finish. You can read and order the book now, and retry the missing pictures any time.`
+    : artStatus.completeness === 'failed'
+    ? "The illustrations didn't finish this time. Your story text is safe — retry the artwork when you're ready."
     : calculatedImageStatus === 'error'
     ? 'Some pages need attention. Retry the failed ones or regenerate everything.'
     : calculatedImageStatus === 'ready'
@@ -720,13 +747,14 @@ export default function StorybookViewerPage() {
             </div>
             {currentPage.title && <h3 className="text-2xl font-semibold">{currentPage.title}</h3>}
             {currentPageText && <p className="text-lg leading-relaxed">{currentPageText}</p>}
-            {/* Show error details for failed pages */}
-            {currentPage.imageStatus === 'error' && currentPage.imageMetadata?.lastErrorMessage && (
-              <Alert variant="destructive" className="text-sm">
+            {/* Friendly note for failed pages (lastErrorMessage is user-safe — never a raw API string) */}
+            {currentPage.imageStatus === 'error' && (
+              <Alert className="bg-amber-50 border-amber-200 text-amber-900 [&>svg]:text-amber-600 text-sm">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Image Generation Failed</AlertTitle>
-                <AlertDescription className="font-mono text-xs break-all">
-                  {currentPage.imageMetadata.lastErrorMessage}
+                <AlertTitle>This picture didn&apos;t finish</AlertTitle>
+                <AlertDescription>
+                  {currentPage.imageMetadata?.lastErrorMessage ?? 'The picture could not be painted this time.'}{' '}
+                  The rest of your book is fine — use &quot;Regenerate this page&quot; to try again.
                 </AlertDescription>
               </Alert>
             )}
@@ -903,24 +931,26 @@ export default function StorybookViewerPage() {
                   <Link href={`/child/${story.childId}/story/${storyId}/read`}>View Story Text</Link>
                 </Button>
               )}
-              {allImagesReady && (
-                <>
-                  <Button asChild variant="default" data-wiz-target="storybook-read">
-                    <Link href={isNewModel ? `/storybook/${bookId}/read?storyId=${storyId}` : `/storybook/${bookId}/read`}>
-                      <BookOpen className="mr-2 h-4 w-4" />
-                      Read Book
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" data-wiz-target="storybook-print-layout">
-                    <Link href={isNewModel ? `/storybook/${bookId}/print-layout?storyId=${storyId}` : `/storybook/${bookId}/print-layout`}>
-                      <Printer className="mr-2 h-4 w-4" />
-                      Create Print Layout
-                    </Link>
-                  </Button>
-                </>
+              {/* Graceful degradation: a book with complete text and partial art
+                  stays readable; ordering needs at least some art (isOrderable). */}
+              {artStatus.isViewable && (
+                <Button asChild variant="default" data-wiz-target="storybook-read">
+                  <Link href={isNewModel ? `/storybook/${bookId}/read?storyId=${storyId}` : `/storybook/${bookId}/read`}>
+                    <BookOpen className="mr-2 h-4 w-4" />
+                    Read Book
+                  </Link>
+                </Button>
               )}
-              {/* Finalize button - show when ready but not locked */}
-              {allImagesReady && !isLocked && isNewModel && (
+              {artStatus.isOrderable && (
+                <Button asChild variant="outline" data-wiz-target="storybook-print-layout">
+                  <Link href={isNewModel ? `/storybook/${bookId}/print-layout?storyId=${storyId}` : `/storybook/${bookId}/print-layout`}>
+                    <Printer className="mr-2 h-4 w-4" />
+                    Create Print Layout
+                  </Link>
+                </Button>
+              )}
+              {/* Finalize button - complete OR degraded books can be finalized/ordered */}
+              {artStatus.isOrderable && !isLocked && isNewModel && (
                 <Button
                   onClick={handleFinalize}
                   disabled={finalizing}
