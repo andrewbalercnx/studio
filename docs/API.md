@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-06-06 (entitlements UI: `GET /api/entitlements/summary`; enforcement: `/api/entitlements/check` pre-flight + `story_allowance` consume-on-completion in `/api/storyCompile`; `storybookV2/create` quota gate)
+> **Last Updated**: 2026-06-11 (`GET /api/kids-generators` now returns a user-safe presentation: jargon-free names, internal fields stripped, `recommended` flag)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -866,7 +866,14 @@ Get available story flows configuration.
 
 ### GET `/api/kids-generators`
 
-Get story generators that are enabled for kids. This endpoint fetches from the `storyGenerators` collection, filtering to include only generators where `status === 'live'` and `enabledForKids === true`.
+Get story generators that are enabled for kids. This endpoint fetches from the `storyGenerators` collection, filtering to include only generators where `status === 'live'` and `enabledForKids === true`, then applies a **user-safe presentation layer** (`src/lib/kids-generator-presentation.ts`):
+
+- Names, descriptions, and loading messages never expose model jargon (e.g. stored name `"Gemini Free"` is served as `"Free Play"`). Admins can override copy per generator via the optional `kidFriendlyName` / `kidFriendlyDescription` doc fields.
+- Internal fields are stripped from the response: `prompts`, `promptConfig`, `defaultModel`, `defaultTemperature`, `apiEndpoint`, `backgroundMusic`, `status`, `enabledForKids`.
+- Exactly one generator carries `recommended: true` so clients can render a "Recommended for first-timers" badge. Precedence: `recommendedForKids` doc flag, then the `wizard` generator, then the first generator by display order.
+- Sorted by `order` (lower first), then by `id`.
+
+Consumed by the kids PWA (`/kids/create`), the parent-side chooser (`/story/start`), and the mobile app.
 
 **Authentication**: None required (public endpoint)
 
@@ -877,18 +884,16 @@ Get story generators that are enabled for kids. This endpoint fetches from the `
   "generators": [
     {
       "id": "wizard",
-      "name": "Magic Story Wizard",
-      "description": "Answer questions to create your story!",
-      "status": "live",
+      "name": "Story Wizard",
+      "description": "Answer four quick questions and watch a whole story appear. The simplest way to make your first story.",
       "order": 1,
-      "enabledForKids": true,
+      "capabilities": {...},
       "styling": {
         "gradient": "bg-gradient-to-br from-amber-400 to-orange-500",
-        "icon": "Wand2",
-        "loadingMessage": "Creating your adventure..."
+        "icon": "Sparkles",
+        "loadingMessage": "The wizard is creating your adventure..."
       },
-      "capabilities": {...},
-      "apiEndpoint": "/api/storyWizard"
+      "recommended": true
     }
   ]
 }
