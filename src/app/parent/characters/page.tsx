@@ -200,9 +200,17 @@ export default function ManageCharactersPage() {
     }
     if (visibleCharacters.length === 0) {
       return (
-        <div className="text-center py-8 border-2 border-dashed rounded-lg">
-          <p className="text-muted-foreground mb-4">No characters found.</p>
-          <Button onClick={() => openForm()}>Create a character</Button>
+        <div className="text-center py-10 border-2 border-dashed rounded-lg" data-wiz-target="add-first-character">
+          <Smile className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+          <h2 className="text-xl font-semibold mb-2">Add a story companion</h2>
+          <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+            Characters are the friends who join your child&apos;s adventures — a pet, a grandparent,
+            a favourite toy. They&apos;re optional, but familiar faces make stories feel like home.
+          </p>
+          <Button onClick={() => openForm()}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create a character
+          </Button>
         </div>
       );
     }
