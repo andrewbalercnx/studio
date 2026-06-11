@@ -79,3 +79,51 @@ export function deriveStorybookArtStatus(pages: PageLike[]): StoryBookArtStatus 
     isOrderable,
   };
 }
+
+/**
+ * Result of gating a print order against the book's art rollup (Sprint W2-C).
+ */
+export type OrderArtGate = {
+  /** The order may proceed as submitted. */
+  allowed: boolean;
+  /**
+   * The order is possible but only with an explicit degraded-art
+   * acknowledgement (`acknowledgeDegraded: true` on the order request).
+   */
+  requiresAcknowledgement: boolean;
+  reason?: 'not_orderable' | 'degraded_confirmation_required';
+};
+
+/**
+ * Server-side gate for ordering a printed book.
+ *
+ * Policy:
+ * - No art rollup available (legacy books predating the contract) -> fail
+ *   open; the PDF checks downstream remain the backstop.
+ * - `isOrderable === false` (failed/none/in_progress art) -> block.
+ * - `degraded` (partial art) -> orderable, but ONLY with an explicit
+ *   acknowledgement that some pages will print without art.
+ * - `complete` -> allowed.
+ */
+export function evaluateOrderArtGate(
+  artStatus:
+    | Pick<StoryBookArtStatus, 'completeness' | 'isOrderable'>
+    | null
+    | undefined,
+  acknowledgeDegraded = false
+): OrderArtGate {
+  if (!artStatus) {
+    return { allowed: true, requiresAcknowledgement: false };
+  }
+  if (!artStatus.isOrderable) {
+    return { allowed: false, requiresAcknowledgement: false, reason: 'not_orderable' };
+  }
+  if (artStatus.completeness === 'degraded' && !acknowledgeDegraded) {
+    return {
+      allowed: false,
+      requiresAcknowledgement: true,
+      reason: 'degraded_confirmation_required',
+    };
+  }
+  return { allowed: true, requiresAcknowledgement: false };
+}
