@@ -28,6 +28,11 @@ import { classifyError, isRetryable, withRetry, type CircuitState, type WithRetr
 
 export const CIRCUIT_BREAKER_DOC_PATH = 'systemConfig/circuitBreakers';
 
+/** Canonical provider keys so all flows share one breaker per provider. */
+export const PROVIDER_GEMINI_TEXT = 'gemini-text';
+export const PROVIDER_GEMINI_IMAGE = 'gemini-image';
+export const PROVIDER_ELEVENLABS_TTS = 'elevenlabs-tts';
+
 /** Per-provider state as persisted in the systemConfig doc. */
 export type PersistedBreakerState = {
   state: CircuitState;

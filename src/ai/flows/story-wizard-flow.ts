@@ -8,79 +8,16 @@ import { z } from 'genkit';
 import type { MessageData } from 'genkit';
 import type { ChildProfile, Character, Story, StoryWizardAnswer, StoryWizardChoice, StoryWizardInput, StoryWizardOutput, StoryGenerator } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { toUserSafeMessage, categorizeError } from '@/lib/ai-error-map';
+import { withProviderReliability, PROVIDER_GEMINI_TEXT } from '@/lib/ai-circuit-breaker.server';
 import { replacePlaceholdersInText, type EntityMap } from '@/lib/resolve-placeholders.server';
 import { buildStoryContext } from '@/lib/story-context-builder';
 
-// Retry configuration
+// Retry configuration: shared withRetry handles backoff (exponential + full
+// jitter, low cap) and ONLY retries classified-transient errors (5xx/timeout)
+// — never 4xx/quota/safety. The shared systemConfig circuit breaker fast-fails
+// during a provider outage instead of retrying.
 const MAX_RETRIES = 2;
-const INITIAL_BACKOFF_MS = 1000;
-
-/** Check if an error is transient and should be retried */
-function isRetryableError(errorMessage: string): boolean {
-  const retryablePatterns = [
-    'RESOURCE_EXHAUSTED',
-    'UNAVAILABLE',
-    'DEADLINE_EXCEEDED',
-    'timed out',
-    'timeout',
-    '429',
-    '503',
-    '500',
-    'quota',
-    'rate limit',
-    'temporarily',
-    'overloaded',
-    'capacity',
-    'fetch failed',
-    'ECONNRESET',
-    'ETIMEDOUT',
-  ];
-  const lowerMessage = errorMessage.toLowerCase();
-  return retryablePatterns.some(pattern => lowerMessage.includes(pattern.toLowerCase()));
-}
-
-/** Categorize error for user-friendly messages */
-function categorizeError(errorMessage: string): { category: string; userMessage: string } {
-  const lowerMessage = errorMessage.toLowerCase();
-
-  if (lowerMessage.includes('resource_exhausted') || lowerMessage.includes('429') || lowerMessage.includes('quota') || lowerMessage.includes('rate')) {
-    return {
-      category: 'rate_limit',
-      userMessage: 'The story wizard is very busy right now. Please wait a moment and try again.',
-    };
-  }
-
-  if (lowerMessage.includes('deadline_exceeded') || lowerMessage.includes('timed out') || lowerMessage.includes('timeout')) {
-    return {
-      category: 'timeout',
-      userMessage: 'The story wizard took too long to respond. Please try again.',
-    };
-  }
-
-  if (lowerMessage.includes('unavailable') || lowerMessage.includes('503') || lowerMessage.includes('temporarily')) {
-    return {
-      category: 'unavailable',
-      userMessage: 'The story wizard is taking a short nap. Please try again in a moment.',
-    };
-  }
-
-  if (lowerMessage.includes('fetch failed') || lowerMessage.includes('econnreset') || lowerMessage.includes('etimedout')) {
-    return {
-      category: 'network',
-      userMessage: 'Had trouble reaching the story wizard. Please check your connection and try again.',
-    };
-  }
-
-  return {
-    category: 'unknown',
-    userMessage: 'The story wizard encountered an unexpected problem. Please try again.',
-  };
-}
-
-/** Sleep for a given number of milliseconds */
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 /** Convert MessageData array to simple log format */
 function formatMessagesForLog(messages: MessageData[]): Array<{ role: string; content: string }> {
@@ -308,78 +245,66 @@ const storyWizardFlowInternal = ai.defineFlow(
         const storyGenPromptTemplate = generator?.prompts?.storyGeneration || DEFAULT_STORY_GEN_PROMPT;
         const storyGenSystemPrompt = fillPromptTemplate(storyGenPromptTemplate, templateVars);
 
-        let llmResponse;
         const modelName = 'googleai/gemini-2.5-pro';
-        let lastError: Error | null = null;
 
-        // Retry loop for story generation
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-          const startTime = Date.now();
-          try {
-            if (attempt > 0) {
-              const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
-              console.log(`[storyWizardFlow:generateStory] Retry attempt ${attempt}/${MAX_RETRIES} after ${backoffMs}ms backoff`);
-              await sleep(backoffMs);
+        // Shared retry/backoff + systemConfig circuit breaker: transient
+        // failures self-heal with jittered exponential backoff; a provider
+        // outage fast-fails instead of retrying.
+        let attemptNumber = 0;
+        const llmResponse = await withProviderReliability(
+          PROVIDER_GEMINI_TEXT,
+          async () => {
+            attemptNumber += 1;
+            const startTime = Date.now();
+            try {
+              // Using output parameter for structured schema validation
+              const response = await ai.generate({
+                model: modelName,
+                system: storyGenSystemPrompt,
+                messages: wizardMessages,
+                output: { schema: WizardStoryGenOutputSchema },
+                config: { temperature: 0.7 },
+              });
+              await logAIFlow({
+                flowName: `${flowName}:generateStory`,
+                sessionId,
+                parentId: child.ownerParentUid,
+                prompt: storyGenSystemPrompt,
+                messages: formatMessagesForLog(wizardMessages),
+                response,
+                startTime,
+                modelName,
+                attemptNumber,
+                maxAttempts: MAX_RETRIES + 1,
+              });
+              return response;
+            } catch (e: any) {
+              const errorMessage = e?.message || String(e);
+              await logAIFlow({
+                flowName: `${flowName}:generateStory`,
+                sessionId,
+                parentId: child.ownerParentUid,
+                prompt: storyGenSystemPrompt,
+                messages: formatMessagesForLog(wizardMessages),
+                error: e,
+                startTime,
+                modelName,
+                attemptNumber,
+                maxAttempts: MAX_RETRIES + 1,
+                retryReason: attemptNumber > 1 ? `${categorizeError(e)}: ${errorMessage.substring(0, 100)}` : undefined,
+              });
+              throw e;
             }
-
-            // Using output parameter for structured schema validation
-            llmResponse = await ai.generate({
-              model: modelName,
-              system: storyGenSystemPrompt,
-              messages: wizardMessages,
-              output: { schema: WizardStoryGenOutputSchema },
-              config: { temperature: 0.7 },
-            });
-            await logAIFlow({
-              flowName: `${flowName}:generateStory`,
-              sessionId,
-              parentId: child.ownerParentUid,
-              prompt: storyGenSystemPrompt,
-              messages: formatMessagesForLog(wizardMessages),
-              response: llmResponse,
-              startTime,
-              modelName,
-              attemptNumber: attempt + 1,
-              maxAttempts: MAX_RETRIES + 1,
-            });
-            // Success - break out of retry loop
-            break;
-          } catch (e: any) {
-            lastError = e;
-            const errorMessage = e?.message || String(e);
-            const { category } = categorizeError(errorMessage);
-
-            await logAIFlow({
-              flowName: `${flowName}:generateStory`,
-              sessionId,
-              parentId: child.ownerParentUid,
-              prompt: storyGenSystemPrompt,
-              messages: formatMessagesForLog(wizardMessages),
-              error: e,
-              startTime,
-              modelName,
-              attemptNumber: attempt + 1,
-              maxAttempts: MAX_RETRIES + 1,
-              retryReason: attempt < MAX_RETRIES && isRetryableError(errorMessage)
-                ? `${category}: ${errorMessage.substring(0, 100)}`
-                : undefined,
-            });
-
-            // Check if we should retry
-            if (attempt < MAX_RETRIES && isRetryableError(errorMessage)) {
-              console.warn(`[storyWizardFlow:generateStory] Retryable error (${category}): ${errorMessage}`);
-              continue;
-            }
-
-            // Non-retryable error or max retries reached
-            throw e;
+          },
+          {
+            maxRetries: MAX_RETRIES,
+            onRetry: ({ attempt, delayMs, error }) =>
+              console.warn(
+                `[storyWizardFlow:generateStory] Transient error, retry ${attempt}/${MAX_RETRIES} after ${delayMs}ms:`,
+                (error as Error)?.message
+              ),
           }
-        }
-
-        // If we exited the loop without llmResponse, throw the last error
-        if (!llmResponse) {
-          throw lastError || new Error('Failed to generate story after retries');
-        }
+        );
 
         try {
           // Extract structured output using Genkit's output parameter
@@ -454,88 +379,73 @@ const storyWizardFlowInternal = ai.defineFlow(
         const questionGenPromptTemplate = generator?.prompts?.questionGeneration || DEFAULT_QUESTION_GEN_PROMPT;
         const questionGenSystemPrompt = fillPromptTemplate(questionGenPromptTemplate, templateVars);
 
-        let llmResponse;
         const modelName2 = 'googleai/gemini-2.5-pro';
-        let lastError: Error | null = null;
 
-        // Retry loop for question generation
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-          const startTime2 = Date.now();
-          try {
-            if (attempt > 0) {
-              const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
-              console.log(`[storyWizardFlow:askQuestion] Retry attempt ${attempt}/${MAX_RETRIES} after ${backoffMs}ms backoff`);
-              await sleep(backoffMs);
-            }
-
-            // Using output parameter for structured schema validation
-            // When no previous messages, use prompt instead of messages to avoid Genkit issues with empty arrays
-            if (previousMessages.length > 0) {
-              llmResponse = await ai.generate({
-                model: modelName2,
-                system: questionGenSystemPrompt,
-                messages: previousMessages,
-                output: { schema: WizardQuestionGenOutputSchema },
-                config: { temperature: 0.8 },
-              });
-            } else {
-              llmResponse = await ai.generate({
-                model: modelName2,
+        // Shared retry/backoff + systemConfig circuit breaker (see above).
+        let questionAttempt = 0;
+        const llmResponse = await withProviderReliability(
+          PROVIDER_GEMINI_TEXT,
+          async () => {
+            questionAttempt += 1;
+            const startTime2 = Date.now();
+            try {
+              // Using output parameter for structured schema validation
+              // When no previous messages, use prompt instead of messages to avoid Genkit issues with empty arrays
+              const response =
+                previousMessages.length > 0
+                  ? await ai.generate({
+                      model: modelName2,
+                      system: questionGenSystemPrompt,
+                      messages: previousMessages,
+                      output: { schema: WizardQuestionGenOutputSchema },
+                      config: { temperature: 0.8 },
+                    })
+                  : await ai.generate({
+                      model: modelName2,
+                      prompt: questionGenSystemPrompt,
+                      output: { schema: WizardQuestionGenOutputSchema },
+                      config: { temperature: 0.8 },
+                    });
+              await logAIFlow({
+                flowName: `${flowName}:askQuestion`,
+                sessionId,
+                parentId: child.ownerParentUid,
                 prompt: questionGenSystemPrompt,
-                output: { schema: WizardQuestionGenOutputSchema },
-                config: { temperature: 0.8 },
+                messages: previousMessages.length > 0 ? formatMessagesForLog(previousMessages) : undefined,
+                response,
+                startTime: startTime2,
+                modelName: modelName2,
+                attemptNumber: questionAttempt,
+                maxAttempts: MAX_RETRIES + 1,
               });
+              return response;
+            } catch (e: any) {
+              const errorMessage = e?.message || String(e);
+              await logAIFlow({
+                flowName: `${flowName}:askQuestion`,
+                sessionId,
+                parentId: child.ownerParentUid,
+                prompt: questionGenSystemPrompt,
+                messages: previousMessages.length > 0 ? formatMessagesForLog(previousMessages) : undefined,
+                error: e,
+                startTime: startTime2,
+                modelName: modelName2,
+                attemptNumber: questionAttempt,
+                maxAttempts: MAX_RETRIES + 1,
+                retryReason: questionAttempt > 1 ? `${categorizeError(e)}: ${errorMessage.substring(0, 100)}` : undefined,
+              });
+              throw e;
             }
-            await logAIFlow({
-              flowName: `${flowName}:askQuestion`,
-              sessionId,
-              parentId: child.ownerParentUid,
-              prompt: questionGenSystemPrompt,
-              messages: previousMessages.length > 0 ? formatMessagesForLog(previousMessages) : undefined,
-              response: llmResponse,
-              startTime: startTime2,
-              modelName: modelName2,
-              attemptNumber: attempt + 1,
-              maxAttempts: MAX_RETRIES + 1,
-            });
-            // Success - break out of retry loop
-            break;
-          } catch (e: any) {
-            lastError = e;
-            const errorMessage = e?.message || String(e);
-            const { category } = categorizeError(errorMessage);
-
-            await logAIFlow({
-              flowName: `${flowName}:askQuestion`,
-              sessionId,
-              parentId: child.ownerParentUid,
-              prompt: questionGenSystemPrompt,
-              messages: previousMessages.length > 0 ? formatMessagesForLog(previousMessages) : undefined,
-              error: e,
-              startTime: startTime2,
-              modelName: modelName2,
-              attemptNumber: attempt + 1,
-              maxAttempts: MAX_RETRIES + 1,
-              retryReason: attempt < MAX_RETRIES && isRetryableError(errorMessage)
-                ? `${category}: ${errorMessage.substring(0, 100)}`
-                : undefined,
-            });
-
-            // Check if we should retry
-            if (attempt < MAX_RETRIES && isRetryableError(errorMessage)) {
-              console.warn(`[storyWizardFlow:askQuestion] Retryable error (${category}): ${errorMessage}`);
-              continue;
-            }
-
-            // Non-retryable error or max retries reached
-            throw e;
+          },
+          {
+            maxRetries: MAX_RETRIES,
+            onRetry: ({ attempt, delayMs, error }) =>
+              console.warn(
+                `[storyWizardFlow:askQuestion] Transient error, retry ${attempt}/${MAX_RETRIES} after ${delayMs}ms:`,
+                (error as Error)?.message
+              ),
           }
-        }
-
-        // If we exited the loop without llmResponse, throw the last error
-        if (!llmResponse) {
-          throw lastError || new Error('Failed to generate question after retries');
-        }
+        );
 
         try {
           // Extract structured output using Genkit's output parameter
@@ -580,10 +490,11 @@ const storyWizardFlowInternal = ai.defineFlow(
         }
       }
     } catch (e: any) {
+      // Raw error stays in server logs; the result error string reaches the
+      // kids UI verbatim so it must be user-safe.
       const errorMessage = e?.message || String(e);
-      const { category, userMessage } = categorizeError(errorMessage);
-      console.error(`[storyWizardFlow] Error (${category}):`, errorMessage);
-      return { state: 'error' as const, ok: false as const, error: userMessage };
+      console.error(`[storyWizardFlow] Error (${categorizeError(e)}):`, errorMessage);
+      return { state: 'error' as const, ok: false as const, error: toUserSafeMessage(e) };
     }
   }
 );

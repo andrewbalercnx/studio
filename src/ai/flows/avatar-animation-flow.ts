@@ -18,6 +18,8 @@ import { logAIFlow } from '@/lib/ai-flow-logger';
 import { Gaxios } from 'gaxios';
 import { getImageGenerationModel } from '@/lib/ai-model-config';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
+import { isRetryable } from '@/lib/ai-retry';
+import { withProviderReliability, PROVIDER_GEMINI_IMAGE } from '@/lib/ai-circuit-breaker.server';
 
 // Fallback model name if config fails to load
 const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
@@ -582,64 +584,57 @@ Output the generated image directly. Do not describe what you would create - act
       const fallbackModelName = imageModel;
       console.log('[avatarAnimationFlow] Using fallback model:', fallbackModelName);
 
-      // Retry logic - sometimes the model returns text instead of an image
+      // Retry via the shared withRetry/breaker wrapper. Two retryable cases:
+      // classified-transient errors (5xx/timeout) AND the flow-specific
+      // "model returned text instead of an image" no-output case.
       const MAX_RETRIES = 2;
-      let imageUrl: string | undefined;
+      const NO_IMAGE_MARKER = 'no image returned';
 
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        const fallbackStartTime = Date.now();
+      const imageUrl: string = await withProviderReliability(
+        PROVIDER_GEMINI_IMAGE,
+        async () => {
+          const fallbackStartTime = Date.now();
 
-        if (attempt > 0) {
-          console.log(`[avatarAnimationFlow] Retry attempt ${attempt}/${MAX_RETRIES}`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-        }
+          llmResponse = await ai.generate({
+            model: imageModel,
+            prompt: [
+              { media: { url: avatarDataUri } },
+              { text: fallbackPrompt },
+            ],
+            config: {
+              responseModalities: ['TEXT', 'IMAGE'],
+            },
+          });
 
-        llmResponse = await ai.generate({
-          model: imageModel,
-          prompt: [
-            { media: { url: avatarDataUri } },
-            { text: fallbackPrompt },
-          ],
-          config: {
-            responseModalities: ['TEXT', 'IMAGE'],
-          },
-        });
+          console.log('[avatarAnimationFlow] Image response received:', {
+            hasMedia: !!llmResponse.media,
+            mediaUrl: llmResponse.media?.url ? `${llmResponse.media.url.substring(0, 50)}...` : 'null',
+            hasText: !!llmResponse.text,
+            textPreview: llmResponse.text?.substring(0, 100),
+          });
 
-        console.log('[avatarAnimationFlow] Image response received:', {
-          hasMedia: !!llmResponse.media,
-          mediaUrl: llmResponse.media?.url ? `${llmResponse.media.url.substring(0, 50)}...` : 'null',
-          hasText: !!llmResponse.text,
-          textPreview: llmResponse.text?.substring(0, 100),
-        });
+          await logAIFlow({ flowName: 'avatarAnimationFlow', sessionId: entityId, parentId: entity.ownerParentUid, prompt: fallbackPrompt, response: llmResponse, startTime: fallbackStartTime, modelName: fallbackModelName });
 
-        await logAIFlow({ flowName: 'avatarAnimationFlow', sessionId: entityId, parentId: entity.ownerParentUid, prompt: fallbackPrompt, response: llmResponse, startTime: fallbackStartTime, modelName: fallbackModelName });
+          const url = llmResponse.media?.url;
+          if (url && url.startsWith('data:')) {
+            return url;
+          }
 
-        imageUrl = llmResponse.media?.url;
-
-        // Check if we got an actual image (not just text)
-        if (imageUrl && imageUrl.startsWith('data:')) {
-          // Successfully got an image
-          break;
-        }
-
-        // If we got text instead of an image, log and retry
-        if (llmResponse.text && !imageUrl) {
-          console.warn(`[avatarAnimationFlow] Model returned text instead of image (attempt ${attempt + 1}):`, llmResponse.text.substring(0, 150));
-        }
-
-        if (attempt === MAX_RETRIES) {
-          console.error('[avatarAnimationFlow] Image generation failed after retries - no media URL. Response keys:', Object.keys(llmResponse));
           const textPreview = llmResponse.text ? llmResponse.text.substring(0, 200) : 'No text returned';
+          console.warn(`[avatarAnimationFlow] Model returned text instead of image:`, textPreview);
           throw new Error(
-            `Failed to generate animation frame image. The model returned text instead of generating an image. ` +
-            `Model response: "${textPreview}"`
+            `Failed to generate animation frame image (${NO_IMAGE_MARKER}). ` +
+            `The model returned text instead of generating an image. Model response: "${textPreview}"`
           );
+        },
+        {
+          maxRetries: MAX_RETRIES,
+          shouldRetry: (e) =>
+            isRetryable(e) || String((e as Error)?.message ?? '').includes(NO_IMAGE_MARKER),
+          onRetry: ({ attempt, delayMs }) =>
+            console.log(`[avatarAnimationFlow] Retry attempt ${attempt}/${MAX_RETRIES} after ${delayMs}ms`),
         }
-      }
-
-      if (!imageUrl) {
-        throw new Error('Failed to generate animation frame image after retries.');
-      }
+      );
 
       console.log('[avatarAnimationFlow] Image URL received, length:', imageUrl.length);
       const { buffer, mimeType } = await parseMediaUrl(imageUrl);
