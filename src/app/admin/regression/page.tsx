@@ -314,6 +314,7 @@ const initialTests: TestResult[] = [
   { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
   { id: 'SCENARIO_GEMINI4_FLOW', name: 'Scenario: Gemini4 Story Flow', status: 'PENDING', message: '' },
   { id: 'SCENARIO_STORYBOOK_RETRY', name: 'Scenario: Storybook Retry API', status: 'PENDING', message: '' },
+  { id: 'API_STORYBOOK_PAGE_EDIT', name: 'API: /api/storybookV2/pageEdit (Validation + Edit + Lock)', status: 'PENDING', message: '' },
   { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
   { id: 'API_STORY_BEAT', name: 'API: /api/storyBeat (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
@@ -1900,6 +1901,98 @@ export default function AdminRegressionPage() {
 
     } catch (e: any) {
         updateTestResult('SCENARIO_STORYBOOK_RETRY', { status: 'ERROR', message: e.message });
+    }
+
+    // Test: API_STORYBOOK_PAGE_EDIT (Sprint W2-C)
+    // Validates input rejection, auth requirement, a real text+prompt edit
+    // (including the stale-audio reset), and the locked-book guard.
+    try {
+        const authToken = await auth?.currentUser?.getIdToken?.();
+        if (!authToken) throw new Error('Admin authentication required for pageEdit test.');
+
+        // Minimal story + storybook + page fixtures
+        const storyRef = doc(collection(firestore, 'stories'));
+        await setDoc(storyRef, addRegressionMeta({
+            childId: 'regression-page-edit-child',
+            storyText: 'A short tale for page edit testing.',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        }, 'API_STORYBOOK_PAGE_EDIT'));
+        trackArtifact(artifacts, 'stories', storyRef.id);
+
+        const storybookRef = doc(collection(firestore, 'stories', storyRef.id, 'storybooks'));
+        await setDoc(storybookRef, {
+            storyOutputTypeId: 'picture_book_standard_v1',
+            status: 'draft',
+            createdAt: serverTimestamp(),
+            regressionTest: true,
+            regressionTag: `${REGRESSION_SUITE_TAG}:API_STORYBOOK_PAGE_EDIT`,
+        });
+        const pageRef = doc(collection(firestore, 'stories', storyRef.id, 'storybooks', storybookRef.id, 'pages'));
+        await setDoc(pageRef, {
+            pageNumber: 2,
+            kind: 'text',
+            bodyText: 'Original text.',
+            displayText: 'Original text.',
+            imagePrompt: 'Original prompt.',
+            imageStatus: 'ready',
+            audioStatus: 'ready',
+            audioUrl: 'https://example.com/regression-audio.mp3',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+
+        // 1. Validation: empty body -> 400
+        const invalidRes = await fetch('/api/storybookV2/pageEdit', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+        });
+        if (invalidRes.status !== 400) throw new Error(`Expected 400 for empty body, got ${invalidRes.status}`);
+
+        // 2. Auth: valid body without a token -> 401
+        const unauthedRes = await fetch('/api/storybookV2/pageEdit', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storyId: storyRef.id, storybookId: storybookRef.id, pageId: pageRef.id, pageText: 'x' }),
+        });
+        if (unauthedRes.status !== 401) throw new Error(`Expected 401 without auth, got ${unauthedRes.status}`);
+
+        // 3. Real edit: text + prompt; expect audio reset (text changed)
+        const editRes = await fetch('/api/storybookV2/pageEdit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+            body: JSON.stringify({
+                storyId: storyRef.id, storybookId: storybookRef.id, pageId: pageRef.id,
+                pageText: 'Edited text.', imagePrompt: 'Edited prompt.',
+            }),
+        });
+        const editPayload = await editRes.json();
+        if (!editRes.ok || !editPayload?.ok) throw new Error(editPayload?.errorMessage || `Edit failed with ${editRes.status}`);
+        if (!editPayload.textChanged || !editPayload.promptChanged) throw new Error('Expected textChanged and promptChanged true.');
+        if (!editPayload.audioReset) throw new Error('Expected audioReset true after text change on a page with audio.');
+
+        const editedSnap = await getDoc(pageRef);
+        const edited = editedSnap.data();
+        if (edited?.bodyText !== 'Edited text.' || edited?.displayText !== 'Edited text.') {
+            throw new Error(`Page text not updated. bodyText=${edited?.bodyText}`);
+        }
+        if (edited?.imagePrompt !== 'Edited prompt.') throw new Error('imagePrompt not updated.');
+        if (edited?.audioStatus !== 'pending' || edited?.audioUrl) throw new Error('Stale audio was not reset.');
+        if (!edited?.lastEditedBy) throw new Error('lastEditedBy not recorded.');
+
+        // 4. Locked book -> 409
+        await updateDoc(storybookRef, { isLocked: true });
+        const lockedRes = await fetch('/api/storybookV2/pageEdit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+            body: JSON.stringify({ storyId: storyRef.id, storybookId: storybookRef.id, pageId: pageRef.id, pageText: 'Should fail.' }),
+        });
+        if (lockedRes.status !== 409) throw new Error(`Expected 409 for locked book, got ${lockedRes.status}`);
+
+        updateTestResult('API_STORYBOOK_PAGE_EDIT', {
+            status: 'PASS',
+            message: 'pageEdit validates input (400), requires auth (401), edits text+prompt with audio reset, and blocks locked books (409).',
+        });
+    } catch (e: any) {
+        updateTestResult('API_STORYBOOK_PAGE_EDIT', { status: 'ERROR', message: e.message });
     }
 
     // Test: SCENARIO_PAGINATION_SCENE_TAG

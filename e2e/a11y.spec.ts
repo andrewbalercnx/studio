@@ -73,6 +73,9 @@ test.describe('accessibility scans @a11y', () => {
       }
     });
 
+    // Signup no longer seeds a default child (515c81b) — surfaces that need a
+    // child create one through the parent UI first.
+
     test('who-is-playing page', async ({ page }, testInfo) => {
       account = await signUpNewParent(page, 'a11y-who');
       // No placeholder child is seeded at signup anymore (W1-C): the page

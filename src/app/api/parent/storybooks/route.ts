@@ -24,6 +24,14 @@ export type StorybookListItem = {
   printablePdfUrl?: string | null;
   printableCoverPdfUrl?: string | null;
   printableInteriorPdfUrl?: string | null;
+  // Degraded-book contract rollup (Sprint W2-C) — computed server-side from
+  // the persisted storybook.artStatus so clients never re-derive policy.
+  artCompleteness?: 'none' | 'in_progress' | 'degraded' | 'failed' | 'complete';
+  artPagesReady?: number;
+  artPagesTotal?: number;
+  artPagesFailed?: number;
+  /** True when the book can be ordered in its current state (complete OR degraded art). */
+  isOrderable?: boolean;
 };
 
 export type ChildWithStorybooks = {
@@ -181,6 +189,13 @@ export async function GET(request: NextRequest) {
             printablePdfUrl: sb.finalization?.printablePdfUrl || null,
             printableCoverPdfUrl: sb.finalization?.printableCoverPdfUrl || null,
             printableInteriorPdfUrl: sb.finalization?.printableInteriorPdfUrl || null,
+            // Degraded-book rollup (persisted by the images route; absent on
+            // books that predate the contract).
+            artCompleteness: sb.artStatus?.completeness,
+            artPagesReady: sb.artStatus?.pagesReady,
+            artPagesTotal: sb.artStatus?.pagesTotal,
+            artPagesFailed: sb.artStatus?.pagesFailed,
+            isOrderable: sb.artStatus?.isOrderable,
           };
           storybooksByChild.get(story.childId)?.push(item);
         }

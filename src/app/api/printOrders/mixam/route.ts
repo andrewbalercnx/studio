@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
-import type { PrintOrder, PrintProduct, PrintStoryBook } from '@/lib/types';
+import type { PrintOrder, PrintProduct, PrintStoryBook, StoryBookArtStatus } from '@/lib/types';
 import { validateUKAddress } from '@/lib/mixam/address-validator';
 import { notifyOrderSubmitted } from '@/lib/email/notify-admins';
+import { deriveStorybookArtStatus, evaluateOrderArtGate } from '@/lib/storybook-status';
 
 /**
  * POST /api/printOrders/mixam
@@ -16,6 +17,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { storyId, printStoryBookId, storybookId, productId, quantity, customOptions, shippingAddress } = body;
+    const acknowledgeDegraded = body.acknowledgeDegraded === true;
 
     console.log('[printOrders/mixam] Creating order:', { storyId, printStoryBookId, storybookId, productId, quantity });
 
@@ -80,6 +82,9 @@ export async function POST(request: NextRequest) {
     let paddingPdfUrl: string | null = null;
     let printableMetadata: any = null;
     let printStoryBook: PrintStoryBook | null = null;
+    // Degraded-book contract (Sprint W2-C): null means "no rollup available"
+    // (legacy paths) and the gate fails open — PDF checks remain the backstop.
+    let artStatus: StoryBookArtStatus | null = null;
 
     if (printStoryBookId) {
       // Use the PrintStoryBook collection
@@ -144,6 +149,29 @@ export async function POST(request: NextRequest) {
       interiorPdfUrl = storybookData.finalization.printableInteriorPdfUrl || null;
       paddingPdfUrl = storybookData.finalization.printablePaddingPdfUrl || null;
       printableMetadata = storybookData.finalization.printableMetadata || null;
+
+      // Art rollup for the degraded-order gate: prefer the persisted rollup
+      // (written by the images route), otherwise derive it live from pages.
+      if (storybookData.artStatus?.completeness) {
+        artStatus = storybookData.artStatus as StoryBookArtStatus;
+      } else {
+        try {
+          const pagesSnap = await firestore
+            .collection('stories')
+            .doc(storyId)
+            .collection('storybooks')
+            .doc(storybookId)
+            .collection('pages')
+            .get();
+          if (!pagesSnap.empty) {
+            artStatus = deriveStorybookArtStatus(
+              pagesSnap.docs.map((d) => ({ ...(d.data() as any), id: d.id }))
+            );
+          }
+        } catch (e: any) {
+          console.warn('[printOrders/mixam] Failed to derive artStatus, gate fails open:', e?.message);
+        }
+      }
     } else {
       // Try legacy path: stories/{storyId}/outputs/storybook
       console.log('[printOrders/mixam] Trying legacy path:', `stories/${storyId}/outputs/storybook`);
@@ -166,6 +194,33 @@ export async function POST(request: NextRequest) {
     if (!coverPdfUrl || !interiorPdfUrl) {
       return NextResponse.json(
         { ok: false, error: 'Printable PDFs have not been generated. Please generate PDFs first.' },
+        { status: 400 }
+      );
+    }
+
+    // 3b. Degraded-book order gate (Sprint W2-C): a partial-art book may be
+    // ordered, but only with an explicit acknowledgement that some pages will
+    // print without art. Fully failed / in-progress art blocks the order.
+    const artGate = evaluateOrderArtGate(artStatus, acknowledgeDegraded);
+    if (!artGate.allowed) {
+      if (artGate.requiresAcknowledgement) {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: 'degraded_confirmation_required',
+            error: `${artStatus!.pagesFailed} of ${artStatus!.pagesTotal} pages have no illustration. Confirm that you want these pages to print without art.`,
+            artStatus,
+          },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        {
+          ok: false,
+          code: 'not_orderable',
+          error: "This book's illustrations are not ready to print. Retry the artwork before ordering.",
+          artStatus,
+        },
         { status: 400 }
       );
     }
@@ -231,6 +286,18 @@ export async function POST(request: NextRequest) {
       fulfillmentStatus: 'awaiting_approval',
       paymentStatus: 'unpaid',
       version: 1,
+      // Degraded-order audit trail (Sprint W2-C)
+      ...(artStatus
+        ? {
+            artStatusSnapshot: {
+              completeness: artStatus.completeness,
+              pagesTotal: artStatus.pagesTotal,
+              pagesReady: artStatus.pagesReady,
+              pagesFailed: artStatus.pagesFailed,
+            },
+          }
+        : {}),
+      ...(artStatus?.completeness === 'degraded' ? { degradedArtAcknowledged: true } : {}),
       createdAt: FieldValue.serverTimestamp() as any,
       updatedAt: FieldValue.serverTimestamp() as any,
       statusHistory: [
@@ -279,6 +346,23 @@ export async function POST(request: NextRequest) {
           },
           source: 'system',
         },
+        ...(artStatus?.completeness === 'degraded'
+          ? [
+              {
+                event: 'degraded_art_acknowledged',
+                timestamp: now,
+                message: `Parent confirmed ordering with ${artStatus.pagesFailed} of ${artStatus.pagesTotal} pages missing art`,
+                data: {
+                  pagesTotal: artStatus.pagesTotal,
+                  pagesReady: artStatus.pagesReady,
+                  pagesFailed: artStatus.pagesFailed,
+                  failedPageIds: artStatus.failedPageIds ?? [],
+                },
+                source: 'parent' as const,
+                userId: user.uid,
+              },
+            ]
+          : []),
       ],
     };
 
@@ -308,11 +392,46 @@ export async function POST(request: NextRequest) {
 
     const orderRef = await firestore.collection('printOrders').add(cleanOrderData);
 
-    // Save shipping address to user profile for future orders
+    // Save shipping address to user profile for future orders (legacy field)
     await firestore.collection('users').doc(user.uid).set(
       { savedShippingAddress: addressValidation.normalized },
       { merge: true }
     );
+
+    // Save to the user's address book when requested (Sprint W2-C).
+    // Best effort: a failure here must never fail the order itself.
+    if (body.saveAddress === true) {
+      try {
+        const normalized = addressValidation.normalized!;
+        const addressesRef = firestore.collection('users').doc(user.uid).collection('addresses');
+        const existingSnap = await addressesRef.get();
+        const normKey = (line1: string, postalCode: string) =>
+          `${line1.trim().toLowerCase()}|${postalCode.replace(/\s+/g, '').toLowerCase()}`;
+        const newKey = normKey(normalized.line1, normalized.postalCode);
+        const isDuplicate = existingSnap.docs.some((doc) => {
+          const a = doc.data();
+          return normKey(a.line1 || '', a.postalCode || '') === newKey;
+        });
+        if (!isDuplicate) {
+          await addressesRef.add({
+            name: normalized.name,
+            line1: normalized.line1,
+            line2: normalized.line2 || '',
+            city: normalized.city,
+            state: normalized.state || '',
+            postalCode: normalized.postalCode,
+            country: normalized.country || 'GB',
+            label: typeof body.addressLabel === 'string' ? body.addressLabel.slice(0, 50) : '',
+            isDefault: existingSnap.empty,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          console.log(`[printOrders/mixam] Saved shipping address to address book for user ${user.uid}`);
+        }
+      } catch (saveError: any) {
+        console.warn('[printOrders/mixam] Failed to save address to address book:', saveError?.message);
+      }
+    }
 
     console.log(`[printOrders/mixam] Order created: ${orderRef.id} for user ${user.uid}`);
 

@@ -5,7 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useUser } from '@/firebase/auth/use-user';
 import { useDiagnosticsOptional } from '@/hooks/use-diagnostics';
-import type { PrintProduct, PrintOrderAddress, StoryOutput, SavedAddress } from '@/lib/types';
+import type { PrintProduct, PrintOrderAddress, StoryOutput, SavedAddress, StoryBookArtStatus } from '@/lib/types';
 import { AddressSelector, PostcodeLookup } from '@/components/address';
 
 type EndPaperColor = 'white' | 'cream' | 'black' | 'red' | 'blue' | 'green';
@@ -28,6 +28,12 @@ export default function OrderPrintBookPage() {
   const [products, setProducts] = useState<PrintProduct[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
 
+  // Degraded-book contract (Sprint W2-C): server-computed rollup, used for the
+  // proactive warning banner; the server gate is the source of truth.
+  const [artStatus, setArtStatus] = useState<StoryBookArtStatus | null>(null);
+  // 409 degraded_confirmation_required -> explicit confirmation dialog state
+  const [degradedConfirm, setDegradedConfirm] = useState<StoryBookArtStatus | null>(null);
+
   // Order customization
   const [quantity, setQuantity] = useState(1);
   const [endPaperColor, setEndPaperColor] = useState<EndPaperColor>('white');
@@ -44,6 +50,10 @@ export default function OrderPrintBookPage() {
   });
   const [addressMode, setAddressMode] = useState<'saved' | 'manual'>('saved');
   const [hasSavedAddresses, setHasSavedAddresses] = useState<boolean | null>(null);
+
+  // Save-address option for manually entered addresses (Sprint W2-C)
+  const [saveAddress, setSaveAddress] = useState(true);
+  const [addressLabel, setAddressLabel] = useState('');
 
   useEffect(() => {
     loadData();
@@ -93,6 +103,7 @@ export default function OrderPrintBookPage() {
       const productsData = await productsResponse.json();
 
       setStory(storyData.story);
+      setArtStatus(storyData.story?.artStatus ?? null);
       setProducts(productsData.products || []);
 
       // Auto-select first product if available
@@ -138,10 +149,7 @@ export default function OrderPrintBookPage() {
     }
   }
 
-  async function handleSubmitOrder(e: React.FormEvent) {
-    e.preventDefault();
-    console.log('[order] handleSubmitOrder called');
-
+  async function submitOrder(acknowledgeDegraded: boolean) {
     if (!user) {
       console.log('[order] No user');
       alert('You must be logged in to place an order');
@@ -180,6 +188,11 @@ export default function OrderPrintBookPage() {
           headTailBandColor: 'white', // Default
         },
         shippingAddress: address,
+        // Degraded-book contract: explicit confirmation that partial-art pages print without art
+        acknowledgeDegraded,
+        // Save manually entered addresses to the user's address book (server-side)
+        saveAddress: addressMode === 'manual' && saveAddress,
+        addressLabel: addressMode === 'manual' && saveAddress ? addressLabel.trim() : undefined,
       };
       console.log('[order] Request body:', requestBody);
 
@@ -196,6 +209,13 @@ export default function OrderPrintBookPage() {
       const data = await response.json();
       console.log('[order] Response data:', data);
 
+      // The server gate asks for an explicit confirmation before printing a
+      // partial-art (degraded) book — show the confirmation dialog.
+      if (response.status === 409 && data?.code === 'degraded_confirmation_required') {
+        setDegradedConfirm(data.artStatus ?? artStatus ?? null);
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(data.error || data.message || 'Failed to create order');
       }
@@ -210,6 +230,11 @@ export default function OrderPrintBookPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleSubmitOrder(e: React.FormEvent) {
+    e.preventDefault();
+    await submitOrder(false);
   }
 
   function formatCurrency(amount: number): string {
@@ -347,6 +372,20 @@ export default function OrderPrintBookPage() {
           <h1 className="text-3xl font-bold text-gray-900">Order Physical Book</h1>
           <p className="text-gray-600 mt-1">Create a beautiful hardcover book of your story</p>
         </div>
+
+        {/* Degraded-art warning (Sprint W2-C): some pages will print without art */}
+        {artStatus?.completeness === 'degraded' && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <p className="font-semibold text-amber-900">
+              {artStatus.pagesFailed} of {artStatus.pagesTotal} pages have no picture
+            </p>
+            <p className="text-sm text-amber-800 mt-1">
+              You can still order this book, but those pages will print without artwork.
+              We&apos;ll ask you to confirm before the order is placed. To fix them first, go back
+              to the book and retry the missing pictures.
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmitOrder} className="space-y-6">
           {/* Story Info */}
@@ -590,6 +629,34 @@ export default function OrderPrintBookPage() {
                     Currently only shipping to UK addresses
                   </p>
                 </div>
+
+                {/* Save address for future orders (Sprint W2-C) */}
+                <div className="border-t pt-4 space-y-3">
+                  <label className="flex items-center gap-2 text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={saveAddress}
+                      onChange={(e) => setSaveAddress(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Save this address for future orders
+                  </label>
+                  {saveAddress && (
+                    <div>
+                      <label className="block text-gray-700 mb-1 text-sm">
+                        Label (optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={addressLabel}
+                        onChange={(e) => setAddressLabel(e.target.value)}
+                        maxLength={50}
+                        placeholder={'e.g. Home, Grandma’s'}
+                        className="w-full max-w-xs border border-gray-300 rounded-md px-3 py-2"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -637,6 +704,51 @@ export default function OrderPrintBookPage() {
             </ul>
           </div>
         </form>
+
+        {/* Degraded-art order confirmation (Sprint W2-C) */}
+        {degradedConfirm && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="degraded-confirm-title"
+          >
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
+              <h2 id="degraded-confirm-title" className="text-xl font-semibold text-gray-900">
+                Some pages will print without pictures
+              </h2>
+              <p className="text-gray-700">
+                {degradedConfirm.pagesFailed} of {degradedConfirm.pagesTotal} pages in this book
+                don&apos;t have artwork — those pages will be printed with their words but{' '}
+                <strong>no picture</strong>.
+              </p>
+              <p className="text-sm text-gray-500">
+                If you&apos;d rather fix them first, go back to the book and retry the missing
+                pictures before ordering.
+              </p>
+              <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDegradedConfirm(null)}
+                  className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Go back
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => {
+                    setDegradedConfirm(null);
+                    submitOrder(true);
+                  }}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {submitting ? 'Submitting...' : 'Print without those pictures'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

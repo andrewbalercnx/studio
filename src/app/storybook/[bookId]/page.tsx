@@ -1,23 +1,21 @@
-
 'use client';
 
-import {useMemo, useState, useEffect} from 'react';
-import {useParams, useSearchParams} from 'next/navigation';
+import { useMemo, useState, useEffect } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import clsx from 'clsx';
-import {useFirestore} from '@/firebase';
-import {doc, collection, query, orderBy, where} from 'firebase/firestore';
-import {useDocument, useCollection} from '@/lib/firestore-hooks';
-import type {Story, StoryOutputPage, StoryOutputType, StoryBookOutput, Character, ChildProfile} from '@/lib/types';
-import {Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter} from '@/components/ui/card';
-import {Badge} from '@/components/ui/badge';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {Switch} from '@/components/ui/switch';
+import { useFirestore } from '@/firebase';
+import { doc, collection, query, orderBy, where, getDoc, updateDoc } from 'firebase/firestore';
+import { useDocument, useCollection } from '@/lib/firestore-hooks';
+import type { Story, StoryOutputPage, StoryOutputType, StoryBookOutput, Character, ChildProfile } from '@/lib/types';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import {
   LoaderCircle,
-  ChevronLeft,
-  ChevronRight,
+  ArrowLeft,
   RefreshCw,
   AlertTriangle,
   Image as ImageIcon,
@@ -26,29 +24,23 @@ import {
   Share2,
   Printer,
   Link as LinkIcon,
-  PackageCheck,
   BookOpen,
   Shield,
   Volume2,
   VolumeX,
-  Sparkles,
+  FileText,
 } from 'lucide-react';
-import {useUser} from '@/firebase/auth/use-user';
-import {useParentGuard} from '@/hooks/use-parent-guard';
-import {useToast} from '@/hooks/use-toast';
-import {PrintOrderDialog} from '@/components/storybook/print-order-dialog';
+import { useUser } from '@/firebase/auth/use-user';
+import { useParentGuard } from '@/hooks/use-parent-guard';
+import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { getDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { useResolvePlaceholders } from '@/hooks/use-resolve-placeholders';
 import { useDiagnosticsOptional } from '@/hooks/use-diagnostics';
-import { replaceNamesWithPlaceholders } from '@/lib/replace-names-with-placeholders';
 import { deriveStorybookArtStatus } from '@/lib/storybook-status';
-import { updateDoc } from 'firebase/firestore';
+import { ParentBookView } from '@/components/book-reader';
+import { PageEditorDialog } from '@/components/storybook/page-editor-dialog';
+import type { ActorNameMapping } from '@/lib/replace-names-with-placeholders';
 
 type StatusBadge = {label: string; variant: 'default' | 'secondary' | 'outline'};
 
@@ -71,7 +63,7 @@ function deriveFinalizationBadge(book?: Story | null, readyPages = 0, totalPages
   if (status === 'printable_ready') return {label: 'Printable Ready', variant: 'secondary'};
   if (status === 'finalized' || book?.isLocked) return {label: 'Finalized', variant: 'default'};
   if (readyPages > 0 && totalPages > 0 && readyPages === totalPages && book?.imageGeneration?.status === 'ready') {
-    return {label: 'Ready to Finalize', variant: 'outline'};
+    return {label: 'Ready to Print', variant: 'outline'};
   }
   return {label: 'Draft', variant: 'outline'};
 }
@@ -86,6 +78,16 @@ function formatShareUrl(path?: string | null): string | null {
   }
 }
 
+/**
+ * Parent storybook view (Sprint W2-C).
+ *
+ * Two distinct stages:
+ *  1. CLEAN-UP — the book renders through the same shared page components the
+ *     child sees (`ParentBookView` -> `BookPageSpread`), with one addition: an
+ *     Edit button on each page (text / picture prompt / single-page repaint).
+ *  2. PRINT & SHARE — a clearly subsequent step: print layout, finalize/lock,
+ *     ordering, and share links.
+ */
 export default function StorybookViewerPage() {
   const params = useParams<{bookId: string}>();
   const searchParams = useSearchParams();
@@ -101,8 +103,6 @@ export default function StorybookViewerPage() {
   const {isParentGuardValidated, showPinModal} = useParentGuard();
   const diagnostics = useDiagnosticsOptional();
 
-  // For legacy model: load Story document directly
-  // For new model: load Story for metadata and StoryBookOutput for status
   const storyRef = useMemo(() => (firestore && storyId ? doc(firestore, 'stories', storyId) : null), [firestore, storyId]);
   const storybookRef = useMemo(
     () => (firestore && isNewModel && storyId && bookId ? doc(firestore, 'stories', storyId, 'storybooks', bookId) : null),
@@ -127,7 +127,6 @@ export default function StorybookViewerPage() {
   // Storybook data - new model only
   const storyBook = useMemo(() => {
     if (!isNewModel || !storybookOutput || !story) return null;
-    // Merge story metadata with storybook output status
     return {
       ...story,
       imageGeneration: storybookOutput.imageGeneration,
@@ -143,47 +142,29 @@ export default function StorybookViewerPage() {
 
   const bookLoading = storyLoading || (isNewModel && storybookOutputLoading);
 
-  const [activeIndex, setActiveIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [jobLogs, setJobLogs] = useState<string[]>([]);
   const [jobError, setJobError] = useState<string | null>(null);
   const [finalizing, setFinalizing] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
-  const [printableLoading, setPrintableLoading] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
   const [shareSecret, setShareSecret] = useState<string | null>(null);
   const [shareProtectWithCode, setShareProtectWithCode] = useState(true);
   const [customSharePasscode, setCustomSharePasscode] = useState('');
   const [absoluteShareUrl, setAbsoluteShareUrl] = useState<string | null>(null);
-  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [selectedOutputTypeId, setSelectedOutputTypeId] = useState<string>('');
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [audioJobError, setAudioJobError] = useState<string | null>(null);
 
-  // Regenerate dialog state
-  const [regenerateDialogOpen, setRegenerateDialogOpen] = useState(false);
-  const [regeneratePageId, setRegeneratePageId] = useState<string | null>(null);
-  const [additionalPrompt, setAdditionalPrompt] = useState('');
+  // Per-page editor state
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorPage, setEditorPage] = useState<StoryOutputPage | null>(null);
 
-  // Actor list state
-  type ActorInfo = {
-    id: string;
-    displayName: string;
-    avatarUrl?: string;
-    type: 'child' | 'character';
-    characterType?: string;
-  };
-  const [actors, setActors] = useState<ActorInfo[]>([]);
-  const [actorsLoading, setActorsLoading] = useState(false);
+  // Actor name <-> $$id$$ mappings for the page editor's placeholder round-trip
+  const [actors, setActors] = useState<ActorNameMapping[]>([]);
 
   const finalization = storyBook?.storybookFinalization ?? null;
 
-  useEffect(() => {
-    if (pages && pages.length > 0 && activeIndex >= pages.length) {
-      setActiveIndex(pages.length - 1);
-    }
-  }, [pages, activeIndex]);
-  
   useEffect(() => {
     if (storyOutputTypes && storyOutputTypes.length > 0 && !selectedOutputTypeId) {
       setSelectedOutputTypeId(storyOutputTypes[0].id);
@@ -212,67 +193,37 @@ export default function StorybookViewerPage() {
     }
   }, [persistedArtStatus?.recoveredAt, persistedArtStatus?.recoveryNotified, storybookRef, toast]);
 
-  // Load actors from story.actors array
+  // Load actor display names from story.actors (children/characters collections)
   useEffect(() => {
     async function loadActors() {
       if (!firestore || !story?.actors || story.actors.length === 0) {
         setActors([]);
         return;
       }
-
-      setActorsLoading(true);
-      // Filter out empty/invalid IDs to prevent Firestore "documentPath must be non-empty" errors
       const actorIds = story.actors.filter((id: string) => id && typeof id === 'string' && id.trim().length > 0);
-      const loadedActors: ActorInfo[] = [];
-
+      const loaded: ActorNameMapping[] = [];
       for (const actorId of actorIds) {
-        // Try children collection first
         try {
           const childDoc = await getDoc(doc(firestore, 'children', actorId));
           if (childDoc.exists()) {
-            const child = childDoc.data() as ChildProfile;
-            loadedActors.push({
-              id: actorId,
-              displayName: child.displayName,
-              avatarUrl: child.avatarUrl,
-              type: 'child',
-            });
+            loaded.push({ id: actorId, displayName: (childDoc.data() as ChildProfile).displayName });
             continue;
           }
         } catch (e) {
           console.warn(`[loadActors] Error fetching child ${actorId}:`, e);
         }
-
-        // Try characters collection
         try {
           const charDoc = await getDoc(doc(firestore, 'characters', actorId));
           if (charDoc.exists()) {
-            const character = charDoc.data() as Character;
-            loadedActors.push({
-              id: actorId,
-              displayName: character.displayName,
-              avatarUrl: character.avatarUrl,
-              type: 'character',
-              characterType: character.type,
-            });
+            loaded.push({ id: actorId, displayName: (charDoc.data() as Character).displayName });
             continue;
           }
         } catch (e) {
           console.warn(`[loadActors] Error fetching character ${actorId}:`, e);
         }
-
-        // Actor not found - add placeholder
-        loadedActors.push({
-          id: actorId,
-          displayName: actorId,
-          type: 'character',
-        });
       }
-
-      setActors(loadedActors);
-      setActorsLoading(false);
+      setActors(loaded);
     }
-
     loadActors();
   }, [firestore, story?.actors]);
 
@@ -288,9 +239,7 @@ export default function StorybookViewerPage() {
   // Audio stats - pages that could have audio (have text content)
   const pagesWithText = pages?.filter((page) => page.bodyText || page.displayText) ?? [];
   const audioReadyCount = pagesWithText.filter((page) => page.audioStatus === 'ready' && page.audioUrl).length;
-  const audioErrorCount = pagesWithText.filter((page) => page.audioStatus === 'error').length;
   const audioGeneratingCount = pagesWithText.filter((page) => page.audioStatus === 'generating').length;
-  const audioPendingCount = pagesWithText.filter((page) => !page.audioStatus || page.audioStatus === 'pending').length;
   const totalAudioPages = pagesWithText.length;
   const allAudioReady = totalAudioPages > 0 && audioReadyCount === totalAudioPages;
   const documentImageStatus = storyBook?.imageGeneration?.status ?? 'idle';
@@ -299,12 +248,6 @@ export default function StorybookViewerPage() {
                                  errorCount > 0 ? 'error' :
                                  documentImageStatus === 'running' ? 'running' : 'pending';
   const disableGenerate = isGenerating || documentImageStatus === 'running' || !!storyBook?.isLocked;
-  const currentPage = pages && pages.length > 0 ? pages[Math.max(0, Math.min(activeIndex, pages.length - 1))] : null;
-
-  // Resolve placeholders in the current page's text
-  // This handles pages with unresolved $$childId$$ or $$characterId$$ placeholders
-  const rawPageText = currentPage?.displayText || currentPage?.bodyText || null;
-  const { resolvedText: currentPageText } = useResolvePlaceholders(rawPageText);
 
   const isLocked = storyBook?.isLocked ?? false;
   const allImagesReady = calculatedImageStatus === 'ready';
@@ -313,8 +256,8 @@ export default function StorybookViewerPage() {
   const artStatus = useMemo(() => deriveStorybookArtStatus(pages ?? []), [pages]);
   const isDegraded = artStatus.completeness === 'degraded';
   const finalizationBadge = deriveFinalizationBadge(storyBook, readyCount, totalPages);
-  const printableReady = finalization?.printableStatus === 'ready' && !!finalization?.printablePdfUrl;
   const shareExpiresAt = formatTimestamp(finalization?.shareExpiresAt);
+  const hasArtStarted = readyCount > 0 || errorCount > 0 || documentImageStatus === 'running' || isGenerating;
 
   const requireGuard = () => {
     if (isParentGuardValidated) return true;
@@ -374,7 +317,7 @@ export default function StorybookViewerPage() {
       setIsGenerating(false);
     }
   };
-  
+
   const handleGeneratePages = async () => {
     if (!storyId || !isNewModel) return;
     if (!selectedOutputTypeId) {
@@ -405,43 +348,24 @@ export default function StorybookViewerPage() {
     }
   };
 
+  const handleGenerateAll = () => triggerImageJob({});
 
-  const handleGenerateAll = (forceRegenerate = false) => triggerImageJob({forceRegenerate});
-
-  // Open the regenerate dialog for a specific page
-  const handleRegeneratePage = (pageId: string | undefined) => {
-    if (!pageId) return;
-    setRegeneratePageId(pageId);
-    setAdditionalPrompt('');
-    setRegenerateDialogOpen(true);
+  // Single-page repaint (used by the failed-page retry and the editor dialog)
+  const handleRetryPage = (page: StoryOutputPage) => {
+    if (!page.id) return;
+    triggerImageJob({ pageId: page.id, forceRegenerate: true });
   };
 
-  // Actually regenerate with optional additional prompt
-  const handleConfirmRegenerate = () => {
-    if (!regeneratePageId) return;
-    setRegenerateDialogOpen(false);
-
-    // Process the additional prompt to replace character names with $$id$$ placeholders
-    // e.g., "The child is Nymira" becomes "The child is $$childId$$"
-    const processedPrompt = additionalPrompt.trim()
-      ? replaceNamesWithPlaceholders(additionalPrompt.trim(), actors)
-      : undefined;
-
-    triggerImageJob({
-      pageId: regeneratePageId,
-      forceRegenerate: true,
-      additionalPrompt: processedPrompt,
-    });
-    setRegeneratePageId(null);
-    setAdditionalPrompt('');
+  const handleRegenerateFromEditor = (pageId: string, additionalPrompt?: string) => {
+    toast({ title: 'Repainting page', description: 'The new picture will appear when it finishes.' });
+    triggerImageJob({ pageId, forceRegenerate: true, additionalPrompt });
   };
 
-  const handleRegenerateFailedPages = async () => {
+  const handleRetryFailedPages = async () => {
     if (!storyId || !isNewModel || failedPageIds.length === 0) return;
     setIsGenerating(true);
     setJobError(null);
     try {
-      // Regenerate each failed page sequentially
       for (const pageId of failedPageIds) {
         const response = await fetch('/api/storybookV2/images', {
           method: 'POST',
@@ -458,12 +382,21 @@ export default function StorybookViewerPage() {
           throw new Error(result?.errorMessage || `Failed to regenerate page ${pageId}.`);
         }
       }
-      toast({title: 'Regenerating failed pages', description: `Started regeneration for ${failedPageIds.length} failed page(s).`});
+      toast({title: 'Retrying missing pictures', description: `Started regeneration for ${failedPageIds.length} page(s).`});
     } catch (error: any) {
       setJobError(error?.message || 'Unexpected error while regenerating failed pages.');
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleEditPage = (page: StoryOutputPage) => {
+    if (isLocked) {
+      toast({ title: 'Book is locked', description: 'Unlock the book to edit its pages.' });
+      return;
+    }
+    setEditorPage(page);
+    setEditorOpen(true);
   };
 
   const handleFinalize = async () => {
@@ -497,27 +430,6 @@ export default function StorybookViewerPage() {
       toast({title: 'Unlock failed', description: error?.message ?? 'Unable to unlock book.', variant: 'destructive'});
     } finally {
       setUnlocking(false);
-    }
-  };
-
-  const handleGeneratePrintable = async () => {
-    if (!storyId || !requireGuard()) return;
-    setPrintableLoading(true);
-    try {
-      // Use the print layout stored on the storybook, or fall back to a default
-      const printLayoutId = storybookOutput?.printLayoutId || 'a4-portrait-spread-v1';
-      const result = await authorizedFetch('/api/storyBook/printable', {
-        storyId,
-        ...(isNewModel && { storybookId: bookId }),
-        outputId: 'storybook',
-        printLayoutId,
-      });
-      if (!result) return;
-      toast({title: 'Printable ready', description: 'PDF regenerated successfully.'});
-    } catch (error: any) {
-      toast({title: 'Printable failed', description: error?.message ?? 'Unable to render PDF.', variant: 'destructive'});
-    } finally {
-      setPrintableLoading(false);
     }
   };
 
@@ -589,7 +501,7 @@ export default function StorybookViewerPage() {
   };
 
   const statusMessage = isLocked
-    ? 'This storybook is locked for printing. Unlock it to regenerate pages or art.'
+    ? 'This storybook is locked for printing. Unlock it to edit pages or repaint pictures.'
     : calculatedImageStatus === 'running'
     ? 'Illustrations are currently generating. You can keep browsing while we finish each page.'
     : isDegraded
@@ -599,51 +511,165 @@ export default function StorybookViewerPage() {
     : calculatedImageStatus === 'error'
     ? 'Some pages need attention. Retry the failed ones or regenerate everything.'
     : calculatedImageStatus === 'ready'
-    ? 'Every page has finished illustration and is ready for review.'
+    ? 'Every page is illustrated. Review each page below, then move on to printing.'
     : 'Kick off art generation to bring this storybook to life.';
 
-  const nextPage = () => {
-    if (!pages || pages.length === 0) return;
-    setActiveIndex((prev) => Math.min(prev + 1, pages.length - 1));
-  };
+  // ── Render ──────────────────────────────────────────────────────────────
 
-  const prevPage = () => {
-    if (!pages || pages.length === 0) return;
-    setActiveIndex((prev) => Math.max(prev - 1, 0));
-  };
-
-  const renderViewer = () => {
-    if (bookLoading || pagesLoading) {
-      return (
-        <div className="flex items-center justify-center py-16">
+  if (bookLoading || pagesLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
+        <div className="flex items-center justify-center py-24">
           <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
         </div>
-      );
-    }
+      </div>
+    );
+  }
 
-    // Legacy storybooks are no longer supported
-    if (!isNewModel) {
-      return (
-        <Card className="border-dashed border-destructive">
-          <CardHeader>
-            <CardTitle className="text-destructive">Legacy Storybook</CardTitle>
-            <CardDescription>
-              This storybook was created with an older format that is no longer supported.
-              Please create a new storybook from your story.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild variant="outline">
-              <Link href="/stories">Back to My Stories</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      );
-    }
+  // Legacy storybooks are no longer supported
+  if (!isNewModel) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
+        <div className="container mx-auto px-4 py-10">
+          <Card className="mx-auto w-full max-w-3xl border-dashed border-destructive">
+            <CardHeader>
+              <CardTitle className="text-destructive">Legacy Storybook</CardTitle>
+              <CardDescription>
+                This storybook was created with an older format that is no longer supported.
+                Please create a new storybook from your story.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild variant="outline">
+                <Link href="/stories">Back to My Stories</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
-    if (!pages || pages.length === 0) {
-      return (
-        <Card className="border-dashed">
+  const hasPages = !!pages && pages.length > 0;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
+    <div className="container mx-auto px-4 py-8 space-y-6">
+      {/* Top bar */}
+      <div className="mx-auto w-full max-w-4xl flex flex-wrap items-center justify-between gap-2">
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/stories">
+            <ArrowLeft className="mr-1 h-4 w-4" />
+            My Stories
+          </Link>
+        </Button>
+        {story?.childId && (
+          <Button asChild variant="ghost" size="sm">
+            <Link href={`/child/${story.childId}/story/${storyId}/read`}>
+              <FileText className="mr-1 h-4 w-4" />
+              View Story Text
+            </Link>
+          </Button>
+        )}
+      </div>
+
+      {/* Header: title, status, primary actions */}
+      <Card className="mx-auto w-full max-w-4xl" data-wiz-target="storybook-viewer-card">
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle>{storyBook?.metadata?.title ?? storyBook?.storyText?.slice(0, 32) ?? 'Storybook'}</CardTitle>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={finalizationBadge.variant} className="uppercase tracking-wide text-xs">
+                {finalizationBadge.label}
+              </Badge>
+              <Badge variant={isDegraded ? 'destructive' : 'secondary'} className="gap-1 text-xs">
+                {isDegraded && <AlertTriangle className="h-3 w-3" />}
+                Pictures: {readyCount}/{totalPages}
+              </Badge>
+              <Badge variant={allAudioReady ? 'default' : audioGeneratingCount > 0 ? 'secondary' : 'outline'} className="gap-1 text-xs">
+                {audioGeneratingCount > 0 ? (
+                  <LoaderCircle className="h-3 w-3 animate-spin" />
+                ) : allAudioReady ? (
+                  <Volume2 className="h-3 w-3" />
+                ) : (
+                  <VolumeX className="h-3 w-3" />
+                )}
+                Audio: {audioReadyCount}/{totalAudioPages}
+              </Badge>
+              {isLocked && (
+                <Badge variant="default" className="gap-1 text-xs">
+                  <Lock className="h-3 w-3" />
+                  Locked
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          <Alert className={clsx(
+              isLocked ? 'bg-blue-50 border-blue-200 text-blue-900 [&>svg]:text-blue-600' :
+              allImagesReady ? 'bg-emerald-50 border-emerald-200 text-emerald-900 [&>svg]:text-emerald-600' :
+              'bg-amber-50 border-amber-200 text-amber-900 [&>svg]:text-amber-600'
+          )}>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{statusMessage}</AlertDescription>
+          </Alert>
+
+          <div className="flex flex-wrap gap-2" data-wiz-target="storybook-actions">
+            {hasPages && !hasArtStarted && !isLocked && (
+              <Button onClick={handleGenerateAll} disabled={disableGenerate} data-wiz-target="storybook-generate-art">
+                {isGenerating ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
+                Generate Storybook Art
+              </Button>
+            )}
+            {errorCount > 0 && !isLocked && (
+              <Button variant="destructive" onClick={handleRetryFailedPages} disabled={disableGenerate}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Retry {errorCount} Missing Picture{errorCount === 1 ? '' : 's'}
+              </Button>
+            )}
+            {artStatus.isViewable && (
+              <Button asChild variant="default" data-wiz-target="storybook-read">
+                <Link href={`/storybook/${bookId}/read?storyId=${storyId}`}>
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  Read Book
+                </Link>
+              </Button>
+            )}
+            {allImagesReady && (
+              <Button
+                variant="outline"
+                onClick={() => handleGenerateAudio(allAudioReady)}
+                disabled={isGeneratingAudio || audioGeneratingCount > 0 || isLocked}
+                title={isLocked ? 'Unlock to generate audio.' : allAudioReady ? 'Regenerate all narration' : 'Generate narration for all pages'}
+                data-wiz-target="storybook-generate-audio"
+              >
+                {(isGeneratingAudio || audioGeneratingCount > 0) ? (
+                  <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Volume2 className="mr-2 h-4 w-4" />
+                )}
+                {allAudioReady ? 'Regenerate Narration' : 'Generate Narration'}
+              </Button>
+            )}
+          </div>
+          {jobError && <p className="text-sm text-destructive">{jobError}</p>}
+          {audioJobError && <p className="text-sm text-destructive">{audioJobError}</p>}
+          {jobLogs.length > 0 && diagnostics?.showDiagnosticsPanel && (
+            <div className="w-full rounded-md bg-muted/40 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Last generation logs</p>
+              <ul className="mt-2 space-y-1 text-xs font-mono">
+                {jobLogs.map((line, idx) => (
+                  <li key={`${line}-${idx}`}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </CardHeader>
+      </Card>
+
+      {/* No pages yet: choose a format and generate pages */}
+      {!hasPages && (
+        <Card className="mx-auto w-full max-w-4xl border-dashed">
             <CardHeader>
                 <CardTitle>Create Your Storybook Pages</CardTitle>
                 <CardDescription>
@@ -668,295 +694,69 @@ export default function StorybookViewerPage() {
                     {isGenerating ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <BookOpen className="mr-2 h-4 w-4" />}
                     Generate Pages
                 </Button>
-                {jobError && <p className="text-sm text-destructive">{jobError}</p>}
             </CardContent>
         </Card>
-      );
-    }
+      )}
 
-    return (
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Button variant="outline" size="sm" onClick={prevPage} disabled={activeIndex === 0}>
-            <ChevronLeft className="mr-1 h-4 w-4" /> Previous
-          </Button>
-          <div className="text-sm text-muted-foreground">
-            Page {activeIndex + 1} of {pages.length}
-          </div>
-          <Button variant="outline" size="sm" onClick={nextPage} disabled={activeIndex >= pages.length - 1}>
-            Next <ChevronRight className="ml-1 h-4 w-4" />
-          </Button>
-        </div>
-        <div className="flex flex-wrap gap-2 justify-center">
-          {pages.map((page, idx) => {
-            // Pages that don't need images (title_page, blank without imagePrompt) are always considered "ready"
-            const needsImage = page.kind !== 'title_page' && page.kind !== 'blank' && !!page.imagePrompt;
-            const isError = needsImage && page.imageStatus === 'error';
-            const isPending = needsImage && (!page.imageStatus || page.imageStatus === 'pending' || page.imageStatus === 'generating');
-            return (
-              <button
-                key={page.id ?? idx}
-                className={clsx(
-                  'rounded-full border px-3 py-1 text-xs capitalize flex items-center gap-1',
-                  idx === activeIndex
-                    ? isError
-                      ? 'border-destructive bg-destructive text-white'
-                      : 'border-primary bg-primary text-white'
-                    : isError
-                      ? 'border-destructive/60 text-destructive bg-destructive/10'
-                      : isPending
-                        ? 'border-amber-400/60 text-amber-600 bg-amber-50'
-                        : 'border-muted-foreground/40 text-muted-foreground'
-                )}
-                onClick={() => setActiveIndex(idx)}
-                title={isError ? 'Image generation failed - click to view' : isPending ? 'Image pending' : undefined}
-              >
-                {isError && <AlertTriangle className="h-3 w-3" />}
-                {page.kind.replace(/_/g, ' ')}
-              </button>
-            );
-          })}
-        </div>
+      {/* Stage 1 — clean-up: the book exactly as the child sees it + Edit */}
+      {hasPages && (
+        <Card className="mx-auto w-full max-w-4xl">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Step 1 · Clean up the pages</CardTitle>
+            <CardDescription>
+              This is the book as your child sees it. Flick through each page — use{' '}
+              <span className="font-medium">Edit page</span> to change the words, the picture
+              description, or repaint a single picture.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ParentBookView
+              pages={pages!}
+              onEditPage={handleEditPage}
+              onRetryPage={handleRetryPage}
+              actionsDisabled={disableGenerate}
+            />
+          </CardContent>
+        </Card>
+      )}
 
-        {currentPage && (
-          <div className="space-y-4">
-            <div className="relative overflow-hidden rounded-xl border bg-muted/30">
-              {currentPage.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={currentPage.imageUrl}
-                  alt={currentPage.imagePrompt || `Page ${currentPage.pageNumber} artwork`}
-                  className="h-[480px] w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-[320px] w-full flex-col items-center justify-center gap-2 text-muted-foreground">
-                  <ImageIcon className="h-10 w-10" />
-                  <p>No illustration yet.</p>
-                </div>
-              )}
-              <div className="absolute left-4 top-4">
-                <Badge variant="secondary" className="capitalize">
-                  {currentPage.kind.replace(/_/g, ' ')}
-                </Badge>
-              </div>
-              <div className="absolute right-4 top-4">
-                <Badge variant={currentPage.imageStatus === 'ready' ? 'default' : 'destructive'}>
-                  {currentPage.imageStatus ?? 'pending'}
-                </Badge>
-              </div>
-            </div>
-            {currentPage.title && <h3 className="text-2xl font-semibold">{currentPage.title}</h3>}
-            {currentPageText && <p className="text-lg leading-relaxed">{currentPageText}</p>}
-            {/* Friendly note for failed pages (lastErrorMessage is user-safe — never a raw API string) */}
-            {currentPage.imageStatus === 'error' && (
-              <Alert className="bg-amber-50 border-amber-200 text-amber-900 [&>svg]:text-amber-600 text-sm">
+      {/* Stage 2 — print & share: a clearly subsequent step */}
+      {hasPages && (
+        <Card className="mx-auto w-full max-w-4xl">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Step 2 · Print &amp; share</CardTitle>
+            <CardDescription>
+              Happy with every page? Create the print layout and order a printed copy, or lock the
+              book to share it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {isDegraded && (
+              <Alert className="bg-amber-50 border-amber-200 text-amber-900 [&>svg]:text-amber-600">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>This picture didn&apos;t finish</AlertTitle>
+                <AlertTitle>{artStatus.pagesFailed} page{artStatus.pagesFailed === 1 ? ' has' : 's have'} no picture</AlertTitle>
                 <AlertDescription>
-                  {currentPage.imageMetadata?.lastErrorMessage ?? 'The picture could not be painted this time.'}{' '}
-                  The rest of your book is fine — use &quot;Regenerate this page&quot; to try again.
+                  You can still order this book — we&apos;ll ask you to confirm at checkout that
+                  those pages will print without art. Or retry the missing pictures in Step 1 first.
                 </AlertDescription>
               </Alert>
             )}
-            <div className="flex flex-wrap gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleRegeneratePage(currentPage.id)}
-                disabled={disableGenerate}
-                title={isLocked ? 'Unlock the book to regenerate art.' : undefined}
-              >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Regenerate this page
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const openOrderDialog = () => {
-    if (!requireGuard()) return;
-    setOrderDialogOpen(true);
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
-    <div className="container mx-auto px-4 py-10 space-y-6">
-      <div className="grid gap-6 lg:grid-cols-1">
-        <Card className="mx-auto w-full max-w-4xl" data-wiz-target="storybook-viewer-card">
-          <CardHeader className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <CardTitle>{storyBook?.metadata?.title ?? storyBook?.storyText?.slice(0, 32) ?? 'Storybook Viewer'}</CardTitle>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant={finalizationBadge.variant} className="uppercase tracking-wide text-xs">
-                  {finalizationBadge.label}
-                </Badge>
-                <Badge variant="secondary" className="text-xs">
-                  Images: {readyCount}/{totalPages}
-                </Badge>
-                <Badge variant={allAudioReady ? 'default' : audioGeneratingCount > 0 ? 'secondary' : 'outline'} className="gap-1 text-xs">
-                  {audioGeneratingCount > 0 ? (
-                    <LoaderCircle className="h-3 w-3 animate-spin" />
-                  ) : allAudioReady ? (
-                    <Volume2 className="h-3 w-3" />
-                  ) : (
-                    <VolumeX className="h-3 w-3" />
-                  )}
-                  Audio: {audioReadyCount}/{totalAudioPages}
-                </Badge>
-                {errorCount > 0 && (
-                  <Badge variant="destructive" className="gap-1 text-xs">
-                    <AlertTriangle className="h-3 w-3" />
-                    {errorCount} Failed
-                  </Badge>
-                )}
-                {isLocked && (
-                  <Badge variant="default" className="gap-1 text-xs">
-                    <Lock className="h-3 w-3" />
-                    Locked
-                  </Badge>
-                )}
-              </div>
-            </div>
-            {/* Actor List */}
-            {actors.length > 0 && (
-              <div className="flex flex-wrap items-center gap-3 py-2 border-t border-b">
-                <span className="text-sm font-medium text-muted-foreground">Cast:</span>
-                <div className="flex flex-wrap gap-2">
-                  {actors.map((actor) => (
-                    <div key={actor.id} className="flex items-center gap-2 bg-muted/50 rounded-full px-3 py-1">
-                      <Avatar className="h-6 w-6">
-                        {actor.avatarUrl ? (
-                          <AvatarImage src={actor.avatarUrl} alt={actor.displayName} />
-                        ) : null}
-                        <AvatarFallback className="text-xs">
-                          {actor.displayName.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm">{actor.displayName}</span>
-                      {actor.type === 'character' && actor.characterType && (
-                        <Badge variant="outline" className="text-xs py-0 px-1">
-                          {actor.characterType}
-                        </Badge>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {actorsLoading && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <LoaderCircle className="h-4 w-4 animate-spin" />
-                Loading cast...
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2" data-wiz-target="storybook-actions">
-              <Button onClick={() => handleGenerateAll(false)} disabled={disableGenerate} title={isLocked ? 'Unlock to regenerate art.' : undefined} data-wiz-target="storybook-generate-art">
-                {(isGenerating || documentImageStatus === 'running') ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
-                {calculatedImageStatus === 'ready' ? 'Refresh Art' : 'Generate Storybook Art'}
-              </Button>
-              {errorCount > 0 && (
-                <Button
-                  variant="destructive"
-                  onClick={handleRegenerateFailedPages}
-                  disabled={disableGenerate}
-                  title={isLocked ? 'Unlock to regenerate art.' : `Regenerate ${errorCount} failed page(s)`}
-                >
-                  <AlertTriangle className="mr-2 h-4 w-4" />
-                  Retry {errorCount} Failed
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                onClick={() => handleGenerateAll(true)}
-                disabled={disableGenerate}
-                title={isLocked ? 'Unlock to regenerate art.' : undefined}
-              >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Force Regenerate All
-              </Button>
-              {/* Audio generation button */}
-              {allImagesReady && (
-                <Button
-                  variant={allAudioReady ? 'outline' : 'default'}
-                  onClick={() => handleGenerateAudio(allAudioReady)}
-                  disabled={isGeneratingAudio || audioGeneratingCount > 0 || isLocked}
-                  title={isLocked ? 'Unlock to generate audio.' : allAudioReady ? 'Regenerate all audio narration' : 'Generate audio narration for all pages'}
-                  data-wiz-target="storybook-generate-audio"
-                >
-                  {(isGeneratingAudio || audioGeneratingCount > 0) ? (
-                    <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Volume2 className="mr-2 h-4 w-4" />
-                  )}
-                  {allAudioReady ? 'Regenerate Narration' : 'Generate Narration'}
-                </Button>
-              )}
-            </div>
-            {audioJobError && (
-              <p className="text-sm text-destructive mt-2">{audioJobError}</p>
-            )}
-            <Alert variant={isLocked ? 'default' : allImagesReady ? 'default' : 'destructive'} className={clsx(
-                isLocked ? 'bg-blue-50 border-blue-200 text-blue-900 [&>svg]:text-blue-600' : 
-                allImagesReady ? 'bg-emerald-50 border-emerald-200 text-emerald-900 [&>svg]:text-emerald-600' : 
-                'bg-amber-50 border-amber-200 text-amber-900 [&>svg]:text-amber-600'
-            )}>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>{statusMessage}</AlertDescription>
-            </Alert>
-          </CardHeader>
-          <CardContent>{renderViewer()}</CardContent>
-          <CardFooter className="flex flex-col gap-3">
-            {jobError && <p className="text-sm text-destructive">{jobError}</p>}
-            {jobLogs.length > 0 && diagnostics?.showDiagnosticsPanel && (
-              <div className="w-full rounded-md bg-muted/40 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Last generation logs</p>
-                <ul className="mt-2 space-y-1 text-xs font-mono">
-                  {jobLogs.map((line, idx) => (
-                    <li key={`${line}-${idx}`}>{line}</li>
-                  ))}
-                </ul>
-              </div>
+            {!artStatus.isOrderable && (
+              <p className="text-sm text-muted-foreground">
+                Printing unlocks once the illustrations are finished (or partially finished) in Step 1.
+              </p>
             )}
             <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline">
-                <Link href="/stories">Back to My Stories</Link>
-              </Button>
-              {story?.childId && (
-                <Button asChild variant="outline">
-                  <Link href={`/child/${story.childId}/story/${storyId}/read`}>View Story Text</Link>
-                </Button>
-              )}
-              {/* Graceful degradation: a book with complete text and partial art
-                  stays readable; ordering needs at least some art (isOrderable). */}
-              {artStatus.isViewable && (
-                <Button asChild variant="default" data-wiz-target="storybook-read">
-                  <Link href={isNewModel ? `/storybook/${bookId}/read?storyId=${storyId}` : `/storybook/${bookId}/read`}>
-                    <BookOpen className="mr-2 h-4 w-4" />
-                    Read Book
-                  </Link>
-                </Button>
-              )}
               {artStatus.isOrderable && (
-                <Button asChild variant="outline" data-wiz-target="storybook-print-layout">
-                  <Link href={isNewModel ? `/storybook/${bookId}/print-layout?storyId=${storyId}` : `/storybook/${bookId}/print-layout`}>
+                <Button asChild variant="default" data-wiz-target="storybook-print-layout">
+                  <Link href={`/storybook/${bookId}/print-layout?storyId=${storyId}`}>
                     <Printer className="mr-2 h-4 w-4" />
                     Create Print Layout
                   </Link>
                 </Button>
               )}
-              {/* Finalize button - complete OR degraded books can be finalized/ordered */}
-              {artStatus.isOrderable && !isLocked && isNewModel && (
-                <Button
-                  onClick={handleFinalize}
-                  disabled={finalizing}
-                  variant="default"
-                  data-wiz-target="storybook-finalize"
-                >
+              {artStatus.isOrderable && !isLocked && (
+                <Button onClick={handleFinalize} disabled={finalizing} variant="outline" data-wiz-target="storybook-finalize">
                   {finalizing ? (
                     <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
@@ -965,14 +765,8 @@ export default function StorybookViewerPage() {
                   Finalize for Sharing
                 </Button>
               )}
-              {/* Unlock button - show when locked */}
-              {isLocked && isNewModel && (
-                <Button
-                  onClick={handleUnlock}
-                  disabled={unlocking}
-                  variant="outline"
-                  data-wiz-target="storybook-unlock"
-                >
+              {isLocked && (
+                <Button onClick={handleUnlock} disabled={unlocking} variant="outline" data-wiz-target="storybook-unlock">
                   {unlocking ? (
                     <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
@@ -982,181 +776,142 @@ export default function StorybookViewerPage() {
                 </Button>
               )}
             </div>
-          </CardFooter>
+          </CardContent>
         </Card>
+      )}
 
-        {/* Share Card - only show when finalized */}
-        {isLocked && isNewModel && (
-          <Card className="mx-auto w-full max-w-4xl" data-wiz-target="storybook-share-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Share2 className="h-5 w-5" />
-                Share This Book
-              </CardTitle>
-              <CardDescription>
-                Create a link to share this storybook with friends and family.
-                {finalization?.shareId && ' Anyone with the link can view the book.'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Active share link */}
-              {absoluteShareUrl ? (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Input
-                      readOnly
-                      value={absoluteShareUrl}
-                      className="font-mono text-sm"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => {
-                        navigator.clipboard.writeText(absoluteShareUrl);
-                        toast({title: 'Link copied', description: 'Share link copied to clipboard.'});
-                      }}
-                      title="Copy link"
-                    >
-                      <LinkIcon className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  {/* Share details */}
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                    {finalization?.shareRequiresPasscode && (
-                      <Badge variant="outline" className="gap-1">
-                        <Shield className="h-3 w-3" />
-                        Passcode protected
-                      </Badge>
-                    )}
-                    {shareExpiresAt && (
-                      <span>Expires {shareExpiresAt}</span>
-                    )}
-                  </div>
-
-                  {/* Show passcode if just generated */}
-                  {shareSecret && (
-                    <Alert className="bg-primary/5 border-primary/20">
-                      <Shield className="h-4 w-4" />
-                      <AlertTitle>Passcode</AlertTitle>
-                      <AlertDescription className="font-mono text-lg">
-                        {shareSecret}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {/* Revoke button */}
+      {/* Share Card - only show when finalized */}
+      {isLocked && (
+        <Card className="mx-auto w-full max-w-4xl" data-wiz-target="storybook-share-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5" />
+              Share This Book
+            </CardTitle>
+            <CardDescription>
+              Create a link to share this storybook with friends and family.
+              {finalization?.shareId && ' Anyone with the link can view the book.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {absoluteShareUrl ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={absoluteShareUrl}
+                    className="font-mono text-sm"
+                  />
                   <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleShareRevoke}
-                    disabled={shareLoading}
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      navigator.clipboard.writeText(absoluteShareUrl);
+                      toast({title: 'Link copied', description: 'Share link copied to clipboard.'});
+                    }}
+                    title="Copy link"
                   >
-                    {shareLoading && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
-                    Revoke Share Link
+                    <LinkIcon className="h-4 w-4" />
                   </Button>
                 </div>
-              ) : (
-                /* Create share link form */
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Switch
-                      id="passcode-toggle"
-                      checked={shareProtectWithCode}
-                      onCheckedChange={setShareProtectWithCode}
-                    />
-                    <label htmlFor="passcode-toggle" className="text-sm font-medium">
-                      Require passcode to view
+
+                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                  {finalization?.shareRequiresPasscode && (
+                    <Badge variant="outline" className="gap-1">
+                      <Shield className="h-3 w-3" />
+                      Passcode protected
+                    </Badge>
+                  )}
+                  {shareExpiresAt && (
+                    <span>Expires {shareExpiresAt}</span>
+                  )}
+                </div>
+
+                {shareSecret && (
+                  <Alert className="bg-primary/5 border-primary/20">
+                    <Shield className="h-4 w-4" />
+                    <AlertTitle>Passcode</AlertTitle>
+                    <AlertDescription className="font-mono text-lg">
+                      {shareSecret}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleShareRevoke}
+                  disabled={shareLoading}
+                >
+                  {shareLoading && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
+                  Revoke Share Link
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Switch
+                    id="passcode-toggle"
+                    checked={shareProtectWithCode}
+                    onCheckedChange={setShareProtectWithCode}
+                  />
+                  <label htmlFor="passcode-toggle" className="text-sm font-medium">
+                    Require passcode to view
+                  </label>
+                </div>
+
+                {shareProtectWithCode && (
+                  <div className="space-y-2">
+                    <label htmlFor="custom-passcode" className="text-sm text-muted-foreground">
+                      Custom passcode (optional, leave empty for auto-generated)
                     </label>
+                    <Input
+                      id="custom-passcode"
+                      placeholder="Enter 4+ character passcode"
+                      value={customSharePasscode}
+                      onChange={(e) => setCustomSharePasscode(e.target.value)}
+                      className="max-w-xs"
+                    />
                   </div>
+                )}
 
-                  {shareProtectWithCode && (
-                    <div className="space-y-2">
-                      <label htmlFor="custom-passcode" className="text-sm text-muted-foreground">
-                        Custom passcode (optional, leave empty for auto-generated)
-                      </label>
-                      <Input
-                        id="custom-passcode"
-                        placeholder="Enter 4+ character passcode"
-                        value={customSharePasscode}
-                        onChange={(e) => setCustomSharePasscode(e.target.value)}
-                        className="max-w-xs"
-                      />
-                    </div>
+                <Button
+                  onClick={handleShareGenerate}
+                  disabled={shareLoading}
+                  data-wiz-target="storybook-create-share"
+                >
+                  {shareLoading ? (
+                    <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Share2 className="mr-2 h-4 w-4" />
                   )}
+                  Create Share Link
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
-                  <Button
-                    onClick={handleShareGenerate}
-                    disabled={shareLoading}
-                    data-wiz-target="storybook-create-share"
-                  >
-                    {shareLoading ? (
-                      <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Share2 className="mr-2 h-4 w-4" />
-                    )}
-                    Create Share Link
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      <PrintOrderDialog
-        open={orderDialogOpen}
-        onOpenChange={setOrderDialogOpen}
-        bookId={bookId}
-        finalization={finalization}
-        onSuccess={() => {
-          toast({title: 'Order submitted', description: 'Check Parent → Orders for status.'});
+      {/* Per-page editor */}
+      <PageEditorDialog
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        page={editorPage}
+        storyId={storyId}
+        storybookId={bookId}
+        actors={actors}
+        disabled={disableGenerate}
+        onSaved={({ audioReset }) => {
+          toast({
+            title: 'Page saved',
+            description: audioReset
+              ? 'The narration for this page was reset — regenerate audio when you finish editing.'
+              : undefined,
+          });
         }}
+        onRegenerate={handleRegenerateFromEditor}
       />
-
-      {/* Regenerate Image Dialog */}
-      <Dialog open={regenerateDialogOpen} onOpenChange={setRegenerateDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5" />
-              Regenerate Image
-            </DialogTitle>
-            <DialogDescription>
-              The image will be regenerated. You can optionally add instructions to guide the AI.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="additional-prompt">Additional instructions (optional)</Label>
-              <Textarea
-                id="additional-prompt"
-                placeholder="e.g., Make the background more colorful, show the character smiling, add a rainbow..."
-                value={additionalPrompt}
-                onChange={(e) => setAdditionalPrompt(e.target.value)}
-                rows={3}
-                className="resize-none"
-              />
-              <p className="text-xs text-muted-foreground">
-                These instructions will be added to the image prompt to help refine the result.
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRegenerateDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleConfirmRegenerate} disabled={isGenerating}>
-              {isGenerating ? (
-                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="mr-2 h-4 w-4" />
-              )}
-              Regenerate
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
     </div>
   );

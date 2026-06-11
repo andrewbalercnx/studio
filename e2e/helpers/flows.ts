@@ -47,10 +47,21 @@ export async function signUpNewParent(page: Page, tag: string): Promise<ParentAc
   return { email, password: E2E_PASSWORD, pin: E2E_PIN, uid };
 }
 
-/** Complete the parent PIN guard modal if/when it appears. */
+/**
+ * Complete the parent PIN guard modal if/when it appears.
+ *
+ * Since the fresh-PIN grace (515c81b) the modal does NOT appear within the
+ * guard window right after signup, so the dialog is optional.
+ */
 export async function passParentPinGuard(page: Page, pin: string): Promise<void> {
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByText('Enter Parent PIN')).toBeVisible({ timeout: 30_000 });
+  const pinPrompt = dialog.getByText('Enter Parent PIN');
+  try {
+    await expect(pinPrompt).toBeVisible({ timeout: 5_000 });
+  } catch {
+    // Guard window still open (fresh-PIN grace) — no modal to pass.
+    return;
+  }
   await dialog.locator('input[type="password"]').fill(pin);
   await dialog.getByRole('button', { name: /unlock|verify|confirm|submit/i }).click();
   await expect(dialog).toBeHidden({ timeout: 15_000 });

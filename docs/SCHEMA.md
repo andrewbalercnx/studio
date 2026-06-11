@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-06-11 (storybook `artStatus` degraded-book rollup + `systemConfig/circuitBreakers`; storyGenerators kid-friendly presentation fields)
+> **Last Updated**: 2026-06-11 (Sprint W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset semantics for parent page edits; printOrders `artStatusSnapshot`/`degradedArtAcknowledged`; checkout `saveAddress` writes to `users/{uid}/addresses`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -62,6 +62,10 @@ Saved shipping addresses for print orders.
 | `updatedAt` | timestamp | Yes | Last update time |
 
 **Migration**: Legacy `savedShippingAddress` field on user document is auto-migrated to this subcollection on first access.
+
+**Write paths**: `POST /api/user/addresses` (address book CRUD) and, since Sprint W2-C,
+`POST /api/printOrders/mixam` with `saveAddress: true` (checkout opt-in; deduped on
+line1 + postcode; the first saved address becomes the default).
 
 **Security**: Read/write by owner; admins have full access.
 
@@ -231,6 +235,13 @@ Compiled story content.
 | `imageDescription` | string | No | Legacy freeform scene description (used when `imageScene` is absent) |
 | `imageUrl` | string | No | Generated image URL |
 | `imageStatus` | string | No | `pending`, `generating`, `ready`, `error` |
+| `lastEditedAt` | timestamp | No | Sprint W2-C: last parent edit via `POST /api/storybookV2/pageEdit` |
+| `lastEditedBy` | string | No | Sprint W2-C: UID of the user who last edited this page |
+
+> **Parent page edits (Sprint W2-C)**: `POST /api/storybookV2/pageEdit` writes the parent's wording
+> to BOTH `bodyText` and `displayText` (it becomes canonical for reader, narration, and print). If
+> the text changed on a page with ready narration, the stale audio is reset
+> (`audioStatus: 'pending'`, `audioUrl: null`).
 - `shareTokens/{tokenId}` - Share links (see `StoryBookShareToken`)
 
 **Security**: Parents can CRUD their own stories; admins have full access.
@@ -402,8 +413,10 @@ Print fulfillment orders.
 | `lastWebhookPayload` | object | No | Last webhook payload (for debugging) |
 | `lastWebhookAt` | timestamp | No | Timestamp of last webhook received |
 | `statusHistory` | array | Yes | Status change history |
-| `processLog` | array | No | Detailed event log |
+| `processLog` | array | No | Detailed event log (Sprint W2-C adds a `degraded_art_acknowledged` event for degraded orders) |
 | `mixamInteractions` | MixamInteraction[] | No | API request/response and webhook log |
+| `artStatusSnapshot` | object | No | Sprint W2-C: `{ completeness, pagesTotal, pagesReady, pagesFailed }` at order time (new-model storybooks) |
+| `degradedArtAcknowledged` | boolean | No | Sprint W2-C: true when the parent explicitly confirmed ordering a degraded (partial-art) book |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
 | `cancelledAt` | timestamp | No | Cancellation timestamp |
@@ -1290,6 +1303,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-06-11 | Sprint W2-C: `lastEditedAt`/`lastEditedBy` on storybook pages + audio-reset semantics for parent page edits via `/api/storybookV2/pageEdit`; `artStatusSnapshot` + `degradedArtAcknowledged` on printOrders (degraded-order audit); checkout `saveAddress` write path into `users/{uid}/addresses` |
 | 2026-06-11 | Added `artStatus` (StoryBookArtStatus degraded-book rollup + recovery fields) to storybook subcollection docs; Added `systemConfig/circuitBreakers` (cross-instance AI provider breaker state); `*.lastErrorMessage` fields now always contain user-safe copy (raw errors stay in `aiFlowLogs`); storybook pages no longer store `imageMetadata.errorStack`; wizard StoryGeneratorResponse gains `questionNumber`/`totalQuestions` |
 | 2026-01-17 | Added `devTodos` collection for development work tracking |
 | 2026-01-14 | Added `textBoxEnabled`/`imageBoxEnabled` flags and `leaf` field to PageLayoutConfig for print layouts; Documented PageLayoutBox and TextLayoutBox types |
