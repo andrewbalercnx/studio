@@ -8,7 +8,7 @@ import { doc } from 'firebase/firestore';
 import { useDocument } from '@/lib/firestore-hooks';
 import { useKidsPWA } from '../../../layout';
 import type { Story, StorySession, StoryBookOutput } from '@/lib/types';
-import { LoaderCircle, CheckCircle2, Wand2, Paintbrush, Music, Moon, Clock, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { LoaderCircle, CheckCircle2, Wand2, Paintbrush, Music, Moon, Clock, ArrowLeft } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
