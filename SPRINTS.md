@@ -19,6 +19,27 @@
 > The authoritative done/outstanding rollup so it survives context resets. As of **2026-06-11** (post Wave-1 merge).
 
 ### Done
+- **Wave 2 (Sprints W2-A/B/C, 2026-06-11)** — merged `465b737`, `7e1cfb1`, `9520627`; verified on
+  the merged result: typecheck + build + 279 vitest + **full e2e suite 20/20** green.
+  - **W2-A Naive-agent probe, productionised — COMPLETE**: persona harness (impatient /
+    first-time / returning-child with budgets, perception-constrained driver), expert-baseline
+    scoring, codable findings JSON + PM report, `npm run probe` + nightly report-only workflow,
+    PostHog concordance stub on canonical event names. **W1-C exit criterion discharged: 7/7
+    original findings PASS**; deliberate-bug catch verified. Surfaced the PIN-reload bug (todo
+    filed).
+  - **W2-B First-run onboarding — COMPLETE**: server-derived checklist (`GET /api/user/onboarding`)
+    on / and /parent; `users.onboardingState` (steps, tips-seen, signup→first-book timestamps so
+    time-to-first-book is measurable pre-PostHog); auto-triggered first-use tips via help-wizard
+    infra; deeper empty states. Funnel spec now asserts the checklist renders. **Prod action:
+    re-seed Help Wizards in admin** (todo filed).
+  - **W2-C Parent storybook view — COMPLETE**: shared `BookPageSpread` renderer (kids reader +
+    new simplified `ParentBookView`); per-page Edit (text/prompt/repaint) via authenticated
+    `POST /api/storybookV2/pageEdit` (text edits reset stale narration); two-step
+    clean-up-then-print flow; server-enforced degraded-order 409 + confirmation; saveAddress;
+    artStatus rollups on list/detail APIs. **Surfaced: `POST /api/storybookV2/images`+`/pages`
+    are unauthenticated and cost-bearing (security todo filed)**.
+  - Cross-track: all three independently found/fixed the funnel gate red on main (W1-C's signup
+    change had invalidated spec assumptions) — wave barriers now run the full e2e suite.
 - **Wave 1 (Sprints W1-A/B/C, 2026-06-11)** — three parallel worktree sprints merged (`ef39433`,
   `333b6b6`, `5fe98a4`); typecheck + build + 245 vitest green on the merged result.
   - **W1-A Generation reliability — COMPLETE**: degraded-book status contract
@@ -66,9 +87,6 @@
 ### Outstanding (mapped to execution sprints below)
 | # | Item | Sprint |
 |---|------|--------|
-| 4 | Naive-agent probe, productionised (`[GTM 3/8]` second half; POC validated) | **W2-A** |
-| 5 | First-run usability (`[GTM 4/8]`): onboarding checklist + tips + time-to-first-book | **W2-B** |
-| 6 | Parent storybook view & ordering flow: simplified view + per-page edit/regenerate; print-flow split; save address; incremental loading | **W2-C** |
 | 7 | Admin UX-monitoring dashboard (`[GTM 7/8]`) + Mixam webhook automation | **W3-A** |
 | 8 | Deployment strategy: canary, flags, rollback | **W3-B** |
 | 9 | Feedback & conversion polish (`[GTM 8/8]`) | **W3-C** |
@@ -101,6 +119,17 @@
   - Recovery notification is in-app only; consider email/push. Durable queue (Cloud Tasks) for
     long generations at scale.
   - Data check: live `beat` generator doc has `enabledForKids: true` (seed disagrees).
+- **Wave-2 follow-ups** (dev todos filed where noted):
+  - **[SECURITY] `POST /api/storybookV2/images` + `/pages` unauthenticated** (cost-bearing;
+    pre-existing, found by W2-C). *(todo filed, high)*
+  - **Prod action: re-seed Help Wizards** (Admin → Help Wizards → seed) so the two W2-B
+    first-use tips go live. *(todo filed, high)*
+  - **[BUG] PIN guard re-prompts on hard reload** despite valid grace (probe finding).
+    *(todo filed)*
+  - TEST_MODE seam for `storyWizardFlow` → real wizard clicks in funnel/probe. *(todo filed)*
+  - Stale report-only a11y/visual specs vs W1-C flow changes. *(todo filed by W2-B)*
+  - Legacy `POST /api/printOrders` route now unused (dead dialog removed) — remove once
+    regression coverage adjusted. Linux visual baselines still bootstrap from first CI artifact.
 
 ---
 
@@ -174,9 +203,9 @@ git worktree add ../studio-ux          -b track/ux
 | 1 | W1-A | Reliability | Generation reliability — finish (degradation, kid-safe states, breaker) | COMPLETE (2026-06-11, `ef39433`) |
 | 1 | W1-B | Ops | E2E funnel specs + a11y/Lighthouse/visual + security tail | COMPLETE (2026-06-11, `333b6b6`) |
 | 1 | W1-C | UX | Remaining probe findings (placeholder child, jargon, PIN) | COMPLETE (2026-06-11, `5fe98a4`) |
-| 2 | W2-A | Reliability→Ops | Naive-agent probe, productionised | PENDING |
-| 2 | W2-B | UX | First-run usability — onboarding checklist, tips, time-to-first-book | PENDING |
-| 2 | W2-C | UX | Parent storybook view & ordering flow (simplified view + per-page edit) | PENDING |
+| 2 | W2-A | Reliability→Ops | Naive-agent probe, productionised | COMPLETE (2026-06-11, `465b737`) |
+| 2 | W2-B | UX | First-run usability — onboarding checklist, tips, time-to-first-book | COMPLETE (2026-06-11, `9520627`) |
+| 2 | W2-C | UX | Parent storybook view & ordering flow (simplified view + per-page edit) | COMPLETE (2026-06-11, `7e1cfb1`) |
 | 3 | W3-A | Ops | Admin UX-monitoring dashboard + Mixam webhook automation | PENDING |
 | 3 | W3-B | Ops | Deployment strategy — canary, flags, rollback | PENDING |
 | 3 | W3-C | UX | Feedback & conversion polish — NPS, testimonials, order transparency | PENDING |
@@ -321,7 +350,7 @@ A probe re-run hits none of the seven findings; no placeholder children appear i
 One command produces a persona-run report; findings file as codable records; a deliberately
 reintroduced W1-C bug is caught.
 
-**Status:** PENDING
+**Status:** COMPLETE — 2026-06-11, merged `465b737` (7/7 original findings PASS; deliberate-bug catch verified; nightly report-only workflow)
 
 ---
 
@@ -354,7 +383,7 @@ New: onboarding checklist component + `onboardingState` field. Docs: SCHEMA, SYS
 Measurable lift in signup → story-completed vs baseline (PostHog once live; session-events
 otherwise); a fresh account reaches a finished book unaided.
 
-**Status:** PENDING
+**Status:** COMPLETE — 2026-06-11, merged `9520627` (lift measurement queryable from onboardingState timestamps; PostHog funnel once gate flips)
 
 ---
 
@@ -390,7 +419,7 @@ Parent and child book views share components; a parent can edit prompt/text and 
 single page without leaving the book; clean-up and ordering are distinct steps; a second order
 reuses a saved address; `/parent/storybooks` renders its list without waiting on images.
 
-**Status:** PENDING
+**Status:** COMPLETE — 2026-06-11, merged `7e1cfb1` (shared BookPageSpread; POST /api/storybookV2/pageEdit; server-enforced degraded-order gate)
 
 ---
 

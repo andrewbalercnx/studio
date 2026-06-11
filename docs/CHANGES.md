@@ -18,6 +18,30 @@
 
 ### 2026-06-11
 
+#### `db575be` - Merge Wave 2: three parallel worktree sprints (W2-A/B/C)
+
+**Type**: Feature / UX / Testing
+
+**Summary**: Merged the three Wave-2 sprints developed in parallel worktrees (merge order A→C→B: `465b737`, `7e1cfb1`, `9520627`). Verified on the merged result: typecheck, production build, 279 vitest tests, and the full e2e suite (20/20, including the blocking funnel gate). Six follow-up dev todos filed across the wave; SPRINTS.md rollup updated.
+
+**W2-A — Productionised naive-agent UX probe (track/ops)**:
+- Persona harness (impatient/first-time/returning-child with action/time budgets, perception-constrained driver), expert-baseline scoring, codable findings JSON + PM markdown report
+- `npm run probe` + nightly report-only GitHub Actions workflow; PostHog concordance stub on canonical event names
+- W1-C exit criterion discharged: 7/7 original probe findings PASS; deliberate-bug catch verified; surfaced the PIN-reload bug
+
+**W2-B — First-run onboarding (track/ux)**:
+- Server-derived "create your first book" checklist (`GET/POST /api/user/onboarding`, `users.onboardingState`) on home + /parent; non-modal, dismissible, asserted by the funnel spec
+- Auto-triggered first-use tips reusing the help-wizard infra; deeper empty states on characters/storybook lists
+- Time-to-first-book: analytics events + durable `signupAtMs`/`firstBookAtMs`/`timeToFirstBookMs`
+
+**W2-C — Parent storybook view & ordering flow (track/ux-parent)**:
+- Shared `BookPageSpread` renderer: kids reader and the new simplified `ParentBookView` use the same presentation; per-page Edit (text/picture prompt/repaint) via new authenticated `POST /api/storybookV2/pageEdit`; text edits become canonical and reset stale narration
+- `/storybook/[bookId]` restructured into clean-up (Step 1) and print/share (Step 2); dead `PrintOrderDialog` removed
+- Server-enforced degraded-order gate (409 + explicit confirmation + audit snapshot); `saveAddress` at checkout; `artStatus` rollups on storybook list/detail APIs
+- Surfaced pre-existing unauthenticated cost-bearing `images`/`pages` routes (security todo filed)
+
+---
+
 #### `a826983` - Merge Wave 1: three parallel worktree sprints (W1-A/B/C)
 
 **Type**: Feature / Reliability / Testing / Security
