@@ -8,6 +8,7 @@ import type { ChildProfile } from '@/lib/types';
 import { LoaderCircle } from 'lucide-react';
 import { PWAInstallPrompt, ServiceWorkerRegistration } from '@/components/pwa';
 import { ApiClientProvider } from '@/contexts/api-client-context';
+import { syncPersonaCookie } from '@/lib/persona-client';
 
 // PWA-specific context for kids mode
 interface KidsPWAContextType {
@@ -72,6 +73,7 @@ export default function KidsLayout({ children }: { children: React.ReactNode }) 
             setChildId(null);
             setIsLocked(false);
             localStorage.removeItem(KIDS_CHILD_ID_KEY);
+            syncPersonaCookie(null, null);
           }
         } else {
           // Child not found - clear the lock
@@ -79,6 +81,7 @@ export default function KidsLayout({ children }: { children: React.ReactNode }) 
           setChildId(null);
           setIsLocked(false);
           localStorage.removeItem(KIDS_CHILD_ID_KEY);
+          syncPersonaCookie(null, null);
         }
       } catch (err) {
         console.error('[KidsPWA] Error fetching child profile:', err);
@@ -95,7 +98,10 @@ export default function KidsLayout({ children }: { children: React.ReactNode }) 
     if (typeof window !== 'undefined') {
       localStorage.setItem(KIDS_CHILD_ID_KEY, newChildId);
     }
-  }, []);
+    // Mirror the lock to the signed httpOnly persona cookie (fire-and-forget;
+    // chokepoints fail open without it, so this never blocks the kid).
+    syncPersonaCookie(user, newChildId);
+  }, [user]);
 
   const unlock = useCallback(() => {
     setChildId(null);
@@ -104,6 +110,8 @@ export default function KidsLayout({ children }: { children: React.ReactNode }) 
     if (typeof window !== 'undefined') {
       localStorage.removeItem(KIDS_CHILD_ID_KEY);
     }
+    // Back to parent/unscoped: clear the persona cookie.
+    syncPersonaCookie(null, null);
   }, []);
 
   // Show loading while checking auth and child state

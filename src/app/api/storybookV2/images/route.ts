@@ -8,6 +8,7 @@ import { getFirestore, FieldValue, Firestore } from 'firebase-admin/firestore';
 import { mapPageKindToLayoutType, calculateImageDimensionsForPageType, getAspectRatioForPageType } from '@/lib/print-layout-utils';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
 import { requireAuthenticatedUser } from '@/lib/server-auth';
+import { enforcePersonaScope } from '@/lib/persona.server';
 import { AuthError } from '@/lib/auth-error';
 import { isTestMode, TEST_MODE_IMAGE_DATA_URL } from '@/lib/test-mode';
 import { toUserSafeMessage, categorizeError } from '@/lib/ai-error-map';
@@ -179,6 +180,21 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { ok: false, errorMessage: 'You do not own this story.', requestId },
         { status: 403 }
+      );
+    }
+
+    // Persona scope: a valid child-persona cookie must match the story's
+    // child. No cookie (mobile app) = legacy behaviour — see src/lib/persona.ts.
+    const personaCheck = await enforcePersonaScope({
+      expectedUid: user.uid,
+      effectiveChildId: storyData.childId,
+      claims: user.claims,
+    });
+    if (!personaCheck.ok) {
+      logger.warn('Persona scope mismatch', { storyId, storybookId, uid: user.uid });
+      return NextResponse.json(
+        { ok: false, errorMessage: personaCheck.message, code: personaCheck.code, requestId },
+        { status: personaCheck.status }
       );
     }
 

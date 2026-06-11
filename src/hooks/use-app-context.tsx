@@ -7,6 +7,7 @@ import type { AppRoleMode, ChildProfile } from '@/lib/types';
 import { useDocument } from '@/lib/firestore-hooks';
 import { doc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
+import { syncPersonaCookie } from '@/lib/persona-client';
 
 interface AppContextType {
   roleMode: AppRoleMode;
@@ -100,6 +101,9 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
       if (typeof window !== 'undefined') {
         localStorage.removeItem('activeChildId');
       }
+      // Sign-out also clears the server-side persona cookie (fire-and-forget;
+      // DELETE needs no token, which is why it works after signOut()).
+      syncPersonaCookie(null, null);
     }
   }, [user, userLoading]);
 
@@ -110,13 +114,16 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     }
     console.debug('[AppContext] setActiveChildId called with', childId);
     setActiveChildIdState(childId);
+    // Mirror the persona to the signed httpOnly cookie (fire-and-forget; no
+    // UX friction — chokepoints fail open when the cookie is missing).
+    syncPersonaCookie(user, childId);
     if (typeof window === 'undefined') return;
     if (childId) {
       localStorage.setItem('activeChildId', childId);
     } else {
       localStorage.removeItem('activeChildId');
     }
-  }, [activeChildId]);
+  }, [activeChildId, user]);
 
   useEffect(() => {
     console.debug('[AppContext] activeChildId now', activeChildId);

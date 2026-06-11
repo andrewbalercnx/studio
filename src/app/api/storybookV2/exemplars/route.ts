@@ -5,6 +5,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
 import type { StoryOutputPage, ActorExemplar } from '@/lib/types';
 import { isTestMode } from '@/lib/test-mode';
+import { enforcePersonaScope } from '@/lib/persona.server';
 
 // Allow up to 5 minutes for exemplar generation (multiple actors)
 export const maxDuration = 300;
@@ -146,6 +147,21 @@ export async function POST(request: Request) {
     }
     const storyData = storySnap.data()!;
     const mainChildId = storyData.childId;
+
+    // Persona scope: if this browser carries a valid child-persona cookie for
+    // the owning family, the story must belong to that child. Absent/invalid
+    // cookie (mobile app) = legacy behaviour — see src/lib/persona.ts.
+    const personaCheck = await enforcePersonaScope({
+      expectedUid: storyData.parentUid,
+      effectiveChildId: mainChildId,
+    });
+    if (!personaCheck.ok) {
+      logger.warn('Persona scope mismatch', { storyId, storybookId });
+      return NextResponse.json(
+        { ok: false, errorMessage: personaCheck.message, code: personaCheck.code, requestId },
+        { status: personaCheck.status }
+      );
+    }
 
     // Load storybook document
     const storybookRef = storyRef.collection('storybooks').doc(storybookId);
