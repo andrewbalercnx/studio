@@ -18,6 +18,17 @@
 
 ### 2026-06-11
 
+#### `c252803` - SPRINTS.md: cite devTodo ID for parent storybook view sprint
+
+**Type**: Documentation
+
+**Summary**: Filed devTodo `iOErHwHgj7H0KLU4UzOp` (simplified parent storybook view aligned with child's view + per-page prompt/text edit and image regeneration) and cited it in Sprint W2-C.
+
+**Modified files**:
+- `SPRINTS.md`
+
+---
+
 #### `bad8564` - Add root SPRINTS.md: worktree-parallelised execution roadmap
 
 **Type**: Planning / Documentation

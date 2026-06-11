@@ -220,8 +220,8 @@ fixed in `0efa328`)
 
 **Track:** C — UX (second worktree off `track/ux`, or sequential after W2-B — owner's call)
 **Dev todos:** `Y8oQ7iqkdNFvbDzMeOS0` [print workflow], `IrcG2YBlJjxnRKaebTuh` [save address],
-`WwE4eEEOHpVT5PGSIsA5` [incremental loading], **new: simplified parent view + per-page edit**
-(file a devTodo when started)
+`WwE4eEEOHpVT5PGSIsA5` [incremental loading], `iOErHwHgj7H0KLU4UzOp` [simplified parent view +
+per-page edit/regenerate]
 **Depends on:** W1-A's degraded-book status contract (the parent view must render partial-art
 books).
 
