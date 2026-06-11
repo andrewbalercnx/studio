@@ -1,5 +1,9 @@
 # Selective Deployment & Rollback Strategy
 
+> **SUPERSEDED (2026-06-11, Sprint W3-B)**: this was the original design
+> sketch. The implemented machinery and the operational runbook now live in
+> **`docs/DEPLOYMENT.md`** — use that document. Kept only for design history.
+
 This replaces the single "push → auto deploy" flow with a staged rollout that lets us ship to small user groups first and roll back safely.
 
 ## Goals

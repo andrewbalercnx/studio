@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-06-11 (W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-06-11 (W3-B: new System Routes — `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -88,6 +88,7 @@ The `StoryPicClient` provides typed methods for child-facing operations:
 - [Music Routes](#music-routes)
 - [Story Output Types Routes](#story-output-types-routes)
 - [Issue Reporting Routes](#issue-reporting-routes)
+- [System Routes](#system-routes)
 - [Internal Routes](#internal-routes)
 - [Webhook Routes](#webhook-routes)
 - [User Onboarding Routes](#user-onboarding-routes)
@@ -3292,6 +3293,73 @@ Save user's shipping address.
   "success": true
 }
 ```
+
+---
+
+## System Routes
+
+Operational endpoints for deployment, canary monitoring, and feature flags. See `docs/DEPLOYMENT.md`.
+
+### GET `/api/health`
+
+Health probe for canary monitoring and rollback decisions (Sprint W3-B). Returns the build identity (git SHA baked at build time), uptime, and a cheap Firestore dependency probe (single doc read, 2s hard timeout). No secrets in the response.
+
+**Authentication**: None.
+
+**Response** (200 OK — healthy, verbose mode):
+```json
+{
+  "status": "ok",
+  "version": "abc1234",
+  "revision": "studio-00042-abc",
+  "service": "studio",
+  "uptimeSeconds": 1234,
+  "timestamp": "2026-06-11T10:00:00.000Z",
+  "checks": {
+    "firestore": { "ok": true, "latencyMs": 12 }
+  }
+}
+```
+
+**Response** (503 Service Unavailable — dependency probe failed):
+```json
+{
+  "status": "degraded",
+  "version": "abc1234",
+  "revision": "studio-00042-abc",
+  "service": "studio",
+  "uptimeSeconds": 1234,
+  "timestamp": "2026-06-11T10:00:00.000Z",
+  "checks": {
+    "firestore": { "ok": false, "latencyMs": 2001, "error": "timeout after 2000ms" }
+  }
+}
+```
+
+**Feature flag (worked example)**: when the `health_verbose` flag is `false`, the response is the minimal `{ "status": "ok", "version": "abc1234" }` and the dependency probe is skipped — see `docs/DEPLOYMENT.md` § Feature flags.
+
+**Notes**:
+- `revision`/`service` come from Cloud Run's `K_REVISION`/`K_SERVICE` env vars (`null` locally).
+- Distinct from `GET /api/healthz` (older endpoint; returns `recentLogs` when `ENABLE_DEV_LOGS=true`). `/api/health` never exposes logs.
+
+### GET `/api/flags`
+
+Server-evaluated feature flags for clients (server-first rule: clients never evaluate Remote Config themselves). Evaluation precedence: env override → Firebase Remote Config (with `uid`/`emailDomain` custom signals and UID-based percentage rollouts) → Firestore `systemConfig/featureFlags` → in-code default. Flag values are not secrets.
+
+**Authentication**: Optional Bearer token. When present, the user's uid/email feed Remote Config conditions; anonymous callers get unconditioned values.
+
+**Response** (200 OK):
+```json
+{
+  "ok": true,
+  "flags": {
+    "health_verbose": true
+  },
+  "authenticated": false
+}
+```
+
+**Client usage**: `useFeatureFlag('health_verbose')` from `src/hooks/use-feature-flag.ts` (returns the in-code default until loaded; 30s shared cache).
 
 ---
 

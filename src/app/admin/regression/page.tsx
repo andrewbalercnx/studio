@@ -318,6 +318,8 @@ const initialTests: TestResult[] = [
   { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
   { id: 'API_USER_ONBOARDING_GET', name: 'API: /api/user/onboarding (GET shape)', status: 'PENDING', message: '' },
   { id: 'API_USER_ONBOARDING_POST', name: 'API: /api/user/onboarding (POST validation)', status: 'PENDING', message: '' },
+  { id: 'API_HEALTH', name: 'API: /api/health (version + dependency probe)', status: 'PENDING', message: '' },
+  { id: 'API_FLAGS', name: 'API: /api/flags (server-evaluated feature flags)', status: 'PENDING', message: '' },
   { id: 'API_STORY_BEAT', name: 'API: /api/storyBeat (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure (Input)', status: 'PENDING', message: '' },
@@ -2225,6 +2227,50 @@ export default function AdminRegressionPage() {
         updateTestResult('API_USER_ONBOARDING_POST', { status: 'PASS', message: 'Unknown action correctly rejected with 400.' });
     } catch (e: any) {
         updateTestResult('API_USER_ONBOARDING_POST', { status: 'FAIL', message: e.message });
+    }
+
+    // Test: API_HEALTH — canary/rollback probe (W3-B). Read-only; verifies the
+    // verbose body shape (version + firestore dependency probe). A 'degraded'
+    // 503 is a FAIL (the probe is doing its job — the dependency is down).
+    try {
+        const response = await fetch('/api/health', { cache: 'no-store' });
+        const result = await response.json();
+        if (!result.version || typeof result.version !== 'string') {
+            throw new Error('Response missing version (build SHA).');
+        }
+        if (result.status === 'ok' && result.checks === undefined) {
+            // Minimal body — the health_verbose flag is off; still a valid state.
+            updateTestResult('API_HEALTH', { status: 'PASS', message: `Minimal body (health_verbose=false); version=${result.version}.` });
+        } else if (response.status === 200 && result.status === 'ok') {
+            if (result.checks?.firestore?.ok !== true) throw new Error('Firestore probe not ok despite status ok.');
+            if (typeof result.uptimeSeconds !== 'number') throw new Error('Response missing uptimeSeconds.');
+            updateTestResult('API_HEALTH', { status: 'PASS', message: `ok; version=${result.version}; firestore ${result.checks.firestore.latencyMs}ms.` });
+        } else {
+            throw new Error(`Status ${response.status}/${result.status}; firestore error: ${result.checks?.firestore?.error || 'unknown'}`);
+        }
+    } catch (e: any) {
+        updateTestResult('API_HEALTH', { status: 'FAIL', message: e.message });
+    }
+
+    // Test: API_FLAGS — server-evaluated feature flags (W3-B). Read-only;
+    // verifies every value is a boolean and the worked-example flag is present.
+    try {
+        const flagsToken = await auth?.currentUser?.getIdToken?.();
+        const response = await fetch('/api/flags', {
+            headers: flagsToken ? { Authorization: `Bearer ${flagsToken}` } : undefined,
+            cache: 'no-store',
+        });
+        const result = await response.json();
+        if (response.status !== 200 || result.ok !== true) {
+            throw new Error(`API returned status ${response.status}: ${result.error || 'Unknown error'}`);
+        }
+        if (!result.flags || typeof result.flags !== 'object') throw new Error('Response missing flags map.');
+        if (typeof result.flags.health_verbose !== 'boolean') throw new Error('flags.health_verbose missing or not boolean.');
+        const nonBoolean = Object.entries(result.flags).find(([, v]) => typeof v !== 'boolean');
+        if (nonBoolean) throw new Error(`Flag '${nonBoolean[0]}' is not a boolean.`);
+        updateTestResult('API_FLAGS', { status: 'PASS', message: `${Object.keys(result.flags).length} flag(s); authenticated=${result.authenticated}.` });
+    } catch (e: any) {
+        updateTestResult('API_FLAGS', { status: 'FAIL', message: e.message });
     }
 
     const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary, storyCompile: storyCompileScenarioSummary, phaseState: phaseStateScenarioSummary, childStoryList: childStoryListScenarioSummary };
