@@ -17,6 +17,7 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
+import { OnboardingTipTrigger } from '@/components/onboarding/onboarding-tip-trigger';
 
 // Helper to calculate age from date of birth
 function getChildAgeYears(child?: ChildProfile | null): number | null {
@@ -213,6 +214,8 @@ export default function KidsStyleSelectionPage({ params }: { params: Promise<{ s
   if (step === 'book-type') {
     return (
       <div className="min-h-screen flex flex-col">
+        {/* First-use tip (auto-shows once per account; no-op once seen). */}
+        <OnboardingTipTrigger tipId="artGeneration" wizardId="tip-first-art" />
         {/* Header */}
         <header className="px-4 py-4 flex items-center gap-2">
           <Link href="/kids">

@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { StoriesLeftBadge } from '@/components/entitlements/entitlement-summary';
+import { OnboardingTipTrigger } from '@/components/onboarding/onboarding-tip-trigger';
 
 // Type for entity metadata included in resolved options
 type EntityMetadata = {
@@ -518,6 +519,8 @@ export default function KidsCreateStoryPage() {
   if (!selectedGenerator && generators.length > 0) {
     return (
       <div className="min-h-screen flex flex-col">
+        {/* First-use tip (auto-shows once per account; no-op once seen). */}
+        <OnboardingTipTrigger tipId="storyCreation" wizardId="tip-first-story" />
         {/* Header */}
         <header className="px-4 py-4 flex items-center gap-3">
           <Link href="/kids">
