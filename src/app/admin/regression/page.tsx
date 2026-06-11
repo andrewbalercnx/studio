@@ -2377,6 +2377,8 @@ export default function AdminRegressionPage() {
         updateTestResult('API_ADMIN_SESSIONS', { status: 'PASS', message: `${result.sessions.length} session(s) returned; ${withErrors} with a lastError summary.` });
     } catch (e: any) {
         updateTestResult('API_ADMIN_SESSIONS', { status: 'FAIL', message: e.message });
+    }
+
     // Test: API_HEALTH — canary/rollback probe (W3-B). Read-only; verifies the
     // verbose body shape (version + firestore dependency probe). A 'degraded'
     // 503 is a FAIL (the probe is doing its job — the dependency is down).
@@ -2419,6 +2421,8 @@ export default function AdminRegressionPage() {
         updateTestResult('API_FLAGS', { status: 'PASS', message: `${Object.keys(result.flags).length} flag(s); authenticated=${result.authenticated}.` });
     } catch (e: any) {
         updateTestResult('API_FLAGS', { status: 'FAIL', message: e.message });
+    }
+
     // ── Sprint W3-C: feedback / tickets / order-timeline APIs ──────────────
     // Validation-only checks: nothing below mutates state (no feedback docs,
     // no tickets, no emails) so the suite stays repeatable.
