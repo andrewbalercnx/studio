@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-06-11 (W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-06-11 (W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -982,6 +982,19 @@ A provider's circuit opens after a threshold of consecutive transient/rate-limit
 
 **Security**: Admin only (server writes via Admin SDK bypass rules).
 
+#### `systemConfig/featureFlags`
+Optional fallback layer for feature flags (Sprint W3-B). Read server-side only
+(`src/lib/feature-flags.server.ts`, ~30s per-instance cache). Sits BELOW Firebase Remote
+Config in precedence (env override → Remote Config → this doc → in-code default in
+`src/lib/feature-flags.ts`); useful before Remote Config is configured, or as a console-editable
+kill switch. The document may be absent — in-code defaults then apply.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `{flagKey}` | boolean | No | One field per flag key from `FLAG_DEFAULTS` (e.g. `health_verbose`). Non-boolean values are ignored |
+
+**Security**: Admin only (read server-side via Admin SDK).
+
 #### `systemConfig/addresses`
 System addresses for Mixam billing configuration.
 
@@ -1347,6 +1360,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 | Date | Changes |
 |------|---------|
 | 2026-06-11 | Sprint W3-A: `adminNextAction`/`needsAdminAttention`/`failureSummary` on printOrders (Mixam webhook + admin list API); Added `systemConfig/opsHealth` (health-check thresholds, per-check `lastAlertedAt` dedup, last run results) |
+| 2026-06-11 | Sprint W3-B: Added `systemConfig/featureFlags` (optional boolean-per-flag fallback layer below Firebase Remote Config; see `docs/DEPLOYMENT.md`) |
 | 2026-06-11 | Sprint W2-C: `lastEditedAt`/`lastEditedBy` on storybook pages + audio-reset semantics for parent page edits via `/api/storybookV2/pageEdit`; `artStatusSnapshot` + `degradedArtAcknowledged` on printOrders (degraded-order audit); checkout `saveAddress` write path into `users/{uid}/addresses` |
 | 2026-06-11 | Added `artStatus` (StoryBookArtStatus degraded-book rollup + recovery fields) to storybook subcollection docs; Added `systemConfig/circuitBreakers` (cross-instance AI provider breaker state); `*.lastErrorMessage` fields now always contain user-safe copy (raw errors stay in `aiFlowLogs`); storybook pages no longer store `imageMetadata.errorStack`; wizard StoryGeneratorResponse gains `questionNumber`/`totalQuestions` |
 | 2026-01-17 | Added `devTodos` collection for development work tracking |

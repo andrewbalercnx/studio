@@ -1,0 +1,121 @@
+# Build-once release pipeline (Sprint W3-B) — NO trigger is attached to this
+# file. It only runs when invoked explicitly:
+#
+#   gcloud builds submit --config cloudbuild.release.yaml \
+#     --substitutions _RELEASE_SHA=$(git rev-parse HEAD)
+#
+# or via the GitHub Actions "Release" workflow (.github/workflows/release.yml,
+# workflow_dispatch only). See docs/DEPLOYMENT.md for the full release flow
+# and the owner-only enablement steps.
+#
+# What it does:
+#   gates (typecheck + unit tests) → build ONE immutable image tagged with the
+#   release commit SHA → push → deploy a ZERO-TRAFFIC Cloud Run revision
+#   tagged rc-<sha7> for staging smoke tests. Traffic moves only via
+#   scripts/deploy/* (canary-promote / promote-full / rollback) — never here.
+#
+# Differences from the legacy cloudbuild.yaml (kept for reference, do not
+# trigger): no mutable :latest tag, no 100%-traffic deploy, secrets list is in
+# sync with apphosting.yaml, resources match apphosting.yaml runConfig.
+
+steps:
+  # ── Validate inputs ──────────────────────────────────────────────────────
+  - id: validate
+    name: 'bash'
+    env: ['RELEASE_SHA=${_RELEASE_SHA}']
+    args:
+      - '-c'
+      - |
+        if [ -z "$$RELEASE_SHA" ]; then
+          echo "ERROR: _RELEASE_SHA substitution is required (full git commit SHA)." >&2
+          echo "  gcloud builds submit --config cloudbuild.release.yaml --substitutions _RELEASE_SHA=\$(git rev-parse HEAD)" >&2
+          exit 1
+        fi
+        echo "Release SHA: $$RELEASE_SHA"
+
+  # ── Gates: nothing gets an artifact without passing these ────────────────
+  - id: install
+    name: 'node:20'
+    entrypoint: 'npm'
+    args: ['ci']
+
+  - id: typecheck
+    name: 'node:20'
+    entrypoint: 'npm'
+    args: ['run', 'typecheck']
+
+  - id: unit-tests
+    name: 'node:20'
+    entrypoint: 'npm'
+    args: ['run', 'test']
+
+  # ── Build once: ONE immutable image, tagged with the release SHA ─────────
+  # (The Dockerfile runs `npm run build` itself; GIT_COMMIT_SHA is baked in
+  # and surfaced by GET /api/health as `version`.)
+  - id: docker-build
+    name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg'
+      - 'GIT_COMMIT_SHA=${_RELEASE_SHA}'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/studio:${_RELEASE_SHA}'
+      - '.'
+
+  - id: docker-push
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/studio:${_RELEASE_SHA}']
+
+  # ── Deploy to staging: new revision, ZERO traffic, tagged rc-<sha7> ──────
+  # The tagged revision gets its own URL (https://rc-<sha7>---<service-url>)
+  # for smoke tests against /api/health before any traffic moves.
+  - id: deploy-staging-no-traffic
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    env:
+      - 'RELEASE_SHA=${_RELEASE_SHA}'
+      - 'SERVICE=${_SERVICE}'
+      - 'REGION=${_DEPLOY_REGION}'
+      - 'DEPLOY_STAGING=${_DEPLOY_STAGING}'
+    args:
+      - '-ceu'
+      - |
+        if [ "$$DEPLOY_STAGING" != "true" ]; then
+          echo "Skipping staging deploy (_DEPLOY_STAGING=$$DEPLOY_STAGING). Image is pushed; deploy later with scripts/deploy/deploy-staging.sh $$RELEASE_SHA"
+          exit 0
+        fi
+        SHA7="$${RELEASE_SHA:0:7}"
+        gcloud run deploy "$$SERVICE" \
+          --image "gcr.io/$PROJECT_ID/studio:$$RELEASE_SHA" \
+          --region "$$REGION" \
+          --platform managed \
+          --allow-unauthenticated \
+          --no-traffic \
+          --tag "rc-$$SHA7" \
+          --memory 2Gi \
+          --cpu 2 \
+          --timeout 300 \
+          --concurrency 10 \
+          --min-instances 0 \
+          --max-instances 5 \
+          --set-env-vars 'ENABLE_DEV_LOGS=true' \
+          --set-secrets 'GEMINI_API_KEY=GEMINI_API_KEY:latest,ELEVENLABS_API_KEY=ELEVENLABS_API_KEY:latest,FIREBASE_SERVICE_ACCOUNT_KEY=FIREBASE_SERVICE_ACCOUNT_KEY:latest,MIXAM_USERNAME=MIXAM_USERNAME:latest,MIXAM_PASSWORD=MIXAM_PASSWORD:latest,MIXAM_WEBHOOK_URL=MIXAM_WEBHOOK_URL:latest,MIXAM_WEBHOOK_SECRET=MIXAM_WEBHOOK_SECRET:latest,AZURE_TENANT_ID=AZURE_TENANT_ID:latest,AZURE_CLIENT_ID=AZURE_CLIENT_ID:latest,AZURE_CLIENT_SECRET=AZURE_CLIENT_SECRET:latest,GETADDRESS_API_KEY=GETADDRESS_API_KEY:latest,INTERNAL_API_SECRET=INTERNAL_API_SECRET:latest,FAL_KEY=FAL_KEY:latest'
+        echo ""
+        echo "Staging revision deployed with ZERO traffic."
+        echo "Smoke-test it at: https://rc-$$SHA7---<service-host>/api/health"
+        echo "Then move traffic with scripts/deploy/canary-promote.sh"
+
+images:
+  - 'gcr.io/$PROJECT_ID/studio:${_RELEASE_SHA}'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+timeout: '1800s'
+
+substitutions:
+  _RELEASE_SHA: '' # REQUIRED: full git commit SHA of the release
+  _SERVICE: 'studio'
+  _DEPLOY_REGION: 'europe-west1'
+  _DEPLOY_STAGING: 'true'

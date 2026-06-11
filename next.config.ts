@@ -2,12 +2,17 @@
 import type {NextConfig} from 'next';
 import { execSync } from 'child_process';
 
-// Get git commit SHA at build time
-let gitCommitSha = 'unknown';
-try {
-  gitCommitSha = execSync('git rev-parse --short HEAD').toString().trim();
-} catch {
-  // Ignore errors (e.g., not a git repo)
+// Get git commit SHA at build time.
+// Precedence: GIT_COMMIT_SHA env (set by Docker build-arg in CI, where there
+// is no .git directory) → `git rev-parse` (local / App Hosting builds) →
+// 'unknown'.
+let gitCommitSha = process.env.GIT_COMMIT_SHA?.trim() || 'unknown';
+if (gitCommitSha === 'unknown') {
+  try {
+    gitCommitSha = execSync('git rev-parse --short HEAD').toString().trim();
+  } catch {
+    // Ignore errors (e.g., not a git repo)
+  }
 }
 
 // Only ignore TypeScript errors in development/preview environments

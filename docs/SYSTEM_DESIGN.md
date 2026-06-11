@@ -577,6 +577,50 @@ auto-cancel. The admin print-orders list shows the action chips/failure summarie
 - `failure` status with `failureReason` for calls that complete but produce no usable output
 - Accessible via Admin > AI Logs with export/selection functionality
 
+### Health Endpoints
+- `GET /api/health` — canary/rollback probe: build identity (`version` = git SHA baked at build
+  time), uptime, Cloud Run revision, and a timeout-guarded Firestore dependency probe. Returns
+  HTTP 503 when `degraded` so monitors can alert on status code. No secrets/logs in the response.
+- `GET /api/healthz` — older endpoint; additionally exposes `recentLogs` when `ENABLE_DEV_LOGS=true`.
+
+---
+
+## Deployment & Release
+
+Full runbook: `docs/DEPLOYMENT.md` (supersedes `docs/DEPLOYMENT_ROLLOUT.md`).
+
+### Current state
+Production is **Firebase App Hosting** (`apphosting.yaml`): every push to `main` auto-builds and
+rolls out to 100% immediately. `cloudbuild.yaml` is a legacy Cloud Run pipeline with a stale
+secrets list — it must not be triggered. `ci.yml` (GitHub Actions) gates merges with typecheck,
+unit tests, and the funnel E2E, but does not deploy.
+
+### Staged rollout (Sprint W3-B machinery — opt-in until owner enablement)
+- **Build-once**: `.github/workflows/release.yml` (`workflow_dispatch` only) runs
+  typecheck/test/build gates, then `cloudbuild.release.yaml` builds ONE immutable image tagged
+  with the commit SHA and deploys it as a **zero-traffic** Cloud Run revision (tag `rc-<sha7>`)
+  for staging smoke tests. No mutable `:latest` tag.
+- **Canary / promote / rollback**: `scripts/deploy/` (`status.sh`, `deploy-staging.sh`,
+  `canary-promote.sh`, `promote-full.sh`, `rollback.sh`) move traffic between existing revisions
+  via Cloud Run traffic splitting — promotion and rollback never rebuild. All mutating scripts
+  are dry-run by default and require `--execute`.
+- **Rationale**: App Hosting offers no artifact reuse, staging step, traffic splitting, or fast
+  rollback; plain Cloud Run provides all four with the same container. The cutover (domain
+  mapping + disabling App Hosting auto-rollouts) is an explicit owner action documented in the
+  runbook — nothing in the repo changes live deploy behaviour on merge.
+
+### Feature Flags (second control plane)
+- **Registry + defaults**: `src/lib/feature-flags.ts` (`FLAG_DEFAULTS`). Server evaluation:
+  `src/lib/feature-flags.server.ts`; clients read server-evaluated values via `GET /api/flags`
+  and the `useFeatureFlag` hook (server-first rule — no Remote Config SDK in the client bundle).
+- **Precedence** (each layer fails open to the next): env override `FLAG_<KEY>` → Firebase
+  Remote Config server template (percentage rollouts keyed on UID `randomizationId`; `uid` /
+  `emailDomain` custom signals for allowlists) → Firestore `systemConfig/featureFlags` fallback
+  doc → in-code default. Per-instance caches (RC 60s, Firestore 30s) mean a flag flip reaches
+  production in ~1 minute without a deploy.
+- **Worked example**: `health_verbose` switches `GET /api/health` between the full body
+  (dependency probes) and a minimal `{status, version}` body.
+
 ---
 
 ## Directory Structure
@@ -675,5 +719,6 @@ Mobile scope is strictly child-facing: story creation, story reading, storybook 
 
 - [SCHEMA.md](./SCHEMA.md) - Database schema reference
 - [API.md](./API.md) - API route documentation
+- [DEPLOYMENT.md](./DEPLOYMENT.md) - Deployment runbook (staged rollout, feature flags, rollback)
 - [CLAUDE.md](../CLAUDE.md) - Development workflow rules
 - [CHANGES.md](./CHANGES.md) - Change history by commit

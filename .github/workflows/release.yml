@@ -1,0 +1,122 @@
+# Release (build-once) — Sprint W3-B staged-rollout pipeline.
+#
+# OPT-IN ONLY: this workflow has NO push/PR trigger. Merging to main does NOT
+# run it; it is started manually (Actions tab → "Release (build-once)" →
+# Run workflow). It therefore cannot change current deploy behaviour until
+# the owner follows the enablement runbook in docs/DEPLOYMENT.md (which
+# includes disabling Firebase App Hosting automatic rollouts).
+#
+# What it does:
+#   1. Gates: typecheck + unit tests + production Next.js build.
+#   2. Hands off to Cloud Build (cloudbuild.release.yaml), which builds ONE
+#      immutable image tagged with the release commit SHA and (optionally)
+#      deploys a zero-traffic staging revision tagged rc-<sha7>.
+#   Traffic moves only via scripts/deploy/* afterwards.
+#
+# Required repository secret (owner enablement step):
+#   GCP_RELEASE_SA_KEY — JSON key for a service account with roles:
+#     roles/cloudbuild.builds.editor, roles/viewer (to follow logs), and the
+#     Cloud Build service account itself needs run.admin + secretmanager
+#     access (it already has these if cloudbuild.yaml ever deployed).
+#   Hardening follow-up: replace the JSON key with Workload Identity
+#   Federation (google-github-actions/auth supports both).
+
+name: Release (build-once)
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_staging:
+        description: 'Deploy zero-traffic staging revision after the image build'
+        type: boolean
+        default: true
+      gcp_project:
+        description: 'GCP project ID (defaults to the GCP_PROJECT_ID secret)'
+        type: string
+        required: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  gates:
+    name: Gates (typecheck, unit tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Production build
+        run: npm run build
+
+  build-once:
+    name: Build immutable image (Cloud Build)
+    needs: gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check release credentials are configured
+        env:
+          GCP_RELEASE_SA_KEY: ${{ secrets.GCP_RELEASE_SA_KEY }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          INPUT_PROJECT: ${{ inputs.gcp_project }}
+        run: |
+          if [ -z "$GCP_RELEASE_SA_KEY" ]; then
+            echo "::error::Repository secret GCP_RELEASE_SA_KEY is not set. See docs/DEPLOYMENT.md → 'Owner enablement'." >&2
+            exit 1
+          fi
+          if [ -z "$INPUT_PROJECT" ] && [ -z "$GCP_PROJECT_ID" ]; then
+            echo "::error::Provide the gcp_project input or set the GCP_PROJECT_ID repository secret." >&2
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_RELEASE_SA_KEY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Submit Cloud Build (build-once + zero-traffic staging deploy)
+        env:
+          PROJECT: ${{ inputs.gcp_project != '' && inputs.gcp_project || secrets.GCP_PROJECT_ID }}
+          DEPLOY_STAGING: ${{ inputs.deploy_staging && 'true' || 'false' }}
+        run: |
+          gcloud builds submit \
+            --project "$PROJECT" \
+            --config cloudbuild.release.yaml \
+            --substitutions "_RELEASE_SHA=${GITHUB_SHA},_DEPLOY_STAGING=${DEPLOY_STAGING}"
+
+      - name: Release summary
+        env:
+          DEPLOY_STAGING: ${{ inputs.deploy_staging && 'true' || 'false' }}
+        run: |
+          SHA7="${GITHUB_SHA:0:7}"
+          {
+            echo "## Release candidate built"
+            echo ""
+            echo "- Image: \`gcr.io/<project>/studio:${GITHUB_SHA}\`"
+            echo "- Staging deploy (zero traffic): \`${DEPLOY_STAGING}\`"
+            echo "- Staging tag: \`rc-${SHA7}\` → smoke-test \`https://rc-${SHA7}---<service-host>/api/health\`"
+            echo ""
+            echo "Next steps (docs/DEPLOYMENT.md):"
+            echo '1. `scripts/deploy/canary-promote.sh <revision> 5 --execute`'
+            echo '2. watch /api/health + Cloud Run metrics'
+            echo '3. `scripts/deploy/promote-full.sh <revision> --execute` or `scripts/deploy/rollback.sh <known-good> --execute`'
+          } >> "$GITHUB_STEP_SUMMARY"
