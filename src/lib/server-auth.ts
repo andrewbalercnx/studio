@@ -1,5 +1,5 @@
 import { headers } from 'next/headers';
-import { auth } from 'firebase-admin';
+import { auth, firestore } from 'firebase-admin';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { AuthError } from './auth-error';
@@ -59,12 +59,44 @@ export async function requireAuthenticatedUser(request: Request): Promise<Verifi
   }
 }
 
+// Signup never provisions custom claims (it writes roles to the users/{uid}
+// doc only), so a genuine parent's ID token carries no isParent claim. Fall
+// back to the profile doc for isParent ONLY — isAdmin/isWriter must stay
+// token-claim-gated because firestore.rules let users write their own doc
+// (including roles), so doc-sourced admin would be self-grantable.
+const parentRoleCache = new Map<string, { isParent: boolean; expiresAt: number }>();
+const PARENT_ROLE_CACHE_MS = 60_000;
+
+async function profileHasParentRole(uid: string): Promise<boolean> {
+  const cached = parentRoleCache.get(uid);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) {
+    return cached.isParent;
+  }
+  let isParent = false;
+  try {
+    const snap = await firestore().doc(`users/${uid}`).get();
+    isParent = snap.exists && snap.get('roles.isParent') === true;
+  } catch (error: any) {
+    console.warn('[server-auth] Failed to read profile roles', error?.message ?? error);
+    return false; // fail closed; do not cache transient failures
+  }
+  parentRoleCache.set(uid, { isParent, expiresAt: now + PARENT_ROLE_CACHE_MS });
+  return isParent;
+}
+
+export function hasParentAccess(claims: Record<string, unknown>): boolean {
+  return claims.isParent === true || claims.isAdmin === true || claims.isWriter === true;
+}
+
 export async function requireParentOrAdminUser(request: Request): Promise<VerifiedUser> {
   'use server';
   const verified = await requireAuthenticatedUser(request);
   const claims = verified.claims ?? {};
-  const isPrivileged = claims.isAdmin || claims.isWriter;
-  if (claims.isParent || isPrivileged) {
+  if (hasParentAccess(claims)) {
+    return verified;
+  }
+  if (await profileHasParentRole(verified.uid)) {
     return verified;
   }
   throw new AuthError('FORBIDDEN', 'Parent access required');
