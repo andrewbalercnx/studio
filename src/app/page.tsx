@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
+import { OnboardingChecklist } from '@/components/onboarding/onboarding-checklist';
 
 function ChildIcon({ profile }: { profile: ChildProfile }) {
   const router = useRouter();
@@ -141,6 +142,9 @@ export default function HomePage() {
           {renderContent()}
         </CardContent>
       </Card>
+
+      {/* First-run guide: renders only while a new parent's first book is incomplete. */}
+      <OnboardingChecklist className="max-w-2xl mx-auto mt-6" />
     </div>
   );
 }

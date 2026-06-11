@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-06-11 (Sprint W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`)
+> **Last Updated**: 2026-06-11 (W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -90,6 +90,7 @@ The `StoryPicClient` provides typed methods for child-facing operations:
 - [Issue Reporting Routes](#issue-reporting-routes)
 - [Internal Routes](#internal-routes)
 - [Webhook Routes](#webhook-routes)
+- [User Onboarding Routes](#user-onboarding-routes)
 - [Address Routes](#address-routes)
 - [Postcode Routes](#postcode-routes)
 - [Sound Effects Routes](#sound-effects-routes)
@@ -3471,6 +3472,62 @@ Rate-limited responses return status `429` with:
   "retryAfter": 60
 }
 ```
+
+---
+
+## User Onboarding Routes
+
+### GET `/api/user/onboarding`
+
+First-run "create your first book" checklist for the authenticated parent. Step completion is **derived server-side** from real account state (children, story sessions, storybook outputs) and the snapshot is persisted to `users/{uid}.onboardingState`, including the `signupAtMs`/`firstBookAtMs` time-to-first-book pair. Once the state is `dismissed` or complete the route short-circuits on the cached state (no Firestore fan-out).
+
+**Authentication**: Required
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "steps": [
+    { "id": "createChild", "title": "Create a profile for your child", "description": "...", "href": "/parent/children", "complete": true },
+    { "id": "addPhoto", "title": "Add a photo of your child", "description": "...", "href": "/parent/children", "complete": false },
+    { "id": "createStory", "title": "Make up a story together", "description": "...", "href": "/", "complete": false },
+    { "id": "generateArt", "title": "Turn the story into a picture book", "description": "...", "href": "/", "complete": false },
+    { "id": "previewBook", "title": "Preview the finished book", "description": "...", "href": "/parent/storybooks", "complete": false }
+  ],
+  "complete": false,
+  "dismissed": false,
+  "newlyCompletedStepIds": ["createChild"],
+  "firstBookJustReady": false,
+  "signupAtMs": 1750000000000,
+  "firstBookAtMs": null,
+  "timeToFirstBookMs": null,
+  "tipsSeen": { "storyCreation": true }
+}
+```
+
+**Notes**:
+- `newlyCompletedStepIds` lists steps that flipped to complete since the previous derivation — clients emit one `onboarding.step_completed` analytics event per id.
+- `firstBookJustReady` is `true` exactly once (the call that first observes a viewable book); clients emit `onboarding.first_book_ready` with `timeToFirstBookMs`.
+- Step derivation logic lives in `src/lib/onboarding.ts` (pure, unit-tested).
+
+### POST `/api/user/onboarding`
+
+Record a user choice on the onboarding state.
+
+**Authentication**: Required
+
+**Request Body**:
+```json
+{ "action": "dismiss" }
+```
+or `{ "action": "restore" }` or `{ "action": "tipSeen", "tipId": "storyCreation" | "artGeneration" }`
+
+**Response**: `200 OK`
+```json
+{ "ok": true }
+```
+
+**Errors**: `400` for an unknown `action` or `tipId`.
 
 ---
 

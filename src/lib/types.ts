@@ -85,6 +85,33 @@ export type UserProfile = {
   hasCompletedStartupWizard?: boolean; // True once user has seen the default startup wizard
   notifiedUser?: boolean; // Receives admin notifications for print orders
   maintenanceUser?: boolean; // Receives maintenance/error notification emails
+  onboardingState?: OnboardingState; // First-run checklist progress (Sprint W2-B)
+};
+
+/**
+ * Per-user first-run onboarding progress, stored on `users/{uid}.onboardingState`.
+ * Step completion is server-derived from real account state by
+ * `GET /api/user/onboarding` and cached here; the flags below capture
+ * user choices (dismissal, tips seen) and time-to-first-book instrumentation.
+ * All timestamps are epoch milliseconds (numbers) for easy diffing/JSON.
+ */
+export type OnboardingState = {
+  // Cached step-completion snapshot from the last derivation (keys are OnboardingStepId).
+  steps?: { [stepId: string]: boolean };
+  // Parent dismissed the checklist (hidden until/unless restored).
+  dismissed?: boolean;
+  dismissedAtMs?: number;
+  // Set once all steps are complete; short-circuits future derivations.
+  completedAtMs?: number;
+  // Onboarding clock start (user-doc createdAt, captured on first derivation).
+  signupAtMs?: number;
+  // First viewable storybook observed — the "wow" moment.
+  firstBookAtMs?: number;
+  // firstBookAtMs - signupAtMs, persisted so it's measurable before PostHog is live.
+  timeToFirstBookMs?: number;
+  // Auto-shown in-context tips already displayed (keys are OnboardingTipId).
+  tipsSeen?: { [tipId: string]: boolean };
+  updatedAtMs?: number;
 };
 
 // Parent's cloned voice for TTS (stored in Firestore: users/{parentUid}/voices/{voiceId})

@@ -51,11 +51,13 @@ test.describe('parent activation funnel @funnel', () => {
   test('signup → create child → story → storybook generation → book ready', async ({ page }) => {
     test.setTimeout(180_000);
 
-    // ── 1. Signup (creates account + PIN, lands on the empty selector) ──
-    // No placeholder child is auto-seeded anymore (W1-C probe fix): the home
-    // screen shows the explicit "Add your first child" first-run prompt.
+    // ── 1. Signup (creates account + PIN, lands on selector) ──
+    // No placeholder child is seeded any more (W1-C); a fresh account sees the
+    // first-run prompts: the "Add your first child" empty state and the
+    // "Make your first book" onboarding checklist (W2-B).
     account = await signUpNewParent(page, 'funnel');
-    await expect(page.getByText('Add your first child').first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Add your first child' })).toBeVisible();
+    await expect(page.getByText('Make your first book')).toBeVisible({ timeout: 15_000 });
 
     // ── 2. Parent creates a child (PIN guard if shown + create dialog) ──
     await createChildViaParentUI(page, account, CHILD_NAME);

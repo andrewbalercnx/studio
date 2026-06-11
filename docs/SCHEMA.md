@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-06-11 (Sprint W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset semantics for parent page edits; printOrders `artStatusSnapshot`/`degradedArtAcknowledged`; checkout `saveAddress` writes to `users/{uid}/addresses`)
+> **Last Updated**: 2026-06-11 (W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -33,6 +33,23 @@ User profiles with authentication and role information.
 | `hasCompletedStartupWizard` | boolean | No | True after user has seen default startup wizard |
 | `notifiedUser` | boolean | No | Receives admin notifications for print orders |
 | `maintenanceUser` | boolean | No | Receives maintenance/error notification emails |
+| `onboardingState` | OnboardingState | No | First-run checklist progress + time-to-first-book instrumentation (see below) |
+
+**`onboardingState` map** (see `OnboardingState` in `src/lib/types.ts`; all timestamps are epoch **milliseconds**):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `steps` | map<string, boolean> | Cached step-completion snapshot keyed by `OnboardingStepId` (`createChild`, `addPhoto`, `createStory`, `generateArt`, `previewBook`). **Server-derived** from real account state by `GET /api/user/onboarding` — never written by clients directly. |
+| `dismissed` | boolean | Parent dismissed the checklist |
+| `dismissedAtMs` | number | When dismissed |
+| `completedAtMs` | number | Set once all steps complete (short-circuits future derivations) |
+| `signupAtMs` | number | Onboarding clock start (user-doc `createdAt`, captured on first derivation) |
+| `firstBookAtMs` | number | First viewable storybook observed |
+| `timeToFirstBookMs` | number | `firstBookAtMs - signupAtMs` — persisted so activation timing is measurable before PostHog is live |
+| `tipsSeen` | map<string, boolean> | Auto-shown in-context tips already displayed, keyed by `OnboardingTipId` (`storyCreation`, `artGeneration`) |
+| `updatedAtMs` | number | Last update |
+
+No security-rule change was needed: `onboardingState` lives on the user's own document (owner read/write already allowed), and all writes go through `/api/user/onboarding` (Admin SDK).
 
 **Subcollections**:
 - `voices/{voiceId}` - Parent's cloned voices for TTS (see `ParentVoice` type)

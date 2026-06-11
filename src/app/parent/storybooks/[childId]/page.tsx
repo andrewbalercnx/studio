@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { useAppContext } from '@/hooks/use-app-context';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
 import { doc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
@@ -25,6 +26,7 @@ import {
   FileText,
   ArrowLeft,
   User,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -242,6 +244,15 @@ export default function ChildStorybooksPage() {
   const firestore = useFirestore();
   const { isParentGuardValidated } = useParentGuard();
   const { toast } = useToast();
+  const router = useRouter();
+  const { setActiveChildId } = useAppContext();
+
+  // Empty-state CTA: jump straight into this child's experience to start a
+  // story (same flow as the "Who is playing?" home screen).
+  const handleStartStory = useCallback(() => {
+    setActiveChildId(childId);
+    router.push(`/child/${childId}`);
+  }, [setActiveChildId, router, childId]);
 
   const [childName, setChildName] = useState('');
   const [childAvatarUrl, setChildAvatarUrl] = useState<string | null>(null);
@@ -597,10 +608,17 @@ export default function ChildStorybooksPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
             <BookOpen className="h-12 w-12 text-muted-foreground" />
-            <div className="text-center">
+            <div className="text-center max-w-md">
               <p className="font-medium">No completed storybooks yet</p>
-              <p className="text-muted-foreground">Create stories with {childName || 'this child'} to see their books here.</p>
+              <p className="text-muted-foreground">
+                Make up a story with {childName || 'this child'}, pick an art style, and the
+                finished book will appear here.
+              </p>
             </div>
+            <Button onClick={handleStartStory}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Start a story{childName ? ` with ${childName}` : ''}
+            </Button>
           </CardContent>
         </Card>
       ) : (

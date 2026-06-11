@@ -605,6 +605,36 @@
           "position": "center-center"
         }
       ]
+    },
+    {
+      "id": "tip-first-story",
+      "title": "Your First Story",
+      "status": "live",
+      "role": "parent",
+      "order": 10,
+      "pages": [
+        {
+          "title": "Time to make your first story!",
+          "description": "Pick whichever way to create looks the most fun — there's no wrong choice.\n\nThe Story Wizard asks a few playful questions and writes the story around your answers. It usually takes just a few minutes.\n\n**Grown-ups:** stay close by for the first story — younger children often want help reading the choices aloud.",
+          "route": "",
+          "position": "bottom-right"
+        }
+      ]
+    },
+    {
+      "id": "tip-first-art",
+      "title": "Your First Picture Book",
+      "status": "live",
+      "role": "parent",
+      "order": 11,
+      "pages": [
+        {
+          "title": "Now turn the story into a book!",
+          "description": "First choose a **book type**, then pick an **art style** you love — the illustrations will star your child.\n\nGenerating the artwork takes a few minutes. When it's done, the finished book appears in **My Books** here, and in the parent **Storybooks** page where you can preview and print it.",
+          "route": "",
+          "position": "bottom-right"
+        }
+      ]
     }
   ]
 }

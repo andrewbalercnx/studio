@@ -316,6 +316,8 @@ const initialTests: TestResult[] = [
   { id: 'SCENARIO_STORYBOOK_RETRY', name: 'Scenario: Storybook Retry API', status: 'PENDING', message: '' },
   { id: 'API_STORYBOOK_PAGE_EDIT', name: 'API: /api/storybookV2/pageEdit (Validation + Edit + Lock)', status: 'PENDING', message: '' },
   { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
+  { id: 'API_USER_ONBOARDING_GET', name: 'API: /api/user/onboarding (GET shape)', status: 'PENDING', message: '' },
+  { id: 'API_USER_ONBOARDING_POST', name: 'API: /api/user/onboarding (POST validation)', status: 'PENDING', message: '' },
   { id: 'API_STORY_BEAT', name: 'API: /api/storyBeat (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure (Input)', status: 'PENDING', message: '' },
@@ -2180,7 +2182,51 @@ export default function AdminRegressionPage() {
              updateTestResult('API_WARMUP_REPLY', { status: 'FAIL', message: e.message });
         }
     }
-    
+
+    // Test: API_USER_ONBOARDING_GET — derived first-run checklist shape.
+    // Read-only for established accounts (state is cached once complete/dismissed).
+    try {
+        const onboardingToken = await auth?.currentUser?.getIdToken?.();
+        if (!onboardingToken) throw new Error('Authentication required.');
+        const response = await fetch('/api/user/onboarding', {
+            headers: { Authorization: `Bearer ${onboardingToken}` },
+        });
+        const result = await response.json();
+        if (response.status !== 200) {
+            throw new Error(`API returned status ${response.status}: ${result.error || 'Unknown error'}`);
+        }
+        if (result.ok !== true) throw new Error('API response missing ok:true.');
+        if (!Array.isArray(result.steps) || result.steps.length !== 5) {
+            throw new Error(`Expected 5 onboarding steps, got ${Array.isArray(result.steps) ? result.steps.length : typeof result.steps}.`);
+        }
+        const badStep = result.steps.find((s: any) => !s.id || typeof s.complete !== 'boolean' || !s.href);
+        if (badStep) throw new Error('A step is missing id/complete/href.');
+        if (typeof result.complete !== 'boolean' || typeof result.dismissed !== 'boolean') {
+            throw new Error('Response missing complete/dismissed booleans.');
+        }
+        updateTestResult('API_USER_ONBOARDING_GET', { status: 'PASS', message: `5 steps returned; complete=${result.complete}, dismissed=${result.dismissed}.` });
+    } catch (e: any) {
+        updateTestResult('API_USER_ONBOARDING_GET', { status: 'FAIL', message: e.message });
+    }
+
+    // Test: API_USER_ONBOARDING_POST — input validation only (no state mutation:
+    // an unknown action must be rejected with 400 before any write).
+    try {
+        const onboardingToken = await auth?.currentUser?.getIdToken?.();
+        if (!onboardingToken) throw new Error('Authentication required.');
+        const response = await fetch('/api/user/onboarding', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${onboardingToken}` },
+            body: JSON.stringify({ action: 'regression-bogus-action' }),
+        });
+        if (response.status !== 400) {
+            throw new Error(`Expected 400 for unknown action, got ${response.status}.`);
+        }
+        updateTestResult('API_USER_ONBOARDING_POST', { status: 'PASS', message: 'Unknown action correctly rejected with 400.' });
+    } catch (e: any) {
+        updateTestResult('API_USER_ONBOARDING_POST', { status: 'FAIL', message: e.message });
+    }
+
     const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary, storyCompile: storyCompileScenarioSummary, phaseState: phaseStateScenarioSummary, childStoryList: childStoryListScenarioSummary };
     setDiagnostics((prev: any) => ({...prev, apiSummary: {...prev.apiSummary, ...apiSummary }, scenario: scenarioResults }));
     return scenarioResults;

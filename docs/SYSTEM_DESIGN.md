@@ -291,6 +291,25 @@ Tracks work items that should be done for a production-ready system. Both admins
 
 ---
 
+### 9. First-Run Onboarding (guided activation)
+
+Gets a brand-new family from an empty account to a finished book unaided. The biggest activation risk is parents stalling before the "wow" moment, so guidance is **pushed** (checklist + auto tips) instead of buried in the help menu.
+
+**Components**:
+- **Step derivation** (`src/lib/onboarding.ts`): pure, unit-tested function mapping real account state → completion of the five steps (`createChild` → `addPhoto` → `createStory` → `generateArt` → `previewBook`).
+- **`GET/POST /api/user/onboarding`**: the only place steps are computed (server-first principle — clients render, never decide). GET derives from Firestore (children, `storySessions`, `stories` + `storybooks` subcollections), persists the snapshot to `users/{uid}.onboardingState`, and records the `signupAtMs`/`firstBookAtMs` pair. Short-circuits on cached state once complete/dismissed, so established accounts cost one doc read.
+- **`OnboardingChecklist`** (`src/components/onboarding/onboarding-checklist.tsx`): non-modal, dismissible card on `/` and `/parent` listing the five steps with the next action highlighted and deep-linked. Renders nothing for non-parents, after dismissal, or once complete — zero change for established accounts. Deliberately never blocks the funnel (no modal, no required interaction).
+- **`OnboardingTipTrigger`** (`src/components/onboarding/onboarding-tip-trigger.tsx`): auto-starts a help wizard once per account on first use of story creation (`/kids/create`) and art generation (`/kids/create/[sessionId]/style`). Reuses the existing help-wizard infrastructure — the tips are ordinary `helpWizards` docs (`tip-first-story`, `tip-first-art`, seeded from `src/data/help-wizards.json` via the admin Help Wizards page). Conditioned on `onboardingState.tipsSeen` (server-persisted), never stacks on another wizard, and no-ops when the wizard docs aren't seeded.
+- **Empty states**: child/character/storybook list pages all point at the concrete next action (create profile / create character / start a story with this child) instead of dead-ending.
+
+**Instrumentation (time-to-first-book)**:
+- Analytics events (`src/lib/analytics/events.ts`): `onboarding.step_completed`, `onboarding.checklist_dismissed`, `onboarding.first_book_ready` (with `durationMs`), `onboarding.tip_shown` — emitted through the existing PostHog-backed module (buffered/no-op until analytics goes live).
+- Durable fallback: `signupAtMs`/`firstBookAtMs`/`timeToFirstBookMs` persisted on `users/{uid}.onboardingState`, so activation timing is queryable directly from Firestore before PostHog is enabled.
+
+**Rationale**: deriving steps from real state (rather than client-side event bookkeeping) makes the checklist self-healing across devices and lets the step logic change server-side without client updates.
+
+---
+
 ## Data Flow Diagrams
 
 ### Story Creation Flow

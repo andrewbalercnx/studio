@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
 import { useParentGuard } from '@/hooks/use-parent-guard';
 import { EntitlementSummaryCard } from '@/components/entitlements/entitlement-summary';
+import { OnboardingChecklist } from '@/components/onboarding/onboarding-checklist';
 
 function ChildIcon({ profile }: { profile: ChildProfile }) {
   const router = useRouter();
@@ -107,6 +108,9 @@ export default function ParentOverviewPage() {
 
   return (
     <div className="space-y-6">
+      {/* First-run guide: renders only while a new parent's first book is incomplete. */}
+      <OnboardingChecklist />
+
       <Card data-wiz-target="parent-child-select-card">
         <CardHeader>
           <CardTitle>Who is playing?</CardTitle>

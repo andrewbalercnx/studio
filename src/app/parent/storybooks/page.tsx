@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useParentGuard } from '@/hooks/use-parent-guard';
-import { LoaderCircle, BookOpen, User } from 'lucide-react';
+import { LoaderCircle, BookOpen, User, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -66,12 +66,18 @@ export default function ParentStorybooksPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
             <BookOpen className="h-12 w-12 text-muted-foreground" />
-            <div className="text-center">
+            <div className="text-center max-w-md">
               <p className="font-medium">No children added yet</p>
-              <p className="text-muted-foreground">Add a child profile to get started.</p>
+              <p className="text-muted-foreground">
+                Storybooks live here once your child has made a story and illustrated it. First,
+                create a profile for your child.
+              </p>
             </div>
             <Button asChild>
-              <Link href="/parent">Go to Children</Link>
+              <Link href="/parent/children">
+                <Plus className="mr-2 h-4 w-4" />
+                Add a child
+              </Link>
             </Button>
           </CardContent>
         </Card>
