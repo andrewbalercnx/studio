@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { RotateCcw, BookOpen, Loader2, Play, Volume2, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
 import { useResolvePlaceholdersMultiple } from '@/hooks/use-resolve-placeholders';
+import { BookPageSpread } from './book-page-spread';
 
 export type ReadMode = 'listen' | 'read';
 
@@ -350,18 +351,16 @@ export function ImmersivePlayer({
       style={{ zIndex: 9999 }}
       onClick={handleScreenTap}
     >
-      {/* Background image */}
-      {currentPage?.imageUrl && (
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-500"
-          style={{
-            backgroundImage: `url(${currentPage.imageUrl})`,
-          }}
+      {/* Page artwork + text via the shared book-page renderer (also used by
+          the parent book view, so both surfaces present pages identically). */}
+      {currentPage && (
+        <BookPageSpread
+          page={currentPage}
+          displayText={displayText}
+          fit="cover"
+          className="absolute inset-0"
         />
       )}
-
-      {/* Gradient overlay for text readability - only covers bottom portion */}
-      <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
 
       {/* Loading indicator - only in listen mode */}
       {readMode === 'listen' && isAudioLoading && (
@@ -450,27 +449,6 @@ export function ImmersivePlayer({
             <BookOpen className="mr-2 h-5 w-5" />
             Return to My Books
           </Button>
-        </div>
-      )}
-
-      {/* Text content */}
-      {displayText && (
-        <div className="absolute bottom-0 left-0 right-0 p-6 pb-safe">
-          <div className="max-w-3xl mx-auto">
-            {/* Title on first page or cover pages */}
-            {(currentPage?.kind === 'cover_front' || currentPage?.kind === 'cover_back') && currentPage?.title && (
-              <h1 className="text-3xl sm:text-4xl font-headline text-white text-center mb-4 drop-shadow-lg">
-                {currentPage.title}
-              </h1>
-            )}
-
-            {/* Body text - fades out on hover to reveal image underneath */}
-            <div className="bg-black/50 backdrop-blur-sm rounded-2xl p-6 transition-opacity duration-300 hover:opacity-10">
-              <p className="text-xl sm:text-2xl text-white leading-relaxed text-center font-medium">
-                {displayText}
-              </p>
-            </div>
-          </div>
         </div>
       )}
 

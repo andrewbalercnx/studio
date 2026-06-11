@@ -358,7 +358,7 @@ export async function POST(request: NextRequest) {
                   pagesFailed: artStatus.pagesFailed,
                   failedPageIds: artStatus.failedPageIds ?? [],
                 },
-                source: 'parent',
+                source: 'parent' as const,
                 userId: user.uid,
               },
             ]
