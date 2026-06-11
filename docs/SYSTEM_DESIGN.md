@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-06-06
+> **Last Updated**: 2026-06-11
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -334,19 +334,62 @@ Tracks work items that should be done for a production-ready system. Both admins
 ## Error Handling
 
 ### AI Flow Errors
-- Logged to `aiFlowLogs` collection
-- Rate limit errors trigger retry with backoff
-- User-facing errors provide actionable messages
-- Shared reliability utilities (`src/lib/ai-retry.ts`, `src/lib/ai-error-map.ts`): retry with
-  exponential backoff + jitter, a transient/permanent error classifier, a per-provider circuit-breaker
-  scaffold, and a raw→user-safe message map.
-- **No raw error reaches a child/parent.** The `storybookV2/*` routes and now every interactive
-  generation route — `tts`, `storyWizard`, `storyFriends`, `storyArc`, `storyEnding`, `storyBeat`,
-  `gemini3`, `gemini4`, `warmupReply`, `storyCompile` — route their catch-block message through
-  `toUserSafeMessage` (kid-safe copy), while the raw error stays in the logs for operators. Controlled
-  messages (auth/validation) are unchanged. (Remaining follow-ups: mapping *flow-result* error
-  messages too, graceful degradation UI / kid-safe empty states, broader `withRetry` adoption, and a
-  systemConfig-backed breaker.)
+- Logged to `aiFlowLogs` collection (raw error strings, stacks, retry metadata — operators only)
+- Shared reliability utilities:
+  - `src/lib/ai-retry.ts`: `classifyError` (transient / rate_limit / permanent), `computeBackoffMs`
+    (exponential + full jitter, low cap), `withRetry` (low retry cap, default 2; retries ONLY
+    classified-transient errors — never 4xx/quota/safety), and the in-memory `CircuitBreaker`
+    primitive.
+  - `src/lib/ai-circuit-breaker.server.ts`: the **systemConfig-backed distributed circuit breaker**.
+    Per-provider counters (`gemini-text`, `gemini-image`, `elevenlabs-tts`) persist in
+    `systemConfig/circuitBreakers` with transactional updates and a ~5s in-memory TTL cache per
+    instance (same pattern as `systemConfig/aiModels`), so the breaker trips consistently across
+    serverless instances. On sustained transient/rate-limit failure it opens and every instance
+    **fast-fails to graceful degradation instead of retrying** — a provider outage never becomes a
+    token-burning retry storm. Breaker-store failures fail open. `withProviderReliability(provider,
+    fn)` is the standard wrapper (breaker pre-check → withRetry → per-attempt breaker accounting →
+    abandon retries if any instance trips the circuit mid-flight).
+  - `src/lib/ai-error-map.ts`: the exhaustive, unit-tested raw→user-safe message table
+    (`toUserSafeMessage` / `categorizeError`).
+- **Retry adoption**: `storyWizardFlow` (both LLM calls) and `avatarAnimationFlow` run under
+  `withProviderReliability`; `storyImageFlow` keeps its progressive-prompt-simplification loop (a
+  flow-specific recovery) but uses the shared classifier, the shared jittered backoff schedule, and
+  the shared `gemini-image` breaker. ElevenLabs TTS flows use the SDK's built-in
+  `maxRetries`/timeout.
+- **No raw error reaches a child/parent — at every layer**:
+  - *Routes*: every interactive generation route (`tts`, `storyWizard`, `storyFriends`, `storyArc`,
+    `storyEnding`, `storyBeat`, `gemini3`, `gemini4`, `warmupReply`, `storyCompile`,
+    `storybookV2/*`, `generateAvatar`, `generateCharacterAvatar`) maps catch-block errors through
+    `toUserSafeMessage`.
+  - *Flow results*: flows that return `{ error | errorMessage }` result objects return user-safe
+    strings (routes pass these through verbatim). Raw detail stays in `aiFlowLogs` and
+    diagnostics-gated `debug` payloads.
+  - *Documents*: every client-readable `*.lastErrorMessage` field (storybook pages, image/page/audio
+    generation status, avatar/canonical/description generation) is written user-safe; raw stacks are
+    no longer stored on page documents.
+  - *Kids PWA*: `/kids/*` error/empty states use age-appropriate copy + mascot/emoji (no technical
+    text); unexpected client-side exceptions render a kid-safe fallback, never `err.message`.
+
+### Graceful Degradation (degraded-book contract)
+- **Contract**: `StoryBookArtStatus` in `src/lib/types.ts`, canonically derived from per-page
+  `imageStatus` by `deriveStorybookArtStatus` (`src/lib/storybook-status.ts`) — pure and shared by
+  server and client. Completeness: `none | in_progress | complete | degraded | failed`, with
+  explicit `isViewable` / `isOrderable` flags.
+- `/api/storybookV2/images` persists the rollup as `artStatus` on the storybook after every run and
+  detects **recovery** (degraded/failed → complete sets `recoveredAt` + `recoveryNotified=false`).
+- **A text + partial-art book is viewable AND orderable**: the storybook viewer offers Read Book
+  whenever the book has pages and print/finalize whenever `isOrderable`; `/api/storybookV2/finalize`
+  gates on `isOrderable` (degraded allowed; only in-progress or fully-failed art blocks). Failed
+  pages show a calm per-page note with a retry action instead of a dead Error badge.
+- **Recovery notification**: the viewer shows a one-time "your book is complete" toast when
+  `recoveredAt` is set and unacknowledged, then writes `artStatus.recoveryNotified=true`. The kids
+  generating page routes degraded books to "Your Book is Ready to Read!" instead of an error screen.
+
+### Perceived Latency (wizard)
+- `storyWizardFlow` returns server-authoritative `questionNumber`/`totalQuestions`; the kids create
+  page renders "Question N of 4" plus a questions+story progress strip, and the long final
+  story-writing call has distinct expectation-setting copy. `StoryGeneratorResponse` carries the
+  same fields for the parent `StoryBrowser` badge.
 
 ### Testing seam (`TEST_MODE`)
 - `src/lib/test-mode.ts` (`TEST_MODE`/`E2E_FAKE_AI`): when set, the storybook generation flows/routes
