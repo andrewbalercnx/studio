@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-06-11 (W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-06-11 (W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -434,6 +434,9 @@ Print fulfillment orders.
 | `mixamInteractions` | MixamInteraction[] | No | API request/response and webhook log |
 | `artStatusSnapshot` | object | No | Sprint W2-C: `{ completeness, pagesTotal, pagesReady, pagesFailed }` at order time (new-model storybooks) |
 | `degradedArtAcknowledged` | boolean | No | Sprint W2-C: true when the parent explicitly confirmed ordering a degraded (partial-art) book |
+| `adminNextAction` | object \| null | No | Sprint W3-A: next required admin action `{ action, label, urgent, setAt?, source? }`. Persisted by the Mixam webhook on status changes; also derived fresh server-side by `GET /api/admin/print-orders`. Action ids/mapping in `src/lib/mixam/order-state.ts` |
+| `needsAdminAttention` | boolean | No | Sprint W3-A: rollup of `adminNextAction.urgent` for cheap "needs attention" badges |
+| `failureSummary` | string \| null | No | Sprint W3-A: one-line failure summary (artwork > validation > rejection > Mixam reason). Persisted by the webhook (null clears it); also computed in the admin list API |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
 | `cancelledAt` | timestamp | No | Cancellation timestamp |
@@ -1011,6 +1014,29 @@ Mixam API configuration settings.
 
 **Security**: Admin only.
 
+#### `systemConfig/opsHealth`
+Operational health-check configuration and run state (Sprint W3-A). Written by
+`POST /api/admin/ops/health-check`; thresholds are admin-editable. Defaults live in
+`src/lib/ops/health-checks.ts` (`DEFAULT_OPS_HEALTH_THRESHOLDS`).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `thresholds.artPendingHours` | number | No | Art generation stuck if running/rate-limited > N hours (default 4) |
+| `thresholds.ordersUnreviewedHours` | number | No | Orders awaiting approval older than N hours are un-reviewed (default 24) |
+| `thresholds.errorRateWindowMinutes` | number | No | Window for the generation error-rate check (default 60) |
+| `thresholds.errorRateThreshold` | number | No | Error rate (0..1) above which the spike check breaches (default 0.3) |
+| `thresholds.errorRateMinSamples` | number | No | Minimum flow runs in the window before the rate is meaningful (default 5) |
+| `thresholds.alertCooldownHours` | number | No | Hours before re-alerting on a still-breached check (default 6) |
+| `lastAlertedAt` | map<checkId, number> | No | Per-check ms-epoch of the last maintenance alert (dedup: a persistent breach alerts once per cooldown) |
+| `lastRunAt` | timestamp | No | When the checks last ran |
+| `lastRunBy` | string | No | Admin UID or `internal` (cron/system-test via X-Internal-Secret) |
+| `lastResults` | array | No | Last run's results `[{ id, breached, summary, details? }]` (shown on /admin/ops) |
+| `updatedAt` | timestamp | No | Last update time |
+
+**Check ids**: `art_pending`, `orders_unreviewed`, `error_rate_spike`.
+
+**Security**: Admin only (systemConfig rules).
+
 ---
 
 ### `shareLinks`
@@ -1320,6 +1346,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-06-11 | Sprint W3-A: `adminNextAction`/`needsAdminAttention`/`failureSummary` on printOrders (Mixam webhook + admin list API); Added `systemConfig/opsHealth` (health-check thresholds, per-check `lastAlertedAt` dedup, last run results) |
 | 2026-06-11 | Sprint W2-C: `lastEditedAt`/`lastEditedBy` on storybook pages + audio-reset semantics for parent page edits via `/api/storybookV2/pageEdit`; `artStatusSnapshot` + `degradedArtAcknowledged` on printOrders (degraded-order audit); checkout `saveAddress` write path into `users/{uid}/addresses` |
 | 2026-06-11 | Added `artStatus` (StoryBookArtStatus degraded-book rollup + recovery fields) to storybook subcollection docs; Added `systemConfig/circuitBreakers` (cross-instance AI provider breaker state); `*.lastErrorMessage` fields now always contain user-safe copy (raw errors stay in `aiFlowLogs`); storybook pages no longer store `imageMetadata.errorStack`; wizard StoryGeneratorResponse gains `questionNumber`/`totalQuestions` |
 | 2026-01-17 | Added `devTodos` collection for development work tracking |

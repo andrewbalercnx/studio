@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-06-11 (W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-06-11 (W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -2490,6 +2490,153 @@ List all print orders (admin view).
 }
 ```
 
+Each order additionally includes server-computed fields (Sprint W3-A — server-first):
+- `adminNextAction` — `{ action, label, urgent, source: 'derived' }`, the next required admin
+  action derived fresh from current order state (mapping in `src/lib/mixam/order-state.ts`)
+- `needsAdminAttention` — boolean rollup of `adminNextAction.urgent`
+- `failureSummary` — one-line failure summary (artwork errors > validation > rejection >
+  Mixam status reason), or `null`
+
+---
+
+### GET `/api/admin/sessions`
+
+List the 100 most recently updated story sessions with a server-computed `lastError` summary
+joined from the most recent 500 `aiFlowLogs` entries (Sprint W3-A — surfaces failure reasons
+at a glance without opening each record).
+
+**Authentication**: Admin only (Bearer token).
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "sessions": [
+    {
+      "id": "session-id",
+      "childId": "child-id",
+      "status": "in_progress",
+      "currentPhase": "story",
+      "storyTitle": "...",
+      "storyMode": "wizard",
+      "promptConfigId": "...",
+      "promptConfigLevelBand": "low",
+      "createdAtMs": 1750000000000,
+      "updatedAtMs": 1750000000000,
+      "lastError": {
+        "flowName": "storyImageFlow",
+        "message": "Truncated error message (max 300 chars)",
+        "status": "error",
+        "atMs": 1750000000000
+      }
+    }
+  ]
+}
+```
+
+`lastError` is `null` when the session has no error/failure in the recent log window.
+
+---
+
+### GET `/api/admin/ops/metrics`
+
+Aggregated metrics for the ops/KPI dashboard (`/admin/ops`). Sprint W3-A.
+
+**Authentication**: Admin only (Bearer token).
+
+**Data sources**: user-behaviour metrics come from PostHog's query API via the cached server
+module `src/lib/posthog-query.server.ts` (NOT Firestore scans); operational metrics use bounded,
+indexed Firestore queries (`aiFlowLogs` last 24h limit 1000; `printOrders` last 30d limit 500).
+While PostHog is dark behind the compliance gate, the analytics sections return
+`{ "available": false, "reason": "not_configured" }`.
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "generatedAt": "2026-06-11T12:00:00.000Z",
+  "analytics": {
+    "source": "posthog",
+    "activeUsers": { "available": true, "cached": false, "data": { "dau": 3, "wau": 10, "mau": 42 } },
+    "funnel": { "available": false, "reason": "not_configured" }
+  },
+  "generation": {
+    "source": "firestore:aiFlowLogs",
+    "windowHours": 24,
+    "total": 120,
+    "errors": 6,
+    "errorRate": 0.05,
+    "sampleLimitReached": false,
+    "topErrorFlows": [{ "flowName": "storyImageFlow", "count": 4, "lastMessage": "..." }]
+  },
+  "printOrders": {
+    "source": "firestore:printOrders",
+    "windowDays": 30,
+    "placed": 12,
+    "paid": 10,
+    "submittedOrBeyond": 9,
+    "shippedOrDelivered": 6,
+    "needingAttention": 2,
+    "unreviewedOver24h": 1,
+    "byStatus": { "awaiting_approval": 2, "in_production": 3 },
+    "conversion": { "placedToSubmitted": 0.75, "placedToShipped": 0.5 }
+  },
+  "health": {
+    "lastRunAtMs": 1750000000000,
+    "results": [{ "id": "art_pending", "breached": false, "summary": "..." }],
+    "thresholds": { "artPendingHours": 4 }
+  }
+}
+```
+
+`health` is `null` until the first health-check run.
+
+**Env (optional, server-side)**: `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID`,
+`POSTHOG_API_HOST` (default `https://eu.posthog.com`). PostHog query results are cached
+in-memory for 5 minutes.
+
+---
+
+### POST `/api/admin/ops/health-check`
+
+Runs the operational health checks and alerts maintenance users on breaches. Sprint W3-A.
+Designed to be called from the ops dashboard ("Run checks now"), the daily system test, or a cron.
+
+**Authentication**: Admin Bearer token OR `X-Internal-Secret` header (`INTERNAL_API_SECRET`).
+
+**Query Parameters**:
+- `dryRun` (optional) - `1` evaluates the checks but sends no alerts and persists nothing
+  (used by the regression suite)
+
+**Checks** (thresholds from `systemConfig/opsHealth.thresholds`, defaults in
+`src/lib/ops/health-checks.ts`):
+| Check id | Condition | Default threshold |
+|----------|-----------|-------------------|
+| `art_pending` | Storybook `imageGeneration` running/pending/rate_limited for too long (scans storybooks of the 50 most recently updated stories — no collection-group queries) | 4 hours |
+| `orders_unreviewed` | Print orders in `awaiting_approval`/`ready_to_submit` older than threshold | 24 hours |
+| `error_rate_spike` | `aiFlowLogs` error+failure rate over a recent window above threshold (with a minimum-sample floor) | 30% over 60 min, min 5 samples |
+
+**Alert dedup**: on breach, `notifyMaintenanceError` fires only if the check's
+`lastAlertedAt` (stored on `systemConfig/opsHealth`) is older than `alertCooldownHours`
+(default 6h) — a persistent condition alerts once per cooldown window, not per run.
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "healthy": false,
+  "dryRun": false,
+  "results": [
+    { "id": "art_pending", "breached": true, "summary": "1 storybook(s) with art generation pending > 4h", "details": { "count": 1, "storybookIds": ["stories/x/storybooks/y"] } },
+    { "id": "orders_unreviewed", "breached": false, "summary": "No print orders un-reviewed > 24h" },
+    { "id": "error_rate_spike", "breached": false, "summary": "Generation error rate 5% over last 60m (6/120)" }
+  ],
+  "alertsSent": ["art_pending"],
+  "thresholds": { "artPendingHours": 4, "ordersUnreviewedHours": 24, "errorRateWindowMinutes": 60, "errorRateThreshold": 0.3, "errorRateMinSamples": 5, "alertCooldownHours": 6 },
+  "checkedAt": "2026-06-11T12:00:00.000Z"
+}
+```
+
 ---
 
 ### GET `/api/admin/print-orders/[orderId]`
@@ -3419,6 +3566,25 @@ Mixam webhook for order status updates. Called by Mixam when order status change
 - `lastWebhookAt` - Timestamp of last webhook
 - `fulfillmentStatus` - Mapped internal status
 - `statusHistory` - Appended with new status entry
+- `adminNextAction` - Sprint W3-A: next required admin action `{ action, label, urgent, setAt, source: 'webhook' }` (mapping in `src/lib/mixam/order-state.ts`)
+- `needsAdminAttention` - Sprint W3-A: rollup of `adminNextAction.urgent`
+- `failureSummary` - Sprint W3-A: one-line failure summary, `null` clears a stale summary
+
+**Admin state machine (Sprint W3-A)**: each webhook advances the admin-facing order state and
+records the next required admin action on the order doc. Conservative by design — webhooks only
+update state and flag/queue actions; they never trigger irreversible operations (no auto-confirm,
+no auto-cancel).
+
+| Internal status after webhook | adminNextAction.action | urgent |
+|------------------------------|------------------------|--------|
+| validation_failed (or any non-terminal status with artwork errors) | `fix_artwork` | yes |
+| ready_to_submit / awaiting_approval | `review_approval` | yes |
+| approved | `submit_to_mixam` | yes |
+| submitted | `confirm_order` | yes |
+| on_hold | `investigate_hold` | yes |
+| failed | `investigate_failure` | yes |
+| validating / submitting / confirmed / in_production / shipped | `monitor` | no |
+| draft / delivered / cancelled | `none` | no |
 
 ### GET `/api/webhooks/mixam`
 
