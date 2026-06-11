@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { deleteStorageObject } from '@/firebase/admin/storage';
+import { isInternalSecretValid } from '@/lib/internal-secret';
 import { storyPageFlow } from '@/ai/flows/story-page-flow';
 import { storyImageFlow } from '@/ai/flows/story-image-flow';
 
@@ -36,7 +37,8 @@ async function runTest(name: string, fn: () => Promise<string>): Promise<TestRes
 
 export async function POST(request: Request) {
   const secret = request.headers.get('X-Internal-Secret');
-  if (!secret || secret !== process.env.INTERNAL_API_SECRET) {
+  // Constant-time comparison — a plain !== leaks prefix-match length via timing.
+  if (!isInternalSecretValid(secret, process.env.INTERNAL_API_SECRET)) {
     return NextResponse.json({ ok: false, errorMessage: 'Unauthorized' }, { status: 401 });
   }
 

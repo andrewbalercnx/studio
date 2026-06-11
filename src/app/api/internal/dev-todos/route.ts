@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { isInternalSecretValid } from '@/lib/internal-secret';
 import type { DevTodo, DevTodoStatus, DevTodoPriority } from '@/lib/types';
 
 const DEV_TODOS_COLLECTION = 'devTodos';
@@ -26,7 +27,8 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!secret || secret !== expectedSecret) {
+    // Constant-time comparison — a plain !== leaks prefix-match length via timing.
+    if (!isInternalSecretValid(secret, expectedSecret)) {
       return NextResponse.json(
         { ok: false, errorMessage: 'Invalid or missing internal secret' },
         { status: 401 }

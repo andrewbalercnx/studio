@@ -15,7 +15,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "build:e2e": "node scripts/build-e2e.mjs",
+    "start:e2e": "node scripts/start-e2e-server.mjs",
+    "test:e2e": "playwright test --project=desktop-chrome --project=mobile-chrome",
+    "test:e2e:funnel": "playwright test e2e/funnel.spec.ts --project=desktop-chrome --project=mobile-chrome",
+    "test:e2e:a11y": "playwright test e2e/a11y.spec.ts --project=desktop-chrome",
+    "test:e2e:visual": "playwright test e2e/visual.spec.ts --project=desktop-chrome --project=mobile-chrome",
     "test:e2e:ui": "playwright test --ui",
     "postinstall": "node scripts/postinstall-fixes.mjs",
     "cleanup:regression": "node scripts/cleanup-regression-data.mjs"
@@ -83,6 +88,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

@@ -52,3 +52,9 @@ serviceAccount.json
 *-service-account*.json
 *.key
 *.p12
+# Playwright / E2E artifacts (may contain child-like content — never commit)
+/test-results/
+/playwright-report/
+/.lighthouseci/
+ui-debug.log
+firebase-debug.log

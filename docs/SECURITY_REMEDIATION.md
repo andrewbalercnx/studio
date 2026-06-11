@@ -40,10 +40,20 @@ Both were present in tracked files and in git history. `.gitignore` did not cove
    # plus a replace-text rule for the old INTERNAL_API_SECRET value
    ```
    Then a **coordinated force-push** (notify all collaborators; everyone re-clones).
-4. **Harden the secret comparison** — switch `secret !== expectedSecret` to
-   `crypto.timingSafeEqual` (constant-time) in:
+4. ~~**Harden the secret comparison**~~ — ✅ **Done (2026-06-11, Sprint W1-B,
+   commit `0c497a0`)**: both internal routes now compare via
+   `crypto.timingSafeEqual` through the shared `isInternalSecretValid` helper
+   (`src/lib/internal-secret.ts` — SHA-256 both sides first so length
+   mismatches never throw or leak; fails closed when the expected secret is
+   unset). Unit-covered in `src/lib/__tests__/internal-secret.test.ts`.
    - `src/app/api/internal/dev-todos/route.ts`
    - `src/app/api/internal/system-test/route.ts`
+
+> **Scrub status (2026-06-11)**: the git-history scrub (item 3) remains
+> deliberately deferred — it needs a coordinated force-push with all
+> collaborators/worktrees paused, which is out of scope for an automated
+> sprint. The leaked values are already rotated/dead, so the scrub is hygiene,
+> not exposure reduction.
 
 ## Verification
 
