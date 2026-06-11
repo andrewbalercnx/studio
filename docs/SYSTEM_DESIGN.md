@@ -144,6 +144,40 @@ Character reference sheets ("exemplars") ensure consistent character appearance 
 - Exemplar URLs are stored on the storybook document (`actorExemplarUrls`) for reuse
 - If exemplar generation fails, the system falls back to using photos/avatars directly
 
+**Shared Book-View Components (Sprint W2-C)**:
+
+Parent and child book views render pages through the same components in
+`src/components/book-reader/`:
+
+```
+BookPageSpread        — THE single-page renderer (full-bleed art + bottom
+                        gradient + overlaid text). Purely presentational.
+  ├── ImmersivePlayer — kids reader (/kids/read/[bookId]): fullscreen,
+  │                     audio autoplay, fit="cover"
+  └── ParentBookView  — parent view (/storybook/[bookId] Step 1): the same
+                        presentation + navigation affordances, fit="contain"
+                        (full artwork visible for review), with ONE addition —
+                        an Edit button on each page
+BookReader            — page-by-page reader with audio controls
+                        (/storybook/[bookId]/read)
+```
+
+**Rationale**: the parent's view of a child's book must look like what the child sees (one
+canonical page presentation, fixed in one place) while carrying parent-only editing power as an
+overlay, not a fork. Interaction (navigation, audio, editing) lives in the hosts; `BookPageSpread`
+stays dependency-free.
+
+**Parent clean-up vs print — two distinct stages** (`/storybook/[bookId]`):
+1. **Step 1 · Clean up the pages**: `ParentBookView` + `PageEditorDialog`
+   (`src/components/storybook/page-editor-dialog.tsx`). The dialog edits page text and/or the
+   image prompt via `POST /api/storybookV2/pageEdit` (server-first; placeholder round-trip via
+   `replaceNamesWithPlaceholders`), and triggers single-page repaints through the existing
+   `POST /api/storybookV2/images` `{ pageId, forceRegenerate, additionalPrompt }` path — generation
+   logic, locking, concurrency guards, and `artStatus` rollups are never duplicated. Single-page
+   regeneration consumes no entitlement.
+2. **Step 2 · Print & share**: print layout, finalize/unlock, and share links — a clearly
+   subsequent step, gated on `artStatus.isOrderable`.
+
 ### 4. Print Production System
 
 ```
@@ -160,9 +194,21 @@ Storybook → PrintStoryBook → PDF Generation → Mixam Order
 1. Parent initiates print from finalized storybook
 2. `PrintStoryBook` created with layout configuration
 3. PDFs generated (separate cover and interior for Mixam)
-4. Order created, awaits admin approval
+4. Order created (`POST /api/printOrders/mixam`), awaits admin approval
 5. Admin approves → submitted to Mixam API
 6. Webhooks update order status through fulfillment
+
+**Degraded-order gate (Sprint W2-C)**: the order route evaluates `evaluateOrderArtGate`
+(`src/lib/storybook-status.ts`) against the book's `artStatus`. A degraded (partial-art) book is
+orderable but only with an explicit `acknowledgeDegraded: true` — otherwise the route returns
+`409 degraded_confirmation_required` and the checkout shows a "pages will print without pictures"
+confirmation. Acknowledged orders carry `degradedArtAcknowledged` + `artStatusSnapshot` for audit.
+Fully-failed or in-progress art blocks the order; books with no rollup (legacy) fail open with the
+printable-PDF checks as backstop.
+
+**Saved addresses (Sprint W2-C)**: checkout offers "save this address"; the order route persists it
+server-side to `users/{uid}/addresses` (deduped), and the order page pre-offers saved addresses on
+subsequent orders via `GET /api/user/addresses`.
 
 ### 5. Character & Actor System
 

@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-06-11 (`GET /api/kids-generators` now returns a user-safe presentation: jargon-free names, internal fields stripped, `recommended` flag)
+> **Last Updated**: 2026-06-11 (Sprint W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -192,7 +192,12 @@ Get all storybooks for the authenticated parent, grouped by child. Optimized for
           "isNewModel": true,
           "printablePdfUrl": null,
           "printableCoverPdfUrl": null,
-          "printableInteriorPdfUrl": null
+          "printableInteriorPdfUrl": null,
+          "artCompleteness": "degraded",
+          "artPagesReady": 10,
+          "artPagesTotal": 12,
+          "artPagesFailed": 2,
+          "isOrderable": true
         }
       ]
     }
@@ -200,6 +205,12 @@ Get all storybooks for the authenticated parent, grouped by child. Optimized for
   "totalBooks": 5
 }
 ```
+
+**Degraded-book rollup (Sprint W2-C)**: `artCompleteness` / `artPages*` / `isOrderable` are computed
+server-side from the persisted `storybook.artStatus` (written by the images route). They are absent
+on books that predate the contract. Clients must use `isOrderable` to gate print actions — degraded
+(partial-art) books remain orderable, subject to the checkout confirmation (see
+`POST /api/printOrders/mixam`).
 
 ---
 
@@ -925,9 +936,23 @@ Get storybook details.
   "id": "book-id",
   "title": "My Adventure",
   "pages": [...],
-  "finalization": {...}
+  "finalization": {...},
+  "artStatus": {
+    "completeness": "degraded",
+    "pagesTotal": 12,
+    "pagesReady": 10,
+    "pagesFailed": 2,
+    "pagesPending": 0,
+    "failedPageIds": ["page7", "page9"],
+    "isViewable": true,
+    "isOrderable": true
+  }
 }
 ```
+
+`artStatus` (Sprint W2-C) is the persisted degraded-book rollup from the new-model storybook
+subcollection document; `null` for legacy books or when no `storybookId` query param is provided.
+The order page uses it for the proactive "pages will print without art" banner.
 
 ---
 
@@ -1242,10 +1267,73 @@ Generate images for storybook pages.
   "status": "ready",
   "ready": 12,
   "total": 12,
+  "artStatus": { "completeness": "complete", "isOrderable": true, "...": "..." },
   "rateLimited": false,
   "logs": []
 }
 ```
+
+**Single-page repaint (Sprint W2-C)**: the parent book view's per-page "repaint" goes through this
+route with `pageId` + `forceRegenerate: true` (+ optional `additionalPrompt`). Single-page
+regeneration does **not** consume any entitlement — `storybook_allowance` is only consumed at
+`POST /api/storybookV2/create`.
+
+---
+
+### POST `/api/storybookV2/pageEdit`
+
+Parent per-page clean-up (Sprint W2-C): edit a single page's text and/or image-generation prompt on
+a new-model storybook. Image regeneration deliberately stays in `POST /api/storybookV2/images`
+(single-page path above) so generation logic is never duplicated.
+
+**Authentication**: Required (Bearer token, parent or admin). Ownership is checked against
+`story.parentUid`.
+
+**Request Body**:
+```json
+{
+  "storyId": "story-id",
+  "storybookId": "storybook-id",
+  "pageId": "page-id",
+  "pageText": "New page wording (optional)",
+  "imagePrompt": "New picture description (optional)"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| storyId | string | Yes | The story document ID |
+| storybookId | string | Yes | The storybook document ID |
+| pageId | string | Yes | The page document ID |
+| pageText | string | No* | Replaces BOTH `bodyText` and `displayText` (the parent's wording becomes canonical). May be empty (picture-only page). Max 2000 chars. May contain `$$id$$` placeholders. |
+| imagePrompt | string | No* | Replaces the page's art prompt. Cannot be blanked. Max 4000 chars. Takes effect on the next (re)generation. |
+
+\* At least one of `pageText` / `imagePrompt` is required.
+
+**Side Effects**:
+- Records `lastEditedAt` (server timestamp) and `lastEditedBy` (uid) on the page.
+- If the text changed and the page had narration, the stale audio is reset
+  (`audioStatus: 'pending'`, `audioUrl: null`) so it can be re-recorded to match.
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "storyId": "story-id",
+  "storybookId": "storybook-id",
+  "pageId": "page-id",
+  "textChanged": true,
+  "promptChanged": false,
+  "audioReset": true,
+  "requestId": "..."
+}
+```
+
+**Errors**:
+- `400` - Validation failure (missing ids, nothing to update, blank imagePrompt, length limits)
+- `401` / `403` - Unauthenticated / not the story's owner
+- `404` - Story, storybook, or page not found
+- `409` - Storybook is locked for printing (unlock first)
 
 ---
 
@@ -1572,26 +1660,50 @@ Mark order as paid.
 
 ### POST `/api/printOrders/mixam`
 
-Get Mixam pricing quote.
+Create a Mixam print order (parent checkout). Validates the product, ownership, printable PDFs,
+UK shipping address, and the degraded-book order gate.
+
+**Authentication**: Required (Bearer token, parent or admin).
 
 **Request Body**:
 ```json
 {
-  "printProductId": "hardcover-a4",
+  "storyId": "story-id",
+  "storybookId": "storybook-id",
+  "printStoryBookId": "optional-print-storybook-id",
+  "productId": "hardcover-8x10",
   "quantity": 1,
-  "pageCount": 24
+  "customOptions": { "endPaperColor": "white", "headTailBandColor": "white" },
+  "shippingAddress": { "name": "...", "line1": "...", "city": "...", "state": "", "postalCode": "SW1A 1AA", "country": "GB" },
+  "acknowledgeDegraded": false,
+  "saveAddress": true,
+  "addressLabel": "Home"
 }
 ```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| acknowledgeDegraded | boolean | No | Sprint W2-C: explicit confirmation that a degraded (partial-art) book may print with art-less pages. Required (server-enforced) when the book's `artStatus.completeness` is `degraded`. |
+| saveAddress | boolean | No | Sprint W2-C: save `shippingAddress` to `users/{uid}/addresses` (deduped on line1+postcode; first address becomes default). Best-effort — never fails the order. |
+| addressLabel | string | No | Optional label for the saved address (max 50 chars). |
+
+**Degraded-book order gate** (`evaluateOrderArtGate` in `src/lib/storybook-status.ts`):
+- `complete` art → allowed.
+- `degraded` art → allowed **only** with `acknowledgeDegraded: true`; otherwise
+  `409 { ok: false, code: "degraded_confirmation_required", artStatus }` and the client shows the
+  explicit confirmation dialog.
+- `failed` / `in_progress` art → `400 { ok: false, code: "not_orderable", artStatus }`.
+- No rollup available (legacy paths) → gate fails open; the printable-PDF checks remain the backstop.
+
+When a degraded order is acknowledged, the order document records `degradedArtAcknowledged: true`,
+an `artStatusSnapshot`, and a `degraded_art_acknowledged` processLog entry.
 
 **Response**: `200 OK`
 ```json
 {
-  "quote": {
-    "printCost": 15.00,
-    "shippingCost": 5.00,
-    "total": 20.00,
-    "currency": "GBP"
-  }
+  "ok": true,
+  "orderId": "order-id",
+  "estimatedCost": { "unitPrice": 15.0, "subtotal": 15.0, "shipping": 5.0, "setupFee": 0, "total": 20.0, "currency": "GBP" }
 }
 ```
 
