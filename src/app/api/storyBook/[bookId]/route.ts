@@ -162,6 +162,9 @@ export async function GET(
       storybookFinalization: finalization,
       // Include printStoryBook data if available
       printStoryBook: printStoryBookData,
+      // Degraded-book rollup (Sprint W2-C): persisted by the images route on
+      // new-model storybooks; null for legacy/unknown so clients can't assume.
+      artStatus: storybookSubcollectionData?.artStatus ?? null,
       // Debug info for diagnostics
       _debug: debugInfo,
     };

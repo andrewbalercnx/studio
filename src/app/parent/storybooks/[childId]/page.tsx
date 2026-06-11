@@ -137,6 +137,12 @@ function StorybookCard({
 }) {
   const imageStyleTitle = imageStyles?.find((s) => s.id === storybook.imageStyleId)?.title || 'Custom';
 
+  // Degraded-book contract (server-computed): partial-art books stay orderable.
+  const isDegraded = storybook.artCompleteness === 'degraded';
+  const canPrint =
+    storybook.isNewModel &&
+    (storybook.imageGenerationStatus === 'ready' || storybook.isOrderable === true);
+
   const viewUrl = storybook.isNewModel
     ? `/storybook/${storybook.storybookId}?storyId=${storybook.storyId}`
     : `/storybook/${storybook.storybookId}`;
@@ -165,7 +171,14 @@ function StorybookCard({
         <CardTitle className="text-base line-clamp-2">{storybook.title || 'Untitled Book'}</CardTitle>
         <CardDescription className="flex flex-wrap gap-1.5">
           <Badge variant="outline" className="text-xs">{imageStyleTitle}</Badge>
-          <StatusBadge status={storybook.imageGenerationStatus} />
+          {isDegraded ? (
+            <Badge variant="secondary" className="flex items-center gap-1 text-xs bg-amber-100 text-amber-900 hover:bg-amber-100">
+              <AlertCircle className="h-3 w-3" />
+              {storybook.artPagesReady}/{storybook.artPagesTotal} pictures
+            </Badge>
+          ) : (
+            <StatusBadge status={storybook.imageGenerationStatus} />
+          )}
           <AudioStatusBadge status={storybook.audioStatus} pagesWithAudio={storybook.pagesWithAudio} totalPages={storybook.totalPages} />
         </CardDescription>
       </CardHeader>
@@ -191,21 +204,22 @@ function StorybookCard({
           Audio
         </Button>
         <Button
-          variant={storybook.imageGenerationStatus === 'error' ? 'destructive' : 'outline'}
+          variant={!canPrint && storybook.imageGenerationStatus === 'error' ? 'destructive' : 'outline'}
           size="sm"
           onClick={() => onGeneratePrintable(storybook)}
-          disabled={!storybook.isNewModel || isGeneratingPrintable || storybook.imageGenerationStatus !== 'ready'}
+          disabled={isGeneratingPrintable || !canPrint}
           title={
             !storybook.isNewModel ? 'Legacy storybook - print not supported'
-            : storybook.imageGenerationStatus === 'error' ? 'Image generation failed - view book to retry'
-            : storybook.imageGenerationStatus !== 'ready' ? `Images: ${storybook.imageGenerationStatus || 'pending'}`
+            : isDegraded ? 'Some pages have no pictures — you can still order, with confirmation'
+            : !canPrint && storybook.imageGenerationStatus === 'error' ? 'Image generation failed - view book to retry'
+            : !canPrint ? `Images: ${storybook.imageGenerationStatus || 'pending'}`
             : undefined
           }
         >
           {isGeneratingPrintable ? <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />
-            : storybook.imageGenerationStatus === 'error' ? <AlertCircle className="mr-1 h-3 w-3" />
+            : !canPrint && storybook.imageGenerationStatus === 'error' ? <AlertCircle className="mr-1 h-3 w-3" />
             : <Printer className="mr-1 h-3 w-3" />}
-          {storybook.imageGenerationStatus === 'error' ? 'Images Failed'
+          {!canPrint && storybook.imageGenerationStatus === 'error' ? 'Images Failed'
             : storybook.printablePdfUrl ? 'Print Options'
             : 'Print'}
         </Button>
