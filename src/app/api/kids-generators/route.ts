@@ -1,15 +1,23 @@
 import { NextResponse } from 'next/server';
 import { getServerFirestore } from '@/lib/server-firestore';
 import type { StoryGenerator } from '@/lib/types';
+import { presentGeneratorsForKids } from '@/lib/kids-generator-presentation';
 
 /**
  * GET: Fetch story generators enabled for kids (public endpoint)
  *
- * Returns generators from the storyGenerators collection that are:
+ * Returns a user-safe presentation of generators from the storyGenerators
+ * collection that are:
  * - status === 'live'
  * - enabledForKids === true
  *
- * Sorted by order (lower first), then by name.
+ * Server-first presentation (see src/lib/kids-generator-presentation.ts):
+ * - internal fields (prompts, model config, apiEndpoint) are stripped;
+ * - model jargon is hidden from names/descriptions/loading messages;
+ * - exactly one generator carries `recommended: true` so clients can show a
+ *   "Recommended for first-timers" badge.
+ *
+ * Sorted by order (lower first), then by id.
  */
 export async function GET() {
   try {
@@ -22,18 +30,12 @@ export async function GET() {
       .where('enabledForKids', '==', true)
       .get();
 
-    const generators: StoryGenerator[] = [];
+    const rawGenerators: StoryGenerator[] = [];
     snapshot.forEach((doc) => {
-      generators.push({ ...doc.data(), id: doc.id } as StoryGenerator);
+      rawGenerators.push({ ...doc.data(), id: doc.id } as StoryGenerator);
     });
 
-    // Sort by order field (lower first), then alphabetically by name
-    generators.sort((a, b) => {
-      const orderA = a.order ?? 0;
-      const orderB = b.order ?? 0;
-      if (orderA !== orderB) return orderA - orderB;
-      return (a.name || a.id).localeCompare(b.name || b.id);
-    });
+    const generators = presentGeneratorsForKids(rawGenerators);
 
     return NextResponse.json({
       ok: true,

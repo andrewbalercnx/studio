@@ -1,6 +1,7 @@
 import type { ChildProfile, Character } from '@/lib/types';
 import { getServerFirestore } from '@/lib/server-firestore';
 import { extractEntityIds } from '@/lib/entity-utils';
+import { isPlaceholderChild } from '@/lib/placeholder-child';
 
 /**
  * Get a human-readable label for a character's type
@@ -184,10 +185,12 @@ export async function buildStoryContext(
   }
   const childAge = calculateChildAge(mainChild);
 
-  // 2. Process siblings
+  // 2. Process siblings.
+  // Exclude the main child, soft-deleted profiles, and legacy "My First Child"
+  // placeholder profiles — placeholders must never appear in a story cast.
   const siblings = siblingsSnapshot.docs
     .map(doc => ({ ...doc.data(), id: doc.id } as ChildProfile))
-    .filter(child => child.id !== childId); // Exclude the main child
+    .filter(child => child.id !== childId && !child.deletedAt && !isPlaceholderChild(child));
 
   // 3. Process main character (deprecated - kept for backward compatibility)
   let mainCharacter: Character | null = null;

@@ -19,6 +19,7 @@ import type {
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { replacePlaceholdersInText, type EntityMap } from '@/lib/resolve-placeholders.server';
+import { isPlaceholderChild } from '@/lib/placeholder-child';
 
 // ============================================================================
 // Shared prompt rules
@@ -412,7 +413,8 @@ async function initializeCharacterSelection(
 
   const siblings = siblingsSnap.docs
     .map((doc) => ({ id: doc.id, ...doc.data() } as ChildProfile))
-    .filter((c) => c.id !== session.childId && !c.deletedAt);
+    // Exclude legacy "My First Child" placeholder profiles from the cast.
+    .filter((c) => c.id !== session.childId && !c.deletedAt && !isPlaceholderChild(c));
 
   // Load characters with full details
   const charactersSnap = await firestore

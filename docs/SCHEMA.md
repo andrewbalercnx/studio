@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-06-11 (added storybook `artStatus` degraded-book rollup + `systemConfig/circuitBreakers`)
+> **Last Updated**: 2026-06-11 (storybook `artStatus` degraded-book rollup + `systemConfig/circuitBreakers`; storyGenerators kid-friendly presentation fields)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -595,7 +595,7 @@ Story format types (Adventure, Mystery, etc.).
 
 ### `storyGenerators`
 
-Story generator configurations. Defines capabilities and API endpoints for each story generation mode (wizard, gemini3, gemini4, beat, friends). The `StoryBrowser` component uses these documents to adapt its UI to each generator's capabilities. The `/story/start` page queries this collection to display available generators (filtered by `status='live'` and `enabledForKids=true`).
+Story generator configurations. Defines capabilities and API endpoints for each story generation mode (wizard, gemini3, gemini4, beat, friends). The `StoryBrowser` component uses these documents to adapt its UI to each generator's capabilities. Both the `/story/start` page and the kids PWA fetch available generators via `GET /api/kids-generators` (filtered by `status='live'` and `enabledForKids=true`), which serves a user-safe presentation: model jargon hidden, internal fields (prompts, model config, apiEndpoint) stripped, and one generator flagged `recommended`.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -630,6 +630,9 @@ Story generator configurations. Defines capabilities and API endpoints for each 
 | `promptConfig` | Record<string, PromptConfig> | No | Per-prompt model and temperature overrides |
 | `promptConfig.[key].model` | AIModelName | No | AI model for this specific prompt |
 | `promptConfig.[key].temperature` | number | No | Temperature for this specific prompt |
+| `kidFriendlyName` | string | No | Optional admin override: user-facing name served by `/api/kids-generators` (takes precedence over built-in jargon-free overrides) |
+| `kidFriendlyDescription` | string | No | Optional admin override: user-facing description served by `/api/kids-generators` |
+| `recommendedForKids` | boolean | No | Optional admin flag: marks this generator as the "Recommended for first-timers" option in choosers (defaults to the wizard when unset) |
 | `createdAt` | timestamp | No | Creation time |
 | `updatedAt` | timestamp | No | Last update time |
 
