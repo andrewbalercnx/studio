@@ -18,6 +18,30 @@
 
 ### 2026-06-11
 
+#### `a826983` - Merge Wave 1: three parallel worktree sprints (W1-A/B/C)
+
+**Type**: Feature / Reliability / Testing / Security
+
+**Summary**: Merged the three Wave-1 sprints developed in parallel worktrees (merge order A→B→C: `ef39433`, `333b6b6`, `5fe98a4`). Verified on the merged result: typecheck, production build, and 245 vitest tests green. Four follow-up dev todos filed; SPRINTS.md rollup updated.
+
+**W1-A — Generation reliability (track/reliability)**:
+- Degraded-book status contract: `artStatus`, `deriveStorybookArtStatus`, `isViewable`/`isOrderable` (`src/lib/storybook-status.ts`, types)
+- Flow-result errors mapped to user-safe messages across 20 flows; user-safe `lastErrorMessage` doc fields; raw errors stay in logs only
+- Distributed circuit breaker in `systemConfig/circuitBreakers` (transactional, 5s cache, fail-open) + `withProviderReliability` wrapper; `withRetry` adoption in wizard/avatar-animation/image flows
+- Graceful degradation: partial-art books viewable/orderable, recovery detection + one-time toast; kid-safe `/kids/*` error/empty/loading states; server-authoritative "Question N of 4" wizard progress
+
+**W1-B — E2E + security tail (track/ops)**:
+- Blocking funnel E2E gate (signup → child → story → storybookV2 generation) on emulator + TEST_MODE, desktop+mobile, 3× deterministic; fixed the old silently-failing CI e2e job
+- Report-only axe a11y, visual regression, and Lighthouse CWV-budget jobs with documented promotion criteria (`docs/testing/e2e.md`)
+- `crypto.timingSafeEqual` for internal-secret comparison (`src/lib/internal-secret.ts`)
+
+**W1-C — UX probe findings (track/ux)**:
+- Signup no longer seeds "My First Child"; placeholders and soft-deleted profiles excluded from story casts server-side (also fixed deleted siblings leaking into prompts)
+- Kids-generator presentation layer: model jargon hidden, one "Recommended for first-timers" badge, public route no longer leaks AI prompts/model config
+- Fresh-PIN grace after signup; smoke-verified the three `0efa328` high-severity fixes (all PASS)
+
+---
+
 #### `54b4d90` - Reconcile the two SPRINTS.md files into one source of truth
 
 **Type**: Documentation / Planning

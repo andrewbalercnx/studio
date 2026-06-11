@@ -16,24 +16,42 @@
 
 ## Program status (single source of truth — update on every change)
 
-> The authoritative done/outstanding rollup so it survives context resets. As of **2026-06-11**.
+> The authoritative done/outstanding rollup so it survives context resets. As of **2026-06-11** (post Wave-1 merge).
 
 ### Done
+- **Wave 1 (Sprints W1-A/B/C, 2026-06-11)** — three parallel worktree sprints merged (`ef39433`,
+  `333b6b6`, `5fe98a4`); typecheck + build + 245 vitest green on the merged result.
+  - **W1-A Generation reliability — COMPLETE**: degraded-book status contract
+    (`artStatus`/`deriveStorybookArtStatus`/`isViewable`/`isOrderable`, contract commit `710d622`);
+    flow-result errors user-safe across 20 flows (raw stays in logs); `withRetry` adoption
+    (wizard/avatar-animation; image flow on shared backoff + breaker); **distributed circuit
+    breaker** in `systemConfig/circuitBreakers` (transactional, 5s cache, fail-open);
+    degraded books viewable/orderable + recovery detection/toast; kid-safe `/kids/*` states;
+    server-authoritative "Question N of 4" wizard progress.
+  - **W1-B E2E + security tail — COMPLETE**: blocking funnel gate (signup → child → story →
+    storybookV2 generation on emulator + TEST_MODE, 3× deterministic, desktop+mobile) — the old CI
+    e2e job was silently failing and is fixed; report-only axe/visual/Lighthouse with promotion
+    criteria in `docs/testing/e2e.md`; `crypto.timingSafeEqual` on internal routes.
+  - **W1-C Probe findings — COMPLETE**: placeholder child no longer seeded ("Add your first
+    child" empty state; placeholders + soft-deleted profiles excluded from casts server-side —
+    also fixed deleted siblings leaking into prompts); kids-generator presentation layer (no
+    model jargon, one "Recommended for first-timers" badge, **fixed public route leaking AI
+    prompts/model config**); fresh-PIN grace after signup; 0efa328 fixes smoke-verified PASS.
 - **Sprint 1 — Measurement spine** (`[GTM 1/8]`): engineering complete, **shipped disabled-by-default**.
   PostHog (EU) analytics + RUM + Error Tracking; vendor-agnostic core with no-PII guard, kill-switch,
   consent gating, pre-init buffer; funnel events; admin toggle. *Not yet live* — see compliance gate.
 - **Commercial catalog** (Monetisation I-b, payment-agnostic): `products`/`prices` model + entitlement
   components + admin `/admin/products` + APIs.
 - **3 high-severity usability fixes** (probe findings): End-Tour→home, "Play as child" button, "Switch
-  child" nav. *Merged; needs a manual/probe smoke post-deploy (owed by Sprint W1-C).*
+  child" nav. *Smoke-verified PASS in W1-C.*
 - **Sprint 3A foundation (partial)**: emulator-aware Firebase config (env-gated, default unchanged) +
   Playwright scaffold + one smoke spec + report-only CI `e2e` job + `TEST_MODE` AI seam (deterministic
-  fixtures, default off). *Remaining: the actual funnel E2E specs + a11y/Lighthouse/visual → Sprint W1-B.*
+  fixtures, default off). *Completed by W1-B.*
 - **Generation reliability (slice)**: retry+jitter util, error classifier, circuit-breaker scaffold,
   raw→user-safe error mapping. **No raw error reaches a child/parent**: the `storybookV2/*` routes
   plus every interactive generation route (`tts`, `storyWizard`, `storyFriends`, `storyArc`,
   `storyEnding`, `storyBeat`, `gemini3`, `gemini4`, `warmupReply`, `storyCompile`) now map catch-block
-  messages through `toUserSafeMessage` (raw stays in logs). *Remaining → Sprint W1-A.*
+  messages through `toUserSafeMessage` (raw stays in logs). *Completed by W1-A.*
 - **Entitlement ledger model**: `entitlementLedgers` collection + grant/check/consume (scope-resolved)
   + server reader + free-tier + rules + tests.
 - **Entitlement enforcement (story + storybook)**: transaction-wrapped `consumeEntitlement` +
@@ -48,9 +66,6 @@
 ### Outstanding (mapped to execution sprints below)
 | # | Item | Sprint |
 |---|------|--------|
-| 1 | Sprint 3A E2E specs: deterministic funnel specs on emulator + `TEST_MODE`; a11y/Lighthouse/visual; promote happy-path to blocking | **W1-B** |
-| 2 | Generation reliability — finish: flow-result error mapping, graceful degradation, kid-safe states, `withRetry` adoption, systemConfig breaker | **W1-A** |
-| 3 | Remaining medium/low probe findings (placeholder child, model jargon, PIN re-entry) | **W1-C** |
 | 4 | Naive-agent probe, productionised (`[GTM 3/8]` second half; POC validated) | **W2-A** |
 | 5 | First-run usability (`[GTM 4/8]`): onboarding checklist + tips + time-to-first-book | **W2-B** |
 | 6 | Parent storybook view & ordering flow: simplified view + per-page edit/regenerate; print-flow split; save address; incremental loading | **W2-C** |
@@ -66,9 +81,26 @@
   criteria are judged from session-events/logs instead.
 - **Catalog rules deploy**: `firebase deploy --only firestore:rules` (products/prices rules not yet deployed).
 - **Secret remediation tail** (non-blocking, secrets already dead): optional git-history scrub;
-  `crypto.timingSafeEqual`; ADC/workload-identity migration. See `docs/SECURITY_REMEDIATION.md`.
-  *(timingSafeEqual + scrub scheduled in W1-B.)*
+  ADC/workload-identity migration. See `docs/SECURITY_REMEDIATION.md`.
+  *(timingSafeEqual ✅ done in W1-B; history scrub still deferred — needs coordinated force-push.)*
 - **Firestore TTL on `events`**: ✅ enabled (2026-06-05).
+- **Wave-1 follow-ups** (dev todos filed where noted):
+  - **[BUG] Kids cold deep-links crash to the error boundary while Firebase auth hydrates**
+    (`/kids/stories`, `/kids/books`; `useRequiredApiClient` throws) — found by W1-B; real
+    PWA-reopen scenario. *(todo filed)*
+  - Wire `withProviderReliability` into the remaining direct `ai.generate` flows + the reserved
+    `elevenlabs-tts` breaker key. *(todo filed)*
+  - Fix the axe-surfaced a11y violations (icon-only buttons, contrast, aria-hidden-focus), then
+    promote the a11y gate per `docs/testing/e2e.md`. *(todo filed)*
+  - One-off migration to soft-delete legacy "My First Child" docs; admin UI fields for
+    `kidFriendlyName`/`kidFriendlyDescription`/`recommendedForKids`. *(todo filed)*
+  - W2-C product question: ordering a degraded book should confirm "some pages print without
+    art" — added to the W2-C sprint notes.
+  - Extend TEST_MODE into the wizard route so the seeded story steps become real clicks; nightly
+    real-generation smoke; linux visual baselines from first CI artifact.
+  - Recovery notification is in-app only; consider email/push. Durable queue (Cloud Tasks) for
+    long generations at scale.
+  - Data check: live `beat` generator doc has `enabledForKids: true` (seed disagrees).
 
 ---
 
@@ -139,9 +171,9 @@ git worktree add ../studio-ux          -b track/ux
 
 | Wave | Sprint | Track | Title | Status |
 |------|--------|-------|-------|--------|
-| 1 | W1-A | Reliability | Generation reliability — finish (degradation, kid-safe states, breaker) | PENDING |
-| 1 | W1-B | Ops | E2E funnel specs + a11y/Lighthouse/visual + security tail | PENDING |
-| 1 | W1-C | UX | Remaining probe findings (placeholder child, jargon, PIN) | PENDING |
+| 1 | W1-A | Reliability | Generation reliability — finish (degradation, kid-safe states, breaker) | COMPLETE (2026-06-11, `ef39433`) |
+| 1 | W1-B | Ops | E2E funnel specs + a11y/Lighthouse/visual + security tail | COMPLETE (2026-06-11, `333b6b6`) |
+| 1 | W1-C | UX | Remaining probe findings (placeholder child, jargon, PIN) | COMPLETE (2026-06-11, `5fe98a4`) |
 | 2 | W2-A | Reliability→Ops | Naive-agent probe, productionised | PENDING |
 | 2 | W2-B | UX | First-run usability — onboarding checklist, tips, time-to-first-book | PENDING |
 | 2 | W2-C | UX | Parent storybook view & ordering flow (simplified view + per-page edit) | PENDING |
@@ -202,7 +234,7 @@ Changed: AI flows, `src/app/storybook/[bookId]/page.tsx`, status components,
 No raw API strings from flows or routes; transient failures self-heal; a partial-art book can be
 viewed and ordered; breaker trips consistently across instances.
 
-**Status:** PENDING
+**Status:** COMPLETE — 2026-06-11, merged `ef39433` (contract commit `710d622`; 215 track tests green)
 
 ---
 
@@ -241,7 +273,7 @@ New: `e2e/` specs, Lighthouse config. Changed: `playwright.config.ts`, `package.
 CI fails on a broken funnel; a11y/perf/visual reports produced on every PR; internal routes use
 constant-time comparison.
 
-**Status:** PENDING
+**Status:** COMPLETE — 2026-06-11, merged `333b6b6` (funnel gate blocking after 3× deterministic runs; history scrub still deferred)
 
 ---
 
@@ -266,7 +298,7 @@ in `0efa328`)
 ### Exit criteria
 A probe re-run hits none of the seven findings; no placeholder children appear in any story cast.
 
-**Status:** PENDING
+**Status:** COMPLETE — 2026-06-11, merged `5fe98a4` (full probe re-run owed to W2-A; code-path smoke PASS on all seven)
 
 ---
 
@@ -350,6 +382,8 @@ power where it belongs, and the path to a printed book stops being overcomplex.
   subcollection already exists in rules).
 - Incremental loading on object-heavy pages (e.g. `/parent/storybooks`): return the list first,
   fill images afterwards — filtering/sorting server-side per the server-first principle.
+- Ordering a degraded (partial-art) book must show an explicit confirmation that some pages will
+  print without art (W1-A made such orders possible; the order dialog doesn't warn yet).
 
 ### Exit criteria
 Parent and child book views share components; a parent can edit prompt/text and regenerate a
