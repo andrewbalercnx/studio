@@ -18,6 +18,31 @@
 
 ### 2026-06-11
 
+#### `65e3b8a` - Merge Wave 3: four parallel lanes (security, W3-A/B/C)
+
+**Type**: Security / Feature / Ops / Infrastructure
+
+**Summary**: Merged four parallel worktree lanes (order: security `ca4d5a8` → W3-A `fbccfba` → W3-B `f56c1b6` → W3-C `0556051`). Verified on the merged result: typecheck, production build, 397 vitest tests, full e2e suite 20/20.
+
+**Security lane (track/reliability)**:
+- `POST /api/storybookV2/images` and `/pages` now require auth + `story.parentUid` ownership (previously unauthenticated and cost-bearing); all web callers attach ID tokens; mobile client already did (no APK rebuild)
+- Fixed `requireParentOrAdminUser` 403ing genuine parents: custom claims are never provisioned, so ~15 parent routes rejected real parent tokens — profile-doc fallback added for `isParent` only (isAdmin/isWriter stay token-claim-gated)
+
+**W3-A — Admin ops dashboard (track/ops)**:
+- `/admin/ops`: DAU/MAU + funnel via cached PostHog query module (honest "not yet enabled" state while gated); generation error rate + print-order conversion from bounded operational queries
+- Health checks (art pending, orders un-reviewed, error-rate spike) with systemConfig thresholds + 6h alert dedup via `notifyMaintenanceError`; failure summaries in print-orders/sessions lists; Mixam webhooks stamp `adminNextAction` (conservative, never auto-confirm)
+
+**W3-B — Deployment machinery (track/infra), fully opt-in**:
+- Build-once release pipeline (workflow_dispatch), dry-run-default deploy/canary/rollback scripts, Remote Config feature flags with systemConfig fallback, `GET /api/health` + `GET /api/flags`
+- Nothing changes on push to main until the owner runs `docs/DEPLOYMENT.md` §3 (E1–E7); legacy `cloudbuild.yaml` identified as stale/dangerous (E1)
+
+**W3-C — Feedback & order transparency (track/ux)**:
+- Rating + NPS prompts (book first view, order placed) with cross-device suppression; consent-based testimonial capture; new `feedback` collection
+- Server-derived order timeline + config-driven turnaround estimate on parent orders/confirmation; issue reports become tracked `tickets` with parent-visible status
+- Fixed `GET /api/printOrders/my-orders` legacy-field query that returned no orders
+
+---
+
 #### `db575be` - Merge Wave 2: three parallel worktree sprints (W2-A/B/C)
 
 **Type**: Feature / UX / Testing

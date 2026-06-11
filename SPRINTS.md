@@ -19,6 +19,33 @@
 > The authoritative done/outstanding rollup so it survives context resets. As of **2026-06-11** (post Wave-1 merge).
 
 ### Done
+- **Wave 3 (Sprints W3-A/B/C + security lane, 2026-06-11)** — four parallel lanes merged
+  (`ca4d5a8`, `fbccfba`, `f56c1b6`, `0556051`); verified on the merged result: typecheck + build +
+  397 vitest + full e2e 20/20 green.
+  - **Security lane — COMPLETE**: `POST /api/storybookV2/images`+`/pages` now require auth +
+    `story.parentUid` ownership (were unauthenticated and cost-bearing); all five web callers
+    attach tokens; mobile app already sent tokens (no APK rebuild). **Plus the parent-claims
+    bug**: custom claims are never provisioned, so every `requireParentOrAdminUser` route
+    (~15: book audio/printable/share, avatars, music, pageEdit, finalize…) 403'd genuine
+    parents — fixed via profile-doc fallback for `isParent` only (`bef2012`); isAdmin/isWriter
+    stay token-claim-gated because users can write their own doc roles (rules-tightening todo
+    filed).
+  - **W3-A Admin ops dashboard — COMPLETE**: /admin/ops (DAU/MAU + funnel from PostHog query API
+    with honest gated state; generation error rate + order conversion from bounded operational
+    queries); health checks (art pending >4h, orders un-reviewed >24h, error spike >30%/60min)
+    with 6h alert dedup via systemConfig/opsHealth; failure summaries in print-orders/sessions
+    lists; Mixam webhooks stamp adminNextAction (never auto-confirm).
+  - **W3-B Deployment machinery — COMPLETE (enablement owner-gated)**: build-once release
+    pipeline (workflow_dispatch only), dry-run-default deploy/canary/rollback scripts, Remote
+    Config feature flags (env → RC → systemConfig → default), GET /api/health with baked SHA.
+    Confirmed live path is App Hosting auto-deploy; legacy cloudbuild.yaml is stale/dangerous
+    (runbook E1). Go-live via docs/DEPLOYMENT.md §3 E1–E7.
+  - **W3-C Feedback & transparency — COMPLETE**: rating+NPS prompts (book-first-view,
+    order-placed; suppression server-checked cross-device), consent-based testimonial capture,
+    server-derived order timeline + honest turnaround estimate (systemConfig/orderTransparency),
+    issue reports → tracked `tickets` with parent-visible status. Also fixed
+    `GET /api/printOrders/my-orders` querying only the legacy owner field (returned nothing for
+    real orders).
 - **Wave 2 (Sprints W2-A/B/C, 2026-06-11)** — merged `465b737`, `7e1cfb1`, `9520627`; verified on
   the merged result: typecheck + build + 279 vitest + **full e2e suite 20/20** green.
   - **W2-A Naive-agent probe, productionised — COMPLETE**: persona harness (impatient /
@@ -87,9 +114,6 @@
 ### Outstanding (mapped to execution sprints below)
 | # | Item | Sprint |
 |---|------|--------|
-| 7 | Admin UX-monitoring dashboard (`[GTM 7/8]`) + Mixam webhook automation | **W3-A** |
-| 8 | Deployment strategy: canary, flags, rollback | **W3-B** |
-| 9 | Feedback & conversion polish (`[GTM 8/8]`) | **W3-C** |
 | 10 | Monetisation I — payments/Stripe (`[GTM 2/8]`): **deferred by owner** | **WG-1** |
 | 11 | Monetisation II (`[GTM 6/8]`): subscriptions + gifting + `print_credit` + ledger hardening | **WG-2** |
 
@@ -128,6 +152,19 @@
     *(todo filed)*
   - TEST_MODE seam for `storyWizardFlow` → real wizard clicks in funnel/probe. *(todo filed)*
   - Stale report-only a11y/visual specs vs W1-C flow changes. *(todo filed by W2-B)*
+- **Wave-3 follow-ups** (dev todos filed where noted):
+  - **Owner: enable the staged-rollout pipeline** — docs/DEPLOYMENT.md §3 E1–E7; E1 (check/disable
+    the stale cloudbuild trigger) is worth doing immediately. *(todo filed)*
+  - Tighten firestore.rules so users cannot rewrite their own `roles` field. *(todo filed)*
+  - Parent-claims root cause: provision `isParent` claims at signup or keep the doc fallback as
+    the permanent pattern — the fallback is live and tested; close todo `cglYNrXisTWuXLVkqIws`
+    in the admin UI (fixed by `bef2012`).
+  - Admin ticket management + feedback/NPS dashboard widget (W3-C handoff, pairs with /admin/ops).
+    *(todo filed)*
+  - Wire a scheduled caller for `POST /api/admin/ops/health-check` (cron or append to the daily
+    system-test). Endpoint accepts the internal secret already.
+  - When the PostHog DPA lands: add `POSTHOG_PERSONAL_API_KEY` + `POSTHOG_PROJECT_ID` to config
+    so the ops dashboard analytics widgets light up.
   - Legacy `POST /api/printOrders` route now unused (dead dialog removed) — remove once
     regression coverage adjusted. Linux visual baselines still bootstrap from first CI artifact.
 
@@ -206,9 +243,9 @@ git worktree add ../studio-ux          -b track/ux
 | 2 | W2-A | Reliability→Ops | Naive-agent probe, productionised | COMPLETE (2026-06-11, `465b737`) |
 | 2 | W2-B | UX | First-run usability — onboarding checklist, tips, time-to-first-book | COMPLETE (2026-06-11, `9520627`) |
 | 2 | W2-C | UX | Parent storybook view & ordering flow (simplified view + per-page edit) | COMPLETE (2026-06-11, `7e1cfb1`) |
-| 3 | W3-A | Ops | Admin UX-monitoring dashboard + Mixam webhook automation | PENDING |
-| 3 | W3-B | Ops | Deployment strategy — canary, flags, rollback | PENDING |
-| 3 | W3-C | UX | Feedback & conversion polish — NPS, testimonials, order transparency | PENDING |
+| 3 | W3-A | Ops | Admin UX-monitoring dashboard + Mixam webhook automation | COMPLETE (2026-06-11, `fbccfba`) |
+| 3 | W3-B | Ops | Deployment strategy — canary, flags, rollback | COMPLETE (2026-06-11, `f56c1b6`; live cutover owner-gated, runbook E1–E7) |
+| 3 | W3-C | UX | Feedback & conversion polish — NPS, testimonials, order transparency | COMPLETE (2026-06-11, `0556051`) |
 | gated | WG-1 | Money | Take money — Stripe Checkout + hardened webhook (owner-deferred) | BLOCKED (owner) |
 | gated | WG-2 | Money | Monetisation II — subscriptions, gifting, print_credit, ledger hardening | BLOCKED (WG-1) |
 
@@ -453,7 +490,7 @@ New: `src/app/admin/ops/page.tsx`, health-check job(s). Changed:
 The drop-off/broken-now question is answerable from one page; alerts fire on synthetic stuck-job
 conditions; a Mixam status webhook visibly advances the order in admin without manual refresh.
 
-**Status:** PENDING
+**Status:** COMPLETE — 2026-06-11, merged `fbccfba` (PostHog widgets show honest gated state until the compliance gate flips)
 
 ---
 
@@ -477,7 +514,9 @@ conditions; a Mixam status webhook visibly advances the order in admin without m
 A release ships to a canary %, promotes, and rolls back — each without a rebuild; a flag disables
 a feature in production without a deploy.
 
-**Status:** PENDING
+**Status:** COMPLETE — 2026-06-11, merged `f56c1b6`. Machinery + runbook landed fully opt-in;
+nothing changes on push to main until the owner runs `docs/DEPLOYMENT.md` §3 steps E1–E7
+(go-live = E6 domain cutover). Exit criteria become demonstrable after enablement.
 
 ---
 
@@ -506,7 +545,8 @@ collection, testimonial capture. Docs: SCHEMA, API, SYSTEM_DESIGN.
 NPS/satisfaction live on the W3-A dashboard; testimonials captured in-product; order status
 transparent to parents.
 
-**Status:** PENDING
+**Status:** COMPLETE — 2026-06-11, merged `0556051` (capture + parent-facing transparency live;
+the admin NPS widget/ticket UI is the filed W3-C handoff todo — pairs with /admin/ops)
 
 ---
 
