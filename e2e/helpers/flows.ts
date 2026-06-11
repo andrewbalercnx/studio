@@ -2,7 +2,7 @@
  * Reusable UI flows for the E2E suite. Web-first assertions only — no
  * waitForTimeout (banned, see docs/testing/e2e.md).
  */
-import { expect, type Page } from 'playwright/test';
+import { expect, type Locator, type Page } from 'playwright/test';
 import { E2E_PASSWORD, E2E_PIN, uniqueEmail } from './test-env';
 import { findUidByEmail } from './emulator';
 
@@ -14,9 +14,13 @@ export type ParentAccount = {
 };
 
 /**
- * Drive the real signup UI: creates the auth user, the users/{uid} profile,
- * the default child ("My First Child") and sets the parent PIN, then lands on
- * the "Who is playing?" page. Returns the new account incl. its emulator uid.
+ * Drive the real signup UI: creates the auth user, the users/{uid} profile and
+ * sets the parent PIN, then lands on the "Who is playing?" page showing the
+ * "Add your first child" empty state (signup no longer auto-seeds a placeholder
+ * child — W1-C probe fix). Returns the new account incl. its emulator uid.
+ *
+ * Note: signup also primes the parent-PIN guard's 5-minute grace window, so
+ * parent routes visited soon after signup will NOT show the PIN dialog.
  */
 export async function signUpNewParent(page: Page, tag: string): Promise<ParentAccount> {
   const email = uniqueEmail(tag);
@@ -53,7 +57,28 @@ export async function passParentPinGuard(page: Page, pin: string): Promise<void>
 }
 
 /**
- * Create a child through the parent console UI (PIN guard included).
+ * Wait for a parent page to become usable, passing the PIN guard only if it
+ * actually appears. Needed since the fresh-PIN grace (W1-C): right after
+ * signup the guard is pre-validated for 5 minutes, so the dialog may
+ * legitimately never show. Races the PIN dialog against `ready` (a locator
+ * proving the page content is interactive) and resolves either way.
+ */
+export async function passParentPinGuardIfPresent(
+  page: Page,
+  pin: string,
+  ready: Locator,
+): Promise<void> {
+  const pinPrompt = page.getByRole('dialog').getByText('Enter Parent PIN');
+  await expect(ready.or(pinPrompt).first()).toBeVisible({ timeout: 30_000 });
+  if (await pinPrompt.isVisible().catch(() => false)) {
+    await passParentPinGuard(page, pin);
+  }
+  await expect(ready).toBeVisible({ timeout: 30_000 });
+}
+
+/**
+ * Create a child through the parent console UI (PIN guard handled if shown —
+ * within 5 minutes of signup the fresh-PIN grace skips it).
  * Leaves the browser on /parent/children with the new child visible.
  */
 export async function createChildViaParentUI(
@@ -62,7 +87,11 @@ export async function createChildViaParentUI(
   childName: string,
 ): Promise<void> {
   await page.goto('/parent/children');
-  await passParentPinGuard(page, account.pin);
+  await passParentPinGuardIfPresent(
+    page,
+    account.pin,
+    page.getByRole('button', { name: /add new child/i }),
+  );
 
   await page.getByRole('button', { name: /add new child/i }).click();
   const dialog = page.getByRole('dialog');

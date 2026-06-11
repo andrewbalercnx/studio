@@ -1,6 +1,11 @@
 import { test, expect } from 'playwright/test';
 import { cleanupFunnelAccount, seedCatalog } from './helpers/emulator';
-import { lockKidsModeToChild, signUpNewParent, type ParentAccount } from './helpers/flows';
+import {
+  createChildViaParentUI,
+  lockKidsModeToChild,
+  signUpNewParent,
+  type ParentAccount,
+} from './helpers/flows';
 
 /**
  * @visual — screenshot regression of key surfaces.
@@ -42,6 +47,10 @@ test.describe('visual regression @visual', () => {
     test('kids home', async ({ page }) => {
       await seedCatalog();
       account = await signUpNewParent(page, 'visual-kids');
+      // Signup no longer seeds a placeholder child (W1-C). Create the child
+      // through the UI with the same display name the committed kids-home
+      // baselines were captured with, so they remain valid.
+      await createChildViaParentUI(page, account, 'My First Child');
       await lockKidsModeToChild(page, 'My First Child');
 
       await expect(page.getByText('Create New Story')).toBeVisible();
