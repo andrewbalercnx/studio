@@ -1,0 +1,4 @@
+{
+  "comment": "Committed baseline of KNOWN probe findings. The report marks any finding whose id is absent here as NEW (a regression or fresh friction to triage). After triaging a run, move accepted/tracked finding records from probe-results/findings.json into this list. Sprint W2-A initial state: empty — all seven W1-C findings are fixed on main and the personas complete their goals.",
+  "findings": []
+}

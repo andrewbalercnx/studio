@@ -63,16 +63,28 @@ export default defineConfig({
     {
       name: 'desktop-chrome',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: /probe\//,
     },
     {
       name: 'mobile-chrome',
       use: { ...devices['Pixel 7'] },
+      testIgnore: /probe\//,
     },
     {
       // Report-only / optional. Not part of the default blocking gate; run with
       // `npx playwright test --project=webkit`. Covers the Safari autoplay class.
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
+      testIgnore: /probe\//,
+    },
+    {
+      // The mechanical UX probe (Sprint W2-A). Report-only, never part of the
+      // blocking gate; run via `npm run probe` (single worker — see
+      // docs/testing/probe.md). The retention goal switches itself to a
+      // mobile viewport with test.use().
+      name: 'probe',
+      testMatch: /probe\/.*\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
 
