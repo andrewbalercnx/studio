@@ -18,6 +18,24 @@
 
 ### 2026-06-11
 
+#### `5195f84` - Merge Sprint W4-A: server-side persona cookie + PIN guard hardening
+
+**Type**: Security / Feature
+
+**Summary**: A child persona now has server-side meaning. Signed httpOnly persona cookie (`storypic.persona`, HMAC-SHA256, 30-day device-level lifetime) set fire-and-forget whenever a persona is entered or switched — zero new UI friction (owner decision: sibling switching stays ungated). All story/book write/generation chokepoints enforce persona scope fail-open: a valid cookie whose childId mismatches the request → 403 `PERSONA_SCOPE_MISMATCH`; cookie absent/invalid → exact legacy behaviour (mobile + API clients unaffected); admin/writer exempt. Entitlement consume sites are now persona-consistent by construction.
+
+**Defects closed**:
+- Kids-setup `pin === '1234'` offline backdoor removed; both its PIN paths repointed from the nonexistent `/api/user/verify-pin` to the real `/api/parent/verify-pin` (correct PIN previously 404-rejected)
+- `POST /api/parent/verify-pin`: transactional lockout — 5 consecutive failures → 5-minute 429 (`users.pinFailedAttempts`/`pinLockedUntil`); timing-safe failure path
+- Parent-guard reload-grace bug fixed (modal deferred until sessionStorage hydration); probe baseline entry removed; new blocking e2e `e2e/pin-guard.spec.ts`
+
+**Verification**: typecheck, build, 424 vitest, full e2e 24/24 (funnel drives kids generation through the live persona cookie).
+
+**Created files**: `src/lib/persona.ts`, `src/lib/persona.server.ts`, `src/lib/persona-client.ts`, `src/app/api/persona/route.ts`, `src/lib/pin-lockout.ts`, `src/lib/verify-pin-client.ts`, `src/hooks/parent-guard-logic.ts`, `e2e/pin-guard.spec.ts`
+
+---
+
+
 #### `4ca2372` - Probe baseline: mark PIN-reload finding as known/triaged
 
 **Type**: Testing

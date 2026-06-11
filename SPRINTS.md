@@ -19,6 +19,16 @@
 > The authoritative done/outstanding rollup so it survives context resets. As of **2026-06-11** (post Wave-1 merge).
 
 ### Done
+- **Sprint W4-A (2026-06-11) — Server-side persona + PIN hardening**: signed httpOnly persona
+  cookie (`storypic.persona`, HMAC, 30d) set fire-and-forget on every persona entry/switch (zero
+  new friction — owner decision: NO PIN on sibling switching); fail-open enforcement at all
+  story/book chokepoints (valid-cookie mismatch → 403 `PERSONA_SCOPE_MISMATCH`; cookie absent =
+  legacy behaviour, so mobile/API clients unaffected; admin/writer exempt). Defects closed: kids
+  `1234` offline PIN backdoor removed + dead `/api/user/verify-pin` call repointed; verify-pin
+  lockout (5 fails → 5min 429, transactional); parent-guard reload-grace bug fixed (probe finding
+  removed from baseline, new blocking e2e); timing-safe PIN failure path. Verified: 424 vitest,
+  e2e 24/24, build green. Follow-ups filed: dedicated `PERSONA_COOKIE_SECRET`, verify-pin stack
+  echo + storySession claims migration.
 - **Wave 3 (Sprints W3-A/B/C + security lane, 2026-06-11)** — four parallel lanes merged
   (`ca4d5a8`, `fbccfba`, `f56c1b6`, `0556051`); verified on the merged result: typecheck + build +
   397 vitest + full e2e 20/20 green.
@@ -246,6 +256,7 @@ git worktree add ../studio-ux          -b track/ux
 | 3 | W3-A | Ops | Admin UX-monitoring dashboard + Mixam webhook automation | COMPLETE (2026-06-11, `fbccfba`) |
 | 3 | W3-B | Ops | Deployment strategy — canary, flags, rollback | COMPLETE (2026-06-11, `f56c1b6`; live cutover owner-gated, runbook E1–E7) |
 | 3 | W3-C | UX | Feedback & conversion polish — NPS, testimonials, order transparency | COMPLETE (2026-06-11, `0556051`) |
+| 4 | W4-A | Auth | Server-side persona cookie + PIN guard hardening | COMPLETE (2026-06-11) |
 | gated | WG-1 | Money | Take money — Stripe Checkout + hardened webhook (owner-deferred) | BLOCKED (owner) |
 | gated | WG-2 | Money | Monetisation II — subscriptions, gifting, print_credit, ledger hardening | BLOCKED (WG-1) |
 
