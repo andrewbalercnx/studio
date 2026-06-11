@@ -7,6 +7,7 @@ import { useFirestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
 import { useKidsPWA } from '../layout';
+import { verifyParentPin } from '@/lib/verify-pin-client';
 import type { ChildProfile } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -66,40 +67,22 @@ export default function KidsSetupPage() {
     }
   };
 
-  // Handle PIN verification
+  // Handle PIN verification (switch to a different child while locked).
+  // Verifies against the real endpoint with the parent's bearer token —
+  // there is NO offline fallback PIN.
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPinError('');
 
-    // Verify PIN against user profile
-    // For simplicity, we'll use a basic PIN check - in production, use proper PIN verification
-    try {
-      const response = await fetch('/api/user/verify-pin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin }),
-      });
-
-      if (response.ok) {
-        // PIN verified - proceed with child change
-        if (selectedChildId) {
-          lockToChild(selectedChildId);
-          router.push('/kids');
-        }
-      } else {
-        setPinError('Incorrect PIN. Please try again.');
+    const result = await verifyParentPin(user, pin);
+    if (result.ok) {
+      if (selectedChildId) {
+        lockToChild(selectedChildId);
+        router.push('/kids');
       }
-    } catch (err) {
-      // If PIN verification endpoint doesn't exist, use simple verification
-      // Default PIN is "1234" for now
-      if (pin === '1234') {
-        if (selectedChildId) {
-          lockToChild(selectedChildId);
-          router.push('/kids');
-        }
-      } else {
-        setPinError('Incorrect PIN. Please try again.');
-      }
+    } else {
+      setPinError(result.message);
+      setPin('');
     }
   };
 
@@ -109,31 +92,18 @@ export default function KidsSetupPage() {
     setSelectedChildId(null); // null indicates unlocking rather than switching
   };
 
+  // Unlock back to parent mode. Same real verification, no fallback PIN.
   const handleUnlockConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
     setPinError('');
 
-    try {
-      const response = await fetch('/api/user/verify-pin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin }),
-      });
-
-      if (response.ok) {
-        unlock();
-        router.push('/parent');
-      } else {
-        setPinError('Incorrect PIN. Please try again.');
-      }
-    } catch (err) {
-      // Fallback simple PIN check
-      if (pin === '1234') {
-        unlock();
-        router.push('/parent');
-      } else {
-        setPinError('Incorrect PIN. Please try again.');
-      }
+    const result = await verifyParentPin(user, pin);
+    if (result.ok) {
+      unlock();
+      router.push('/parent');
+    } else {
+      setPinError(result.message);
+      setPin('');
     }
   };
 

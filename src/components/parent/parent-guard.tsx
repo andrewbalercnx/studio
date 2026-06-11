@@ -8,16 +8,18 @@ import { useEffect, type ReactNode } from 'react';
 import { LoaderCircle } from 'lucide-react';
 
 export function ParentGuard({ children }: { children: ReactNode }) {
-  const { isParentGuardValidated, showPinModal } = useParentGuard();
+  const { isParentGuardValidated, isGuardHydrated, showPinModal } = useParentGuard();
   const { user, loading: userLoading } = useUser();
   const { roleMode } = useAppContext();
 
   useEffect(() => {
-    // Only trigger the PIN modal once we know the user and roleMode are loaded
-    if (!userLoading && user && !isParentGuardValidated) {
+    // Only trigger the PIN modal once the user is loaded AND the persisted
+    // grace timestamp has hydrated — a hard reload inside the unexpired
+    // window must NOT re-prompt (docs/testing/pin-guard.md §4).
+    if (!userLoading && user && isGuardHydrated && !isParentGuardValidated) {
       showPinModal();
     }
-  }, [isParentGuardValidated, showPinModal, userLoading, user]);
+  }, [isParentGuardValidated, isGuardHydrated, showPinModal, userLoading, user]);
 
   // Show loading state while user is being loaded
   if (userLoading) {

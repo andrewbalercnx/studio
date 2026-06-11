@@ -86,6 +86,8 @@ export type UserProfile = {
   notifiedUser?: boolean; // Receives admin notifications for print orders
   maintenanceUser?: boolean; // Receives maintenance/error notification emails
   onboardingState?: OnboardingState; // First-run checklist progress (Sprint W2-B)
+  pinFailedAttempts?: number; // Consecutive failed PIN verifications (lockout counter, Sprint W4-A)
+  pinLockedUntil?: any; // Timestamp: PIN verification refused until this time (Sprint W4-A)
 };
 
 /**
