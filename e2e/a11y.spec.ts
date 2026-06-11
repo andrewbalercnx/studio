@@ -9,8 +9,9 @@ import {
   seedReadyStorybook,
 } from './helpers/emulator';
 import {
+  createChildViaParentUI,
   lockKidsModeToChild,
-  passParentPinGuard,
+  passParentPinGuardIfPresent,
   signUpNewParent,
   type ParentAccount,
 } from './helpers/flows';
@@ -74,14 +75,17 @@ test.describe('accessibility scans @a11y', () => {
 
     test('who-is-playing page', async ({ page }, testInfo) => {
       account = await signUpNewParent(page, 'a11y-who');
-      await expect(page.getByText('My First Child')).toBeVisible();
+      // No placeholder child is seeded at signup anymore (W1-C): the page
+      // shows the "Add your first child" first-run prompt.
+      await expect(page.getByText('Add your first child').first()).toBeVisible();
       await runAxe(page, testInfo, 'who-is-playing');
     });
 
     test('story creation page', async ({ page }, testInfo) => {
       await seedCatalog();
       account = await signUpNewParent(page, 'a11y-create');
-      await lockKidsModeToChild(page, 'My First Child');
+      await createChildViaParentUI(page, account, 'Ellie A11y');
+      await lockKidsModeToChild(page, 'Ellie A11y');
       await page.goto('/kids/create');
       await expect(page.getByText(SEED.generatorName)).toBeVisible({ timeout: 30_000 });
       await runAxe(page, testInfo, 'story-creation');
@@ -90,10 +94,11 @@ test.describe('accessibility scans @a11y', () => {
     test('storybook view page', async ({ page }, testInfo) => {
       await seedCatalog();
       account = await signUpNewParent(page, 'a11y-books');
-      const childId = await findChildId(account.uid, 'My First Child');
+      await createChildViaParentUI(page, account, 'Ellie A11y');
+      const childId = await findChildId(account.uid, 'Ellie A11y');
       const { sessionId } = await seedCompletedStory({ parentUid: account.uid, childId });
       await seedReadyStorybook({ storyId: sessionId });
-      await lockKidsModeToChild(page, 'My First Child');
+      await lockKidsModeToChild(page, 'Ellie A11y');
 
       // Client-side navigation — kids surfaces crash on cold deep-links while
       // auth hydrates (known app issue, see docs/testing/e2e.md).
@@ -105,8 +110,9 @@ test.describe('accessibility scans @a11y', () => {
     test('orders page', async ({ page }, testInfo) => {
       account = await signUpNewParent(page, 'a11y-orders');
       await page.goto('/parent/orders');
-      await passParentPinGuard(page, account.pin);
-      await expect(page.getByText(/order/i).first()).toBeVisible({ timeout: 30_000 });
+      // Fresh-PIN grace (W1-C): right after signup the PIN dialog may not
+      // appear at all — pass it only if shown.
+      await passParentPinGuardIfPresent(page, account.pin, page.getByText(/order/i).first());
       await runAxe(page, testInfo, 'orders');
     });
   });

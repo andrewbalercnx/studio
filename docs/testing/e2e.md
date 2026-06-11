@@ -15,6 +15,7 @@ npm run test:e2e:funnel  # the blocking happy-path, desktop + mobile
 npm run test:e2e         # everything (funnel + smoke + a11y + visual)
 npm run test:e2e:a11y    # axe scans only
 npm run test:e2e:visual  # screenshot regression only
+npm run probe            # mechanical UX probe (report-only) — see docs/testing/probe.md
 ```
 
 Playwright boots the emulators and the app itself (see `webServer` in
@@ -48,7 +49,9 @@ To point the suite at an already-running stack instead, set
 
 ## The blocking funnel spec (`e2e/funnel.spec.ts`, `@funnel`)
 
-Covers: **signup → parent creates child (PIN guard) → kids-mode lock →
+Covers: **signup (no placeholder child is seeded; the home screen shows the
+"Add your first child" prompt) → parent creates child (PIN guard passed only
+if it appears — the fresh-PIN grace usually skips it) → kids-mode lock →
 story-creation entry → story completion → storybook generation → book ready**,
 on `desktop-chrome` and `mobile-chrome`. Checkout/pay is out of scope until
 Stripe lands (sprint WG-1).

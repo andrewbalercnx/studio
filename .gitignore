@@ -56,5 +56,7 @@ serviceAccount.json
 /test-results/
 /playwright-report/
 /.lighthouseci/
+# UX probe run artifacts (reports may embed synthetic child-like content)
+/probe-results/
 ui-debug.log
 firebase-debug.log

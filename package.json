@@ -22,6 +22,8 @@
     "test:e2e:a11y": "playwright test e2e/a11y.spec.ts --project=desktop-chrome",
     "test:e2e:visual": "playwright test e2e/visual.spec.ts --project=desktop-chrome --project=mobile-chrome",
     "test:e2e:ui": "playwright test --ui",
+    "probe": "node scripts/run-probe.mjs",
+    "probe:report": "node scripts/probe-report.mjs",
     "postinstall": "node scripts/postinstall-fixes.mjs",
     "cleanup:regression": "node scripts/cleanup-regression-data.mjs"
   },
