@@ -162,6 +162,8 @@ const StoryWizardOutputSchema = z.discriminatedUnion('state', [
     question: z.string().describe('The next question to ask the child.'),
     choices: z.array(StoryWizardChoiceSchema).min(2).max(4).describe('A list of choices for the child to pick from.'),
     answers: z.array(StoryWizardAnswerSchema),
+    questionNumber: z.number().optional().describe('1-based index of this question.'),
+    totalQuestions: z.number().optional().describe('Total questions before the story is written.'),
     ok: z.literal(true),
   }),
   z.object({
@@ -483,7 +485,17 @@ const storyWizardFlowInternal = ai.defineFlow(
             }))
           );
 
-          return { state: 'asking' as const, ok: true as const, answers, question: resolvedQuestion, choices: resolvedChoices };
+          return {
+            state: 'asking' as const,
+            ok: true as const,
+            answers,
+            question: resolvedQuestion,
+            choices: resolvedChoices,
+            // Step indicator ("Question N of M") — server-authoritative so
+            // every client renders the same expectation-setting progress.
+            questionNumber: answers.length + 1,
+            totalQuestions: MAX_QUESTIONS,
+          };
         } catch (e) {
           console.error("Failed to parse question generation JSON:", llmResponse.text, e);
           return { state: 'error' as const, ok: false as const, error: 'The wizard got stuck thinking of a question. Please try again.' };

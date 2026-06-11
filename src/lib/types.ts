@@ -1444,6 +1444,10 @@ export type StoryWizardOutput =
       question: string;
       choices: StoryWizardChoice[];
       answers: StoryWizardAnswer[];
+      /** 1-based index of this question ("Question 2 of 4"). */
+      questionNumber?: number;
+      /** Total number of wizard questions before the story is written. */
+      totalQuestions?: number;
       ok: true;
     }
   | {
@@ -2078,6 +2082,12 @@ export type StoryGeneratorResponse = {
   // Monotonically increasing estimate of how far through story generation we are.
   // 0.0 = just started, 1.0 = complete
   progress?: number;
+
+  // Step indicator for fixed-length question flows ("Question N of M").
+  // Set by generators with a known question count (e.g. wizard); clients fall
+  // back to their existing progress display when absent.
+  questionNumber?: number;
+  totalQuestions?: number;
 
   // Ending options (beat mode ending flow)
   isEndingPhase?: boolean;

@@ -93,9 +93,13 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
   const retryAt = isNewModel
     ? (storybook?.pageGeneration?.rateLimitRetryAt || storybook?.imageGeneration?.rateLimitRetryAt)
     : (story?.pageGeneration?.rateLimitRetryAt || story?.imageGeneration?.rateLimitRetryAt);
-  const errorMessage = isNewModel
-    ? (storybook?.pageGeneration?.lastErrorMessage || storybook?.imageGeneration?.lastErrorMessage)
-    : (story?.pageGeneration?.lastErrorMessage || story?.imageGeneration?.lastErrorMessage);
+  // Degraded-book contract: when SOME art succeeded the book is still readable —
+  // a child should see "your book is ready (a few pictures missing)", never a
+  // dead error screen. Prefer the server-persisted rollup; fall back to counts.
+  const persistedArt = isNewModel ? storybook?.artStatus : undefined;
+  const isDegraded =
+    persistedArt?.completeness === 'degraded' ||
+    (hasError && imageStatus === 'error' && imageReady > 0);
 
   // Funnel: fire generation.failed once when a generation phase errors (coarse reason only — never
   // the raw error message, which can contain PII; the no-PII guard would reject it anyway).
@@ -374,27 +378,67 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
     );
   }
 
-  // Error state
-  if (hasError) {
+  // Degraded state: the book finished with SOME pictures missing — it is still
+  // readable. Celebrate what worked instead of showing a dead error screen.
+  if (isDegraded) {
     return (
       <div className="min-h-screen flex flex-col bg-gradient-to-b from-amber-50 to-orange-50">
         <header className="px-4 py-6 text-center">
-          <h1 className="text-2xl font-bold text-red-800">
-            Oops! Something Went Wrong
+          <h1 className="text-2xl font-bold text-amber-900">
+            Your Book is Ready to Read!
           </h1>
-          <p className="text-red-600 mt-1">
-            The Story Wizard ran into a problem
+          <p className="text-amber-700 mt-1">
+            A few pictures are still missing — but the story is all there!
           </p>
         </header>
 
         <main className="flex-1 flex flex-col items-center justify-center px-4 pb-8 gap-8">
-          <AlertTriangle className="h-20 w-20 text-red-400" />
+          <div className="relative">
+            <span className="text-7xl" role="img" aria-label="painter">🎨</span>
+            <span className="absolute -top-2 -right-4 text-3xl">✨</span>
+          </div>
 
-          {errorMessage && (
-            <div className="w-full max-w-sm p-4 rounded-2xl border-2 border-red-200 bg-red-50">
-              <p className="text-sm text-red-700">{errorMessage}</p>
-            </div>
-          )}
+          <div className="w-full max-w-sm p-4 rounded-2xl border-2 border-amber-300 bg-amber-50">
+            <p className="text-sm text-amber-800">
+              The Art Fairy couldn&apos;t finish every picture this time. Your story is
+              safe, and a grown-up can ask for the missing pictures again later.
+            </p>
+          </div>
+
+          <Button asChild size="lg" className="bg-amber-500 hover:bg-amber-600">
+            <Link href="/kids/books">Read My Book</Link>
+          </Button>
+        </main>
+      </div>
+    );
+  }
+
+  // Error state — kid-safe copy only (never a technical message), with the
+  // reassurance that the story itself is not lost.
+  if (hasError) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-amber-50 to-orange-50">
+        <header className="px-4 py-6 text-center">
+          <h1 className="text-2xl font-bold text-amber-900">
+            The Story Wizard Got Stuck!
+          </h1>
+          <p className="text-amber-700 mt-1">
+            Don&apos;t worry — your story is safe.
+          </p>
+        </header>
+
+        <main className="flex-1 flex flex-col items-center justify-center px-4 pb-8 gap-8">
+          <div className="relative">
+            <span className="text-7xl" role="img" aria-label="sleepy wizard">🧙</span>
+            <span className="absolute -top-2 -right-4 text-3xl">💫</span>
+          </div>
+
+          <div className="w-full max-w-sm p-4 rounded-2xl border-2 border-amber-300 bg-amber-50">
+            <p className="text-sm text-amber-800">
+              Something went wrong while making your book. Ask a grown-up to try
+              again in a little while — your story will be waiting!
+            </p>
+          </div>
 
           <div className="flex gap-4">
             <Button asChild variant="outline">
@@ -402,6 +446,9 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Stories
               </Link>
+            </Button>
+            <Button asChild className="bg-amber-500 hover:bg-amber-600">
+              <Link href="/kids">Go Home</Link>
             </Button>
           </div>
         </main>
