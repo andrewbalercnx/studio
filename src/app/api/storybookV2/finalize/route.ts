@@ -6,6 +6,8 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
+import { deriveStorybookArtStatus } from '@/lib/storybook-status';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 type FinalizeRequest = {
   storyId: string;
@@ -102,21 +104,22 @@ export async function POST(request: Request) {
     }
 
     // finalize action
-    // Check that all pages have ready images
+    // Graceful degradation contract (see src/lib/storybook-status.ts): a book
+    // with complete text and PARTIAL art (degraded) is still orderable — only
+    // in-progress generation or a fully-failed art run blocks finalization.
     const pagesSnap = await storybookRef.collection('pages').get();
     if (pagesSnap.empty) {
       return respondError(400, 'No pages available to finalize.');
     }
 
-    const pages = pagesSnap.docs.map(doc => doc.data());
-    const pendingPage = pages.find((page: any) => {
-      // Pages without imagePrompt (title_page, blank) don't need images
-      if (!page.imagePrompt) return false;
-      return page.imageStatus !== 'ready';
-    });
+    const pages = pagesSnap.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    const artStatus = deriveStorybookArtStatus(pages as any);
 
-    if (pendingPage) {
-      return respondError(409, 'All pages with illustrations must have ready artwork before finalizing.');
+    if (!artStatus.isOrderable) {
+      if (artStatus.completeness === 'in_progress') {
+        return respondError(409, 'Illustrations are still being generated. Please wait for them to finish before finalizing.');
+      }
+      return respondError(409, 'None of the illustrations finished. Retry the artwork before finalizing this book.');
     }
 
     const version = Number(finalization?.version ?? 0) + 1;
@@ -148,6 +151,8 @@ export async function POST(request: Request) {
         storybookId,
         version,
         pageCount: pages.length,
+        artCompleteness: artStatus.completeness,
+        pagesFailed: artStatus.pagesFailed,
       });
     }
 
@@ -158,12 +163,14 @@ export async function POST(request: Request) {
       storybookId,
       version,
       finalizedPageCount: pages.length,
+      artStatus,
     });
   } catch (error: any) {
     if (error instanceof AuthError) {
       return respondError(error.status, error.message);
     }
+    // Raw error stays in server logs; the response message must be user-safe.
     console.error('[storybookV2/finalize] error', error);
-    return respondError(500, error?.message ?? 'Unexpected finalize error');
+    return respondError(500, toUserSafeMessage(error));
   }
 }

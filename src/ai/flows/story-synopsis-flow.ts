@@ -13,6 +13,7 @@ import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { Story, ChildProfile, Character } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import {
   type ActorInfo,
   childProfileToActorInfo,
@@ -250,15 +251,18 @@ OUTPUT: Return ONLY the synopsis text (no quotes, no labels, just the synopsis).
       return { ok: true, synopsis, actors: actorIds };
 
     } catch (e: any) {
+      // Raw error stays in server logs / aiFlowLogs; the doc field and result
+      // errorMessage are user-visible so they must be user-safe.
       console.error('[storySynopsisFlow] Error:', e);
+      const userSafeMessage = toUserSafeMessage(e);
 
       // Mark as error
       await storyRef.update({
         'synopsisGeneration.status': 'error',
-        'synopsisGeneration.lastErrorMessage': e.message || 'Unknown error',
+        'synopsisGeneration.lastErrorMessage': userSafeMessage,
       });
 
-      return { ok: false, errorMessage: e.message || 'Failed to generate synopsis.' };
+      return { ok: false, errorMessage: userSafeMessage };
     }
   }
 );

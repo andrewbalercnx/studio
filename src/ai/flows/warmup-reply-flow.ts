@@ -11,6 +11,7 @@ import type { MessageData } from 'genkit';
 import type { StorySession, ChatMessage } from '@/lib/types';
 import { resolvePromptConfigForSession } from '@/lib/prompt-config-resolver';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
 
 
@@ -222,9 +223,12 @@ Now, as the Story Guide, give the next short, friendly reply to continue the con
                     llmResponseStringForDebug = '[[Could not stringify llmResponse]]';
                 }
             }
+            // Raw error stays in debug (diagnostics-gated) and server logs; the
+            // result errorMessage reaches clients verbatim so it must be user-safe.
+            console.error(`[warmupReplyFlow] Unexpected error for session ${sessionId}:`, e);
             return {
                 ok: false,
-                errorMessage: `Unexpected error in warmupReplyFlow for session ${sessionId}: ${errorMessage}`,
+                errorMessage: toUserSafeMessage(e),
                 debug: { ...(promptDebug || {}), error: errorMessage, llmResponseStringified: llmResponseStringForDebug },
             };
         }

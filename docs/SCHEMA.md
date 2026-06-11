@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-06-06 (added storySessions story_allowance consume fields)
+> **Last Updated**: 2026-06-11 (added storybook `artStatus` degraded-book rollup + `systemConfig/circuitBreakers`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -256,6 +256,7 @@ A specific rendering of a story with output type, image style, and layout.
 | `pageGeneration` | object | Yes | Page generation status |
 | `imageGeneration` | object | Yes | Image generation status |
 | `exemplarGeneration` | object | No | Character exemplar generation status |
+| `artStatus` | StoryBookArtStatus | No | Degraded-book rollup written by `/api/storybookV2/images` after every run (see below) |
 | `actorExemplarUrls` | map | No | Map of actorId → exemplar image URL |
 | `isFinalized` | boolean | No | Whether book is finalized |
 | `isLocked` | boolean | No | Whether book is locked for edits |
@@ -268,6 +269,22 @@ A specific rendering of a story with output type, image style, and layout.
 | `updatedAt` | timestamp | Yes | Last update time |
 
 **Security**: Parents can CRUD their own storybooks; admins have full access.
+
+**`artStatus` (StoryBookArtStatus)** — the degraded-book contract (canonical derivation:
+`deriveStorybookArtStatus` in `src/lib/storybook-status.ts`):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `completeness` | 'none' \| 'in_progress' \| 'complete' \| 'degraded' \| 'failed' | Book-level art rollup derived from per-page `imageStatus` |
+| `pagesTotal` | number | Illustratable pages (excludes title/blank/promptless) |
+| `pagesReady` | number | Pages with ready art |
+| `pagesFailed` | number | Pages whose art failed |
+| `pagesPending` | number | Pages not yet attempted / generating |
+| `failedPageIds` | string[] | IDs of failed pages, for targeted retry |
+| `isViewable` | boolean | Book has pages — readable even with partial/missing art |
+| `isOrderable` | boolean | Complete or degraded (some art) — finalize/order allowed |
+| `recoveredAt` | timestamp | Set when a previously degraded/failed book later completed |
+| `recoveryNotified` | boolean | False until the user has seen the recovery notification |
 
 ---
 
@@ -913,6 +930,22 @@ Centralized configuration for AI model selections across the application.
 
 **Security**: Admin only.
 
+#### `systemConfig/circuitBreakers`
+Cross-instance circuit-breaker state for AI providers (written ONLY by the Admin SDK from
+`src/lib/ai-circuit-breaker.server.ts`; each serverless instance caches reads for ~5s).
+A provider's circuit opens after a threshold of consecutive transient/rate-limit failures
+(any instance) and all instances then fast-fail to graceful degradation instead of retrying.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `providers` | map | Yes | Keyed by provider id (`gemini-text`, `gemini-image`, `elevenlabs-tts`) |
+| `providers.{key}.state` | 'closed' \| 'open' \| 'half_open' | Yes | Circuit state |
+| `providers.{key}.consecutiveFailures` | number | Yes | Shared failure counter across instances |
+| `providers.{key}.openedAtMs` | number | Yes | Epoch ms when the circuit last opened (0 = never) |
+| `providers.{key}.updatedAtMs` | number | Yes | Epoch ms of last update (diagnostics) |
+
+**Security**: Admin only (server writes via Admin SDK bypass rules).
+
 #### `systemConfig/addresses`
 System addresses for Mixam billing configuration.
 
@@ -1254,6 +1287,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-06-11 | Added `artStatus` (StoryBookArtStatus degraded-book rollup + recovery fields) to storybook subcollection docs; Added `systemConfig/circuitBreakers` (cross-instance AI provider breaker state); `*.lastErrorMessage` fields now always contain user-safe copy (raw errors stay in `aiFlowLogs`); storybook pages no longer store `imageMetadata.errorStack`; wizard StoryGeneratorResponse gains `questionNumber`/`totalQuestions` |
 | 2026-01-17 | Added `devTodos` collection for development work tracking |
 | 2026-01-14 | Added `textBoxEnabled`/`imageBoxEnabled` flags and `leaf` field to PageLayoutConfig for print layouts; Documented PageLayoutBox and TextLayoutBox types |
 | 2026-01-13 | Added `users/{uid}/addresses` subcollection for saved shipping addresses; Added `systemConfig/addresses` for Mixam billing; Added `SavedAddress` common type |

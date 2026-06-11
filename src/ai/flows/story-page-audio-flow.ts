@@ -18,6 +18,7 @@ import {
   type EntityMap,
 } from '@/lib/resolve-placeholders.server';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { getElevenLabsModelId } from '@/lib/get-elevenlabs-config.server';
 import { isTestMode, TEST_MODE_AUDIO_DATA_URL } from '@/lib/test-mode';
 
@@ -437,13 +438,16 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
           return { success: true, skipped: true };
         }
       } catch (pageError: any) {
+        // Raw error stays in server logs / aiFlowLogs; the doc field and the
+        // result error are user-visible so they must be user-safe.
         console.error(`[page-audio-flow] Error generating audio for page ${page.pageNumber}:`, pageError.message || pageError);
+        const userSafeMessage = toUserSafeMessage(pageError);
         await pageRef.update({
           audioStatus: 'error',
-          'audioMetadata.lastErrorMessage': pageError.message || 'Unknown error',
+          'audioMetadata.lastErrorMessage': userSafeMessage,
           updatedAt: FieldValue.serverTimestamp(),
         });
-        return { success: false, error: pageError.message };
+        return { success: false, error: userSafeMessage };
       }
     };
 
@@ -526,7 +530,8 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
 
         await storybookRef.update({
           'audioGeneration.status': 'error',
-          'audioGeneration.lastErrorMessage': error.message || 'Unknown error',
+          // User-visible doc field — must be user-safe (raw stays in logs).
+          'audioGeneration.lastErrorMessage': toUserSafeMessage(error),
           updatedAt: FieldValue.serverTimestamp(),
         });
       } catch (updateErr) {
@@ -536,7 +541,7 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
 
     return {
       ok: false,
-      errorMessage: error.message || 'Failed to generate page audio',
+      errorMessage: toUserSafeMessage(error),
     };
   }
 }

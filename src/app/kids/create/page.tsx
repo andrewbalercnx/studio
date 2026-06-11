@@ -51,6 +51,11 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
 
 const DefaultIcon = Sparkles;
 
+// Kid-safe fallback for unexpected client-side failures. Wizard-flow errors
+// are already user-safe (mapped server-side) and are shown as-is; anything
+// thrown locally (network, Firestore) must never reach a child raw.
+const KID_SAFE_ERROR = "Something went a little wonky! Don't worry — your ideas are safe. Let's try again.";
+
 // Component for rendering a choice button with entity avatars
 function ChoiceButton({
   choice,
@@ -148,6 +153,9 @@ export default function KidsCreateStoryPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [wizardState, setWizardState] = useState<StoryWizardOutput | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  // True while the FINAL wizard call runs (writing the whole story) — a much
+  // longer wait than between-question calls, so it gets its own copy.
+  const [isWritingStory, setIsWritingStory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentAnswers, setCurrentAnswers] = useState<StoryWizardAnswer[]>([]);
 
@@ -284,8 +292,9 @@ export default function KidsCreateStoryPage() {
         // Redirect to play page which handles all these flows
         router.push(`/story/play/${newSessionId}`);
       } catch (err: any) {
+        // Kid-safe copy only — raw error stays in the console for diagnostics.
         console.error('[KidsCreate] Error starting generator:', err);
-        setError(err.message || 'Something went wrong');
+        setError(KID_SAFE_ERROR);
         setSelectedGenerator(null);
         setIsProcessing(false);
       }
@@ -361,7 +370,9 @@ export default function KidsCreateStoryPage() {
         });
 
         if (!result.ok) {
-          throw new Error((result as any).error || 'Wizard failed to start');
+          // Wizard flow errors are already user-safe — show them as-is.
+          setError((result as any).error || KID_SAFE_ERROR);
+          return;
         }
 
         setWizardState(result);
@@ -369,8 +380,9 @@ export default function KidsCreateStoryPage() {
           setCurrentAnswers(result.answers || []);
         }
       } catch (err: any) {
+        // Kid-safe copy only — raw error stays in the console for diagnostics.
         console.error('[KidsCreate] Error initializing wizard:', err);
-        setError(err.message || 'Something went wrong');
+        setError(KID_SAFE_ERROR);
       } finally {
         setIsInitializing(false);
         setIsProcessing(false);
@@ -394,6 +406,10 @@ export default function KidsCreateStoryPage() {
     ];
 
     setIsProcessing(true);
+    // The final call (all questions answered) writes the whole story — a
+    // multi-second wait that deserves expectation-setting copy.
+    const totalQuestions = (wizardState as { totalQuestions?: number }).totalQuestions ?? 4;
+    setIsWritingStory(newAnswers.length >= totalQuestions);
     setError(null);
 
     try {
@@ -404,7 +420,9 @@ export default function KidsCreateStoryPage() {
       });
 
       if (!result.ok) {
-        throw new Error((result as any).error || 'Wizard failed');
+        // Wizard flow errors are already user-safe — show them as-is.
+        setError((result as any).error || KID_SAFE_ERROR);
+        return;
       }
 
       setWizardState(result);
@@ -461,10 +479,12 @@ export default function KidsCreateStoryPage() {
         router.push(`/kids/create/${sessionId}/style`);
       }
     } catch (err: any) {
+      // Kid-safe copy only — raw error stays in the console for diagnostics.
       console.error('[KidsCreate] Error in wizard:', err);
-      setError(err.message || 'Something went wrong');
+      setError(KID_SAFE_ERROR);
     } finally {
       setIsProcessing(false);
+      setIsWritingStory(false);
     }
   }, [sessionId, childId, wizardState, currentAnswers, isProcessing, firestore, router, toast]);
 
@@ -576,19 +596,19 @@ export default function KidsCreateStoryPage() {
     );
   }
 
-  // Error state
+  // Error state — kid-safe and friendly, never technical
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className="w-full max-w-sm text-center">
+        <Card className="w-full max-w-sm text-center border-2 border-amber-200">
           <CardHeader>
-            <CardTitle className="text-red-600">Oops!</CardTitle>
-            <CardDescription>{error}</CardDescription>
+            <div className="text-5xl mb-2" role="img" aria-label="sleepy wizard">🧙💤</div>
+            <CardTitle className="text-amber-900">The wizard needs a moment!</CardTitle>
+            <CardDescription className="text-amber-700">{error}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Button
-              variant="outline"
-              className="w-full"
+              className="w-full bg-amber-500 hover:bg-amber-600"
               onClick={() => {
                 setError(null);
                 setSelectedGenerator(null);
@@ -610,20 +630,37 @@ export default function KidsCreateStoryPage() {
     );
   }
 
-  // Processing state (between questions or starting generator)
+  // Processing state (between questions or starting generator).
+  // Perceived-latency copy: tell the child what is happening and roughly how
+  // long it takes, especially for the long final story-writing call.
   if (isProcessing) {
     const loadingMessage = selectedGenerator?.styling?.loadingMessage || 'Starting your adventure...';
+    const isWizard = selectedGenerator?.id === 'wizard';
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 gap-6">
         <div className="relative">
-          <LoaderCircle className="h-16 w-16 text-amber-500 animate-spin" />
+          {isWritingStory ? (
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-amber-200 to-orange-300 flex items-center justify-center animate-pulse">
+              <span className="text-5xl" role="img" aria-label="writing">📝</span>
+            </div>
+          ) : (
+            <LoaderCircle className="h-16 w-16 text-amber-500 animate-spin" />
+          )}
         </div>
         <div className="text-center space-y-2">
           <p className="text-xl text-amber-800 font-medium">
-            {selectedGenerator?.id === 'wizard' ? 'The wizard is thinking...' : loadingMessage}
+            {isWizard
+              ? isWritingStory
+                ? 'The wizard is writing your whole story!'
+                : 'The wizard is thinking...'
+              : loadingMessage}
           </p>
           <p className="text-amber-600">
-            {selectedGenerator?.id === 'wizard' ? 'Creating the next part of your adventure!' : 'Get ready for something amazing!'}
+            {isWizard
+              ? isWritingStory
+                ? 'All your answers are turning into a real story. This is the big one — it can take a minute!'
+                : 'Dreaming up the next question — just a few seconds!'
+              : 'Get ready for something amazing!'}
           </p>
         </div>
       </div>
@@ -651,7 +688,7 @@ export default function KidsCreateStoryPage() {
               </AvatarFallback>
             </Avatar>
             <p className="text-sm text-amber-700">
-              Question {currentAnswers.length + 1}
+              Question {wizardState.questionNumber ?? currentAnswers.length + 1} of {wizardState.totalQuestions ?? 4}
             </p>
           </div>
           <div className="w-10" /> {/* Spacer for centering */}
@@ -684,16 +721,22 @@ export default function KidsCreateStoryPage() {
           </div>
         </main>
 
-        {/* Progress indicator */}
-        <footer className="px-4 py-4 flex justify-center gap-1.5">
-          {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className={`h-2 w-8 rounded-full transition-colors ${
-                i <= currentAnswers.length ? 'bg-amber-500' : 'bg-amber-200'
-              }`}
-            />
-          ))}
+        {/* Progress indicator: one segment per question + one for the story write */}
+        <footer className="px-4 py-4 flex flex-col items-center gap-2">
+          <div className="flex justify-center gap-1.5">
+            {[...Array((wizardState.totalQuestions ?? 4) + 1)].map((_, i) => (
+              <div
+                key={i}
+                className={`h-2 w-8 rounded-full transition-colors ${
+                  i <= currentAnswers.length ? 'bg-amber-500' : 'bg-amber-200'
+                }`}
+              />
+            ))}
+          </div>
+          <p className="text-xs text-amber-600">
+            {(wizardState.totalQuestions ?? 4) - currentAnswers.length} more{' '}
+            {(wizardState.totalQuestions ?? 4) - currentAnswers.length === 1 ? 'question' : 'questions'}, then your story!
+          </p>
         </footer>
       </div>
     );

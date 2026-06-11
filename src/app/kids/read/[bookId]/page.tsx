@@ -63,8 +63,9 @@ export default function KidsReadBookPage({ params }: { params: Promise<{ bookId:
         const sb = storybooks.find((s) => s.id === storybookId);
         if (sb) setStorybook(sb);
       } catch (err: any) {
+        // Kid-safe copy only — raw error stays in the console for diagnostics.
         console.error('[KidsReadBook] Error loading data:', err);
-        setError(err.message || 'Failed to load book');
+        setError("We couldn't open your book right now.");
       } finally {
         setLoading(false);
       }
@@ -101,14 +102,21 @@ export default function KidsReadBookPage({ params }: { params: Promise<{ bookId:
     );
   }
 
-  // Error state
+  // Error state — kid-safe and friendly, never technical
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-amber-50 to-orange-50 gap-4">
-        <p className="text-amber-800">{error}</p>
-        <Button asChild>
-          <Link href="/kids/books">Go to My Books</Link>
-        </Button>
+        <span className="text-6xl" role="img" aria-label="sleepy book">📖💤</span>
+        <h1 className="text-xl font-bold text-amber-900 text-center">This book is being shy!</h1>
+        <p className="text-amber-700 text-center max-w-xs">{error} Let&apos;s try again!</p>
+        <div className="flex gap-3">
+          <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => window.location.reload()}>
+            Try Again
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/kids/books">Go to My Books</Link>
+          </Button>
+        </div>
       </div>
     );
   }

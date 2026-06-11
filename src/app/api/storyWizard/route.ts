@@ -150,6 +150,9 @@ export async function POST(request: Request) {
         options,
         isStoryComplete: false,
         progress,
+        // Step indicator ("Question N of M") from the wizard flow.
+        questionNumber: (result as { questionNumber?: number }).questionNumber ?? answeredCount + 1,
+        totalQuestions: (result as { totalQuestions?: number }).totalQuestions ?? 4,
       };
 
       return NextResponse.json(response);

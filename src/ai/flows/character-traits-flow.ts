@@ -11,6 +11,7 @@ import { z } from 'genkit';
 import type { MessageData } from 'genkit';
 import type { StorySession, Character, ChatMessage } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 // Zod schema for the expected JSON output from the model
 const CharacterTraitsOutputSchema = z.object({
@@ -178,12 +179,14 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             };
 
         } catch (e: any) {
+            // Raw error stays in server logs/debug; the result errorMessage
+            // reaches clients verbatim so it must be user-safe.
             console.error('Unexpected error in characterTraitsFlow:', e, debug);
             return {
                 ok: false,
                 sessionId,
                 characterId,
-                errorMessage: `Unexpected error in characterTraitsFlow: ${e?.message || String(e)}`,
+                errorMessage: toUserSafeMessage(e),
                 debug,
             };
         }

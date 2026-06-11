@@ -152,8 +152,9 @@ export default function KidsBooksPage() {
         books.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         setCompletedBooks(books);
       } catch (err: any) {
+        // Kid-safe copy only — raw error stays in the console for diagnostics.
         console.error('[KidsBooks] Error loading data:', err);
-        setError(err.message || 'Failed to load books');
+        setError("We couldn't fetch your books right now.");
       } finally {
         setLoading(false);
       }
@@ -190,12 +191,23 @@ export default function KidsBooksPage() {
     );
   }
 
-  // Error state
+  // Error state — kid-safe and friendly, never technical
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-amber-50 to-orange-50 p-4">
-        <p className="text-amber-800 mb-4">{error}</p>
-        <Button onClick={() => window.location.reload()}>Try Again</Button>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-amber-50 to-orange-50 p-4 gap-4">
+        <span className="text-6xl" role="img" aria-label="sleepy books">📚</span>
+        <h1 className="text-xl font-bold text-amber-900 text-center">
+          Your bookshelf is taking a little nap!
+        </h1>
+        <p className="text-amber-700 text-center max-w-xs">{error} Let&apos;s try again!</p>
+        <div className="flex gap-3">
+          <Button className="bg-amber-500 hover:bg-amber-600" onClick={() => window.location.reload()}>
+            Try Again
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/kids">Go Home</Link>
+          </Button>
+        </div>
       </div>
     );
   }

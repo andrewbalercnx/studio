@@ -134,6 +134,8 @@ export function StoryBrowser({
   // Initialize music preference from child profile, defaulting to true if not set
   const [musicEnabled, setMusicEnabled] = useState(() => childProfile?.musicEnabled !== false);
   const [storyProgress, setStoryProgress] = useState(0); // Story progress (0-1) from API responses
+  // "Question N of M" step indicator for fixed-length generators (wizard).
+  const [questionStep, setQuestionStep] = useState<{ current: number; total: number } | null>(null);
 
   // Friends flow state
   const [friendsPhase, setFriendsPhase] = useState<FriendsPhase | null>(null);
@@ -416,6 +418,11 @@ export function StoryBrowser({
       if (typeof result.progress === 'number') {
         setStoryProgress(result.progress);
       }
+      setQuestionStep(
+        result.questionNumber && result.totalQuestions
+          ? { current: result.questionNumber, total: result.totalQuestions }
+          : null
+      );
 
       // Extract actor IDs from response
       const textToScan = [
@@ -568,6 +575,11 @@ export function StoryBrowser({
       if (typeof result.progress === 'number') {
         setStoryProgress(result.progress);
       }
+      setQuestionStep(
+        result.questionNumber && result.totalQuestions
+          ? { current: result.questionNumber, total: result.totalQuestions }
+          : null
+      );
 
       // Handle story complete
       if (result.isStoryComplete) {
@@ -1083,6 +1095,12 @@ export function StoryBrowser({
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             {generator && (
               <span className="hidden sm:inline">{generator.name}</span>
+            )}
+            {/* "Question N of M" step indicator (fixed-length generators) */}
+            {questionStep && browserState === 'question' && (
+              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                Question {questionStep.current} of {questionStep.total}
+              </span>
             )}
           </div>
 

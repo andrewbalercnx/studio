@@ -12,6 +12,7 @@ import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { Story, ChildProfile } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
 
 /**
@@ -172,15 +173,18 @@ Reply with ONLY the title text, nothing else.`;
       return { ok: true, title };
 
     } catch (e: any) {
+      // Raw error stays in server logs / aiFlowLogs; the doc field and result
+      // errorMessage are user-visible so they must be user-safe.
       console.error('[storyTitleFlow] Error:', e);
+      const userSafeMessage = toUserSafeMessage(e);
 
       // Mark as error
       await storyRef.update({
         'titleGeneration.status': 'error',
-        'titleGeneration.lastErrorMessage': e.message || 'Unknown error',
+        'titleGeneration.lastErrorMessage': userSafeMessage,
       });
 
-      return { ok: false, errorMessage: e.message || 'Failed to generate title.' };
+      return { ok: false, errorMessage: userSafeMessage };
     }
   }
 );

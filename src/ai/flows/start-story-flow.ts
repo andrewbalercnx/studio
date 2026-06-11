@@ -12,6 +12,7 @@
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import type { ChildProfile, StorySession, PromptConfig } from '@/lib/types';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 initFirebaseAdminApp();
 
@@ -138,8 +139,10 @@ export async function startWarmupStory(input: StartWarmupStoryInput): Promise<St
         };
 
     } catch (e: any) {
+        // Raw error stays in server logs; the result message reaches clients
+        // verbatim so it must be user-safe.
         console.error("Error in startWarmupStory:", e);
-        return { error: true, message: e.message || "An unexpected error occurred." };
+        return { error: true, message: toUserSafeMessage(e) };
     }
 }
 

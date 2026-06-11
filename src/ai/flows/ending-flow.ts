@@ -23,6 +23,7 @@ import { logServerSessionEvent } from '@/lib/session-events.server';
 import { logAIFlow } from '@/lib/ai-flow-logger';
 import { resolveEntitiesInText, replacePlaceholdersInText } from '@/lib/resolve-placeholders.server';
 import { buildStoryContext } from '@/lib/story-context-builder';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { buildStorySystemMessage } from '@/lib/build-story-system-message';
 import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
 // New structured prompt system
@@ -296,11 +297,14 @@ Return a single valid JSON object (no markdown, no explanation):
             };
 
         } catch (e: any) {
+            // Raw error stays in debug (diagnostics-gated) and server logs; the
+            // result errorMessage reaches clients verbatim so it must be user-safe.
             debug.details.error = e.message || String(e);
+            console.error('[endingFlow] Unexpected error:', e);
             return {
                 ok: false,
                 sessionId,
-                errorMessage: `Unexpected error in endingFlow: ${e.message || String(e)}`,
+                errorMessage: toUserSafeMessage(e),
                 debug,
             };
         }

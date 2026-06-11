@@ -15,7 +15,13 @@ import { logAICallToTrace } from '@/lib/ai-run-trace';
 import { notifyMaintenanceError } from '@/lib/email/notify-admins';
 import { getGlobalImagePrompt } from '@/lib/image-prompt-config.server';
 import { getImageGenerationModel } from '@/lib/ai-model-config';
-import { classifyError } from '@/lib/ai-retry';
+import { classifyError, computeBackoffMs } from '@/lib/ai-retry';
+import { toUserSafeMessage, categorizeError } from '@/lib/ai-error-map';
+import {
+  getDistributedCircuitBreaker,
+  CircuitOpenError,
+  PROVIDER_GEMINI_IMAGE,
+} from '@/lib/ai-circuit-breaker.server';
 import { isTestMode, TEST_MODE_IMAGE_DATA_URL } from '@/lib/test-mode';
 // New actor utilities - available for future use alongside existing fetchEntityReferenceData
 import {
@@ -83,7 +89,13 @@ const StoryImageFlowOutput = z.object({
     storyId: z.string(),
     pageId: z.string(),
     imageStatus: z.literal('error'),
+    /** User-safe message (already mapped via toUserSafeMessage — never raw). */
     errorMessage: z.string(),
+    /**
+     * Machine-readable error bucket (see UserSafeErrorCategory) so callers can
+     * classify (e.g. rate-limit handling) without parsing raw strings.
+     */
+    errorCategory: z.string().optional(),
     logs: z.array(z.string()).optional(),
   })
 );
@@ -1093,6 +1105,19 @@ CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin 
   let successfulPromptText: string = ''; // Track the prompt text used for successful generation
   let successfulStartTime: number = startTime; // Track start time for the successful attempt
 
+  // Shared systemConfig circuit breaker: during a sustained provider outage
+  // every instance fast-fails here (graceful degradation) instead of burning
+  // tokens on retries that cannot succeed.
+  const breaker = getDistributedCircuitBreaker(PROVIDER_GEMINI_IMAGE);
+  if (!(await breaker.canRequest())) {
+    throw new CircuitOpenError(PROVIDER_GEMINI_IMAGE);
+  }
+
+  // NOTE: this loop is intentionally NOT a plain withRetry call — each retry
+  // also progressively simplifies the prompt (a flow-specific recovery for
+  // copyright/safety triggers). It shares the same building blocks though:
+  // classifyError for the retry decision, computeBackoffMs for jittered
+  // exponential backoff, and the distributed breaker above.
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     // Use progressively simpler prompts on each retry
     let currentPromptParts: any[];
@@ -1114,8 +1139,8 @@ CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin 
     const startTime = Date.now();
     try {
       if (attempt > 0) {
-        // Wait a bit before retrying (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        // Jittered exponential backoff via the shared schedule
+        await new Promise(resolve => setTimeout(resolve, computeBackoffMs(attempt - 1, { baseMs: 1000 })));
       }
 
       // Wrap ai.generate in a timeout to prevent hanging on rate limits
@@ -1180,6 +1205,7 @@ CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin 
         lastNoMediaReason = null;
         successfulPromptText = currentPromptText;
         successfulStartTime = startTime;
+        await breaker.recordSuccess();
         break;
       }
     } catch (e: any) {
@@ -1208,6 +1234,16 @@ CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin 
       const errorClass = classifyError(e);
       const isRateLimitError = errorClass === 'rate_limit';
       const isTransientError = errorClass === 'transient' || errorClass === 'rate_limit';
+
+      // Provider-health failures feed the shared breaker; permanent errors
+      // (safety/4xx) are not a provider outage and never trip it.
+      if (isTransientError) {
+        await breaker.recordFailure();
+      }
+      // If the breaker opened (here or on another instance), stop retrying.
+      if (isTransientError && !breaker.canRequestSync()) {
+        throw e;
+      }
 
       // Flow-specific retry triggers: these errors are "permanent" to the generic
       // classifier, but THIS flow can sometimes recover by progressively
@@ -1618,10 +1654,12 @@ export const storyImageFlow = ai.defineFlow(
         console.error('[story-image-flow] Image generation error for page', pageId, ':', errMessage);
         logs.push(`[warn] Image model failed for ${pageId}: ${errMessage}`);
 
-        // Update the page with the error details immediately so user can see it
+        // Update the page with a USER-SAFE error message immediately so the UI
+        // can show it. The raw message stays in server logs / aiFlowLogs —
+        // this doc field is client-readable and rendered to parents.
         await pageRef.update({
           imageStatus: 'error',
-          'imageMetadata.lastErrorMessage': errMessage,
+          'imageMetadata.lastErrorMessage': toUserSafeMessage(generationError),
           updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -1740,14 +1778,18 @@ export const storyImageFlow = ai.defineFlow(
     } catch (error: any) {
       const message = error?.message ?? 'storyImageFlow failed.';
       const stack = error?.stack ?? 'No stack trace available';
-      // Log the full stack trace for debugging
+      // The raw message/stack stay in server logs, aiFlowLogs, and the
+      // maintenance email below. The page document is client-readable, so it
+      // only ever receives the user-safe message (no raw strings, no stacks).
+      const userSafeMessage = toUserSafeMessage(error);
+      const errorCategory = categorizeError(error);
       console.error(`[storyImageFlow] Error for page ${pageId}:`, message);
       console.error(`[storyImageFlow] Stack trace:`, stack);
       try {
         await pageRef.update({
           imageStatus: 'error',
-          'imageMetadata.lastErrorMessage': message,
-          'imageMetadata.errorStack': stack.substring(0, 1000), // Store first 1000 chars of stack
+          'imageMetadata.lastErrorMessage': userSafeMessage,
+          'imageMetadata.errorStack': null,
           updatedAt: FieldValue.serverTimestamp(),
         });
       } catch (updateError) {
@@ -1827,7 +1869,8 @@ export const storyImageFlow = ai.defineFlow(
         storyId,
         pageId,
         imageStatus: 'error' as const,
-        errorMessage: message,
+        errorMessage: userSafeMessage,
+        errorCategory,
         logs,
       };
     }

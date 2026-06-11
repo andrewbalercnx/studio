@@ -478,6 +478,13 @@ export type StoryBookOutput = {
   imageGeneration: StoryBookImageGenerationStatus;
   exemplarGeneration?: StoryBookExemplarGenerationStatus;
 
+  /**
+   * Degraded-book rollup (see `StoryBookArtStatus`). Written by the image
+   * generation route after every run; absent on storybooks generated before
+   * this field existed (derive from pages via `deriveStorybookArtStatus`).
+   */
+  artStatus?: StoryBookArtStatus;
+
   // Map of actorId -> exemplarId for this storybook's character reference images
   // @deprecated Use actorExemplarUrls instead
   actorExemplars?: Record<string, string>;
@@ -599,6 +606,74 @@ export type StoryBookImageGenerationStatus = {
     // Rate limit retry tracking
     rateLimitRetryAt?: any;        // When the next automatic retry will occur
     rateLimitRetryCount?: number;  // How many retries have been attempted
+};
+
+// ============================================================================
+// Degraded-book status contract
+// ============================================================================
+// A storybook whose text is complete but whose art only partially generated is
+// a *degraded* book, not a failed one: it must remain viewable and orderable
+// while the failed pages can be retried. This contract is the single shared
+// vocabulary for that state across the parent storybook view, the kids PWA,
+// the generation routes, and (later) the parent-view sprint.
+//
+// The canonical derivation from per-page `imageStatus` lives in
+// `src/lib/storybook-status.ts` (`deriveStorybookArtStatus`) so every surface
+// computes the same answer.
+
+/**
+ * Book-level art completeness, derived from per-page `imageStatus` values.
+ *
+ * - `none`        — the book has no pages yet (nothing to show).
+ * - `in_progress` — at least one illustratable page is still pending/generating.
+ * - `complete`    — every illustratable page has ready art (or none need art).
+ * - `degraded`    — generation finished but some pages failed while others
+ *                   succeeded. The book is viewable and orderable in this state.
+ * - `failed`      — generation finished and no illustratable page has art.
+ */
+export type StoryBookArtCompleteness =
+  | 'none'
+  | 'in_progress'
+  | 'complete'
+  | 'degraded'
+  | 'failed';
+
+/**
+ * Rollup of a storybook's art state. Persisted on the StoryBookOutput document
+ * as `artStatus` by the image-generation route after each run, and derivable
+ * on any surface from the pages themselves via `deriveStorybookArtStatus`.
+ */
+export type StoryBookArtStatus = {
+  completeness: StoryBookArtCompleteness;
+  /** Number of pages that require AI art (excludes title/blank/no-prompt pages). */
+  pagesTotal: number;
+  /** Pages whose art is ready. */
+  pagesReady: number;
+  /** Pages whose art generation failed. */
+  pagesFailed: number;
+  /** Pages not yet attempted or still generating. */
+  pagesPending: number;
+  /** IDs of the failed pages, for targeted retry. */
+  failedPageIds: string[];
+  /**
+   * The book has pages (text is complete) and can be opened/read.
+   * Partial or missing art does NOT make a book unviewable.
+   */
+  isViewable: boolean;
+  /**
+   * The book can be ordered in its current state: viewable AND art is either
+   * complete or degraded (some art ready). A fully failed art run is not
+   * orderable until at least one retry succeeds.
+   */
+  isOrderable: boolean;
+  /**
+   * Set (server timestamp) when a previously `degraded`/`failed` book later
+   * reaches `complete` — i.e. a retry recovered it. Used to tell the user
+   * their book finished after an earlier failure.
+   */
+  recoveredAt?: any;
+  /** False until the user has been shown the recovery notification. */
+  recoveryNotified?: boolean;
 };
 
 export type StoryOutputPage = {
@@ -1369,6 +1444,10 @@ export type StoryWizardOutput =
       question: string;
       choices: StoryWizardChoice[];
       answers: StoryWizardAnswer[];
+      /** 1-based index of this question ("Question 2 of 4"). */
+      questionNumber?: number;
+      /** Total number of wizard questions before the story is written. */
+      totalQuestions?: number;
       ok: true;
     }
   | {
@@ -2003,6 +2082,12 @@ export type StoryGeneratorResponse = {
   // Monotonically increasing estimate of how far through story generation we are.
   // 0.0 = just started, 1.0 = complete
   progress?: number;
+
+  // Step indicator for fixed-length question flows ("Question N of M").
+  // Set by generators with a known question count (e.g. wizard); clients fall
+  // back to their existing progress display when absent.
+  questionNumber?: number;
+  totalQuestions?: number;
 
   // Ending options (beat mode ending flow)
   isEndingPhase?: boolean;

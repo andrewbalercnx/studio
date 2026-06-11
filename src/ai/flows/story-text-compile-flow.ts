@@ -11,6 +11,7 @@ import { getServerFirestore } from '@/lib/server-firestore';
 import { z } from 'genkit';
 import type { StorySession, ChatMessage, StoryType, ChildProfile } from '@/lib/types';
 import { logAIFlow } from '@/lib/ai-flow-logger';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { logAICallToTrace, completeRunTrace } from '@/lib/ai-run-trace';
 import { replacePlaceholdersWithDescriptions } from '@/lib/resolve-placeholders.server';
 import { extractEntityIds } from '@/lib/entity-utils';
@@ -443,11 +444,14 @@ Respond with only the JSON object now.`;
             };
 
         } catch (e: any) {
+            // Raw error stays in debug (diagnostics-gated) and server logs; the
+            // result errorMessage reaches clients verbatim so it must be user-safe.
             debug.details.error = e.message || String(e);
+            console.error('[storyTextCompileFlow] Unexpected error:', e);
             return {
                 ok: false,
                 sessionId,
-                errorMessage: `Error in storyTextCompileFlow: ${e.message || String(e)}`,
+                errorMessage: toUserSafeMessage(e),
                 debug,
             };
         }

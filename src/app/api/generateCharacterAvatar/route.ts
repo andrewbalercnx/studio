@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { characterAvatarFlow } from '@/ai/flows/character-avatar-flow';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
+import { toUserSafeMessage } from '@/lib/ai-error-map';
 
 export async function POST(request: Request) {
   try {
@@ -21,12 +22,12 @@ export async function POST(request: Request) {
     if (e instanceof AuthError) {
       return NextResponse.json({ ok: false, errorMessage: e.message }, { status: e.status });
     }
-    const errorMessage = e.message || 'An unexpected error occurred.';
+    // Raw error stays in server logs; the response message must be user-safe.
     console.error('[api/generateCharacterAvatar] Error:', e);
     return NextResponse.json(
       {
         ok: false,
-        errorMessage: `API /generateCharacterAvatar route error: ${errorMessage}`
+        errorMessage: toUserSafeMessage(e),
       },
       { status: 500 }
     );
