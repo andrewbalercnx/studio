@@ -1,4 +1,23 @@
 {
-  "comment": "Committed baseline of KNOWN probe findings. The report marks any finding whose id is absent here as NEW (a regression or fresh friction to triage). After triaging a run, move accepted/tracked finding records from probe-results/findings.json into this list. Sprint W2-A initial state: empty — all seven W1-C findings are fixed on main and the personas complete their goals.",
-  "findings": []
+  "comment": "Committed baseline of KNOWN probe findings. The report marks any finding whose id is absent here as NEW (a regression or fresh friction to triage). After triaging a run, move accepted/tracked finding records from probe-results/findings.json into this list. Sprint W2-A initial state: empty \u2014 all seven W1-C findings are fixed on main and the personas complete their goals.",
+  "findings": [
+    {
+      "id": "pin-guard--grace-lost-on-full-reload",
+      "severity": "medium",
+      "surface": "/parent/* (PIN guard)",
+      "category": "feedback",
+      "summary": "PIN guard re-prompts on a full page reload even though the persisted grace timestamp is present and unexpired",
+      "reproSteps": [
+        "Sign up (PIN is set; guard grace begins) \u2014 or unlock any parent page with the PIN",
+        "Hard-reload /parent/children (sessionStorage still holds an unexpired storypic.parentGuard.lastValidatedAt:<uid>)",
+        "The \"Enter Parent PIN\" dialog appears anyway"
+      ],
+      "suggestedFix": "In ParentGuardProvider, defer the modal-open decision until the persisted lastValidatedAt has hydrated (and close the modal if hydration proves the guard valid).",
+      "source": {
+        "kind": "w1c-check",
+        "check": "W1C-6"
+      },
+      "status": "new"
+    }
+  ]
 }

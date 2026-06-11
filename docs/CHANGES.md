@@ -18,6 +18,17 @@
 
 ### 2026-06-11
 
+#### `4ca2372` - Probe baseline: mark PIN-reload finding as known/triaged
+
+**Type**: Testing
+
+**Summary**: Ran the naive-parent UX probe on `19abab8` (post-deploy): 7/7 W1-C regression checks PASS, 3/3 persona goals succeeded at expert-optimal action counts, one finding — the already-filed PIN-guard hard-reload bug. Moved that finding into `e2e/probe/baseline-findings.json` so nightly probe reports only flag genuinely new friction.
+
+**Modified files**:
+- `e2e/probe/baseline-findings.json`
+
+---
+
 #### `65e3b8a` - Merge Wave 3: four parallel lanes (security, W3-A/B/C)
 
 **Type**: Security / Feature / Ops / Infrastructure
