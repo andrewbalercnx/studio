@@ -5,6 +5,8 @@ import { storyExemplarGenerationFlow } from '@/ai/flows/story-exemplar-generatio
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
+import { requireAuthenticatedUser } from '@/lib/server-auth';
+import { AuthError } from '@/lib/auth-error';
 import { isTestMode, buildTestModePages } from '@/lib/test-mode';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
 
@@ -37,11 +39,31 @@ export async function POST(request: Request) {
   const startTime = Date.now();
 
   try {
+    // Authentication: this route triggers paid AI generation, so it must never
+    // run anonymously. Same gate as /api/storybookV2/create (the route that
+    // precedes this one in every client flow): any authenticated Firebase user,
+    // then strict ownership against story.parentUid below. We deliberately do
+    // NOT require the isParent custom claim (requireParentOrAdminUser) because
+    // parent roles live in Firestore, not in token claims.
+    const user = await requireAuthenticatedUser(request);
+
     // Step 1: Get Story document
     const storyRef = firestore.collection('stories').doc(storyId);
     const storySnap = await storyRef.get();
     if (!storySnap.exists) {
       return NextResponse.json({ ok: false, errorMessage: `Story not found at stories/${storyId}` }, { status: 404 });
+    }
+
+    // Ownership: the storybook belongs to the caller's story (or the caller is
+    // privileged via admin/writer claims). Mirrors finalize/pageEdit.
+    const storyData = storySnap.data() as Record<string, any>;
+    const isPrivileged = user.claims.isAdmin || user.claims.isWriter;
+    if (!isPrivileged && storyData.parentUid && storyData.parentUid !== user.uid) {
+      logger.warn('Ownership verification failed', { storyId, storybookId, uid: user.uid });
+      return NextResponse.json(
+        { ok: false, errorMessage: 'You do not own this story.', requestId },
+        { status: 403 }
+      );
     }
 
     // Step 2: Get StoryBookOutput document
@@ -206,6 +228,14 @@ export async function POST(request: Request) {
       diagnostics: flowResult.diagnostics ?? null,
     });
   } catch (error: any) {
+    // Auth failures happen before any generation state is touched — return the
+    // 401/403 directly without writing an error status onto the storybook.
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { ok: false, errorMessage: error.message, requestId },
+        { status: error.status }
+      );
+    }
     const durationMs = Date.now() - startTime;
     logger.error('Unhandled exception in route', error, { storyId, storybookId, durationMs });
     // Never surface the raw error to the user; the raw string stays in logs above.

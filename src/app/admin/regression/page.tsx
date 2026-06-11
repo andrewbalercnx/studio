@@ -315,6 +315,7 @@ const initialTests: TestResult[] = [
   { id: 'SCENARIO_GEMINI4_FLOW', name: 'Scenario: Gemini4 Story Flow', status: 'PENDING', message: '' },
   { id: 'SCENARIO_STORYBOOK_RETRY', name: 'Scenario: Storybook Retry API', status: 'PENDING', message: '' },
   { id: 'API_STORYBOOK_PAGE_EDIT', name: 'API: /api/storybookV2/pageEdit (Validation + Edit + Lock)', status: 'PENDING', message: '' },
+  { id: 'API_STORYBOOKV2_GENERATION_AUTH', name: 'API: /api/storybookV2/pages + /images (Auth Required)', status: 'PENDING', message: '' },
   { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
   { id: 'API_USER_ONBOARDING_GET', name: 'API: /api/user/onboarding (GET shape)', status: 'PENDING', message: '' },
   { id: 'API_USER_ONBOARDING_POST', name: 'API: /api/user/onboarding (POST validation)', status: 'PENDING', message: '' },
@@ -1045,9 +1046,17 @@ export default function AdminRegressionPage() {
         });
         const storybookId = storybookRef.id;
 
+        // Generation routes require auth (cost-bearing AI endpoints)
+        const compileAuthToken = await auth?.currentUser?.getIdToken?.();
+        if (!compileAuthToken) throw new Error('Admin authentication required for generation APIs.');
+        const compileAuthedHeaders = {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${compileAuthToken}`,
+        };
+
         const pagesResponse = await fetch('/api/storybookV2/pages', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: compileAuthedHeaders,
             body: JSON.stringify({ storyId: storyRef.id, storybookId }),
         });
         const pagesResult = await pagesResponse.json();
@@ -1114,7 +1123,7 @@ export default function AdminRegressionPage() {
 
         const imagesResponse = await fetch('/api/storybookV2/images', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: compileAuthedHeaders,
             body: JSON.stringify({
                 storyId: storyRef.id,
                 storybookId,
@@ -1263,9 +1272,17 @@ export default function AdminRegressionPage() {
         });
         const storybookId = e2eStorybookRef.id;
 
+        // Generation routes require auth (cost-bearing AI endpoints)
+        const e2eGenToken = await auth?.currentUser?.getIdToken?.();
+        if (!e2eGenToken) throw new Error('Admin authentication required for generation APIs.');
+        const e2eGenHeaders = {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${e2eGenToken}`,
+        };
+
         const pagesResponse = await fetch('/api/storybookV2/pages', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: e2eGenHeaders,
             body: JSON.stringify({ storyId: storyRef.id, storybookId }),
         });
         const pagesPayload = await pagesResponse.json();
@@ -1289,7 +1306,7 @@ export default function AdminRegressionPage() {
 
         const imagesResponse = await fetch('/api/storybookV2/images', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: e2eGenHeaders,
             body: JSON.stringify({
                 storyId: storyRef.id,
                 storybookId,
@@ -1997,6 +2014,49 @@ export default function AdminRegressionPage() {
         updateTestResult('API_STORYBOOK_PAGE_EDIT', { status: 'ERROR', message: e.message });
     }
 
+    // Test: API_STORYBOOKV2_GENERATION_AUTH
+    // The generation routes are cost-bearing (they trigger paid AI work), so they
+    // must reject unauthenticated requests with 401. Authenticated requests get
+    // past the auth gate (proved cheaply: a non-existent story returns 404, not
+    // 401 — no AI is invoked). Authenticated happy-path generation is covered by
+    // SCENARIO_STORY_COMPILE, SCENARIO_STORYBOOK_E2E, and
+    // SCENARIO_PAGINATION_SCENE_TAG, which all call these routes with tokens.
+    try {
+        const genAuthToken = await auth?.currentUser?.getIdToken?.();
+        if (!genAuthToken) throw new Error('Admin authentication required for generation auth test.');
+        const bogusBody = JSON.stringify({ storyId: 'regression-auth-nonexistent-story', storybookId: 'regression-auth-nonexistent-storybook' });
+
+        // 1. Unauthenticated -> 401 (both routes)
+        const unauthedPagesRes = await fetch('/api/storybookV2/pages', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bogusBody,
+        });
+        if (unauthedPagesRes.status !== 401) throw new Error(`pages: expected 401 without auth, got ${unauthedPagesRes.status}`);
+
+        const unauthedImagesRes = await fetch('/api/storybookV2/images', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bogusBody,
+        });
+        if (unauthedImagesRes.status !== 401) throw new Error(`images: expected 401 without auth, got ${unauthedImagesRes.status}`);
+
+        // 2. Authenticated -> past the auth gate (404 for a non-existent story; no AI cost)
+        const authedHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${genAuthToken}` };
+        const authedPagesRes = await fetch('/api/storybookV2/pages', {
+            method: 'POST', headers: authedHeaders, body: bogusBody,
+        });
+        if (authedPagesRes.status !== 404) throw new Error(`pages: expected 404 for authed request on missing story, got ${authedPagesRes.status}`);
+
+        const authedImagesRes = await fetch('/api/storybookV2/images', {
+            method: 'POST', headers: authedHeaders, body: bogusBody,
+        });
+        if (authedImagesRes.status !== 404) throw new Error(`images: expected 404 for authed request on missing story, got ${authedImagesRes.status}`);
+
+        updateTestResult('API_STORYBOOKV2_GENERATION_AUTH', {
+            status: 'PASS',
+            message: 'pages and images reject unauthenticated requests (401) and accept authenticated ones (404 on missing story, auth gate passed).',
+        });
+    } catch (e: any) {
+        updateTestResult('API_STORYBOOKV2_GENERATION_AUTH', { status: 'ERROR', message: e.message });
+    }
+
     // Test: SCENARIO_PAGINATION_SCENE_TAG
     // Creates a minimal story doc directly, runs pages API, checks imageScene.sceneTag on pages
     // and locationRegistry on the story doc.
@@ -2031,9 +2091,13 @@ export default function AdminRegressionPage() {
             regressionTag: `${REGRESSION_SUITE_TAG}:SCENARIO_PAGINATION_SCENE_TAG`,
         });
 
+        // Generation routes require auth (cost-bearing AI endpoints)
+        const sceneTagToken = await auth?.currentUser?.getIdToken?.();
+        if (!sceneTagToken) throw new Error('Admin authentication required for generation APIs.');
+
         const pagesRes = await fetch('/api/storybookV2/pages', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sceneTagToken}` },
             body: JSON.stringify({ storyId: storyRef.id, storybookId: storybookRef.id }),
         });
         const pagesPayload = await pagesRes.json();

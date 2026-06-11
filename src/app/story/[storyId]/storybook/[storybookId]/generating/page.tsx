@@ -3,6 +3,7 @@
 import { use, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFirestore } from '@/firebase';
+import { useUser } from '@/firebase/auth/use-user';
 import { doc } from 'firebase/firestore';
 import { useDocument } from '@/lib/firestore-hooks';
 import type { StoryBookOutput, Story } from '@/lib/types';
@@ -24,6 +25,7 @@ export default function StorybookGeneratingPage({
   const { storyId, storybookId } = resolvedParams;
   const router = useRouter();
   const firestore = useFirestore();
+  const { user } = useUser();
   const { toast } = useToast();
   const { activeChildProfile } = useAppContext();
 
@@ -48,18 +50,20 @@ export default function StorybookGeneratingPage({
       storybook.pageGeneration?.status === 'idle' &&
       !hasTriggeredPages.current;
 
-    if (shouldGeneratePages) {
+    // Generation routes now require the parent's ID token — wait for auth.
+    if (shouldGeneratePages && user) {
       hasTriggeredPages.current = true;
       console.log('[Generating] Auto-triggering page generation for storybook:', storybookId);
 
-      fetch('/api/storybookV2/pages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          storyId,
-          storybookId,
-        }),
-      })
+      user.getIdToken()
+        .then((token) => fetch('/api/storybookV2/pages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            storyId,
+            storybookId,
+          }),
+        }))
         .then((res) => res.json())
         .then((result) => {
           if (!result.ok) {
@@ -80,7 +84,7 @@ export default function StorybookGeneratingPage({
           });
         });
     }
-  }, [storybook?.pageGeneration?.status, storyId, storybookId, toast]);
+  }, [storybook?.pageGeneration?.status, storyId, storybookId, toast, user]);
 
   // Auto-trigger image generation when pages are ready
   useEffect(() => {
@@ -90,21 +94,23 @@ export default function StorybookGeneratingPage({
       storybook.imageGeneration?.status === 'idle' &&
       !hasTriggeredImages.current;
 
-    if (shouldGenerateImages) {
+    // Generation routes now require the parent's ID token — wait for auth.
+    if (shouldGenerateImages && user) {
       hasTriggeredImages.current = true;
       console.log('[Generating] Auto-triggering image generation for storybook:', storybookId);
 
-      fetch('/api/storybookV2/images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          storyId,
-          storybookId,
-          imageStylePrompt: storybook.imageStylePrompt,
-          ...(storybook.imageWidthPx != null && { targetWidthPx: storybook.imageWidthPx }),
-          ...(storybook.imageHeightPx != null && { targetHeightPx: storybook.imageHeightPx }),
-        }),
-      })
+      user.getIdToken()
+        .then((token) => fetch('/api/storybookV2/images', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            storyId,
+            storybookId,
+            imageStylePrompt: storybook.imageStylePrompt,
+            ...(storybook.imageWidthPx != null && { targetWidthPx: storybook.imageWidthPx }),
+            ...(storybook.imageHeightPx != null && { targetHeightPx: storybook.imageHeightPx }),
+          }),
+        }))
         .then((res) => res.json())
         .then((result) => {
           if (!result.ok) {
@@ -134,6 +140,7 @@ export default function StorybookGeneratingPage({
     storyId,
     storybookId,
     toast,
+    user,
   ]);
 
   // Auto-redirect when complete
