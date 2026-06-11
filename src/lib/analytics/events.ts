@@ -40,6 +40,15 @@ export const ANALYTICS_EVENTS = {
   kidsBeatProgressed: 'kids.beat_progressed',
   kidsStuck: 'kids.stuck',
   kidsAbandoned: 'kids.abandoned',
+
+  // --- Feedback & support (Sprint W3-C) ---
+  // Props are scalar only: trigger, subjectId, rating, nps — never the comment
+  // or testimonial quote (free text stays in Firestore, not analytics).
+  feedbackPromptShown: 'feedback.prompt_shown',
+  feedbackSubmitted: 'feedback.submitted',
+  feedbackDismissed: 'feedback.dismissed',
+  feedbackTestimonialSubmitted: 'feedback.testimonial_submitted',
+  supportTicketCreated: 'support_ticket.created',
 } as const;
 
 export type AnalyticsEventName = (typeof ANALYTICS_EVENTS)[keyof typeof ANALYTICS_EVENTS];
