@@ -2559,3 +2559,89 @@ export type EntitlementCheck = {
   /** Human-readable reason when denied. */
   reason?: string;
 };
+
+// ============================================================================
+// Feedback, Testimonials & Support Tickets (Sprint W3-C)
+// ============================================================================
+
+/** Moments at which a rating prompt may be offered (parent surfaces only). */
+export type FeedbackTriggerId = 'book_first_view' | 'order_placed';
+
+/** Optional marketing testimonial attached to a 4–5 star feedback doc. */
+export type FeedbackTestimonial = {
+  /** Explicit, checkbox-given consent to use the quote (and photo) in marketing. */
+  consent: boolean;
+  quote: string;
+  /** Tokenised download URL of the optional uploaded photo. */
+  photoUrl?: string | null;
+  /** Storage object path of the optional uploaded photo. */
+  photoPath?: string | null;
+  /** ISO timestamp at which consent was recorded. */
+  consentedAt?: string | null;
+};
+
+/**
+ * A document in the `feedback` collection. One per parent+trigger+subject —
+ * a dismissal is recorded too so the same prompt is never shown twice.
+ * Created server-side by POST /api/feedback (append-only for clients).
+ */
+export type FeedbackDoc = {
+  id?: string;
+  parentUid: string;
+  trigger: FeedbackTriggerId;
+  /** The storybook id (book_first_view) or print order id (order_placed). */
+  subjectId: string;
+  action: 'submitted' | 'dismissed';
+  /** 1–5 stars (present when action === 'submitted'). */
+  rating?: number | null;
+  /** Optional NPS 0–10. */
+  nps?: number | null;
+  /** Optional free-text comment. */
+  comment?: string | null;
+  testimonial?: FeedbackTestimonial | null;
+  /** Page the prompt was shown on, for context. */
+  pagePath?: string | null;
+  source: 'web';
+  createdAt?: any;
+  updatedAt?: any;
+};
+
+export type TicketStatus = 'open' | 'in_progress' | 'resolved';
+
+/**
+ * A document in the `tickets` collection: a tracked parent issue report.
+ * Created server-side by POST /api/report-issue (alongside the maintenance
+ * email); status moves open → in_progress → resolved via admin tooling.
+ */
+export type SupportTicket = {
+  id?: string;
+  parentUid: string;
+  contactEmail?: string | null;
+  message: string;
+  pagePath: string;
+  status: TicketStatus;
+  statusHistory: Array<{
+    status: TicketStatus;
+    timestamp: string; // ISO
+    note?: string;
+    source: 'parent' | 'admin' | 'system';
+  }>;
+  /** Optional admin-written note shown to the parent when resolved. */
+  resolutionNote?: string | null;
+  diagnostics?: Record<string, any> | null;
+  createdAt?: any;
+  updatedAt?: any;
+};
+
+/**
+ * systemConfig/orderTransparency — parent-facing turnaround estimate shown on
+ * order surfaces. Honest "estimate" labelling is applied in lib/order-timeline.
+ */
+export type OrderTransparencyConfig = {
+  /** Lower bound of the order→delivery estimate, in business days. */
+  turnaroundMinBusinessDays: number;
+  /** Upper bound of the order→delivery estimate, in business days. */
+  turnaroundMaxBusinessDays: number;
+  updatedAt?: any;
+  updatedBy?: string;
+};

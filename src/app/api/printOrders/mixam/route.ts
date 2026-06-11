@@ -6,6 +6,8 @@ import type { PrintOrder, PrintProduct, PrintStoryBook, StoryBookArtStatus } fro
 import { validateUKAddress } from '@/lib/mixam/address-validator';
 import { notifyOrderSubmitted } from '@/lib/email/notify-admins';
 import { deriveStorybookArtStatus, evaluateOrderArtGate } from '@/lib/storybook-status';
+import { deriveOrderTimeline, formatEstimatedTurnaround } from '@/lib/order-timeline';
+import { getOrderTransparencyConfig } from '@/lib/order-transparency-config.server';
 
 /**
  * POST /api/printOrders/mixam
@@ -444,10 +446,23 @@ export async function POST(request: NextRequest) {
       // Don't fail the request due to email errors
     }
 
+    // Order transparency (Sprint W3-C): the confirmation screen renders this
+    // server-derived timeline + honest turnaround estimate (server-first).
+    const transparency = await getOrderTransparencyConfig();
+
     return NextResponse.json({
       ok: true,
       orderId: orderRef.id,
       estimatedCost: orderData.estimatedCost,
+      timeline: deriveOrderTimeline({
+        fulfillmentStatus: 'awaiting_approval',
+        createdAtIso: now,
+        statusHistory: orderData.statusHistory ?? null,
+      }),
+      estimatedTurnaround: formatEstimatedTurnaround(
+        transparency.turnaroundMinBusinessDays,
+        transparency.turnaroundMaxBusinessDays
+      ),
     });
 
   } catch (error: any) {

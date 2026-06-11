@@ -324,6 +324,11 @@ const initialTests: TestResult[] = [
   { id: 'API_ADMIN_SESSIONS', name: 'API: /api/admin/sessions (GET shape + lastError)', status: 'PENDING', message: '' },
   { id: 'API_HEALTH', name: 'API: /api/health (version + dependency probe)', status: 'PENDING', message: '' },
   { id: 'API_FLAGS', name: 'API: /api/flags (server-evaluated feature flags)', status: 'PENDING', message: '' },
+  { id: 'API_FEEDBACK_POST_VALIDATION', name: 'API: /api/feedback (POST validation)', status: 'PENDING', message: '' },
+  { id: 'API_FEEDBACK_ELIGIBILITY', name: 'API: /api/feedback/eligibility (GET shape)', status: 'PENDING', message: '' },
+  { id: 'API_TICKETS_GET', name: 'API: /api/tickets (GET shape)', status: 'PENDING', message: '' },
+  { id: 'API_REPORT_ISSUE_VALIDATION', name: 'API: /api/report-issue (POST validation)', status: 'PENDING', message: '' },
+  { id: 'API_MY_ORDERS_TIMELINE', name: 'API: /api/printOrders/my-orders (timeline shape)', status: 'PENDING', message: '' },
   { id: 'API_STORY_BEAT', name: 'API: /api/storyBeat (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_MESSAGES', name: 'Session: Beat Messages (Input)', status: 'PENDING', message: '' },
   { id: 'SESSION_BEAT_STRUCTURE', name: 'Session: Beat Structure (Input)', status: 'PENDING', message: '' },
@@ -2414,6 +2419,99 @@ export default function AdminRegressionPage() {
         updateTestResult('API_FLAGS', { status: 'PASS', message: `${Object.keys(result.flags).length} flag(s); authenticated=${result.authenticated}.` });
     } catch (e: any) {
         updateTestResult('API_FLAGS', { status: 'FAIL', message: e.message });
+    // ── Sprint W3-C: feedback / tickets / order-timeline APIs ──────────────
+    // Validation-only checks: nothing below mutates state (no feedback docs,
+    // no tickets, no emails) so the suite stays repeatable.
+
+    // Test: API_FEEDBACK_POST_VALIDATION — bogus trigger must be rejected with 400.
+    try {
+        const w3cToken = await auth?.currentUser?.getIdToken?.();
+        if (!w3cToken) throw new Error('Authentication required.');
+        const response = await fetch('/api/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${w3cToken}` },
+            body: JSON.stringify({ trigger: 'regression-bogus-trigger', subjectId: 'regression', action: 'submitted', rating: 5 }),
+        });
+        if (response.status !== 400) {
+            throw new Error(`Expected 400 for unknown trigger, got ${response.status}.`);
+        }
+        updateTestResult('API_FEEDBACK_POST_VALIDATION', { status: 'PASS', message: 'Unknown trigger correctly rejected with 400.' });
+    } catch (e: any) {
+        updateTestResult('API_FEEDBACK_POST_VALIDATION', { status: 'FAIL', message: e.message });
+    }
+
+    // Test: API_FEEDBACK_ELIGIBILITY — read-only eligibility check returns a boolean.
+    try {
+        const w3cToken = await auth?.currentUser?.getIdToken?.();
+        if (!w3cToken) throw new Error('Authentication required.');
+        const response = await fetch('/api/feedback/eligibility?trigger=book_first_view&subjectId=regression-nonexistent-book', {
+            headers: { Authorization: `Bearer ${w3cToken}` },
+        });
+        const result = await response.json();
+        if (response.status !== 200) throw new Error(`API returned status ${response.status}: ${result.error || 'Unknown error'}`);
+        if (result.ok !== true || typeof result.eligible !== 'boolean') {
+            throw new Error('Response missing ok:true / eligible boolean.');
+        }
+        updateTestResult('API_FEEDBACK_ELIGIBILITY', { status: 'PASS', message: `Eligibility check returned eligible=${result.eligible}.` });
+    } catch (e: any) {
+        updateTestResult('API_FEEDBACK_ELIGIBILITY', { status: 'FAIL', message: e.message });
+    }
+
+    // Test: API_TICKETS_GET — own-tickets list shape.
+    try {
+        const w3cToken = await auth?.currentUser?.getIdToken?.();
+        if (!w3cToken) throw new Error('Authentication required.');
+        const response = await fetch('/api/tickets', {
+            headers: { Authorization: `Bearer ${w3cToken}` },
+        });
+        const result = await response.json();
+        if (response.status !== 200) throw new Error(`API returned status ${response.status}: ${result.error || 'Unknown error'}`);
+        if (result.ok !== true || !Array.isArray(result.tickets)) throw new Error('Response missing ok:true / tickets array.');
+        const badTicket = result.tickets.find((t: any) => !t.id || !['open', 'in_progress', 'resolved'].includes(t.status));
+        if (badTicket) throw new Error(`Ticket ${badTicket.id || '?'} has an invalid status.`);
+        updateTestResult('API_TICKETS_GET', { status: 'PASS', message: `${result.tickets.length} ticket(s) returned with valid statuses.` });
+    } catch (e: any) {
+        updateTestResult('API_TICKETS_GET', { status: 'FAIL', message: e.message });
+    }
+
+    // Test: API_REPORT_ISSUE_VALIDATION — missing message must be rejected with 400
+    // (validated before any ticket write or email).
+    try {
+        const w3cToken = await auth?.currentUser?.getIdToken?.();
+        if (!w3cToken) throw new Error('Authentication required.');
+        const response = await fetch('/api/report-issue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${w3cToken}` },
+            body: JSON.stringify({ pagePath: '/admin/regression' }),
+        });
+        if (response.status !== 400) {
+            throw new Error(`Expected 400 for missing message, got ${response.status}.`);
+        }
+        updateTestResult('API_REPORT_ISSUE_VALIDATION', { status: 'PASS', message: 'Missing message correctly rejected with 400 (no ticket created).' });
+    } catch (e: any) {
+        updateTestResult('API_REPORT_ISSUE_VALIDATION', { status: 'FAIL', message: e.message });
+    }
+
+    // Test: API_MY_ORDERS_TIMELINE — server-derived timeline/statusCategory shape.
+    try {
+        const w3cToken = await auth?.currentUser?.getIdToken?.();
+        if (!w3cToken) throw new Error('Authentication required.');
+        const response = await fetch('/api/printOrders/my-orders', {
+            headers: { Authorization: `Bearer ${w3cToken}` },
+        });
+        const result = await response.json();
+        if (response.status !== 200) throw new Error(`API returned status ${response.status}: ${result.error || 'Unknown error'}`);
+        if (result.ok !== true || !Array.isArray(result.orders)) throw new Error('Response missing ok:true / orders array.');
+        if (!result.estimatedTurnaround || typeof result.estimatedTurnaround.label !== 'string') {
+            throw new Error('Response missing estimatedTurnaround.label.');
+        }
+        const badOrder = result.orders.find((o: any) =>
+            !o.timeline || !Array.isArray(o.timeline.steps) || o.timeline.steps.length !== 5 ||
+            !['pending', 'in_progress', 'completed', 'cancelled'].includes(o.statusCategory));
+        if (badOrder) throw new Error(`Order ${badOrder.id || '?'} is missing a 5-step timeline or valid statusCategory.`);
+        updateTestResult('API_MY_ORDERS_TIMELINE', { status: 'PASS', message: `${result.orders.length} order(s) with server-derived timelines; estimate present.` });
+    } catch (e: any) {
+        updateTestResult('API_MY_ORDERS_TIMELINE', { status: 'FAIL', message: e.message });
     }
 
     const scenarioResults = { beat: beatScenarioSummary, warmup: warmupScenarioSummary, moreOptions: moreOptionsScenarioSummary, character: characterScenarioSummary, characterTraits: characterTraitsScenarioSummary, arcAdvance: arcAdvanceScenarioSummary, arcBounds: arcBoundsScenarioSummary, ending: endingScenarioSummary, storyCompile: storyCompileScenarioSummary, phaseState: phaseStateScenarioSummary, childStoryList: childStoryListScenarioSummary };

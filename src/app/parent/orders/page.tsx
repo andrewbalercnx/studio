@@ -1,48 +1,45 @@
 
 'use client';
 
-import {useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
 import {useUser} from '@/firebase/auth/use-user';
-import {useFirestore} from '@/firebase';
-import {collection, query, where} from 'firebase/firestore';
-import {useCollection} from '@/lib/firestore-hooks';
-import type {PrintOrder, MixamOrderStatus} from '@/lib/types';
+import type {PrintOrder, TicketStatus} from '@/lib/types';
+import type {EstimatedTurnaround, OrderStatusCategory, OrderTimeline} from '@/lib/order-timeline';
+import {OrderTimelineView} from '@/components/orders/order-timeline';
+import {ReportIssueButton} from '@/components/report-issue-button';
 import {Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle} from '@/components/ui/card';
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
 import {Tabs, TabsList, TabsTrigger} from '@/components/ui/tabs';
-import {LoaderCircle, PackageCheck, Mail, MapPin, DollarSign, XCircle} from 'lucide-react';
+import {LoaderCircle, PackageCheck, Mail, MapPin, DollarSign, XCircle, Truck, LifeBuoy, Clock} from 'lucide-react';
 import Link from 'next/link';
 import {format} from 'date-fns';
 import {useToast} from '@/hooks/use-toast';
 
-type StatusFilter = 'all' | 'pending' | 'in_progress' | 'completed' | 'cancelled';
+type StatusFilter = 'all' | OrderStatusCategory;
 
-// Map fulfillment statuses to filter categories
-function getStatusCategory(status: MixamOrderStatus): StatusFilter {
-  switch (status) {
-    case 'draft':
-    case 'validating':
-    case 'validation_failed':
-    case 'ready_to_submit':
-    case 'awaiting_approval':
-      return 'pending';
-    case 'approved':
-    case 'submitting':
-    case 'submitted':
-    case 'confirmed':
-    case 'in_production':
-      return 'in_progress';
-    case 'shipped':
-    case 'delivered':
-      return 'completed';
-    case 'cancelled':
-    case 'failed':
-      return 'cancelled';
-    default:
-      return 'all';
-  }
-}
+/**
+ * Server-derived order row (Sprint W3-C): the API returns the timeline,
+ * status category and ISO timestamps — this page only renders them
+ * (server-first principle; no status mapping in the client).
+ */
+type OrderRow = PrintOrder & {
+  createdAtIso: string | null;
+  updatedAtIso: string | null;
+  rejectedAtIso: string | null;
+  statusCategory: OrderStatusCategory;
+  timeline: OrderTimeline;
+};
+
+type TicketRow = {
+  id: string;
+  message: string;
+  pagePath: string;
+  status: TicketStatus;
+  resolutionNote: string | null;
+  createdAtIso: string | null;
+  updatedAtIso: string | null;
+};
 
 /**
  * Format a date in a friendly format like "12th December 2025"
@@ -56,52 +53,100 @@ function formatFriendlyDate(date: Date): string {
   return `${day}${suffix} ${format(date, 'MMMM yyyy')}`;
 }
 
+function friendlyIsoDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return formatFriendlyDate(date);
+}
+
+const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
+  open: 'Open',
+  in_progress: 'In progress',
+  resolved: 'Resolved',
+};
+
+function ticketBadgeVariant(status: TicketStatus): 'secondary' | 'default' | 'outline' {
+  if (status === 'resolved') return 'default';
+  if (status === 'in_progress') return 'outline';
+  return 'secondary';
+}
+
 export default function ParentOrdersPage() {
   const {user, loading: userLoading} = useUser();
-  const firestore = useFirestore();
   const {toast} = useToast();
   const [markingOrderId, setMarkingOrderId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  // Query for orders using parentUid
-  // Note: We don't use orderBy here to avoid needing composite indexes.
-  // Sorting is done in JavaScript after fetching.
-  const ordersQuery = useMemo(() => {
-    if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'printOrders'),
-      where('parentUid', '==', user.uid)
-    );
-  }, [firestore, user]);
+  const [allOrders, setAllOrders] = useState<OrderRow[] | null>(null);
+  const [estimatedTurnaround, setEstimatedTurnaround] = useState<EstimatedTurnaround | null>(null);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
 
-  const {data: rawOrders, loading: ordersLoading} = useCollection<PrintOrder>(ordersQuery);
+  const [tickets, setTickets] = useState<TicketRow[] | null>(null);
+  const [ticketsLoading, setTicketsLoading] = useState(true);
 
-  // Sort orders by createdAt descending
-  const allOrders = useMemo(() => {
-    if (!rawOrders) return null;
-    return [...rawOrders].sort((a, b) => {
-      const aTime = a.createdAt?.toMillis?.() || 0;
-      const bTime = b.createdAt?.toMillis?.() || 0;
-      return bTime - aTime;
-    });
-  }, [rawOrders]);
+  const loadOrders = useCallback(async () => {
+    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch('/api/printOrders/my-orders', {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || 'Failed to load orders');
+      }
+      setAllOrders(data.orders as OrderRow[]);
+      setEstimatedTurnaround(data.estimatedTurnaround ?? null);
+      setOrdersError(null);
+    } catch (error: any) {
+      setOrdersError(error?.message ?? 'Failed to load orders');
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, [user]);
 
-  // Filter orders by status category
+  const loadTickets = useCallback(async () => {
+    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch('/api/tickets', {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const data = await response.json();
+      if (response.ok && data?.ok) {
+        setTickets(data.tickets as TicketRow[]);
+      }
+    } catch {
+      // Tickets are a secondary surface — fail quietly.
+    } finally {
+      setTicketsLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    loadOrders();
+    loadTickets();
+  }, [user, loadOrders, loadTickets]);
+
+  // Filter orders by the server-derived status category
   const orders = useMemo(() => {
     if (!allOrders) return null;
     if (statusFilter === 'all') return allOrders;
-    return allOrders.filter(order => getStatusCategory(order.fulfillmentStatus) === statusFilter);
+    return allOrders.filter(order => order.statusCategory === statusFilter);
   }, [allOrders, statusFilter]);
 
   // Count orders by category for tab badges
   const orderCounts = useMemo(() => {
-    if (!allOrders) return { all: 0, pending: 0, in_progress: 0, completed: 0, cancelled: 0 };
+    const counts = { all: 0, pending: 0, in_progress: 0, completed: 0, cancelled: 0 } as Record<StatusFilter, number>;
+    if (!allOrders) return counts;
     return allOrders.reduce((acc, order) => {
       acc.all++;
-      const category = getStatusCategory(order.fulfillmentStatus);
-      acc[category]++;
+      acc[order.statusCategory]++;
       return acc;
-    }, { all: 0, pending: 0, in_progress: 0, completed: 0, cancelled: 0 } as Record<StatusFilter, number>);
+    }, counts);
   }, [allOrders]);
 
   const handleMarkPaid = async (orderId: string) => {
@@ -120,6 +165,7 @@ export default function ParentOrdersPage() {
         throw new Error(result?.errorMessage || 'Unable to mark as paid.');
       }
       toast({title: 'Marked as paid'});
+      await loadOrders();
     } catch (error: any) {
       toast({title: 'Update failed', description: error?.message ?? 'Could not update payment status.', variant: 'destructive'});
     } finally {
@@ -127,7 +173,7 @@ export default function ParentOrdersPage() {
     }
   };
 
-  if (userLoading || (ordersLoading && !orders)) {
+  if (userLoading || (user && ordersLoading && !allOrders)) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <LoaderCircle className="h-10 w-10 animate-spin text-primary" />
@@ -158,12 +204,27 @@ export default function ParentOrdersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Print Orders</h1>
-          <p className="text-muted-foreground">Track every shipment and simulate payments for testing.</p>
+          <p className="text-muted-foreground">Track every order from placement to delivery.</p>
         </div>
         <Button asChild variant="outline">
           <Link href="/stories">Back to Stories</Link>
         </Button>
       </div>
+
+      {estimatedTurnaround && (
+        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Clock className="h-4 w-4" />
+          {estimatedTurnaround.label}
+        </p>
+      )}
+
+      {ordersError && (
+        <Card className="border-destructive/40">
+          <CardContent className="py-4 text-sm text-destructive">
+            Couldn&apos;t load your orders: {ordersError}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Status Filter Tabs */}
       <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
@@ -189,9 +250,10 @@ export default function ParentOrdersPage() {
       {orders && orders.length > 0 ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {orders.map((order) => {
-            const createdAt = order.createdAt?.toDate ? order.createdAt.toDate() : null;
-            const updatedAt = order.updatedAt?.toDate ? order.updatedAt.toDate() : null;
+            const createdLabel = friendlyIsoDate(order.createdAtIso);
+            const updatedLabel = friendlyIsoDate(order.updatedAtIso);
             const isPaid = order.paymentStatus === 'paid';
+            const inFlight = order.timeline.state === 'active' || order.timeline.state === 'shipped';
             return (
               <Card key={order.id ?? order.storyId}>
                 <CardHeader className="space-y-2">
@@ -200,14 +262,35 @@ export default function ParentOrdersPage() {
                     <Badge variant={isPaid ? 'default' : 'secondary'}>{order.paymentStatus}</Badge>
                   </div>
                   <CardDescription>
-                    {createdAt ? `Created ${formatFriendlyDate(createdAt)}` : 'Pending timestamp'}
+                    {createdLabel ? `Created ${createdLabel}` : 'Pending timestamp'}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-3 text-sm">
+                <CardContent className="space-y-4 text-sm">
+                  {/* Order pipeline transparency (Sprint W3-C): server-derived timeline */}
+                  <OrderTimelineView timeline={order.timeline} />
+
+                  {inFlight && order.timeline.state === 'active' && estimatedTurnaround && (
+                    <p className="text-xs text-muted-foreground">
+                      {estimatedTurnaround.label}
+                    </p>
+                  )}
+
+                  {order.mixamTrackingUrl && (
+                    <p>
+                      <a
+                        href={order.mixamTrackingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 font-medium text-primary underline"
+                      >
+                        <Truck className="h-4 w-4" />
+                        Track your delivery
+                        {order.mixamTrackingNumber ? ` (${order.mixamTrackingNumber})` : ''}
+                      </a>
+                    </p>
+                  )}
+
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <Badge variant="outline" className="gap-1 text-xs">
-                      <PackageCheck className="h-3 w-3" /> {order.fulfillmentStatus}
-                    </Badge>
                     <Badge variant="outline">Qty {order.quantity}</Badge>
                     <Badge variant="outline">Version v{order.version}</Badge>
                   </div>
@@ -222,11 +305,9 @@ export default function ParentOrdersPage() {
                           {order.rejectedReason && (
                             <p className="text-sm mt-1">{order.rejectedReason}</p>
                           )}
-                          {order.rejectedAt && (
+                          {friendlyIsoDate(order.rejectedAtIso) && (
                             <p className="text-xs text-red-600 mt-1">
-                              Rejected {formatFriendlyDate(
-                                order.rejectedAt.toDate ? order.rejectedAt.toDate() : new Date(order.rejectedAt)
-                              )}
+                              Rejected {friendlyIsoDate(order.rejectedAtIso)}
                             </p>
                           )}
                         </div>
@@ -258,9 +339,9 @@ export default function ParentOrdersPage() {
                       </div>
                     </div>
                   )}
-                  {updatedAt && (
+                  {updatedLabel && (
                     <p className="text-xs text-muted-foreground">
-                      Updated {formatFriendlyDate(updatedAt)}
+                      Updated {updatedLabel}
                     </p>
                   )}
                 </CardContent>
@@ -295,6 +376,53 @@ export default function ParentOrdersPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Support tickets (Sprint W3-C): tracked issue reports with status */}
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <LifeBuoy className="h-5 w-5" />
+              Support Tickets
+            </CardTitle>
+            <CardDescription>
+              Issues you&apos;ve reported and where they&apos;re up to.
+            </CardDescription>
+          </div>
+          <ReportIssueButton onReported={loadTickets} />
+        </CardHeader>
+        <CardContent>
+          {ticketsLoading ? (
+            <div className="flex justify-center py-4">
+              <LoaderCircle className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : tickets && tickets.length > 0 ? (
+            <ul className="divide-y">
+              {tickets.map((ticket) => (
+                <li key={ticket.id} className="flex items-start justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{ticket.message}</p>
+                    <p className="text-xs text-muted-foreground">
+                      #{ticket.id.slice(-6)}
+                      {friendlyIsoDate(ticket.createdAtIso) ? ` · Reported ${friendlyIsoDate(ticket.createdAtIso)}` : ''}
+                    </p>
+                    {ticket.status === 'resolved' && ticket.resolutionNote && (
+                      <p className="mt-1 text-xs text-emerald-700">{ticket.resolutionNote}</p>
+                    )}
+                  </div>
+                  <Badge variant={ticketBadgeVariant(ticket.status)} className="shrink-0">
+                    {TICKET_STATUS_LABELS[ticket.status] ?? ticket.status}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="py-2 text-sm text-muted-foreground">
+              No tickets — if anything goes wrong, use &quot;Report Issue&quot; and we&apos;ll track it here.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

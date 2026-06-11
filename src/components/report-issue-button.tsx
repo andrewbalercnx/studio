@@ -17,15 +17,18 @@ import { Label } from '@/components/ui/label';
 import { AlertTriangle, LoaderCircle, Send } from 'lucide-react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useToast } from '@/hooks/use-toast';
+import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 
 interface ReportIssueButtonProps {
   /** Additional diagnostic data to include in the report */
   diagnostics?: Record<string, any>;
   /** Custom class name for the button */
   className?: string;
+  /** Called with the new ticket id after a report is filed (Sprint W3-C). */
+  onReported?: (ticketId: string) => void;
 }
 
-export function ReportIssueButton({ diagnostics, className }: ReportIssueButtonProps) {
+export function ReportIssueButton({ diagnostics, className, onReported }: ReportIssueButtonProps) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -78,10 +81,16 @@ export function ReportIssueButton({ diagnostics, className }: ReportIssueButtonP
       const data = await response.json();
 
       if (data.ok) {
+        const ticketRef = typeof data.ticketId === 'string' ? `#${data.ticketId.slice(-6)}` : null;
         toast({
-          title: 'Issue Reported',
-          description: 'Thank you! Your issue has been sent to our maintenance team.',
+          title: ticketRef ? `Ticket ${ticketRef} created` : 'Issue Reported',
+          description:
+            'Thank you! Our team has been notified. You can follow progress under Support Tickets on your Orders page.',
         });
+        track(ANALYTICS_EVENTS.supportTicketCreated, { pagePath: pathname });
+        if (typeof data.ticketId === 'string') {
+          onReported?.(data.ticketId);
+        }
         setMessage('');
         setOpen(false);
       } else {

@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-06-11 (Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-06-11 (Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -89,6 +89,7 @@ The `StoryPicClient` provides typed methods for child-facing operations:
 - [Story Output Types Routes](#story-output-types-routes)
 - [Issue Reporting Routes](#issue-reporting-routes)
 - [System Routes](#system-routes)
+- [Feedback Routes](#feedback-routes)
 - [Internal Routes](#internal-routes)
 - [Webhook Routes](#webhook-routes)
 - [User Onboarding Routes](#user-onboarding-routes)
@@ -1615,21 +1616,54 @@ Get available print products.
 
 ### GET `/api/printOrders/my-orders`
 
-Get current user's print orders.
+Get current user's print orders with server-derived presentation fields (Sprint W3-C,
+server-first principle: clients render the timeline, they never re-map statuses).
+Orders are matched on both `parentUid` and the legacy `ownerUserId` field and sorted
+newest-first.
+
+**Authentication**: Required (Bearer token, parent or admin).
 
 **Response**: `200 OK`
 ```json
 {
+  "ok": true,
   "orders": [
     {
       "id": "order-id",
       "storyId": "story-id",
       "fulfillmentStatus": "submitted",
-      "createdAt": "..."
+      "createdAtIso": "2026-06-01T10:00:00.000Z",
+      "updatedAtIso": "2026-06-02T09:00:00.000Z",
+      "rejectedAtIso": null,
+      "statusCategory": "in_progress",
+      "timeline": {
+        "steps": [
+          { "id": "placed", "label": "Order placed", "state": "complete", "at": "2026-06-01T10:00:00.000Z" },
+          { "id": "review", "label": "Quality review", "state": "complete" },
+          { "id": "submitted", "label": "Sent to printer", "state": "complete" },
+          { "id": "printing", "label": "Printing", "state": "current" },
+          { "id": "shipped", "label": "Shipped", "state": "upcoming" }
+        ],
+        "state": "active",
+        "currentStepId": "printing",
+        "attention": false
+      }
     }
-  ]
+  ],
+  "estimatedTurnaround": {
+    "minBusinessDays": 10,
+    "maxBusinessDays": 15,
+    "label": "Estimated 10–15 business days from order to delivery — this is an estimate, not a guarantee."
+  }
 }
 ```
+
+| Derived field | Description |
+|---------------|-------------|
+| `timeline` | Parent-facing progress (placed → review → sent to printer → printing → shipped) derived from `fulfillmentStatus` by `deriveOrderTimeline` (`src/lib/order-timeline.ts`). `state` is `active`/`shipped`/`delivered`/`cancelled`/`failed`; `attention` + `attentionNote` flag `on_hold`/`validation_failed`. |
+| `statusCategory` | Filter bucket: `pending` / `in_progress` / `completed` / `cancelled`. |
+| `createdAtIso` etc. | Firestore timestamps serialised to ISO strings. |
+| `estimatedTurnaround` | From `systemConfig/orderTransparency` (defaults 10–15 business days), honestly labelled as an estimate. |
 
 ---
 
@@ -1730,9 +1764,14 @@ an `artStatusSnapshot`, and a `degraded_art_acknowledged` processLog entry.
 {
   "ok": true,
   "orderId": "order-id",
-  "estimatedCost": { "unitPrice": 15.0, "subtotal": 15.0, "shipping": 5.0, "setupFee": 0, "total": 20.0, "currency": "GBP" }
+  "estimatedCost": { "unitPrice": 15.0, "subtotal": 15.0, "shipping": 5.0, "setupFee": 0, "total": 20.0, "currency": "GBP" },
+  "timeline": { "steps": [ "…initial timeline (review current)…" ], "state": "active", "currentStepId": "review", "attention": false },
+  "estimatedTurnaround": { "minBusinessDays": 10, "maxBusinessDays": 15, "label": "Estimated 10–15 business days …" }
 }
 ```
+
+`timeline` and `estimatedTurnaround` (Sprint W3-C) feed the post-order confirmation screen —
+same shapes as `GET /api/printOrders/my-orders`.
 
 ---
 
@@ -2171,7 +2210,10 @@ Upload an image for a story output type.
 
 ### POST `/api/report-issue`
 
-Allow any authenticated parent or admin user to report an issue to maintenance users. This triggers an email notification to all users with `maintenanceUser: true`.
+Allow any authenticated parent or admin user to report an issue. Sprint W3-C: the report is
+persisted as a **tracked ticket** in the `tickets` collection (status `open`, see
+`GET /api/tickets`) and the maintenance email (all users with `maintenanceUser: true`) is sent
+best-effort — an email failure never loses the ticket.
 
 **Request Body**:
 ```json
@@ -2190,6 +2232,7 @@ Allow any authenticated parent or admin user to report an issue to maintenance u
 ```json
 {
   "ok": true,
+  "ticketId": "ticket-id",
   "message": "Issue reported successfully"
 }
 ```
@@ -2197,6 +2240,118 @@ Allow any authenticated parent or admin user to report an issue to maintenance u
 **Error Responses**:
 - `400` - Missing required fields (message or pagePath)
 - `401` - Not authenticated
+
+---
+
+### GET `/api/tickets`
+
+List the calling parent's support tickets (Sprint W3-C), newest first. Status moves
+`open` → `in_progress` → `resolved` via admin tooling; parents read status here (surfaced in the
+Support Tickets section of `/parent/orders`).
+
+**Authentication**: Required (Bearer token, parent or admin).
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "tickets": [
+    {
+      "id": "ticket-id",
+      "message": "Description of the issue",
+      "pagePath": "/storybook/abc",
+      "status": "open",
+      "resolutionNote": null,
+      "createdAtIso": "2026-06-11T10:00:00.000Z",
+      "updatedAtIso": "2026-06-11T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+## Feedback Routes
+
+Sprint W3-C: post-moment ratings, NPS and consented testimonials. Prompts are parent-facing
+only, non-modal, and shown at most once per trigger+subject (suppression is server-backed).
+Triggers: `book_first_view` (subject = storybook id) and `order_placed` (subject = order id).
+
+### POST `/api/feedback`
+
+Record a parent's response to a rating prompt — a submission (1–5 stars, optional NPS 0–10 and
+comment) or a dismissal. Exactly one document is kept per parent+trigger+subject; a repeat POST
+returns `{ ok: true, duplicate: true }`.
+
+**Authentication**: Required (Bearer token, parent or admin).
+
+**Request Body**:
+```json
+{
+  "trigger": "book_first_view",
+  "subjectId": "storybook-id",
+  "action": "submitted",
+  "rating": 5,
+  "nps": 9,
+  "comment": "Optional free text",
+  "pagePath": "/storybook/abc"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| trigger | string | Yes | `book_first_view` or `order_placed` |
+| subjectId | string | Yes | Storybook id / print order id |
+| action | string | Yes | `submitted` or `dismissed` (dismissals carry no rating) |
+| rating | integer 1–5 | When submitted | Star rating |
+| nps | integer 0–10 | No | Net promoter score |
+| comment | string ≤2000 | No | Free-text comment (stored in Firestore, never sent to analytics) |
+
+**Response**: `200 OK` — `{ "ok": true, "feedbackId": "..." }` (or `"duplicate": true`)
+
+**Error Responses**: `400` validation (see `validateFeedbackSubmission` in
+`src/lib/feedback/triggers.ts`), `401`/`403` auth.
+
+---
+
+### GET `/api/feedback/eligibility`
+
+Cross-device "never show twice" check: eligible only while no feedback doc (submission OR
+dismissal) exists for this parent+trigger+subject. Clients call this before showing a prompt.
+
+**Query Parameters**: `trigger` (required), `subjectId` (required).
+
+**Response**: `200 OK` — `{ "ok": true, "eligible": true }`
+
+---
+
+### POST `/api/feedback/testimonial`
+
+Attach the optional "share your story" testimonial to an existing **4–5 star** feedback doc the
+caller owns: explicit consent flag, quote (≤1000 chars), optional photo (data URL ≤8 MB,
+uploaded server-side to `users/{uid}/feedback/{feedbackId}/…` following the children-photos
+pattern). Capture only — nothing is displayed publicly yet.
+
+**Authentication**: Required (Bearer token, parent or admin).
+
+**Request Body**:
+```json
+{
+  "feedbackId": "feedback-id",
+  "consent": true,
+  "quote": "My daughter asks for her own story every night now…",
+  "photoDataUrl": "data:image/jpeg;base64,..."
+}
+```
+
+**Response**: `200 OK` — `{ "ok": true, "feedbackId": "..." }`
+
+**Error Responses**:
+- `400` - Missing/invalid fields; `consent` must be explicitly `true`
+- `403` - Not the feedback owner
+- `404` - Feedback not found
+- `409` - Feedback is not a 4–5 star submission
+- `413` - Photo too large
 
 ---
 
@@ -4216,6 +4371,7 @@ Generate a sound effect for an answer animation using ElevenLabs Text-to-Sound-E
 
 | Date | Changes |
 |------|---------|
+| 2026-06-11 | W3-C: Feedback routes (feedback, eligibility, testimonial), tracked tickets (report-issue + GET /api/tickets), server-derived order timeline/turnaround on my-orders and mixam order creation |
 | 2026-01-14 | Added sound effects routes (seed, generate) for Q&A animations |
 | 2026-01-13 | Added address management endpoints (user addresses CRUD, system addresses, postcode lookup) |
 | 2026-01-04 | Added /api/storyFriends endpoint for "Fun with my friends" story generator |
