@@ -288,12 +288,17 @@ export default function StorybookViewerPage() {
 
   const triggerImageJob = async (payload: {pageId?: string; forceRegenerate?: boolean; additionalPrompt?: string} = {}) => {
     if (!storyId || !isNewModel) return;
+    if (!user) {
+      toast({title: 'Sign in required', description: 'Please sign in again.', variant: 'destructive'});
+      return;
+    }
     setIsGenerating(true);
     setJobError(null);
     try {
+      const token = await user.getIdToken();
       const response = await fetch('/api/storybookV2/images', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
         body: JSON.stringify({
           storyId,
           storybookId: bookId,
@@ -324,12 +329,17 @@ export default function StorybookViewerPage() {
         toast({ title: 'Please select an output type', variant: 'destructive' });
         return;
     }
+    if (!user) {
+      toast({ title: 'Sign in required', description: 'Please sign in again.', variant: 'destructive' });
+      return;
+    }
     setIsGenerating(true);
     setJobError(null);
     try {
+        const token = await user.getIdToken();
         const response = await fetch('/api/storybookV2/pages', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({
               storyId,
               storybookId: bookId,
@@ -363,13 +373,18 @@ export default function StorybookViewerPage() {
 
   const handleRetryFailedPages = async () => {
     if (!storyId || !isNewModel || failedPageIds.length === 0) return;
+    if (!user) {
+      toast({title: 'Sign in required', description: 'Please sign in again.', variant: 'destructive'});
+      return;
+    }
     setIsGenerating(true);
     setJobError(null);
     try {
+      const token = await user.getIdToken();
       for (const pageId of failedPageIds) {
         const response = await fetch('/api/storybookV2/images', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
+          headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
           body: JSON.stringify({
             storyId,
             storybookId: bookId,

@@ -127,15 +127,18 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
     if (hasTriggeredPages.current) return;
 
     // For new model: check storybook status
-    if (isNewModel && storybook?.pageGeneration?.status === 'idle') {
+    // Kids surfaces run under the parent's Firebase session — wait for it so
+    // the generation route gets the parent's ID token (it now requires auth).
+    if (isNewModel && storybook?.pageGeneration?.status === 'idle' && user) {
       hasTriggeredPages.current = true;
       console.log('[KidsGenerating] Auto-triggering page generation (new model)');
 
-      fetch('/api/storybookV2/pages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storyId: sessionId, storybookId }),
-      })
+      user.getIdToken()
+        .then(token => fetch('/api/storybookV2/pages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ storyId: sessionId, storybookId }),
+        }))
         .then(res => res.json())
         .then(body => {
           if (!body.ok) {
@@ -170,28 +173,30 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
           hasTriggeredPages.current = false;
         });
     }
-  }, [isNewModel, storybook?.pageGeneration?.status, session?.storyOutputTypeId, session?.status, story?.pageGeneration?.status, sessionId, storybookId, story, session, storybook]);
+  }, [isNewModel, storybook?.pageGeneration?.status, session?.storyOutputTypeId, session?.status, story?.pageGeneration?.status, sessionId, storybookId, story, session, storybook, user]);
 
   // Auto-trigger image generation
   useEffect(() => {
     if (hasTriggeredImages.current) return;
 
     // For new model
-    if (isNewModel && storybook?.pageGeneration?.status === 'ready' && storybook?.imageGeneration?.status === 'idle') {
+    // Wait for the parent's Firebase session so the route gets an ID token.
+    if (isNewModel && storybook?.pageGeneration?.status === 'ready' && storybook?.imageGeneration?.status === 'idle' && user) {
       hasTriggeredImages.current = true;
       console.log('[KidsGenerating] Auto-triggering image generation (new model)');
 
-      fetch('/api/storybookV2/images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          storyId: sessionId,
-          storybookId,
-          imageStylePrompt: storybook.imageStylePrompt,
-          ...(storybook.imageWidthPx != null && { targetWidthPx: storybook.imageWidthPx }),
-          ...(storybook.imageHeightPx != null && { targetHeightPx: storybook.imageHeightPx }),
-        }),
-      })
+      user.getIdToken()
+        .then(token => fetch('/api/storybookV2/images', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            storyId: sessionId,
+            storybookId,
+            imageStylePrompt: storybook.imageStylePrompt,
+            ...(storybook.imageWidthPx != null && { targetWidthPx: storybook.imageWidthPx }),
+            ...(storybook.imageHeightPx != null && { targetHeightPx: storybook.imageHeightPx }),
+          }),
+        }))
         .then(res => res.json())
         .then(body => {
           if (!body.ok) {
@@ -226,7 +231,7 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
           hasTriggeredImages.current = false;
         });
     }
-  }, [isNewModel, storybook?.pageGeneration?.status, storybook?.imageGeneration?.status, storybook?.imageStylePrompt, storybook?.imageWidthPx, storybook?.imageHeightPx, story?.selectedImageStyleId, story?.pageGeneration?.status, story?.imageGeneration?.status, sessionId, storybookId, story, storybook]);
+  }, [isNewModel, storybook?.pageGeneration?.status, storybook?.imageGeneration?.status, storybook?.imageStylePrompt, storybook?.imageWidthPx, storybook?.imageHeightPx, story?.selectedImageStyleId, story?.pageGeneration?.status, story?.imageGeneration?.status, sessionId, storybookId, story, storybook, user]);
 
   // Auto-trigger audio generation (legacy model only - new model handles audio separately)
   useEffect(() => {

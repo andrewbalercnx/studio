@@ -131,18 +131,20 @@ export default function BookGeneratingPage({
       storybook.pageGeneration?.status === 'idle' &&
       !hasTriggeredPages.current;
 
-    if (shouldGeneratePages) {
+    // Generation routes now require the parent's ID token — wait for auth.
+    if (shouldGeneratePages && user) {
       hasTriggeredPages.current = true;
       console.log('[Generating] Auto-triggering page generation for storybook:', storybookId);
 
-      fetch('/api/storybookV2/pages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          storyId,
-          storybookId,
-        }),
-      })
+      user.getIdToken()
+        .then((token) => fetch('/api/storybookV2/pages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            storyId,
+            storybookId,
+          }),
+        }))
         .then((res) => res.json())
         .then((result) => {
           if (!result.ok) {
@@ -163,7 +165,7 @@ export default function BookGeneratingPage({
           });
         });
     }
-  }, [storybook?.pageGeneration?.status, storyId, storybookId, toast]);
+  }, [storybook?.pageGeneration?.status, storyId, storybookId, toast, user]);
 
   // Auto-trigger image generation when pages are ready
   useEffect(() => {
@@ -173,21 +175,23 @@ export default function BookGeneratingPage({
       storybook.imageGeneration?.status === 'idle' &&
       !hasTriggeredImages.current;
 
-    if (shouldGenerateImages) {
+    // Generation routes now require the parent's ID token — wait for auth.
+    if (shouldGenerateImages && user) {
       hasTriggeredImages.current = true;
       console.log('[Generating] Auto-triggering image generation for storybook:', storybookId);
 
-      fetch('/api/storybookV2/images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          storyId,
-          storybookId,
-          imageStylePrompt: storybook.imageStylePrompt,
-          ...(storybook.imageWidthPx != null && { targetWidthPx: storybook.imageWidthPx }),
-          ...(storybook.imageHeightPx != null && { targetHeightPx: storybook.imageHeightPx }),
-        }),
-      })
+      user.getIdToken()
+        .then((token) => fetch('/api/storybookV2/images', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            storyId,
+            storybookId,
+            imageStylePrompt: storybook.imageStylePrompt,
+            ...(storybook.imageWidthPx != null && { targetWidthPx: storybook.imageWidthPx }),
+            ...(storybook.imageHeightPx != null && { targetHeightPx: storybook.imageHeightPx }),
+          }),
+        }))
         .then((res) => res.json())
         .then((result) => {
           if (!result.ok) {
@@ -217,6 +221,7 @@ export default function BookGeneratingPage({
     storyId,
     storybookId,
     toast,
+    user,
   ]);
 
   // Auto-redirect when complete
@@ -233,15 +238,16 @@ export default function BookGeneratingPage({
 
   // Retry failed image generation
   const handleRetryImages = async () => {
-    if (!storybook || isRetrying) return;
+    if (!storybook || isRetrying || !user) return;
 
     setIsRetrying(true);
     hasTriggeredImages.current = true;
 
     try {
+      const token = await user.getIdToken();
       const res = await fetch('/api/storybookV2/images', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           storyId,
           storybookId,
