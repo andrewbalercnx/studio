@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-06-11
+> **Last Updated**: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -411,9 +411,26 @@ require a client release.
 ## Security Model
 
 ### Authentication
-- Firebase Auth with email/password
-- Parent PIN for child-lock feature (client-side gate)
-- Custom claims for role-based access
+- Firebase Auth with email/password — **one account per family** (the parent's). Children are data (`children/{childId}` docs), not auth principals.
+- Parent PIN for the child-lock feature (client-side gate, server-verified)
+- Custom claims for role-based access (`isAdmin`/`isWriter`); `isParent` falls back to the profile doc (claims are never provisioned at signup, and doc-roles must never grant admin because users can write their own doc)
+
+### Child persona model (Sprint W4-A)
+
+"A child is playing" is primarily client state (React `activeChildId`, the kids-PWA localStorage lock). The **persona cookie** gives that state server-side meaning:
+
+- **What child-mode means server-side**: a signed httpOnly cookie `storypic.persona` (HMAC-SHA256 over `{uid, childId, iat}`; `sameSite=lax`; 30-day lifetime — personas are device-level, not session-level). Signing key: `PERSONA_COOKIE_SECRET`, falling back to the Secret Manager-provisioned `INTERNAL_API_SECRET`. Implementation: `src/lib/persona.ts` (pure, unit-tested) + `src/lib/persona.server.ts` (request plumbing).
+- **Transition map** (all fire-and-forget via `POST/DELETE /api/persona`; no UI friction is ever added to entering/switching child personas):
+  - Enter/switch child ("Who is playing?" tap, "Play as <child>", kids-PWA `lockToChild`) → POST sets the cookie for that child (child→child switching stays PIN-free by owner decision)
+  - Switch to parent (header, `switchToParentMode`), kids-PWA unlock (PIN-gated), sign-out → DELETE clears the cookie
+  - `help-*` demo profiles → cookie cleared (no real child doc backs them)
+- **Enforcement**: the story/storybook chokepoints (`storySession`, `storyWizard`, `storyCompile`, `storybookV2` create/pages/images/finalize/pageEdit/exemplars) call `enforcePersonaScope`. A **valid** cookie whose `uid` matches the request's principal and whose `childId` differs from the request's effective child → `403 PERSONA_SCOPE_MISMATCH` (user-safe message). Admin/writer principals are exempt (admin tooling operates across children).
+- **Fail-open rule (and why)**: an absent, malformed, tampered, or expired cookie means *behave exactly as before* — parentUid ownership checks only. The mobile app and `@storypic/api-client` authenticate with bearer tokens and never carry cookies; enforcing on cookie absence would break every non-browser client. Cookie present + valid = enforce; anything else = legacy.
+
+### Parent PIN guard
+- PIN stored as scrypt hash + salt on `users/{uid}`; verification is timing-safe (`POST /api/parent/verify-pin`)
+- **Brute-force lockout**: 5 consecutive failures → 5-minute lock (`429 PIN_LOCKED`), tracked transactionally on the user doc (`pinFailedAttempts`, `pinLockedUntil`); state machine in `src/lib/pin-lockout.ts`
+- The client guard persists its 5-minute grace window in sessionStorage; modal-open decisions are deferred until that value hydrates so a hard reload inside the window never re-prompts (`isGuardHydrated` in `use-parent-guard`)
 
 ### Authorization
 - Firestore security rules enforce document-level access
@@ -424,6 +441,7 @@ require a client release.
 - Parents only see their own children/stories
 - Writers can manage content config but not user data
 - Admins have full access for support/debugging
+- Within a family, the persona cookie scopes child-mode browsers to the active child at the generation/mutation chokepoints (see "Child persona model")
 
 ---
 

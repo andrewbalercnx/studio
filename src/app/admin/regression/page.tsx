@@ -316,6 +316,8 @@ const initialTests: TestResult[] = [
   { id: 'SCENARIO_STORYBOOK_RETRY', name: 'Scenario: Storybook Retry API', status: 'PENDING', message: '' },
   { id: 'API_STORYBOOK_PAGE_EDIT', name: 'API: /api/storybookV2/pageEdit (Validation + Edit + Lock)', status: 'PENDING', message: '' },
   { id: 'API_STORYBOOKV2_GENERATION_AUTH', name: 'API: /api/storybookV2/pages + /images (Auth Required)', status: 'PENDING', message: '' },
+  { id: 'API_PERSONA', name: 'API: /api/persona (auth + childId validation)', status: 'PENDING', message: '' },
+  { id: 'API_VERIFY_PIN_LOCKOUT', name: 'API: /api/parent/verify-pin (lockout policy dry-run)', status: 'PENDING', message: '' },
   { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
   { id: 'API_USER_ONBOARDING_GET', name: 'API: /api/user/onboarding (GET shape)', status: 'PENDING', message: '' },
   { id: 'API_USER_ONBOARDING_POST', name: 'API: /api/user/onboarding (POST validation)', status: 'PENDING', message: '' },
@@ -2065,6 +2067,87 @@ export default function AdminRegressionPage() {
         });
     } catch (e: any) {
         updateTestResult('API_STORYBOOKV2_GENERATION_AUTH', { status: 'ERROR', message: e.message });
+    }
+
+    // Test: API_PERSONA — the persona cookie endpoint (Sprint W4-A).
+    // Validation-only: never sets a real child persona for the admin (that
+    // would scope this browser's subsequent generation requests); finishes
+    // with DELETE so the suite always leaves the browser unscoped.
+    try {
+        const personaToken = await auth?.currentUser?.getIdToken?.();
+        if (!personaToken) throw new Error('Admin authentication required for persona test.');
+
+        // 1. Unauthenticated -> 401
+        const unauthedPersonaRes = await fetch('/api/persona', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ childId: 'regression-persona-child' }),
+        });
+        if (unauthedPersonaRes.status !== 401) throw new Error(`Expected 401 without auth, got ${unauthedPersonaRes.status}`);
+
+        const personaHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${personaToken}` };
+
+        // 2. Bad childId type -> 400
+        const badPersonaRes = await fetch('/api/persona', {
+            method: 'POST', headers: personaHeaders, body: JSON.stringify({ childId: 123 }),
+        });
+        if (badPersonaRes.status !== 400) throw new Error(`Expected 400 for non-string childId, got ${badPersonaRes.status}`);
+
+        // 3. Unknown childId -> 404 (or 503 when no signing secret is configured locally)
+        const missingPersonaRes = await fetch('/api/persona', {
+            method: 'POST', headers: personaHeaders, body: JSON.stringify({ childId: 'regression-persona-nonexistent-child' }),
+        });
+        if (missingPersonaRes.status !== 404 && missingPersonaRes.status !== 503) {
+            throw new Error(`Expected 404 for unknown childId (or 503 unconfigured), got ${missingPersonaRes.status}`);
+        }
+
+        // 4. DELETE clears (no auth required by design — sign-out path)
+        const clearPersonaRes = await fetch('/api/persona', { method: 'DELETE' });
+        if (!clearPersonaRes.ok) throw new Error(`Expected DELETE to clear the persona, got ${clearPersonaRes.status}`);
+
+        updateTestResult('API_PERSONA', {
+            status: 'PASS',
+            message: 'persona requires auth (401), validates childId (400 bad type, 404 unknown), and DELETE clears the cookie. Browser left unscoped.',
+        });
+    } catch (e: any) {
+        updateTestResult('API_PERSONA', { status: 'ERROR', message: e.message });
+    }
+
+    // Test: API_VERIFY_PIN_LOCKOUT — verify-pin brute-force lockout policy
+    // (Sprint W4-A). Uses the dryRun seam: reports the lockout configuration
+    // and current state WITHOUT comparing a PIN or recording an attempt, so
+    // the admin account can never be locked out by this suite.
+    try {
+        const pinDryRunToken = await auth?.currentUser?.getIdToken?.();
+        if (!pinDryRunToken) throw new Error('Admin authentication required for verify-pin lockout test.');
+        const pinDryRunHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${pinDryRunToken}` };
+
+        const dryRunRes = await fetch('/api/parent/verify-pin', {
+            method: 'POST', headers: pinDryRunHeaders, body: JSON.stringify({ dryRun: true }),
+        });
+        const dryRunPayload = await dryRunRes.json();
+        if (!dryRunRes.ok || dryRunPayload?.ok !== true || dryRunPayload?.dryRun !== true) {
+            throw new Error(`Expected dry-run 200, got ${dryRunRes.status}: ${dryRunPayload?.message || ''}`);
+        }
+        if (dryRunPayload?.lockout?.maxAttempts !== 5 || dryRunPayload?.lockout?.lockoutMs !== 300000) {
+            throw new Error(`Unexpected lockout config: ${JSON.stringify(dryRunPayload?.lockout)}`);
+        }
+        if (typeof dryRunPayload?.failedAttempts !== 'number' || typeof dryRunPayload?.locked !== 'boolean') {
+            throw new Error('Dry-run response missing failedAttempts/locked state.');
+        }
+
+        // Format validation still rejects without recording an attempt.
+        const shortPinRes = await fetch('/api/parent/verify-pin', {
+            method: 'POST', headers: pinDryRunHeaders, body: JSON.stringify({ pin: '12' }),
+        });
+        if (shortPinRes.status !== 400) throw new Error(`Expected 400 for short PIN, got ${shortPinRes.status}`);
+
+        updateTestResult('API_VERIFY_PIN_LOCKOUT', {
+            status: 'PASS',
+            message: `Lockout policy live (${dryRunPayload.lockout.maxAttempts} attempts / ${dryRunPayload.lockout.lockoutMs / 60000} min); locked=${dryRunPayload.locked}, failedAttempts=${dryRunPayload.failedAttempts}; bad format 400s. Non-destructive (dryRun).`,
+        });
+    } catch (e: any) {
+        updateTestResult('API_VERIFY_PIN_LOCKOUT', { status: 'ERROR', message: e.message });
     }
 
     // Test: SCENARIO_PAGINATION_SCENE_TAG

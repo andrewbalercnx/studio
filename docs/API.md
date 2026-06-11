@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-06-11 (Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-06-11 (W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -114,6 +114,7 @@ Authorization: Bearer <firebase_id_token>
 |--------|-------------|
 | 401 | Unauthorized - Missing or invalid token |
 | 403 | Forbidden - Insufficient permissions |
+| 403 `PERSONA_SCOPE_MISMATCH` | A valid child-persona cookie is present and the request's effective child does not match it. Story/storybook chokepoints only (`storySession`, `storyWizard`, `storyCompile`, `storybookV2/*`). Absent/invalid cookie = legacy behaviour, so bearer-only clients (mobile, api-client) never see this. |
 | 404 | Not Found - Resource doesn't exist |
 | 500 | Internal Server Error |
 
@@ -146,7 +147,7 @@ Set or update parent PIN for child-lock feature.
 
 ### POST `/api/parent/verify-pin`
 
-Verify parent PIN.
+Verify parent PIN (timing-safe scrypt comparison against `users/{uid}.pinHash`/`pinSalt`).
 
 **Request Body**:
 ```json
@@ -158,9 +159,68 @@ Verify parent PIN.
 **Response**: `200 OK`
 ```json
 {
-  "valid": true
+  "ok": true,
+  "message": "PIN verified."
 }
 ```
+
+**Brute-force lockout**: failed attempts are tracked server-side on the user doc (`pinFailedAttempts`). After **5 consecutive failures** verification is locked for **5 minutes** (`pinLockedUntil`); while locked every call returns `429` without comparing the PIN. The counter resets on success and when a lock is set (an expired lock grants a fresh window of 5 attempts).
+
+**Errors**:
+- `400 INVALID_PIN_FORMAT` - PIN must be exactly 4 digits
+- `400 PIN_NOT_SET` - No PIN configured for this account
+- `401 INCORRECT_PIN` - Wrong PIN (counts toward the lockout)
+- `429 PIN_LOCKED` - Too many incorrect attempts; body includes `retryAfterMs` and a user-safe message
+- `401` - Missing/invalid token
+
+**Dry run** (regression/diagnostics; non-destructive): `{ "dryRun": true }` returns the lockout policy and current state without comparing a PIN or recording an attempt:
+```json
+{
+  "ok": true,
+  "dryRun": true,
+  "lockout": { "maxAttempts": 5, "lockoutMs": 300000 },
+  "locked": false,
+  "failedAttempts": 0
+}
+```
+
+---
+
+### POST `/api/persona`
+
+Set (or clear) the device's **active child persona** — a signed httpOnly cookie (`storypic.persona`, HMAC-SHA256 over `{uid, childId, iat}`, 30-day lifetime) that gives the client-side "a child is playing" state server-side meaning. Story/storybook generation and mutation chokepoints reject requests whose effective child does not match a valid persona cookie; an **absent or invalid cookie always behaves as before** (parentUid ownership only), so bearer-token-only clients (mobile app, `@storypic/api-client`) are unaffected. See `docs/SYSTEM_DESIGN.md` ("Child persona model").
+
+Called fire-and-forget by the web clients whenever a child persona is entered, switched, or cleared — it never adds UI friction.
+
+**Request Body**:
+```json
+{
+  "childId": "child123"
+}
+```
+`{ "childId": null }` clears the cookie (parent / unscoped).
+
+**Response**: `200 OK` (sets/clears the `storypic.persona` cookie)
+```json
+{
+  "ok": true,
+  "persona": { "childId": "child123" }
+}
+```
+
+**Errors**:
+- `400 INVALID_CHILD_ID` - childId must be a non-empty string or null
+- `400 CHILD_DELETED` / `400 CHILD_PLACEHOLDER` - profile not usable as a persona
+- `401` - Missing/invalid token
+- `403 NOT_OWNER` - child is not owned by the caller
+- `404 CHILD_NOT_FOUND` - no such child
+- `503 PERSONA_UNAVAILABLE` - no signing secret configured (`PERSONA_COOKIE_SECRET` / `INTERNAL_API_SECRET`)
+
+### DELETE `/api/persona`
+
+Clears the persona cookie. **No authentication required by design**: it runs on sign-out (after the bearer token is gone) and removing one's own cookie grants nothing.
+
+**Response**: `200 OK` `{ "ok": true, "persona": null }`
 
 ---
 
