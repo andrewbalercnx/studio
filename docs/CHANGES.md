@@ -18,6 +18,17 @@
 
 ### 2026-06-12
 
+#### `38f7852` - Pagination: retry on structured-output schema misses
+
+**Type**: Bug fix (production)
+
+**Summary**: Third fix in the overnight System Tests chain. gemini-2.5-flash stochastically omits required imageScene fields (observed: `sceneTag` on one page), and Genkit rejects the entire response — collapsing pagination to the fallback. Schema-validation failures are now retried up to 3 attempts (fresh generation usually succeeds); all other errors propagate immediately as before.
+
+**Modified files**:
+- `src/ai/flows/story-pagination-flow.ts`
+
+---
+
 #### `d7ab7e3` - Pagination resilience: optional atmosphere with sceneTag-derived default
 
 **Type**: Bug fix (production)

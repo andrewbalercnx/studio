@@ -314,12 +314,34 @@ Generate the paginated output now.`;
 
             let llmResponse;
             try {
-                llmResponse = await ai.generate({
-                    model: modelName,
-                    prompt: finalPrompt,
-                    output: { schema: PaginationAIOutputSchema },
-                    config: { temperature: 0.3, maxOutputTokens: 8000 },
-                });
+                // Structured-output misses are stochastic: the model occasionally
+                // omits a required imageScene field and Genkit rejects the WHOLE
+                // response (INVALID_ARGUMENT, "Schema validation failed"). That is
+                // worth a couple of fresh attempts — unlike a true 4xx it usually
+                // succeeds on retry. Other errors propagate immediately.
+                const isSchemaMiss = (e: any) =>
+                    typeof e?.message === 'string' && e.message.includes('Schema validation failed');
+                const MAX_SCHEMA_ATTEMPTS = 3;
+                let attempt = 0;
+                for (;;) {
+                    attempt += 1;
+                    try {
+                        llmResponse = await ai.generate({
+                            model: modelName,
+                            prompt: finalPrompt,
+                            output: { schema: PaginationAIOutputSchema },
+                            config: { temperature: 0.3, maxOutputTokens: 8000 },
+                        });
+                        break;
+                    } catch (e: any) {
+                        if (isSchemaMiss(e) && attempt < MAX_SCHEMA_ATTEMPTS) {
+                            console.warn(`[storyPaginationFlow] schema miss on attempt ${attempt}/${MAX_SCHEMA_ATTEMPTS}, retrying:`, e.message?.slice(0, 160));
+                            debug.details[`schemaMissAttempt${attempt}`] = e.message?.slice(0, 300);
+                            continue;
+                        }
+                        throw e;
+                    }
+                }
                 await logAIFlow({
                     flowName: 'storyPaginationFlow',
                     sessionId: story.storySessionId,
