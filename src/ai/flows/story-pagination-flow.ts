@@ -18,6 +18,7 @@ import { logAIFlow } from '@/lib/ai-flow-logger';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { logAICallToTrace } from '@/lib/ai-run-trace';
 import { getPaginationPrompt } from '@/lib/pagination-prompt-config.server';
+import { repairImageScene } from '@/lib/image-scene-repair';
 import {
     type ActorInfo,
     buildActorListForPrompt,
@@ -36,29 +37,25 @@ import { extractEntityIds } from '@/lib/entity-utils';
 // Empty strings are filtered out during post-processing.
 const ImageSceneActorSchema = z.object({
   id: z.string(),
-  action: z.string(),
+  action: z.string().optional(),
   facing: z.string().optional(),
 });
 
-// atmosphere is optional at the schema layer: Genkit rejects the WHOLE response
-// if any one page omits a required field, and gemini-2.5-flash occasionally
-// drops atmosphere on a page. A missing atmosphere is recoverable (defaulted
-// from sceneTag below); losing all pagination to the sentence-chunking
-// fallback is not.
+// The schema is deliberately LOOSE: it still steers Gemini's constrained
+// decoding toward the right shape, but nothing here can hard-fail the whole
+// response. gemini-2.5-flash stochastically violates a strict schema in small
+// mechanical ways (invalid sceneTag value, missing actors/atmosphere) and
+// Genkit rejects the ENTIRE response on any one miss — observed to fail even
+// across 3 retries because same-prompt/low-temperature attempts are
+// correlated. Instead we accept what the model produced and repair each scene
+// deterministically (src/lib/image-scene-repair.ts).
 const ImageSceneSchema = z.object({
-  locationKey: z.string(),
-  locationDescription: z.string(),
-  actors: z.array(ImageSceneActorSchema),
+  locationKey: z.string().optional(),
+  locationDescription: z.string().optional(),
+  actors: z.array(ImageSceneActorSchema).optional(),
   atmosphere: z.string().optional(),
-  sceneTag: z.enum(['indoor-day', 'outdoor-day', 'indoor-night', 'outdoor-night']),
+  sceneTag: z.string().optional(),
 });
-
-const DEFAULT_ATMOSPHERE: Record<string, string> = {
-  'indoor-day': 'warm, bright daylight, cheerful indoor scene',
-  'outdoor-day': 'bright, sunny, open-air and cheerful',
-  'indoor-night': 'soft, cozy lamplight, calm night-time mood',
-  'outdoor-night': 'gentle moonlight, calm and magical night air',
-};
 
 const PaginationAIOutputSchema = z.object({
   pages: z.array(z.object({
@@ -314,51 +311,47 @@ Generate the paginated output now.`;
 
             let llmResponse;
             try {
-                // Structured-output misses are stochastic: the model occasionally
-                // omits required imageScene fields. Two failure shapes, both worth
-                // fresh attempts (unlike a true 4xx they usually succeed on retry):
-                //  1. Genkit rejects the WHOLE response (INVALID_ARGUMENT,
-                //     "Schema validation failed") when a present imageScene is
-                //     missing a required property.
-                //  2. The response passes the schema but a text page omits
-                //     imageScene entirely (it is .optional() so blank/divider pages
-                //     do not hard-fail) — semantically a miss: every non-empty text
-                //     page needs a scene for image generation.
-                // Other errors propagate immediately.
+                // The loose schema above makes hard schema rejections rare, and
+                // per-scene repair (below) absorbs small misses. Retries remain
+                // only for degenerate responses (a residual schema rejection, or
+                // a response where NO text page carries any usable scene), and
+                // each retry raises temperature to decorrelate from the failed
+                // attempt — same-prompt/low-temperature retries were observed to
+                // repeat the same mistake.
                 const isSchemaMiss = (e: any) =>
                     typeof e?.message === 'string' && e.message.includes('Schema validation failed');
-                const VALID_SCENE_TAGS = ['indoor-day', 'outdoor-day', 'indoor-night', 'outdoor-night'];
-                const semanticMiss = (resp: any): string | null => {
+                const degenerate = (resp: any): string | null => {
                     const pages = resp?.output?.pages;
                     if (!Array.isArray(pages)) return null; // manual-parse path handles downstream
                     const textPages = pages.filter((p: any) => p.text && p.text.trim().length > 0);
                     if (textPages.length === 0) return 'no non-empty text pages';
-                    const bad = textPages.filter((p: any) => !VALID_SCENE_TAGS.includes(p.imageScene?.sceneTag));
-                    return bad.length > 0
-                        ? `${bad.length}/${textPages.length} text page(s) missing valid imageScene.sceneTag`
-                        : null;
+                    const withScene = textPages.filter((p: any) =>
+                        typeof p.imageScene?.locationDescription === 'string' && p.imageScene.locationDescription.trim());
+                    return withScene.length === 0 ? 'no text page has a usable imageScene' : null;
                 };
-                const MAX_SCHEMA_ATTEMPTS = 3;
+                const MAX_ATTEMPTS = 3;
+                const RETRY_TEMPERATURES = [0.3, 0.7, 0.9];
                 let attempt = 0;
                 for (;;) {
                     attempt += 1;
+                    const temperature = RETRY_TEMPERATURES[Math.min(attempt, RETRY_TEMPERATURES.length) - 1];
                     try {
                         llmResponse = await ai.generate({
                             model: modelName,
                             prompt: finalPrompt,
                             output: { schema: PaginationAIOutputSchema },
-                            config: { temperature: 0.3, maxOutputTokens: 8000 },
+                            config: { temperature, maxOutputTokens: 8000 },
                         });
-                        const miss = semanticMiss(llmResponse);
-                        if (miss && attempt < MAX_SCHEMA_ATTEMPTS) {
-                            console.warn(`[storyPaginationFlow] semantic miss on attempt ${attempt}/${MAX_SCHEMA_ATTEMPTS}, retrying: ${miss}`);
-                            debug.details[`semanticMissAttempt${attempt}`] = miss;
+                        const miss = degenerate(llmResponse);
+                        if (miss && attempt < MAX_ATTEMPTS) {
+                            console.warn(`[storyPaginationFlow] degenerate output on attempt ${attempt}/${MAX_ATTEMPTS} (temp ${temperature}), retrying: ${miss}`);
+                            debug.details[`degenerateAttempt${attempt}`] = miss;
                             continue;
                         }
                         break;
                     } catch (e: any) {
-                        if (isSchemaMiss(e) && attempt < MAX_SCHEMA_ATTEMPTS) {
-                            console.warn(`[storyPaginationFlow] schema miss on attempt ${attempt}/${MAX_SCHEMA_ATTEMPTS}, retrying:`, e.message?.slice(0, 160));
+                        if (isSchemaMiss(e) && attempt < MAX_ATTEMPTS) {
+                            console.warn(`[storyPaginationFlow] schema miss on attempt ${attempt}/${MAX_ATTEMPTS} (temp ${temperature}), retrying:`, e.message?.slice(0, 160));
                             debug.details[`schemaMissAttempt${attempt}`] = e.message?.slice(0, 300);
                             continue;
                         }
@@ -452,9 +445,18 @@ Generate the paginated output now.`;
             debug.details.filteredOutPages = pages.length - validPages.length;
             debug.stage = 'done';
 
+            // Repair each scene into the strict ImageScene shape (coerce bad
+            // sceneTags, default actors/atmosphere) BEFORE anything downstream
+            // consumes it. Pages whose scene has no usable location info get
+            // imageScene undefined — the image flow has a no-scene fallback.
+            const repairedPages = validPages.map((page: any) => ({
+                ...page,
+                imageScene: repairImageScene(page.imageScene, page.actors ?? [], page.pageNumber),
+            }));
+
             // Build location registry: first occurrence of each locationKey becomes canonical
             const locationRegistry: Record<string, string> = {};
-            for (const page of validPages) {
+            for (const page of repairedPages) {
                 const scene = (page as any).imageScene as ImageScene | undefined;
                 if (scene?.locationKey && !locationRegistry[scene.locationKey]) {
                     locationRegistry[scene.locationKey] = scene.locationDescription;
@@ -463,7 +465,7 @@ Generate the paginated output now.`;
 
             // Resolve placeholders for displayText; apply canonical location descriptions
             const pagesWithDisplayText = await Promise.all(
-                validPages.map(async (page: any) => {
+                repairedPages.map(async (page: any) => {
                     const imageScene: ImageScene | undefined = page.imageScene;
                     return {
                         pageNumber: page.pageNumber,
@@ -473,7 +475,6 @@ Generate the paginated output now.`;
                         // Apply canonical location description from registry
                         imageScene: imageScene ? {
                             ...imageScene,
-                            atmosphere: imageScene.atmosphere || (imageScene.sceneTag && DEFAULT_ATMOSPHERE[imageScene.sceneTag]) || 'warm, friendly storybook mood',
                             locationDescription: locationRegistry[imageScene.locationKey] ?? imageScene.locationDescription,
                         } : undefined,
                     };

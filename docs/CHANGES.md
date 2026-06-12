@@ -18,6 +18,20 @@
 
 ### 2026-06-12
 
+#### `c80a9e4` - Pagination: accept-loose + deterministic scene repair (replaces strict-reject + retry)
+
+**Type**: Bug fix (production) / Reliability
+
+**Summary**: Cloud Run logs proved the retry approach insufficient: schema retries fired and exhausted because same-prompt/low-temperature attempts repeat the same mistake (observed misses: invalid sceneTag enum value, missing actors, missing atmosphere — all mechanically repairable). Replaced strict-reject with accept-loose + repair: the generation schema is now fully optional-field (still steers constrained decoding), and each scene is deterministically repaired in code (`src/lib/image-scene-repair.ts`: coerce bad sceneTags via indoor/outdoor/day/night keywords, default actors from the page's actor list, default atmosphere from sceneTag; scenes with no usable location info become undefined for the image flow's no-scene fallback). Retries remain only for degenerate responses, with temperature escalation (0.3 → 0.7 → 0.9) to decorrelate attempts. 10 new unit tests.
+
+**Created files**:
+- `src/lib/image-scene-repair.ts`, `src/lib/__tests__/image-scene-repair.test.ts`
+
+**Modified files**:
+- `src/ai/flows/story-pagination-flow.ts`
+
+---
+
 #### `b5875cb` - Pagination: retry semantic misses too (text page without imageScene)
 
 **Type**: Bug fix (production)
