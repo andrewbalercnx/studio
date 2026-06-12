@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coerceSceneTag, repairImageScene } from '../image-scene-repair';
+import { coerceSceneTag, fillMissingScenes, repairImageScene } from '../image-scene-repair';
 
 describe('coerceSceneTag', () => {
   it('passes valid tags through', () => {
@@ -70,5 +70,46 @@ describe('repairImageScene', () => {
       1,
     );
     expect(scene?.actors).toEqual([{ id: 'a1', action: 'in the scene' }]);
+  });
+});
+
+describe('fillMissingScenes', () => {
+  const scene = (loc: string) => ({
+    locationKey: loc,
+    locationDescription: `the ${loc}`,
+    actors: [{ id: 'a1', action: 'standing' }],
+    atmosphere: 'warm',
+    sceneTag: 'indoor-day' as const,
+  });
+
+  it('forward-fills a missing middle scene with the page own actors', () => {
+    const pages = [
+      { pageNumber: 1, actors: ['a1'], imageScene: scene('kitchen') },
+      { pageNumber: 2, actors: ['a2'], imageScene: undefined },
+      { pageNumber: 3, actors: ['a1'], imageScene: scene('garden') },
+    ];
+    const filled = fillMissingScenes(pages as any);
+    expect(filled[1].imageScene?.locationKey).toBe('kitchen');
+    expect(filled[1].imageScene?.actors).toEqual([{ id: 'a2', action: 'in the scene' }]);
+    expect(filled[2].imageScene?.locationKey).toBe('garden');
+  });
+
+  it('backward-fills leading pages from the first scene', () => {
+    const pages = [
+      { pageNumber: 1, actors: [], imageScene: undefined },
+      { pageNumber: 2, actors: ['a1'], imageScene: scene('forest') },
+    ];
+    const filled = fillMissingScenes(pages as any);
+    expect(filled[0].imageScene?.locationKey).toBe('forest');
+    expect(filled[0].imageScene?.actors).toEqual(scene('forest').actors);
+  });
+
+  it('leaves everything undefined when no page has a scene', () => {
+    const pages = [
+      { pageNumber: 1, actors: ['a1'], imageScene: undefined },
+      { pageNumber: 2, actors: [], imageScene: undefined },
+    ];
+    const filled = fillMissingScenes(pages as any);
+    expect(filled.every(p => p.imageScene === undefined)).toBe(true);
   });
 });

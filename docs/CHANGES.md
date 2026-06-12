@@ -18,6 +18,17 @@
 
 ### 2026-06-12
 
+#### `f54c0b1` - Pagination: scene-continuity fill for pages with no scene at all
+
+**Type**: Bug fix (production) / Reliability
+
+**Summary**: Stability runs after the repair pass showed the residual failure: the model omits a page's whole `imageScene` on 1–2 pages per book even when the rest have scenes — nothing to repair. Added scene-continuity fill (`fillMissingScenes`): a page without a scene inherits the nearest earlier page's location/atmosphere/sceneTag with its own actors (picture books continue locations across pages); leading pages backward-fill from the first scene. Only an entirely scene-less book remains undefined (degenerate → existing retry). 3 new unit tests (437 total).
+
+**Modified files**:
+- `src/lib/image-scene-repair.ts`, `src/lib/__tests__/image-scene-repair.test.ts`, `src/ai/flows/story-pagination-flow.ts`
+
+---
+
 #### `c80a9e4` - Pagination: accept-loose + deterministic scene repair (replaces strict-reject + retry)
 
 **Type**: Bug fix (production) / Reliability

@@ -18,7 +18,7 @@ import { logAIFlow } from '@/lib/ai-flow-logger';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { logAICallToTrace } from '@/lib/ai-run-trace';
 import { getPaginationPrompt } from '@/lib/pagination-prompt-config.server';
-import { repairImageScene } from '@/lib/image-scene-repair';
+import { repairImageScene, fillMissingScenes } from '@/lib/image-scene-repair';
 import {
     type ActorInfo,
     buildActorListForPrompt,
@@ -447,12 +447,14 @@ Generate the paginated output now.`;
 
             // Repair each scene into the strict ImageScene shape (coerce bad
             // sceneTags, default actors/atmosphere) BEFORE anything downstream
-            // consumes it. Pages whose scene has no usable location info get
-            // imageScene undefined — the image flow has a no-scene fallback.
-            const repairedPages = validPages.map((page: any) => ({
+            // consumes it, then fill pages whose scene was wholly missing via
+            // scene continuity (inherit the nearest earlier scene with the
+            // page's own actors) — the model omits a page's scene occasionally
+            // even when the rest of the book has them.
+            const repairedPages = fillMissingScenes(validPages.map((page: any) => ({
                 ...page,
                 imageScene: repairImageScene(page.imageScene, page.actors ?? [], page.pageNumber),
-            }));
+            })));
 
             // Build location registry: first occurrence of each locationKey becomes canonical
             const locationRegistry: Record<string, string> = {};

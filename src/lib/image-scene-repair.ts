@@ -104,3 +104,36 @@ export function repairImageScene(
 
   return { locationKey, locationDescription, actors, atmosphere, sceneTag };
 }
+
+/**
+ * Scene-continuity fill: the model sometimes omits imageScene on a page or
+ * two even when the rest of the book has scenes. Picture-book pages usually
+ * continue the previous page's location, so a missing scene inherits the
+ * nearest earlier scene (location/atmosphere/tag) with the page's OWN actors;
+ * leading pages inherit backward from the first scene. Pages keep undefined
+ * only when no page in the book has a scene (degenerate — caller retries).
+ */
+export function fillMissingScenes<T extends { imageScene?: ImageScene; actors?: string[] }>(
+  pages: T[],
+): T[] {
+  const firstWithScene = pages.find((p) => p.imageScene);
+  if (!firstWithScene) return pages;
+
+  let lastScene: ImageScene = firstWithScene.imageScene!;
+  return pages.map((page) => {
+    if (page.imageScene) {
+      lastScene = page.imageScene;
+      return page;
+    }
+    const actorIds = Array.isArray(page.actors) ? page.actors : [];
+    return {
+      ...page,
+      imageScene: {
+        ...lastScene,
+        actors: actorIds.length > 0
+          ? actorIds.map((id) => ({ id, action: 'in the scene' }))
+          : lastScene.actors,
+      },
+    };
+  });
+}
