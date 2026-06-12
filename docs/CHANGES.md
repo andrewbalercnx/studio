@@ -16,6 +16,19 @@
 
 ## Changes
 
+### 2026-06-12
+
+#### `29354ae` - Fix story pagination calling retired gemini-2.0-flash
+
+**Type**: Bug fix (production)
+
+**Summary**: The daily System Tests run (unmasked by yesterday's secret fix) failed on pagination assertions. Root cause from production `aiFlowLogs`: `storyPaginationFlow` hardcoded `googleai/gemini-2.0-flash`, which Google has retired (404 "no longer available"). Every AI pagination call failed and fell back silently to sentence chunking — pages had no `imageScene`/`sceneTag` and no `locationRegistry`, degrading real users' book layout and downstream image generation, with only a console.warn. Bumped to `googleai/gemini-2.5-flash` (the tier every other text flow already uses); repo and Firestore config scans confirm no other retired-model references. Resolves dev todo `RrUyDZfCYz7UOusnCPIM`.
+
+**Modified files**:
+- `src/ai/flows/story-pagination-flow.ts`
+
+---
+
 ### 2026-06-11
 
 #### `5195f84` - Merge Sprint W4-A: server-side persona cookie + PIN guard hardening

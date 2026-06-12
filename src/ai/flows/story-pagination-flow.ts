@@ -294,8 +294,10 @@ Generate the paginated output now.`;
 
             // Call AI for pagination
             debug.stage = 'ai_generate';
-            // Using gemini-2.0-flash for faster response times (pagination is straightforward)
-            const modelName = 'googleai/gemini-2.0-flash';
+            // Flash tier suffices: pagination is straightforward. gemini-2.0-flash
+            // was retired by Google (404s since ~June 2026) and silently pushed every
+            // book onto the no-imageScene fallback path.
+            const modelName = 'googleai/gemini-2.5-flash';
             const startTime = Date.now();
 
             let llmResponse;
