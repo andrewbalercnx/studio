@@ -40,13 +40,25 @@ const ImageSceneActorSchema = z.object({
   facing: z.string().optional(),
 });
 
+// atmosphere is optional at the schema layer: Genkit rejects the WHOLE response
+// if any one page omits a required field, and gemini-2.5-flash occasionally
+// drops atmosphere on a page. A missing atmosphere is recoverable (defaulted
+// from sceneTag below); losing all pagination to the sentence-chunking
+// fallback is not.
 const ImageSceneSchema = z.object({
   locationKey: z.string(),
   locationDescription: z.string(),
   actors: z.array(ImageSceneActorSchema),
-  atmosphere: z.string(),
+  atmosphere: z.string().optional(),
   sceneTag: z.enum(['indoor-day', 'outdoor-day', 'indoor-night', 'outdoor-night']),
 });
+
+const DEFAULT_ATMOSPHERE: Record<string, string> = {
+  'indoor-day': 'warm, bright daylight, cheerful indoor scene',
+  'outdoor-day': 'bright, sunny, open-air and cheerful',
+  'indoor-night': 'soft, cozy lamplight, calm night-time mood',
+  'outdoor-night': 'gentle moonlight, calm and magical night air',
+};
 
 const PaginationAIOutputSchema = z.object({
   pages: z.array(z.object({
@@ -416,6 +428,7 @@ Generate the paginated output now.`;
                         // Apply canonical location description from registry
                         imageScene: imageScene ? {
                             ...imageScene,
+                            atmosphere: imageScene.atmosphere || (imageScene.sceneTag && DEFAULT_ATMOSPHERE[imageScene.sceneTag]) || 'warm, friendly storybook mood',
                             locationDescription: locationRegistry[imageScene.locationKey] ?? imageScene.locationDescription,
                         } : undefined,
                     };

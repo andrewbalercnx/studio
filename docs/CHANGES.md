@@ -18,6 +18,17 @@
 
 ### 2026-06-12
 
+#### `d7ab7e3` - Pagination resilience: optional atmosphere with sceneTag-derived default
+
+**Type**: Bug fix (production)
+
+**Summary**: Second half of the overnight System Tests fix. After the model bump, `gemini-2.5-flash` responded but Genkit rejected the entire response when any single page omitted the required `atmosphere` field — collapsing all pagination to the sentence-chunking fallback (no sceneTags, no locationRegistry). Made `atmosphere` optional at the AI schema layer and defaulted it from `sceneTag` post-hoc, so one missing decorative field can no longer destroy the structured pagination.
+
+**Modified files**:
+- `src/ai/flows/story-pagination-flow.ts`
+
+---
+
 #### `29354ae` - Fix story pagination calling retired gemini-2.0-flash
 
 **Type**: Bug fix (production)
