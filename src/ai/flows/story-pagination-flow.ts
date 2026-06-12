@@ -315,12 +315,29 @@ Generate the paginated output now.`;
             let llmResponse;
             try {
                 // Structured-output misses are stochastic: the model occasionally
-                // omits a required imageScene field and Genkit rejects the WHOLE
-                // response (INVALID_ARGUMENT, "Schema validation failed"). That is
-                // worth a couple of fresh attempts — unlike a true 4xx it usually
-                // succeeds on retry. Other errors propagate immediately.
+                // omits required imageScene fields. Two failure shapes, both worth
+                // fresh attempts (unlike a true 4xx they usually succeed on retry):
+                //  1. Genkit rejects the WHOLE response (INVALID_ARGUMENT,
+                //     "Schema validation failed") when a present imageScene is
+                //     missing a required property.
+                //  2. The response passes the schema but a text page omits
+                //     imageScene entirely (it is .optional() so blank/divider pages
+                //     do not hard-fail) — semantically a miss: every non-empty text
+                //     page needs a scene for image generation.
+                // Other errors propagate immediately.
                 const isSchemaMiss = (e: any) =>
                     typeof e?.message === 'string' && e.message.includes('Schema validation failed');
+                const VALID_SCENE_TAGS = ['indoor-day', 'outdoor-day', 'indoor-night', 'outdoor-night'];
+                const semanticMiss = (resp: any): string | null => {
+                    const pages = resp?.output?.pages;
+                    if (!Array.isArray(pages)) return null; // manual-parse path handles downstream
+                    const textPages = pages.filter((p: any) => p.text && p.text.trim().length > 0);
+                    if (textPages.length === 0) return 'no non-empty text pages';
+                    const bad = textPages.filter((p: any) => !VALID_SCENE_TAGS.includes(p.imageScene?.sceneTag));
+                    return bad.length > 0
+                        ? `${bad.length}/${textPages.length} text page(s) missing valid imageScene.sceneTag`
+                        : null;
+                };
                 const MAX_SCHEMA_ATTEMPTS = 3;
                 let attempt = 0;
                 for (;;) {
@@ -332,6 +349,12 @@ Generate the paginated output now.`;
                             output: { schema: PaginationAIOutputSchema },
                             config: { temperature: 0.3, maxOutputTokens: 8000 },
                         });
+                        const miss = semanticMiss(llmResponse);
+                        if (miss && attempt < MAX_SCHEMA_ATTEMPTS) {
+                            console.warn(`[storyPaginationFlow] semantic miss on attempt ${attempt}/${MAX_SCHEMA_ATTEMPTS}, retrying: ${miss}`);
+                            debug.details[`semanticMissAttempt${attempt}`] = miss;
+                            continue;
+                        }
                         break;
                     } catch (e: any) {
                         if (isSchemaMiss(e) && attempt < MAX_SCHEMA_ATTEMPTS) {

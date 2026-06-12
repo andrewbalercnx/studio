@@ -18,6 +18,17 @@
 
 ### 2026-06-12
 
+#### `b5875cb` - Pagination: retry semantic misses too (text page without imageScene)
+
+**Type**: Bug fix (production)
+
+**Summary**: Stability testing (3x live runs) caught the remaining hole: `imageScene` is `.optional()` per page, so a response where a text page omits it entirely passes Genkit's schema and skips the retry. The retry loop now also enforces the semantic invariant — every non-empty text page must carry a valid `imageScene.sceneTag` — retrying up to the same 3-attempt cap.
+
+**Modified files**:
+- `src/ai/flows/story-pagination-flow.ts`
+
+---
+
 #### `38f7852` - Pagination: retry on structured-output schema misses
 
 **Type**: Bug fix (production)
