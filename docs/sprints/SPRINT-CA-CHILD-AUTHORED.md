@@ -1215,3 +1215,51 @@ voice/streaming-TTS (#10). **Roughly 8–11 engineer-weeks** of net-new build fo
 M2 "green behind the flag" milestone — *excluding* the spikes (§9.0) and the M3 compliance track,
 which run in parallel. Treat this as order-of-magnitude until the spikes calibrate scope (a bad
 age-floor result, e.g., could add a co-creation mode to #7).
+
+## 14. Post-spike roadmap
+
+The plan is now implementation-complete on paper (§12 specs, §13 schema/sizing). This is the path
+from here to a live feature. Four milestones, each with a gate; the spikes now **calibrate and
+validate** rather than unblock.
+
+### 14.0 Triage checkpoint (immediately after the spikes report)
+The spikes set config values (§13.1 `systemConfig/storyAuthoring`) and can trigger documented forks —
+not rewrites:
+
+| Spike | Sets (config, no deploy) | Fork it can trigger |
+|---|---|---|
+| WoZ usability | `questionBudget`, `phaseCap`, `recapMode` per band | age-4 floor → co-creation mode (adds to work-item #7) |
+| STT WER | `editDistanceThreshold` | dedicated STT (Cloud Speech) instead of Gemini (reshapes #10) |
+| Latency | (validates the §2.3 budget) | harder tactics: partial-transcript streaming / cheaper scribe |
+
+**Gate:** results folded into §2.3/§2.7/§13.1; any fork decided and its §13.3 estimate updated.
+
+### 14.1 M1 — Specs complete ✅ (done ahead of schedule)
+§12.1–§12.7 + §13. **Gate met:** a developer can pick up any work item without an unresolved design
+decision. (Only the ⟦spike-calibrated⟧ *numbers* remain, and they live in config.)
+
+### 14.2 M2 — Build to "green behind the flag"
+The §13.3 work items in the §9 sequence: foundation → TEST_MODE seam → pure modules → authoring flow
+→ moderation/PII → phases+bands+Parent-Assist → characters → compile bridge+e2e → voice → telemetry.
+**Gate:** the three-layer test net green (pure-logic + seamed + e2e), `typecheck`+`build`+`test` pass,
+docs updated (SCHEMA/API/SYSTEM_DESIGN/CHANGES + regression), shipped **disabled-by-default**. A real,
+mergeable milestone with nothing live. *(≈ 8–11 eng-weeks, §13.3.)*
+
+### 14.3 M3 — Go-live (flip `enabled`)
+Engineering is done at M2; M3 is purely the §11.3 compliance deliverables: **DPIA · verifiable
+server-side parental consent (`authoringConsent`) · DPA + sub-processor-list + privacy-policy updates
+naming Google/Vertex for STT · EU/UK residency confirmed · age-assurance control · child DSAR/erasure
+path (§12.5) · safeguarding policy.** Then a **staged rollout** (internal → friends-and-family →
+wider), watching the content-free telemetry, before any broad enable. **Gate:** all compliance items
+signed off; `enabled` flipped per family on a consent record.
+
+### 14.4 After launch
+Telemetry-driven tuning (question budget, recap cadence, the eventual fidelity dial) → the **v2
+engine** (full phonetic/discourse resolver, fidelity dial) → §10 follow-ups (photo avatars,
+multi-child co-authoring).
+
+### 14.5 Critical path & parallelism
+`spikes → triage → (M1 ✅) → M2 build → M3 compliance`. The long pole is **not** the code — it's the
+**spikes** (real children + Vertex-EU) and the **M3 compliance track** (DPIA + consent + DPA). Both
+should start **now, in parallel** with any build prep, because they gate go-live regardless of how
+fast M2 lands.

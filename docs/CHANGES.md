@@ -18,6 +18,17 @@
 
 ### 2026-06-23
 
+#### `a95474b` - Sprint CA: post-spike roadmap (§14)
+
+**Type**: Planning / Documentation
+
+**Summary**: Added §14 — the path from "specs complete" to "live feature." Four milestones with gates: §14.0 triage checkpoint mapping each spike to the config value it sets and the fork it can trigger (WoZ→budget/phase/recap or co-creation mode; STT WER→edit-distance threshold or dedicated STT; latency→harder streaming tactics); §14.1 M1 specs complete (done); §14.2 M2 build to "green behind the flag" (≈8–11 eng-weeks); §14.3 M3 go-live = the compliance deliverables + staged rollout; §14.4 post-launch tuning + v2 engine. §14.5 names the critical path: the long pole is the spikes + the M3 compliance track, both of which should start now in parallel with build prep.
+
+**Modified files**:
+- `docs/sprints/SPRINT-CA-CHILD-AUTHORED.md`
+
+---
+
 #### `7efc0bd` - Sprint CA: consolidated data model + reuse accounting + build sizing (§13)
 
 **Type**: Planning / Documentation

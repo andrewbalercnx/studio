@@ -686,6 +686,8 @@ mitigations mandatory); both Little + Big Author age bands in v1; phases built f
 by a second council pass §11.5. Round-2 decisions: Parent-Assist hybrid, share/print gated behind
 parent review, spikes-first sequencing — **since reversed: full implementation spec batch §12.1–§12.7
 now written, spike-dependent values flagged ⟦spike-calibrated⟧**. Spike tooling built under `spikes/`.
+Plan now implementation-complete on paper: consolidated data model + reuse accounting + build sizing
+(§13, ≈8–11 eng-weeks net-new to M2) and a post-spike roadmap (§14, M0 triage → M2 build → M3 go-live).
 Top-line verdict unchanged: build green behind the flag, flipping `enabled` is NO-GO).
 
 ---
