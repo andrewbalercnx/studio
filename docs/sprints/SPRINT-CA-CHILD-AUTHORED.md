@@ -130,6 +130,49 @@ Reuse Friends-flow Phase-1 *selection* as-is. Add a "make a new one" affordance:
 
 ---
 
+### 2.6 Character reference resolution — the "always know who" guarantee
+
+**Why it's critical, not cosmetic.** The canonical story is stored with `$$id$$` placeholders and
+the **image pipeline draws whichever actor IDs a page resolves to**. A mis-resolved reference
+renders the *wrong character* on the page. With children this is hard: STT garbles pronunciation
+("Wex" for "Rex"), and child grammar overloads pronouns and drops referents ("he went and then he
+got scared" — which he?). We must keep a reliable mapping from the child's words to known actors in
+every sentence.
+
+**The reframe: this is closed-world entity *linking*, not open coreference.** The cast is fixed
+before authoring starts (selected + created characters + the child). Every mention links to one of
+~2–6 known entities — far more tractable than unbounded coref. A layered pipeline:
+
+- **L0 — Anchor at character time (biggest lever).** Per character capture: canonical name,
+  **pronouns**, type, an explicit **alias/nickname list** ("what do you call her?"), and
+  precomputed **phonetic keys** (Double Metaphone + a child-phonology substitution table:
+  w↔r, th↔f, …). Bind the child's self-reference ("me/I") to the child actor.
+- **L1 — Bias transcription.** Pass the cast names/aliases to Gemini STT as phrase hints each turn
+  so it transcribes "Luna", not "lunar" — fix pronunciation at the source.
+- **L2 — Resolve every mention.** Tag each mention (name, alias, descriptor "the puppy"/"my
+  brother", or pronoun) → actor ID using (a) **phonetic + edit-distance** match over the small cast
+  (low false-positive risk) and (b) **discourse state**: present actors, recency/salience, last
+  subject, per-pronoun antecedents, narrowed by the cast's pronoun metadata ("she" + one female on
+  stage → confident). Fold this into the scribe step: the scribe emits the `$$id$$`-tagged segment
+  **plus a list of low-confidence mentions** as structured output — one model call, deterministic
+  phonetic pre-pass feeding candidates.
+- **L3 — Clarify, never guess (key principle).** Each binding carries a confidence. High → bind
+  silently. Low/ambiguous → the coach asks a short concrete question in child language ("Did Rex
+  get scared, or your brother Tom?"). Ambiguity becomes a cheap dialog turn, never a silent wrong
+  render; consistent with the scribe role and the §2.2 grounding check.
+- **L4 — Visible, tappable cast.** Show on-stage characters as avatars; **tap one to say "this
+  one"** — a non-verbal disambiguation channel for pre-readers and a fallback when voice/grammar
+  fail. Aliases learned mid-session are added to the character for the rest of the session.
+- **L5 — Verify before image gen.** At compile, assert every page's `imageScene.actors ⊆ cast`; an
+  unresolved reference blocks rendering with a clarifying prompt rather than drawing a wrong
+  character. Parent per-page edit (W2-C) is the final net.
+
+**Failure handling (trade-off).** If the child can't/won't disambiguate after **one** ask, do not
+halt (that frustrates a child) — bind to the most-salient present actor and **flag the segment for
+parent review** so W2-C's page edit catches it. Ask once, not repeatedly.
+
+---
+
 ## 3. Data model changes
 
 **`storySessions/{id}`** (additive):
@@ -141,7 +184,13 @@ Reuse Friends-flow Phase-1 *selection* as-is. Add a "make a new one" affordance:
 - `authoringFidelity?: 'scribe'|'light'|'coauthor'` (snapshot at session start)
 - `authoringComplete?: boolean`
 
-**`characters/{id}`** (additive): `createdVia?: 'parent'|'ai'|'child_authoring'`.
+**`characters/{id}`** (additive): `createdVia?: 'parent'|'ai'|'child_authoring'`;
+`aliases?: string[]`; `phoneticKeys?: string[]` (precomputed, for reference resolution §2.6).
+
+**Discourse state** for resolution (extends the existing `worldState` on the session):
+`presentActorIds`, `salienceOrder`, `lastSubjectActorId`, `pronounAntecedents { she?, he?, they? }`,
+`sessionAliases { alias → actorId }`. Per `authoredSegments[]` entry also stores resolved mentions
++ confidence (for undo and the parent-review flag).
 
 **`systemConfig/storyAuthoring`** (new config doc): `{ enabled, fidelity, arcEnabled,
 defaultModality, voiceRetention: 'discard'|'<ttl>' }`. Disabled-by-default (consistent with the
@@ -201,6 +250,10 @@ This escalates PII sensitivity over today's posture — capturing a **child's vo
       rejected/re-scribed.
 - [ ] **Compile-bridge test** — authored segments → valid `stories/{id}` with `$$id$$`
       placeholders resolving to the selected/created actors.
+- [ ] **Reference-resolution suite (§2.6)** — phonetic match binds garbled names ("Wex"→Rex);
+      pronoun + gender + presence narrows correctly; a genuinely ambiguous mention triggers a
+      clarify turn (not a silent guess); a tapped avatar overrides resolution; compile asserts
+      `imageScene.actors ⊆ cast`.
 - [ ] **Undo** pops the last segment and rolls back the arc step; **finish** is gated on ≥1 segment.
 - [ ] **STT route** returns a transcript for a fixture audio (Gemini mocked under `TEST_MODE`).
 - [ ] **Child-created character** persists with `createdVia:'child_authoring'`, gets an avatar,
@@ -248,6 +301,7 @@ storyCompile entry to accept the authored bridge input.
 | Unsafe child-generated content | Moderate input + output; user-safe redirects, never raw refusals |
 | Safari/iOS audio capture flakiness | `MediaRecorder` feature-detect + text fallback; WebKit report-only e2e |
 | Placeholder/entity drift on compile | Reuse the proven `$$id$$` + actor-tracking pattern; bridge test (§6) |
+| **Wrong character resolved → wrong character drawn** | Closed-world linking + phonetic match + STT biasing + clarify-don't-guess + tappable cast + compile-time `actors ⊆ cast` assert (§2.6) |
 
 ---
 

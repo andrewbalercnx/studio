@@ -32,6 +32,17 @@
 
 ---
 
+#### `6b93b46` - Sprint CA: add character reference-resolution design (§2.6)
+
+**Type**: Planning / Documentation
+
+**Summary**: Added a dedicated "always know who" section to the child-authored sprint addressing how to keep a reliable mapping from a child's words to known characters in every sentence — critical because the image pipeline draws whichever actor IDs a page resolves to, so mis-resolution renders the wrong character. Reframed as closed-world entity linking (fixed cast) rather than open coreference, with a layered pipeline: anchor aliases/pronouns/phonetic keys at character time; bias Gemini STT with cast names; resolve via phonetic + edit-distance + discourse state (salience, pronoun antecedents, gender narrowing) folded into the scribe step; clarify-don't-guess on low confidence; visible/tappable cast for non-verbal disambiguation; compile-time `imageScene.actors ⊆ cast` assertion. Added supporting data-model fields (character aliases/phoneticKeys, session discourse state), a reference-resolution test suite, and a risk row.
+
+**Modified files**:
+- `docs/sprints/SPRINT-CA-CHILD-AUTHORED.md`
+
+---
+
 ### 2026-06-12
 
 #### `f54c0b1` - Pagination: scene-continuity fill for pages with no scene at all
