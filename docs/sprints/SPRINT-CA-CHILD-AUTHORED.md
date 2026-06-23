@@ -1,6 +1,10 @@
 # Sprint CA — Child-Authored Stories ("Be the Author")
 
 > **Status**: Planned · **Priority**: High · **Dev todo**: file one when started (program item)
+> **v2-validation (2026-06-23)**: a **second six-lens council pass** re-reviewed v2 against the live
+> code — verdict unchanged (architecture sound, build green behind the flag, `enabled` NO-GO), with
+> new build-blockers (chiefly **phantom reuse**: `withProviderReliability`, streaming `/api/tts`, the
+> W1/W3 e2e net, and `feature-flags.test.ts` don't exist as cited). Full detail in **§11.5**.
 > **v2 (2026-06-23)**: incorporates a six-lens **council review** (simplicity/reuse, AI/ML
 > correctness, testability, child safety & privacy, scalability/cost/latency, UX/child-dev fit).
 > The council's verdict, findings, and the must-fix gates are in **§11**; the body below is revised
@@ -640,3 +644,172 @@ Verifiable **server-side parental consent** (per child, revocable) · **DPIA** �
 > survived review intact. What changed is *how much to build at once* and *which safety/compliance
 > foundations are prerequisites, not follow-ups*. The council did not weaken the vision — it moved
 > the load-bearing walls to the bottom.
+
+---
+
+### 11.5 Second council pass — validation of v2 (2026-06-23)
+
+The six lenses were re-run against the **current v2 plan** (not v1), each verifying claims against the
+live codebase. **Consensus: architecture sound, build is GREEN behind the flag, flipping `enabled`
+is NO-GO** — the same shape as the v1 verdict, but one layer deeper. v2 correctly fixed every
+*specific* v1 finding, then re-introduced the *same class* of error one level down: it leans on reuse
+anchors that do not exist as named. The pillars still stand; the load-bearing walls moved again.
+
+**Per-lens, did v2 resolve its v1 finding?**
+
+| Lens | v2 status | Residual |
+|---|---|---|
+| Simplicity & reuse | **Resolved** | Body still written around phases while §11.4 recommends flat-stream-first; commit to one. |
+| AI/ML correctness | **Partial** | Moderation fix solid; grounding redesign still leaks (11.5.2). |
+| Testability | **Partial** | Architecture now deterministic; rests on phantom reuse anchors (11.5.1). |
+| Child safety & privacy | **Partial** | 3 BLOCKERs correctly planned; new deletion / compiled-book-PII / age-assurance gaps (11.5.5). |
+| Scalability/cost/latency | **Partial** | Pro & hot-doc resolved; latency budget rests on unbuilt streaming TTS (11.5.1); abandoned-session compute unaddressed (11.5.4). |
+| UX / child-dev fit | **Partial** | Bands + budget + Parent-Assist specced; age-4 floor and Parent-Assist authorship still soft (11.5.7). |
+
+#### 11.5.1 The convergent new finding — **phantom reuse** (3+ lenses, independently)
+
+The plan repeatedly says "reuse / extend / stream the existing X" for infrastructure that is absent or
+differently shaped. Verified against code:
+
+- **`withProviderReliability` does not exist.** Reliability is `withRetry` + `CircuitBreaker` /
+  `getCircuitBreaker` in `src/lib/ai-retry.ts`, and the breaker has **zero call sites** today
+  (`withRetry` is wired into exactly one route). The authoring flow would be the breaker's first real
+  integration — new work, not reuse. The `gemini-stt` "provider key" reuse is genuine (keys exist),
+  but the composed wrapper the doc names must be authored. *(Strike the name throughout §4/§7.)*
+- **Streaming `/api/tts` does not exist.** `src/app/api/tts/route.ts:168` drains the whole clip via
+  `streamToBuffer` and returns base64 JSON — buffer-then-return, *exactly what §2.3 says to avoid*.
+  The entire `p50 < 4s` thesis ("show text now, stream audio") rests on unbuilt streaming. The §9.0
+  latency spike is therefore mandatory, not optional, and TTS streaming is net-new build.
+- **The "W1/W3 e2e net → art-ready" does not exist.** `e2e/` contains one spec (`login.smoke.spec.ts`).
+  Exit criterion 4 chains into a storybook-pipeline e2e that must be **built**, plus the new authoring
+  spec.
+- **`feature-flags.test.ts` and `docs/testing/e2e.md`'s "report-only → blocking after 3 cold green"
+  process do not exist.** Mirror the kill-switch test at `src/lib/analytics/__tests__/analytics.test.ts:80-103`;
+  the promotion process must be written, not cited.
+- **The one fully-true reuse anchor — the no-PII `findPiiViolation` contract — has a trap.**
+  `FORBIDDEN_KEY_SUBSTRINGS` (`src/lib/analytics/events.ts`) already contains `'text'` and `'name'`,
+  so `scribedText` is *already* forbidden; the load-bearing half of the test is proving the **allowed**
+  content-free scalars (`arcStepIndex`, `questionsPerPhase`, modality) survive an already-greedy
+  blocklist. Only `transcript`/`utterance`/`segment` are genuinely new substrings.
+
+**Action (must-fix before build):** a **reuse-accounting pass** that strikes the phantom anchors and
+re-budgets each as new work. This is the recurring failure mode the council has now caught twice.
+
+#### 11.5.2 Grounding still leaks (AI/ML + testability)
+
+The Tier-1/Tier-2 redesign is the right *shape*, but as written it does not yet deliver the headline
+guarantee:
+
+- **Tier-1 `extractEntityIds(scribedText) ⊆ cast` cannot catch the failure it claims.**
+  `extractEntityIds` (`src/lib/entity-utils.ts`) only sees IDs the model already wrapped in `$$…$$`;
+  an untagged invention ("a wizard helped them", no placeholder) passes the subset test trivially. The
+  *real* gate is the separate "reject new proper-noun token not phonetically in transcript" clause —
+  a different, NLP-flavoured mechanism that the doc bundles in as if it were the same "pure string
+  logic." Spec it explicitly.
+- **Common-noun / verb invention bypasses Tier-1 entirely.** "Then a monster ate them" introduces a
+  character and a plot event in lowercase common words. Tier-1 by construction only sees proper
+  nouns/IDs → this must be explicitly delegated to Tier-2, not left in the gap.
+- **Tier-1 false positives collide with the scribe's job.** Light-touch *fixes capitalisation*
+  (§2.2), so a legitimately proper-cased word ("the Dragon") looks like a "new capitalised token."
+  Capitalisation-normalisation and proper-noun-invention-detection are in direct tension and must be
+  reconciled in the spec.
+- **Tier-2 `sourceSpan` is bypassable by confabulated attribution.** Fuzzy span-membership proves
+  *a span exists*, not *that the span entails the atom*. Require each atom content-word
+  (subject/verb/object) to be independently present/derivable in the cited span.
+- **Missing fail-closed invariant.** A malformed/partial scribe structured-output must **reject and
+  re-scribe**, never deterministic-repair-then-run-grounding — otherwise §4's repair path produces a
+  **false-green on the headline feature**. State this invariant explicitly.
+
+#### 11.5.3 The single fat scribe call contradicts itself (AI/ML + scalability + testability)
+
+§4 mandates one scribe call emitting text + `atoms[]` + `sourceSpan` + unbound-mentions + grounding +
+boundary signals ("zero extra calls"); §2.2 mandates **splitting** scribe from coach because mixing
+objectives "degrades both." Both cannot be the cost/latency story. The richer structured output also
+maximally exposes the exact stochastic-failure mode the doc cites from pagination
+(`story-pagination-flow.ts` uses permissive validation + raw-JSON repair precisely because strict
+schemas fail), and here a malformed decode is the grounding gate's input. Decide: is the atom payload
+a *separate* low-temp call, or folded — and reconcile with the split-call mandate and the fail-closed
+rule (11.5.2).
+
+#### 11.5.4 Abandoned-session compute is unaddressed (scalability — new)
+
+TTL (`expireAt`, pattern at `src/lib/session-events.server.ts`) reclaims **storage, not compute**. An
+authored session is ~3 model calls/turn for 12–25 turns; a child who quits at turn 15 consumes **no
+entitlement** (compile never runs) yet has burned 30–45 Flash calls + STT. Unlike AI-authored modes
+(cost bounded by a completed artifact), authoring cost is unbounded by abandonment and uncapped by
+entitlements. Add a **server-side per-session turn cap** and an abandoned-session cost ceiling, not
+just per-book telemetry.
+
+#### 11.5.5 "Downstream is free" is false for authored books (privacy)
+
+The §0/§2.5 framing holds for AI-invented stories; for **child-narrated** stories the compiled
+`stories/{id}.storyText` *is* self-disclosed child PII rendered to a printable + publicly shareable
+object. Confirmed surfaces:
+
+- **Public share is unauthenticated and leaks `childName`.** `src/app/api/storyBook/share/route.ts`
+  GET takes only an 8-hex-char `shareId` (`randomBytes(4)` ≈ **32 bits**, brute-forceable at scale),
+  returns `metadata.childName` + every page's body/audio; `requiresPasscode` is opt-out by default.
+  For authored books: default passcode-on, raise token entropy, and decide the `childName`-exposure
+  question (already in §11.3).
+- **Revocation vs transcribe-then-discard is inconsistent.** Raw audio is discarded but the
+  *transcript is retained* (it is the story). "Revocation deletes retained transcripts" must therefore
+  be a **cascading deletion** — segments subcollection → compiled `stories/{id}` → storybook → share
+  tokens → queued print orders. Bake `childId`/`parentUid` provenance into every derived doc so
+  erasure is queryable. Enumerate this before the schema sets.
+- **Compiled book has no TTL and no child-subject deletion path.** The §2.8 TTL covers abandoned
+  *sessions*, not the finished artifact.
+- **§11.3 go-live gate is missing two ICO Children's-Code items:** a named **age-assurance** control
+  (the design forks on a *parent-confirmed* band — make it an explicit signed-off control) and a
+  **child DSAR / erasure path** covering compiled books + print orders.
+- **Safeguarding disclosures need a distinct classifier**, not the moderation blocklist: a distressing
+  *disclosure* (not unsafe content) flows transcript → scribe → recap-aloud before a flag-for-parent
+  stance engages. Wire it into the pipeline, don't leave it as a documented stance only.
+
+#### 11.5.6 §2.6 confident-bind leak (AI/ML)
+
+The stated principle — "the LLM only *proposes*, the deterministic pre-pass *resolves*" — is violated
+in v1 scope, because the deterministic phonetic/edit-distance pre-pass is **v2-deferred** (§2.6 v1
+scoping). So the LLM's *confident* inline `$$id$$` binds flow straight into the L5 `actors ⊆ cast`
+assert and into image rendering with **no** independent check; the clarify net only fires on mentions
+the LLM self-flagged as unsure. A confident-but-wrong bind ("Wex"→`$$rex$$`) silently draws the wrong
+character. **Run even v1 name-derived binds through a cheap deterministic edit-distance sanity check**,
+not only the LLM-flagged-unsure ones.
+
+#### 11.5.7 Parent-Assist inverts the authorship promise; age-4 floor is soft (UX)
+
+- **Parent-Assist as the *default* for ages 4–5 means the parent authors**, and the §2.2 grounding
+  guarantee then validates against the *parent's* words — the sprint's defining promise (§0) is
+  quietly inverted for a large slice of the target span. Take an explicit stance: either Parent-Assist
+  is **scaffolding-only** (parent prompts/encourages, child supplies content), or accept the 4–5
+  artifact is **co-authored** and stop claiming the authorship guarantee for it.
+- **Parent-Assist is specified at toggle-level** (`parentAssist?: boolean`) — no turn-ownership,
+  provenance tagging, child-engagement, or exit/re-entry flow. That under-specification is how v1's
+  Parent-Assist became a finding; it will be improvised at build time again unless given a schema and
+  flow states.
+- **Age-4 is not credibly served by a voice turn-loop.** The §9.0 WoZ spike must be **empowered to
+  re-scope** ("≈6–9, with a co-creation mode below"), not merely tune timings; and the exit criterion
+  ("≥1 child per band completes a story") must prove the *child* authored, not a parent-assisted pass.
+- **Two v2 additions create new abrupt-cutoff risks:** recap reads back the *whole* accumulating phase
+  (fatigue for a 5-year-old — needs a Little-Author "just the new bit" mode), and the hard question-cap
+  silently drops a *genuine* ambiguity (must be voiced as "got it!", never silence). Moderation
+  "redirect kindly" needs a defined child-facing UX and a "never refuse the same idea twice without a
+  steer" rule to avoid redirect→repeat loops.
+
+#### 11.5.8 Testability contradiction (carry-over)
+
+§6's "undo rolls back discourse state + learned aliases" asserts behaviour of **v2-deferred** code (the
+discourse-state object is deferred in §2.6). Either ship a minimal v1 session-alias map so the test is
+real, or explicitly v2-defer the assertion — do not leave a test that asserts nothing against v1 scope.
+The authoring TEST_MODE seam must also expose **fault-injection** (`scribe`/`tts` failure) and a
+**moderation-verdict** hook, or mid-turn idempotency and moderation cannot be Layer-2 deterministic.
+
+#### 11.5.9 Net delta to the plan
+
+No change to the top-line: **PLANNED, build green behind the flag, do not flip `enabled`.** The new
+build-blocking additions on top of §11.2 are: **(a)** the reuse-accounting pass (11.5.1); **(b)** the
+grounding fail-closed invariant + Tier-1/Tier-2 boundary spec (11.5.2); **(c)** resolve the fat-call
+vs split-call contradiction (11.5.3); **(d)** a per-session turn/compute cap (11.5.4); **(e)** the
+cascading-deletion + compiled-book-PII model (11.5.5, before schema sets); **(f)** the §2.6 v1
+deterministic bind-check (11.5.6). New go-live additions: age-assurance + child DSAR/erasure
+(11.5.5). And the highest-leverage owner call remains §11.4 #4 (**flat-stream-first vs phases**),
+which several of the above shrink dramatically if flat-stream leads.

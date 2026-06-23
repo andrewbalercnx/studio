@@ -681,7 +681,9 @@ question budget + Parent-Assist; pre-build usability/latency/STT spikes. Go-live
 parental consent + DPIA + DPA/sub-processor updates + safeguarding policy. Full detail in §11 of the
 detail doc. **Open owner decisions** in §11.4.
 
-**Status:** PLANNED (v2, council-reviewed).
+**Status:** PLANNED (v2, council-reviewed; v2 re-validated by a second council pass 2026-06-23 — see
+§11.5 of the detail doc: new build-blockers, chiefly "phantom reuse" of infra that doesn't exist as
+cited; top-line verdict unchanged).
 
 ---
 
