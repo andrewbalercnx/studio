@@ -18,6 +18,17 @@
 
 ### 2026-06-23
 
+#### `1978256` - Sprint CA: add phased authoring with boundary recap & clarify (§2.7)
+
+**Type**: Planning / Documentation
+
+**Summary**: Added phase-based story construction to the child-authored sprint. Phases are the missing middle layer between a child's turn (segment) and a printed page (a phase → possibly several pages), realized as arc steps. The flow detects a phase boundary (arc satisfaction / scene shift / child signal) and enters a recap state that reads the phase back aloud (TTS) and clarifies open items in three buckets — elements, actions, and which character did what (batch-resolving §2.6's deferred low-confidence bindings) — then locks the phase on confirm/amend. Non-blocking ambiguity now defers from mid-phase to the recap checkpoint. Confirmed phases carry scene metadata (location/time/atmosphere/actors/actions) captured with the child, pre-seeding `story-pagination-flow` for better illustrations than the AI-authored modes. Added the `authoredPhases` data model, a phase state machine + new flow actions (`confirm_phase`/`amend_phase`), a storyboard/filmstrip UI, a phasing test suite, and updated the bridge to assemble confirmed phases.
+
+**Modified files**:
+- `docs/sprints/SPRINT-CA-CHILD-AUTHORED.md`, `SPRINTS.md`
+
+---
+
 #### `a04b33a` - Plan Sprint CA — Child-Authored Stories ("Be the Author")
 
 **Type**: Planning / Documentation

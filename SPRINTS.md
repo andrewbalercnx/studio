@@ -652,6 +652,12 @@ finish → existing storybook pipeline**.
 (pagination → images → audio → order → entitlements). New build is just **(1) child-side character
 creation** and **(2) the authoring dialog**.
 
+**Phased authoring:** the story is built as a sequence of **phases** (scenes/beats; a phase →
+possibly several pages). At each phase boundary the agent reads the phase back aloud and clarifies
+open items — story elements, actions, and which character did what — before locking it. Phases sit
+between a child's turn and a printed page, carry scene metadata captured *with the child*, and so
+pre-seed pagination for more accurate illustrations than the AI-authored modes.
+
 **Decisions locked (owner, 2026-06-23):** voice-first with text fallback (STT via Gemini
 multimodal — no new vendor; agent prompts spoken via existing TTS) · tunable scribe↔co-author
 fidelity dial, default light-touch · child character creation = name + traits + AI-avatar-from-

@@ -38,8 +38,10 @@ the child's, not the model's.
 **Exit criteria (top-line):**
 1. A child can pick existing characters **or** create a new one (name + type + trait → AI avatar)
    from the kids surface.
-2. A child authors a multi-segment story via an open-ended dialog (voice-first; text fallback;
-   agent prompts spoken aloud), with **undo** and a child-controlled finish.
+2. A child authors a story as a sequence of **phases** via an open-ended dialog (voice-first; text
+   fallback; agent prompts spoken aloud); at each phase boundary the agent **reads the phase back**
+   and clarifies open elements/actions/character-assignments before locking it; with **undo** and a
+   child-controlled finish.
 3. An automated **fidelity/grounding check** shows the agent introduces no named entity or plot
    event absent from the child's contributions (light-touch default).
 4. Finishing compiles to a normal `stories/{id}` doc and reaches **art-ready** through the
@@ -61,14 +63,22 @@ the child's, not the model's.
         │                                          (name + type + trait → AI avatar from text)
         ▼
 [authoring dialog]  ← the heart of the sprint
-        │   agent speaks an OPEN prompt (TTS)  ─┐
-        │   child answers (voice → STT, or text) │  loop, arc-aware,
-        │   agent scribes child's words → segment│  undo supported
-        │   agent appends + asks the next prompt ─┘
-        │   child (or agent-detected natural end) → "Is that the end?"
+        │   ┌─ PHASE (a scene/beat = several segments) ───────────────┐
+        │   │  agent speaks an OPEN prompt (TTS)  ─┐                   │
+        │   │  child answers (voice → STT, or text)│ loop, arc-aware,  │
+        │   │  agent scribes child's words→segment │ undo supported    │
+        │   │  agent appends + asks next prompt   ─┘                   │
+        │   │  agent detects PHASE BOUNDARY →                          │
+        │   │  ┌─ RECAP ─────────────────────────────────────────┐    │
+        │   │  │ read phase back aloud (TTS) → clarify open items: │    │
+        │   │  │ elements · actions · which character did what     │    │
+        │   │  │ → child confirms / amends → phase LOCKED          │    │
+        │   │  └───────────────────────────────────────────────────┘  │
+        │   └──────────────────────────────────────────────────────────┘
+        │   next phase… │ child (or agent-detected end) → "Is that the end?"
         ▼
 [finish] → /api/storyCompile (UNCHANGED) → stories/{id}
-        ▼
+        ▼   (confirmed phases carry scene metadata → better pagination/images)
 [existing pipeline]  storybookV2/create → pages → images → audio → order  (ALL REUSED)
 ```
 
@@ -122,8 +132,9 @@ Reuse Friends-flow Phase-1 *selection* as-is. Add a "make a new one" affordance:
 | Character selection | Friends Phase-1 (`initializeCharacterSelection`, proposal) | — |
 | Character creation | avatar generation (text path) | child-side create UI + route |
 | Authoring dialog | `messages` subcollection, prompt-config resolver, arc template | `story-authoring-flow` |
-| Compile | `storyCompileFlow` (authorship-agnostic) | thin bridge: segments → `storyText` w/ `$$id$$` |
-| Pagination/images/exemplars/audio | entire pipeline | — |
+| Phasing / recap | arc template (`story-arc-flow`), TTS read-back | phase state machine + recap/clarify (§2.7) |
+| Compile | `storyCompileFlow` (authorship-agnostic) | thin bridge: phases/segments → `storyText` w/ `$$id$$` |
+| Pagination/images/exemplars/audio | entire pipeline (phase `sceneSummary` pre-feeds pagination) | — |
 | Order/print/finalize | entire flow (incl. W2-C page-edit) | — |
 | Entitlements | `story_allowance`, `storybook_allowance` | — |
 | Persona scope / PIN | W4-A persona cookie | — |
@@ -173,14 +184,72 @@ parent review** so W2-C's page edit catches it. Ask once, not repeatedly.
 
 ---
 
+### 2.7 Phased authoring with boundary recap & clarify
+
+Stories are built as a sequence of **phases** — coherent scenes/beats, each made of several
+segments — rather than one undifferentiated stream. Phases are the **missing middle layer** between
+a child's turn and a printed page:
+
+```
+segment (one child turn)  ⊂  phase (a scene/beat)  ⊂  pages (1..n per phase, from pagination)
+```
+
+A phase is the realized instance of an **arc step** (opening → problem → turning point →
+resolution), so the existing arc template paces the story without dictating content.
+
+**Phase-boundary detection (each turn the flow asks "is this phase done?"):**
+- **Arc satisfaction** — the phase's narrative goal is met (setting established / problem
+  introduced / problem resolved).
+- **Scene shift** — change of place or time ("the next day…", "back home…").
+- **Child signal** — "and that's what happened in the forest", or a natural lull.
+
+**On a boundary → the RECAP state (the core of this section):**
+1. **Read it back.** The agent reads the phase's scribed text aloud (TTS): *"Here's what happened
+   so far…"*. Essential for pre-readers (hearing is how they verify) and it doubles as a
+   **human-in-the-loop check on the fidelity dial** — if the scribe over-polished, the child hears
+   it and corrects.
+2. **Clarify the open items — three buckets:**
+   - **Elements** — image-relevant gaps the child hasn't specified ("what does the dragon look
+     like?"). Strictly *elicitation*, never silent invention — preserves the §2.2 authorship
+     guarantee. Only ask about gaps that **matter for the page** (don't over-interrogate).
+   - **Actions** — ambiguous events ("did they run away, or hide?").
+   - **Which character did what** — batch-resolve the phase's accumulated low-confidence character
+     bindings here (the §2.6 payoff): "when you said 'he climbed up' — Rex or Tom?".
+3. **Confirm / amend → lock.** Child approves or fixes; edits apply to the phase; the phase locks
+   and the next one opens.
+
+**Interaction with §2.6 clarify policy:** *blocking* ambiguity is still asked immediately
+mid-phase; everything non-blocking **defers to the phase recap**, so questions are batched at
+natural checkpoints instead of interrupting every sentence.
+
+**Why phases improve the output (not just the UX):** a confirmed phase carries resolved scene
+metadata — location, time, atmosphere, actors, actions — captured *with the child*. Pagination /
+image-scene generation currently has to **infer** this from finished prose; here it is
+pre-structured at authoring time, so phases → pages yields more accurate, more consistent
+illustrations than the AI-authored modes. Each phase's `sceneSummary` feeds
+`story-pagination-flow` directly.
+
+**Flow state machine:** `authoring(phase) → phase_recap → (confirm|amend) → authoring(next phase) →
+… → finish`. New actions: `confirm_phase`, `amend_phase`. A light arc target (≈3–5 phases) paces
+the story; the child may add or drop phases.
+
+**UI:** completed phases render as a visible **storyboard/filmstrip** of cards (mini-summary, later
+a thumbnail) so the child watches the story build in chunks; cards are tappable to revisit/amend —
+also strong pre-reader UX and a direct visualisation of "phases → pages".
+
+---
+
 ## 3. Data model changes
 
 **`storySessions/{id}`** (additive):
 - `storyMode: 'authored'`
 - `currentPhase`: add `'authoring'`
-- `authoredSegments?: AuthoredSegment[]` — `{ id, order, childInputRaw, scribedText, actorIds[],
-  arcStep, inputModality: 'voice'|'text', createdAt }`
-- `authoringArcStepIndex?: number`
+- `authoredSegments?: AuthoredSegment[]` — `{ id, order, phaseId, childInputRaw, scribedText,
+  actorIds[], arcStep, inputModality: 'voice'|'text', createdAt }`
+- `authoredPhases?: AuthoredPhase[]` (§2.7) — `{ id, order, arcStep, segmentIds[], scribedText,
+  sceneSummary { locationKey, locationDescription, atmosphere, timeOfDay }, actorIds[], actions[],
+  status: 'open'|'recapping'|'confirmed', recapConfirmedAt? }`
+- `authoringPhaseState?: 'authoring'|'phase_recap'` · `authoringArcStepIndex?: number`
 - `authoringFidelity?: 'scribe'|'light'|'coauthor'` (snapshot at session start)
 - `authoringComplete?: boolean`
 
@@ -205,10 +274,12 @@ Story compile output is **unchanged** (`stories/{id}.storyText` with `$$id$$` pl
 
 ## 4. API & flows
 
-**New flow** `src/ai/flows/story-authoring-flow.ts` — the scribe+coach turn loop (§2.2): input
-`{ sessionId, contribution?, action: 'start'|'continue'|'undo'|'finish'|'help' }`; output
-`{ ok, agentPrompt, storySoFar, arcStep, phase, canFinish }`. Mirrors the
-`StoryGeneratorResponse` shape so the existing `StoryBrowser` renders it.
+**New flow** `src/ai/flows/story-authoring-flow.ts` — the scribe+coach turn loop (§2.2) **plus the
+phase state machine (§2.7)**: input `{ sessionId, contribution?, action:
+'start'|'continue'|'undo'|'finish'|'help'|'confirm_phase'|'amend_phase' }`; output
+`{ ok, agentPrompt|recap, storySoFar, phases, currentPhase, phaseState, arcStep, canFinish }`.
+Mirrors the `StoryGeneratorResponse` shape so the existing `StoryBrowser` renders it; the recap
+state additionally returns the read-back text + the batched clarify questions.
 
 **New routes:**
 - `POST /api/storyAuthor` — the turn endpoint (auth + persona scope + ownership).
@@ -218,9 +289,11 @@ Story compile output is **unchanged** (`stories/{id}.storyText` with `$$id$$` pl
 **Reused unchanged:** `/api/storyCompile`, `/api/storybookV2/{create,pages,images,pageEdit}`,
 `/api/entitlements/*`, TTS route.
 
-**Bridge:** on `finish`, assemble `authoredSegments[].scribedText` into the canonical narrative
-with `$$id$$` placeholders (entity tags from each segment), then call the existing compile path —
-which consumes `story_allowance` and writes `stories/{id}` exactly as today.
+**Bridge:** on `finish`, assemble the **confirmed phases** (`authoredPhases[].scribedText`, in
+order) into the canonical narrative with `$$id$$` placeholders (entity tags from each segment), then
+call the existing compile path — which consumes `story_allowance` and writes `stories/{id}` exactly
+as today. Each phase's `sceneSummary` is passed through so `story-pagination-flow` can pre-seed
+image scenes rather than inferring them (§2.7).
 
 ---
 
@@ -254,7 +327,12 @@ This escalates PII sensitivity over today's posture — capturing a **child's vo
       pronoun + gender + presence narrows correctly; a genuinely ambiguous mention triggers a
       clarify turn (not a silent guess); a tapped avatar overrides resolution; compile asserts
       `imageScene.actors ⊆ cast`.
-- [ ] **Undo** pops the last segment and rolls back the arc step; **finish** is gated on ≥1 segment.
+- [ ] **Phasing suite (§2.7)** — a phase boundary is detected → flow enters `phase_recap`; recap
+      returns read-back text + batched clarify questions; `confirm_phase` locks the phase and opens
+      the next; `amend_phase` applies edits; non-blocking ambiguity defers from mid-phase to recap;
+      a confirmed phase's `sceneSummary` reaches pagination.
+- [ ] **Undo** pops the last segment and rolls back the arc step; **finish** is gated on ≥1
+      confirmed phase.
 - [ ] **STT route** returns a transcript for a fixture audio (Gemini mocked under `TEST_MODE`).
 - [ ] **Child-created character** persists with `createdVia:'child_authoring'`, gets an avatar,
       and appears in the parent character list.
@@ -307,11 +385,14 @@ storyCompile entry to accept the authored bridge input.
 
 ## 9. Sequencing within the sprint
 
-1. **Foundation** — types/session phase, `systemConfig/storyAuthoring`, generator seed (disabled).
-2. **Authoring flow (text-first)** — scribe+coach, arc-awareness, grounding check, undo/finish.
-   Text modality first because it's deterministic and carries the headline test.
+1. **Foundation** — types/session phase + phase model, `systemConfig/storyAuthoring`, generator
+   seed (disabled).
+2. **Authoring flow (text-first)** — scribe+coach, arc-awareness, grounding check, undo/finish,
+   **phase state machine + boundary recap/clarify (§2.7)**. Text modality first because it's
+   deterministic and carries the headline tests.
 3. **Characters** — Friends-selection reuse + child create + AI-avatar-from-description.
-4. **Compile bridge + e2e** — segments → `storyText`; run through the existing pipeline (TEST_MODE).
+4. **Compile bridge + e2e** — confirmed phases → `storyText` (+ `sceneSummary` pre-seed); run
+   through the existing pipeline (TEST_MODE).
 5. **Voice** — STT route (Gemini) + spoken agent prompts (TTS) + mic UI + text fallback.
 6. **Privacy/telemetry/moderation** — content-free events, transcribe-then-discard, moderation.
 7. **DoD + docs + consent gate** — tests green; docs updated; ship disabled-by-default behind flag.
