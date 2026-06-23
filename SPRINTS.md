@@ -671,7 +671,17 @@ mode genuinely child-authored.
 behind `systemConfig/storyAuthoring.enabled`; raw audio is transcribe-then-discard; child
 audio/text never reach analytics; parental consent + retention sign-off required to flip on.
 
-**Status:** PLANNED.
+**Council review (v2, 2026-06-23):** the plan was run through a six-lens council (simplicity/reuse,
+AI/ML correctness, testability, child safety & privacy, scalability/cost/latency, UX/child-dev fit).
+Verdict: architecture sound; vision intact; but v1 oversold three things and treated 4–9 as one
+user. Build-blocking fixes folded into the plan: grounding can't be a single LLM-judge (deterministic
++ provenance gates); a moderation module must be built (none exists today); STT child-voice ≠ "no new
+DPA" (owner decision Vertex-EU vs DPA); segments → subcollection; Flash not Pro; age-band split +
+question budget + Parent-Assist; pre-build usability/latency/STT spikes. Go-live gated on verifiable
+parental consent + DPIA + DPA/sub-processor updates + safeguarding policy. Full detail in §11 of the
+detail doc. **Open owner decisions** in §11.4.
+
+**Status:** PLANNED (v2, council-reviewed).
 
 ---
 

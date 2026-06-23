@@ -18,6 +18,17 @@
 
 ### 2026-06-23
 
+#### `ebdbcfe` - Sprint CA: six-lens council review → plan v2
+
+**Type**: Planning / Documentation
+
+**Summary**: Ran the child-authored sprint plan through a six-lens council review (simplicity/reuse, AI/ML correctness, testability, child safety & privacy, scalability/cost/latency, UX/child-dev fit), each grounded in the live codebase, and revised the plan to v2. Verdict: architecture sound and vision intact, but v1 oversold three things and treated 4–9 as one user. Build-shaping corrections folded in: (1) the grounding guarantee cannot be a single LLM-judge — redesigned to a deterministic entity gate + provenance audit, with any semantic check on an independent model and report-only (§2.2); (2) there is no moderation capability in the codebase today (`toUserSafeMessage` is only an error mapper, no `safetySettings`) — added a new §2.8 moderation + self-disclosed-PII + safeguarding section; (3) STT via the consumer Gemini API is not "no new DPA" (US residency for child voice) — added an owner decision (Vertex-EU vs DPA) and corrected §2.3/§5; (4) segments must be a subcollection with TTL, not an embedded array on the hot session doc (§3); (5) scribe/STT on Flash not Pro, fold grounding/boundary into the scribe call, idempotency + mid-turn failure semantics + reliability wrapping (§4); (6) "4–9 is two products" — age bands, server-enforced question budget, and a real Parent-Assist mode (§2.7); (7) test architecture reworked to pure-logic + seamed + e2e layers with an authoring TEST_MODE seam (§6); (8) pre-build spikes (Wizard-of-Oz usability, STT WER, latency) added to gate the design (§9). Added §11 Council Review (verdicts, must-fix-before-build vs before-go-live, open owner decisions).
+
+**Modified files**:
+- `docs/sprints/SPRINT-CA-CHILD-AUTHORED.md`, `SPRINTS.md`
+
+---
+
 #### `1978256` - Sprint CA: add phased authoring with boundary recap & clarify (§2.7)
 
 **Type**: Planning / Documentation

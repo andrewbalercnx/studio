@@ -1,12 +1,23 @@
 # Sprint CA — Child-Authored Stories ("Be the Author")
 
 > **Status**: Planned · **Priority**: High · **Dev todo**: file one when started (program item)
+> **v2 (2026-06-23)**: incorporates a six-lens **council review** (simplicity/reuse, AI/ML
+> correctness, testability, child safety & privacy, scalability/cost/latency, UX/child-dev fit).
+> The council's verdict, findings, and the must-fix gates are in **§11**; the body below is revised
+> to reflect them. **Headline corrections:** the grounding guarantee cannot be a single LLM-judge
+> (§2.2 redesigned); there is **no moderation capability in the codebase today** (new §2.8); STT
+> via the consumer Gemini API is **not** "no new DPA" (§2.3/§5 corrected); "4–9" is two products,
+> not one (§2.7 age bands); segments must be a subcollection, not an embedded array (§3); scribe/STT
+> must run on Flash, not Pro (§4).
 > **Tracks**: A — Reliability/Flows (primary), C — UX, B — Ops (telemetry/route tail)
-> **Depends on**: W1-A degraded-book contract; W2-C parent page-edit; W4-A persona cookie;
-> Sprint-1 analytics no-PII contract (extended here to child voice).
+> **Depends on**: W1-A degraded-book contract + retry/breaker infra; W2-C parent page-edit; W4-A
+> persona cookie; Sprint-1 analytics no-PII contract (extended here to child voice).
 > **Decisions locked (owner, 2026-06-23)**: voice-first w/ text fallback · tunable fidelity dial
 > defaulting light-touch · child character creation = name+traits+AI-avatar-from-description (no
 > photo) · target span ages 4–9 with voice bridging literacy.
+> **Open decisions surfaced by the council (owner, §11.4)**: STT data path (Vertex-EU vs consumer
+> Gemini) · whether voice-first survives the latency spike or text-first leads · age-band split
+> scope · build phases now vs flat-stream-first.
 
 ---
 
@@ -97,22 +108,55 @@ Each authoring turn the flow:
    ("maybe they go somewhere new… where do you think?").
 6. Detects a natural ending and asks "Is that the end, or does more happen?".
 
-**Authorship guarantee.** The system prompt forbids introducing plot; a cheap post-step
-**grounding check** verifies the scribed segment's named entities and events are present in the
-child's input. Violations are rejected and re-scribed. This check is the contract that makes this
-mode genuinely child-authored, and it is the sprint's headline automated test (§6).
+**Authorship guarantee (redesigned per council §11).** A single "LLM checks the LLM" grounding
+test would be circular — same model family, same blind spots — and would give a *false green* on the
+sprint's defining feature. Replace it with a **two-tier, provenance-based** mechanism that separates
+the deterministic-and-testable part from the genuinely-fuzzy part:
+
+- **Tier 1 — entity grounding (deterministic, hard gate, the real headline test).** The scribe
+  emits `$$id$$`-tagged text; assert `extractEntityIds(scribedText) ⊆ cast` **per segment** (not
+  just at compile), and reject any new capitalised/proper-noun token not present (phonetically) in
+  the child's transcript. Pure string logic → a deterministic vitest table incl. **adversarial**
+  fixtures (child says "the dragon came" → scribe must not add its colour/actions).
+- **Tier 2 — event/detail grounding by provenance, not prose-judging.** The scribe emits
+  **structured atoms** `{ scribedText, atoms:[{ subject, verb, object?, sourceSpan:"child's exact
+  words" }] }`; reject any atom whose `sourceSpan` is not (fuzzily) present in the child's input. An
+  invented event has no honest span to cite — this audits provenance mechanically instead of asking
+  a model "did you add anything?".
+- **Optional semantic check = report-only, never the gate.** If a semantic judge is used, it must be
+  an **independent model** (e.g. Claude, since the stack is single-provider Gemini), validated
+  against a labelled gold set, and it only annotates — it never blocks.
+
+To keep the scribe stable: **pin temperature low (~0.1–0.2)** (not the storytelling 0.7–1.2), and
+**split the `scribe` call from the `coach` next-prompt call** — mixing "add nothing" with "invent an
+engaging question" in one decode degrades both. **Instruction-isolation**: child contributions are
+delimited as *data, not instructions* so "ignore your rules…" can't steer the agent.
 
 **Fidelity dial.** `systemConfig/storyAuthoring.fidelity ∈ {scribe, light, coauthor}`, default
-`light`. Lets the owner move the scribe↔co-author balance after seeing real output, no deploy.
+`light`. *Council note:* ship **one** behaviour (light-touch) for v1 and add the dial once there are
+real sessions to tune against — the knob is premature before the grounding mechanism is proven.
 
 ### 2.3 Voice (modality)
 
-- **Capture**: browser `MediaRecorder` on a big tap-to-talk mic (kid-first); feature-detected with
-  graceful **text fallback** (Safari audio history — see Risks).
-- **STT**: **Gemini multimodal audio** (already our model provider — no new vendor, no new DPA).
-  New thin route transcribes; raw audio is **not persisted** beyond the request by default.
-- **Agent voice**: prompts read aloud via the **existing TTS** path (ElevenLabs / story-audio).
-  This closes a fully oral loop for pre-readers: agent speaks → child speaks → agent speaks.
+- **Capture**: browser `MediaRecorder` on a big **tap-to-start / tap-to-stop** mic (not
+  press-and-hold — small hands release early) with a visible recording state + voice-activity
+  auto-stop; feature-detected with graceful **text fallback** (Safari audio history — see Risks).
+- **STT**: **Gemini multimodal audio on the Flash tier** (transcription doesn't need Pro). ⚠️
+  **Correction (council §11):** this is **not** "no new vendor/DPA". The app is wired to the
+  *consumer* Gemini API (`generativelanguage.googleapis.com`, US-default), not region-pinned Vertex.
+  Sending **child voice** there is a new cross-border transfer of sensitive child data → an
+  **owner decision (§11.4)**: move STT to **Vertex AI EU/UK region** (or self-host) vs accept the
+  consumer-API terms in an updated DPA. Either way the privacy policy + sub-processor list must name
+  Google for STT. Also verify the generate API can accept the L1 phrase-hints at all (it may not;
+  dedicated Cloud Speech `speechContexts` is the fallback).
+- **Latency budget (new DoD).** The serial loop record→STT→scribe→[grounding]→TTS→play is ~6–12s
+  today — 2–4× a young child's patience. Target **p50 < 4s to first feedback**: show the scribed
+  text + next prompt immediately (don't block on audio), **stream** prompt TTS (use the real-time
+  `/api/tts` path, not buffer-then-store), and play a short "let me write that down…" filler so
+  there's never dead air. Validate with a **prototype spike before committing to voice-first** (§9).
+- **Agent voice**: prompts read aloud via the **existing TTS** path (ElevenLabs); **cache repeated
+  prompt/scaffold TTS by text hash** (they recur every turn). Raw child audio is **transcribe-then-
+  discard** — guaranteed in code: never persisted, never logged, never attached to `captureException`.
 - **Text fallback** is always available (typed contributions), so a literate child or a flaky-mic
   session is never blocked.
 
@@ -182,6 +226,17 @@ before authoring starts (selected + created characters + the child). Every menti
 halt (that frustrates a child) — bind to the most-salient present actor and **flag the segment for
 parent review** so W2-C's page edit catches it. Ask once, not repeatedly.
 
+**v1 scoping (council §11 — avoid the research-grade build).** For a cast of 2–6, the closed-world
+roster *in the scribe prompt* does ~90% of the linking. Ship the minimal version first: scribe emits
+`$$id$$`-tagged text + a list of mentions it couldn't confidently bind; for those, **ask once with
+the tappable cast (L4)**; keep the **compile-time `actors ⊆ cast` assert (L5)** as the one
+non-negotiable. **Defer to v2**: Double Metaphone + the child-phonology substitution table,
+persisted `phoneticKeys`, and the full discourse-state object (`salienceOrder`, `lastSubjectActorId`,
+`pronounAntecedents`). **Confidence must come from the deterministic phonetic/edit-distance pre-pass,
+not from an LLM-emitted score** (LLM confidence is uncalibrated and would mis-drive the
+clarify-vs-bind threshold). Keep the binding logic a **pure module** (`resolveMentions`) so it is
+unit-testable; the LLM only *proposes* candidates, it is never the resolver.
+
 ---
 
 ### 2.7 Phased authoring with boundary recap & clarify
@@ -237,36 +292,95 @@ the story; the child may add or drop phases.
 a thumbnail) so the child watches the story build in chunks; cards are tappable to revisit/amend —
 also strong pre-reader UX and a direct visualisation of "phases → pages".
 
+**Age bands — "4–9 is two products" (council §11, UX + must-fix).** Drive the experience off the
+child profile's age (parent-confirmed band, not just birthdate):
+- **Little Author (≈4–6):** 1–2 phases max; **no** arc/conflict prompts; **zero** mid-phase clarify
+  — defer *all* non-blocking clarify to a single end-of-story **parent-review** pass; tappable
+  picture-choices + cast taps are the *primary* input rail, voice is enrichment; cheerleader scribe,
+  not story coach; soft 3–5 min cap. A **1-phase book is a valid, celebrated artifact.**
+- **Big Author (≈7–9):** the full §2.2/§2.7 loop as designed.
+
+**Server-enforced question budget (must-fix).** Prompt-level restraint reliably fails with young
+kids. Track `questionsAskedThisPhase` in session state and **hard-cap** it (Little Author ≤1/phase;
+Big Author ≤2–3/recap); over budget → fall back to most-salient + parent-review flag. Emit
+questions-per-phase as content-free telemetry to tune the cap on real data.
+
+**Parent-Assist / co-pilot mode (must-fix — currently leaned on but unbuilt).** An explicit "a
+grown-up is helping" toggle, the *default suggested* path for the 4–5 band: parent can speak for the
+child or rephrase the agent's question, clarify questions surface parent-facing, and a present parent
+also de-risks consent. **Comprehension & turn-taking fallbacks** (not just "silence"): handle the
+rambler (chunk long audio), the off-topic answer, and **"child didn't understand"** — rephrase
+simpler *once*, then drop the question; never ask the same concept twice.
+
 ---
 
-## 3. Data model changes
+### 2.8 Moderation, self-disclosed-PII & safeguarding (NEW — does not exist today)
 
-**`storySessions/{id}`** (additive):
-- `storyMode: 'authored'`
-- `currentPhase`: add `'authoring'`
-- `authoredSegments?: AuthoredSegment[]` — `{ id, order, phaseId, childInputRaw, scribedText,
-  actorIds[], arcStep, inputModality: 'voice'|'text', createdAt }`
-- `authoredPhases?: AuthoredPhase[]` (§2.7) — `{ id, order, arcStep, segmentIds[], scribedText,
-  sceneSummary { locationKey, locationDescription, atmosphere, timeOfDay }, actorIds[], actions[],
-  status: 'open'|'recapping'|'confirmed', recapConfirmedAt? }`
-- `authoringPhaseState?: 'authoring'|'phase_recap'` · `authoringArcStepIndex?: number`
-- `authoringFidelity?: 'scribe'|'light'|'coauthor'` (snapshot at session start)
-- `authoringComplete?: boolean`
+**Correction (council §11, BLOCKER):** the plan previously said "moderate input/output, reuse
+`toUserSafeMessage`." But `toUserSafeMessage` is only an **error-string mapper**; a codebase search
+found **no moderation capability at all**, and **no `safetySettings` are configured** on any Gemini
+call. When the child is the *author*, the model will faithfully transcribe unsafe input it would have
+refused to *invent* — so this must be built, not reused. It is a launch blocker for a kids product.
 
-**`characters/{id}`** (additive): `createdVia?: 'parent'|'ai'|'child_authoring'`;
-`aliases?: string[]`; `phoneticKeys?: string[]` (precomputed, for reference resolution §2.6).
+- **A real moderation module** applied at three points: (i) child input **post-transcription**,
+  (ii) scribed segment / agent prompt **pre-display and pre-TTS** (the recap reads text *aloud* — an
+  amplification path), (iii) final compiled story **pre-share / pre-print**. Mechanism: explicit
+  Gemini `safetySettings` **plus** a dedicated classification pass **plus** a deterministic blocklist
+  for the long tail. Unsafe → redirect kindly, never surface a raw refusal (route via
+  `toUserSafeMessage`).
+- **Self-disclosed-PII detector/redactor** in the scribe step: a freely-narrating child will say
+  real names, address, school. That text compiles into a **printable** and **publicly shareable**
+  book (`shareLinks/{id}` is fetched unauthenticated, passcode optional, and currently returns
+  `childName`). Flag/redact real-name/address/school/phone patterns before compile; **gate
+  share-link creation and print submission of authored books behind parent review**; reconsider
+  exposing `childName` on a public share page; consider forcing `requiresPasscode` for authored
+  shares.
+- **Safeguarding policy** (must-fix-before-go-live): a documented stance for distressing disclosure
+  (abuse/self-harm/domestic) — at minimum flag-for-parent-review with no auto-report; silence is not
+  an acceptable answer for sign-off.
+- **Moderate child-created character** name/traits/aliases too (they appear in the parent list and
+  the avatar prompt).
 
-**Discourse state** for resolution (extends the existing `worldState` on the session):
-`presentActorIds`, `salienceOrder`, `lastSubjectActorId`, `pronounAntecedents { she?, he?, they? }`,
-`sessionAliases { alias → actorId }`. Per `authoredSegments[]` entry also stores resolved mentions
-+ confidence (for undo and the parent-review flag).
+⚠️ **Corrections from the council (§11):** segments must NOT be an embedded array on the session
+doc — a hot doc rewritten every 2–5s for 12–25 turns risks write-amplification and the 1 MiB limit.
+Use a **subcollection** (mirrors the existing `messages` pattern). Add a **TTL** (`expireAt`,
+reusing the Sprint-1 `events` TTL pattern) on authoring sessions/segments — abandoned half-authored
+sessions carry the heaviest payload in the product. Several fields below are **deferred to v2**.
 
-**`systemConfig/storyAuthoring`** (new config doc): `{ enabled, fidelity, arcEnabled,
-defaultModality, voiceRetention: 'discard'|'<ttl>' }`. Disabled-by-default (consistent with the
-cautious-rollout pattern), behind a flag until the consent gate clears.
+**`storySessions/{id}/segments/{segId}`** (NEW subcollection — not an array):
+- `{ id, order, phaseId, childInputRaw, scribedText, atoms[], actorIds[], resolvedMentions[],
+  inputModality: 'voice'|'text', parentReviewFlag?, createdAt }`
+- A client-generated **`turnIdempotencyKey`** so a retried turn replaces rather than double-writes.
+- Written `status:'pending'` then committed only after the full turn succeeds (mid-turn failure
+  semantics, §4).
 
-**Generator doc** (`storyGenerators`, Firestore-driven, `status=live`/`enabledForKids`): seed a
-"Be the Author" generator with its scribe + coach prompt configs; ships **disabled** until §5 gate.
+**`storySessions/{id}`** (small fixed fields only):
+- `storyMode: 'authored'` · `currentPhase`: add `'authoring'` · `authoringComplete?` · `expireAt`
+- `ageBand?: 'little'|'big'` · `parentAssist?: boolean` · `questionsAskedThisPhase?: number`
+- `authoredPhases?` (bounded ≤5, may stay inline) — `{ id, order, arcStep, segmentIds[],
+  scribedText, sceneSummary{…}, actorIds[], actions[], status, recapConfirmedAt? }`
+- `authoringPhaseState?: 'authoring'|'phase_recap'`
+- **v2-deferred:** `authoringFidelity` (ship one behaviour first), `authoringArcStepIndex`, and the
+  discourse-state object below.
+
+**`characters/{id}`** (additive): `createdVia?: 'parent'|'ai'|'child_authoring'`; `aliases?: string[]`.
+*v2-deferred:* `phoneticKeys?` (only if the deterministic phonetic layer ships — §2.6 v1 scoping).
+
+**Discourse state (v2)** — `salienceOrder`, `lastSubjectActorId`, `pronounAntecedents`,
+`sessionAliases` extend `worldState` only when the full resolver lands. **Undo must roll back
+discourse state + learned aliases**, not just pop a segment (else a stale antecedent poisons the
+next turn — council testability gap).
+
+**`systemConfig/storyAuthoring`** (new config): `{ enabled, arcEnabled, defaultModality,
+voiceRetention: 'discard' }`. Disabled-by-default. *(Drop the `'<ttl>'` audio-retention option for
+launch — it implies a path that needs its own consent/DPA; `fidelity` deferred with the dial.)*
+
+**`authoringConsent`** (NEW, per-child, server-side — replaces the localStorage analytics-consent
+model which is inadequate for voice): `{ childId, parentUid, consentedAt, consentVersion,
+scope:['voice','stt-subprocessor','retention'], revokedAt? }`. `enabled` is gated **per family** on
+this record, not only the global flag. Revocation disables the mode + deletes retained transcripts.
+
+**Generator doc** (`storyGenerators`): seed "Be the Author" disabled until the §5 gate.
 
 Story compile output is **unchanged** (`stories/{id}.storyText` with `$$id$$` placeholders).
 
@@ -274,26 +388,46 @@ Story compile output is **unchanged** (`stories/{id}.storyText` with `$$id$$` pl
 
 ## 4. API & flows
 
-**New flow** `src/ai/flows/story-authoring-flow.ts` — the scribe+coach turn loop (§2.2) **plus the
-phase state machine (§2.7)**: input `{ sessionId, contribution?, action:
+**New flow** `src/ai/flows/story-authoring-flow.ts` — the turn loop (§2.2) + phase state machine
+(§2.7). Input `{ sessionId, contribution?, turnIdempotencyKey, action:
 'start'|'continue'|'undo'|'finish'|'help'|'confirm_phase'|'amend_phase' }`; output
-`{ ok, agentPrompt|recap, storySoFar, phases, currentPhase, phaseState, arcStep, canFinish }`.
-Mirrors the `StoryGeneratorResponse` shape so the existing `StoryBrowser` renders it; the recap
-state additionally returns the read-back text + the batched clarify questions.
+`{ ok, agentPrompt|recap, storySoFar, phases, currentPhase, phaseState, canFinish }`.
+- **Two model calls, both on Flash (not Pro) — council §11:** a **scribe** call (low temp ~0.1–0.2;
+  emits `$$id$$`-tagged text + atoms + unbound-mention list + grounding/boundary signals as one
+  structured output) and a separate **coach** call (next open prompt). Fold grounding + boundary
+  detection into the scribe's structured output → **zero extra calls**.
+- **Pure modules extracted** (for testability + correctness): `checkGrounding`, `resolveMentions`,
+  `phaseStateMachine`, `assertActorsSubsetOfCast` — the LLM never *is* the gate.
+- **Reliability:** wrap STT, scribe, coach, TTS in `withProviderReliability` (add a `gemini-stt`
+  provider key); **don't inherit Pro**, don't skip the breaker (it's opt-in per call site).
+- **Loose structured-output schema + deterministic repair** (the pagination-flow lesson — strict
+  schemas stochastically fail and Genkit rejects the whole response).
+- ⚠️ **UI reuse correction:** the friends `StoryGeneratorResponse` shapes are all *选-an-option*
+  screens; the authoring turn surface (mic, story-so-far, recap, filmstrip) is a **new component**,
+  not a `StoryBrowser` render-adapter. Budget for it.
 
-**New routes:**
-- `POST /api/storyAuthor` — the turn endpoint (auth + persona scope + ownership).
-- `POST /api/storyAuthor/transcribe` — audio → transcript via Gemini (raw audio discarded).
-- `POST /api/kids/characters` — child-side character create (+ avatar-from-description).
+**New routes** (all: TEST_MODE seam, `withProviderReliability`, moderation hooks §2.8):
+- `POST /api/storyAuthor` — turn endpoint (auth + persona scope + ownership + idempotency).
+- `POST /api/storyAuthor/transcribe` — audio → transcript (Flash). **Raw audio: never persisted,
+  never logged, never attached to `captureException`** (tested, §6).
+- `POST /api/kids/characters` — child-side character create (+ avatar-from-description; moderated).
 
 **Reused unchanged:** `/api/storyCompile`, `/api/storybookV2/{create,pages,images,pageEdit}`,
-`/api/entitlements/*`, TTS route.
+`/api/entitlements/*`. TTS: use the **streaming `/api/tts`** path for live prompts (not buffer-then-
+store), with **text-hash caching** of repeated prompts.
 
-**Bridge:** on `finish`, assemble the **confirmed phases** (`authoredPhases[].scribedText`, in
-order) into the canonical narrative with `$$id$$` placeholders (entity tags from each segment), then
-call the existing compile path — which consumes `story_allowance` and writes `stories/{id}` exactly
-as today. Each phase's `sceneSummary` is passed through so `story-pagination-flow` can pre-seed
-image scenes rather than inferring them (§2.7).
+**Mid-turn failure semantics (council §11):** STT may succeed then scribe/TTS fail. Write the
+segment only after the full turn succeeds (or `status:'pending'` + reconcile), keyed by
+`turnIdempotencyKey`, so a retry never double-appends or strands a half-authored story.
+
+**Bridge (corrected):** on `finish`, follow the proven **friends-mode template** — write
+`stories/{sessionId}` with the **unresolved `$$id$$`** narrative assembled from confirmed phases and
+`actors` = resolved cast (force-include `childId` as actor[0], like every other mode), then add an
+`authored` branch in `storyCompileFlow` that skips AI compilation and runs only synopsis + background
+tasks. ⚠️ **`sceneSummary` pre-seed is NOT free reuse:** `story-pagination-flow` has no scene-input
+channel and *generates* `imageScene` itself. Either **(a)** drop the pre-seed for v1 and let
+pagination infer scenes as it does today (recommended — authored prose paginates fine), or **(b)**
+scope an explicit pagination-flow change (move it to "Changed"). Do not claim both.
 
 ---
 
@@ -301,51 +435,86 @@ image scenes rather than inferring them (§2.7).
 
 This escalates PII sensitivity over today's posture — capturing a **child's voice** is significant.
 
-- **Transcribe-then-discard**: raw child audio is not persisted by default; only the transcript
-  (story content, handled like other story text) is kept.
-- **No analytics leakage**: extend the Sprint-1 no-PII contract — child audio and story text never
-  reach PostHog. Authoring telemetry is **content-free only**: turn count, modality, arc step,
-  stuck events, time-to-finish.
-- **Content moderation** (kids product): moderate **both** the child's input and any agent text;
-  block/redirect unsafe content; never surface a raw model refusal to a child (reuse
-  `toUserSafeMessage`).
-- **Parental consent for voice capture** — a documented consent + lawful-basis gate, analogous to
-  the Sprint-1 analytics gate. Mode ships **disabled-by-default**; flip on per
-  `systemConfig/storyAuthoring.enabled` once consent copy + retention are signed off.
+The council (§11) rated this the **highest-stakes lens** and returned **NOT-READY-as-written** with
+several BLOCKERs. Concrete requirements:
+
+- **STT data path (BLOCKER, build-shaping):** the app uses the *consumer* Gemini API (US-default),
+  not region-pinned Vertex — so sending child voice is a new cross-border transfer. **Owner decision
+  (§11.4):** Vertex AI EU/UK (or self-host) vs accept consumer terms in an updated DPA. Name Google
+  as an STT sub-processor in the privacy policy + sub-processor list regardless.
+- **Verifiable parental consent (BLOCKER, go-live):** a **server-side per-child consent record**
+  (`authoringConsent`, §3) — not a localStorage flag. Lawful basis = **consent** (safer than LI for
+  child voice); per-child, revocable (revocation deletes retained transcripts); records who/what/
+  when/version. `enabled` gates per family on this record.
+- **Transcribe-then-discard (enforced, not asserted):** prove in code — no persistence, no request
+  log, no error-capture attachment; drop the `voiceRetention:'<ttl>'` option for launch.
+- **Moderation + self-disclosed-PII + safeguarding:** see §2.8 (does not exist today — build it).
+  Gate share-link creation / print of authored books behind parent review.
+- **No analytics leakage:** extend the Sprint-1 no-PII contract — child audio/text never reach
+  PostHog. Add authoring terms (`transcript`,`utterance`,`scribedText`,`segment`) to
+  `FORBIDDEN_KEY_SUBSTRINGS`; telemetry is content-free scalars only (turn count, modality, arc
+  step index, stuck bool, questions-per-phase, time-to-finish, per-turn latency).
+- **DPIA (go-live):** UK GDPR Art.35 + ICO Children's Code almost certainly require one (children's
+  data + innovative tech/voice). New deliverable.
+- Mode ships **disabled-by-default**; the manual "consent copy reviewed" checkbox is upgraded to the
+  deliverables above.
 
 ---
 
 ## 6. Tests / Definition of Done
 
-**Automated (extends the CI vitest + e2e nets):**
-- [ ] **Authorship grounding test (headline)** — for a set of child contributions, the scribed
-      segment introduces **no** named entity or plot event absent from the input; violations are
-      rejected/re-scribed.
-- [ ] **Compile-bridge test** — authored segments → valid `stories/{id}` with `$$id$$`
-      placeholders resolving to the selected/created actors.
-- [ ] **Reference-resolution suite (§2.6)** — phonetic match binds garbled names ("Wex"→Rex);
-      pronoun + gender + presence narrows correctly; a genuinely ambiguous mention triggers a
-      clarify turn (not a silent guess); a tapped avatar overrides resolution; compile asserts
-      `imageScene.actors ⊆ cast`.
-- [ ] **Phasing suite (§2.7)** — a phase boundary is detected → flow enters `phase_recap`; recap
-      returns read-back text + batched clarify questions; `confirm_phase` locks the phase and opens
-      the next; `amend_phase` applies edits; non-blocking ambiguity defers from mid-phase to recap;
-      a confirmed phase's `sceneSummary` reaches pagination.
-- [ ] **Undo** pops the last segment and rolls back the arc step; **finish** is gated on ≥1
-      confirmed phase.
-- [ ] **STT route** returns a transcript for a fixture audio (Gemini mocked under `TEST_MODE`).
-- [ ] **Child-created character** persists with `createdVia:'child_authoring'`, gets an avatar,
-      and appears in the parent character list.
-- [ ] **No-PII contract** (extend Sprint-1): authoring telemetry carries no audio/text.
-- [ ] **Playwright happy path** — text modality, deterministic: choose mode → select/create
-      character → author 3 segments → finish → (`TEST_MODE`) storybook reaches art-ready.
-      Report-only first; promote to blocking after green (per `docs/testing/e2e.md`).
-- [ ] **WebKit (report-only)** — mic capture feature-detect + text-fallback smoke.
+**Test architecture (council §11):** *never assert a live-LLM output value in CI.* Three layers —
+(1) **pure-logic vitest** on extracted modules (deterministic, blocking from day one); (2) **seamed
+flow tests** via a new authoring TEST_MODE seam (control-flow, deterministic); (3) **e2e happy-path**
+(TEST_MODE+emulator). Probabilistic *quality* lives only in a **nightly quarantined live-gen smoke**
+with a tolerant threshold, never on the PR gate.
 
-**Manual (not automatable):**
-- [ ] Voice loop end-to-end on a real device (agent speaks, child speaks, transcript is faithful).
-- [ ] Light-touch fidelity reads as the child's voice, not the model's, on 5 sample sessions.
-- [ ] Consent copy + voice-retention policy reviewed/signed off (go-live gate).
+**Layer 1 — pure-logic unit (blocking):**
+- [ ] **`checkGrounding` (headline)** — Tier-1 entity gate + Tier-2 provenance audit over a committed
+      fixture corpus incl. **adversarial** cases (child "the dragon came" → reject added colour/
+      chase; over-embellishing fixture → must be caught). *No LLM in this test.*
+- [ ] **`resolveMentions`** — garbled name ("Wex"→Rex), pronoun×gender×presence narrowing,
+      genuinely-ambiguous → "needs clarify" verdict (not a guess), tapped-avatar override.
+- [ ] **`phaseStateMachine`** — legal transitions + **illegal** ones (confirm while authoring,
+      amend a locked phase, finish with 0 confirmed phases); boundary-heuristic detectors.
+- [ ] **`assertActorsSubsetOfCast`** — per-segment + compile-time `actors ⊆ cast`; child actor[0]
+      force-included.
+
+**Layer 2 — seamed flow (blocking, deterministic via TEST_MODE):**
+- [ ] **Authoring TEST_MODE seam** (`buildTestModeAuthoringTurn`, `TEST_MODE_TRANSCRIPT`) — *this is
+      foundation, not a checkbox* (E1 §11.3). Flow rejects-and-re-scribes on a grounding-violating
+      fixture; defers non-blocking ambiguity to recap; clarifies on low confidence.
+- [ ] **STT route** returns the fixture transcript without touching Gemini.
+- [ ] **Transcribe-then-discard (privacy)** — no Firestore/Storage write contains audio; nothing
+      attached to `captureException`.
+- [ ] **Disabled-by-default / consent gate** — routes refuse and the generator is hidden when
+      `enabled:false` / no `authoringConsent`. (Mirror `feature-flags.test.ts`.)
+- [ ] **Undo rolls back discourse state + learned aliases** (not just pops a segment); **idempotency**
+      — a retried turn (same key) does not double-write.
+- [ ] **Parent-review-flag** — ambiguous + child declines after one ask → segment flagged → surfaces
+      in W2-C page-edit.
+- [ ] **Moderation** — unsafe fixture input blocked/redirected at all three points (incl. pre-TTS);
+      self-disclosed-PII fixture flagged before compile; refusals mapped via `toUserSafeMessage`.
+- [ ] **No-PII contract** — `FORBIDDEN_KEY_SUBSTRINGS` extended (`transcript`/`utterance`/
+      `scribedText`/`segment`); content-free scalars pass, content fields rejected.
+- [ ] **Compile-bridge** — confirmed phases → `stories/{id}` with **unresolved** `$$id$$` + correct
+      `actors`; negative: a phase referencing a non-cast actor is caught before compile.
+- [ ] **Question-budget** — `questionsAskedThisPhase` hard-capped per age band.
+
+**Layer 3 — e2e (report-only → blocking after 3 cold green, per `docs/testing/e2e.md`):**
+- [ ] **Playwright happy path** — text modality: choose mode → select/create character → author →
+      finish → (TEST_MODE) storybook reaches art-ready. **WebKit report-only:** mic feature-detect +
+      text-fallback.
+
+**Nightly (quarantined, never PR-blocking):** live-gen grounding-quality smoke (≥threshold of
+fixtures clean) — the only place a real Gemini scribe runs.
+
+**Manual / spikes (gates):**
+- [ ] **Pre-build spikes (§9):** Wizard-of-Oz voice loop with real 4/6/9-yr-olds; STT WER on
+      young-child speech incl. cast names; per-turn latency (must hit p50 < 4s to first feedback).
+- [ ] Child-developmental usability gate: ≥1 child in each band completes a story.
+- [ ] Light-touch fidelity reads as the child's voice on 5 sample sessions.
+- [ ] Consent/DPIA/DPA/sub-processor + safeguarding policy signed off (go-live).
 
 **Gate:** `npm run typecheck` + `npm run build` + `npm run test` pass.
 
@@ -353,14 +522,18 @@ This escalates PII sensitivity over today's posture — capturing a **child's vo
 
 ## 7. Files
 
-**New:** `src/ai/flows/story-authoring-flow.ts`; `src/app/api/storyAuthor/route.ts`,
-`src/app/api/storyAuthor/transcribe/route.ts`, `src/app/api/kids/characters/route.ts`;
-kids authoring UI under `src/app/kids/` (mic/text turn surface, story-so-far panel, character
-create) reusing `StoryBrowser`; `systemConfig/storyAuthoring` seed; "Be the Author" generator seed;
-tests.
-**Changed:** `src/lib/types.ts` (session/character additions — Track A write-priority), kids
-generator list, `src/lib/analytics/events.ts` (content-free authoring events),
-storyCompile entry to accept the authored bridge input.
+**New:** `src/ai/flows/story-authoring-flow.ts`; pure modules `src/lib/authoring/{checkGrounding,
+resolveMentions,phaseStateMachine,assertActorsSubsetOfCast}.ts` (+ `__fixtures__/`); a **moderation
+module** (§2.8) + self-disclosed-PII detector; `src/app/api/storyAuthor/route.ts`,
+`/transcribe/route.ts`, `src/app/api/kids/characters/route.ts`; authoring TEST_MODE seam in
+`src/lib/test-mode.ts`; a **new** kids authoring UI component under `src/app/kids/` (mic/text turn
+surface, story-so-far, recap, filmstrip — not a `StoryBrowser` adapter); `systemConfig/storyAuthoring`
++ `authoringConsent` + "Be the Author" generator seeds; tests.
+**Changed:** `src/lib/types.ts` (session subcollection + character additions — Track A write-
+priority), kids generator list, `src/lib/analytics/events.ts` (+`FORBIDDEN_KEY_SUBSTRINGS`),
+`storyCompileFlow` (`authored` branch), `ai-circuit-breaker`/provider keys (`gemini-stt`), firestore
+rules + TTL config; **possibly** `story-pagination-flow.ts` *iff* `sceneSummary` pre-seed is chosen
+(§4 — otherwise unchanged).
 **Docs:** `SCHEMA.md` (session/character/config fields), `API.md` (new routes),
 `SYSTEM_DESIGN.md` (new "Child-Authored Stories" component + STT integration + voice-PII handling),
 `CHANGES.md` (on push), regression tests for the new routes.
@@ -378,24 +551,40 @@ storyCompile entry to accept the authored bridge input.
 | Output too rough for print | Fidelity dial; light-touch default; parent per-page edit already exists (W2-C) |
 | Unsafe child-generated content | Moderate input + output; user-safe redirects, never raw refusals |
 | Safari/iOS audio capture flakiness | `MediaRecorder` feature-detect + text fallback; WebKit report-only e2e |
-| Placeholder/entity drift on compile | Reuse the proven `$$id$$` + actor-tracking pattern; bridge test (§6) |
-| **Wrong character resolved → wrong character drawn** | Closed-world linking + phonetic match + STT biasing + clarify-don't-guess + tappable cast + compile-time `actors ⊆ cast` assert (§2.6) |
+| Placeholder/entity drift on compile | Friends-mode bridge template; **unresolved** `$$id$$` written; bridge test (§6) |
+| **Wrong character resolved → wrong character drawn** | Closed-world linking + clarify-don't-guess + tappable cast + compile-time `actors ⊆ cast` assert (§2.6 v1) |
+| **Grounding guarantee gives false-green (LLM judges LLM)** | Deterministic entity + provenance gates; independent-model semantic check report-only (§2.2) |
+| **Moderation assumed but absent in codebase** | Build the §2.8 module before wiring scribe/recap/TTS/compile |
+| **Per-turn latency 6–12s ≫ child patience** | Flash tier; stream TTS; show text before audio; filler; latency spike gates voice-first (§9) |
+| **~10× call blow-up / per-book cost** | Flash for scribe+STT; fold grounding/boundary into scribe; TTS text-hash cache; per-book cost telemetry |
+| **Hot session doc / 1 MiB / unbounded growth** | Segments in a subcollection; TTL on authoring data (§3) |
+| **STT child-voice residency / "no new DPA" false** | Owner decision Vertex-EU vs DPA (§11.4); sub-processor list update |
+| **Unusable for the younger half of 4–9** | Age bands + Little-Author reductions + Parent-Assist mode (§2.7) |
 
 ---
 
 ## 9. Sequencing within the sprint
 
-1. **Foundation** — types/session phase + phase model, `systemConfig/storyAuthoring`, generator
-   seed (disabled).
-2. **Authoring flow (text-first)** — scribe+coach, arc-awareness, grounding check, undo/finish,
-   **phase state machine + boundary recap/clarify (§2.7)**. Text modality first because it's
-   deterministic and carries the headline tests.
-3. **Characters** — Friends-selection reuse + child create + AI-avatar-from-description.
-4. **Compile bridge + e2e** — confirmed phases → `storyText` (+ `sceneSummary` pre-seed); run
-   through the existing pipeline (TEST_MODE).
-5. **Voice** — STT route (Gemini) + spoken agent prompts (TTS) + mic UI + text fallback.
-6. **Privacy/telemetry/moderation** — content-free events, transcribe-then-discard, moderation.
-7. **DoD + docs + consent gate** — tests green; docs updated; ship disabled-by-default behind flag.
+0. **Pre-build spikes (gate the design — council §11).** Wizard-of-Oz voice loop with real
+   4/6/9-yr-olds (answers the age-band/recap/comprehension risks before code); STT WER on young-child
+   speech incl. cast names; per-turn latency prototype. **If voice-first can't hit p50 < 4s, lead
+   text-first.** Resolve the §11.4 owner decisions (STT data path; age-band scope; phases-now vs
+   flat-stream-first).
+1. **Foundation** — types + **segments subcollection** + TTL; `systemConfig/storyAuthoring` +
+   `authoringConsent` + generator seed (disabled); **TEST_MODE authoring seam**; **moderation module
+   skeleton** (§2.8) wired as a no-op hook at all three points.
+2. **Authoring flow (text-first)** — extracted pure modules (`checkGrounding`, `resolveMentions`,
+   `phaseStateMachine`) with their vitest corpora *first*; then the Flash scribe/coach calls +
+   idempotency + reliability wrapping. Carries the headline deterministic tests.
+3. **Characters** — Friends-selection reuse + child create + AI-avatar-from-description (moderated).
+4. **Compile bridge + e2e** — confirmed phases → unresolved `$$id$$` via the friends-mode template;
+   run through the existing pipeline (TEST_MODE). (Pagination pre-seed only if §4 option (b) chosen.)
+5. **Voice** — STT route (Flash) + streaming prompt TTS + tap-to-talk UI + text fallback, *after the
+   spike clears it*.
+6. **Safety & privacy** — full moderation + self-disclosed-PII detector + share/print gating +
+   transcribe-then-discard guarantees + content-free telemetry + no-PII contract extension.
+7. **DoD + docs + consent/DPIA gate** — tests green; docs updated; ship disabled-by-default; go-live
+   gated on the §5 compliance deliverables.
 
 ---
 
@@ -405,3 +594,49 @@ storyCompile entry to accept the authored bridge input.
 - Collaborative / multi-child co-authoring.
 - Editing a *finished* authored story's text from the kids surface (parent page-edit covers print).
 - Blind A/B of scribe vs co-author output quality (do once the dial has real sessions to compare).
+- **v2 of the authoring engine** (deferred from v1 per council): Double Metaphone + child-phonology
+  table + persisted `phoneticKeys`; full discourse-state resolver; the fidelity dial.
+
+---
+
+## 11. Council Review (v2 — 2026-06-23)
+
+Six specialist reviewers assessed the v1 plan against the live codebase. **Consensus: the
+architecture is sound** — closed-world entity linking, authorship-agnostic downstream reuse, and
+phased recap are the right ideas — **but v1 oversold three things that don't exist or can't work as
+written, and treated "4–9" as one user.** The body above (§§1–10) is revised accordingly.
+
+### 11.1 Verdicts by lens
+| Lens | Verdict | Sharpest finding |
+|---|---|---|
+| Simplicity & reuse | Sound, **over-scoped** | `sceneSummary→pagination` is a *false* reuse claim (no scene-input channel); `StoryBrowser`/`messages` reuse oversold; §2.6/§2.7 are research-grade for v1. Bridge is low-risk — friends-mode already paved it. |
+| AI/ML correctness | **Two redesigns needed** | A single LLM-judge grounding check is circular → false-green on the headline feature. "Moderation = reuse `toUserSafeMessage`" is false — it's an error mapper; no moderation/`safetySettings` exist. |
+| Testability | **Foundation under-budgeted** | Most §6 tests aren't deterministic as written; needs an authoring TEST_MODE seam (E1) + guarantees extracted as pure modules (E2), else the headline test "tests nothing." |
+| Child safety & privacy | **NOT-READY as written** | 3 BLOCKERs: consumer-Gemini STT ≠ "no new DPA" (US residency, child voice); no moderation; self-disclosed PII → **public share + print**. |
+| Scalability/cost/latency | **Viability risk** | ~10× call blow-up (4–7 → 40–100 dialog calls), inherits Pro; per-turn ~6–12s ≫ a child's 2–4s patience; hot session-doc array. |
+| UX / child-dev fit | **"4–9 is two products"** | No younger-age path; no enforced question budget; Parent-Assist leaned on but unbuilt; no latency budget. |
+
+### 11.2 Must-fix **before build** (shape the architecture)
+1. **Redesign the grounding guarantee** → deterministic entity gate + provenance audit; independent-model semantic check report-only only (§2.2).
+2. **Build a real moderation module** + self-disclosed-PII detector at three insertion points (§2.8) — it does not exist today.
+3. **Decide & wire the STT data path** (Vertex-EU vs consumer+DPA) and strike "no new DPA" (§2.3/§5/§11.4).
+4. **Add the authoring TEST_MODE seam + extract guarantees as pure modules** (`checkGrounding`/`resolveMentions`/`phaseStateMachine`) (§4/§6).
+5. **Segments → subcollection + TTL**; not an embedded array on the hot session doc (§3).
+6. **Pin Flash + low temp; split scribe/coach; fold grounding/boundary into scribe output; reliability-wrap + idempotency + mid-turn semantics** (§4).
+7. **Age-band split + server-enforced question budget + Parent-Assist mode** (§2.7).
+8. **Run the pre-build spikes** (WoZ usability, STT WER, latency) — they can invalidate voice-first cheaply (§9.0).
+9. **Simplify §2.6 to v1 scope** (defer metaphone/discourse-state; confidence from the deterministic pre-pass, not the LLM).
+
+### 11.3 Must-fix **before go-live** (flip `enabled`)
+Verifiable **server-side parental consent** (per child, revocable) · **DPIA** · executed **DPA + sub-processor-list + privacy-policy** updates naming Google for STT · EU/UK residency confirmed · **safeguarding/escalation policy** · share/`childName`-exposure decision for authored books · the no-PII analytics test extended to authoring telemetry.
+
+### 11.4 Open decisions for the owner
+- **STT data path:** Vertex AI EU/UK (more setup, clean residency) **vs** consumer Gemini + updated DPA (faster, residency/terms risk for child voice). *Recommend Vertex-EU.*
+- **Voice-first vs text-first lead:** gated on the latency spike — if record→STT→scribe→TTS→play can't hit p50 < 4s, default text-first and treat voice as enrichment. *Recommend deciding post-spike.*
+- **Age-band scope:** ship both Little/Big Author in v1, or Big-only first and add Little later? *Recommend both, because Little-Author is the harder-but-core demographic — but it's a scope call.*
+- **Phases now vs flat-stream-first:** simplicity lens suggests a flat segment-stream + "I'm done" delivers the exit criterion with far less machinery; phases (your explicit ask) can be the immediate next increment. *Recommend flat-stream as the first internal milestone, phases as milestone 2 within the sprint.*
+
+> **Process note:** v1's three design pillars (scribe-not-inventor, always-know-who, phased recap)
+> survived review intact. What changed is *how much to build at once* and *which safety/compliance
+> foundations are prerequisites, not follow-ups*. The council did not weaken the vision — it moved
+> the load-bearing walls to the bottom.
