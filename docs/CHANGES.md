@@ -18,6 +18,17 @@
 
 ### 2026-06-23
 
+#### `ff8e817` - Sprint CA: write full implementation spec batch (§12.2–§12.7) ahead of spikes
+
+**Type**: Planning / Documentation
+
+**Summary**: Owner reversed the spikes-first sequencing — wrote the remaining implementation specs now rather than waiting for spike results, with every genuinely spike-dependent value marked ⟦spike-calibrated⟧ against its source spike (contracts/structure stand regardless of the numbers). Added: §12.2 reference resolution v1 (deterministic edit-distance audit of even the LLM's confident binds per §11.5.6, clarify-not-guess, tap override learning a minimal session-alias map for undo); §12.3 phase state machine + server-enforced question budget (pure `phaseStateMachine`, hybrid boundary detection, illegal-transition tests, budget caps + recap cadence flagged spike-calibrated); §12.4 moderation + safeguarding (new infra — layered blocklist + Flash classifier + Gemini safetySettings at three insertion points incl. pre-TTS; separate safeguarding-disclosure classifier that flags not blocks; redirect-loop prevention); §12.5 self-disclosed-PII detector + share/print parent-review gate + cascading-erasure/child-DSAR design (provenance on every derived doc); §12.6 Parent-Assist hybrid flow + per-segment author provenance + artifact relabelling; §12.7 compile bridge (friends-mode template, unresolved $$id$$, childId actor[0], actors⊆cast assert). Updated §11.6 sequencing decision and the status line.
+
+**Modified files**:
+- `docs/sprints/SPRINT-CA-CHILD-AUTHORED.md`, `SPRINTS.md`
+
+---
+
 #### `53c8c60` - Sprint CA: WoZ facilitator script
 
 **Type**: Tooling (throwaway / research)

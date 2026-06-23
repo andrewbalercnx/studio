@@ -865,9 +865,12 @@ which several of the above shrink dramatically if flat-stream leads.
   until a parent approves; passcode-on + higher token entropy when approved; `childName`-exposure
   decided at the review step. (§2.8 updated; supersedes the "decide childName exposure" open item in
   §11.3/§11.5.5.)
-- **Spec sequencing → SPIKES FIRST.** Spike-*dependent* specs (voice/UX, phase cadence, age floor,
-  Parent-Assist interaction) wait until the three §9.0 spikes report. The **grounding mechanism spec
-  (§12.1) is spike-independent** and is written now.
+- **Spec sequencing → SPIKES FIRST** *(superseded 2026-06-23 — see below)*. Originally: spike-
+  dependent specs wait for the §9.0 spikes; only the spike-independent grounding spec (§12.1) now.
+  **Reversed by the owner:** write the full spec batch now (§12.2–§12.7), with every genuinely
+  spike-dependent value marked **⟦spike-calibrated⟧** against its source spike. The contracts and
+  structure stand regardless of the numbers; the spikes calibrate parameters and may force the
+  documented forks (age-floor re-scope, dedicated STT, harder latency tactics), not rewrites.
 
 ---
 
@@ -948,3 +951,172 @@ object violation); added character (lowercase "monster" → T2c); confabulated s
 doesn't entail → T2b); legitimate cap-fix (child "rex"→"Rex" → pass); alias synonym (child "doggy"→
 `$$dog$$` → pass); continuity (atom cites prior confirmed text → pass). A **seamed flow test** feeds a
 violating fixture as the scribe output and asserts reject-and-re-scribe + the fail-closed fallback.
+
+> **Note (specs written ahead of spikes, 2026-06-23):** §11.6 originally sequenced these
+> spike-first. The owner reversed that — specs are written now. Where a value genuinely depends on a
+> spike (age-band cadence, question-budget numbers, edit-distance threshold, STT choice, latency
+> tactics) it is marked **⟦spike-calibrated⟧** with the source spike; the *structure and contracts*
+> below stand regardless of the numbers.
+
+### 12.2 Reference resolution — v1 spec
+
+**Goal:** map every character mention in a child turn → an actor ID against the closed cast,
+deterministically where possible; **clarify when unsure; never silently wrong-bind.** Full
+phonetic/discourse resolution is v2-deferred (§2.6 v1 scoping); v1 leans on the closed-cast prompt +
+a deterministic edit-distance check that runs on **every** name-derived bind — including the LLM's
+*confident* ones (§11.5.6).
+
+**Pure module** `resolveMentions({ scribeBindings, unboundMentions, cast, presentActorIds, turnAliases }) → { bindings, needClarify, learnedAliases }`
+- `scribeBindings`: `[{ surface, actorId }]` the scribe emitted (each `$$id$$` it wrapped, with the
+  surface text it bound).
+- `cast`: `[{ id, names:[canonical+aliases] }]`. `presentActorIds`: actors mentioned this/last
+  segment (thin v1 "salience"). `turnAliases`: surface→id learned earlier this session.
+
+**Algorithm (deterministic):**
+1. **Audit every confident LLM bind.** For each `scribeBinding`, edit-distance the `surface` against
+   all cast names/aliases. Accept iff the bound `actorId` is the *best* match within threshold. If a
+   **different** cast member matches better → it's a mis-bind → push to `needClarify` (do **not**
+   trust the LLM). If nothing matches within threshold → `needClarify`.
+2. **Resolve unbound mentions.** Edit-distance the `surface` against the cast: single clear winner →
+   bind (`source:'editdistance'`); ties or none → `needClarify` with candidates.
+3. **Pronouns (thin v1).** If the surface is a pronoun and exactly one `presentActorIds` member
+   matches its gender → bind; otherwise `needClarify`. (Salience/antecedent stack is v2.)
+4. **Tap override.** A child tap on a cast avatar in response to a clarify wins (`source:'tap'`) and
+   adds `surface→id` to `learnedAliases` for the session (the minimal alias map — also what **undo**
+   rolls back, §11.5.8).
+- Edit-distance: normalized Levenshtein on lowercased tokens; **threshold ⟦spike-calibrated⟧ by the
+  STT WER spike** (how garbled real child renderings of the cast names are). Phonetic substitution
+  table = v2.
+
+**Output usage:** `bindings` confirm the segment's `$$id$$` tags; `needClarify` drives a clarify —
+*blocking* (can't place the segment) asks now; *non-blocking* defers to the phase recap (§2.7). After
+the budget (§12.3) is spent, unresolved → bind most-salient + `parentReviewFlag`.
+
+**Tests (pure):** "Wex"→`$$rex$$` by edit-distance; a confident-but-wrong LLM bind is caught and
+clarified; ambiguous → `needClarify` (never a guess); tap override learns a session alias; single
+gender-matched pronoun binds, multi → clarify.
+
+### 12.3 Phase state machine + question budget — spec
+
+**States:** `authoring` · `phase_recap` · `finished`. Per-phase `status: open|recapping|confirmed`.
+
+**Pure module** `phaseStateMachine(state, action, ctx) → { nextState, effects[] }` — exhaustive and
+the home of the headline state tests.
+
+**Actions:** `start · continue(segment) · undo · help · confirm_phase · amend_phase · finish` plus
+internal `boundaryDetected`.
+
+**Boundary detection (hybrid):** the scribe emits `boundarySignal ∈ {continue, phase_end,
+story_end}` (LLM heuristic) **plus** deterministic triggers — a scene-shift keyword list
+("next day", "later", "back home"), child-signal phrases ("the end", "and that's the story"), and a
+**max-segments-per-phase** cap. Any → `phase_end` → enter `phase_recap`. `story_end` or `finish` →
+`finished`, **gated on ≥1 confirmed phase**.
+
+**`phase_recap` behaviour:** build recap text — **whole phase (Big) / "just the new bit" (Little)**
+⟦spike-calibrated cadence: WoZ⟧ — gather this phase's deferred non-blocking clarifies (§12.2) up to
+the budget, read back (TTS, moderated §12.4), then await `confirm_phase` (lock, open next) or
+`amend_phase` (apply edit, re-scribe affected segment).
+
+**Question budget (server-enforced, not prompt-level):** `questionsAskedThisPhase` counter, hard cap
+by band — **Little ≤1 / Big ≤2–3 ⟦spike-calibrated: WoZ⟧**. Over budget → suppress further clarifies,
+bind most-salient + `parentReviewFlag`. A *genuine* dropped ambiguity is voiced as a cheerful "got
+it!", never silence (§11.5.7). Blocking ambiguity may ask mid-phase (counts against budget);
+non-blocking defers to recap.
+
+**Undo:** pop last segment; roll back `learnedAliases` gained that turn and decrement the budget
+counter if that turn asked (§11.5.8). **Phase count caps ⟦spike-calibrated: WoZ⟧** (Little 1–2,
+Big 3–5).
+
+**Tests (pure):** legal transitions; **illegal** ones rejected (`confirm` while `authoring`, `amend`
+a confirmed phase, `finish` with 0 confirmed phases); boundary heuristics on fixture transcripts;
+budget cap suppresses the 2nd Little-Author clarify; undo rolls back alias + counter.
+
+### 12.4 Moderation & safeguarding — spec (NEW infra)
+
+Nothing exists today (`toUserSafeMessage` is an error mapper; no `safetySettings` anywhere). Build it.
+
+**Module** `moderate(text, { role }) → { verdict: ok|block|redirect|flag, categories[] }`, where
+`role ∈ {child_input, agent_output, compiled_story}`. **Layered:** a deterministic blocklist/regex
+first (cheap, catches slurs/long tail), then a Flash classification pass for child-context
+categories; **plus** explicit Gemini `safetySettings` (HarmCategory thresholds) on the scribe/coach
+calls — none are configured today.
+
+**Three insertion points:** (i) child input **post-transcription, before it enters any prompt**;
+(ii) scribed segment + agent prompt **pre-display AND pre-TTS** (recap reads aloud — an amplification
+path); (iii) compiled story **pre-share / pre-print**.
+
+**Child-facing UX:** `block`/`redirect` → kind redirect via `toUserSafeMessage`, never a raw refusal;
+track a per-idea redirect count and **never refuse the same idea twice without a concrete gentle
+steer**, then escalate to parent (§11.5.7) — avoids the redirect→repeat loop.
+
+**Safeguarding classifier (separate from moderation):** detects *disclosure* of harm
+(abuse / self-harm / domestic) — which is **not** "unsafe content." On detection: do **not** block
+(the child isn't doing wrong) → `flag` for parent review, respond calmly, **no auto-report**
+(documented stance). Runs on the transcript **before** the recap read-back so we never voice it back.
+
+**Tests:** unsafe input blocked at each point; refusal mapped via `toUserSafeMessage`; redirect-loop
+prevention; safeguarding disclosure → `flag` not `block`; agent output gated before TTS.
+
+### 12.5 Self-disclosed PII + share/print gate + erasure — spec
+
+**PII detector** `detectPii(text) → { spans:[{type, text}], hasPii }` — deterministic patterns
+(phone, address, "I live at…/my school is…/my name is…" templates) + a Flash classifier for context.
+Runs in the **scribe step, before compile**. Action: redact to generic ("my street", "my school")
+**or** hold the segment for parent review (config; default flag-and-surface-at-review).
+
+**Share/print gate (decided §11.6):** an authored book carries `shareReviewState: 'unreviewed'`.
+`POST` share-link creation and print submission **refuse** until a parent sets `'approved'` via a
+review UI. On approval: **passcode-on by default**, **raise share-token entropy** (today's
+`randomBytes(4)` = 32 bits is brute-forceable → `randomBytes(16)`), and the `childName`-on-share
+choice is made at the review step.
+
+**Cascading erasure (§11.5.5 — design before schema sets):** stamp `childId` + `parentUid` on
+**every** derived doc (segments, `stories/{id}`, storybook, pages, `shareLinks`, print orders).
+`eraseChild(childId)` / consent-revocation deletes the whole chain (incl. retained transcripts —
+the audio is already discarded). This is the child-DSAR path (§11.3 go-live).
+
+**Tests:** PII fixtures flagged/redacted; share/print refused while `unreviewed`; approved share uses
+passcode + high-entropy token; `eraseChild` deletes every derived doc.
+
+### 12.6 Parent-Assist (hybrid) flow + provenance — spec
+
+Two clearly-labelled modes (§11.6). Session `assistMode: 'none'|'scaffolding'|'coauthor'`; per-segment
+`author: 'child'|'parent'|'shared'`.
+
+- **Scaffolding (default):** grown-up encourages / rephrases / operates the device; **child supplies
+  content**; segments stay `author:'child'`; grounding validates against the child's words; artifact =
+  **child-authored**.
+- **"Help me tell it together" (co-author, opt-in, distinctly labelled):** parent may supply content;
+  those segments tagged `author:'parent'|'shared'`; grounding still runs (no inventing) but against
+  whatever the author supplied; artifact labelled **co-created** and the child-authored guarantee is
+  **not** claimed.
+
+**Flow:** entry = explicit mode toggle (distinct UI, never silent); turn-ownership recorded per
+segment; exit/re-entry allowed — **switching to `coauthor` relabels the artifact** (derived from
+segment provenance: any `parent`/`shared` segment → co-created). ⟦WoZ decides whether scaffolding
+suffices for 4–5 or co-author is needed; the flow supports both regardless.⟧
+
+**Tests:** provenance persists per segment; mode switch relabels the artifact; scaffolding keeps
+`author:'child'`; a co-author session's book is labelled co-created.
+
+### 12.7 Compile bridge — spec
+
+Follows the **friends-mode template** (verified by the simplicity lens: friends writes
+`stories/{id}` with unresolved `$$id$$` + `actors`, then `storyCompileFlow` skips AI compilation).
+
+**On `finish`:**
+1. Assemble confirmed `phases[].scribedText` in order → canonical narrative, keeping the **unresolved
+   `$$id$$`** placeholders (segments already carry them from §12.2). *Do not write resolved names —
+   the friends/wizard comments warn that resolved text breaks pagination.*
+2. `actors` = union of segment `actorIds`, **force-include `childId` as actor[0]** (every mode does).
+3. **Assert `actors ⊆ cast`** before write (the L5 gate); a non-cast reference blocks compile with a
+   clarify rather than a dangling placeholder.
+4. Write `stories/{sessionId}` `{ storyText:<unresolved>, actors, storyMode:'authored', childId,
+   parentUid, metadata }`, then call the existing compile path (synopsis + background tasks;
+   **consumes `story_allowance`**). Add an `authored` branch in `storyCompileFlow` mirroring `friends`.
+5. **Pagination infers scenes as today** (§4 option (a) — `sceneSummary` pre-seed dropped for v1
+   unless explicitly scoped).
+
+**Tests:** confirmed phases → valid `stories/{id}` with **unresolved** `$$id$$` + correct `actors`
+(childId[0]); a non-cast actor is caught pre-write; downstream pipeline reaches art-ready in
+TEST_MODE (reuses the storybook-pipeline e2e once built).

@@ -684,9 +684,9 @@ mitigations mandatory); both Little + Big Author age bands in v1; phases built f
 
 **Status:** PLANNED (v2, council-reviewed; **owner decisions resolved §11.4 + §11.6**; v2 re-validated
 by a second council pass §11.5. Round-2 decisions: Parent-Assist hybrid, share/print gated behind
-parent review, spikes-first sequencing. **Grounding-mechanism implementation spec written (§12.1)**;
-remaining specs held pending the §9.0 spikes. Top-line verdict unchanged: build green behind the flag,
-flipping `enabled` is NO-GO).
+parent review, spikes-first sequencing — **since reversed: full implementation spec batch §12.1–§12.7
+now written, spike-dependent values flagged ⟦spike-calibrated⟧**. Spike tooling built under `spikes/`.
+Top-line verdict unchanged: build green behind the flag, flipping `enabled` is NO-GO).
 
 ---
 
