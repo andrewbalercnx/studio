@@ -18,6 +18,20 @@
 
 ### 2026-06-23
 
+#### `53c8c60` - Sprint CA: WoZ facilitator script
+
+**Type**: Tooling (throwaway / research)
+
+**Summary**: Added `spikes/woz/facilitator-script.md` — the exact wording the Wizard-of-Oz operator uses so the scribe+coach dialog isn't improvised. Differentiated by age band (Little 4–6: 1–2 phases, no arc prompts, ≤1 clarify, "just the new bit" recap, cheerleader tone; Big 7–9: full arc-aware prompts, whole-phase recap, ≤2–3 clarifies), with open-prompt/scaffold/clarify/recap lines, an awkward-behaviour table mapped to the operator's one-tap observations, author-provenance guidance, and the scaffolding-vs-co-author Parent-Assist distinction (§11.6). README points at it.
+
+**Created files**:
+- `spikes/woz/facilitator-script.md`
+
+**Modified files**:
+- `spikes/README.md`
+
+---
+
 #### `58b739b` - Sprint CA: build de-risking spike tooling under spikes/
 
 **Type**: Tooling (throwaway / not wired into the app)

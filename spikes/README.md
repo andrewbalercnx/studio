@@ -7,6 +7,10 @@ badly, reshapes the plan — so run these *before* writing the spike-dependent s
 | Spike | Question it answers | Needs creds? | Decides |
 |-------|--------------------|--------------|---------|
 | [`woz/`](./woz) | Can a real 4/6/9-yr-old sustain a scribe+coach dialog? | **No** | age bands · recap cadence · question budget · age-4 floor |
+
+> WoZ facilitator: read [`woz/facilitator-script.md`](./woz/facilitator-script.md) first — the exact
+> open-prompt / scaffold / clarify / recap wording per age band — then capture results in
+> [`woz/findings-template.md`](./woz/findings-template.md).
 | [`stt/`](./stt) | Is Gemini STT accurate on young-child speech (esp. cast names)? | Vertex-EU | voice-first viability · dedicated-STT vs Gemini · name-biasing value |
 | [`latency/`](./latency) | Does record→STT→scribe→TTS→play hit p50 < 4 s? | Vertex-EU + ElevenLabs | voice-first interaction model · what to stream/optimise |
 
