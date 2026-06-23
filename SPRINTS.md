@@ -682,9 +682,11 @@ parental consent + DPIA + DPA/sub-processor updates + safeguarding policy. Full 
 detail doc. **Owner decisions resolved (§11.4):** STT → Vertex AI EU/UK; voice-first committed (latency
 mitigations mandatory); both Little + Big Author age bands in v1; phases built from the start.
 
-**Status:** PLANNED (v2, council-reviewed; **owner decisions resolved §11.4**; v2 re-validated by a
-second council pass — §11.5: new build-blockers, chiefly "phantom reuse" of infra that doesn't exist
-as cited. Top-line verdict unchanged: build green behind the flag, flipping `enabled` is NO-GO).
+**Status:** PLANNED (v2, council-reviewed; **owner decisions resolved §11.4 + §11.6**; v2 re-validated
+by a second council pass §11.5. Round-2 decisions: Parent-Assist hybrid, share/print gated behind
+parent review, spikes-first sequencing. **Grounding-mechanism implementation spec written (§12.1)**;
+remaining specs held pending the §9.0 spikes. Top-line verdict unchanged: build green behind the flag,
+flipping `enabled` is NO-GO).
 
 ---
 

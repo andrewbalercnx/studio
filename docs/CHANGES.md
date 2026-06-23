@@ -18,6 +18,17 @@
 
 ### 2026-06-23
 
+#### `eeacfd0` - Sprint CA: round-2 owner decisions (§11.6) + grounding implementation spec (§12.1)
+
+**Type**: Planning / Documentation
+
+**Summary**: Recorded a second AskUserQuestion decision round (§11.6): Parent-Assist is HYBRID (scaffolding-only default where the child supplies content and the authorship guarantee holds, plus an opt-in distinctly-labelled "help me tell it together" co-author sub-mode whose output is labelled co-created; per-segment `author` provenance; modes are a state-machine concern, not a boolean — §2.7); share/print of authored books is GATED behind explicit parent review (no public share link or print order until approved; passcode-on + higher token entropy when approved; childName-exposure decided at review — §2.8); and spec-writing is spikes-first except the spike-independent grounding spec. Wrote the grounding-mechanism implementation spec (§12.1): resolves the fat-call-vs-split-call contradiction (scribe = one fidelity call emitting text+atoms+unbound-mentions+boundary-signal; coach = separate generative call; grounding check = deterministic, zero extra LLM calls); a pure `checkGrounding` with Tier-1 (tagged-subset + proper-noun-invention reconciled with capitalisation-fixing via lexical-presence) and Tier-2 (span provenance + content-word entailment + common-noun new-entity catch); the fail-closed invariant (reject-and-re-scribe on malformed grounding fields, never repair-then-pass); near-verbatim fallback + parent-review flag; LLM-never-the-judge with an optional independent-model report-only check; and a deterministic adversarial test corpus. Updated data model (`assistMode`, per-segment `author`, `shareReviewState`) and §11.3 go-live items.
+
+**Modified files**:
+- `docs/sprints/SPRINT-CA-CHILD-AUTHORED.md`, `SPRINTS.md`
+
+---
+
 #### `423f20a` - Sprint CA: resolve owner decisions + reuse-accounting pass (reconcile with §11.5)
 
 **Type**: Planning / Documentation

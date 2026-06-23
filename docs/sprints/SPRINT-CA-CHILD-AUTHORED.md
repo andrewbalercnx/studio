@@ -312,12 +312,22 @@ kids. Track `questionsAskedThisPhase` in session state and **hard-cap** it (Litt
 Big Author ≤2–3/recap); over budget → fall back to most-salient + parent-review flag. Emit
 questions-per-phase as content-free telemetry to tune the cap on real data.
 
-**Parent-Assist / co-pilot mode (must-fix — currently leaned on but unbuilt).** An explicit "a
-grown-up is helping" toggle, the *default suggested* path for the 4–5 band: parent can speak for the
-child or rephrase the agent's question, clarify questions surface parent-facing, and a present parent
-also de-risks consent. **Comprehension & turn-taking fallbacks** (not just "silence"): handle the
-rambler (chunk long audio), the off-topic answer, and **"child didn't understand"** — rephrase
-simpler *once*, then drop the question; never ask the same concept twice.
+**Parent-Assist / co-pilot mode — HYBRID stance (decided §11.6).** Two clearly-labelled modes, not a
+bare toggle:
+- **Scaffolding (default):** the grown-up encourages, rephrases the agent's question, or operates the
+  device, **but the child supplies the content.** The §2.2 grounding guarantee still validates against
+  the *child's* words; turns are provenance-tagged `author:'child'`; the "child-authored" promise
+  holds across the whole 4–9 span. If the youngest can't contribute, fall back gracefully (tappable
+  picture rail, end early) rather than letting the parent author.
+- **"Help me tell it together" (opt-in co-author):** an explicit, distinctly-labelled sub-mode where
+  the parent may supply content; turns tagged `author:'parent'|'shared'`; the artifact is labelled
+  **co-created** and the child-authored guarantee is *not* claimed for it. This is the honest home for
+  the 4–5 band when scaffolding isn't enough.
+Provenance (`author` per segment), turn-ownership, and the entry/exit/re-entry flow between the two
+modes are a **schema + state-machine concern**, not a boolean — specced with the phase machine.
+**Comprehension & turn-taking fallbacks** (not just "silence"): handle the rambler (chunk long audio),
+the off-topic answer, and **"child didn't understand"** — rephrase simpler *once*, then drop the
+question; never ask the same concept twice.
 
 ---
 
@@ -338,10 +348,12 @@ refused to *invent* — so this must be built, not reused. It is a launch blocke
 - **Self-disclosed-PII detector/redactor** in the scribe step: a freely-narrating child will say
   real names, address, school. That text compiles into a **printable** and **publicly shareable**
   book (`shareLinks/{id}` is fetched unauthenticated, passcode optional, and currently returns
-  `childName`). Flag/redact real-name/address/school/phone patterns before compile; **gate
-  share-link creation and print submission of authored books behind parent review**; reconsider
-  exposing `childName` on a public share page; consider forcing `requiresPasscode` for authored
-  shares.
+  `childName`). Flag/redact real-name/address/school/phone patterns before compile.
+- **Share/print of authored books is GATED behind explicit parent review (decided §11.6).** No public
+  share link or print order can be created for a child-authored book until a parent has reviewed and
+  approved it — the strongest control, removing accidental exposure rather than mitigating it. When a
+  share *is* approved: passcode-on by default, raise share-token entropy (the current 8-hex/32-bit id
+  is brute-forceable), and the parent-review step is where the `childName`-exposure choice is made.
 - **Safeguarding policy** (must-fix-before-go-live): a documented stance for distressing disclosure
   (abuse/self-harm/domestic) — at minimum flag-for-parent-review with no auto-report; silence is not
   an acceptable answer for sign-off.
@@ -363,7 +375,9 @@ sessions carry the heaviest payload in the product. Several fields below are **d
 
 **`storySessions/{id}`** (small fixed fields only):
 - `storyMode: 'authored'` · `currentPhase`: add `'authoring'` · `authoringComplete?` · `expireAt`
-- `ageBand?: 'little'|'big'` · `parentAssist?: boolean` · `questionsAskedThisPhase?: number`
+- `ageBand?: 'little'|'big'` · `assistMode?: 'none'|'scaffolding'|'coauthor'` (hybrid, §11.6) ·
+  `questionsAskedThisPhase?: number` (per-segment `author?: 'child'|'parent'|'shared'` provenance)
+- `shareReviewState?: 'unreviewed'|'approved'` · print blocked until `approved` (§11.6 share gate)
 - `authoredPhases?` (bounded ≤5, may stay inline) — `{ id, order, arcStep, segmentIds[],
   scribedText, sceneSummary{…}, actorIds[], actions[], status, recapConfirmedAt? }`
 - `authoringPhaseState?: 'authoring'|'phase_recap'`
@@ -645,7 +659,7 @@ written, and treated "4–9" as one user.** The body above (§§1–10) is revis
 9. **Simplify §2.6 to v1 scope** (defer metaphone/discourse-state; confidence from the deterministic pre-pass, not the LLM).
 
 ### 11.3 Must-fix **before go-live** (flip `enabled`)
-Verifiable **server-side parental consent** (per child, revocable) · **DPIA** · executed **DPA + sub-processor-list + privacy-policy** updates naming Google for STT · EU/UK residency confirmed · **safeguarding/escalation policy** · share/`childName`-exposure decision for authored books · the no-PII analytics test extended to authoring telemetry.
+Verifiable **server-side parental consent** (per child, revocable) · **DPIA** · executed **DPA + sub-processor-list + privacy-policy** updates naming Google for STT · EU/UK residency confirmed · **safeguarding/escalation policy** · parent-review share/print gate live + `childName`-at-review choice (§11.6) · **age-assurance control + child DSAR/erasure path** (§11.5.5) · the no-PII analytics test extended to authoring telemetry.
 
 ### 11.4 Owner decisions — RESOLVED (2026-06-23)
 - **STT data path → Vertex AI EU/UK region.** Clean residency for child voice; consumer Gemini ruled
@@ -838,3 +852,96 @@ cascading-deletion + compiled-book-PII model (11.5.5, before schema sets); **(f)
 deterministic bind-check (11.5.6). New go-live additions: age-assurance + child DSAR/erasure
 (11.5.5). And the highest-leverage owner call remains §11.4 #4 (**flat-stream-first vs phases**),
 which several of the above shrink dramatically if flat-stream leads.
+
+### 11.6 Owner decisions, round 2 — RESOLVED (2026-06-23)
+- **Parent-Assist → HYBRID** (scaffolding-only default + opt-in, distinctly-labelled "help me tell it
+  together" co-author sub-mode). Provenance per segment (`author`), modes are a schema + state-machine
+  concern. (§2.7 updated.) *The child-authored guarantee holds in scaffolding; it is explicitly NOT
+  claimed for the co-author sub-mode, whose output is labelled "co-created."*
+- **Share/print of authored books → GATED behind parent review.** No public share link or print order
+  until a parent approves; passcode-on + higher token entropy when approved; `childName`-exposure
+  decided at the review step. (§2.8 updated; supersedes the "decide childName exposure" open item in
+  §11.3/§11.5.5.)
+- **Spec sequencing → SPIKES FIRST.** Spike-*dependent* specs (voice/UX, phase cadence, age floor,
+  Parent-Assist interaction) wait until the three §9.0 spikes report. The **grounding mechanism spec
+  (§12.1) is spike-independent** and is written now.
+
+---
+
+## 12. Implementation specs (post-decision)
+
+> Per §11.6, only the **spike-independent** grounding spec is written now; the spike-dependent specs
+> (reference-resolution v1 bind-check, phase state machine, moderation/safeguarding, self-disclosed-PII,
+> Parent-Assist flow, compile bridge) follow once the §9.0 spikes report.
+
+### 12.1 Grounding mechanism — implementable spec
+
+The guarantee: the **scribe** (the model that turns a child turn into a story segment) introduces no
+entity or event the child didn't supply, at the configured fidelity (v1 ships `light` only). The check
+is **deterministic, fail-closed, and testable without a live LLM**. The LLM *produces*; code *judges*.
+
+**Resolves the fat-call vs split-call contradiction (§11.5.3).** Two LLM calls per turn:
+1. **scribe** (low temp ~0.1–0.2) — one call emitting a single structured output (all *fidelity* tasks,
+   mutually consistent): `scribedText`, `atoms[]`, `unboundMentions[]`, `boundarySignal`. Combining
+   these is fine — they are the same "stay faithful" objective.
+2. **coach** (separate call) — the next open prompt (a *generative* objective; kept apart so "add
+   nothing" and "invent a question" never share one decode).
+Grounding **checking is deterministic post-processing — zero extra LLM calls.** ("Zero extra calls"
+in §4 means the *check* is code, not that boundary/coach are free.)
+
+**Scribe structured output (permissive schema + repair on non-grounding fields only):**
+```
+{ scribedText: string,                       // light-touch; character refs wrapped $$id$$
+  atoms: [ { subject: actorId,               // resolved actor (see §2.6); or "$$unbound$$"
+             verb: string, object?: string,
+             sourceSpan: string } ],          // VERBATIM substring of the cited source
+  unboundMentions: [ { surface: string, candidates: actorId[] } ],
+  boundarySignal: 'continue' | 'phase_end' | 'story_end' }
+```
+
+**The check — `checkGrounding(childInputRaw, priorConfirmedText, scribed, cast) → {ok, violations[]}` (pure):**
+
+*Tier 1 — entity grounding*
+- **T1a tagged-subset:** every `$$id$$` in `scribedText` ∈ `cast`. (Catches tagged out-of-cast.)
+- **T1b proper-noun invention:** tokenize `scribedText`; for each capitalised token that is *not*
+  sentence-initial, *not* a cast name/alias, and *not* `$$id$$`-wrapped, require a **case-insensitive /
+  phonetic** match in `childInputRaw`. *Reconciles the capitalisation-fix tension (§11.5.2):* the check
+  is **lexical presence, not casing** — the scribe may up-case a name the child said lowercase; it may
+  not introduce a name absent from the transcript.
+
+*Tier 2 — event/detail grounding (provenance + entailment)*
+- **T2a provenance:** every atom's `sourceSpan` is a fuzzy substring of `childInputRaw` **or** of
+  `priorConfirmedText` (continuity from a *confirmed* earlier segment is legitimate, tagged as such —
+  so persisted location/facts don't read as invention).
+- **T2b entailment (closes the confabulated-span bypass, §11.5.2):** each atom **content word**
+  (subject name/alias, verb lemma, object head noun) must be present-or-derivable **within the cited
+  span**, not merely somewhere in the transcript. "Derivable" = inflection (ran/run) or the cast alias
+  map (doggy→`$$dog$$`) only; anything else → violation.
+- **T2c common-noun new entity/event (closes the Tier-1 gap, §11.5.2):** an atom subject/object naming
+  a **new animate entity** not in `cast` and with no span provenance (e.g. lowercase "monster" in
+  "then a monster ate them") → violation. This is where common-noun invention is caught.
+
+*Fail-closed invariant (§11.5.2)*
+- Malformed/partial scribe output in any **grounding-relevant** field (`atoms`, `sourceSpan`, tags) →
+  **reject and re-scribe**; never deterministic-repair-then-pass. Repair is permitted only on
+  non-grounding fields.
+- On any T1/T2 violation → re-scribe with a corrective instruction (≤2 retries) → if still failing,
+  fall back to **near-verbatim scribe** (clean spelling/grammar of `childInputRaw` only — grounded by
+  construction) and **flag for parent review** if it still can't be cleanly tagged.
+
+*Unbound subjects* — an atom whose `subject` is `$$unbound$$` (the resolver couldn't bind a pronoun/
+mention) does **not** get fabricated; it triggers the §2.6 clarify path (or defers to the phase recap).
+
+**Fidelity dial:** spec the `light` thresholds above; `scribe` tightens T2b (no synonym latitude),
+`coauthor` relaxes T2 (connective detail allowed) — both are config stubs, not v1 behaviour.
+
+**The LLM is never the judge.** `checkGrounding` is the blocking gate. An optional semantic check may
+run on an **independent model** (e.g. Claude), **report-only**, validated against a labelled gold set —
+it never blocks and never re-scribes.
+
+**Tests (headline, deterministic, no LLM):** `checkGrounding` unit table over a committed fixture
+corpus, incl. adversarial cases — added detail ("the dragon"→"the **green** dragon", no basis → T2b
+object violation); added character (lowercase "monster" → T2c); confabulated span (real span cited,
+doesn't entail → T2b); legitimate cap-fix (child "rex"→"Rex" → pass); alias synonym (child "doggy"→
+`$$dog$$` → pass); continuity (atom cites prior confirmed text → pass). A **seamed flow test** feeds a
+violating fixture as the scribe output and asserts reject-and-re-scribe + the fail-closed fallback.
