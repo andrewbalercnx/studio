@@ -19,9 +19,10 @@
 > **Decisions locked (owner, 2026-06-23)**: voice-first w/ text fallback · tunable fidelity dial
 > defaulting light-touch · child character creation = name+traits+AI-avatar-from-description (no
 > photo) · target span ages 4–9 with voice bridging literacy.
-> **Open decisions surfaced by the council (owner, §11.4)**: STT data path (Vertex-EU vs consumer
-> Gemini) · whether voice-first survives the latency spike or text-first leads · age-band split
-> scope · build phases now vs flat-stream-first.
+> **Council decisions resolved (owner, 2026-06-23, §11.4)**: STT → **Vertex AI EU/UK region** (clean
+> residency) · **voice-first committed** (so the latency mitigations in §2.3 are mandatory, and the
+> latency spike is validation, not a go/no-go) · **both Little + Big Author age bands in v1** · **build
+> phases from the start** (full phase state machine up front).
 
 ---
 
@@ -60,7 +61,8 @@ the child's, not the model's.
 3. An automated **fidelity/grounding check** shows the agent introduces no named entity or plot
    event absent from the child's contributions (light-touch default).
 4. Finishing compiles to a normal `stories/{id}` doc and reaches **art-ready** through the
-   existing storybook pipeline under `TEST_MODE` (reuses the W1/W3 e2e net).
+   existing storybook pipeline under `TEST_MODE` (via the e2e harness — note `e2e/` has only a smoke
+   spec today, so the storybook-pipeline + authoring specs are net-new build, §11.5.1).
 5. **No child voice audio or story text reaches analytics** (extends the Sprint-1 no-PII
    contract); raw child audio is transcribe-then-discard by default.
 
@@ -145,19 +147,20 @@ real sessions to tune against — the knob is premature before the grounding mec
 - **Capture**: browser `MediaRecorder` on a big **tap-to-start / tap-to-stop** mic (not
   press-and-hold — small hands release early) with a visible recording state + voice-activity
   auto-stop; feature-detected with graceful **text fallback** (Safari audio history — see Risks).
-- **STT**: **Gemini multimodal audio on the Flash tier** (transcription doesn't need Pro). ⚠️
-  **Correction (council §11):** this is **not** "no new vendor/DPA". The app is wired to the
-  *consumer* Gemini API (`generativelanguage.googleapis.com`, US-default), not region-pinned Vertex.
-  Sending **child voice** there is a new cross-border transfer of sensitive child data → an
-  **owner decision (§11.4)**: move STT to **Vertex AI EU/UK region** (or self-host) vs accept the
-  consumer-API terms in an updated DPA. Either way the privacy policy + sub-processor list must name
-  Google for STT. Also verify the generate API can accept the L1 phrase-hints at all (it may not;
-  dedicated Cloud Speech `speechContexts` is the fallback).
-- **Latency budget (new DoD).** The serial loop record→STT→scribe→[grounding]→TTS→play is ~6–12s
-  today — 2–4× a young child's patience. Target **p50 < 4s to first feedback**: show the scribed
-  text + next prompt immediately (don't block on audio), **stream** prompt TTS (use the real-time
-  `/api/tts` path, not buffer-then-store), and play a short "let me write that down…" filler so
-  there's never dead air. Validate with a **prototype spike before committing to voice-first** (§9).
+- **STT (decided §11.4): Gemini multimodal audio on Vertex AI, pinned to an EU/UK region**, Flash
+  tier (transcription doesn't need Pro). This resolves the residency problem with the consumer Gemini
+  API (`generativelanguage.googleapis.com`, US-default) — child voice must **not** go there. The
+  privacy policy + sub-processor list still name Google/Vertex for STT, and the DPA must cover child
+  audio. Verify Vertex's Gemini path accepts the L1 phrase-hints; if not, Google Cloud Speech (EU,
+  `speechContexts`) is the fallback.
+- **Latency budget (committed — voice-first, §11.4, so this is mandatory).** The serial loop
+  record→STT→scribe→[grounding]→TTS→play is ~6–12s naïvely — 2–4× a young child's patience. Target
+  **p50 < 4s to first feedback**: show the scribed text + next prompt immediately (don't block on
+  audio), **stream** prompt TTS — note `/api/tts` currently *buffers* and a streaming path is net-new
+  (§11.5.1) — Flash everywhere, and play a short "let me write that down…" filler so there's never
+  dead air. The latency spike (§9.0)
+  now *validates the mitigations* (voice-first is committed); if it can't reach the target, the
+  mitigations get hardened (e.g. partial-transcript streaming), not the modality abandoned.
 - **Agent voice**: prompts read aloud via the **existing TTS** path (ElevenLabs); **cache repeated
   prompt/scaffold TTS by text hash** (they recur every turn). Raw child audio is **transcribe-then-
   discard** — guaranteed in code: never persisted, never logged, never attached to `captureException`.
@@ -402,23 +405,29 @@ Story compile output is **unchanged** (`stories/{id}.storyText` with `$$id$$` pl
   detection into the scribe's structured output → **zero extra calls**.
 - **Pure modules extracted** (for testability + correctness): `checkGrounding`, `resolveMentions`,
   `phaseStateMachine`, `assertActorsSubsetOfCast` — the LLM never *is* the gate.
-- **Reliability:** wrap STT, scribe, coach, TTS in `withProviderReliability` (add a `gemini-stt`
-  provider key); **don't inherit Pro**, don't skip the breaker (it's opt-in per call site).
+- **Reliability (corrected, §11.5.1):** there is **no `withProviderReliability` wrapper** — compose
+  the real primitives from `src/lib/ai-retry.ts` (`withRetry` + `CircuitBreaker`/`getCircuitBreaker`)
+  around STT, scribe, coach, TTS, with a `gemini-stt` key. The breaker has **zero call sites today**,
+  so this is its first real integration — **new work, not reuse**. **Don't inherit Pro.**
 - **Loose structured-output schema + deterministic repair** (the pagination-flow lesson — strict
-  schemas stochastically fail and Genkit rejects the whole response).
-- ⚠️ **UI reuse correction:** the friends `StoryGeneratorResponse` shapes are all *选-an-option*
+  schemas stochastically fail and Genkit rejects the whole response). **But fail-closed on the
+  grounding gate (§11.5.2):** a malformed scribe decode must reject-and-re-scribe, never repair-then-
+  pass-grounding.
+- ⚠️ **UI reuse correction:** the friends `StoryGeneratorResponse` shapes are all *select-an-option*
   screens; the authoring turn surface (mic, story-so-far, recap, filmstrip) is a **new component**,
   not a `StoryBrowser` render-adapter. Budget for it.
 
-**New routes** (all: TEST_MODE seam, `withProviderReliability`, moderation hooks §2.8):
+**New routes** (all: TEST_MODE seam w/ fault-injection + moderation-verdict hooks §11.5.8, retry +
+breaker, moderation §2.8):
 - `POST /api/storyAuthor` — turn endpoint (auth + persona scope + ownership + idempotency).
 - `POST /api/storyAuthor/transcribe` — audio → transcript (Flash). **Raw audio: never persisted,
   never logged, never attached to `captureException`** (tested, §6).
 - `POST /api/kids/characters` — child-side character create (+ avatar-from-description; moderated).
 
 **Reused unchanged:** `/api/storyCompile`, `/api/storybookV2/{create,pages,images,pageEdit}`,
-`/api/entitlements/*`. TTS: use the **streaming `/api/tts`** path for live prompts (not buffer-then-
-store), with **text-hash caching** of repeated prompts.
+`/api/entitlements/*`. ⚠️ **TTS streaming is net-new (§11.5.1):** `/api/tts` today buffers the whole
+clip (`streamToBuffer` → base64 JSON) — the exact pattern the latency budget needs to avoid. A
+**streaming TTS path must be built** for live prompts, with **text-hash caching** of repeated prompts.
 
 **Mid-turn failure semantics (council §11):** STT may succeed then scribe/TTS fail. Write the
 segment only after the full turn succeeds (or `status:'pending'` + reconcile), keyed by
@@ -442,10 +451,9 @@ This escalates PII sensitivity over today's posture — capturing a **child's vo
 The council (§11) rated this the **highest-stakes lens** and returned **NOT-READY-as-written** with
 several BLOCKERs. Concrete requirements:
 
-- **STT data path (BLOCKER, build-shaping):** the app uses the *consumer* Gemini API (US-default),
-  not region-pinned Vertex — so sending child voice is a new cross-border transfer. **Owner decision
-  (§11.4):** Vertex AI EU/UK (or self-host) vs accept consumer terms in an updated DPA. Name Google
-  as an STT sub-processor in the privacy policy + sub-processor list regardless.
+- **STT data path (decided §11.4): Vertex AI EU/UK region** — child voice is **not** sent to the
+  consumer Gemini API (US-default). Residency is clean; still name Google/Vertex as an STT
+  sub-processor in the privacy policy + sub-processor list, and ensure the DPA covers child audio.
 - **Verifiable parental consent (BLOCKER, go-live):** a **server-side per-child consent record**
   (`authoringConsent`, §3) — not a localStorage flag. Lawful basis = **consent** (safer than LI for
   child voice); per-child, revocable (revocation deletes retained transcripts); records who/what/
@@ -492,9 +500,11 @@ with a tolerant threshold, never on the PR gate.
 - [ ] **Transcribe-then-discard (privacy)** — no Firestore/Storage write contains audio; nothing
       attached to `captureException`.
 - [ ] **Disabled-by-default / consent gate** — routes refuse and the generator is hidden when
-      `enabled:false` / no `authoringConsent`. (Mirror `feature-flags.test.ts`.)
-- [ ] **Undo rolls back discourse state + learned aliases** (not just pops a segment); **idempotency**
-      — a retried turn (same key) does not double-write.
+      `enabled:false` / no `authoringConsent`. (Mirror the kill-switch test pattern in
+      `src/lib/analytics/__tests__/analytics.test.ts`; `feature-flags.test.ts` doesn't exist — §11.5.1.)
+- [ ] **Undo** — ship a minimal v1 session-alias map so this is testable against v1 scope, OR
+      explicitly v2-defer the "rolls back discourse state" assertion (§11.5.8); **idempotency** — a
+      retried turn (same key) does not double-write.
 - [ ] **Parent-review-flag** — ambiguous + child declines after one ask → segment flagged → surfaces
       in W2-C page-edit.
 - [ ] **Moderation** — unsafe fixture input blocked/redirected at all three points (incl. pre-TTS);
@@ -569,25 +579,28 @@ rules + TTL config; **possibly** `story-pagination-flow.ts` *iff* `sceneSummary`
 
 ## 9. Sequencing within the sprint
 
-0. **Pre-build spikes (gate the design — council §11).** Wizard-of-Oz voice loop with real
-   4/6/9-yr-olds (answers the age-band/recap/comprehension risks before code); STT WER on young-child
-   speech incl. cast names; per-turn latency prototype. **If voice-first can't hit p50 < 4s, lead
-   text-first.** Resolve the §11.4 owner decisions (STT data path; age-band scope; phases-now vs
-   flat-stream-first).
+0. **Pre-build spikes (de-risk — council §11).** Wizard-of-Oz voice loop with real 4/6/9-yr-olds
+   (validates the age-band/recap/comprehension design before code); STT WER on young-child speech
+   (Vertex EU) incl. cast names; per-turn latency prototype. Voice-first is committed (§11.4) — the
+   latency spike validates/hardens the §2.3 mitigations rather than choosing the modality.
 1. **Foundation** — types + **segments subcollection** + TTL; `systemConfig/storyAuthoring` +
-   `authoringConsent` + generator seed (disabled); **TEST_MODE authoring seam**; **moderation module
-   skeleton** (§2.8) wired as a no-op hook at all three points.
-2. **Authoring flow (text-first)** — extracted pure modules (`checkGrounding`, `resolveMentions`,
-   `phaseStateMachine`) with their vitest corpora *first*; then the Flash scribe/coach calls +
-   idempotency + reliability wrapping. Carries the headline deterministic tests.
-3. **Characters** — Friends-selection reuse + child create + AI-avatar-from-description (moderated).
-4. **Compile bridge + e2e** — confirmed phases → unresolved `$$id$$` via the friends-mode template;
+   `authoringConsent` + generator seed (disabled); **Vertex-EU STT wiring**; **TEST_MODE authoring
+   seam**; **moderation module skeleton** (§2.8) wired as a no-op hook at all three points.
+2. **Authoring flow with phases (text path first for determinism)** — extracted pure modules
+   (`checkGrounding`, `resolveMentions`, `phaseStateMachine`) with their vitest corpora *first*; then
+   the Flash scribe/coach calls + the **full phase state machine + boundary recap/clarify (§2.7,
+   built up front per §11.4)** + idempotency + reliability wrapping. Carries the headline tests.
+   *Text path is exercised first only because it's deterministic to test — not a separate milestone.*
+3. **Age bands** — both **Little Author (4–6)** and **Big Author (7–9)** (§2.7) + server-enforced
+   question budget + **Parent-Assist** mode.
+4. **Characters** — Friends-selection reuse + child create + AI-avatar-from-description (moderated).
+5. **Compile bridge + e2e** — confirmed phases → unresolved `$$id$$` via the friends-mode template;
    run through the existing pipeline (TEST_MODE). (Pagination pre-seed only if §4 option (b) chosen.)
-5. **Voice** — STT route (Flash) + streaming prompt TTS + tap-to-talk UI + text fallback, *after the
-   spike clears it*.
-6. **Safety & privacy** — full moderation + self-disclosed-PII detector + share/print gating +
+6. **Voice (committed core)** — Vertex-EU STT + streaming prompt TTS + tap-to-talk UI + text fallback,
+   meeting the §2.3 latency budget.
+7. **Safety & privacy** — full moderation + self-disclosed-PII detector + share/print gating +
    transcribe-then-discard guarantees + content-free telemetry + no-PII contract extension.
-7. **DoD + docs + consent/DPIA gate** — tests green; docs updated; ship disabled-by-default; go-live
+8. **DoD + docs + consent/DPIA gate** — tests green; docs updated; ship disabled-by-default; go-live
    gated on the §5 compliance deliverables.
 
 ---
@@ -634,11 +647,23 @@ written, and treated "4–9" as one user.** The body above (§§1–10) is revis
 ### 11.3 Must-fix **before go-live** (flip `enabled`)
 Verifiable **server-side parental consent** (per child, revocable) · **DPIA** · executed **DPA + sub-processor-list + privacy-policy** updates naming Google for STT · EU/UK residency confirmed · **safeguarding/escalation policy** · share/`childName`-exposure decision for authored books · the no-PII analytics test extended to authoring telemetry.
 
-### 11.4 Open decisions for the owner
-- **STT data path:** Vertex AI EU/UK (more setup, clean residency) **vs** consumer Gemini + updated DPA (faster, residency/terms risk for child voice). *Recommend Vertex-EU.*
-- **Voice-first vs text-first lead:** gated on the latency spike — if record→STT→scribe→TTS→play can't hit p50 < 4s, default text-first and treat voice as enrichment. *Recommend deciding post-spike.*
-- **Age-band scope:** ship both Little/Big Author in v1, or Big-only first and add Little later? *Recommend both, because Little-Author is the harder-but-core demographic — but it's a scope call.*
-- **Phases now vs flat-stream-first:** simplicity lens suggests a flat segment-stream + "I'm done" delivers the exit criterion with far less machinery; phases (your explicit ask) can be the immediate next increment. *Recommend flat-stream as the first internal milestone, phases as milestone 2 within the sprint.*
+### 11.4 Owner decisions — RESOLVED (2026-06-23)
+- **STT data path → Vertex AI EU/UK region.** Clean residency for child voice; consumer Gemini ruled
+  out. (§2.3, §5 updated.)
+- **Voice-first → committed.** Not gated on the spike; the §2.3 latency mitigations become mandatory
+  DoD, and the spike validates/hardens them. (§2.3, §9.0 updated.)
+- **Age bands → both Little (4–6) + Big (7–9) Author in v1.** (§2.7, §9.3.)
+- **Phases → built from the start.** Full phase state machine + recap up front, not a deferred
+  increment. (§2.7, §9.2.) *Trade-off accepted: more complex machinery before the scribe loop is
+  battle-tested; mitigated by extracting `phaseStateMachine` as a pure, exhaustively-tested module.*
+
+> **Supersedes §11.5's open-decision framing.** §11.5 was written while these four were still open, so
+> it flags "flat-stream-first vs phases" (its §11.5.9 "highest-leverage owner call") and "commit to
+> one" as live. They are now **decided: phases from the start.** §11.5's *technical* findings
+> (phantom reuse 11.5.1, grounding leaks 11.5.2, fat-call contradiction 11.5.3, abandoned-compute
+> 11.5.4, compiled-book PII 11.5.5, v1 bind-check 11.5.6, Parent-Assist authorship 11.5.7) **all
+> still stand** — choosing phases narrows none of them; if anything 11.5.4/11.5.7 grow, so their
+> mitigations are mandatory, not optional.
 
 > **Process note:** v1's three design pillars (scribe-not-inventor, always-know-who, phased recap)
 > survived review intact. What changed is *how much to build at once* and *which safety/compliance

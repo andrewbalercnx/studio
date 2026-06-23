@@ -18,6 +18,17 @@
 
 ### 2026-06-23
 
+#### `423f20a` - Sprint CA: resolve owner decisions + reuse-accounting pass (reconcile with §11.5)
+
+**Type**: Planning / Documentation
+
+**Summary**: Recorded the four owner decisions from the AskUserQuestion round (§11.4 → RESOLVED: STT on Vertex AI EU/UK; voice-first committed so the latency mitigations are mandatory; both Little + Big Author age bands in v1; phases built from the start) and reconciled them with the second council pass (§11.5), which another agent committed (`26bbad2`) while those decisions were still open — added a superseding note that §11.5's "flat-stream-first vs phases" open call is now decided while all its technical findings still stand. Applied the §11.5.1 **reuse-accounting pass** to strike phantom-reuse claims that the body still made: `withProviderReliability` does not exist (replaced with the real `withRetry` + `CircuitBreaker`/`getCircuitBreaker` from `src/lib/ai-retry.ts`, breaker has no call sites yet → first integration); streaming `/api/tts` does not exist (current route buffers → streaming path is net-new); the "W1/W3 e2e net" is a single smoke spec (storybook + authoring specs are net-new); `feature-flags.test.ts` doesn't exist (mirror the analytics kill-switch test). Added the grounding fail-closed invariant and TEST_MODE fault-injection hooks references. Merge-resolved the SPRINTS.md status line.
+
+**Modified files**:
+- `docs/sprints/SPRINT-CA-CHILD-AUTHORED.md`, `SPRINTS.md`
+
+---
+
 #### `ebdbcfe` - Sprint CA: six-lens council review → plan v2
 
 **Type**: Planning / Documentation

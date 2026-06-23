@@ -679,11 +679,12 @@ user. Build-blocking fixes folded into the plan: grounding can't be a single LLM
 DPA" (owner decision Vertex-EU vs DPA); segments → subcollection; Flash not Pro; age-band split +
 question budget + Parent-Assist; pre-build usability/latency/STT spikes. Go-live gated on verifiable
 parental consent + DPIA + DPA/sub-processor updates + safeguarding policy. Full detail in §11 of the
-detail doc. **Open owner decisions** in §11.4.
+detail doc. **Owner decisions resolved (§11.4):** STT → Vertex AI EU/UK; voice-first committed (latency
+mitigations mandatory); both Little + Big Author age bands in v1; phases built from the start.
 
-**Status:** PLANNED (v2, council-reviewed; v2 re-validated by a second council pass 2026-06-23 — see
-§11.5 of the detail doc: new build-blockers, chiefly "phantom reuse" of infra that doesn't exist as
-cited; top-line verdict unchanged).
+**Status:** PLANNED (v2, council-reviewed; **owner decisions resolved §11.4**; v2 re-validated by a
+second council pass — §11.5: new build-blockers, chiefly "phantom reuse" of infra that doesn't exist
+as cited. Top-line verdict unchanged: build green behind the flag, flipping `enabled` is NO-GO).
 
 ---
 
