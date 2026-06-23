@@ -1,0 +1,15 @@
+{
+  "_comment": "Copy to manifest.json. One entry per audio clip in spikes/stt/clips/. 'reference' is the human transcript; 'castNames' are the character names you want to track recognition of (the metric that matters for §2.6). Audio: wav/mp3/m4a/ogg/webm.",
+  "clips": [
+    {
+      "file": "child-01.wav",
+      "reference": "Rex ran into the dark forest and Luna flew up high",
+      "castNames": ["Rex", "Luna"]
+    },
+    {
+      "file": "child-02.m4a",
+      "reference": "then the puppy got scared so my brother helped him",
+      "castNames": ["Rex"]
+    }
+  ]
+}

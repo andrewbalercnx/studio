@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>My Story</title>
+<style>
+  :root { font-family: system-ui, sans-serif; }
+  body { margin: 0; background: #fef6e4; color: #2b2b2b; }
+  header { padding: 1rem; text-align: center; }
+  .cast { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; padding: 0.5rem 1rem; }
+  .char { background: #fff; border-radius: 1.25rem; padding: 0.75rem 1rem; box-shadow: 0 2px 8px rgba(0,0,0,.08);
+          font-size: 1.4rem; display: flex; align-items: center; gap: .5rem; }
+  .char .emoji { font-size: 2.2rem; }
+  .prompt { font-size: 2rem; line-height: 1.3; text-align: center; padding: 1.5rem 2rem; min-height: 3rem; }
+  .listening { text-align: center; font-size: 1.3rem; color: #8a6d3b; height: 2rem; }
+  .listening.on::after { content: '🎤 listening…'; animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: .4; } }
+  .story { max-width: 46rem; margin: 0 auto; padding: 0 2rem 3rem; font-size: 1.5rem; line-height: 1.6; }
+  .story p { margin: .4rem 0; }
+  .replay { display: block; margin: 0 auto; font-size: 1.3rem; padding: .6rem 1.2rem; border-radius: 999px;
+            border: none; background: #f8b400; color: #2b2b2b; cursor: pointer; }
+</style>
+</head>
+<body>
+  <header><h1>📖 My Story</h1></header>
+  <div class="cast" id="cast"></div>
+  <div class="prompt" id="prompt">Tap "Start" on the grown-up screen…</div>
+  <div class="listening" id="listening"></div>
+  <button class="replay" id="replay">🔊 Say it again</button>
+  <div class="story" id="story"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let lastSpoken = '';
+
+  function speak(text) {
+    if (!text || !('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.95; u.pitch = 1.05;
+    $('listening').classList.remove('on');
+    u.onend = () => $('listening').classList.add('on');   // after the agent speaks, we're "listening"
+    window.speechSynthesis.speak(u);
+    lastSpoken = text;
+  }
+
+  function renderCast(chars) {
+    $('cast').innerHTML = (chars || []).map(c =>
+      `<div class="char"><span class="emoji">${c.emoji || '🧸'}</span>${c.name}</div>`).join('');
+  }
+  function renderStory(segs) {
+    $('story').innerHTML = (segs || []).map(s => `<p>${s.text}</p>`).join('');
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+
+  const es = new EventSource('/events');
+  es.onmessage = (e) => {
+    const ev = JSON.parse(e.data);
+    if (ev.type === 'state') { renderCast(ev.state.characters); renderStory(ev.state.storySoFar); }
+    if (ev.type === 'speak') {
+      $('prompt').textContent = ev.kind === 'recap' ? '“' + ev.text + '”' : ev.text;
+      speak(ev.text);
+      if (ev.state) { renderCast(ev.state.characters); renderStory(ev.state.storySoFar); }
+    }
+  };
+  $('replay').onclick = () => speak(lastSpoken || $('prompt').textContent);
+</script>
+</body>
+</html>

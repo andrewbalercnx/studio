@@ -18,6 +18,23 @@
 
 ### 2026-06-23
 
+#### `58b739b` - Sprint CA: build de-risking spike tooling under spikes/
+
+**Type**: Tooling (throwaway / not wired into the app)
+
+**Summary**: Built the three §9.0 de-risking spikes under `spikes/` so they're ready the moment the owner has children + a Vertex-EU project lined up. (1) `spikes/woz/` — a zero-dependency Wizard-of-Oz puppet (Node http + SSE; child screen speaks agent prompts via browser SpeechSynthesis, operator screen for the facilitator to type prompts / scribe / recap / one-tap observations; every action timestamped to a gitignored JSONL session log) + a findings template; boots and serves with no creds (smoke-tested). (2) `spikes/stt/` — `transcribe.mjs` runs Gemini STT on Vertex AI (EU region) over a manifest of child-speech clips, with and without cast-name biasing, and reports WER + name-error-rate via the pure `wer.mjs` (unit-sanity-checked here); flags the dedicated-STT fallback if biasing doesn't help. (3) `spikes/latency/` — `tts-stream.mjs` (streaming-vs-buffered TTS time-to-first-audio) + `run.mjs` (end-to-end STT→scribe→TTS stage timing, p50/p95, asserts the p50<4s time-to-first-feedback budget). Child voice/content + secrets are gitignored (clips/, sessions/, .env, reports); ethics/consent/retention notes in the README. No app code touched.
+
+**Created files**:
+- `spikes/README.md`, `spikes/.gitignore`, `spikes/.env.example`
+- `spikes/woz/{server.mjs,findings-template.md,public/child.html,public/operator.html}`
+- `spikes/stt/{transcribe.mjs,wer.mjs,manifest.example.json}`
+- `spikes/latency/{run.mjs,tts-stream.mjs}`
+
+**Modified files**:
+- `docs/sprints/SPRINT-CA-CHILD-AUTHORED.md` (§9.0 points at the spike tooling)
+
+---
+
 #### `eeacfd0` - Sprint CA: round-2 owner decisions (§11.6) + grounding implementation spec (§12.1)
 
 **Type**: Planning / Documentation

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WoZ Operator</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #1e1e24; color: #eee; padding: 1rem; }
+  h2 { margin: .3rem 0; font-size: 1rem; color: #aaa; text-transform: uppercase; letter-spacing: .05em; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; max-width: 1100px; margin: 0 auto; }
+  .card { background: #2a2a33; border-radius: .6rem; padding: .9rem; }
+  textarea, input { width: 100%; box-sizing: border-box; background: #14141a; color: #eee; border: 1px solid #444;
+                    border-radius: .4rem; padding: .5rem; font-size: 1rem; font-family: inherit; }
+  textarea { min-height: 3.2rem; resize: vertical; }
+  button { cursor: pointer; border: none; border-radius: .4rem; padding: .55rem .8rem; font-size: .95rem; margin: .2rem .2rem 0 0; }
+  .primary { background: #f8b400; color: #1e1e24; font-weight: 600; }
+  .ghost { background: #3a3a45; color: #eee; }
+  .obs button { background: #444; color: #fff; }
+  .obs .bad { background: #7a2e2e; } .obs .good { background: #2e6b3a; }
+  .row { display: flex; gap: .4rem; align-items: center; }
+  .timer { font-variant-numeric: tabular-nums; font-size: 1.1rem; color: #f8b400; }
+  small { color: #888; }
+  .story p { margin: .2rem 0; padding: .2rem .4rem; background: #14141a; border-radius: .3rem; }
+</style>
+</head>
+<body>
+  <div class="row" style="max-width:1100px;margin:0 auto .6rem;justify-content:space-between">
+    <h2>Wizard-of-Oz operator — facilitator only</h2>
+    <div class="row"><span class="timer" id="timer">00:00</span>
+      <button class="ghost" id="startTimer">⏱ start</button>
+      <button class="ghost" onclick="op('reset')">reset session</button></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h2>1 · Child & cast</h2>
+      <div class="row"><input id="ageBand" placeholder="age band (e.g. 4 / 6 / 9)" />
+        <button class="ghost" onclick="setMeta()">set</button></div>
+      <small>Characters — one per line as: emoji name (e.g. "🐶 Rex")</small>
+      <textarea id="chars" placeholder="🐶 Rex&#10;🦄 Luna&#10;👦 me"></textarea>
+      <button class="ghost" onclick="setCharacters()">show characters on child screen</button>
+    </div>
+
+    <div class="card">
+      <h2>2 · Agent says (spoken aloud)</h2>
+      <small>Open question only — never multiple choice.</small>
+      <textarea id="prompt" placeholder="What happens first in your story?"></textarea>
+      <button class="primary" onclick="sendPrompt()">▶ speak prompt</button>
+      <textarea id="clarify" placeholder="Clarify: which character climbed the tree — Rex or Luna?"></textarea>
+      <button class="ghost" onclick="sendClarify()">speak clarify</button>
+    </div>
+
+    <div class="card">
+      <h2>3 · Scribe (write what the child said)</h2>
+      <small>Light-touch: fix grammar, keep their words. Add nothing.</small>
+      <textarea id="scribe" placeholder="Rex ran into the dark forest…"></textarea>
+      <div class="row">
+        author:
+        <select id="author"><option>child</option><option>shared</option><option>parent</option></select>
+        <button class="primary" onclick="addScribe()">+ add to story</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>4 · Phase</h2>
+      <button class="ghost" onclick="op('recap')">🔊 recap (re-read phase aloud)</button>
+      <button class="ghost" onclick="op('phaseBoundary')">⏭ phase boundary</button>
+      <h2 style="margin-top:1rem">Observations (timestamped to log)</h2>
+      <div class="obs">
+        <button class="bad" onclick="observe('stall')">stall</button>
+        <button class="bad" onclick="observe('ramble')">ramble</button>
+        <button class="bad" onclick="observe('offtopic')">off-topic</button>
+        <button class="bad" onclick="observe('didnt_understand')">didn't understand</button>
+        <button class="bad" onclick="observe('disengaged')">disengaged</button>
+        <button class="good" onclick="observe('delight')">delight ✨</button>
+      </div>
+      <input id="obsnote" placeholder="optional note for next observation" />
+    </div>
+
+    <div class="card" style="grid-column:1/3">
+      <h2>Story so far — phase <span id="phaseNum">1</span></h2>
+      <div class="story" id="story"></div>
+    </div>
+  </div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  async function op(type, payload = {}) {
+    await fetch('/api/op', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, payload }) });
+  }
+  function setMeta() { op('setMeta', { ageBand: $('ageBand').value }); }
+  function setCharacters() {
+    const characters = $('chars').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+      const m = l.match(/^(\p{Emoji}️?|\S+)\s+(.*)$/u);
+      return m ? { emoji: m[1], name: m[2] } : { emoji: '🧸', name: l };
+    });
+    op('setCharacters', { characters });
+  }
+  function sendPrompt() { op('prompt', { text: $('prompt').value }); $('prompt').value=''; }
+  function sendClarify() { op('clarify', { text: $('clarify').value }); $('clarify').value=''; }
+  function addScribe() { op('scribe', { text: $('scribe').value, author: $('author').value }); $('scribe').value=''; }
+  function observe(signal) { op('observe', { signal, note: $('obsnote').value }); $('obsnote').value=''; }
+
+  // mirror story-so-far + phase
+  const es = new EventSource('/events');
+  es.onmessage = (e) => {
+    const ev = JSON.parse(e.data);
+    const st = ev.state; if (!st) return;
+    $('phaseNum').textContent = st.phase; $('timer');
+    $('story').innerHTML = (st.storySoFar||[]).map(s => `<p><b>${s.author}:</b> ${s.text}</p>`).join('');
+  };
+
+  // session timer
+  let t0 = null;
+  $('startTimer').onclick = () => { t0 = Date.now(); };
+  setInterval(() => {
+    if (!t0) return;
+    const s = Math.floor((Date.now()-t0)/1000);
+    $('timer').textContent = String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+  }, 500);
+</script>
+</body>
+</html>

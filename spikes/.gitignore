@@ -1,0 +1,14 @@
+# Spikes are throwaway. Never commit child voice/content or secrets.
+.env
+# Ignore the *contents* of clips/ and sessions/ but keep the (empty) dirs via .gitkeep.
+**/clips/*
+!**/clips/.gitkeep
+**/sessions/*
+!**/sessions/.gitkeep
+*.wav
+*.mp3
+*.webm
+*.m4a
+*.ogg
+report*.json
+report*.csv

@@ -593,10 +593,13 @@ rules + TTL config; **possibly** `story-pagination-flow.ts` *iff* `sceneSummary`
 
 ## 9. Sequencing within the sprint
 
-0. **Pre-build spikes (de-risk — council §11).** Wizard-of-Oz voice loop with real 4/6/9-yr-olds
-   (validates the age-band/recap/comprehension design before code); STT WER on young-child speech
-   (Vertex EU) incl. cast names; per-turn latency prototype. Voice-first is committed (§11.4) — the
-   latency spike validates/hardens the §2.3 mitigations rather than choosing the modality.
+0. **Pre-build spikes (de-risk — council §11). Tooling built: [`spikes/`](../../spikes/README.md).**
+   Wizard-of-Oz voice loop with real 4/6/9-yr-olds (`spikes/woz/` — zero-dep puppet server, no
+   creds; validates the age-band/recap/comprehension design before code); STT WER + name-error-rate
+   on young-child speech (`spikes/stt/`, Vertex-EU); per-turn latency + streaming-TTS prototype
+   (`spikes/latency/`). Voice-first is committed (§11.4) — the latency spike validates/hardens the
+   §2.3 mitigations rather than choosing the modality. **Blocker on owner:** a Vertex-EU project +
+   creds (spikes 2–3) and recruited children + consent (spike 1).
 1. **Foundation** — types + **segments subcollection** + TTL; `systemConfig/storyAuthoring` +
    `authoringConsent` + generator seed (disabled); **Vertex-EU STT wiring**; **TEST_MODE authoring
    seam**; **moderation module skeleton** (§2.8) wired as a no-op hook at all three points.
