@@ -1,6 +1,6 @@
 # StoryPic Kids — Sprint Roadmap (GTM Program + Execution)
 
-> **Last Updated**: 2026-06-11
+> **Last Updated**: 2026-06-23 (added Feature Sprint CA — Child-Authored Stories)
 >
 > **This is the single source of truth** for the GTM sprint program: its rationale, the
 > authoritative done/outstanding rollup, and the worktree-parallelised execution plan.
@@ -126,6 +126,7 @@
 |---|------|--------|
 | 10 | Monetisation I — payments/Stripe (`[GTM 2/8]`): **deferred by owner** | **WG-1** |
 | 11 | Monetisation II (`[GTM 6/8]`): subscriptions + gifting + `print_credit` + ledger hardening | **WG-2** |
+| 12 | Child-authored stories ("Be the Author"): child writes the story, agent scribes/coaches; voice-first | **CA** |
 
 ### Open non-sprint gates / follow-ups
 - **Sprint 1 compliance gate (to flip analytics ON)**: set PostHog retention; add EU sub-processor list
@@ -259,6 +260,7 @@ git worktree add ../studio-ux          -b track/ux
 | 4 | W4-A | Auth | Server-side persona cookie + PIN guard hardening | COMPLETE (2026-06-11) |
 | gated | WG-1 | Money | Take money — Stripe Checkout + hardened webhook (owner-deferred) | BLOCKED (owner) |
 | gated | WG-2 | Money | Monetisation II — subscriptions, gifting, print_credit, ledger hardening | BLOCKED (WG-1) |
+| feature | CA | A/C | Child-authored stories — child writes, agent scribes/coaches (voice-first) | PLANNED |
 
 ---
 
@@ -625,6 +627,45 @@ update Firestore via webhook; free-tier limits enforced; the three ledger gaps h
 tests.
 
 **Status:** BLOCKED (WG-1)
+
+---
+
+# Feature Sprints (post-GTM)
+
+Product-capability sprints that sit alongside the GTM program rather than inside its waves.
+
+## Sprint CA: Child-Authored Stories — "Be the Author"
+
+**Tracks:** A — Flows (primary), C — UX, B — telemetry tail
+**Detailed plan:** [`docs/sprints/SPRINT-CA-CHILD-AUTHORED.md`](docs/sprints/SPRINT-CA-CHILD-AUTHORED.md)
+**Depends on:** W1-A degraded-book contract, W2-C parent page-edit, W4-A persona cookie, Sprint-1
+no-PII contract (extended to child voice).
+
+**Goal:** Invert the authorship model. Today every mode is *AI-invents / child-picks* (Wizard's
+multiple-choice questions; Friends' proposed characters/scenarios/synopses). This mode lets the
+**child write the story while the agent acts as scribe + coach** — eliciting and transcribing the
+child's ideas (open questions, never multiple choice), nudging story shape via the existing arc
+template without supplying content. Flow: **choose/create characters → guided authoring dialog →
+finish → existing storybook pipeline**.
+
+**The leverage:** everything downstream of compile is authorship-agnostic and reused unchanged
+(pagination → images → audio → order → entitlements). New build is just **(1) child-side character
+creation** and **(2) the authoring dialog**.
+
+**Decisions locked (owner, 2026-06-23):** voice-first with text fallback (STT via Gemini
+multimodal — no new vendor; agent prompts spoken via existing TTS) · tunable scribe↔co-author
+fidelity dial, default light-touch · child character creation = name + traits + AI-avatar-from-
+description (no photo) · target span ages 4–9, voice bridging literacy.
+
+**Headline guarantee:** an automated **grounding check** enforces that the agent introduces no
+named entity or plot event absent from the child's contributions — the contract that makes the
+mode genuinely child-authored.
+
+**Go-live gate:** capturing child voice escalates PII sensitivity. Ships **disabled-by-default**
+behind `systemConfig/storyAuthoring.enabled`; raw audio is transcribe-then-discard; child
+audio/text never reach analytics; parental consent + retention sign-off required to flip on.
+
+**Status:** PLANNED.
 
 ---
 

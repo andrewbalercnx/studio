@@ -16,6 +16,22 @@
 
 ## Changes
 
+### 2026-06-23
+
+#### `a04b33a` - Plan Sprint CA — Child-Authored Stories ("Be the Author")
+
+**Type**: Planning / Documentation
+
+**Summary**: Constructed the sprint for a new story-creation model that inverts authorship — the child writes the story while the agent acts as scribe + coach, rather than the current AI-invents/child-picks modes (Wizard, Friends). Flow: choose/create characters → guided open-ended authoring dialog (voice-first via Gemini multimodal STT, agent prompts spoken via existing TTS, text fallback) → finish → existing storybook pipeline (reused unchanged). Owner-locked decisions: voice-first with text fallback; tunable scribe↔co-author fidelity dial (default light-touch); child character creation = name+traits+AI-avatar-from-description (no photo); target ages 4–9. Headline guarantee: an automated grounding check enforces the agent introduces no entity/plot the child didn't supply. Ships disabled-by-default behind a consent/voice-PII gate. No code changes in this commit — planning docs only.
+
+**Created files**:
+- `docs/sprints/SPRINT-CA-CHILD-AUTHORED.md`
+
+**Modified files**:
+- `SPRINTS.md` (Status Overview row, Outstanding entry, new Feature Sprints section, Last Updated)
+
+---
+
 ### 2026-06-12
 
 #### `f54c0b1` - Pagination: scene-continuity fill for pages with no scene at all
