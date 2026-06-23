@@ -1120,3 +1120,98 @@ Follows the **friends-mode template** (verified by the simplicity lens: friends 
 **Tests:** confirmed phases → valid `stories/{id}` with **unresolved** `$$id$$` + correct `actors`
 (childId[0]); a non-cast actor is caught pre-write; downstream pipeline reaches art-ready in
 TEST_MODE (reuses the storybook-pipeline e2e once built).
+
+## 13. Consolidated data model · reuse accounting · build sizing
+
+Pulls the fields scattered across §3 and §12 into one authoritative reference, settles the
+reuse-vs-new question (resolving the §11.5.1 phantom reuse), and sizes the build.
+
+### 13.1 Consolidated schema (authoritative)
+
+**`storySessions/{id}`** — additive, small fixed fields only (segments live in a subcollection):
+| field | type | notes |
+|---|---|---|
+| `storyMode` | `'authored'` | dispatch key |
+| `currentPhase` | add `'authoring'` | |
+| `ageBand` | `'little' \| 'big'` | parent-confirmed (§2.7) |
+| `assistMode` | `'none'\|'scaffolding'\|'coauthor'` | §12.6 |
+| `authoringPhaseState` | `'authoring'\|'phase_recap'` | §12.3 |
+| `authoredPhases` | `AuthoredPhase[]` (≤5, inline) | `{id,order,arcStep?,segmentIds[],scribedText,actorIds[],status:'open'\|'recapping'\|'confirmed',recapConfirmedAt?}` — **no `sceneSummary` in v1** (pagination infers, §12.7) |
+| `questionsAskedThisPhase` | number | budget counter (§12.3) |
+| `learnedAliases` | `{ surface: actorId }` | minimal v1 alias map; **undo rolls this back** (§12.2/§11.5.8) |
+| `authoringComplete` | boolean | |
+| `expireAt` | timestamp | **TTL** for abandoned sessions (§3) |
+
+**`storySessions/{id}/segments/{segId}`** — NEW subcollection (not an embedded array, §11.5):
+`{ id, order, phaseId, childInputRaw, scribedText, atoms:[{subject,verb,object?,sourceSpan}],
+actorIds[], resolvedMentions:[{surface,actorId,source,confidence}], author:'child'|'parent'|'shared',
+inputModality:'voice'|'text', status:'pending'|'committed', turnIdempotencyKey, parentReviewFlag?,
+createdAt }`. Written `pending`, committed only on full-turn success (mid-turn idempotency, §4).
+
+**`characters/{id}`** — additive: `createdVia?: 'parent'|'ai'|'child_authoring'`, `aliases?: string[]`.
+*(v2: `phoneticKeys?`.)*
+
+**`stories/{id}`** — additive: `storyMode:'authored'`, `authorship?: 'child'|'co-created'` (derived
+from segment provenance, §12.6), `authoringReviewState?: 'unreviewed'|'approved'` (gates share+print,
+§12.5). `childId`+`parentUid` already present → confirm on every derived doc for erasure. `storyText`
+stays **unresolved `$$id$$`**; `actors[]` incl. `childId` at [0] (contract unchanged).
+
+**`systemConfig/storyAuthoring`** — config (so ⟦spike-calibrated⟧ values are a config change, not a
+deploy): `{ enabled:false, arcEnabled, defaultModality, voiceRetention:'discard',
+editDistanceThreshold, questionBudget:{little,big}, phaseCap:{little,big}, recapMode:{little,big} }`.
+*(`fidelity` deferred — ships `light`.)*
+
+**`authoringConsent/{id}`** — NEW, per-child: `{ childId, parentUid, consentedAt, consentVersion,
+scope:['voice','stt-subprocessor','retention'], revokedAt? }`. `enabled` gates **per family** on this.
+
+**`shareLinks/{id}`** — changes for authored books: token entropy `randomBytes(4)`→`randomBytes(16)`;
+`requiresPasscode` default **true**; creation refused unless the story's `authoringReviewState ===
+'approved'` (§12.5). Carry `childId`+`parentUid` for the erasure cascade.
+
+**`storyGenerators`** — seed "Be the Author" `status` disabled until the §5 go-live gate.
+
+**Erasure provenance:** `childId`+`parentUid` on `segments` (via session), `stories`, `storybooks`,
+`pages`, `shareLinks`, `printOrders` → `eraseChild(childId)` deletes the chain (§12.5, child-DSAR).
+
+### 13.2 Reuse accounting (resolves §11.5.1)
+
+| Genuinely reused (unchanged or extend) | Net-new build |
+|---|---|
+| `storyCompileFlow` dispatch + friends-mode write-then-skip **bridge template** | `story-authoring-flow` (scribe + coach calls) |
+| `$$id$$` + `extractEntityIds` + actor tracking | pure modules: `checkGrounding`, `resolveMentions`, `phaseStateMachine`, `assertActorsSubsetOfCast` |
+| pagination → images → exemplars → audio → order/print | **moderation module + safeguarding classifier** (none exists today) |
+| Friends Phase-1 selection (`initializeCharacterSelection`) | self-disclosed-**PII detector** |
+| avatar generation (text path) for child-create | **streaming TTS** path (`/api/tts` buffers today) |
+| entitlements (`story_allowance`, `storybook_allowance`) | **Vertex-EU STT** route |
+| persona cookie / PIN (W4-A) | reliability **wiring**: compose `withRetry`+`CircuitBreaker` (breaker has 0 call sites → first integration) + `gemini-stt` key |
+| prompt-config resolver (`getModelConfig`/`loadGeneratorConfig`) | **authoring TEST_MODE seam** (+ fault-injection, moderation-verdict hook) |
+| no-PII guard `findPiiViolation` (extend substrings) | **e2e specs** (storybook-pipeline + authoring; only a smoke spec exists) |
+| TTL pattern (`session-events` `expireAt`) | consent-gate test (mirror analytics kill-switch; `feature-flags.test.ts` doesn't exist) |
+| `toUserSafeMessage` (for refusals only) | new **kids authoring UI** (mic/text/recap/filmstrip/char-create/assist toggle — not a `StoryBrowser` adapter) |
+| | share/print **parent-review gate** + token entropy + **erasure cascade**; child-create route |
+| | new schema: segments subcollection, phases, `storyAuthoring`/`authoringConsent` docs, rules, TTL |
+
+### 13.3 Build sizing (rough — calibrate after spikes)
+
+Effort S ≈ ≤1d · M ≈ 2–4d · L ≈ 1–2wk. Mapped to the §9 sequence; **★ = long pole / highest risk**.
+
+| # | Work item | Effort | Depends on |
+|---|---|---|---|
+| 1 | Foundation: schema (§13.1) + rules + TTL + config + consent doc + generator seed (disabled) | M | — |
+| 2 | TEST_MODE authoring seam (+ fault-injection, moderation hook) ★ | M | 1 |
+| 3 | Pure modules + fixture corpora: `checkGrounding`, `resolveMentions`, `phaseStateMachine`, cast-subset | L | — |
+| 4 | `story-authoring-flow` (scribe+coach, Flash, reliability, idempotency) wiring the pure modules | L | 2,3 |
+| 5 | Moderation module + safeguarding classifier (new infra) ★ | L | 1 |
+| 6 | Self-disclosed-PII detector + redaction | M | 5 |
+| 7 | Phases UI + age bands + question budget + Parent-Assist (new kids authoring component) ★ | L | 4 |
+| 8 | Characters: selection reuse + child-create route + AI avatar (moderated) | M | 1,5 |
+| 9 | Compile bridge (`authored` branch) + e2e through pipeline | M | 4,8 |
+| 10 | Voice: Vertex-EU STT route + streaming TTS + tap-to-talk ★ | L | 2,7 |
+| 11 | Share/print parent-review gate + token entropy + erasure cascade | M | 9 |
+| 12 | Telemetry (content-free) + no-PII contract extension + full test suite green | M | all |
+
+**Long poles:** the pure-module/grounding work (#3), the new authoring UI (#7), moderation (#5), and
+voice/streaming-TTS (#10). **Roughly 8–11 engineer-weeks** of net-new build for one developer to the
+M2 "green behind the flag" milestone — *excluding* the spikes (§9.0) and the M3 compliance track,
+which run in parallel. Treat this as order-of-magnitude until the spikes calibrate scope (a bad
+age-floor result, e.g., could add a co-creation mode to #7).

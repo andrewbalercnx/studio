@@ -18,6 +18,17 @@
 
 ### 2026-06-23
 
+#### `7efc0bd` - Sprint CA: consolidated data model + reuse accounting + build sizing (§13)
+
+**Type**: Planning / Documentation
+
+**Summary**: Added §13 — the data-model finalisation pass. §13.1 consolidates every field from §3/§12 into one authoritative schema reference (session fields, the segments subcollection, phases, character additions, story additions incl. authorship/review state, the `systemConfig/storyAuthoring` config that holds the spike-calibrated values so tuning needs no deploy, the per-child `authoringConsent` doc, shareLinks token/passcode/review changes, and the childId/parentUid erasure provenance on every derived doc). §13.2 is a reuse-accounting table that settles genuine-reuse vs net-new (resolving §11.5.1 phantom reuse). §13.3 sizes the build as 12 work items (S/M/L, dependencies, long poles flagged) ≈ 8–11 engineer-weeks of net-new to the M2 "green behind the flag" milestone, excluding spikes + compliance.
+
+**Modified files**:
+- `docs/sprints/SPRINT-CA-CHILD-AUTHORED.md`
+
+---
+
 #### `ff8e817` - Sprint CA: write full implementation spec batch (§12.2–§12.7) ahead of spikes
 
 **Type**: Planning / Documentation
