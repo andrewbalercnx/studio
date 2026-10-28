@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { storyBeatFlow } from '@/ai/flows/story-beat-flow';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
+import { requireSessionOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 import type { StoryGeneratorResponse, StoryGeneratorResponseOption } from '@/lib/types';
 
 /**
@@ -23,6 +24,8 @@ export async function POST(request: Request) {
             };
             return NextResponse.json(errorResponse, { status: 400 });
         }
+
+        await requireSessionOwner(request, sessionId);
 
         // Handle "more options" request - just regenerate options
         // The flow will return new options based on the same arc step
@@ -71,6 +74,8 @@ export async function POST(request: Request) {
         return NextResponse.json(response, { status: 200 });
 
     } catch (e: any) {
+        const authResponse = routeAuthErrorResponse(e, { sessionId: '', question: '', options: [] });
+        if (authResponse) return authResponse;
         console.error('[api/storyBeat] Error:', e);
         const errorResponse: StoryGeneratorResponse = {
             ok: false,

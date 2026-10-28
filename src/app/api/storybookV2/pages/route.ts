@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     // privileged via admin/writer claims). Mirrors finalize/pageEdit.
     const storyData = storySnap.data() as Record<string, any>;
     const isPrivileged = user.claims.isAdmin || user.claims.isWriter;
-    if (!isPrivileged && storyData.parentUid && storyData.parentUid !== user.uid) {
+    if (!isPrivileged && storyData.parentUid !== user.uid) {
       logger.warn('Ownership verification failed', { storyId, storybookId, uid: user.uid });
       return NextResponse.json(
         { ok: false, errorMessage: 'You do not own this story.', requestId },

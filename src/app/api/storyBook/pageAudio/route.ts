@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { storyPageAudioFlow } from '@/ai/flows/story-page-audio-flow';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
+import { assertStoryOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 
 type PageAudioJobRequest = {
   storyId: string;
@@ -23,7 +24,7 @@ type PageAudioJobRequest = {
  */
 export async function POST(request: Request) {
   try {
-    await requireParentOrAdminUser(request);
+    const user = await requireParentOrAdminUser(request);
 
     const body = (await request.json()) as PageAudioJobRequest;
     const { storyId, storybookId, pageId, forceRegenerate = false, voiceConfig } = body;
@@ -37,6 +38,8 @@ export async function POST(request: Request) {
 
     // Fire-and-forget: Start audio generation in background
     // Use setImmediate/setTimeout to ensure the response is sent first, then run the flow
+    await assertStoryOwner(user, storyId);
+
     console.log(`[api/storyBook/pageAudio] Starting background audio generation for storyId: ${storyId}, storybookId: ${storybookId || 'none (legacy)'}, pageId: ${pageId || 'all'}`);
 
     // Run synchronously but don't block the response - Next.js will keep the function alive
@@ -69,6 +72,8 @@ export async function POST(request: Request) {
         : 'Audio generation started for all pages. Poll page documents for completion.',
     });
   } catch (e: any) {
+    const ownershipResponse = routeAuthErrorResponse(e);
+    if (ownershipResponse) return ownershipResponse;
     if (e instanceof AuthError) {
       return NextResponse.json(
         { ok: false, errorMessage: e.message },

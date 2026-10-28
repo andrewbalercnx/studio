@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -134,7 +135,7 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
       console.log('[KidsGenerating] Auto-triggering page generation (new model)');
 
       user.getIdToken()
-        .then(token => fetch('/api/storybookV2/pages', {
+        .then(token => authFetch('/api/storybookV2/pages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ storyId: sessionId, storybookId }),
@@ -156,7 +157,7 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
       hasTriggeredPages.current = true;
       console.log('[KidsGenerating] Auto-triggering page generation (legacy model)');
 
-      fetch('/api/storyBook/pages', {
+      authFetch('/api/storyBook/pages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ storyId: sessionId }),
@@ -186,7 +187,7 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
       console.log('[KidsGenerating] Auto-triggering image generation (new model)');
 
       user.getIdToken()
-        .then(token => fetch('/api/storybookV2/images', {
+        .then(token => authFetch('/api/storybookV2/images', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
@@ -214,7 +215,7 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
       hasTriggeredImages.current = true;
       console.log('[KidsGenerating] Auto-triggering image generation (legacy model)');
 
-      fetch('/api/storyBook/images', {
+      authFetch('/api/storyBook/images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ storyId: sessionId }),
@@ -241,7 +242,7 @@ export default function KidsGeneratingPage({ params }: { params: Promise<{ sessi
       hasTriggeredAudio.current = true;
       console.log('[KidsGenerating] Auto-triggering audio generation');
 
-      fetch('/api/storyBook/audio', {
+      authFetch('/api/storyBook/audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ storyId: sessionId }),

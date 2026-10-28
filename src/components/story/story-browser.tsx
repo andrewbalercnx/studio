@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -349,7 +350,7 @@ export function StoryBrowser({
     setBrowserState('compiling');
 
     try {
-      const response = await fetch('/api/storyCompile', {
+      const response = await authFetch('/api/storyCompile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, storyOutputTypeId }),
@@ -390,7 +391,7 @@ export function StoryBrowser({
     stopSpeech();
 
     try {
-      const response = await fetch(generator.apiEndpoint, {
+      const response = await authFetch(generator.apiEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -546,7 +547,7 @@ export function StoryBrowser({
     stopSpeech();
 
     try {
-      const response = await fetch(generator.apiEndpoint, {
+      const response = await authFetch(generator.apiEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -648,7 +649,7 @@ export function StoryBrowser({
     stopSpeech();
 
     try {
-      const response = await fetch('/api/storyEnding', {
+      const response = await authFetch('/api/storyEnding', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -824,7 +825,7 @@ export function StoryBrowser({
         const storyTypeContext = activeStoryType?.name || 'adventure';
         const storyContext = `A ${storyTypeContext} story about ${childProfile?.displayName || 'a child'}.`;
 
-        const response = await fetch('/api/characters/create', {
+        const response = await authFetch('/api/characters/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -850,7 +851,7 @@ export function StoryBrowser({
 
         // Trigger async avatar generation
         if (result.characterId) {
-          fetch('/api/generateCharacterAvatar', {
+          authFetch('/api/generateCharacterAvatar', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1021,7 +1022,7 @@ export function StoryBrowser({
     setIsLoadingMore(true);
     try {
       // Call API with a special flag for more options
-      const response = await fetch(generator.apiEndpoint, {
+      const response = await authFetch(generator.apiEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

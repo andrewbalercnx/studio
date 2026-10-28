@@ -3,6 +3,7 @@ import { gemini4Flow } from '@/ai/flows/gemini4-flow';
 import { gemini4CreateCharacterFlow } from '@/ai/flows/create-story-character-flow';
 import { createLogger, generateRequestId, createTimeoutController } from '@/lib/server-logger';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
+import { requireSessionOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 import type { StoryGeneratorResponse, StoryGeneratorResponseOption } from '@/lib/types';
 
 // Request timeout for AI flows (2 minutes)
@@ -35,6 +36,9 @@ export async function POST(request: Request) {
       return NextResponse.json(errorResponse, { status: 400 });
     }
 
+    // Owner identity and child come from the verified session, never the body.
+    const { data: session } = await requireSessionOwner(request, sessionId);
+
     // Create abort controller for timeout
     // Note: Genkit flows don't currently accept abort signals, so this provides
     // logging and cleanup but won't interrupt a running flow.
@@ -53,8 +57,8 @@ export async function POST(request: Request) {
         // TODO: Pass controller.signal to flow when Genkit supports abort signals
         const result = await gemini4CreateCharacterFlow({
           sessionId,
-          parentUid: characterData.parentUid,
-          childId: characterData.childId,
+          parentUid: session.parentUid,
+          childId: session.childId,
           characterLabel: characterData.characterLabel,
           characterType: characterData.characterType,
           storyContext: characterData.storyContext,
@@ -138,6 +142,8 @@ export async function POST(request: Request) {
       cleanup();
     }
   } catch (e: any) {
+    const authResponse = routeAuthErrorResponse(e, { sessionId: '', question: '', options: [], requestId });
+    if (authResponse) return authResponse;
     logger.error('Unhandled exception in route', e);
     const errorResponse: StoryGeneratorResponse = {
       ok: false,

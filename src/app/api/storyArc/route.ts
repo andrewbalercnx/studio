@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { storyArcEngineFlow } from '@/ai/flows/story-arc-flow';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
+import { requireSessionOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 
 export async function POST(request: Request) {
     try {
@@ -12,6 +13,8 @@ export async function POST(request: Request) {
         if (!sessionId || !storyTypeId || typeof arcStepIndex !== 'number') {
             return NextResponse.json({ ok: false, errorMessage: 'Missing required fields: sessionId, storyTypeId, arcStepIndex' }, { status: 400 });
         }
+
+        await requireSessionOwner(request, sessionId);
 
         const result = await storyArcEngineFlow({
             sessionId,
@@ -25,6 +28,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true, ...result }, { status: 200 });
 
     } catch (e: any) {
+        const authResponse = routeAuthErrorResponse(e);
+        if (authResponse) return authResponse;
         console.error('Error in /api/storyArc:', e);
         return NextResponse.json(
             {

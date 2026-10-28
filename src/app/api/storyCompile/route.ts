@@ -8,7 +8,7 @@ import { getServerFirestore } from '@/lib/server-firestore';
 import { FieldValue } from 'firebase-admin/firestore';
 import { checkEntitlement, consumeEntitlement } from '@/lib/entitlements/ledger.server';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
-import { enforcePersonaScope } from '@/lib/persona.server';
+import { requireSessionOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 
 // Request timeout for story compile (3 minutes - longer due to complexity)
 const COMPILE_TIMEOUT_MS = 180000;
@@ -34,6 +34,9 @@ export async function POST(request: Request) {
         // storyOutputTypeId is now optional - story can be compiled without it
         // and storyOutputType can be selected later when creating a storybook
 
+        // Caller must own the session (also applies the child-persona scope).
+        await requireSessionOwner(request, sessionId);
+
         // Idempotency check: prevent duplicate compile requests
         const firestore = await getServerFirestore();
         const sessionRef = firestore.collection('storySessions').doc(sessionId);
@@ -42,22 +45,6 @@ export async function POST(request: Request) {
         const sessionData = sessionDoc.exists ? sessionDoc.data() : undefined;
 
         if (sessionDoc.exists) {
-            // Persona scope: if this browser carries a valid child-persona
-            // cookie for the owning family, the session must belong to that
-            // child. Absent/invalid cookie (mobile app, api-client) = legacy
-            // behaviour — see src/lib/persona.ts.
-            const personaCheck = await enforcePersonaScope({
-                expectedUid: sessionData?.parentUid,
-                effectiveChildId: sessionData?.childId,
-            });
-            if (!personaCheck.ok) {
-                logger.warn('Persona scope mismatch', { sessionId });
-                return NextResponse.json(
-                    { ok: false, errorMessage: personaCheck.message, code: personaCheck.code, requestId },
-                    { status: personaCheck.status },
-                );
-            }
-
             const compileInProgress = sessionData?.compileInProgress;
             const compileStartedAt = sessionData?.compileStartedAt;
 
@@ -267,6 +254,9 @@ export async function POST(request: Request) {
         }
 
     } catch (e: any) {
+        // Before the lock release below: a rejected caller must not touch the session.
+        const authResponse = routeAuthErrorResponse(e, { requestId });
+        if (authResponse) return authResponse;
         const errorMessage = e.message || 'An unexpected error occurred in the API route.';
         logger.error('Unhandled exception in route', e);
 

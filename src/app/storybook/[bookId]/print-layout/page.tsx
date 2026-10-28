@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useMemo, useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -167,7 +168,7 @@ export default function PrintLayoutSelectionPage() {
       console.log('[print-layout] Request body string:', requestBodyString);
       console.log('[print-layout] Calling API:', `/api/printStoryBooks/${docRef.id}/auto-layout`);
 
-      const autoLayoutResponse = await fetch(
+      const autoLayoutResponse = await authFetch(
         `/api/printStoryBooks/${docRef.id}/auto-layout`,
         {
           method: 'POST',

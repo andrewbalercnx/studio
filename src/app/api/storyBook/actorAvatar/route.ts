@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { storyActorAvatarFlow } from '@/ai/flows/story-actor-avatar-flow';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
+import { assertStoryOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 
 type ActorAvatarJobRequest = {
   storyId: string;
@@ -18,7 +19,7 @@ type ActorAvatarJobRequest = {
  */
 export async function POST(request: Request) {
   try {
-    await requireParentOrAdminUser(request);
+    const user = await requireParentOrAdminUser(request);
 
     const body = (await request.json()) as ActorAvatarJobRequest;
     const { storyId, forceRegenerate = false } = body;
@@ -33,6 +34,8 @@ export async function POST(request: Request) {
     // Fire-and-forget: Start actor avatar generation in background
     // Don't await - let it run while we return immediately
     // The flow updates story.actorAvatarGeneration.status as it progresses
+    await assertStoryOwner(user, storyId);
+
     storyActorAvatarFlow({
       storyId,
       forceRegenerate,
@@ -53,6 +56,8 @@ export async function POST(request: Request) {
       message: 'Actor avatar generation started. Poll story document for completion.',
     });
   } catch (e: any) {
+    const ownershipResponse = routeAuthErrorResponse(e);
+    if (ownershipResponse) return ownershipResponse;
     if (e instanceof AuthError) {
       return NextResponse.json(
         { ok: false, errorMessage: e.message },

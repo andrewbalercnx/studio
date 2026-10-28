@@ -1,5 +1,6 @@
 
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useState, useEffect } from 'react';
 import { useAdminStatus } from '@/hooks/use-admin-status';
@@ -172,7 +173,7 @@ export default function AdminStoryCompileTestPage() {
         setLastError(null);
 
         try {
-            const response = await fetch('/api/storyCompile', {
+            const response = await authFetch('/api/storyCompile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sessionId: sessionIdInput }),

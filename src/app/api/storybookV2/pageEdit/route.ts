@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     }
     const storyData = storySnap.data() as Record<string, any>;
     const isPrivileged = user.claims.isAdmin || user.claims.isWriter;
-    if (!isPrivileged && storyData.parentUid && storyData.parentUid !== user.uid) {
+    if (!isPrivileged && storyData.parentUid !== user.uid) {
       return respondError(403, 'You do not own this story.');
     }
 

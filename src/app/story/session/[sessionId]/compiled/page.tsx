@@ -1,5 +1,6 @@
 
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useMemo, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
@@ -88,7 +89,7 @@ export default function CompiledStoryBookPage() {
     setIsGeneratingPages(true);
     setPageGenerationError(null);
     try {
-      const response = await fetch('/api/storyBook/pages', {
+      const response = await authFetch('/api/storyBook/pages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ storyId }),
@@ -113,7 +114,7 @@ export default function CompiledStoryBookPage() {
     setImageGenerationError(null);
     setImageLogs([]);
     try {
-      const response = await fetch('/api/storyBook/images', {
+      const response = await authFetch('/api/storyBook/images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

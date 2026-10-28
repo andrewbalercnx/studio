@@ -3,10 +3,11 @@ import { NextResponse } from 'next/server';
 import { avatarAnimationFlow } from '@/ai/flows/avatar-animation-flow';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
+import { assertCharacterOwner, assertChildOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 
 export async function POST(request: Request) {
   try {
-    await requireParentOrAdminUser(request);
+    const user = await requireParentOrAdminUser(request);
     const { childId, characterId, forceRegenerate } = await request.json();
 
     if (!childId && !characterId) {
@@ -14,6 +15,9 @@ export async function POST(request: Request) {
     }
 
     console.log('[api/generateAvatar/animation] Starting animation generation:', { childId, characterId, forceRegenerate });
+
+    if (childId) await assertChildOwner(user, childId);
+    if (characterId) await assertCharacterOwner(user, characterId);
 
     const result = await avatarAnimationFlow({ childId, characterId, forceRegenerate });
 
@@ -27,6 +31,8 @@ export async function POST(request: Request) {
     }, { status: result.ok ? 200 : 500 });
 
   } catch (e: any) {
+    const ownershipResponse = routeAuthErrorResponse(e);
+    if (ownershipResponse) return ownershipResponse;
     if (e instanceof AuthError) {
       return NextResponse.json({ ok: false, errorMessage: e.message }, { status: e.status });
     }

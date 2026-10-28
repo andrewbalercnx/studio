@@ -1,13 +1,13 @@
 # API Documentation
 
-> **Last Updated**: 2026-06-11 (W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
 
 ## Overview
 
-StoryPic Kids API uses Next.js App Router API routes. All endpoints require authentication unless otherwise noted.
+StoryPic Kids API uses Next.js App Router API routes. All endpoints require authentication unless otherwise noted. Routes that act on a user's data also check ownership; the per-route rules are summarised in [`docs/architecture/route-auth-matrix.md`](architecture/route-auth-matrix.md).
 
 **Base URL**: `/api`
 
@@ -341,26 +341,34 @@ Upload photos for a child profile. Triggers image description generation in back
 
 ### POST `/api/characters/create`
 
-Create a character from a child profile or parent input.
+**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist. The character's `ownerParentUid` and `childId` are taken from the session; `parentUid`/`childId` in the body are ignored and no longer required.
+
+Create a supporting character during a story session. An AI call generates pronouns, description, likes and dislikes; the character is added to the session's `supportingCharacterIds`.
 
 **Request Body**:
 ```json
 {
-  "displayName": "Fluffy",
-  "type": "Pet",
-  "likes": ["treats", "walks"],
-  "dislikes": ["baths"],
-  "description": "A friendly golden retriever",
-  "childId": "optional-child-id"
+  "sessionId": "session-id",
+  "characterLabel": "a friendly golden retriever",
+  "characterName": "Fluffy",
+  "characterType": "Pet",
+  "storyContext": "Story so far...",
+  "childAge": 5,
+  "generateAvatar": false
 }
 ```
 
-**Response**: `200 OK`
-```json
-{
-  "characterId": "abc123"
-}
-```
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sessionId` | string | Yes | Story session the character joins; must belong to the caller |
+| `characterLabel` | string | Yes | How the story refers to the character |
+| `characterName` | string | No | Display name (derived from the label if omitted) |
+| `characterType` | string | Yes | One of `Family`, `Friend`, `Pet`, `Toy`, `Other` |
+| `storyContext` | string | No | Story text used to shape the profile |
+| `childAge` | number | No | Child's age, for age-appropriate traits |
+| `generateAvatar` | boolean | No | Hint for the client to call `/api/generateCharacterAvatar` afterwards |
+
+**Response**: `200 OK` with `{ "ok": true, "characterId": "abc123", ... }` (the flow's result).
 
 ---
 
@@ -408,6 +416,8 @@ Manually trigger regeneration of the image description for a child or character.
 ---
 
 ### POST `/api/characterTraits`
+
+**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist. The character must also belong to the caller (`characters.ownerParentUid`).
 
 Generate character trait suggestions using AI.
 
@@ -457,6 +467,8 @@ All story generation endpoints return a `StoryGeneratorResponse` object with the
 
 ### POST `/api/warmupReply`
 
+**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
+
 Generate warmup phase response.
 
 **Request Body**:
@@ -483,6 +495,8 @@ Generate warmup phase response.
 ---
 
 ### POST `/api/storyBeat`
+
+**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
 
 Generate story beat with continuation and options. Uses the standard `StoryGeneratorResponse` format for StoryBrowser compatibility.
 
@@ -523,6 +537,8 @@ Generate story beat with continuation and options. Uses the standard `StoryGener
 
 ### POST `/api/gemini3`
 
+**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
+
 Generate Gemini 3 free-form story questions. Uses the standard `StoryGeneratorResponse` format for StoryBrowser compatibility.
 
 **Request Body**:
@@ -555,6 +571,8 @@ Generate Gemini 3 free-form story questions. Uses the standard `StoryGeneratorRe
 ---
 
 ### POST `/api/gemini4`
+
+**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist. For `action: "createCharacter"`, the new character's owner and child come from the session; `characterData.parentUid`/`childId` are ignored.
 
 Generate Gemini 4 structured story questions with "Tell me more" support. Uses the standard `StoryGeneratorResponse` format for StoryBrowser compatibility.
 
@@ -740,6 +758,8 @@ Multi-phase "Fun with my friends" story generator. Creates adventure stories fea
 
 ### POST `/api/storyArc`
 
+**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
+
 Generate or retrieve story arc structure.
 
 **Request Body**:
@@ -767,6 +787,8 @@ Generate or retrieve story arc structure.
 
 ### POST `/api/storyEnding`
 
+**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
+
 Generate story ending options.
 
 **Request Body**:
@@ -791,6 +813,8 @@ Generate story ending options.
 ---
 
 ### POST `/api/storyCompile`
+
+**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
 
 Compile story session into final story text. This is the shared completion chokepoint for **all**
 story flows (kids and parent), so it is where `story_allowance` is enforced:
@@ -828,6 +852,8 @@ story flows (kids and parent), so it is where `story_allowance` is enforced:
 ---
 
 ### POST `/api/storyPagination`
+
+**Authentication**: Bearer token. The caller must own the story (`stories.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 / 403 / 404 as for session routes.
 
 Paginate a compiled story into pages using AI-driven pagination.
 
@@ -872,6 +898,8 @@ Paginate a compiled story into pages using AI-driven pagination.
 
 ### POST `/api/gemini3`
 
+**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
+
 Generate story using Gemini 3 flow.
 
 **Request Body**:
@@ -896,6 +924,8 @@ Generate story using Gemini 3 flow.
 ---
 
 ### POST `/api/gemini4`
+
+**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist. For `action: "createCharacter"`, the new character's owner and child come from the session; `characterData.parentUid`/`childId` are ignored.
 
 Generate story using Gemini 4 flow.
 
@@ -988,6 +1018,8 @@ Consumed by the kids PWA (`/kids/create`), the parent-side chooser (`/story/star
 
 ### GET `/api/storyBook/[bookId]`
 
+**Authentication**: Bearer token. The caller must own the story (`stories.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 / 403 / 404 as for session routes. Help-tour sample stories (`help-*` IDs) are readable by any signed-in user. A `printStoryBookId` is honoured only if that print storybook's `storyId` equals `bookId`.
+
 Get storybook details.
 
 **Path Parameters**:
@@ -1016,30 +1048,6 @@ Get storybook details.
 `artStatus` (Sprint W2-C) is the persisted degraded-book rollup from the new-model storybook
 subcollection document; `null` for legacy books or when no `storybookId` query param is provided.
 The order page uses it for the proactive "pages will print without art" banner.
-
----
-
-### PATCH `/api/storyBook/[bookId]`
-
-Update storybook details.
-
-**Path Parameters**:
-- `bookId` (string, required) - Storybook document ID
-
-**Request Body**:
-```json
-{
-  "title": "Updated Title",
-  "selectedImageStyleId": "watercolor"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "success": true
-}
-```
 
 ---
 
@@ -1150,6 +1158,8 @@ View a shared storybook (public endpoint - no authentication required).
 
 ### POST `/api/storyBook/audio`
 
+**Authentication**: Bearer token, parent or admin. The caller must own the story (`stories.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 / 403 / 404 as for session routes.
+
 Generate full audio narration for storybook.
 
 **Request Body**:
@@ -1171,6 +1181,8 @@ Generate full audio narration for storybook.
 ---
 
 ### POST `/api/storyBook/pageAudio`
+
+**Authentication**: Bearer token, parent or admin. The caller must own the story (`stories.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 / 403 / 404 as for session routes.
 
 Generate audio for a specific page.
 
@@ -1218,6 +1230,8 @@ Generate printable PDF for storybook.
 ---
 
 ### POST `/api/storyBook/actorAvatar`
+
+**Authentication**: Bearer token, parent or admin. The caller must own the story (`stories.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 / 403 / 404 as for session routes.
 
 Generate composite avatar from story actors.
 
@@ -1589,6 +1603,8 @@ writes the ledger; a brand-new family is treated as free-tier seeded in memory.
 
 ### POST `/api/generateAvatar`
 
+**Authentication**: Bearer token, parent or admin. The caller must own the child (`children.ownerParentUid`); admin and writer principals are exempt.
+
 Generate avatar from uploaded photo.
 
 **Request Body**:
@@ -1611,6 +1627,8 @@ Generate avatar from uploaded photo.
 
 ### POST `/api/generateAvatar/animation`
 
+**Authentication**: Bearer token, parent or admin. The caller must own the child (`children.ownerParentUid`) and/or character (`characters.ownerParentUid`) named; admin and writer principals are exempt.
+
 Generate animated avatar (dancing).
 
 **Request Body**:
@@ -1631,6 +1649,8 @@ Generate animated avatar (dancing).
 ---
 
 ### POST `/api/generateCharacterAvatar`
+
+**Authentication**: Bearer token, parent or admin. The caller must own the character (`characters.ownerParentUid`); admin and writer principals are exempt.
 
 Generate avatar for a character.
 
@@ -1837,6 +1857,8 @@ same shapes as `GET /api/printOrders/my-orders`.
 
 ### POST `/api/printStoryBooks/[printStoryBookId]/auto-layout`
 
+**Authentication**: Bearer token. The caller must own the print storybook (`printStoryBooks.ownerUserId`) and the story it lays out (`stories.parentUid`); admin and writer principals are exempt.
+
 Auto-layout print storybook pages.
 
 **Path Parameters**:
@@ -1853,6 +1875,8 @@ Auto-layout print storybook pages.
 ---
 
 ### POST `/api/printStoryBooks/[printStoryBookId]/generate-pdfs`
+
+**Authentication**: Bearer token. The caller must own the print storybook (`printStoryBooks.ownerUserId`); admin and writer principals are exempt.
 
 Generate PDFs for print storybook.
 
@@ -3727,7 +3751,7 @@ Health probe for canary monitoring and rollback decisions (Sprint W3-B). Returns
 
 **Notes**:
 - `revision`/`service` come from Cloud Run's `K_REVISION`/`K_SERVICE` env vars (`null` locally).
-- Distinct from `GET /api/healthz` (older endpoint; returns `recentLogs` when `ENABLE_DEV_LOGS=true`). `/api/health` never exposes logs.
+- Distinct from `GET /api/healthz` (older endpoint). `/api/healthz` returns `recentLogs` only when `ENABLE_DEV_LOGS=true` **and** the caller presents an admin Bearer token; `/api/health` never exposes logs.
 
 ### GET `/api/flags`
 
@@ -3799,10 +3823,10 @@ Create a dev todo item. Used by Claude Code to track follow-up work items.
 
 Mixam webhook for order status updates. Called by Mixam when order status changes.
 
-**Authentication**: HMAC-SHA256 signature verification using `MIXAM_WEBHOOK_SECRET` (optional).
+**Authentication**: A valid `X-Mixam-Signature` (HMAC-SHA256 of the raw body with `MIXAM_WEBHOOK_SECRET`) is required. Missing or invalid signature → 401. Secret not configured → 503.
 
 **Request Headers**:
-- `X-Mixam-Signature` - HMAC-SHA256 signature (optional)
+- `X-Mixam-Signature` - HMAC-SHA256 signature (required)
 
 **Request Body** (Mixam webhook payload):
 ```json
@@ -4314,7 +4338,7 @@ Update Mixam API configuration.
 
 Look up addresses from a UK postcode using getAddress.io API.
 
-**Authentication**: Required
+**Authentication**: Bearer token (any signed-in user). Each lookup is billed to the getAddress.io key.
 
 **Query Parameters**:
 - `postcode` (string, required) - UK postcode to look up

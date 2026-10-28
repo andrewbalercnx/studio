@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -171,7 +172,7 @@ export default function KidsCreateStoryPage() {
   useEffect(() => {
     const fetchGenerators = async () => {
       try {
-        const response = await fetch('/api/kids-generators');
+        const response = await authFetch('/api/kids-generators');
         const result = await response.json();
         if (result.ok && result.generators) {
           setGenerators(result.generators);
@@ -205,7 +206,7 @@ export default function KidsCreateStoryPage() {
     if (!user || !childId) return { ok: true };
     try {
       const token = await user.getIdToken();
-      const res = await fetch('/api/entitlements/check', {
+      const res = await authFetch('/api/entitlements/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ component: 'story_allowance', childId }),
@@ -464,7 +465,7 @@ export default function KidsCreateStoryPage() {
         // Call storyCompile to trigger post-generation tasks (synopsis, audio, cast avatar, title)
         // This ensures wizard stories get the same treatment as other generator stories
         try {
-          const compileResponse = await fetch('/api/storyCompile', {
+          const compileResponse = await authFetch('/api/storyCompile', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sessionId }),

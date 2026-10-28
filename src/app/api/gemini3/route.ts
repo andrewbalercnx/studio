@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { gemini3Flow } from '@/ai/flows/gemini3-flow';
 import { createLogger, generateRequestId, createTimeoutController } from '@/lib/server-logger';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
+import { requireSessionOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 import type { StoryGeneratorResponse, StoryGeneratorResponseOption } from '@/lib/types';
 
 // Request timeout for AI flows (2 minutes)
@@ -32,6 +33,8 @@ export async function POST(request: Request) {
             };
             return NextResponse.json(errorResponse, { status: 400 });
         }
+
+        await requireSessionOwner(request, sessionId);
 
         // Create abort controller for timeout
         // Note: Genkit flows don't currently accept abort signals, so this provides
@@ -101,6 +104,8 @@ export async function POST(request: Request) {
         }
 
     } catch (e: any) {
+        const authResponse = routeAuthErrorResponse(e, { sessionId: '', question: '', options: [], requestId });
+        if (authResponse) return authResponse;
         logger.error('Unhandled exception in route', e);
         const errorResponse: StoryGeneratorResponse = {
             ok: false,

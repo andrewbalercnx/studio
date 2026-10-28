@@ -25,9 +25,9 @@ export async function POST(request: Request, context: { params: Promise<{ orderI
       return respondError(404, 'Order not found');
     }
     const orderData = orderSnap.data() as Record<string, any>;
-    const parentUid = orderData?.parentUid;
+    const parentUid = orderData?.parentUid ?? orderData?.ownerUserId;
     const isPrivileged = user.claims.isAdmin || user.claims.isWriter;
-    if (!isPrivileged && parentUid && parentUid !== user.uid) {
+    if (!isPrivileged && parentUid !== user.uid) {
       return respondError(403, 'You do not own this order.');
     }
 

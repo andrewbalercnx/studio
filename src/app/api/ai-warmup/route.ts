@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { ai } from '@/ai/genkit';
+import { requireUser, routeAuthErrorResponse } from '@/lib/route-auth.server';
 
 /**
  * AI connection warm-up endpoint.
@@ -11,10 +12,17 @@ import { ai } from '@/ai/genkit';
  * fire-and-forget from the story session page on mount, so that the connection
  * is warm when the first story beat fires after the child selects a story type.
  *
- * No authentication required — output is discarded, no sensitive data involved.
- * Cost: ~$0.000001 per call (negligible).
+ * Requires a signed-in user: the output is discarded, but each call is a
+ * billed model request (~$0.000001), so it must not be open to anyone.
  */
-export async function POST() {
+export async function POST(request: Request) {
+    try {
+        await requireUser(request);
+    } catch (error) {
+        const authResponse = routeAuthErrorResponse(error);
+        if (authResponse) return authResponse;
+        throw error;
+    }
     const startTime = Date.now();
     try {
         await ai.generate({

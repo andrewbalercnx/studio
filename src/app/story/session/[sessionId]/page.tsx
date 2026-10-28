@@ -1,5 +1,6 @@
 
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -321,7 +322,7 @@ export default function StorySessionPage() {
     // and HTTP/2 session to Google AI are established before the child selects a story type.
     // The first story beat then runs on a warm connection instead of paying cold-start overhead.
     useEffect(() => {
-        fetch('/api/ai-warmup', { method: 'POST' }).catch(() => {});
+        authFetch('/api/ai-warmup', { method: 'POST' }).catch(() => {});
     }, []);
 
     const latestOptionsMessage = useMemo(() => {
@@ -390,7 +391,7 @@ export default function StorySessionPage() {
                     createdAt: serverTimestamp(),
                 });
 
-                const response = await fetch('/api/warmupReply', {
+                const response = await authFetch('/api/warmupReply', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sessionId }),
@@ -500,7 +501,7 @@ export default function StorySessionPage() {
             }
 
 
-            const response = await fetch('/api/storyBeat', {
+            const response = await authFetch('/api/storyBeat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sessionId }),
@@ -562,7 +563,7 @@ export default function StorySessionPage() {
         if (!firestore || !sessionRef) return false;
 
         try {
-            const response = await fetch('/api/characterTraits', {
+            const response = await authFetch('/api/characterTraits', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sessionId, characterId }),
@@ -629,7 +630,7 @@ export default function StorySessionPage() {
         const storyContext = `A ${storyTypeContext} story about ${childProfile?.displayName || 'a child'}. Recent events: ${recentStory.slice(0, 200)}`;
 
         try {
-            const response = await fetch('/api/characters/create', {
+            const response = await authFetch('/api/characters/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -654,7 +655,7 @@ export default function StorySessionPage() {
             // Trigger async avatar generation (don't wait for it)
             if (user && result.characterId) {
                 const idToken = await user.getIdToken();
-                fetch('/api/generateCharacterAvatar', {
+                authFetch('/api/generateCharacterAvatar', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -679,7 +680,7 @@ export default function StorySessionPage() {
         setIsEndingRunning(true);
         setEndingDiagnostics(prev => ({ ...prev, lastEndingErrorMessage: null }));
         try {
-            const response = await fetch('/api/storyEnding', {
+            const response = await authFetch('/api/storyEnding', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sessionId }),
@@ -861,7 +862,7 @@ export default function StorySessionPage() {
         setCompileError(null);
         try {
             await logClientStage('compile.started', { storyOutputTypeId: selectedOutputTypeId });
-            const response = await fetch('/api/storyCompile', {
+            const response = await authFetch('/api/storyCompile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sessionId, storyOutputTypeId: selectedOutputTypeId }),
@@ -913,7 +914,7 @@ export default function StorySessionPage() {
             // Use sessionId as storyId since stories are stored with sessionId as their doc ID
             const storyId = storyBook.id || sessionId;
             await logClientStage('pages.started', { storyId });
-            const response = await fetch('/api/storyBook/pages', {
+            const response = await authFetch('/api/storyBook/pages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ storyId }),
@@ -937,7 +938,7 @@ export default function StorySessionPage() {
         setBeatDiagnostics(prev => ({...prev, lastBeatErrorMessage: null}));
 
         try {
-            const response = await fetch('/api/storyBeat', {
+            const response = await authFetch('/api/storyBeat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sessionId }),
@@ -1030,7 +1031,7 @@ export default function StorySessionPage() {
         setImageJobError(null);
         try {
             await logClientStage('art.started', { storyId, force });
-            const response = await fetch('/api/storyBook/images', {
+            const response = await authFetch('/api/storyBook/images', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

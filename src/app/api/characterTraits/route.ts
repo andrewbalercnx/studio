@@ -1,6 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { characterTraitsFlow } from '@/ai/flows/character-traits-flow';
+import { assertCharacterOwner, requireSessionOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 
 export async function POST(request: Request) {
     try {
@@ -9,6 +10,9 @@ export async function POST(request: Request) {
         if (!sessionId || !characterId) {
             return NextResponse.json({ ok: false, errorMessage: 'Missing sessionId or characterId' }, { status: 400 });
         }
+
+        const { user } = await requireSessionOwner(request, sessionId);
+        await assertCharacterOwner(user, characterId);
 
         const result = await characterTraitsFlow({ sessionId, characterId });
 
@@ -27,6 +31,8 @@ export async function POST(request: Request) {
         }
 
     } catch (e: any) {
+        const authResponse = routeAuthErrorResponse(e);
+        if (authResponse) return authResponse;
         const errorMessage = e.message || 'An unexpected error occurred in the API route.';
         return NextResponse.json(
             { 

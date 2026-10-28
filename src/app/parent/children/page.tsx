@@ -1,5 +1,6 @@
 
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -157,7 +158,7 @@ function AvatarGenerator({ child, onAvatarUpdate }: { child: ChildProfile, onAva
         setError(null);
         try {
             const idToken = await user.getIdToken();
-            const res = await fetch('/api/generateAvatar', {
+            const res = await authFetch('/api/generateAvatar', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -201,7 +202,7 @@ function AvatarGenerator({ child, onAvatarUpdate }: { child: ChildProfile, onAva
         setAnimationError(null);
         try {
             const idToken = await user.getIdToken();
-            const res = await fetch('/api/generateAvatar/animation', {
+            const res = await authFetch('/api/generateAvatar/animation', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
+import { requirePrintStoryBookOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 import { getStoryBucket } from '@/firebase/admin/storage';
 import { randomUUID } from 'crypto';
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
@@ -785,7 +786,7 @@ async function uploadInteriorPdf(
 }
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ printStoryBookId: string }> }
 ) {
   const requestId = generateRequestId();
@@ -794,6 +795,8 @@ export async function POST(
   try {
     const { printStoryBookId } = await params;
     logger.info('PDF generation request received', { printStoryBookId });
+
+    await requirePrintStoryBookOwner(request, printStoryBookId);
 
     await initFirebaseAdminApp();
     const db = getFirestore();
@@ -938,6 +941,8 @@ export async function POST(
       throw generationError;
     }
   } catch (error: any) {
+    const authResponse = routeAuthErrorResponse(error, { requestId });
+    if (authResponse) return authResponse;
     logger.error('Unhandled exception in route', error);
     return NextResponse.json(
       {

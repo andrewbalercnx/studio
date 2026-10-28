@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser, routeAuthErrorResponse } from '@/lib/route-auth.server';
 
 /**
  * Response format from getAddress.io Autocomplete API
@@ -66,6 +67,15 @@ export type PostcodeLookupResponse = {
  * Returns a list of addresses that the user can select from.
  */
 export async function GET(request: NextRequest) {
+  // Each lookup bills the getAddress.io key, so signed-in users only.
+  try {
+    await requireUser(request);
+  } catch (error) {
+    const authResponse = routeAuthErrorResponse(error);
+    if (authResponse) return authResponse;
+    throw error;
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const postcode = searchParams.get('postcode');
 

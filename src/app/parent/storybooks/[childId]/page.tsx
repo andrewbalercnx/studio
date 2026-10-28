@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -331,7 +332,7 @@ export default function ChildStorybooksPage() {
       for (let i = 0; i < storybooksToFetch.length; i += BATCH_SIZE) {
         const batch = storybooksToFetch.slice(i, i + BATCH_SIZE);
         try {
-          const response = await fetch('/api/parent/storybooks/thumbnails', {
+          const response = await authFetch('/api/parent/storybooks/thumbnails', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
             body: JSON.stringify({ storybooks: batch }),
@@ -357,7 +358,7 @@ export default function ChildStorybooksPage() {
       const idToken = await user.getIdToken();
       // ?childId= triggers a single-doc child read + filters storybook subcollection
       // reads to only this child's stories — faster than loading all children/storybooks
-      const response = await fetch(`/api/parent/storybooks?childId=${childId}`, {
+      const response = await authFetch(`/api/parent/storybooks?childId=${childId}`, {
         headers: { Authorization: `Bearer ${idToken}` },
       });
 
@@ -416,7 +417,7 @@ export default function ChildStorybooksPage() {
     setRegeneratingAudioFor(storybook.storybookId);
     try {
       const idToken = await user.getIdToken();
-      const response = await fetch('/api/storyBook/pageAudio', {
+      const response = await authFetch('/api/storyBook/pageAudio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({
@@ -455,7 +456,7 @@ export default function ChildStorybooksPage() {
     setGeneratingPrintableFor(storybook.storybookId);
     try {
       const idToken = await user.getIdToken();
-      const response = await fetch('/api/storyBook/printable', {
+      const response = await authFetch('/api/storyBook/printable', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({ storyId: storybook.storyId, storybookId: storybook.storybookId, printLayoutId: storybook.printLayoutId || 'mixam-8x10-hardcover' }),
@@ -491,7 +492,7 @@ export default function ChildStorybooksPage() {
     const layoutId = selectedPrintLayoutId || storybook.printLayoutId || 'mixam-8x10-hardcover';
     try {
       const idToken = await user.getIdToken();
-      const response = await fetch('/api/storyBook/printable', {
+      const response = await authFetch('/api/storyBook/printable', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({ storyId: storybook.storyId, storybookId: storybook.storybookId, printLayoutId: layoutId, forceRegenerate: true }),
