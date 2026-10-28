@@ -2,7 +2,7 @@
 
 > **Purpose**: Track all significant changes to the codebase by commit ID for easy searching and reference.
 >
-> **IMPORTANT**: This document must be updated with every push to main. Append new entries at the top.
+> **IMPORTANT**: Add an entry in every PR, keyed by PR number (entries before 2026-10-28 use commit IDs). Append new entries at the top.
 
 ---
 
