@@ -30,8 +30,8 @@
 - `docs/architecture/route-auth-matrix.md`
 
 **Modified files**:
-- 26 route handlers under `src/app/api/` (see the route auth matrix)
-- 24 client pages and components switched from `fetch` to `authFetch`
+- 31 route handlers under `src/app/api/` (see the route auth matrix)
+- 23 client pages and components switched from `fetch` to `authFetch`
 - `src/app/admin/regression/page.tsx` (new `API_ROUTE_AUTH_ANON` test)
 - `.github/workflows/ci.yml`, `docs/API.md`, `docs/SYSTEM_DESIGN.md`
 
