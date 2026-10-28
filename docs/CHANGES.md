@@ -16,6 +16,30 @@
 
 ## Changes
 
+### 2026-10-28
+
+#### `#7` - Phase 0: require auth and ownership on API routes
+
+**Type**: Security
+
+**Summary**: Admin-SDK routes bypass `firestore.rules`, and many story, AI, storybook and print routes either had no auth or didn't check ownership. New ownership guards (`src/lib/route-auth.server.ts`) now require a token and the caller's ownership of the session, story, child, character or print storybook, with admin/writer exempt. Character creation takes owner and child from the session instead of the body. Fail-open owner checks are strict. The Mixam webhook requires a signature, `healthz` logs are admin-only, and postcode lookup and AI warm-up require sign-in. Web clients use `authFetch` to send the ID token to same-origin `/api/` routes only. The orphaned `storybookV2/exemplars` route is removed. CI adds a gitleaks scan of PR commits.
+
+**Created files**:
+- `src/lib/route-auth.server.ts`, `src/lib/auth-fetch.ts`
+- `src/lib/__tests__/route-auth.test.ts`, `src/lib/__tests__/auth-fetch.test.ts`
+- `docs/architecture/route-auth-matrix.md`
+
+**Modified files**:
+- 26 route handlers under `src/app/api/` (see the route auth matrix)
+- 24 client pages and components switched from `fetch` to `authFetch`
+- `src/app/admin/regression/page.tsx` (new `API_ROUTE_AUTH_ANON` test)
+- `.github/workflows/ci.yml`, `docs/API.md`, `docs/SYSTEM_DESIGN.md`
+
+**Deleted files**:
+- `src/app/api/storybookV2/exemplars/route.ts`
+
+---
+
 ### 2026-06-12
 
 #### `f54c0b1` - Pagination: scene-continuity fill for pages with no scene at all
