@@ -1,6 +1,7 @@
 
 
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useState, useMemo } from 'react';
 import { useAdminStatus } from '@/hooks/use-admin-status';
@@ -325,6 +326,7 @@ const initialTests: TestResult[] = [
   { id: 'API_ADMIN_OPS_HEALTH_CHECK', name: 'API: /api/admin/ops/health-check (POST dry-run)', status: 'PENDING', message: '' },
   { id: 'API_ADMIN_SESSIONS', name: 'API: /api/admin/sessions (GET shape + lastError)', status: 'PENDING', message: '' },
   { id: 'API_HEALTH', name: 'API: /api/health (version + dependency probe)', status: 'PENDING', message: '' },
+  { id: 'API_ROUTE_AUTH_ANON', name: 'API: protected routes reject anonymous calls (401)', status: 'PENDING', message: '' },
   { id: 'API_FLAGS', name: 'API: /api/flags (server-evaluated feature flags)', status: 'PENDING', message: '' },
   { id: 'API_FEEDBACK_POST_VALIDATION', name: 'API: /api/feedback (POST validation)', status: 'PENDING', message: '' },
   { id: 'API_FEEDBACK_ELIGIBILITY', name: 'API: /api/feedback/eligibility (GET shape)', status: 'PENDING', message: '' },
@@ -966,14 +968,14 @@ export default function AdminRegressionPage() {
         if (sessionSnap.data()?.currentPhase !== 'story') throw new Error(`Phase at final beat was ${sessionSnap.data()?.currentPhase}, expected 'story'`);
         
         // 4. Ending
-        const endingRes = await fetch('/api/storyEnding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }) });
+        const endingRes = await authFetch('/api/storyEnding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }) });
         if (!endingRes.ok) { const body = await endingRes.json(); throw new Error(`Ending API failed: ${body.errorMessage}`); }
         sessionSnap = await getDoc(sessionRef);
         phaseStateScenarioSummary.phaseAfterEnding = sessionSnap.data()?.currentPhase;
         if (sessionSnap.data()?.currentPhase !== 'ending') throw new Error(`Phase after ending was ${sessionSnap.data()?.currentPhase}, expected 'ending'`);
 
         // 5. Compile
-        const compileRes = await fetch('/api/storyCompile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id, storyOutputTypeId: 'picture_book_standard_v1' }) });
+        const compileRes = await authFetch('/api/storyCompile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id, storyOutputTypeId: 'picture_book_standard_v1' }) });
         if (!compileRes.ok) { const body = await compileRes.json(); throw new Error(`Compile API failed: ${body.errorMessage}`); }
         sessionSnap = await getDoc(sessionRef);
         phaseStateScenarioSummary.phaseAfterCompile = sessionSnap.data()?.currentPhase;
@@ -1003,7 +1005,7 @@ export default function AdminRegressionPage() {
         }, 'SCENARIO_STORY_COMPILE');
         await addDoc(collection(firestore, 'storySessions', sessionRef.id, 'messages'), { sender: 'assistant', text: 'The story is now complete!', createdAt: serverTimestamp() });
 
-        const response = await fetch('/api/storyCompile', {
+        const response = await authFetch('/api/storyCompile', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id, storyOutputTypeId: 'picture_book_standard_v1' }),
         });
         const result = await response.json();
@@ -1066,7 +1068,7 @@ export default function AdminRegressionPage() {
             Authorization: `Bearer ${compileAuthToken}`,
         };
 
-        const pagesResponse = await fetch('/api/storybookV2/pages', {
+        const pagesResponse = await authFetch('/api/storybookV2/pages', {
             method: 'POST',
             headers: compileAuthedHeaders,
             body: JSON.stringify({ storyId: storyRef.id, storybookId }),
@@ -1133,7 +1135,7 @@ export default function AdminRegressionPage() {
         storyCompileScenarioSummary.lastPageKind = lastPageKind;
         storyCompileScenarioSummary.interiorPlacementsAlternate = placementsAlternate;
 
-        const imagesResponse = await fetch('/api/storybookV2/images', {
+        const imagesResponse = await authFetch('/api/storybookV2/images', {
             method: 'POST',
             headers: compileAuthedHeaders,
             body: JSON.stringify({
@@ -1204,7 +1206,7 @@ export default function AdminRegressionPage() {
         const messagesRef = collection(firestore, 'storySessions', sessionRef.id, 'messages');
         await addDoc(messagesRef, { sender: 'assistant', text: 'Hi friend! Ready to make a story?', createdAt: serverTimestamp() });
         for (let i = 0; i < arcSteps.length; i++) {
-            const beatRes = await fetch('/api/storyBeat', {
+            const beatRes = await authFetch('/api/storyBeat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sessionId: sessionRef.id }),
@@ -1230,7 +1232,7 @@ export default function AdminRegressionPage() {
                 updatedAt: serverTimestamp(),
             });
         }
-        const endingRes = await fetch('/api/storyEnding', {
+        const endingRes = await authFetch('/api/storyEnding', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sessionId: sessionRef.id }),
@@ -1256,7 +1258,7 @@ export default function AdminRegressionPage() {
                 createdAt: serverTimestamp(),
             });
         }
-        const compileRes = await fetch('/api/storyCompile', {
+        const compileRes = await authFetch('/api/storyCompile', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sessionId: sessionRef.id, storyOutputTypeId: 'picture_book_standard_v1' }),
@@ -1292,7 +1294,7 @@ export default function AdminRegressionPage() {
             Authorization: `Bearer ${e2eGenToken}`,
         };
 
-        const pagesResponse = await fetch('/api/storybookV2/pages', {
+        const pagesResponse = await authFetch('/api/storybookV2/pages', {
             method: 'POST',
             headers: e2eGenHeaders,
             body: JSON.stringify({ storyId: storyRef.id, storybookId }),
@@ -1316,7 +1318,7 @@ export default function AdminRegressionPage() {
             storybookE2EScenarioSummary.sampleDisplayText = e2eFirstContentPage.displayText?.slice(0, 200) ?? null;
         }
 
-        const imagesResponse = await fetch('/api/storybookV2/images', {
+        const imagesResponse = await authFetch('/api/storybookV2/images', {
             method: 'POST',
             headers: e2eGenHeaders,
             body: JSON.stringify({
@@ -1348,7 +1350,7 @@ export default function AdminRegressionPage() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${authToken}`,
         };
-        const finalizeResponse = await fetch('/api/storybookV2/finalize', {
+        const finalizeResponse = await authFetch('/api/storybookV2/finalize', {
             method: 'POST',
             headers: authedHeaders,
             body: JSON.stringify({ storyId: storyRef.id, storybookId, action: 'finalize' }),
@@ -1358,7 +1360,7 @@ export default function AdminRegressionPage() {
             throw new Error(finalizePayload?.errorMessage || 'Finalize API failed for E2E scenario.');
         }
         storybookE2EScenarioSummary.finalized = true;
-        const printableResponse = await fetch('/api/storyBook/printable', {
+        const printableResponse = await authFetch('/api/storyBook/printable', {
             method: 'POST',
             headers: authedHeaders,
             body: JSON.stringify({ storyId: storyRef.id, storybookId, printLayoutId: 'a4-portrait-spread-v1' }),
@@ -1379,7 +1381,7 @@ export default function AdminRegressionPage() {
         }, scenarioId);
         storybookE2EScenarioSummary.orderId = orderRes.id;
         
-        const payResponse = await fetch(`/api/printOrders/${orderRes.id}/pay`, {
+        const payResponse = await authFetch(`/api/printOrders/${orderRes.id}/pay`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${authToken}`,
@@ -1414,7 +1416,7 @@ export default function AdminRegressionPage() {
         }, 'SCENARIO_ENDING_FLOW');
         await addDoc(collection(firestore, 'storySessions', sessionRef.id, 'messages'), { sender: 'assistant', text: 'The story is almost over!', createdAt: serverTimestamp() });
         
-        const response = await fetch('/api/storyEnding', {
+        const response = await authFetch('/api/storyEnding', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
         });
         const result = await response.json();
@@ -1471,7 +1473,7 @@ export default function AdminRegressionPage() {
         const maxBeats = stepsCount + 5;
 
         for (let i = 0; i < maxBeats; i++) {
-            const beatRes = await fetch('/api/storyBeat', {
+            const beatRes = await authFetch('/api/storyBeat', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
             });
             const beatResult = await beatRes.json();
@@ -1576,7 +1578,7 @@ export default function AdminRegressionPage() {
             sender: 'assistant', text: 'Once upon a time...', createdAt: serverTimestamp()
         });
 
-        const response = await fetch('/api/characterTraits', {
+        const response = await authFetch('/api/characterTraits', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sessionId: sessionRef.id, characterId: charRef.id })
         });
@@ -1617,7 +1619,7 @@ export default function AdminRegressionPage() {
         
         characterScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id, optionsCount: null, sampleOption: null };
 
-        const response = await fetch('/api/storyBeat', {
+        const response = await authFetch('/api/storyBeat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id })
         });
         if (!response.ok) throw new Error(`API returned status ${response.status}`);
@@ -1655,7 +1657,7 @@ export default function AdminRegressionPage() {
         updateTestResult('SCENARIO_MORE_OPTIONS', { status: 'SKIP', message: 'Depends on successful SCENARIO_BEAT_AUTO.' });
     } else {
         try {
-            const res1 = await fetch('/api/storyBeat', {
+            const res1 = await authFetch('/api/storyBeat', {
               method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: moreOptionsSessionId }),
             });
             const result1 = await res1.json();
@@ -1665,7 +1667,7 @@ export default function AdminRegressionPage() {
             await addDoc(messagesRef, { sender: 'assistant', text: result1.storyContinuation, kind: 'beat_continuation', createdAt: serverTimestamp() });
             await addDoc(messagesRef, { sender: 'assistant', text: 'What happens next?', kind: 'beat_options', options: result1.options, createdAt: serverTimestamp() });
 
-            const res2 = await fetch('/api/storyBeat', {
+            const res2 = await authFetch('/api/storyBeat', {
               method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: moreOptionsSessionId }),
             });
             const result2 = await res2.json();
@@ -1734,7 +1736,7 @@ export default function AdminRegressionPage() {
         
         beatScenarioSummary = { childId: childRef.id, sessionId: sessionRef.id };
 
-        const response = await fetch('/api/storyBeat', {
+        const response = await authFetch('/api/storyBeat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
         });
         if (!response.ok) throw new Error(`API returned ${response.status}`);
@@ -1780,7 +1782,7 @@ export default function AdminRegressionPage() {
              sender: 'assistant', text: 'Hi! I am your Story Guide. What should I call you?', createdAt: serverTimestamp()
         });
 
-        const response = await fetch('/api/warmupReply', {
+        const response = await authFetch('/api/warmupReply', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionRef.id }),
         });
         
@@ -1839,7 +1841,7 @@ export default function AdminRegressionPage() {
         }, 'SCENARIO_GEMINI4_FLOW');
 
         // Call the gemini4 API to generate story content
-        const geminiRes = await fetch('/api/gemini4', {
+        const geminiRes = await authFetch('/api/gemini4', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sessionId: sessionRef.id }),
@@ -1904,7 +1906,7 @@ export default function AdminRegressionPage() {
         });
 
         // Test the retry API with invalid page ID to verify it handles errors gracefully
-        const retryRes = await fetch('/api/storybookV2/retry', {
+        const retryRes = await authFetch('/api/storybookV2/retry', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1974,20 +1976,20 @@ export default function AdminRegressionPage() {
         });
 
         // 1. Validation: empty body -> 400
-        const invalidRes = await fetch('/api/storybookV2/pageEdit', {
+        const invalidRes = await authFetch('/api/storybookV2/pageEdit', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
         });
         if (invalidRes.status !== 400) throw new Error(`Expected 400 for empty body, got ${invalidRes.status}`);
 
         // 2. Auth: valid body without a token -> 401
-        const unauthedRes = await fetch('/api/storybookV2/pageEdit', {
+        const unauthedRes = await authFetch('/api/storybookV2/pageEdit', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ storyId: storyRef.id, storybookId: storybookRef.id, pageId: pageRef.id, pageText: 'x' }),
         });
         if (unauthedRes.status !== 401) throw new Error(`Expected 401 without auth, got ${unauthedRes.status}`);
 
         // 3. Real edit: text + prompt; expect audio reset (text changed)
-        const editRes = await fetch('/api/storybookV2/pageEdit', {
+        const editRes = await authFetch('/api/storybookV2/pageEdit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
             body: JSON.stringify({
@@ -2011,7 +2013,7 @@ export default function AdminRegressionPage() {
 
         // 4. Locked book -> 409
         await updateDoc(storybookRef, { isLocked: true });
-        const lockedRes = await fetch('/api/storybookV2/pageEdit', {
+        const lockedRes = await authFetch('/api/storybookV2/pageEdit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
             body: JSON.stringify({ storyId: storyRef.id, storybookId: storybookRef.id, pageId: pageRef.id, pageText: 'Should fail.' }),
@@ -2039,24 +2041,24 @@ export default function AdminRegressionPage() {
         const bogusBody = JSON.stringify({ storyId: 'regression-auth-nonexistent-story', storybookId: 'regression-auth-nonexistent-storybook' });
 
         // 1. Unauthenticated -> 401 (both routes)
-        const unauthedPagesRes = await fetch('/api/storybookV2/pages', {
+        const unauthedPagesRes = await authFetch('/api/storybookV2/pages', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bogusBody,
         });
         if (unauthedPagesRes.status !== 401) throw new Error(`pages: expected 401 without auth, got ${unauthedPagesRes.status}`);
 
-        const unauthedImagesRes = await fetch('/api/storybookV2/images', {
+        const unauthedImagesRes = await authFetch('/api/storybookV2/images', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bogusBody,
         });
         if (unauthedImagesRes.status !== 401) throw new Error(`images: expected 401 without auth, got ${unauthedImagesRes.status}`);
 
         // 2. Authenticated -> past the auth gate (404 for a non-existent story; no AI cost)
         const authedHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${genAuthToken}` };
-        const authedPagesRes = await fetch('/api/storybookV2/pages', {
+        const authedPagesRes = await authFetch('/api/storybookV2/pages', {
             method: 'POST', headers: authedHeaders, body: bogusBody,
         });
         if (authedPagesRes.status !== 404) throw new Error(`pages: expected 404 for authed request on missing story, got ${authedPagesRes.status}`);
 
-        const authedImagesRes = await fetch('/api/storybookV2/images', {
+        const authedImagesRes = await authFetch('/api/storybookV2/images', {
             method: 'POST', headers: authedHeaders, body: bogusBody,
         });
         if (authedImagesRes.status !== 404) throw new Error(`images: expected 404 for authed request on missing story, got ${authedImagesRes.status}`);
@@ -2078,7 +2080,7 @@ export default function AdminRegressionPage() {
         if (!personaToken) throw new Error('Admin authentication required for persona test.');
 
         // 1. Unauthenticated -> 401
-        const unauthedPersonaRes = await fetch('/api/persona', {
+        const unauthedPersonaRes = await authFetch('/api/persona', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ childId: 'regression-persona-child' }),
@@ -2088,13 +2090,13 @@ export default function AdminRegressionPage() {
         const personaHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${personaToken}` };
 
         // 2. Bad childId type -> 400
-        const badPersonaRes = await fetch('/api/persona', {
+        const badPersonaRes = await authFetch('/api/persona', {
             method: 'POST', headers: personaHeaders, body: JSON.stringify({ childId: 123 }),
         });
         if (badPersonaRes.status !== 400) throw new Error(`Expected 400 for non-string childId, got ${badPersonaRes.status}`);
 
         // 3. Unknown childId -> 404 (or 503 when no signing secret is configured locally)
-        const missingPersonaRes = await fetch('/api/persona', {
+        const missingPersonaRes = await authFetch('/api/persona', {
             method: 'POST', headers: personaHeaders, body: JSON.stringify({ childId: 'regression-persona-nonexistent-child' }),
         });
         if (missingPersonaRes.status !== 404 && missingPersonaRes.status !== 503) {
@@ -2102,7 +2104,7 @@ export default function AdminRegressionPage() {
         }
 
         // 4. DELETE clears (no auth required by design — sign-out path)
-        const clearPersonaRes = await fetch('/api/persona', { method: 'DELETE' });
+        const clearPersonaRes = await authFetch('/api/persona', { method: 'DELETE' });
         if (!clearPersonaRes.ok) throw new Error(`Expected DELETE to clear the persona, got ${clearPersonaRes.status}`);
 
         updateTestResult('API_PERSONA', {
@@ -2122,7 +2124,7 @@ export default function AdminRegressionPage() {
         if (!pinDryRunToken) throw new Error('Admin authentication required for verify-pin lockout test.');
         const pinDryRunHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${pinDryRunToken}` };
 
-        const dryRunRes = await fetch('/api/parent/verify-pin', {
+        const dryRunRes = await authFetch('/api/parent/verify-pin', {
             method: 'POST', headers: pinDryRunHeaders, body: JSON.stringify({ dryRun: true }),
         });
         const dryRunPayload = await dryRunRes.json();
@@ -2137,7 +2139,7 @@ export default function AdminRegressionPage() {
         }
 
         // Format validation still rejects without recording an attempt.
-        const shortPinRes = await fetch('/api/parent/verify-pin', {
+        const shortPinRes = await authFetch('/api/parent/verify-pin', {
             method: 'POST', headers: pinDryRunHeaders, body: JSON.stringify({ pin: '12' }),
         });
         if (shortPinRes.status !== 400) throw new Error(`Expected 400 for short PIN, got ${shortPinRes.status}`);
@@ -2188,7 +2190,7 @@ export default function AdminRegressionPage() {
         const sceneTagToken = await auth?.currentUser?.getIdToken?.();
         if (!sceneTagToken) throw new Error('Admin authentication required for generation APIs.');
 
-        const pagesRes = await fetch('/api/storybookV2/pages', {
+        const pagesRes = await authFetch('/api/storybookV2/pages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sceneTagToken}` },
             body: JSON.stringify({ storyId: storyRef.id, storybookId: storybookRef.id }),
@@ -2248,7 +2250,7 @@ export default function AdminRegressionPage() {
         // Minimal 1×1 PNG
         const MINIMAL_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI6QAAAABJRU5ErkJggg==';
 
-        const uploadRes = await fetch('/api/children/photos', {
+        const uploadRes = await authFetch('/api/children/photos', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
             body: JSON.stringify({ childId: childRef.id, dataUrl: MINIMAL_PNG }),
@@ -2285,7 +2287,7 @@ export default function AdminRegressionPage() {
       updateTestResult('API_STORY_BEAT', { status: 'SKIP', message: 'No beat-ready sessionId provided' });
     } else {
       try {
-        const response = await fetch('/api/storyBeat', {
+        const response = await authFetch('/api/storyBeat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: beatSessionId }),
         });
         apiSummary.storyBeat = { lastStatus: response.status };
@@ -2312,7 +2314,7 @@ export default function AdminRegressionPage() {
         updateTestResult('API_WARMUP_REPLY', { status: 'SKIP', message: 'No warmup sessionId provided and scenario failed.' });
     } else {
         try {
-            const response = await fetch('/api/warmupReply', {
+            const response = await authFetch('/api/warmupReply', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: warmupTestSessionId }),
             });
             apiSummary.warmupReply = { lastStatus: response.status, forSession: warmupTestSessionId };
@@ -2345,7 +2347,7 @@ export default function AdminRegressionPage() {
     try {
         const onboardingToken = await auth?.currentUser?.getIdToken?.();
         if (!onboardingToken) throw new Error('Authentication required.');
-        const response = await fetch('/api/user/onboarding', {
+        const response = await authFetch('/api/user/onboarding', {
             headers: { Authorization: `Bearer ${onboardingToken}` },
         });
         const result = await response.json();
@@ -2371,7 +2373,7 @@ export default function AdminRegressionPage() {
     try {
         const onboardingToken = await auth?.currentUser?.getIdToken?.();
         if (!onboardingToken) throw new Error('Authentication required.');
-        const response = await fetch('/api/user/onboarding', {
+        const response = await authFetch('/api/user/onboarding', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${onboardingToken}` },
             body: JSON.stringify({ action: 'regression-bogus-action' }),
@@ -2388,7 +2390,7 @@ export default function AdminRegressionPage() {
     try {
         const opsToken = await auth?.currentUser?.getIdToken?.();
         if (!opsToken) throw new Error('Authentication required.');
-        const response = await fetch('/api/admin/ops/metrics', {
+        const response = await authFetch('/api/admin/ops/metrics', {
             headers: { Authorization: `Bearer ${opsToken}` },
         });
         const result = await response.json();
@@ -2418,7 +2420,7 @@ export default function AdminRegressionPage() {
     try {
         const opsToken = await auth?.currentUser?.getIdToken?.();
         if (!opsToken) throw new Error('Authentication required.');
-        const response = await fetch('/api/admin/ops/health-check?dryRun=1', {
+        const response = await authFetch('/api/admin/ops/health-check?dryRun=1', {
             method: 'POST',
             headers: { Authorization: `Bearer ${opsToken}` },
         });
@@ -2445,7 +2447,7 @@ export default function AdminRegressionPage() {
     try {
         const opsToken = await auth?.currentUser?.getIdToken?.();
         if (!opsToken) throw new Error('Authentication required.');
-        const response = await fetch('/api/admin/sessions', {
+        const response = await authFetch('/api/admin/sessions', {
             headers: { Authorization: `Bearer ${opsToken}` },
         });
         const result = await response.json();
@@ -2466,7 +2468,7 @@ export default function AdminRegressionPage() {
     // verbose body shape (version + firestore dependency probe). A 'degraded'
     // 503 is a FAIL (the probe is doing its job — the dependency is down).
     try {
-        const response = await fetch('/api/health', { cache: 'no-store' });
+        const response = await authFetch('/api/health', { cache: 'no-store' });
         const result = await response.json();
         if (!result.version || typeof result.version !== 'string') {
             throw new Error('Response missing version (build SHA).');
@@ -2485,11 +2487,41 @@ export default function AdminRegressionPage() {
         updateTestResult('API_HEALTH', { status: 'FAIL', message: e.message });
     }
 
+    // Test: API_ROUTE_AUTH_ANON — Phase 0 route auth. Calls protected routes
+    // with NO token (plain fetch, deliberately not authFetch) and expects a
+    // refusal before any AI call, Firestore read or upstream billing happens.
+    // The IDs are placeholders; a 404 would mean auth ran too late.
+    try {
+        const anonymous: Array<{ path: string; init?: RequestInit; expect: number[] }> = [
+            { path: '/api/storyBeat', init: { method: 'POST', body: JSON.stringify({ sessionId: 'regression-anon' }) }, expect: [401] },
+            { path: '/api/storyCompile', init: { method: 'POST', body: JSON.stringify({ sessionId: 'regression-anon' }) }, expect: [401] },
+            { path: '/api/characters/create', init: { method: 'POST', body: JSON.stringify({ sessionId: 'regression-anon', characterLabel: 'x', characterType: 'Pet' }) }, expect: [401] },
+            { path: '/api/storyPagination', init: { method: 'POST', body: JSON.stringify({ storyId: 'regression-anon', storyOutputTypeId: 'x' }) }, expect: [401] },
+            { path: '/api/storyBook/regression-anon', expect: [401] },
+            { path: '/api/printStoryBooks/regression-anon/generate-pdfs', init: { method: 'POST' }, expect: [401] },
+            { path: '/api/postcode/lookup?postcode=SW1A1AA', expect: [401] },
+            { path: '/api/webhooks/mixam', init: { method: 'POST', body: '{}' }, expect: [401, 503] },
+        ];
+        const failures: string[] = [];
+        for (const { path, init, expect } of anonymous) {
+            const response = await globalThis.fetch(path, {
+                ...init,
+                headers: { 'Content-Type': 'application/json' },
+                cache: 'no-store',
+            });
+            if (!expect.includes(response.status)) failures.push(`${path} → ${response.status}`);
+        }
+        if (failures.length > 0) throw new Error(`Not rejected: ${failures.join('; ')}`);
+        updateTestResult('API_ROUTE_AUTH_ANON', { status: 'PASS', message: `${anonymous.length} protected routes refused anonymous calls.` });
+    } catch (e: any) {
+        updateTestResult('API_ROUTE_AUTH_ANON', { status: 'FAIL', message: e.message });
+    }
+
     // Test: API_FLAGS — server-evaluated feature flags (W3-B). Read-only;
     // verifies every value is a boolean and the worked-example flag is present.
     try {
         const flagsToken = await auth?.currentUser?.getIdToken?.();
-        const response = await fetch('/api/flags', {
+        const response = await authFetch('/api/flags', {
             headers: flagsToken ? { Authorization: `Bearer ${flagsToken}` } : undefined,
             cache: 'no-store',
         });
@@ -2514,7 +2546,7 @@ export default function AdminRegressionPage() {
     try {
         const w3cToken = await auth?.currentUser?.getIdToken?.();
         if (!w3cToken) throw new Error('Authentication required.');
-        const response = await fetch('/api/feedback', {
+        const response = await authFetch('/api/feedback', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${w3cToken}` },
             body: JSON.stringify({ trigger: 'regression-bogus-trigger', subjectId: 'regression', action: 'submitted', rating: 5 }),
@@ -2531,7 +2563,7 @@ export default function AdminRegressionPage() {
     try {
         const w3cToken = await auth?.currentUser?.getIdToken?.();
         if (!w3cToken) throw new Error('Authentication required.');
-        const response = await fetch('/api/feedback/eligibility?trigger=book_first_view&subjectId=regression-nonexistent-book', {
+        const response = await authFetch('/api/feedback/eligibility?trigger=book_first_view&subjectId=regression-nonexistent-book', {
             headers: { Authorization: `Bearer ${w3cToken}` },
         });
         const result = await response.json();
@@ -2548,7 +2580,7 @@ export default function AdminRegressionPage() {
     try {
         const w3cToken = await auth?.currentUser?.getIdToken?.();
         if (!w3cToken) throw new Error('Authentication required.');
-        const response = await fetch('/api/tickets', {
+        const response = await authFetch('/api/tickets', {
             headers: { Authorization: `Bearer ${w3cToken}` },
         });
         const result = await response.json();
@@ -2566,7 +2598,7 @@ export default function AdminRegressionPage() {
     try {
         const w3cToken = await auth?.currentUser?.getIdToken?.();
         if (!w3cToken) throw new Error('Authentication required.');
-        const response = await fetch('/api/report-issue', {
+        const response = await authFetch('/api/report-issue', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${w3cToken}` },
             body: JSON.stringify({ pagePath: '/admin/regression' }),
@@ -2583,7 +2615,7 @@ export default function AdminRegressionPage() {
     try {
         const w3cToken = await auth?.currentUser?.getIdToken?.();
         if (!w3cToken) throw new Error('Authentication required.');
-        const response = await fetch('/api/printOrders/my-orders', {
+        const response = await authFetch('/api/printOrders/my-orders', {
             headers: { Authorization: `Bearer ${w3cToken}` },
         });
         const result = await response.json();

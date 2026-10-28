@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useMemo, useState, useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
@@ -102,7 +103,7 @@ export default function BookReaderPage() {
 
       try {
         const idToken = await user.getIdToken();
-        const response = await fetch('/api/storyBook/pageAudio', {
+        const response = await authFetch('/api/storyBook/pageAudio', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -146,7 +147,7 @@ export default function BookReaderPage() {
     setIsGeneratingAudio(true);
     try {
       const idToken = await user.getIdToken();
-      const response = await fetch('/api/storyBook/pageAudio', {
+      const response = await authFetch('/api/storyBook/pageAudio', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

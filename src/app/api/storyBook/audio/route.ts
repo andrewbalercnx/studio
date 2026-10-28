@@ -3,6 +3,7 @@ import { after } from 'next/server';
 import { storyAudioFlow } from '@/ai/flows/story-audio-flow';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
+import { assertStoryOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 
 type AudioJobRequest = {
   storyId: string;
@@ -22,7 +23,7 @@ type AudioJobRequest = {
  */
 export async function POST(request: Request) {
   try {
-    await requireParentOrAdminUser(request);
+    const user = await requireParentOrAdminUser(request);
 
     const body = (await request.json()) as AudioJobRequest;
     const { storyId, forceRegenerate = false, voiceConfig } = body;
@@ -36,6 +37,8 @@ export async function POST(request: Request) {
 
     // Use Next.js after() to run audio generation after response is sent
     // This keeps the serverless function alive until the work completes
+    await assertStoryOwner(user, storyId);
+
     after(async () => {
       console.log(`[api/storyBook/audio] Starting background audio generation for ${storyId}`);
       try {
@@ -61,6 +64,8 @@ export async function POST(request: Request) {
       message: 'Audio generation started. Poll story document for completion.',
     });
   } catch (e: any) {
+    const ownershipResponse = routeAuthErrorResponse(e);
+    if (ownershipResponse) return ownershipResponse;
     if (e instanceof AuthError) {
       return NextResponse.json(
         { ok: false, errorMessage: e.message },

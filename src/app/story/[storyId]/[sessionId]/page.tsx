@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -70,7 +71,7 @@ export default function DynamicStoryPage() {
       });
 
       try {
-        const response = await fetch('/api/storyCompile', {
+        const response = await authFetch('/api/storyCompile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId, storyOutputTypeId }),

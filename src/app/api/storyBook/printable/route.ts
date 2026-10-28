@@ -1057,7 +1057,7 @@ export async function POST(request: Request) {
     // Check ownership
     const parentUid = storyData?.parentUid;
     const isPrivileged = user.claims.isAdmin || user.claims.isWriter;
-    if (!isPrivileged && parentUid && parentUid !== user.uid) {
+    if (!isPrivileged && parentUid !== user.uid) {
       return respondError(403, 'You do not own this story.');
     }
 

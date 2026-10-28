@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
+import { assertStoryOwner, requirePrintStoryBookOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 import type { PrintStoryBookPage, PrintLayout, StoryOutputPage } from '@/lib/types';
 
 /**
@@ -35,6 +36,11 @@ export async function POST(
   try {
     const { printStoryBookId } = await params;
     console.log('[auto-layout] Starting auto-layout for:', printStoryBookId);
+
+    // The caller must own the print storybook and the story it lays out.
+    const { user, data: owned } = await requirePrintStoryBookOwner(request, printStoryBookId);
+    await assertStoryOwner(user, owned.storyId);
+
     await initFirebaseAdminApp();
     const db = getFirestore();
 
@@ -276,6 +282,8 @@ export async function POST(
       message: 'Auto-layout completed successfully',
     });
   } catch (error) {
+    const authResponse = routeAuthErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error('[auto-layout] Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     const errorStack = error instanceof Error ? error.stack : undefined;

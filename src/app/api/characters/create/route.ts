@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createStoryCharacterFlow } from '@/ai/flows/create-story-character-flow';
+import { requireSessionOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 
 /**
  * POST /api/characters/create
@@ -7,14 +8,15 @@ import { createStoryCharacterFlow } from '@/ai/flows/create-story-character-flow
  * Unified API endpoint for creating story characters.
  * Used by all story flows (Story Beat, Gemini 3, Gemini 4) to ensure
  * consistent character creation with proper pronouns, description, likes, and dislikes.
+ *
+ * The character's owner and child are taken from the caller's session, not the
+ * request body; `parentUid`/`childId` in the body are ignored.
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const {
       sessionId,
-      parentUid,
-      childId,
       characterLabel,
       characterName,
       characterType,
@@ -26,12 +28,6 @@ export async function POST(request: Request) {
     // Validate required fields
     if (!sessionId) {
       return NextResponse.json({ ok: false, errorMessage: 'Missing sessionId' }, { status: 400 });
-    }
-    if (!parentUid) {
-      return NextResponse.json({ ok: false, errorMessage: 'Missing parentUid' }, { status: 400 });
-    }
-    if (!childId) {
-      return NextResponse.json({ ok: false, errorMessage: 'Missing childId' }, { status: 400 });
     }
     if (!characterLabel) {
       return NextResponse.json({ ok: false, errorMessage: 'Missing characterLabel' }, { status: 400 });
@@ -49,11 +45,13 @@ export async function POST(request: Request) {
       );
     }
 
+    const { data: session } = await requireSessionOwner(request, sessionId);
+
     // Call the unified character creation flow
     const result = await createStoryCharacterFlow({
       sessionId,
-      parentUid,
-      childId,
+      parentUid: session.parentUid,
+      childId: session.childId,
       characterLabel,
       characterName,
       characterType,
@@ -71,6 +69,8 @@ export async function POST(request: Request) {
       );
     }
   } catch (e: any) {
+    const authResponse = routeAuthErrorResponse(e);
+    if (authResponse) return authResponse;
     const errorMessage = e.message || 'An unexpected error occurred';
     console.error('[/api/characters/create] Error:', errorMessage);
     return NextResponse.json(

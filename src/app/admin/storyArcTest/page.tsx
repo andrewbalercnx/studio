@@ -1,5 +1,6 @@
 
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useState } from 'react';
 import { useAdminStatus } from '@/hooks/use-admin-status';
@@ -59,7 +60,7 @@ export default function AdminStoryArcTestPage() {
         setLastError(null);
 
         try {
-            const response = await fetch('/api/storyArc', {
+            const response = await authFetch('/api/storyArc', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 

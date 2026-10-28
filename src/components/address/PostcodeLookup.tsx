@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -36,7 +37,7 @@ export function PostcodeLookup({
     setAddresses(null);
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `/api/postcode/lookup?postcode=${encodeURIComponent(postcode.trim())}`
       );
       const data: PostcodeLookupResponse = await response.json();

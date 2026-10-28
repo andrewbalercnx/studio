@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { endingFlow } from '@/ai/flows/ending-flow';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
+import { requireSessionOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 
 export async function POST(request: Request) {
     try {
@@ -10,6 +11,8 @@ export async function POST(request: Request) {
         if (!sessionId) {
             return NextResponse.json({ ok: false, errorMessage: 'Missing sessionId' }, { status: 400 });
         }
+
+        await requireSessionOwner(request, sessionId);
 
         const result = await endingFlow({ sessionId });
 
@@ -27,6 +30,8 @@ export async function POST(request: Request) {
         }
 
     } catch (e: any) {
+        const authResponse = routeAuthErrorResponse(e);
+        if (authResponse) return authResponse;
         console.error('[api/storyEnding] Error:', e);
         return NextResponse.json(
             {

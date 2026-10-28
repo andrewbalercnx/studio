@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -52,7 +53,7 @@ export default function PrintStoryBookPagesEditor() {
     setIsGeneratingPDFs(true);
 
     try {
-      const response = await fetch(`/api/printStoryBooks/${printStoryBookId}/generate-pdfs`, {
+      const response = await authFetch(`/api/printStoryBooks/${printStoryBookId}/generate-pdfs`, {
         method: 'POST',
       });
 

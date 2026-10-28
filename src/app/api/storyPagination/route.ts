@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { storyPaginationFlow } from '@/ai/flows/story-pagination-flow';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
+import { requireStoryOwner, routeAuthErrorResponse } from '@/lib/route-auth.server';
 
 // Allow up to 2 minutes for pagination
 export const maxDuration = 120;
@@ -22,6 +23,8 @@ export async function POST(request: Request) {
             logger.warn('Missing storyOutputTypeId in request');
             return NextResponse.json({ ok: false, errorMessage: 'Missing storyOutputTypeId', requestId }, { status: 400 });
         }
+
+        await requireStoryOwner(request, storyId);
 
         const startTime = Date.now();
 
@@ -50,6 +53,8 @@ export async function POST(request: Request) {
         }
 
     } catch (e: any) {
+        const authResponse = routeAuthErrorResponse(e, { requestId });
+        if (authResponse) return authResponse;
         const errorMessage = e.message || 'An unexpected error occurred in the API route.';
         logger.error('Unhandled exception in route', e);
         return NextResponse.json(

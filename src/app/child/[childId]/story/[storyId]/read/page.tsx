@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { use, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
@@ -150,7 +151,7 @@ export default function StoryReadPage({
       setIsGeneratingAudio(true);
       try {
         const idToken = await user.getIdToken();
-        const response = await fetch('/api/storyBook/audio', {
+        const response = await authFetch('/api/storyBook/audio', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

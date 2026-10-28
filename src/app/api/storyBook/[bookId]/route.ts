@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import type { PrintStoryBook } from '@/lib/types';
+import { requireStoryReader, routeAuthErrorResponse } from '@/lib/route-auth.server';
 
 export async function GET(
   request: NextRequest,
@@ -25,17 +26,8 @@ export async function GET(
     await initFirebaseAdminApp();
     const db = getFirestore();
 
-    // Fetch the story document
-    const storyDoc = await db.collection('stories').doc(bookId).get();
-
-    if (!storyDoc.exists) {
-      return NextResponse.json(
-        { error: 'Story not found' },
-        { status: 404 }
-      );
-    }
-
-    const storyData = storyDoc.data();
+    // Fetch the story document; the caller must own it (help-tour samples excepted).
+    const { ref: storyRef, data: storyData } = await requireStoryReader(request, bookId);
 
     // Fetch the storybook output document for finalization data (legacy workflow)
     const storybookOutputDoc = await db
@@ -104,7 +96,8 @@ export async function GET(
         docExists: printStoryBookDoc.exists,
       };
 
-      if (printStoryBookDoc.exists) {
+      // A print storybook is only returned alongside the story it belongs to.
+      if (printStoryBookDoc.exists && printStoryBookDoc.data()?.storyId === bookId) {
         const docData = printStoryBookDoc.data();
         debugInfo.printStoryBook.pdfStatus = docData?.pdfStatus;
         printStoryBookData = {
@@ -153,7 +146,7 @@ export async function GET(
 
     // Combine the data into a StoryOutput-like structure
     const story = {
-      id: storyDoc.id,
+      id: storyRef.id,
       ...storyData,
       title: storyData?.metadata?.title || printStoryBookData?.title || 'Untitled Story',
       // Add finalization data
@@ -171,6 +164,8 @@ export async function GET(
 
     return NextResponse.json({ story });
   } catch (error: any) {
+    const authResponse = routeAuthErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error('[storyBook/[bookId]] Error:', error);
     return NextResponse.json(
       { error: error?.message || 'Failed to fetch story' },

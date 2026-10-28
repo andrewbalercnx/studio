@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { use, useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -47,7 +48,7 @@ export default function SelectOutputTypePage({ params }: { params: Promise<{ ses
       });
 
       // Compile the story with the selected output type
-      const compileResponse = await fetch('/api/storyCompile', {
+      const compileResponse = await authFetch('/api/storyCompile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, storyOutputTypeId: outputType.id }),

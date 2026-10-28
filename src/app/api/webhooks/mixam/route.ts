@@ -116,24 +116,18 @@ function mapMixamStatusToInternal(status: string, hasErrors: boolean): MixamOrde
 /**
  * Verifies webhook signature from Mixam
  * Uses HMAC-SHA256 with shared secret
- * Note: Mixam may not require signature verification - check their docs
+ * Requests without a valid signature are rejected.
  */
 function verifyWebhookSignature(
   payload: string,
   signature: string | null,
   secret: string
 ): boolean {
-  // If no signature provided and we have a placeholder secret, skip verification
-  // This allows testing while we wait for Mixam to provide the real secret
-  if (!signature && secret === 'your_webhook_secret_from_mixam') {
-    console.warn('[Mixam Webhook] Skipping signature verification (placeholder secret)');
-    return true;
-  }
-
-  // If no signature header, skip verification (Mixam may not send one)
+  // Unsigned requests are rejected: this endpoint rewrites order status and
+  // tracking URLs and emails customers, so it must only accept Mixam.
   if (!signature) {
-    console.warn('[Mixam Webhook] No signature provided, allowing request');
-    return true;
+    console.warn('[Mixam Webhook] No signature provided, rejecting request');
+    return false;
   }
 
   const crypto = require('crypto');
@@ -167,11 +161,19 @@ export async function POST(request: Request) {
       console.log('[Mixam Webhook] Received webhook payload:', rawBody.substring(0, 500));
     }
 
-    // 2. Verify webhook signature (if configured)
+    // 2. Verify webhook signature (required)
     const signature = request.headers.get('X-Mixam-Signature');
     const webhookSecret = process.env.MIXAM_WEBHOOK_SECRET;
 
-    if (webhookSecret && !verifyWebhookSignature(rawBody, signature, webhookSecret)) {
+    if (!webhookSecret || webhookSecret === 'your_webhook_secret_from_mixam') {
+      console.error('[Mixam Webhook] MIXAM_WEBHOOK_SECRET is not configured; rejecting request');
+      return NextResponse.json(
+        { error: 'Webhook not configured' },
+        { status: 503 }
+      );
+    }
+
+    if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
       console.error('[Mixam Webhook] Invalid signature');
       return NextResponse.json(
         { error: 'Invalid signature' },

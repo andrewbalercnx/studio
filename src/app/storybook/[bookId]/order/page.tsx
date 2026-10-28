@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
@@ -92,15 +93,15 @@ export default function OrderPrintBookPage() {
 
       // Load story, print products, and saved address in parallel
       const fetchPromises: Promise<Response>[] = [
-        fetch(storyApiUrl),
-        fetch('/api/printOrders/products'),
+        authFetch(storyApiUrl),
+        authFetch('/api/printOrders/products'),
       ];
 
       // Only fetch saved addresses if user is logged in
       if (user) {
         const idToken = await user.getIdToken();
         fetchPromises.push(
-          fetch('/api/user/addresses', {
+          authFetch('/api/user/addresses', {
             headers: { Authorization: `Bearer ${idToken}` },
           })
         );
@@ -210,7 +211,7 @@ export default function OrderPrintBookPage() {
       };
       console.log('[order] Request body:', requestBody);
 
-      const response = await fetch('/api/printOrders/mixam', {
+      const response = await authFetch('/api/printOrders/mixam', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/auth-fetch';
 
 import { use, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
@@ -203,7 +204,7 @@ export default function MyStoriesPage({ params }: { params: Promise<{ childId: s
       // Get fresh ID token for auth
       const idToken = await user.getIdToken();
 
-      const response = await fetch('/api/storyBook/audio', {
+      const response = await authFetch('/api/storyBook/audio', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -257,7 +258,7 @@ export default function MyStoriesPage({ params }: { params: Promise<{ childId: s
       // Get fresh ID token for auth
       const idToken = await user.getIdToken();
 
-      const response = await fetch('/api/storyBook/actorAvatar', {
+      const response = await authFetch('/api/storyBook/actorAvatar', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
