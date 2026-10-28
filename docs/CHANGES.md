@@ -16,6 +16,22 @@
 
 ## Changes
 
+### 2026-10-28
+
+#### `#6` - Architecture review plan; branch + PR workflow
+
+**Type**: Process / Documentation
+
+**Summary**: Added the phased architecture review and rebuild plan (`docs/architecture/REVIEW_PLAN.md`). Trial data and installed mobile builds don't need preserving, so it is a rebuild-and-delete plan; curated admin config is exported and re-seeded. `CLAUDE.md` now requires a branch and PR per change instead of pushing to main, and CHANGES entries are keyed by PR number.
+
+**Created files**:
+- `docs/architecture/REVIEW_PLAN.md`
+
+**Modified files**:
+- `CLAUDE.md`, `docs/CHANGES.md`
+
+---
+
 ### 2026-06-12
 
 #### `f54c0b1` - Pagination: scene-continuity fill for pages with no scene at all
