@@ -44,11 +44,11 @@ This file documents all API routes, their methods, request/response formats, and
 ### Change History
 Location: `docs/CHANGES.md`
 
-This document tracks all significant changes by commit ID for easy searching and reference.
+This document tracks all significant changes by PR number (older entries: commit ID) for easy searching and reference.
 
 **Rules**:
-- **Append new entries** at the top of the document with every push to main
-- Include commit ID, type, summary, and detailed changes
+- **Append new entries** at the top of the document in every PR
+- Include PR number, type, summary, and detailed changes
 - Never remove or modify existing entries (append-only)
 
 ### Regression Tests
@@ -130,7 +130,7 @@ const rawStorybooks = storybooksSnapshot.docs
 
 ### On Completion
 
-Before pushing to main, complete this checklist:
+Before opening a PR, complete this checklist:
 
 1. **Update System Design** (if architecture changed):
    - [ ] Updated `docs/SYSTEM_DESIGN.md` to reflect current architecture
@@ -157,11 +157,11 @@ Before pushing to main, complete this checklist:
    - [ ] Removed tests for deleted endpoints
 
 5. **Update Change History**:
-   - [ ] Added entry to `docs/CHANGES.md` with commit ID
+   - [ ] Added entry to `docs/CHANGES.md` with PR number
    - [ ] Included type, summary, and detailed changes
    - [ ] Listed modified and created files for significant changes
 
-6. **Push to main**:
+6. **Open the PR**:
    - [ ] All documentation is up to date
    - [ ] Build passes (`npm run build`)
    - [ ] TypeScript checks pass (`npm run typecheck`)
@@ -188,7 +188,8 @@ This feature is controlled by the `showApiDocumentation` field in `systemConfig/
 | System Design | `docs/SYSTEM_DESIGN.md` | Architecture changes | Read before major work |
 | Schema | `docs/SCHEMA.md` | Database changes | Fields, collections, rules |
 | API | `docs/API.md` | API route changes | Endpoints, formats |
-| Changes | `docs/CHANGES.md` | Every push | Append-only history |
+| Changes | `docs/CHANGES.md` | Every PR | Append-only history |
+| Rebuild Plan | `docs/architecture/REVIEW_PLAN.md` | Each phase | Architecture review & rebuild |
 | Regression Tests | `src/app/admin/regression/page.tsx` | API changes | Automated tests |
 | Standing Rules | `CLAUDE.md` | Workflow changes | This file |
 
@@ -196,30 +197,22 @@ This feature is controlled by the `showApiDocumentation` field in `systemConfig/
 
 ## Git Workflow
 
-### Single-Push Commit with CHANGES.md
+### Branch and Pull Request per change
 
-To avoid triggering two Firebase builds, use this workflow:
+Work never goes straight to `main`. Since 2026-10-28 (start of the architecture rebuild, see
+`docs/architecture/REVIEW_PLAN.md`) every change follows this flow:
 
-1. **Stage all files** including CHANGES.md (use `pending` as placeholder for commit ID)
-2. **Commit** with a descriptive message
-3. **Get the commit ID**: `git rev-parse --short HEAD`
-4. **Update CHANGES.md** replacing `pending` with the commit ID
-5. **Amend and push in one step**: `git add docs/CHANGES.md && git commit --amend --no-edit && git push`
+1. **Branch** from the latest `main`: `git fetch origin main && git checkout -b <type>/<short-name> origin/main`
+   - For rebuild work, one branch per phase or slice (e.g. `rebuild/phase0-route-auth`).
+2. **Commit** in small, reviewable steps with descriptive messages.
+3. **Validate locally** before pushing: `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` for anything touching routes or config.
+4. **Push the branch** (`git push -u origin <branch>`) and **open a PR** against `main`.
+5. **Merge** only when CI is green and the owner has approved. Squash-merge so `main` gets one commit per PR, which means one Firebase build per merge.
 
-**Note**: The amend will change the commit ID slightly, but this is acceptable - the ID in CHANGES.md will be close enough to find the commit. The important thing is avoiding two separate pushes.
+### CHANGES.md
 
-Example:
-```bash
-git add .
-git commit -m "Add feature X"
-COMMIT_ID=$(git rev-parse --short HEAD)
-# Edit CHANGES.md to replace 'pending' with $COMMIT_ID
-git add docs/CHANGES.md && git commit --amend --no-edit && git push
-```
-
-**Auto-push rule**: Always push to main immediately after completing the commit workflow. Do not wait for user confirmation.
-
----
+Add the entry in the same PR, identified by **PR number** (e.g. `#42`) rather than commit ID. The
+PR number is known before merge, so the old amend-before-push step is no longer needed.
 
 ## Allowed Commands
 
@@ -268,10 +261,8 @@ gcloud secrets list
 curl -X POST https://storypic.rcnx.io/api/internal/dev-todos
 ```
 
-**End of Development Cycle**: After completing work, always:
-1. `git add` the changed files
-2. `git commit` with a descriptive message
-3. `git push` to main immediately (per auto-push rule above)
+**End of Development Cycle**: After completing work, commit to the working branch, push the
+branch and open (or update) its PR. Do not push to `main`.
 
 ---
 
@@ -361,6 +352,7 @@ When you complete a todo item, inform the admin so they can mark it as completed
 
 | Date | Changes |
 |------|---------|
+| 2026-10-28 | Replaced push-to-main with branch + PR workflow; CHANGES.md entries keyed by PR number; added rebuild plan reference |
 | 2026-01-19 | Added dev todo API secret and URL to CLAUDE.md, added curl command to allowed commands |
 | 2026-01-17 | Added Development Todo List section with instructions for Claude to add items |
 | 2026-01-17 | Added explicit triggers for when SYSTEM_DESIGN.md must be updated |
