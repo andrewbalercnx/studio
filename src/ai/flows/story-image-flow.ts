@@ -547,7 +547,8 @@ function buildCharacterDetails(characters: Character[]): string {
  */
 async function fetchEntityReferenceData(
   firestore: FirebaseFirestore.Firestore,
-  entityIds: string[]
+  entityIds: string[],
+  ownerUid?: string | null
 ): Promise<EntityReferenceData> {
   if (!entityIds || entityIds.length === 0) {
     return { photos: [], characters: [], actorMap: new Map() };
@@ -613,16 +614,18 @@ async function fetchEntityReferenceData(
 
   // Fallback: For IDs not found by document ID, try to find by displayName
   // This handles legacy data where the AI used displayName instead of document ID
+  // Names are not unique across families: only the story owner's entities are
+  // searched, and nothing is searched when the owner is unknown.
   const unfoundIds = uniqueIds.filter(id => !actorMap.has(id));
-  if (unfoundIds.length > 0) {
+  if (unfoundIds.length > 0 && ownerUid) {
     const chunkSize = 10; // Firestore 'in' query limit
     for (let i = 0; i < unfoundIds.length; i += chunkSize) {
       const chunk = unfoundIds.slice(i, i + chunkSize);
 
       // Query both collections by displayName in parallel
       const [charsByName, childrenByName] = await Promise.all([
-        firestore.collection('characters').where('displayName', 'in', chunk).get(),
-        firestore.collection('children').where('displayName', 'in', chunk).get(),
+        firestore.collection('characters').where('ownerParentUid', '==', ownerUid).where('displayName', 'in', chunk).get(),
+        firestore.collection('children').where('ownerParentUid', '==', ownerUid).where('displayName', 'in', chunk).get(),
       ]);
 
       charsByName.forEach((docSnap) => {
@@ -1501,7 +1504,7 @@ export const storyImageFlow = ai.defineFlow(
 
       try {
         // Collect reference photos AND character details from entities mentioned on this page
-        const entityData = await fetchEntityReferenceData(firestore, page.entityIds ?? []);
+        const entityData = await fetchEntityReferenceData(firestore, page.entityIds ?? [], storyData.parentUid);
         logs.push(`[entities] Found ${page.entityIds?.length ?? 0} entity IDs, ${entityData.photos.length} reference photos, ${entityData.actorMap.size} actors resolved`);
 
         // Calculate child's age for the prompt

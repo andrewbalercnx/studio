@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoaderCircle, ArrowLeft, Wand2, Sparkles, BookOpen, MessageCircle, Users, Star } from 'lucide-react';
 import Link from 'next/link';
-import { storyWizardFlow } from '@/ai/flows/story-wizard-flow';
+import { runKidsWizardStep } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -372,7 +372,8 @@ export default function KidsCreateStoryPage() {
 
         // Start wizard flow
         setIsProcessing(true);
-        const result = await storyWizardFlow({
+        const result = await runKidsWizardStep({
+          idToken: await user.getIdToken(),
           childId: childId,
           sessionId: newSessionId,
           answers: [],
@@ -403,7 +404,7 @@ export default function KidsCreateStoryPage() {
 
   // Handle choice selection (wizard flow)
   const handleSelectChoice = useCallback(async (choice: StoryWizardChoice) => {
-    if (!sessionId || !childId || !wizardState || isProcessing) return;
+    if (!user || !sessionId || !childId || !wizardState || isProcessing) return;
     if (wizardState.state !== 'asking') return;
 
     // Kids telemetry (content-free): which step the child answered.
@@ -422,7 +423,8 @@ export default function KidsCreateStoryPage() {
     setError(null);
 
     try {
-      const result = await storyWizardFlow({
+      const result = await runKidsWizardStep({
+        idToken: await user.getIdToken(),
         childId: childId,
         sessionId: sessionId,
         answers: newAnswers,
@@ -495,7 +497,7 @@ export default function KidsCreateStoryPage() {
       setIsProcessing(false);
       setIsWritingStory(false);
     }
-  }, [sessionId, childId, wizardState, currentAnswers, isProcessing, firestore, router, toast]);
+  }, [user, sessionId, childId, wizardState, currentAnswers, isProcessing, firestore, router, toast]);
 
   // Redirect if not set up
   useEffect(() => {

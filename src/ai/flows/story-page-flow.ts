@@ -596,7 +596,7 @@ export const storyPageFlow = ai.defineFlow(
 
       // Resolve entity placeholders for display text
       const combinedTextForResolution = story.storyText;
-      const entityMap = await resolveEntitiesInText(combinedTextForResolution);
+      const entityMap = await resolveEntitiesInText(combinedTextForResolution, story.parentUid);
       diagnostics.details.resolvedEntities = entityMap.size;
 
       // Build resolved entities list for diagnostics

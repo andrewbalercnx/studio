@@ -147,7 +147,7 @@ export async function storyAudioFlow(input: StoryAudioFlowInput): Promise<StoryA
     if (story.storyText.includes('$$')) {
       // Story text still has $$id$$ placeholders — resolve them to display names / pronunciation
       console.log(`[story-audio-flow] Resolving placeholders in story text`);
-      const entityMap = await resolveEntitiesInText(story.storyText);
+      const entityMap = await resolveEntitiesInText(story.storyText, story.parentUid);
       textForTTS = await replacePlaceholdersForTTS(story.storyText, entityMap);
     }
 

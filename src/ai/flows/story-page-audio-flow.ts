@@ -332,7 +332,7 @@ export async function storyPageAudioFlow(input: PageAudioFlowInput): Promise<Pag
 
     // Resolve all entities for the story
     const entityIdsText = Array.from(allEntityIds).map(id => `$$${id}$$`).join(' ');
-    const entityMap = await resolveEntitiesInText(entityIdsText);
+    const entityMap = await resolveEntitiesInText(entityIdsText, story.parentUid);
     console.log(`[page-audio-flow] Resolved ${entityMap.size} entities`);
 
     // Check for API key before initializing client
