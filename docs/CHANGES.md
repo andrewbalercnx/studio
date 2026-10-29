@@ -18,6 +18,20 @@
 
 ### 2026-10-29
 
+#### `#10` - Phase 2: target domain model, pipeline and ADRs
+
+**Type**: Architecture / Documentation
+
+**Summary**: The target model for the rebuild. Story → Manuscript → Book, with length and density as the contract between the words and the look. One leased Job model run server-side by Cloud Tasks. Five creation modes behind one interface. Likeness built from photos, with the canonical portrait wired in. Ten ADRs, three accepted by the owner, plus open questions for the owner.
+
+**Created files**:
+- `docs/architecture/target/` (README, domain-model, pipeline, creation, `adr/0001`–`0010`)
+
+**Modified files**:
+- `docs/architecture/REVIEW_PLAN.md`, `docs/CHANGES.md`
+
+---
+
 #### `#8` - Phase 1: map the system as it is
 
 **Type**: Documentation / Tooling
