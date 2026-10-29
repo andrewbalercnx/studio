@@ -44,6 +44,14 @@ export class UnauthenticatedError extends AppError {
   }
 }
 
+/** 402: the family has no allowance left for this (entitlements). */
+export class PaymentRequiredError extends AppError {
+  readonly status = 402;
+  constructor(message = 'No allowance left', options?: AppErrorOptions) {
+    super('PAYMENT_REQUIRED', message, options);
+  }
+}
+
 /** 403: authenticated, but not allowed (not the owner, persona mismatch, not admin). */
 export class ForbiddenError extends AppError {
   readonly status = 403;

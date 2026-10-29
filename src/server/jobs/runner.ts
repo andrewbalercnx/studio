@@ -387,7 +387,7 @@ export class JobRunner {
       const children = childSnapshot.docs.map((doc) => this.jobs.parse(doc));
       if (children.length === 0 || children.some((child) => !isTerminalJobStatus(child.status))) return none;
 
-      const result = (await definition.onChildrenComplete({ tx, parent, children })) ?? {};
+      const result = (await definition.onChildrenComplete({ tx, db, parent, children })) ?? {};
       // Reads for the next jobs happen here, before any write below.
       const next = await this.createJobsIn(tx, this.prepare(result.enqueue ?? []));
       await this.jobs.updateIn(tx, parentJobId, { fanInCompletedAt: FieldValue.serverTimestamp() });

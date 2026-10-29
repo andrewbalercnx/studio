@@ -43,6 +43,8 @@ export type JobContext = {
 export type FanInContext = {
   /** Read-only use: all transaction reads happen before the runner's writes. */
   tx: Transaction;
+  /** The runner's Firestore, to build references for reads through `tx`. */
+  db: Firestore;
   parent: WithId<Job>;
   children: WithId<Job>[];
 };

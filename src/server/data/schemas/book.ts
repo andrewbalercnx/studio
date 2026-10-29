@@ -15,7 +15,11 @@ export const bookSchema = z.object({
   /** Denormalised from the Story so the persona guard can check it without a second read. */
   childId: z.string().min(1),
   styleId: z.string().min(1),
-  layoutId: z.string().min(1),
+  /**
+   * The print Layout, chosen by the parent in the print slice (ADR-0011). Null for a screen
+   * Book: screen reading needs no print layout.
+   */
+  layoutId: z.string().min(1).nullable().default(null),
   printProductId: z.string().min(1).nullable().default(null),
   status: bookStatusSchema,
   /** Progress rollup over the Book's pages, derived from their art jobs. */
@@ -53,8 +57,11 @@ export const castSheetSchema = z.object({
   ...ownerFields,
   castId: z.string().min(1),
   ref: castMemberSchema.shape.ref,
-  /** `portrait` when drawn from the canonical portrait; `appearance` when there were no photos. */
-  source: z.enum(['portrait', 'appearance']),
+  /**
+   * What the sheet was drawn from: `portrait` (the canonical portrait), `photos` (original
+   * photos, while a member has photos but no portrait yet) or `appearance` (text only: no photos).
+   */
+  source: z.enum(['portrait', 'photos', 'appearance']),
   imageUrl: z.string().nullable().default(null),
   job: jobSummarySchema.nullable().default(null),
   ...stampFields,
