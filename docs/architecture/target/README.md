@@ -29,15 +29,17 @@ writes.
 | ADR | Decision | Status |
 |-----|----------|--------|
 | [0001](adr/0001-story-manuscript-book.md) | Story → Manuscript → Book; length and density are the contract between B and C | **Accepted** |
-| [0002](adr/0002-server-orchestration-cloud-tasks.md) | Server-side orchestration with Cloud Tasks | Proposed |
-| [0003](adr/0003-one-job-model.md) | One job model; `queued / running / succeeded / failed / cancelled`; leases; `partial` is an outcome | Proposed |
-| [0004](adr/0004-story-replaces-session.md) | The Story replaces the session; turns are server-written | Proposed |
-| [0005](adr/0005-browser-reads-server-writes.md) | The browser reads its own data; only the server writes | Proposed |
+| [0002](adr/0002-server-orchestration-cloud-tasks.md) | Server-side orchestration with Cloud Tasks | **Accepted** |
+| [0003](adr/0003-one-job-model.md) | One job model; `queued / running / succeeded / failed / cancelled`; leases; `partial` is an outcome | **Accepted** |
+| [0004](adr/0004-story-replaces-session.md) | The Story replaces the session; turns are server-written | **Accepted** |
+| [0005](adr/0005-browser-reads-server-writes.md) | The browser reads its own data; only the server writes | **Accepted** |
 | [0006](adr/0006-likeness-from-photos.md) | Likeness from photos: appearance + canonical portrait; no stock placeholders | **Accepted** |
-| [0007](adr/0007-one-name-one-owner-field.md) | One name per concept; `ownerUid` everywhere | Proposed |
-| [0008](adr/0008-ai-harness-model-registry.md) | One AI harness; models chosen by purpose from one registry | Proposed |
-| [0009](adr/0009-creation-modes-one-interface.md) | Five creation modes behind one interface | **Accepted** (modes); Proposed (interface) |
-| [0010](adr/0010-immutable-renders.md) | Renders are immutable; orders pin a render | Proposed |
+| [0007](adr/0007-one-name-one-owner-field.md) | One name per concept; `ownerUid` everywhere | **Accepted** |
+| [0008](adr/0008-ai-harness-model-registry.md) | One AI harness; models chosen by purpose from one registry | **Accepted** |
+| [0009](adr/0009-creation-modes-one-interface.md) | Five creation modes behind one interface | **Accepted** |
+| [0010](adr/0010-immutable-renders.md) | Renders are immutable; orders pin a render | **Accepted** |
+| [0011](adr/0011-length-menu-and-choices.md) | Picture books: 12, 16 or 24 story pages; the child picks Form and Style, the parent picks Layout and print | **Accepted** |
+| [0012](adr/0012-stripe-payment.md) | Real payment with Stripe; prices from the catalogue, never our cost | **Accepted** |
 
 ## How today maps onto the target
 
@@ -61,23 +63,17 @@ Trial user data is not migrated (`../REVIEW_PLAN.md` constraints). Curated confi
 with `scripts/export-config.mjs` and re-seeded into the target collections by a mapping script
 written in Phase 4.
 
-## Open questions for the owner
+## Owner decisions (2026-10-29)
 
-1. **Orchestration (ADR-0002)**: Cloud Tasks inside the existing app (recommended) or
-   Firestore-triggered Cloud Functions?
-2. **Length menu**: which story-page counts should each Form offer? Proposal for picture books:
-   12, 16 or 24 story pages. The Book adds title, dedication and end pages, then pads to the print
-   product's rules (Mixam case binding: at least 24 interior pages, in multiples of 4), so 12 or 16
-   story pages print as 24 pages and 24 story pages as 28. Poems and colouring pages may want
-   different menus.
-3. **Who chooses what**: does the child choose the Form and Style (with the parent choosing the
-   Layout and print product), or does the parent choose everything after the story?
-4. **Payment**: is a real payment provider (Stripe) in scope for the rebuild, or do orders stay
-   admin-marked-paid until later?
-5. **The Proposed ADRs**: accept as written, or discuss any?
+| Question | Decision |
+|----------|----------|
+| Orchestration | Cloud Tasks inside the existing app (ADR-0002) |
+| Picture-book lengths | 12, 16 or 24 story pages (ADR-0011) |
+| Who chooses | The child picks Form and Style; the parent picks Layout and print product, and orders (ADR-0011) |
+| Payment | Stripe checkout is in scope, in the print and orders slice (ADR-0012) |
+| Proposed ADRs | All accepted |
 
 ## Next
 
-Once the open questions are answered and the Proposed ADRs accepted, Phase 3 (security review in
-depth, using `../as-is/open-risks.md`) and Phase 4 (foundations: layering, repositories with
-schemas, the AI harness, the job runner) can start.
+Phase 3 (security review in depth, using `../as-is/open-risks.md`) and Phase 4 (foundations:
+layering, repositories with schemas, the AI harness, the Cloud Tasks job runner) can start.

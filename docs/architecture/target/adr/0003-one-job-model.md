@@ -1,6 +1,6 @@
 # ADR-0003: One job model and status vocabulary
 
-**Status**: Proposed
+**Status**: Accepted (owner, 2026-10-29)
 
 ## Context
 

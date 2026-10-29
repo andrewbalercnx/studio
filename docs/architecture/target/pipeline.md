@@ -134,11 +134,15 @@ draft ──▶ illustrating ──▶ ready | partial ──▶ locked
 created ──▶ awaiting_payment ──▶ paid ──▶ submitting ──▶ submitted ──▶ in_production ──▶ shipped ──▶ delivered
                   │                         │                │
                   └──▶ cancelled            └─(retry, same idempotency key)
-                                                             └──▶ failed | cancelled
+                                                             └──▶ failed | cancelled ──▶ refunded
 ```
 
-- Payment is a real step. Until a payment provider exists, an admin marks orders paid; a parent
-  cannot.
+`refunded` is reached only through the Stripe webhook, from any paid state the order leaves
+without being delivered (or later, if the parent is refunded after delivery).
+
+- Payment is a real step: `awaiting_payment → paid` only on a verified Stripe webhook, or by
+  print credits (ADR-0012). A parent can never mark an order paid; an admin can, as an audited
+  exception.
 - `submitting` → Mixam uses the order id as the idempotency key; a lost response is resolved by
   asking Mixam, never by submitting again.
 - The webhook only moves an order forward, only for the order's own `mixamOrderId`, and

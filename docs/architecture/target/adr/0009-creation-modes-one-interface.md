@@ -1,6 +1,6 @@
 # ADR-0009: Five creation modes behind one interface
 
-**Status**: Accepted (owner chose the modes, 2026-10-29); interface Proposed
+**Status**: Accepted (owner, 2026-10-29)
 
 ## Context
 

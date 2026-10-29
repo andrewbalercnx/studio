@@ -1,6 +1,6 @@
 # ADR-0010: Renders are immutable; orders pin a render
 
-**Status**: Proposed
+**Status**: Accepted (owner, 2026-10-29)
 
 ## Context
 

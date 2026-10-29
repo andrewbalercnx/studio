@@ -1,6 +1,6 @@
 # ADR-0002: Server-side orchestration with Cloud Tasks
 
-**Status**: Proposed
+**Status**: Accepted (owner, 2026-10-29)
 
 ## Context
 
