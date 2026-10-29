@@ -447,6 +447,41 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // ========== TARGET MODEL: MANUSCRIPTS, BOOKS, JOBS (Phase 5) ==========
+    // ADR-0005: the browser reads its own documents (live progress through
+    // listeners); only the server writes. Every document, including pages,
+    // cast sheets and renders, carries `ownerUid`. Lists must filter on it:
+    // where('ownerUid', '==', uid).
+    function ownsDoc() {
+      return isAuthenticated() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    match /manuscripts/{manuscriptId} {
+      allow read: if isAdmin() || ownsDoc();
+      allow write: if isAdmin();
+
+      match /{sub}/{docId} {
+        allow read: if isAdmin() || ownsDoc();
+        allow write: if isAdmin();
+      }
+    }
+
+    match /books/{bookId} {
+      allow read: if isAdmin() || ownsDoc();
+      allow write: if isAdmin();
+
+      // pages, castSheets, renders
+      match /{sub}/{docId} {
+        allow read: if isAdmin() || ownsDoc();
+        allow write: if isAdmin();
+      }
+    }
+
+    match /jobs/{jobId} {
+      allow read: if isAdmin() || ownsDoc();
+      allow write: if isAdmin();
+    }
+
     // ========== DENY ALL OTHER COLLECTIONS ==========
     match /{document=**} {
       allow read, write: if false;
