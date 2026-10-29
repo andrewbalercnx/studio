@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-10-29 (Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
+> **Last Updated**: 2026-10-29 (Phase 5.3: server-side Story creation (§13) — five modes behind one engine interface, `POST /api/stories` + turns + abandon + finish, `story.finish` job, target Stories and turns in `stories`, trial-data reset script; not yet used by the clients (5.4). Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -98,6 +98,10 @@ Firebase Auth → Custom Claims → Role-Based Access
 **Implementation**: Custom claims set via Firebase Admin SDK. Firestore security rules enforce access based on claims.
 
 ### 2. Story Session Engine
+
+> What today's clients run. Its replacement — one Story, five creation modes behind one interface,
+> three routes and the `story.finish` job — is on the server since slice 5.3 (§13); slice 5.4 moves
+> the clients and deletes this engine.
 
 ```
 Session State Machine:
@@ -346,15 +350,15 @@ require a client release.
 ### 11. Server Foundations (`src/server`)
 
 Phase 4 of the architecture rebuild (`docs/architecture/REVIEW_PLAN.md`) added the modules the
-rebuilt slices are built on. The first user is the server-side Book pipeline (§12); everything in
+rebuilt slices are built on. They are used by the server-side Book pipeline (§12) and Story creation (§13); everything in
 sections 1–10 still runs on the code it always did. How a slice uses each module is in
 [`architecture/target/foundations.md`](architecture/target/foundations.md).
 
 | Module | What it is |
 |--------|------------|
-| `src/server/errors.ts` | Typed errors (`BadRequest` 400, `Unauthenticated` 401, `PaymentRequired` 402, `Forbidden` 403, `NotFound` 404, `Conflict` 409, `DataIntegrity` 500) shared by all modules |
+| `src/server/errors.ts` | Typed errors (`BadRequest` 400, `Unauthenticated` 401, `PaymentRequired` 402, `Forbidden` 403, `NotFound` 404, `Conflict` 409, `DataIntegrity` 500, `ServiceUnavailable` 503) shared by all modules |
 | `src/server/http` | `withRoute({ auth: 'public' \| 'user' \| 'admin' \| 'internal', body })`: verifies the Firebase ID token from the `Authorization` header only (no `?idToken=`), or a Cloud Tasks OIDC token for `internal`; validates the body with zod; maps errors to one envelope (`{ ok: true, data }` / `{ ok: false, error: { code, message, details? } }`). Ownership helpers `assertOwner` / `loadOwned` check `ownerUid` (admin/writer exempt) and the child-persona scope |
-| `src/server/data` | Repositories over the **target** collections (`jobs`, `stories`, `manuscripts` + `pages`, `books` + `pages` / `castSheets` / `renders`). Reads are parsed with zod (malformed docs throw `DataIntegrityError`), writes are validated and stamped with `createdAt` / `updatedAt` |
+| `src/server/data` | Repositories over the **target** collections (`jobs`, `stories` + `turns`, `manuscripts` + `pages`, `books` + `pages` / `castSheets` / `renders`). Reads are parsed with zod (malformed docs throw `DataIntegrityError`), writes are validated and stamped with `createdAt` / `updatedAt` |
 | `src/server/jobs` | The job runner (ADR-0002/0003): `JobRegistry` (kind → handler, queue group; kinds registered in `kinds.ts`), `enqueue` (job id derived from the idempotency key), `runJob` (transactional lease, retry with backoff up to `maxAttempts`, fan-in to the coordinator job), and two dispatchers: in-process (default) and Cloud Tasks (`JOBS_DISPATCHER=cloud-tasks`) |
 | `src/server/ai` | The AI harness (ADR-0008): `AIModelRegistry` resolves a model by purpose from `config/aiModels` (30 s cache) with code defaults equal to today's flow models; `aiCall` / `aiGenerateText` / `aiGenerateImage` add the shared circuit breaker + retry (`ai-circuit-breaker.server.ts`) and one `aiFlowLogs` entry per call when `systemConfig/diagnostics.enableAIFlowLogging` is on |
 | `src/server/config` | `ConfigService`: one typed loader with one cache (60 s default TTL), schema validation, in-flight read sharing and explicit `invalidate()`, replacing the per-file `*-config.server.ts` pattern for new code |
@@ -381,7 +385,7 @@ onto them and delete its old code.
 ### 12. Server-side Book pipeline (Story → Manuscript → Book)
 
 Slice 5.1 of the rebuild (ADR-0001; [`architecture/target/slices/5.1-book-server.md`](architecture/target/slices/5.1-book-server.md)).
-It takes today's `stories/{storyId}` document as the Story and produces:
+It takes a `stories/{storyId}` document as the Story (today's legacy shape, or a `complete` target Story made by §13) and produces:
 
 ```
 POST /api/manuscripts | POST /api/books        (withRoute, owner + persona, one transaction each)
@@ -419,6 +423,55 @@ POST /api/books/{id}/lock | /unlock (unlock runs bookUnlockHooks: share-link rev
 
 **Used by** the web app and the kids PWA (§3). **Not yet**: print (no `book.render`, layouts or
 orders for Books; the print slice adds them) and the mobile app.
+
+### 13. Server-side Story creation (five modes, one interface)
+
+Slice 5.3 of the rebuild (ADR-0004, ADR-0009; [`architecture/target/creation.md`](architecture/target/creation.md),
+[`architecture/target/slices/5.3-creation-server.md`](architecture/target/slices/5.3-creation-server.md)).
+**On the server, not yet used by the clients**: today's clients still run the Story Session Engine
+(§2); slice 5.4 moves web, kids PWA and mobile onto these routes and deletes §2.
+
+```
+POST /api/stories {childId, modeId, castIds?, idempotencyKey}
+   child owned + persona │ mode live (enabledForKids for a child persona) │ story_allowance available (check)
+   ▼  StoryContext (one builder) ─▶ engine.start ─▶ one transaction: Story (creating) + turn 0 (+ characters)
+POST /api/stories/{id}/turns {input, idempotencyKey}
+   claim (tx, pendingTurn lease) ─▶ engine.respond (model calls, no tx) ─▶ tx: input + reply turns, cast,
+   modeState; on done: text, status finishing, enqueue story.finish
+story.finish (ai-text job): synopsis + title ─▶ one tx: status complete + one story_allowance consumed
+POST /api/stories/{id}/abandon   creating → abandoned
+POST /api/stories/{id}/finish    failed → finishing (new job)
+```
+
+- **Engines** (`src/server/creation/engines/`): `wizard`, `freeplay` (today's gemini3), `guided`
+  (gemini4), `friends`, `adventure` (the beat engine with StoryType arcs and a chosen ending), each
+  `start(ctx) → Turn` and `respond(ctx, input) → Turn | Done`. Ported from today's flows with their
+  prompts; prompts come from `storyGenerators` (and `storyTypes.promptConfig` for adventure) through
+  the CreationMode adapter (`modes.ts`). Engines never write Firestore; their state between turns is
+  `Story.modeState`, never the client.
+- **One StoryContext builder** (`context.ts`): the Story, its turns, the owner-scoped family roster
+  (hero, siblings, characters in the child's scope), likeness summaries (`imageDescription`, from
+  original photos), preferences, mode config, StoryType.
+- **Cast tokens** (`tokens.ts`): stored text, prompts and options use `[[cast:<castId>]]`
+  (`castId` = the child/character document id); model output in any token form (`$$id$$`, `$id$`, a
+  name) is normalised against the roster, so another family's id can never be stored. Turns also
+  store the resolved words (`promptDisplay`, option `display`) so clients render without lookups.
+- **AI-introduced characters**: created in `characters` (`origin: 'story'`, `ownerParentUid`,
+  scoped to the hero) and added to the cast in the transaction that records the turn.
+- **Concurrency**: one turn at a time per Story, claimed in a transaction keyed by the request's
+  idempotency key (`pendingTurn` with a lease, so a crashed request does not block for long); a
+  repeated key returns the recorded reply; a different turn meanwhile gets 409.
+- **Models**: every call through the AI harness with purpose `creation.text`; a mode's
+  `defaultModel` is the only override (ADR-0008). Model failures are 503 and record nothing.
+- **Allowance**: checked when a Story starts (402 before anything is created), consumed exactly once
+  by `story.finish` in the transaction that sets `complete`. Every mode ends through it (today
+  Wizard and Friends skip compile and are never charged).
+- **TEST_MODE**: every engine and `story.finish` model call returns a deterministic fixture, so the
+  emulator E2E (slice 5.4) can create a Story end to end through the UI.
+- **Books**: `src/server/books/story-source.ts` reads both shapes (target Stories must be
+  `complete`); the legacy branch is deleted in 5.4. Rules: owner reads target Stories and turns; no
+  client writes.
+- **Trial-data reset** (`scripts/reset-trial-data.mjs`, `docs/DEPLOYMENT.md` §10) ships with 5.4.
 
 ---
 

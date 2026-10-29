@@ -26,6 +26,7 @@ writes.
 | [`foundations.md`](foundations.md) | Phase 4: the server modules every slice is built on |
 | [`slices/5.1-book-server.md`](slices/5.1-book-server.md) | Phase 5.1: the Book pipeline on the server; catalogue mapping; decisions where the docs were silent |
 | [`slices/5.2-book-clients.md`](slices/5.2-book-clients.md) | Phase 5.2: web app and kids PWA on the Book pipeline; what was deleted and kept; old storybooks; mobile |
+| [`slices/5.3-creation-server.md`](slices/5.3-creation-server.md) | Phase 5.3: Story creation on the server — five mode engines, routes, `story.finish`, CreationMode mapping, reset script; decisions where the docs were silent |
 
 ## Decisions
 

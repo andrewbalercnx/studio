@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-10-29 (Phase 5.2: the web app and kids PWA read `books`, `manuscripts` and their pages directly (owner-filtered queries) and create Books through `POST /api/books`; `stories/*/storybooks` is legacy and read-only (no route writes it any more except the old print/share path), kept until the trial data reset. Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-10-29 (Phase 5.3: target-shaped Stories (`schemaVersion: 2`, `ownerUid`, `modeId`, `cast`, `modeState`…) and the `stories/{id}/turns` subcollection, written by the new creation routes — present, the UI switches in 5.4; AI-introduced characters get `origin: 'story'` / `originStoryId`; rules: owner-read, no client writes on target Stories and turns, legacy owner updates unchanged; `jobs.kind` adds `story.finish`. Phase 5.2: the web app and kids PWA read `books`, `manuscripts` and their pages directly (owner-filtered queries) and create Books through `POST /api/books`; `stories/*/storybooks` is legacy and read-only (no route writes it any more except the old print/share path), kept until the trial data reset. Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -152,6 +152,8 @@ Story characters with traits, owned by parents.
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
 | `isParentGenerated` | boolean | No | true = parent-created, false = AI-generated |
+| `origin` | 'parent' \| 'story' | No | Slice 5.3: `story` = introduced by the AI while a Story was created (`POST /api/stories/{id}/turns`); written with the turn |
+| `originStoryId` | string | No | Slice 5.3: the Story that introduced it |
 | `usageCount` | number | No | Times used in stories |
 | `lastUsedAt` | timestamp | No | Last story usage |
 | `deletedAt` | timestamp | No | Soft delete timestamp |
@@ -210,7 +212,9 @@ Interactive story creation sessions.
 
 ### `stories`
 
-Compiled story content.
+Compiled story content (legacy shape, written by today's flows; no `schemaVersion`). Target-shaped
+Stories share the collection until the trial-data reset: see
+[Target model: `stories` (Story)](#target-model-stories-story-and-storiesidturns).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -348,6 +352,65 @@ Share tokens for public storybook viewing.
 
 ---
 
+### Target model: `stories` (Story) and `stories/{id}/turns`
+
+**Present on the server since slice 5.3; the UI switches to it in slice 5.4.** One `stories/{storyId}`
+document is both the creation in progress and the finished story (ADR-0004), written only by the
+creation routes and the `story.finish` job (`docs/architecture/target/creation.md`,
+`slices/5.3-creation-server.md`). It lives in the same `stories` collection as today's legacy
+documents (above) until the trial-data reset; **`schemaVersion: 2`** tells them apart (the Book
+pipeline's `story-source.ts` and the rules read both shapes). Schema: `storySchema` and `turnSchema`
+in `src/server/data/schemas/story.ts`. Id `st_<hash(ownerUid, idempotencyKey)>`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `schemaVersion` | 2 | Marks a target Story |
+| `ownerUid` | string | The family (the child's `ownerParentUid`) |
+| `childId` | string | The hero |
+| `modeId` | `wizard` \| `freeplay` \| `guided` \| `friends` \| `adventure` | Creation mode (config: `storyGenerators`, see the mapping in the slice doc) |
+| `storyTypeId` | string \| null | `adventure` only |
+| `status` | `creating` \| `finishing` \| `complete` \| `abandoned` \| `failed` | pipeline.md state machine |
+| `cast` | CastMember[] | `{ castId, ref: { kind: child\|character, id }, role: hero\|supporting, addedBy: setup\|child\|ai }`; `castId` = `ref.id`. On `done` it becomes who the final text names |
+| `text` | string \| null | Final text with `[[cast:<castId>]]` tokens; set on `done` |
+| `title`, `synopsis` | string \| null | Written by `story.finish` (synopsis with names, for the story card) |
+| `titleHint` | string \| null | A title the mode proposed (wizard, friends); `story.finish` keeps it |
+| `modeState` | map | The engine's state between turns (answers, phase, arc step, world state…). Server-only |
+| `turnCount` | number | Turns recorded |
+| `pendingTurn` | `{ idempotencyKey, leaseUntil }` \| null | The turn being processed (one at a time) |
+| `idempotencyKey` | string | The create request's key |
+| `finishJobId` | string \| null | Latest `story.finish` job |
+| `finishRuns` | number | Finishing runs started (a retry after `failed` is a new run) |
+| `allowance` | `{ charged, remaining, reason }` \| null | The `story_allowance` decision, made once in the transaction that sets `complete` |
+| `error` | `{ code, message }` \| null | Why finishing failed |
+| `completedAt`, `abandonedAt` | timestamp \| null | |
+| `createdAt`, `updatedAt` | timestamp | |
+
+#### `stories/{storyId}/turns/{index}`
+
+The creation conversation, server-written. Doc id = `index` zero-padded (`0000`, `0001`…).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ownerUid`, `childId` | string | |
+| `index` | number | Order in the conversation |
+| `role`, `kind` | `ai`/`prompt`, `child`/`input`, `ai`/`done` | |
+| `idempotencyKey` | string \| null | The request that produced it; a repeat returns the recorded reply |
+| `prompt`, `promptDisplay` | string \| null | With `[[cast:id]]` tokens / names resolved |
+| `options` | `[{ id, text, display, preselected }]` \| null | |
+| `expects` | `choice` \| `text` \| `castPick` \| null | UI hint |
+| `progress` | `{ step, of }` \| null | |
+| `addedCast` | string[] | castIds that joined with this turn |
+| `input`, `inputDisplay` | ChildInput \| null, string \| null | `{kind:'choice',optionId}` \| `{kind:'text',text}` \| `{kind:'castPick',castIds}` |
+
+**Characters introduced by the AI** are created in `characters` with `origin: 'story'`,
+`originStoryId`, `ownerParentUid` (today's owner field, kept so the current UI lists them),
+`childId` (scoped to the hero), `isParentGenerated: false`, `photos: []` and no avatar — in the same
+transaction as the turn that introduced them.
+
+**Security**: owner reads the Story and its turns (`ownerUid == request.auth.uid`; lists filter on
+`ownerUid`); no client writes (create, update and turns are admin/server only). Legacy documents keep
+their limited owner updates until slice 5.4.
+
 ### Target model: `manuscripts`, `books`, `jobs`
 
 Written by the server-side Book pipeline (slice 5.1; `docs/architecture/target/domain-model.md`,
@@ -367,8 +430,8 @@ so one per shape.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `ownerUid` | string | Story owner (`stories.parentUid`) |
-| `storyId` | string | Today's `stories/{storyId}` |
+| `ownerUid` | string | Story owner (`ownerUid`; legacy stories: `parentUid`) |
+| `storyId` | string | `stories/{storyId}` (either shape) |
 | `childId` | string | From the story (persona scope) |
 | `form` | string | Form id (`storyOutputTypes` doc id) |
 | `readingLevel` | string | From the Form (`ageRange`, else `all`) |
@@ -419,7 +482,7 @@ One unit of work (pipeline.md, ADR-0003). Id `job_<hash(idempotencyKey)>`.
 | Field | Type | Description |
 |-------|------|-------------|
 | `ownerUid` | string | |
-| `jobId`, `kind` | string | Kinds in use: `manuscript.paginate`, `manuscript.narrate`, `book.prepareCast`, `book.castSheet`, `book.illustrate`, `book.pageArt` |
+| `jobId`, `kind` | string | Kinds in use: `story.finish`, `manuscript.paginate`, `manuscript.narrate`, `book.prepareCast`, `book.castSheet`, `book.illustrate`, `book.pageArt` |
 | `target` | `{ collection, id, subpath? }` | What the job writes |
 | `input` | map | Handler input |
 | `status` | `queued` \| `running` \| `succeeded` \| `failed` \| `cancelled` | |
@@ -1538,6 +1601,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-10-29 | Phase 5.3: target-shaped Stories (`schemaVersion: 2`) and `stories/{id}/turns`, written by the creation routes and `story.finish`, present but not yet used by the UI; `characters.origin` / `originStoryId`; rules: owner-read and no client writes for target Stories and turns (legacy owner updates unchanged) |
 | 2026-10-29 | Phase 5.2: `books`, `manuscripts` (+ pages) read by the web app and kids PWA; `stories/*/storybooks` marked legacy read-only (no generation writes); no rules change |
 | 2026-10-29 | Phase 5.1: new `manuscripts` (+ `pages`), `books` (+ `pages`, `castSheets`, `renders`) and `jobs` collections for the server-side Book pipeline, present but not yet used by the UI; rules owner-read, admin-write |
 | 2026-10-29 | Phase 3 security rules: owner cannot write roles/PIN state, session allowance and compile-lock fields, story content, storybook lock/finalization/art/generation state, storybook pages or share tokens; owner fields immutable on update; `help-*` documents admin-only; `systemConfig` admin-only except `diagnostics`. Checked by `npm run test:rules` |
