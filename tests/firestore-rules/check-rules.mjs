@@ -141,6 +141,11 @@ await check('read own book page', 'allow', () => getDoc(doc(parent, 'books', 'k1
 await check('read own cast sheet', 'allow', () => getDoc(doc(parent, 'books', 'k1', 'castSheets', 'c1')));
 await check("read another family's book", 'deny', () => getDoc(doc(parent, 'books', 'k2')));
 await check("read another family's book page", 'deny', () => getDoc(doc(parent, 'books', 'k2', 'pages', '1')));
+// The client queries of slice 5.2 (src/hooks/use-books.ts): owner-filtered lists.
+await check("list own books for a child and story", 'allow', () => getDocs(query(collection(parent, 'books'), where('ownerUid', '==', 'p1'), where('childId', '==', 'c1'), where('storyId', '==', 's1'))));
+await check('list own book pages', 'allow', () => getDocs(query(collection(parent, 'books', 'k1', 'pages'), where('ownerUid', '==', 'p1'))));
+await check('list own manuscript pages', 'allow', () => getDocs(query(collection(parent, 'manuscripts', 'm1', 'pages'), where('ownerUid', '==', 'p1'))));
+await check('list book pages without the owner filter', 'deny', () => getDocs(collection(parent, 'books', 'k1', 'pages')));
 await check('create book', 'deny', () => setDoc(doc(parent, 'books', 'k3'), { ownerUid: 'p1', status: 'ready' }));
 await check('lock own book directly', 'deny', () => updateDoc(doc(parent, 'books', 'k1'), { status: 'locked' }));
 await check('set own page art', 'deny', () => updateDoc(doc(parent, 'books', 'k1', 'pages', '1'), { artUrl: 'https://example.com/x.png' }));
