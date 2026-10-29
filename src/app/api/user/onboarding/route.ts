@@ -39,9 +39,8 @@ export type OnboardingResponse = {
 
 // Caps keep the derivation cheap. Onboarding users have a handful of docs;
 // long-time users short-circuit on the cached completedAtMs/dismissed state.
-const MAX_SESSIONS = 50;
-const MAX_STORIES = 25;
-const MAX_STORYBOOKS_PER_STORY = 5;
+const MAX_STORIES = 50;
+const MAX_BOOKS = 50;
 
 function responseFromState(
   state: OnboardingState,
@@ -88,54 +87,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(responseFromState(state));
     }
 
-    // Gather real account state in parallel.
-    const [childrenSnap, sessionsSnap, storiesSnap] = await Promise.all([
+    // Gather real account state in parallel (server statuses only).
+    const [childrenSnap, storiesSnap, booksSnap] = await Promise.all([
       firestore.collection('children').where('ownerParentUid', '==', uid).get(),
-      firestore.collection('storySessions').where('parentUid', '==', uid).limit(MAX_SESSIONS).get(),
-      firestore.collection('stories').where('parentUid', '==', uid).limit(MAX_STORIES).get(),
+      firestore.collection('stories').where('ownerUid', '==', uid).limit(MAX_STORIES).get(),
+      firestore.collection('books').where('ownerUid', '==', uid).limit(MAX_BOOKS).get(),
     ]);
-
-    const activeStoryDocs = storiesSnap.docs.filter((d) => !d.data().deletedAt);
-
-    const storybooks: OnboardingSnapshot['storybooks'] = [];
-    // Legacy model: generation status lives on the story document itself.
-    for (const storyDoc of activeStoryDocs) {
-      const story = storyDoc.data();
-      const imageStatus = story.imageGeneration?.status;
-      const pageStatus = story.pageGeneration?.status;
-      if (imageStatus || pageStatus) {
-        storybooks.push({
-          imageGenerationStatus: imageStatus ?? null,
-          pageGenerationStatus: pageStatus ?? null,
-        });
-      }
-    }
-    // New model: storybooks subcollection under each story.
-    await Promise.all(
-      activeStoryDocs.map(async (storyDoc) => {
-        const sbSnap = await storyDoc.ref
-          .collection('storybooks')
-          .limit(MAX_STORYBOOKS_PER_STORY)
-          .get();
-        for (const sbDoc of sbSnap.docs) {
-          const sb = sbDoc.data();
-          if (sb.deletedAt) continue;
-          storybooks.push({
-            imageGenerationStatus: sb.imageGeneration?.status ?? null,
-            pageGenerationStatus: sb.pageGeneration?.status ?? null,
-          });
-        }
-      })
-    );
 
     const snapshot: OnboardingSnapshot = {
       children: childrenSnap.docs.map((d) => {
         const c = d.data();
         return { deletedAt: c.deletedAt, photos: c.photos ?? null, avatarUrl: c.avatarUrl ?? null };
       }),
-      storySessions: sessionsSnap.docs.map((d) => ({ status: d.data().status ?? null })),
-      hasCompiledStory: activeStoryDocs.length > 0,
-      storybooks,
+      stories: storiesSnap.docs.map((d) => ({ status: d.data().status ?? null })),
+      books: booksSnap.docs.map((d) => ({ status: d.data().status ?? null })),
     };
 
     const stepStates = deriveOnboardingStepStates(snapshot);

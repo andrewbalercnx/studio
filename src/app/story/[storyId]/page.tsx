@@ -1,16 +1,14 @@
 'use client';
 
-import { use, useMemo, useState } from 'react';
+import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useFirestore } from '@/firebase';
-import { doc, collection, query, orderBy } from 'firebase/firestore';
-import { useDocument, useCollection } from '@/lib/firestore-hooks';
-import type { Story, StoryBookOutput, ChildProfile, ImageStyle, StoryOutputType } from '@/lib/types';
+import { useStoryView } from '@/hooks/use-stories';
+import { storyStatusLabel } from '@/lib/stories/types';
 import { useBooks, useCreateBook } from '@/hooks/use-books';
 import { BookCard, useBookCatalog } from '@/components/books';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { LoaderCircle, Plus, Book, Image as ImageIcon, Printer, Eye } from 'lucide-react';
+import { LoaderCircle, Plus, Book } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
@@ -35,7 +33,6 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
   const resolvedParams = use(params);
   const storyId = resolvedParams.storyId;
   const router = useRouter();
-  const firestore = useFirestore();
   const { toast } = useToast();
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -46,38 +43,9 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
   const [selectedOutputTypeId, setSelectedOutputTypeId] = useState<string>('');
   const [selectedImageStyleId, setSelectedImageStyleId] = useState<string>('');
 
-  // Load story
-  const storyRef = useMemo(() => (firestore ? doc(firestore, 'stories', storyId) : null), [firestore, storyId]);
-  const { data: story, loading: storyLoading, error: storyError } = useDocument<Story>(storyRef);
-
-  // Load child profile for display name
-  const childRef = useMemo(() => (firestore && story?.childId ? doc(firestore, 'children', story.childId) : null), [firestore, story?.childId]);
-  const { data: childProfile } = useDocument<ChildProfile>(childRef);
-
-  // Storybooks made before the Book pipeline: read-only, kept until the trial data reset
-  // (their print path still works).
-  const storybooksQuery = useMemo(() => {
-    if (!firestore) return null;
-    return query(
-      collection(firestore, 'stories', storyId, 'storybooks'),
-      orderBy('createdAt', 'desc')
-    );
-  }, [firestore, storyId]);
-  const { data: storybooks, loading: storybooksLoading } = useCollection<StoryBookOutput>(storybooksQuery);
-
-  // Load available output types
-  const outputTypesQuery = useMemo(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'storyOutputTypes'), orderBy('childFacingLabel', 'asc'));
-  }, [firestore]);
-  const { data: outputTypes } = useCollection<StoryOutputType>(outputTypesQuery);
-
-  // Load available image styles
-  const imageStylesQuery = useMemo(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'imageStyles'), orderBy('title', 'asc'));
-  }, [firestore]);
-  const { data: imageStyles } = useCollection<ImageStyle>(imageStylesQuery);
+  // The Story as the server renders it (names resolved, status from the server).
+  const { story, loading: storyLoading, error: storyError } = useStoryView(storyId);
+  const childName = story?.cast.find((member) => member.role === 'hero')?.displayName;
 
   const handleCreateBook = async () => {
     if (!story || !selectedOutputTypeId || !selectedImageStyleId) {
@@ -99,25 +67,6 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
     }
   };
 
-  const getStatusBadge = (storybook: StoryBookOutput) => {
-    if (storybook.imageGeneration?.status === 'ready') {
-      return <Badge variant="default" className="bg-green-500">Complete</Badge>;
-    }
-    if (storybook.imageGeneration?.status === 'running') {
-      return <Badge variant="secondary">Generating Images...</Badge>;
-    }
-    if (storybook.pageGeneration?.status === 'running') {
-      return <Badge variant="secondary">Generating Pages...</Badge>;
-    }
-    if (storybook.pageGeneration?.status === 'ready') {
-      return <Badge variant="outline">Pages Ready</Badge>;
-    }
-    if (storybook.pageGeneration?.status === 'error' || storybook.imageGeneration?.status === 'error') {
-      return <Badge variant="destructive">Error</Badge>;
-    }
-    return <Badge variant="outline">Draft</Badge>;
-  };
-
   if (storyLoading) {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center gap-4">
@@ -133,7 +82,7 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
         <Card className="w-full max-w-md text-center">
           <CardHeader>
             <CardTitle>Story Not Found</CardTitle>
-            <CardDescription>{storyError?.message || "We couldn't find that story."}</CardDescription>
+            <CardDescription>We couldn&apos;t find that story.</CardDescription>
           </CardHeader>
           <CardFooter className="justify-center">
             <Button asChild>
@@ -152,14 +101,15 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
         <CardHeader>
           <div className="flex items-start justify-between">
             <div>
-              <CardTitle className="text-3xl">{story.metadata?.title || 'Untitled Story'}</CardTitle>
-              <CardDescription>
-                Created for {childProfile?.displayName || 'your child'}
+              <CardTitle className="text-3xl">{story.title || 'Untitled Story'}</CardTitle>
+              <CardDescription className="flex items-center gap-2">
+                Created for {childName || 'your child'}
+                <Badge variant="outline">{storyStatusLabel(story.status)}</Badge>
               </CardDescription>
             </div>
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button disabled={story.status !== 'complete'}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create Book
                 </Button>
@@ -230,7 +180,7 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
         <CardContent>
           <div className="prose prose-sm max-w-none">
             <p className="text-muted-foreground whitespace-pre-wrap line-clamp-6">
-              {story.storyText}
+              {story.text ?? 'This story is still being made.'}
             </p>
           </div>
         </CardContent>
@@ -258,7 +208,7 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
                 <p className="font-medium">No books yet</p>
                 <p className="text-sm text-muted-foreground">Create your first book from this story!</p>
               </div>
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Button onClick={() => setIsCreateDialogOpen(true)} disabled={story.status !== 'complete'}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create Book
               </Button>
@@ -267,53 +217,6 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
         )}
       </div>
 
-      {/* Earlier storybooks (before the Book pipeline): read-only */}
-      {!storybooksLoading && storybooks && storybooks.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Earlier storybooks</h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            {storybooks.map((storybook) => {
-              const outputType = outputTypes?.find(t => t.id === storybook.storyOutputTypeId);
-              const imageStyle = imageStyles?.find(s => s.id === storybook.imageStyleId);
-              return (
-                <Card key={storybook.id}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          <Book className="h-5 w-5" />
-                          {outputType?.childFacingLabel || 'Storybook'}
-                        </CardTitle>
-                        <CardDescription className="flex items-center gap-2 mt-1">
-                          <ImageIcon className="h-4 w-4" />
-                          {imageStyle?.title || 'Unknown style'}
-                        </CardDescription>
-                      </div>
-                      {getStatusBadge(storybook)}
-                    </div>
-                  </CardHeader>
-                  {storybook.imageGeneration?.status === 'ready' && (
-                    <CardFooter className="gap-2">
-                      <Button asChild variant="default" size="sm">
-                        <Link href={`/storybook/${storybook.id}?storyId=${storyId}`}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          View
-                        </Link>
-                      </Button>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/storybook/${storybook.id}/order?storyId=${storyId}`}>
-                          <Printer className="mr-2 h-4 w-4" />
-                          Order Print
-                        </Link>
-                      </Button>
-                    </CardFooter>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

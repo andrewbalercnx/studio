@@ -11,11 +11,10 @@ import { BookChooser, ageFromDateOfBirth } from '@/components/books';
 /**
  * Kids PWA: the child picks a Form and a Style for a finished story; the Book
  * is created on the server (`POST /api/books`) and the child watches it at
- * `/kids/book/{bookId}`. The route keeps its `[sessionId]` name: a story's id
- * is its session id.
+ * `/kids/book/{bookId}`.
  */
-export default function KidsStyleSelectionPage({ params }: { params: Promise<{ sessionId: string }> }) {
-  const { sessionId: storyId } = use(params);
+export default function KidsStyleSelectionPage({ params }: { params: Promise<{ storyId: string }> }) {
+  const { storyId } = use(params);
   const router = useRouter();
   const { user, loading: userLoading } = useUser();
   const { childId, childProfile, isLocked } = useKidsPWA();

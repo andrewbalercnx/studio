@@ -11,9 +11,8 @@ import {
 
 const emptySnapshot: OnboardingSnapshot = {
   children: [],
-  storySessions: [],
-  hasCompiledStory: false,
-  storybooks: [],
+  stories: [],
+  books: [],
 };
 
 describe('deriveOnboardingStepStates', () => {
@@ -61,61 +60,43 @@ describe('deriveOnboardingStepStates', () => {
     expect(states.addPhoto).toBe(true);
   });
 
-  it('does not complete createStory for an in-progress session', () => {
+  it('does not complete createStory for a story still being made', () => {
     const states = deriveOnboardingStepStates({
       ...emptySnapshot,
-      storySessions: [{ status: 'in_progress' }, { status: 'active' }],
+      stories: [{ status: 'creating' }, { status: 'finishing' }],
     });
     expect(states.createStory).toBe(false);
   });
 
-  it('completes createStory when a session reached completed', () => {
+  it('completes createStory when a story is complete', () => {
     const states = deriveOnboardingStepStates({
       ...emptySnapshot,
-      storySessions: [{ status: 'in_progress' }, { status: 'completed' }],
+      stories: [{ status: 'creating' }, { status: 'complete' }],
     });
     expect(states.createStory).toBe(true);
   });
 
-  it('completes createStory when a compiled story document exists', () => {
+  it('completes generateArt as soon as a Book exists', () => {
     const states = deriveOnboardingStepStates({
       ...emptySnapshot,
-      hasCompiledStory: true,
-    });
-    expect(states.createStory).toBe(true);
-  });
-
-  it('completes generateArt as soon as a storybook output exists', () => {
-    const states = deriveOnboardingStepStates({
-      ...emptySnapshot,
-      storybooks: [{ imageGenerationStatus: 'idle', pageGenerationStatus: 'idle' }],
+      books: [{ status: 'illustrating' }],
     });
     expect(states.generateArt).toBe(true);
     expect(states.previewBook).toBe(false);
   });
 
-  it('completes previewBook when pages are ready', () => {
-    const states = deriveOnboardingStepStates({
-      ...emptySnapshot,
-      storybooks: [{ pageGenerationStatus: 'ready' }],
-    });
-    expect(states.previewBook).toBe(true);
-  });
-
-  it('completes previewBook when images are ready (legacy model)', () => {
-    const states = deriveOnboardingStepStates({
-      ...emptySnapshot,
-      storybooks: [{ imageGenerationStatus: 'ready' }],
-    });
-    expect(states.previewBook).toBe(true);
+  it('completes previewBook when a Book is ready, partial or locked', () => {
+    for (const status of ['ready', 'partial', 'locked']) {
+      expect(deriveOnboardingStepStates({ ...emptySnapshot, books: [{ status }] }).previewBook).toBe(true);
+    }
+    expect(deriveOnboardingStepStates({ ...emptySnapshot, books: [{ status: 'failed' }] }).previewBook).toBe(false);
   });
 
   it('marks the whole funnel complete for a fully activated account', () => {
     const states = deriveOnboardingStepStates({
       children: [{ photos: ['https://x/p.jpg'], avatarUrl: 'https://x/a.png' }],
-      storySessions: [{ status: 'completed' }],
-      hasCompiledStory: true,
-      storybooks: [{ imageGenerationStatus: 'ready', pageGenerationStatus: 'ready' }],
+      stories: [{ status: 'complete' }],
+      books: [{ status: 'ready' }],
     });
     expect(isOnboardingComplete(states)).toBe(true);
   });
@@ -145,7 +126,7 @@ describe('diffNewlyCompletedSteps', () => {
     const next = deriveOnboardingStepStates({
       ...emptySnapshot,
       children: [{ photos: ['https://x/p.jpg'] }],
-      storySessions: [{ status: 'completed' }],
+      stories: [{ status: 'complete' }],
     });
     expect(diffNewlyCompletedSteps(prev, next)).toEqual(['addPhoto', 'createStory']);
   });
