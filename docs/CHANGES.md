@@ -18,6 +18,28 @@
 
 ### 2026-10-29
 
+#### `#12` - Phase 4: foundations (route wrapper, data layer, job runner, AI harness)
+
+**Type**: Architecture / Infrastructure
+
+**Summary**: Adds the `src/server/` modules the Phase 5 slices build on. No product flow uses them yet.
+- **Route wrapper:** `withRoute` takes header-only tokens, internal OIDC auth for Cloud Tasks, zod-validated bodies, one response envelope and `ownerUid` ownership guards.
+- **Data layer:** repositories that validate every read against zod schemas for the target entities.
+- **Job runner:** leased, idempotent and retried, with fan-in and two dispatchers (in-process and Cloud Tasks). It adds the internal route `POST /api/internal/jobs/run`.
+- **AI harness:** a model registry keyed by purpose.
+- **Config service:** one typed service with a single cache.
+- **Lint guard:** blocks client imports of server code.
+
+New dependency: `@google-cloud/tasks`. 83 new tests.
+
+**Created files**:
+- `src/server/**` (http, data, jobs, ai, config, testing), `src/app/api/internal/jobs/run/route.ts`, `docs/architecture/target/foundations.md`
+
+**Modified files**:
+- `eslint.config.mjs`, `package.json`, `package-lock.json`, `docs/API.md`, `docs/SYSTEM_DESIGN.md`, `docs/architecture/route-auth-matrix.md`, `docs/architecture/REVIEW_PLAN.md`, `docs/CHANGES.md`
+
+---
+
 #### `#10` - Phase 2: target domain model, pipeline and ADRs
 
 **Type**: Architecture / Documentation
