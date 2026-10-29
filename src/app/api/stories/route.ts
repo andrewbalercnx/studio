@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     const allTexts = storiesRaw.map((s: any) =>
       `${s.metadata?.title || ''} ${s.synopsis || ''}`
     ).join(' ');
-    const entityMap = await resolveEntitiesInText(allTexts);
+    const entityMap = await resolveEntitiesInText(allTexts, authResult.uid);
 
     // Process each story with resolved placeholders and actor profiles
     const stories = await Promise.all(

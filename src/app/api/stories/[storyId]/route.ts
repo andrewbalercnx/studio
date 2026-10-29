@@ -55,7 +55,7 @@ export async function GET(
     const allText = `${title} ${synopsis} ${storyText}`;
 
     // Resolve entities from all text
-    const entityMap = await resolveEntitiesInText(allText);
+    const entityMap = await resolveEntitiesInText(allText, authResult.uid);
 
     // Resolve placeholders in each field
     const titleResolved = await replacePlaceholdersInText(title, entityMap);

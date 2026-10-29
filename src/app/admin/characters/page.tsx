@@ -12,7 +12,6 @@ import { collection, doc, onSnapshot, writeBatch, serverTimestamp, query, orderB
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Character } from '@/lib/types';
-import { logAIFlow } from '@/lib/ai-flow-logger';
 
 const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt' | 'ownerParentUid'>[] = [
     {
