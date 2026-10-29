@@ -1,11 +1,13 @@
 'use client';
 
-import { use, useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useMemo } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useFirestore } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
-import type { Story, StoryBookOutput } from '@/lib/types';
+import type { Story } from '@/lib/types';
+import { useBooks } from '@/hooks/use-books';
+import { isReadableStatus } from '@/lib/books/types';
 import { useAppContext } from '@/hooks/use-app-context';
 import { LoaderCircle, BookOpen, Sparkles, BookText } from 'lucide-react';
 import Link from 'next/link';
@@ -45,52 +47,9 @@ export default function ChildDashboardPage({ params }: { params: Promise<{ child
   const { data: stories, loading: storiesLoading } = useCollection<Story>(storiesQuery);
   const storiesCount = stories?.length ?? 0;
 
-  // Count completed books from both legacy model and new storybooks subcollection
-  const [completedBooksCount, setCompletedBooksCount] = useState(0);
-  const [booksCountLoading, setBooksCountLoading] = useState(true);
-
-  useEffect(() => {
-    const countCompletedBooks = async () => {
-      if (!firestore || !stories || storiesLoading) {
-        setBooksCountLoading(false);
-        return;
-      }
-
-      setBooksCountLoading(true);
-      let count = 0;
-
-      for (const story of stories) {
-        // Skip soft-deleted stories
-        if (story.deletedAt) continue;
-
-        // Count legacy books (imageGeneration on Story document)
-        if (story.imageGeneration?.status === 'ready') {
-          count++;
-        }
-
-        // Count new storybooks from subcollection
-        try {
-          const storybooksRef = collection(firestore, 'stories', story.id || story.storySessionId, 'storybooks');
-          const storybooksSnap = await getDocs(storybooksRef);
-          for (const sbDoc of storybooksSnap.docs) {
-            const sb = sbDoc.data() as StoryBookOutput;
-            // Skip soft-deleted storybooks
-            if (sb.deletedAt) continue;
-            if (sb.imageGeneration?.status === 'ready') {
-              count++;
-            }
-          }
-        } catch (err) {
-          console.error('Error counting storybooks for story:', story.id, err);
-        }
-      }
-
-      setCompletedBooksCount(count);
-      setBooksCountLoading(false);
-    };
-
-    countCompletedBooks();
-  }, [firestore, stories, storiesLoading]);
+  // Books ready to read, by the server's status (new Book pipeline).
+  const { books, loading: booksCountLoading } = useBooks({ childId: activeChildId });
+  const completedBooksCount = books.filter((book) => isReadableStatus(book.status)).length;
 
   if (userLoading || activeChildProfileLoading) {
     return (

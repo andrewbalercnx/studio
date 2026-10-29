@@ -59,6 +59,8 @@ import {
 } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { DeleteButton, UndoBanner, useDeleteWithUndo } from '@/components/shared/DeleteWithUndo';
+import { useBooks } from '@/hooks/use-books';
+import { BookCard } from '@/components/books';
 import type {
   StorybookListItem,
   StorybooksResponse,
@@ -124,18 +126,14 @@ function AudioStatusBadge({ status, pagesWithAudio, totalPages }: { status?: str
 function StorybookCard({
   storybook,
   imageStyles,
-  onRegenerateAudio,
   onGeneratePrintable,
   onDelete,
-  isRegeneratingAudio,
   isGeneratingPrintable,
 }: {
   storybook: StorybookWithMeta;
   imageStyles?: ImageStyle[];
-  onRegenerateAudio: (storybook: StorybookWithMeta) => void;
   onGeneratePrintable: (storybook: StorybookWithMeta) => void;
   onDelete: (storybookId: string) => Promise<void>;
-  isRegeneratingAudio: boolean;
   isGeneratingPrintable: boolean;
 }) {
   const imageStyleTitle = imageStyles?.find((s) => s.id === storybook.imageStyleId)?.title || 'Custom';
@@ -198,15 +196,6 @@ function StorybookCard({
           <Link href={readUrl}><BookOpen className="mr-1 h-3 w-3" />Read</Link>
         </Button>
         <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onRegenerateAudio(storybook)}
-          disabled={isRegeneratingAudio || storybook.imageGenerationStatus !== 'ready'}
-        >
-          {isRegeneratingAudio ? <LoaderCircle className="mr-1 h-3 w-3 animate-spin" /> : <Volume2 className="mr-1 h-3 w-3" />}
-          Audio
-        </Button>
-        <Button
           variant={!canPrint && storybook.imageGenerationStatus === 'error' ? 'destructive' : 'outline'}
           size="sm"
           onClick={() => onGeneratePrintable(storybook)}
@@ -255,11 +244,13 @@ export default function ChildStorybooksPage() {
     router.push(`/child/${childId}`);
   }, [setActiveChildId, router, childId]);
 
+  // Books from the server pipeline (status from the server). Printing them comes with the print slice.
+  const { books } = useBooks({ childId });
+
   const [childName, setChildName] = useState('');
   const [childAvatarUrl, setChildAvatarUrl] = useState<string | null>(null);
   const [storybooks, setStorybooks] = useState<StorybookWithMeta[]>([]);
   const [loading, setLoading] = useState(true);
-  const [regeneratingAudioFor, setRegeneratingAudioFor] = useState<string | null>(null);
   const [generatingPrintableFor, setGeneratingPrintableFor] = useState<string | null>(null);
   const { deletedItem, markAsDeleted, clearDeletedItem } = useDeleteWithUndo();
 
@@ -412,33 +403,6 @@ export default function ChildStorybooksPage() {
     }
   }, [user, userLoading, idTokenResult, fetchStorybooks]);
 
-  const handleRegenerateAudio = useCallback(async (storybook: StorybookWithMeta) => {
-    if (!user) return;
-    setRegeneratingAudioFor(storybook.storybookId);
-    try {
-      const idToken = await user.getIdToken();
-      const response = await authFetch('/api/storyBook/pageAudio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({
-          storyId: storybook.storyId,
-          ...(storybook.isNewModel && { storybookId: storybook.storybookId }),
-          forceRegenerate: true,
-        }),
-      });
-      const result = await response.json();
-      if (!result.ok) {
-        toast({ title: 'Audio generation failed', description: result.errorMessage || 'Please try again.', variant: 'destructive' });
-      } else {
-        toast({ title: 'Audio generation started', description: 'Audio is being generated in the background.' });
-      }
-    } catch {
-      toast({ title: 'Audio generation failed', description: 'Please check your connection and try again.', variant: 'destructive' });
-    } finally {
-      setRegeneratingAudioFor(null);
-    }
-  }, [user, toast]);
-
   const handleGeneratePrintable = useCallback(async (storybook: StorybookWithMeta) => {
     if (!user) return;
 
@@ -590,7 +554,7 @@ export default function ChildStorybooksPage() {
           <div>
             <h1 className="text-3xl font-bold">{childName || 'Storybooks'}</h1>
             <p className="text-muted-foreground">
-              {isLoadingPage ? 'Loading...' : `${storybooks.length} ${storybooks.length === 1 ? 'book' : 'books'}`}
+              {isLoadingPage ? 'Loading...' : `${books.length + storybooks.length} ${books.length + storybooks.length === 1 ? 'book' : 'books'}`}
             </p>
           </div>
         </div>
@@ -605,7 +569,7 @@ export default function ChildStorybooksPage() {
         <div className="flex items-center justify-center py-16">
           <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
         </div>
-      ) : storybooks.length === 0 ? (
+      ) : storybooks.length === 0 && books.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
             <BookOpen className="h-12 w-12 text-muted-foreground" />
@@ -623,19 +587,37 @@ export default function ChildStorybooksPage() {
           </CardContent>
         </Card>
       ) : (
+        <div className="space-y-8">
+          {books.length > 0 && (
+            <section className="space-y-3">
+              <div>
+                <h2 className="text-xl font-semibold">Books</h2>
+                <p className="text-sm text-muted-foreground">Printing is coming soon for these books.</p>
+              </div>
+              <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {books.map((book) => (
+                  <BookCard key={book.id} book={book} href={`/books/${book.id}`} />
+                ))}
+              </div>
+            </section>
+          )}
+          {storybooks.length > 0 && (
+        <section className="space-y-3">
+          {books.length > 0 && <h2 className="text-xl font-semibold">Earlier storybooks</h2>}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {storybooks.map((sb) => (
             <StorybookCard
               key={`${sb.storyId}-${sb.storybookId}`}
               storybook={sb}
               imageStyles={imageStyles ?? undefined}
-              onRegenerateAudio={handleRegenerateAudio}
               onGeneratePrintable={handleGeneratePrintable}
               onDelete={handleDeleteStorybook}
-              isRegeneratingAudio={regeneratingAudioFor === sb.storybookId}
               isGeneratingPrintable={generatingPrintableFor === sb.storybookId}
             />
           ))}
+        </div>
+        </section>
+          )}
         </div>
       )}
 

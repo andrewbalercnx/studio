@@ -12,6 +12,8 @@ import { LoaderCircle, ArrowLeft, Volume2, VolumeX, BookOpen, Sparkles, ChevronR
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { useBooks } from '@/hooks/use-books';
+import { isReadableStatus } from '@/lib/books/types';
 
 // Actor type returned by the API (different from the base Story.actors which is string[])
 type Actor = {
@@ -19,16 +21,6 @@ type Actor = {
   displayName: string;
   avatarUrl?: string;
   type: 'child' | 'character';
-};
-
-// Storybook type as returned by the API (with additional resolved fields)
-type Storybook = {
-  id: string;
-  storyId: string;
-  thumbnailUrl?: string;
-  imageStyleName?: string;
-  outputTypeName?: string;
-  imageGeneration?: { status: string };
 };
 
 // Extended story type with resolved fields from API
@@ -56,7 +48,8 @@ export default function KidsStoryReadPage({
 
   // State
   const [story, setStory] = useState<StoryWithResolved | null>(null);
-  const [storybooks, setStorybooks] = useState<Storybook[]>([]);
+  // This story's Books (server pipeline); status comes from the server.
+  const { books } = useBooks({ storyId });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isReading, setIsReading] = useState(false);
@@ -69,13 +62,10 @@ export default function KidsStoryReadPage({
     setLoading(true);
     setError(null);
 
-    Promise.all([
-      apiClient.getStory(storyId),
-      apiClient.getMyStorybooks(storyId).catch(() => []),
-    ])
-      .then(([storyData, storybooksData]) => {
+    apiClient
+      .getStory(storyId)
+      .then((storyData) => {
         setStory(storyData as StoryWithResolved);
-        setStorybooks(storybooksData);
       })
       .catch((err) => {
         console.error('[KidsStoryRead] Error loading story:', err);
@@ -325,69 +315,34 @@ export default function KidsStoryReadPage({
 
         {/* Storybooks and Actions - matching mobile app layout */}
         <div className="mt-8 pt-6 border-t border-amber-200 space-y-3">
-          {/* Existing storybooks with thumbnails */}
-          {storybooks.map((sb) => (
+          {/* This story's Books, with the server's status */}
+          {books.map((book) => (
             <Link
-              key={sb.id}
-              href={`/kids/read/${storyId}?storybookId=${sb.id}`}
+              key={book.id}
+              href={`/kids/book/${book.id}`}
               className="flex items-center gap-3 p-3 bg-emerald-500 rounded-2xl shadow-md hover:bg-emerald-600 transition-colors"
             >
-              {sb.thumbnailUrl ? (
-                <img
-                  src={sb.thumbnailUrl}
-                  alt=""
-                  className="w-14 h-14 rounded-lg object-cover bg-white"
-                />
-              ) : (
-                <div className="w-14 h-14 rounded-lg bg-white/30 flex items-center justify-center">
-                  <span className="text-2xl">📚</span>
-                </div>
-              )}
+              <div className="w-14 h-14 rounded-lg bg-white/30 flex items-center justify-center">
+                <span className="text-2xl">📚</span>
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="text-white font-semibold truncate">
-                  {sb.imageStyleName || 'Picture Book'}
+                  {isReadableStatus(book.status) ? 'Read Picture Book' : book.status === 'failed' ? 'Book got stuck' : 'Book being made…'}
                 </div>
-                {sb.outputTypeName && (
-                  <div className="text-white/80 text-sm truncate">{sb.outputTypeName}</div>
-                )}
               </div>
               <ChevronRight className="h-6 w-6 text-white/80 flex-shrink-0" />
             </Link>
           ))}
 
-          {/* Legacy book button (if exists on story itself) */}
-          {story.imageGeneration?.status === 'ready' && (
-            <Link
-              href={`/kids/read/${storyId}`}
-              className="flex items-center justify-center gap-2 p-4 bg-emerald-500 rounded-2xl shadow-md hover:bg-emerald-600 transition-colors"
-            >
-              <span className="text-2xl">📚</span>
-              <span className="text-white font-semibold text-lg">Read Picture Book</span>
-            </Link>
-          )}
-
-          {/* Generating indicator */}
-          {(story.pageGeneration?.status === 'running' || story.imageGeneration?.status === 'running') && (
-            <div className="flex items-center justify-center gap-3 p-4 bg-amber-200 rounded-2xl">
-              <LoaderCircle className="h-5 w-5 animate-spin text-amber-600" />
-              <span className="text-amber-800 font-medium">Creating your book...</span>
-            </div>
-          )}
-
-          {/* Create book button - always show unless currently generating */}
-          {story.pageGeneration?.status !== 'running' && story.imageGeneration?.status !== 'running' && (
-            <Link
-              href={`/kids/create/${storyId}/style`}
-              className="flex items-center justify-center gap-2 p-4 bg-white border-2 border-amber-500 rounded-2xl shadow-md hover:bg-amber-50 transition-colors"
-            >
-              <Sparkles className="h-5 w-5 text-amber-500" />
-              <span className="text-amber-600 font-semibold text-lg">
-                {storybooks.length > 0 || story.imageGeneration?.status === 'ready'
-                  ? 'Create Another Book'
-                  : 'Create Picture Book'}
-              </span>
-            </Link>
-          )}
+          <Link
+            href={`/kids/create/${storyId}/style`}
+            className="flex items-center justify-center gap-2 p-4 bg-white border-2 border-amber-500 rounded-2xl shadow-md hover:bg-amber-50 transition-colors"
+          >
+            <Sparkles className="h-5 w-5 text-amber-500" />
+            <span className="text-amber-600 font-semibold text-lg">
+              {books.length > 0 ? 'Create Another Book' : 'Create Picture Book'}
+            </span>
+          </Link>
         </div>
       </main>
     </div>

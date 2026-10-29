@@ -3,9 +3,11 @@
 import { use, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFirestore } from '@/firebase';
-import { doc, collection, query, orderBy, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { useDocument, useCollection } from '@/lib/firestore-hooks';
-import type { Story, StoryBookOutput, ChildProfile, PrintLayout, ImageStyle, StoryOutputType } from '@/lib/types';
+import type { Story, StoryBookOutput, ChildProfile, ImageStyle, StoryOutputType } from '@/lib/types';
+import { useBooks, useCreateBook } from '@/hooks/use-books';
+import { BookCard, useBookCatalog } from '@/components/books';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle, Plus, Book, Image as ImageIcon, Printer, Eye } from 'lucide-react';
@@ -28,7 +30,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { calculateImageDimensions } from '@/lib/print-layout-utils';
 
 export default function StoryDetailPage({ params }: { params: Promise<{ storyId: string }> }) {
   const resolvedParams = use(params);
@@ -38,7 +39,10 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
   const { toast } = useToast();
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
+  const { createBook, pending: isCreating } = useCreateBook();
+  const { forms, styles } = useBookCatalog();
+  // Books from the server pipeline for this story (status from the server).
+  const { books, loading: booksLoading } = useBooks({ storyId });
   const [selectedOutputTypeId, setSelectedOutputTypeId] = useState<string>('');
   const [selectedImageStyleId, setSelectedImageStyleId] = useState<string>('');
 
@@ -50,7 +54,8 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
   const childRef = useMemo(() => (firestore && story?.childId ? doc(firestore, 'children', story.childId) : null), [firestore, story?.childId]);
   const { data: childProfile } = useDocument<ChildProfile>(childRef);
 
-  // Load storybooks for this story
+  // Storybooks made before the Book pipeline: read-only, kept until the trial data reset
+  // (their print path still works).
   const storybooksQuery = useMemo(() => {
     if (!firestore) return null;
     return query(
@@ -74,87 +79,23 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
   }, [firestore]);
   const { data: imageStyles } = useCollection<ImageStyle>(imageStylesQuery);
 
-  // Get print layout from the selected output type (not the child)
-  const selectedOutputType = outputTypes?.find(t => t.id === selectedOutputTypeId);
-  const printLayoutId = selectedOutputType?.defaultPrintLayoutId || undefined;
-
-  const handleCreateStorybook = async () => {
-    if (!firestore || !story || !selectedOutputTypeId || !selectedImageStyleId) {
-      toast({ title: 'Error', description: 'Please select output type and image style', variant: 'destructive' });
+  const handleCreateBook = async () => {
+    if (!story || !selectedOutputTypeId || !selectedImageStyleId) {
+      toast({ title: 'Error', description: 'Please choose a book type and an art style', variant: 'destructive' });
       return;
     }
-
-    const outputType = outputTypes?.find(t => t.id === selectedOutputTypeId);
-    const selectedImageStyle = imageStyles?.find(s => s.id === selectedImageStyleId);
-
-    if (!outputType || !selectedImageStyle) {
-      toast({ title: 'Error', description: 'Invalid selection', variant: 'destructive' });
-      return;
-    }
-
-    setIsCreating(true);
     try {
-      // Use print layout from storyOutputType if specified, otherwise unconstrained
-      const outputTypePrintLayoutId = outputType.defaultPrintLayoutId || undefined;
-
-      // Default dimensions: 8x8 inches at 300 DPI = 2400x2400 pixels (unconstrained square)
-      const DEFAULT_IMAGE_WIDTH_PX = 2400;
-      const DEFAULT_IMAGE_HEIGHT_PX = 2400;
-
-      let imageWidthPx: number = DEFAULT_IMAGE_WIDTH_PX;
-      let imageHeightPx: number = DEFAULT_IMAGE_HEIGHT_PX;
-
-      // Only calculate dimensions from layout if a print layout is specified on the output type
-      if (outputTypePrintLayoutId) {
-        const layoutDoc = await getDoc(doc(firestore, 'printLayouts', outputTypePrintLayoutId));
-        const layout = layoutDoc.exists() ? (layoutDoc.data() as PrintLayout) : null;
-        if (layout) {
-          const dimensions = calculateImageDimensions(layout);
-          imageWidthPx = dimensions.widthPx;
-          imageHeightPx = dimensions.heightPx;
-        }
-      }
-
-      // Create new StoryBookOutput document
-      const storybooksRef = collection(firestore, 'stories', storyId, 'storybooks');
-      const newStorybook: Omit<StoryBookOutput, 'id'> = {
-        storyId,
-        childId: story.childId,
-        parentUid: story.parentUid,
-        storyOutputTypeId: selectedOutputTypeId,
-        imageStyleId: selectedImageStyleId,
-        imageStylePrompt: selectedImageStyle.stylePrompt,
-        printLayoutId: outputTypePrintLayoutId || null,
-        imageWidthPx,
-        imageHeightPx,
-        pageGeneration: { status: 'idle' },
-        imageGeneration: { status: 'idle' },
-        title: story.metadata?.title,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
-      const docRef = await addDoc(storybooksRef, newStorybook);
-
-      toast({
-        title: 'Storybook Created!',
-        description: `Creating ${outputType.childFacingLabel} with ${selectedImageStyle.title} style...`,
-      });
-
+      const result = await createBook({ storyId, formId: selectedOutputTypeId, styleId: selectedImageStyleId });
       setIsCreateDialogOpen(false);
       setSelectedOutputTypeId('');
       setSelectedImageStyleId('');
-
-      // Navigate to the generating page for this storybook
-      router.push(`/story/${storyId}/storybook/${docRef.id}/generating`);
+      router.push(`/books/${result.bookId}`);
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create storybook',
+        description: error.message || 'Failed to create the book',
         variant: 'destructive',
       });
-    } finally {
-      setIsCreating(false);
     }
   };
 
@@ -220,27 +161,27 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="mr-2 h-4 w-4" />
-                  Create Storybook
+                  Create Book
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Create a New Storybook</DialogTitle>
+                  <DialogTitle>Create a New Book</DialogTitle>
                   <DialogDescription>
-                    Choose how you want to turn this story into a storybook.
+                    Choose what kind of book and how it looks.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label>Output Type</Label>
+                    <Label>Book type</Label>
                     <Select value={selectedOutputTypeId} onValueChange={setSelectedOutputTypeId}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select output type..." />
+                        <SelectValue placeholder="Select book type..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {outputTypes?.map((type) => (
-                          <SelectItem key={type.id} value={type.id}>
-                            {type.childFacingLabel}
+                        {forms.map((form) => (
+                          <SelectItem key={form.id} value={form.id}>
+                            {form.childFacingLabel || form.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -248,13 +189,13 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Image Style</Label>
+                    <Label>Art style</Label>
                     <Select value={selectedImageStyleId} onValueChange={setSelectedImageStyleId}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select art style..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {imageStyles?.map((style) => (
+                        {styles.map((style) => (
                           <SelectItem key={style.id} value={style.id}>
                             {style.title}
                           </SelectItem>
@@ -263,19 +204,12 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
                     </Select>
                   </div>
 
-                  {printLayoutId && (
-                    <p className="text-sm text-muted-foreground">
-                      Image dimensions determined by output type's print layout
-                    </p>
-                  )}
-                  {!printLayoutId && selectedOutputTypeId && (
-                    <p className="text-sm text-muted-foreground">
-                      Images will be generated at default size (8" × 8" square)
-                    </p>
-                  )}
+                  <p className="text-sm text-muted-foreground">
+                    The number of pages comes from the book type. The book keeps being made if you close this page.
+                  </p>
 
                   <Button
-                    onClick={handleCreateStorybook}
+                    onClick={handleCreateBook}
                     disabled={isCreating || !selectedOutputTypeId || !selectedImageStyleId}
                     className="w-full"
                   >
@@ -285,7 +219,7 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
                         Creating...
                       </>
                     ) : (
-                      'Create Storybook'
+                      'Create Book'
                     )}
                   </Button>
                 </div>
@@ -302,21 +236,45 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
         </CardContent>
       </Card>
 
-      {/* Storybooks List */}
+      {/* Books (server pipeline) */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold">Storybooks</h2>
-
-        {storybooksLoading ? (
+        <h2 className="text-2xl font-bold">Books</h2>
+        {booksLoading ? (
           <div className="flex items-center gap-2 py-8 justify-center">
             <LoaderCircle className="h-5 w-5 animate-spin" />
-            <span>Loading storybooks...</span>
+            <span>Loading books...</span>
           </div>
-        ) : storybooks && storybooks.length > 0 ? (
+        ) : books.length > 0 ? (
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
+            {books.map((book) => (
+              <BookCard key={book.id} book={book} href={`/books/${book.id}`} />
+            ))}
+          </div>
+        ) : (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+              <Book className="h-12 w-12 text-muted-foreground" />
+              <div>
+                <p className="font-medium">No books yet</p>
+                <p className="text-sm text-muted-foreground">Create your first book from this story!</p>
+              </div>
+              <Button onClick={() => setIsCreateDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Book
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Earlier storybooks (before the Book pipeline): read-only */}
+      {!storybooksLoading && storybooks && storybooks.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Earlier storybooks</h2>
           <div className="grid gap-4 md:grid-cols-2">
             {storybooks.map((storybook) => {
               const outputType = outputTypes?.find(t => t.id === storybook.storyOutputTypeId);
               const imageStyle = imageStyles?.find(s => s.id === storybook.imageStyleId);
-
               return (
                 <Card key={storybook.id}>
                   <CardHeader>
@@ -334,62 +292,28 @@ export default function StoryDetailPage({ params }: { params: Promise<{ storyId:
                       {getStatusBadge(storybook)}
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="text-sm text-muted-foreground space-y-1">
-                      <p>Pages: {storybook.pageGeneration?.pagesCount || 0}</p>
-                      {storybook.imageGeneration?.pagesTotal && (
-                        <p>
-                          Images: {storybook.imageGeneration.pagesReady || 0} / {storybook.imageGeneration.pagesTotal}
-                        </p>
-                      )}
-                    </div>
-                  </CardContent>
-                  <CardFooter className="gap-2">
-                    {storybook.imageGeneration?.status === 'ready' ? (
-                      <>
-                        <Button asChild variant="default" size="sm">
-                          <Link href={`/storybook/${storybook.id}?storyId=${storyId}`}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            View
-                          </Link>
-                        </Button>
-                        <Button asChild variant="outline" size="sm">
-                          <Link href={`/storybook/${storybook.id}/order?storyId=${storyId}`}>
-                            <Printer className="mr-2 h-4 w-4" />
-                            Order Print
-                          </Link>
-                        </Button>
-                      </>
-                    ) : (
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/story/${storyId}/storybook/${storybook.id}/generating`}>
-                          View Progress
+                  {storybook.imageGeneration?.status === 'ready' && (
+                    <CardFooter className="gap-2">
+                      <Button asChild variant="default" size="sm">
+                        <Link href={`/storybook/${storybook.id}?storyId=${storyId}`}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          View
                         </Link>
                       </Button>
-                    )}
-                  </CardFooter>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/storybook/${storybook.id}/order?storyId=${storyId}`}>
+                          <Printer className="mr-2 h-4 w-4" />
+                          Order Print
+                        </Link>
+                      </Button>
+                    </CardFooter>
+                  )}
                 </Card>
               );
             })}
           </div>
-        ) : (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
-              <Book className="h-12 w-12 text-muted-foreground" />
-              <div>
-                <p className="font-medium">No storybooks yet</p>
-                <p className="text-sm text-muted-foreground">
-                  Create your first storybook from this story!
-                </p>
-              </div>
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Storybook
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
