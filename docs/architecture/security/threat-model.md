@@ -1,6 +1,6 @@
 # Threat Model
 
-> **Created**: 2026-10-29 · Phase 3 of `../REVIEW_PLAN.md`.
+> **Created**: 2026-10-29 · Phase 3 of `../REVIEW_PLAN.md`. Updated in slice 5.4 (creation findings resolved).
 > Covers the system as deployed. The target architecture (`../target/`) removes several of these
 > risks by design; where a fix belongs to a Phase 5 slice, it is marked so.
 
@@ -59,7 +59,11 @@
 | `my-orders` returned our cost snapshot, the Mixam product spec, process logs and admin ids | Phase 3 |
 | `/api/children` returned soft-deleted children | Phase 3 |
 | Mixam webhook applied updates for a different Mixam order, could move delivered/cancelled orders backwards, and returned 200 on internal errors | Phase 3 |
-| Rules changes were untested | Phase 3: `npm run test:rules` in CI (emulator, 40 cases) |
+| Rules changes were untested | Phase 3: `npm run test:rules` in CI (emulator; 67 cases after slice 5.4) |
+| The AI compiled from a transcript (`storySessions/{id}/messages`) that the browser wrote | Slice 5.4 (5.3 PR #15 + 5.4): turns are written only by the creation routes; `storySessions` is gone and the rules deny every client write under `stories` |
+| Story sessions were created from the browser (8 client paths with different shapes; the web paths had no allowance check and backfilled `ownerParentUid`) | Slice 5.4: Stories are created only by `POST /api/stories` (child ownership, persona, live mode and allowance checked) |
+| Wizard and Friends never passed through compile, so the story allowance was not charged | Slice 5.4: every mode ends via `story.finish`, which consumes one `story_allowance` |
+| Two browser paths created storybooks without the storybook allowance check | Slice 5.2 (#14): Books are created only by `POST /api/books` |
 
 ### Accepted until a Phase 5 slice replaces the code
 
@@ -68,10 +72,7 @@ to be replaced.
 
 | Finding | Severity | Resolved by |
 |---------|----------|-------------|
-| The AI compiles from a transcript (`storySessions/{id}/messages`) that the browser writes; a parent can put anything in it | Medium (affects only their own story) | Creation slice: server-written turns (ADR-0004) |
-| Sessions, children, characters and storybooks are created from the browser | Medium | ADR-0005 slices |
-| Wizard and Friends never pass through compile, so the story allowance is not charged | Medium (billing, trial only) | Creation slice: every mode ends via `story.finish` |
-| Two browser paths create storybooks without the storybook allowance check | Medium (billing, trial only) | Book slice: creation via API only |
+| Children and characters are created from the browser (sessions and storybooks no longer are) | Medium | Characters slice (ADR-0005) |
 | No payment; order creation and Mixam submission have no idempotency | High once real orders flow | Print slice with Stripe (ADR-0012) and idempotent `order.submit` |
 | Regenerated PDFs overwrite files referenced by placed orders | Medium | Book slice: immutable renders (ADR-0010) |
 | `users.roles.isParent` is set at signup by the client, so "parent" means "signed in" | Low: signup is open anyway, and since #7 every user-data route checks ownership, not the role | Nothing further; the role must never gate access to another family's data |
@@ -90,6 +91,9 @@ to be replaced.
   modules are never imported into client components.
 - The browser never writes a field the server trusts. When a rule or a client write changes, add
   a case to `tests/firestore-rules/check-rules.mjs`.
+- Stories, turns, Books and Manuscripts are server-written only: clients read them (owner-filtered
+  listeners or the read routes) and change them only through the routes, with an idempotency key
+  per user action.
 - Webhooks verify a signature, accept only the expected object, and never move an object out of a
   final state.
 - Tokens travel in the `Authorization` header only.

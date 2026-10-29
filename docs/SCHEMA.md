@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-10-29 (Phase 5.3: target-shaped Stories (`schemaVersion: 2`, `ownerUid`, `modeId`, `cast`, `modeState`…) and the `stories/{id}/turns` subcollection, written by the new creation routes — present, the UI switches in 5.4; AI-introduced characters get `origin: 'story'` / `originStoryId`; rules: owner-read, no client writes on target Stories and turns, legacy owner updates unchanged; `jobs.kind` adds `story.finish`. Phase 5.2: the web app and kids PWA read `books`, `manuscripts` and their pages directly (owner-filtered queries) and create Books through `POST /api/books`; `stories/*/storybooks` is legacy and read-only (no route writes it any more except the old print/share path), kept until the trial data reset. Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-10-29 (Phase 5.4: `stories` holds Stories (`schemaVersion: 2`) only and is server-written only — the owner reads a Story and its `turns`; `storySessions` (with `messages`, `events`), `children/{id}/sessions`, the legacy story fields and the `stories/{id}/storybooks` subcollection are removed (trial-data reset at deploy, `docs/DEPLOYMENT.md` §10; rules deny every client access to them); `systemConfig/kids-flows` removed; `storyGenerators` is read through `GET /api/creation-modes`. Phase 5.3: target-shaped Stories (`schemaVersion: 2`, `ownerUid`, `modeId`, `cast`, `modeState`…) and the `stories/{id}/turns` subcollection, written by the new creation routes — present, the UI switches in 5.4; AI-introduced characters get `origin: 'story'` / `originStoryId`; rules: owner-read, no client writes on target Stories and turns, legacy owner updates unchanged; `jobs.kind` adds `story.finish`. Phase 5.2: the web app and kids PWA read `books`, `manuscripts` and their pages directly (owner-filtered queries) and create Books through `POST /api/books`; `stories/*/storybooks` is legacy and read-only (no route writes it any more except the old print/share path), kept until the trial data reset. Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -163,171 +163,32 @@ Story characters with traits, owned by parents.
 
 ---
 
-### `storySessions`
+### `storySessions` — removed (slice 5.4)
 
-Interactive story creation sessions.
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | Yes | Document ID |
-| `childId` | string | Yes | Child's document ID |
-| `parentUid` | string | Yes | Parent's Firebase UID |
-| `status` | 'in_progress' \| 'completed' | Yes | Session status |
-| `currentPhase` | string | Yes | 'warmup' \| 'story' \| 'ending' \| 'final' \| 'wizard' \| 'gemini3' \| 'gemini4' \| 'friends' \| 'completed' |
-| `currentStepIndex` | number | Yes | Current step in flow |
-| `storyTitle` | string | No | Story title |
-| `storyVibe` | string | No | Story mood/vibe |
-| `storyTypeId` | string | No | Selected story type |
-| `arcStepIndex` | number | No | Current arc step |
-| `mainCharacterId` | string | No | Main character ID |
-| `supportingCharacterIds` | string[] | No | Supporting character IDs |
-| `storyMode` | string | No | Story generator ID (e.g., 'wizard', 'friends', or dynamic generator IDs) |
-| `actors` | string[] | No | Actor IDs ($$id$$ placeholders) |
-| `worldState` | WorldState | No | World state from the last beat (presentActorIds, currentLocation) |
-| `wizardAnswers` | object[] | No | Wizard mode Q&A state (question, answer pairs) |
-| `wizardLastQuestion` | string | No | Wizard mode: last question asked |
-| `wizardLastChoices` | object[] | No | Wizard mode: last choices offered |
-| `friendsPhase` | FriendsPhase | No | Friends mode: current phase |
-| `friendsProposedCharacterIds` | string[] | No | Friends mode: AI-proposed character IDs |
-| `friendsSelectedCharacterIds` | string[] | No | Friends mode: child-confirmed character IDs |
-| `friendsScenarios` | FriendsScenario[] | No | Friends mode: generated scenario options |
-| `friendsSelectedScenarioId` | string | No | Friends mode: selected scenario ID |
-| `friendsSynopses` | FriendsSynopsis[] | No | Friends mode: generated synopsis options |
-| `friendsSelectedSynopsisId` | string | No | Friends mode: selected synopsis ID |
-| `progress` | object | No | Phase completion timestamps |
-| `storyAllowanceConsumed` | boolean | No | Set true once `story_allowance` has been consumed for this session at compile time (idempotency guard; prevents double-charging on retried/timed-out compiles) |
-| `storyAllowanceConsumedAt` | timestamp | No | When `story_allowance` was consumed for this session |
-| `storyAllowanceRemaining` | number | No | Remaining `story_allowance` (in the satisfying scope) recorded at consume time, for diagnostics |
-| `createdAt` | timestamp | Yes | Creation time |
-| `updatedAt` | timestamp | Yes | Last update time |
-
-**Subcollections**:
-- `messages/{messageId}` - Chat messages (see `ChatMessage` type)
-- `events/{eventId}` - Session operational/debug events (`event`, `status`, `source`, `attributes`, `createdAt`, `expireAt`). **Bounded by TTL**: each doc sets `expireAt = now + 90d`. A Firestore TTL policy must be enabled on the `events` collection-group keyed on `expireAt`:
-  `gcloud firestore fields ttls update expireAt --collection-group=events --enable-ttl`
-
-**Security**: Parents can CRUD their own sessions; admins have full access.
+The session documents (with `messages` and `events`) and their per-child mirror
+`children/{childId}/sessions` belonged to the retired creation flows. Every client now creates Stories
+through the creation routes; the trial-data reset deletes these collections and the rules deny all
+client access. The kept print and order routes (print slice) still look the old sessions up and find
+nothing.
 
 ---
 
-### `stories`
+### `stories` (Story) and `stories/{id}/turns`
 
-Compiled story content (legacy shape, written by today's flows; no `schemaVersion`). Target-shaped
-Stories share the collection until the trial-data reset: see
-[Target model: `stories` (Story)](#target-model-stories-story-and-storiesidturns).
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | Yes | Document ID |
-| `storySessionId` | string | Yes | Source session ID |
-| `childId` | string | Yes | Child's document ID |
-| `parentUid` | string | Yes | Parent's Firebase UID |
-| `storyText` | string | Yes | Full story text |
-| `storyMode` | string | No | Story generator ID that created this story (copied from session) |
-| `metadata` | object | No | Title, vibe, paragraphs, characterIds, etc. |
-| `status` | 'text_ready' \| 'images_pending' | No | Story status |
-| `titleGeneration` | object | No | Title generation status |
-| `synopsis` | string | No | AI-generated synopsis |
-| `actors` | string[] | No | Actor IDs used in story |
-| `locationRegistry` | object | No | Maps `locationKey → canonical visual description`; built at pagination time for cross-scene consistency |
-| `actorAvatarUrl` | string | No | Composite avatar URL |
-| `audioGeneration` | object | No | Audio generation status |
-| `audioUrl` | string | No | Full audio narration URL |
-| `audioMetadata` | object | No | Audio file metadata |
-| `selectedImageStyleId` | string | No | Image style ID |
-| `selectedImageStylePrompt` | string | No | Image style prompt |
-| `deletedAt` | timestamp | No | Soft delete timestamp |
-| `deletedBy` | string | No | UID of user who deleted |
-| `createdAt` | timestamp | Yes | Creation time |
-| `updatedAt` | timestamp | Yes | Last update time |
-
-**Subcollections**:
-- `storybooks/{storybookId}` - Storybook outputs (see below)
-- `storybooks/{storybookId}/pages/{pageId}` - Storybook pages (see `StoryOutputPage`)
-
-**`StoryOutputPage` key fields** (pages subcollection):
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `pageNumber` | number | Yes | Sequential page number |
-| `kind` | string | Yes | `cover_front`, `cover_back`, `title_page`, `text`, `image`, `blank` |
-| `bodyText` | string | No | Story text for this page (raw, with `$$id$$` placeholders) |
-| `displayText` | string | No | Resolved text with character names substituted |
-| `entityIds` | string[] | No | Actor IDs referenced on this page |
-| `imageScene` | object | No | **Structured scene** — `{ locationKey, locationDescription, actors[], atmosphere }`. Source of truth for deterministic image prompt assembly |
-| `imageDescription` | string | No | Legacy freeform scene description (used when `imageScene` is absent) |
-| `imageUrl` | string | No | Generated image URL |
-| `imageStatus` | string | No | `pending`, `generating`, `ready`, `error` |
-| `lastEditedAt` | timestamp | No | Sprint W2-C: last parent edit (the edit route was removed in slice 5.2) |
-| `lastEditedBy` | string | No | Sprint W2-C: UID of the user who last edited this page |
-
-> **Parent page edits (Sprint W2-C, legacy)**: the removed `storybookV2/pageEdit` route wrote the
-> parent's wording to BOTH `bodyText` and `displayText`. Existing edits stay in the data; nothing
-> writes these fields any more.
-- `shareTokens/{tokenId}` - Share links (see `StoryBookShareToken`)
-
-**Security**: Parents can CRUD their own stories; admins have full access.
-
----
-
-### `stories/{storyId}/storybooks/{storybookId}` (Subcollection) — legacy, read-only
-
-A specific rendering of a story with output type, image style, and layout, made by the `storybookV2`
-routes that slice 5.2 deleted. **Nothing creates or generates these any more**: new books are
-`books/{bookId}` (below). Existing trial storybooks stay readable to parents (`/storybook/{id}`,
-`/api/parent/storybooks`, `/api/stories/{id}/storybooks`) and keep their print, order and share path
-(`storyBook/printable`, `printStoryBooks`, `printOrders`, `storyBook/share`) until the data reset.
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | Yes | Document ID |
-| `storyId` | string | Yes | Parent story ID |
-| `childId` | string | Yes | Child ID |
-| `parentUid` | string | Yes | Parent's Firebase UID |
-| `storyOutputTypeId` | string | Yes | Output type (e.g., "picture-book") |
-| `imageStyleId` | string | Yes | Image style ID |
-| `imageStylePrompt` | string | Yes | Style prompt for image generation |
-| `printLayoutId` | string | No | Print layout ID (determines image dimensions) |
-| `imageWidthPx` | number | No | Width in pixels (layoutWidth × 300 DPI) |
-| `imageHeightPx` | number | No | Height in pixels (layoutHeight × 300 DPI) |
-| `pageGeneration` | object | Yes | Page generation status |
-| `imageGeneration` | object | Yes | Image generation status |
-| `exemplarGeneration` | object | No | Character exemplar generation status |
-| `artStatus` | StoryBookArtStatus | No | Degraded-book rollup written by the former `storybookV2/images` route (see below) |
-| `actorExemplarUrls` | map | No | Map of actorId → exemplar image URL |
-| `isFinalized` | boolean | No | Whether book is finalized |
-| `isLocked` | boolean | No | Whether book is locked for edits |
-| `finalization` | StoryBookFinalization | No | Finalization/print details |
-| `title` | string | No | Override story title |
-| `thumbnailUrl` | string | No | Cached cover image URL for fast list loading |
-| `deletedAt` | timestamp | No | Soft delete timestamp |
-| `deletedBy` | string | No | UID of user who deleted |
-| `createdAt` | timestamp | Yes | Creation time |
-| `updatedAt` | timestamp | Yes | Last update time |
-
-**Security**: Parents can CRUD their own storybooks; admins have full access.
-
-**`artStatus` (StoryBookArtStatus)** — the degraded-book contract (canonical derivation:
-`deriveStorybookArtStatus` in `src/lib/storybook-status.ts`):
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `completeness` | 'none' \| 'in_progress' \| 'complete' \| 'degraded' \| 'failed' | Book-level art rollup derived from per-page `imageStatus` |
-| `pagesTotal` | number | Illustratable pages (excludes title/blank/promptless) |
-| `pagesReady` | number | Pages with ready art |
-| `pagesFailed` | number | Pages whose art failed |
-| `pagesPending` | number | Pages not yet attempted / generating |
-| `failedPageIds` | string[] | IDs of failed pages, for targeted retry |
-| `isViewable` | boolean | Book has pages — readable even with partial/missing art |
-| `isOrderable` | boolean | Complete or degraded (some art) — finalize/order allowed |
-| `recoveredAt` | timestamp | Set when a previously degraded/failed book later completed |
-| `recoveryNotified` | boolean | False until the user has seen the recovery notification |
+See [Story and turns](#target-model-stories-story-and-storiesidturns) below: every document in
+`stories` is a Story written by the creation routes (`schemaVersion: 2`). The legacy fields of the
+retired flows (`parentUid`, `storyText`, `metadata.title`, `storyMode`, `actors`, `audioUrl`,
+`actorAvatarUrl`, `selectedImageStyle*`, `pageGeneration` / `imageGeneration`, soft delete) and the
+`stories/{storyId}/storybooks` subcollection (with its pages, made by the `storybookV2` routes
+removed in slice 5.2) are removed by the trial-data reset. The kept print, order and share code for
+old storybooks (`printStoryBooks`, `storyBook/printable`, `storyBook/share`, `storyBook/{id}`) is
+unchanged until the print slice; it finds no storybooks after the reset.
 
 ---
 
 ### `stories/{storyId}/shareTokens/{tokenId}` (Subcollection)
 
-Share tokens for public storybook viewing.
+Share tokens for public storybook viewing (old storybooks; written only by the kept `/api/storyBook/share` route with the Admin SDK — no client rules). Removed with the trial-data reset; the print slice rebuilds sharing for Books.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -348,19 +209,20 @@ Share tokens for public storybook viewing.
 | `revokedAt` | timestamp | No | Revocation time |
 | `revokedBy` | string | No | UID of revoker |
 
-**Security**: Accessible via public API endpoint with validation; parents can create/revoke for their own stories.
+**Security**: server-only (Admin SDK); no client reads or writes.
 
 ---
 
 ### Target model: `stories` (Story) and `stories/{id}/turns`
 
-**Present on the server since slice 5.3; the UI switches to it in slice 5.4.** One `stories/{storyId}`
+**Written by the creation routes since slice 5.3; every client uses it since slice 5.4.** One `stories/{storyId}`
 document is both the creation in progress and the finished story (ADR-0004), written only by the
 creation routes and the `story.finish` job (`docs/architecture/target/creation.md`,
-`slices/5.3-creation-server.md`). It lives in the same `stories` collection as today's legacy
-documents (above) until the trial-data reset; **`schemaVersion: 2`** tells them apart (the Book
-pipeline's `story-source.ts` and the rules read both shapes). Schema: `storySchema` and `turnSchema`
-in `src/server/data/schemas/story.ts`. Id `st_<hash(ownerUid, idempotencyKey)>`.
+`slices/5.3-creation-server.md`, `slices/5.4-creation-clients.md`). **`schemaVersion: 2`** marks a
+Story; a document without it is not a Story (the Book pipeline's `story-source.ts` and the read
+routes treat it as not found). Schema: `storySchema` and `turnSchema` in
+`src/server/data/schemas/story.ts`. Id `st_<hash(ownerUid, idempotencyKey)>`. There is no client
+rename: titles come from the mode or `story.finish`.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -407,9 +269,12 @@ The creation conversation, server-written. Doc id = `index` zero-padded (`0000`,
 `childId` (scoped to the hero), `isParentGenerated: false`, `photos: []` and no avatar — in the same
 transaction as the turn that introduced them.
 
+**Read by clients**: the web app and kids PWA listen to `stories/{id}` and its `turns` (filtered on
+`ownerUid`) while a Story is being created; lists and readers (and mobile) use `GET /api/stories` and
+`GET /api/stories/{id}`, which render title, synopsis, text and prompts with names on the server.
+
 **Security**: owner reads the Story and its turns (`ownerUid == request.auth.uid`; lists filter on
-`ownerUid`); no client writes (create, update and turns are admin/server only). Legacy documents keep
-their limited owner updates until slice 5.4.
+`ownerUid`); no client writes at all (create, update, delete and turns are admin/server only).
 
 ### Target model: `manuscripts`, `books`, `jobs`
 
@@ -430,8 +295,8 @@ so one per shape.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `ownerUid` | string | Story owner (`ownerUid`; legacy stories: `parentUid`) |
-| `storyId` | string | `stories/{storyId}` (either shape) |
+| `ownerUid` | string | Story owner |
+| `storyId` | string | `stories/{storyId}` (a `complete` Story) |
 | `childId` | string | From the story (persona scope) |
 | `form` | string | Form id (`storyOutputTypes` doc id) |
 | `readingLevel` | string | From the Form (`ageRange`, else `all`) |
@@ -788,7 +653,7 @@ Story format types (Adventure, Mystery, etc.).
 
 ### `storyGenerators`
 
-Story generator configurations. Defines capabilities and API endpoints for each story generation mode (wizard, gemini3, gemini4, beat, friends). The `StoryBrowser` component uses these documents to adapt its UI to each generator's capabilities. Both the `/story/start` page and the kids PWA fetch available generators via `GET /api/kids-generators` (filtered by `status='live'` and `enabledForKids=true`), which serves a user-safe presentation: model jargon hidden, internal fields (prompts, model config, apiEndpoint) stripped, and one generator flagged `recommended`.
+Creation mode configurations, read through the CreationMode adapter (`src/server/creation/modes.ts`): `wizard` ← `wizard`, `freeplay` ← `gemini3`, `guided` ← `gemini4`, `friends` ← `friends`, `adventure` ← `beat`. Every client's mode chooser uses `GET /api/creation-modes` (modes with `status='live'` and `enabledForKids=true`), which serves a user-safe presentation: model jargon hidden, internal fields (prompts, model config) stripped, and one mode flagged `recommended`. `capabilities`, `apiEndpoint` and `backgroundMusic` are no longer read by any client (the engines own each mode's behaviour).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -823,8 +688,8 @@ Story generator configurations. Defines capabilities and API endpoints for each 
 | `promptConfig` | Record<string, PromptConfig> | No | Per-prompt model and temperature overrides |
 | `promptConfig.[key].model` | AIModelName | No | AI model for this specific prompt |
 | `promptConfig.[key].temperature` | number | No | Temperature for this specific prompt |
-| `kidFriendlyName` | string | No | Optional admin override: user-facing name served by `/api/kids-generators` (takes precedence over built-in jargon-free overrides) |
-| `kidFriendlyDescription` | string | No | Optional admin override: user-facing description served by `/api/kids-generators` |
+| `kidFriendlyName` | string | No | Optional admin override: user-facing name served by `/api/creation-modes` (takes precedence over built-in jargon-free overrides) |
+| `kidFriendlyDescription` | string | No | Optional admin override: user-facing description served by `/api/creation-modes` |
 | `recommendedForKids` | boolean | No | Optional admin flag: marks this generator as the "Recommended for first-timers" option in choosers (defaults to the wizard when unset) |
 | `createdAt` | timestamp | No | Creation time |
 | `updatedAt` | timestamp | No | Last update time |
@@ -837,7 +702,7 @@ Story generator configurations. Defines capabilities and API endpoints for each 
 - **gemini4**: `systemPrompt`, `phase_opening`, `phase_setting`, `phase_characters`, `phase_conflict`, `phase_action`, `phase_resolution`, `phase_development`
 - **friends**: `characterProposal`, `scenarioGeneration`, `synopsisGeneration`, `storyGeneration`
 
-**Standard API Response Format**: All generators must return `StoryGeneratorResponse` (see `src/lib/types.ts`).
+**Responses**: every mode answers through the creation routes as turns (`expects`, options with `display`); see `turns` above.
 
 **Security**: Read by all authenticated users; write by admins only.
 
@@ -1049,17 +914,6 @@ System-wide configuration documents.
 |-------|------|----------|-------------|
 | `imagePrompt` | string | Yes | Global prompt prepended to all image generation requests |
 | `enabled` | boolean | Yes | When true, use custom prompt; when false, no global prefix |
-| `updatedAt` | timestamp | No | Last update time |
-| `updatedBy` | string | No | Email of last updater |
-
-#### `systemConfig/kids-flows`
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `wizardEnabled` | boolean | Yes | Enable wizard flow |
-| `chatEnabled` | boolean | Yes | Enable chat flow |
-| `gemini3Enabled` | boolean | Yes | Enable Gemini 3 flow |
-| `gemini4Enabled` | boolean | Yes | Enable Gemini 4 flow |
-| `friendsEnabled` | boolean | Yes | Enable "Fun with my friends" flow |
 | `updatedAt` | timestamp | No | Last update time |
 | `updatedBy` | string | No | Email of last updater |
 
@@ -1473,7 +1327,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 'he/him' | 'she/her' | 'they/them'
 ```
 
-### `ChatMessage`
+### `ChatMessage` (retired with `storySessions`; kept in `src/lib/types.ts` for old type references)
 ```typescript
 {
   id: string;
@@ -1572,8 +1426,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 | `users` | Owner, Admin | Owner, Admin | Owner cannot change `roles` or PIN fields (`pinHash`, `pinSalt`, `pinUpdatedAt`, `pinFailedAttempts`, `pinLockedUntil`); signup may only create default parent roles |
 | `children` | Owner, Admin | Owner, Admin | Soft-delete hidden from non-admins; `ownerParentUid` immutable; `help-*` docs admin-only |
 | `characters` | Owner, Admin | Owner, Admin | Soft-delete hidden from non-admins; `ownerParentUid` immutable; `help-*` docs admin-only |
-| `storySessions` | Owner, Admin | Owner, Admin | Including subcollections. Owner cannot set `storyAllowanceConsumed`, `compileInProgress`, `compileStartedAt`, or change `parentUid` |
-| `stories` | Owner, Admin | Admin; owner may update only `metadata.title`, `selectedImageStyleId`, `selectedImageStylePrompt`, soft-delete fields | `storybooks`: owner creates idle storybooks (no lock/finalization/art/generation fields) and may only soft-delete or set `artStatus.recoveryNotified`; pages, share tokens and other subcollections admin/server-only |
+| `stories` | Owner (`ownerUid`), Admin | Admin (server) only | `turns`: owner reads (lists filter on `ownerUid`), server writes. No other subcollection is readable or writable by a client; `storySessions` and `children/*/sessions` have no rules (deny) |
 | `printOrders` | Owner, Admin | Admin | Created and updated by server routes (Admin SDK) only |
 | `printStoryBooks` | Owner, Admin | Owner (create draft, delete), Admin (all) | Owner creates only with `pdfStatus: 'draft'` and no PDF fields; layout and PDFs are server-written |
 | `printProducts` | Authenticated | Admin | |

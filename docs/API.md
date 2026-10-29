@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-10-29 (Phase 5.3: new `POST /api/stories`, `POST /api/stories/[storyId]/turns`, `POST /api/stories/[storyId]/abandon`, `POST /api/stories/[storyId]/finish` — Story creation in five modes on the server, not yet used by the UI; `POST /api/manuscripts` and `POST /api/books` also accept Stories made by these routes once `complete`. Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-10-29 (Phase 5.4: every client creates Stories with the creation routes; new `GET /api/creation-modes`; `GET /api/stories?childId` and `GET /api/stories/[storyId]` rewritten for Stories (names resolved on the server; the latter also returns the turns); removed `POST /api/storyWizard`, `/api/gemini3`, `/api/gemini4`, `/api/storyFriends`, `/api/storyBeat`, `/api/storyEnding`, `/api/storyCompile`, `/api/storySession`, `/api/warmupReply`, `/api/ai-warmup`, `/api/storyArc`, `/api/characterTraits`, `/api/characters/create`, `/api/storyBook/audio`, `/api/storyBook/actorAvatar`, `GET /api/kids-flows`, `GET /api/kids-generators`, `GET/PUT /api/admin/system-config/kids-flows`, `GET /api/admin/sessions`, `GET /api/parent/storybooks`, `POST /api/parent/storybooks/thumbnails`, `GET /api/stories/[storyId]/storybooks` and its `pages` route; api-client: `listCreationModes`, `createStory`, `sendTurn`, `abandonStory`, `retryFinish`. Phase 5.3: new `POST /api/stories`, `POST /api/stories/[storyId]/turns`, `POST /api/stories/[storyId]/abandon`, `POST /api/stories/[storyId]/finish` — Story creation in five modes on the server, not yet used by the UI; `POST /api/manuscripts` and `POST /api/books` also accept Stories made by these routes once `complete`. Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -17,57 +17,36 @@ StoryPic Kids API uses Next.js App Router API routes. All endpoints require auth
 
 ## API Client Library
 
-For child-facing functionality, use the typed API client (`@storypic/api-client`) instead of direct fetch calls.
-
-### Installation
-
-The API client is available as a workspace package:
+`@storypic/api-client` (`packages/api-client`) is the typed client for child-facing operations. The
+web app calls the routes directly with `authFetch` (`src/lib/stories/api.ts`, `src/lib/books/api.ts`);
+the mobile app carries its own copy with the same methods (`mobile/src/contexts/ApiClientContext.tsx`).
 
 ```typescript
 import { StoryPicClient } from '@storypic/api-client';
-```
-
-### React Integration
-
-Use the `ApiClientProvider` context in React components:
-
-```typescript
-import { useApiClient, useRequiredApiClient } from '@/contexts/api-client-context';
-
-// Returns null if user not authenticated
-const client = useApiClient();
-
-// Throws if user not authenticated (use in components that require auth)
-const client = useRequiredApiClient();
+const client = new StoryPicClient({ baseUrl: '/api', getToken: () => user.getIdToken() });
 ```
 
 ### Client Methods
 
-The `StoryPicClient` provides typed methods for child-facing operations:
-
-**Story Creation:**
-- `sendWizardChoice(sessionId, optionId)` - Wizard generator
-- `sendBeatChoice(sessionId, optionId, moreOptions)` - Beat generator
-- `sendFriendsAction(sessionId, optionId, action, characterIds)` - Friends generator
-- `sendGemini3Choice(sessionId, optionId, userMessage)` - Gemini3 generator
-- `sendGemini4Choice(sessionId, optionId, userMessage)` - Gemini4 generator
-- `compileStory(sessionId)` - Compile story
+**Story creation** (one key per user action, repeated on a retry of that action):
+- `listCreationModes()` - `GET /api/creation-modes`
+- `createStory({ childId, modeId, castIds?, storyTypeId?, idempotencyKey })` - `POST /api/stories`
+- `sendTurn(storyId, input, idempotencyKey)` - `POST /api/stories/{id}/turns`; `input` is
+  `{ kind: 'choice', optionId }`, `{ kind: 'text', text }` or `{ kind: 'castPick', castIds }`
+- `abandonStory(storyId)`, `retryFinish(storyId)`
 
 **Books:**
 - `createBook({ storyId, formId, styleId, idempotencyKey })` - `POST /api/books`; make the key once per
   user action and repeat it on a retry of that action. Progress is read from Firestore (`books/{id}`),
   not polled through the client.
 
-**Discovery:**
-- `getGenerators()` - Get available story generators
-- `getOutputTypes()` - Get available story output types
+**Catalog:**
+- `getOutputTypes()` - Get available story output types (Forms)
 - `getImageStyles()` - Get available image styles
 
 **Reading/Viewing:**
-- `getMyStories(childId)` - Get stories for a child (with resolved placeholders)
-- `getStory(storyId)` - Get single story (with resolved placeholders and actors)
-- `getMyStorybooks(storyId, includeAll?)` - Get storybooks for a story (old storybooks, read-only)
-- `getStorybookPages(storyId, storybookId)` - Get pages for an old storybook
+- `getMyStories(childId)` - `GET /api/stories?childId=` (names resolved, server status)
+- `getStory(storyId)` - `GET /api/stories/{id}` (the Story and its turns)
 
 **TTS:**
 - `speak(text, voiceId, childId)` - Generate text-to-speech audio
@@ -80,7 +59,6 @@ The `StoryPicClient` provides typed methods for child-facing operations:
 - [Parent Routes](#parent-routes)
 - [Children Routes](#children-routes)
 - [Characters Routes](#characters-routes)
-- [Story Session Routes](#story-session-routes)
 - [Storybook Routes](#storybook-routes)
 - [Story Creation Routes](#story-creation-routes)
 - [Manuscript and Book Routes](#manuscript-and-book-routes)
@@ -117,7 +95,7 @@ Authorization: Bearer <firebase_id_token>
 |--------|-------------|
 | 401 | Unauthorized - Missing or invalid token |
 | 403 | Forbidden - Insufficient permissions |
-| 403 `PERSONA_SCOPE_MISMATCH` | A valid child-persona cookie is present and the request's effective child does not match it. Story/book chokepoints only (`storySession`, `storyWizard`, `storyCompile`, `/api/stories/**` (POST), `/api/manuscripts`, `/api/books/**`). Absent/invalid cookie = legacy behaviour, so bearer-only clients (mobile, api-client) never see this. |
+| 403 `PERSONA_SCOPE_MISMATCH` | A valid child-persona cookie is present and the request's effective child does not match it. Story/book chokepoints only (`/api/stories/**` (POST and GET), `/api/manuscripts`, `/api/books/**`). Absent/invalid cookie = legacy behaviour, so bearer-only clients (mobile, api-client) never see this. |
 | 404 | Not Found - Resource doesn't exist |
 | 500 | Internal Server Error |
 
@@ -227,98 +205,6 @@ Clears the persona cookie. **No authentication required by design**: it runs on 
 
 ---
 
-### GET `/api/parent/storybooks`
-
-Get all storybooks for the authenticated parent, grouped by child. Optimized for fast loading - returns document-level data without querying pages.
-
-**Query Parameters**:
-- `includeThumbnails` (boolean, optional) - If true, queries pages to get thumbnails (slower). Default: false.
-
-**Response**: `200 OK`
-```json
-{
-  "children": [
-    {
-      "childId": "child123",
-      "displayName": "Emma",
-      "avatarUrl": "https://...",
-      "storybooks": [
-        {
-          "storybookId": "sb123",
-          "storyId": "story456",
-          "childId": "child123",
-          "title": "The Dragon Adventure",
-          "thumbnailUrl": null,
-          "imageStyleId": "watercolor",
-          "printLayoutId": "mixam-8x10-hardcover",
-          "createdAt": "2026-01-15T10:30:00.000Z",
-          "imageGenerationStatus": "ready",
-          "pageGenerationStatus": "ready",
-          "audioStatus": "none",
-          "isNewModel": true,
-          "printablePdfUrl": null,
-          "printableCoverPdfUrl": null,
-          "printableInteriorPdfUrl": null,
-          "artCompleteness": "degraded",
-          "artPagesReady": 10,
-          "artPagesTotal": 12,
-          "artPagesFailed": 2,
-          "isOrderable": true
-        }
-      ]
-    }
-  ],
-  "totalBooks": 5
-}
-```
-
-**Degraded-book rollup (Sprint W2-C)**: `artCompleteness` / `artPages*` / `isOrderable` are computed
-server-side from the persisted `storybook.artStatus` (written by the images route). They are absent
-on books that predate the contract. Clients must use `isOrderable` to gate print actions — degraded
-(partial-art) books remain orderable, subject to the checkout confirmation (see
-`POST /api/printOrders/mixam`).
-
----
-
-### POST `/api/parent/storybooks/thumbnails`
-
-Batch fetch thumbnails and audio status for storybooks. Called after initial list load for incremental loading.
-
-**Request Body**:
-```json
-{
-  "storybooks": [
-    {
-      "storybookId": "sb123",
-      "storyId": "story456",
-      "isNewModel": true
-    }
-  ]
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "thumbnails": [
-    {
-      "storybookId": "sb123",
-      "thumbnailUrl": "https://storage.googleapis.com/...",
-      "audioStatus": "ready",
-      "pagesWithAudio": 12,
-      "totalPages": 12,
-      "calculatedImageStatus": "ready"
-    }
-  ]
-}
-```
-
-**Side Effects**: Caches thumbnailUrl on storybook document for future fast loads.
-
-**Limits**: Maximum 50 storybooks per request.
-
----
-
 ## Children Routes
 
 ### GET `/api/children`
@@ -359,39 +245,6 @@ Upload photos for a child profile. Triggers image description generation in back
 ---
 
 ## Characters Routes
-
-### POST `/api/characters/create`
-
-**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist. The character's `ownerParentUid` and `childId` are taken from the session; `parentUid`/`childId` in the body are ignored and no longer required.
-
-Create a supporting character during a story session. An AI call generates pronouns, description, likes and dislikes; the character is added to the session's `supportingCharacterIds`.
-
-**Request Body**:
-```json
-{
-  "sessionId": "session-id",
-  "characterLabel": "a friendly golden retriever",
-  "characterName": "Fluffy",
-  "characterType": "Pet",
-  "storyContext": "Story so far...",
-  "childAge": 5,
-  "generateAvatar": false
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `sessionId` | string | Yes | Story session the character joins; must belong to the caller |
-| `characterLabel` | string | Yes | How the story refers to the character |
-| `characterName` | string | No | Display name (derived from the label if omitted) |
-| `characterType` | string | Yes | One of `Family`, `Friend`, `Pet`, `Toy`, `Other` |
-| `storyContext` | string | No | Story text used to shape the profile |
-| `childAge` | number | No | Child's age, for age-appropriate traits |
-| `generateAvatar` | boolean | No | Hint for the client to call `/api/generateCharacterAvatar` afterwards |
-
-**Response**: `200 OK` with `{ "ok": true, "characterId": "abc123", ... }` (the flow's result).
-
----
 
 ### POST `/api/characters/photos`
 
@@ -436,571 +289,11 @@ Manually trigger regeneration of the image description for a child or character.
 
 ---
 
-### POST `/api/characterTraits`
-
-**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist. The character must also belong to the caller (`characters.ownerParentUid`).
-
-Generate character trait suggestions using AI.
-
-**Request Body**:
-```json
-{
-  "characterLabel": "a friendly squirrel",
-  "sessionId": "session-id"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "question": "What makes Nutsy special?",
-  "suggestedTraits": ["loves acorns", "very curious", "always helpful"]
-}
-```
-
----
-
-## Story Session Routes
-
-> These mode-specific routes are what today's clients call. Their replacement, the three
-> [Story Creation Routes](#story-creation-routes), is on the server since slice 5.3; the clients
-> switch in slice 5.4, which deletes these routes.
-
-All story generation endpoints return a `StoryGeneratorResponse` object with the following common fields:
-
-### StoryGeneratorResponse Format
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `ok` | boolean | Success status |
-| `sessionId` | string | Story session ID |
-| `headerText` | string? | Story continuation (beat mode) - with $$placeholders$$ |
-| `headerTextResolved` | string? | Story continuation resolved for display |
-| `question` | string | Current question/prompt - with $$placeholders$$ |
-| `questionResolved` | string? | Question resolved for display |
-| `options` | array | Available choices |
-| `isStoryComplete` | boolean? | True when story is finished |
-| `finalStory` | string? | Complete story text when finished |
-| `progress` | number? | Story progress (0.0-1.0), monotonically increasing |
-| `debug` | object? | Debug information (dev only) |
-| `errorMessage` | string? | Error description when ok=false |
-
-**Progress Field**: The `progress` value (0.0 to 1.0) estimates how far through the story generation we are. This is used to display visual progress indicators to children. Progress is monotonically increasing - it never decreases during a story session.
-
----
-
-### POST `/api/warmupReply`
-
-**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
-
-Generate warmup phase response.
-
-**Request Body**:
-```json
-{
-  "sessionId": "session-id",
-  "childId": "child-id",
-  "userMessage": "I want an adventure story!"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "text": "Great choice! Let's create an adventure...",
-  "options": [
-    {"id": "opt1", "text": "In a magical forest"},
-    {"id": "opt2", "text": "In outer space"}
-  ]
-}
-```
-
----
-
-### POST `/api/storyBeat`
-
-**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
-
-Generate story beat with continuation and options. Uses the standard `StoryGeneratorResponse` format for StoryBrowser compatibility.
-
-**Request Body**:
-```json
-{
-  "sessionId": "session-id",
-  "selectedOptionId": "A",
-  "moreOptions": false
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `sessionId` | string | Yes | Story session ID |
-| `selectedOptionId` | string | No | Option ID from previous beat |
-| `moreOptions` | boolean | No | Request alternative options |
-
-**Response**: `200 OK` (StoryGeneratorResponse format)
-```json
-{
-  "ok": true,
-  "sessionId": "session-id",
-  "headerText": "The brave hero entered the forest...",
-  "headerTextResolved": "Emma entered the magical forest...",
-  "question": "What happens next?",
-  "questionResolved": "What happens next?",
-  "options": [
-    {"id": "A", "text": "Follow the mysterious path", "textResolved": "Follow the mysterious path"},
-    {"id": "B", "text": "Climb the tall tree", "textResolved": "Climb the tall tree"}
-  ],
-  "isStoryComplete": false,
-  "progress": 0.4
-}
-```
-
----
-
-### POST `/api/gemini3`
-
-**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
-
-Generate Gemini 3 free-form story questions. Uses the standard `StoryGeneratorResponse` format for StoryBrowser compatibility.
-
-**Request Body**:
-```json
-{
-  "sessionId": "session-id"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `sessionId` | string | Yes | Story session ID |
-
-**Response**: `200 OK` (StoryGeneratorResponse format)
-```json
-{
-  "ok": true,
-  "sessionId": "session-id",
-  "question": "What kind of adventure would $$childId$$ like?",
-  "questionResolved": "What kind of adventure would Emma like?",
-  "options": [
-    {"id": "A", "text": "A magical journey", "textResolved": "A magical journey"},
-    {"id": "B", "text": "A space adventure", "textResolved": "A space adventure"}
-  ],
-  "isStoryComplete": false,
-  "progress": 0.25
-}
-```
-
----
-
-### POST `/api/gemini4`
-
-**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist. For `action: "createCharacter"`, the new character's owner and child come from the session; `characterData.parentUid`/`childId` are ignored.
-
-Generate Gemini 4 structured story questions with "Tell me more" support. Uses the standard `StoryGeneratorResponse` format for StoryBrowser compatibility.
-
-**Request Body**:
-```json
-{
-  "sessionId": "session-id",
-  "selectedOptionId": "A",
-  "userMessage": "I chose the magical journey"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `sessionId` | string | Yes | Story session ID |
-| `selectedOptionId` | string | No | Option ID from previous question |
-| `userMessage` | string | No | Child's response text |
-
-**Response**: `200 OK` (StoryGeneratorResponse format)
-```json
-{
-  "ok": true,
-  "sessionId": "session-id",
-  "question": "Where would you like to go?",
-  "questionResolved": "Where would you like to go?",
-  "options": [
-    {"id": "A", "text": "A magical forest", "isMoreOption": false},
-    {"id": "B", "text": "A distant planet", "isMoreOption": false},
-    {"id": "C", "text": "An underwater kingdom", "isMoreOption": false},
-    {"id": "M", "text": "Tell me more", "isMoreOption": true}
-  ],
-  "isStoryComplete": false,
-  "progress": 0.25
-}
-```
-
----
-
-### POST `/api/storyWizard`
-
-Generate wizard questions and final story. The wizard asks 4 questions to gather story preferences, then generates a complete story. Uses the standard `StoryGeneratorResponse` format for StoryBrowser compatibility.
-
-**Request Body**:
-```json
-{
-  "sessionId": "session-id",
-  "selectedOptionId": "A"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `sessionId` | string | Yes | Story session ID |
-| `selectedOptionId` | string | No | Option letter (A, B, C, D) from previous question |
-
-**Response**: `200 OK` (StoryGeneratorResponse format)
-```json
-{
-  "ok": true,
-  "sessionId": "session-id",
-  "question": "What kind of adventure would you like?",
-  "questionResolved": "What kind of adventure would you like?",
-  "options": [
-    {"id": "A", "text": "A magical journey", "introducesCharacter": false},
-    {"id": "B", "text": "A space adventure", "introducesCharacter": false}
-  ],
-  "isStoryComplete": false,
-  "progress": 0.4
-}
-```
-
-**Response (Story Complete)**: `200 OK`
-```json
-{
-  "ok": true,
-  "sessionId": "session-id",
-  "question": "Your story is complete!",
-  "options": [],
-  "isStoryComplete": true,
-  "finalStory": "Once upon a time...",
-  "finalStoryResolved": "Once upon a time..."
-}
-```
-
----
-
-### POST `/api/storyFriends`
-
-**Authentication**: Bearer token; caller must own the session. Child-persona scope applies (403 if a persona cookie names another child).
-
-Multi-phase "Fun with my friends" story generator. Creates adventure stories featuring the child's characters and friends through a guided 4-phase flow.
-
-**Phases**:
-1. `character_selection` - AI proposes adventure companions; child confirms or modifies
-2. `scenario_selection` - Child picks an adventure scenario
-3. `synopsis_selection` - Child picks from 3 story synopses (can request more)
-4. `story_generation` - AI writes the full story
-
-**Request Body**:
-```json
-{
-  "sessionId": "session-id",
-  "selectedOptionId": "scenario-id",
-  "action": "confirm_characters",
-  "selectedCharacterIds": ["char-1", "char-2"]
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `sessionId` | string | Yes | Story session ID |
-| `selectedOptionId` | string | No | Selected scenario or synopsis ID |
-| `action` | string | No | `confirm_characters`, `change_characters`, or `more_synopses` |
-| `selectedCharacterIds` | string[] | No | Character IDs when modifying selection |
-
-**Response (Character Selection)**: `200 OK`
-```json
-{
-  "ok": true,
-  "sessionId": "session-id",
-  "question": "Here are some friends who'd love to adventure with you!",
-  "questionResolved": "Here are some friends who'd love to adventure with you!",
-  "options": [],
-  "isStoryComplete": false,
-  "friendsPhase": "character_selection",
-  "proposedCharacters": [
-    {"id": "child-id", "displayName": "Emma", "type": "child", "avatarUrl": "...", "isSelected": true},
-    {"id": "char-1", "displayName": "Max", "type": "Pet", "avatarUrl": "...", "isSelected": true}
-  ],
-  "availableCharacters": [...]
-}
-```
-
-**Response (Scenario Selection)**: `200 OK`
-```json
-{
-  "ok": true,
-  "sessionId": "session-id",
-  "question": "What adventure would you like?",
-  "options": [
-    {"id": "scen-1", "text": "The Enchanted Forest: Explore a magical woods..."},
-    {"id": "scen-2", "text": "Space Station Rescue: Help friends on a space station..."}
-  ],
-  "isStoryComplete": false,
-  "friendsPhase": "scenario_selection",
-  "scenarios": [
-    {"id": "scen-1", "title": "The Enchanted Forest", "description": "Explore a magical woods..."},
-    {"id": "scen-2", "title": "Space Station Rescue", "description": "Help friends on a space station..."}
-  ]
-}
-```
-
-**Response (Synopsis Selection)**: `200 OK`
-```json
-{
-  "ok": true,
-  "sessionId": "session-id",
-  "question": "Which story sounds the most fun?",
-  "options": [
-    {"id": "syn-1", "text": "The Lost Treasure: Emma and Max discover a map..."},
-    {"id": "syn-2", "text": "The Magic Key: A mysterious key appears..."},
-    {"id": "MORE", "text": "Show me different stories", "isMoreOption": true}
-  ],
-  "isStoryComplete": false,
-  "friendsPhase": "synopsis_selection",
-  "synopses": [...]
-}
-```
-
-**Response (Story Complete)**: `200 OK`
-```json
-{
-  "ok": true,
-  "sessionId": "session-id",
-  "question": "Your story is complete!",
-  "options": [],
-  "isStoryComplete": true,
-  "finalStory": "Once upon a time, $$childId$$ and $$char-1$$ set off...",
-  "finalStoryResolved": "Once upon a time, Emma and Max set off...",
-  "friendsPhase": "complete"
-}
-```
-
----
-
-### POST `/api/storyArc`
-
-**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
-
-Generate or retrieve story arc structure.
-
-**Request Body**:
-```json
-{
-  "sessionId": "session-id",
-  "storyTypeId": "adventure"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "arc": {
-    "steps": [
-      {"id": "step1", "label": "The Call to Adventure"},
-      {"id": "step2", "label": "Meeting the Guide"}
-    ]
-  }
-}
-```
-
----
-
-### POST `/api/storyEnding`
-
-**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
-
-Generate story ending options.
-
-**Request Body**:
-```json
-{
-  "sessionId": "session-id",
-  "childId": "child-id"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "endings": [
-    {"id": "end1", "text": "They lived happily ever after..."},
-    {"id": "end2", "text": "And that was just the beginning..."}
-  ]
-}
-```
-
----
-
-### POST `/api/storyCompile`
-
-**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
-
-Compile story session into final story text. This is the shared completion chokepoint for **all**
-story flows (kids and parent), so it is where `story_allowance` is enforced:
-
-- **Pre-flight block**: before compiling, if the family is already at its `story_allowance` limit
-  (and this session hasn't already been counted), the route returns `402` and produces no story doc
-  — which blocks the entire downstream funnel (storybook, print).
-- **Consume-on-completion**: on a successful compile it decrements one `story_allowance`, scoped to
-  the session's child then family pool. Idempotent via a `storyAllowanceConsumed` flag on the
-  session, so a retried/timed-out compile never double-charges, and an *abandoned* create (no
-  compile) never burns quota. The decrement is non-blocking — a ledger hiccup never fails an
-  already-generated story.
-
-**Request Body**:
-```json
-{
-  "sessionId": "session-id"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "storyId": "story-id",
-  "storyText": "Once upon a time...",
-  "title": "The Great Adventure"
-}
-```
-
-**Errors**:
-- `402 Payment Required`: Story allowance exhausted (`code: "ENTITLEMENT_LIMIT"`, `remaining`)
-- `409 Conflict`: A compile is already in progress for this session
-
----
-
-### POST `/api/gemini3`
-
-**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
-
-Generate story using Gemini 3 flow.
-
-**Request Body**:
-```json
-{
-  "sessionId": "session-id",
-  "childId": "child-id",
-  "userMessage": "User's choice or input"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "state": "asking",
-  "question": "What happens next?",
-  "choices": [{"text": "Option A"}, {"text": "Option B"}]
-}
-```
-
----
-
-### POST `/api/gemini4`
-
-**Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist. For `action: "createCharacter"`, the new character's owner and child come from the session; `characterData.parentUid`/`childId` are ignored.
-
-Generate story using Gemini 4 flow.
-
-**Request Body**:
-```json
-{
-  "sessionId": "session-id",
-  "childId": "child-id",
-  "userMessage": "User's choice or input"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "state": "asking",
-  "question": "What happens next?",
-  "choices": [{"text": "Option A"}, {"text": "Option B"}]
-}
-```
-
----
-
-### GET `/api/kids-flows`
-
-Get available story flows configuration.
-
-> **DEPRECATED**: Use `/api/kids-generators` instead, which fetches from the `storyGenerators` collection.
-
-**Response**: `200 OK`
-```json
-{
-  "wizardEnabled": true,
-  "chatEnabled": true,
-  "gemini3Enabled": true,
-  "gemini4Enabled": true
-}
-```
-
----
-
-### GET `/api/kids-generators`
-
-Get story generators that are enabled for kids. This endpoint fetches from the `storyGenerators` collection, filtering to include only generators where `status === 'live'` and `enabledForKids === true`, then applies a **user-safe presentation layer** (`src/lib/kids-generator-presentation.ts`):
-
-- Names, descriptions, and loading messages never expose model jargon (e.g. stored name `"Gemini Free"` is served as `"Free Play"`). Admins can override copy per generator via the optional `kidFriendlyName` / `kidFriendlyDescription` doc fields.
-- Internal fields are stripped from the response: `prompts`, `promptConfig`, `defaultModel`, `defaultTemperature`, `apiEndpoint`, `backgroundMusic`, `status`, `enabledForKids`.
-- Exactly one generator carries `recommended: true` so clients can render a "Recommended for first-timers" badge. Precedence: `recommendedForKids` doc flag, then the `wizard` generator, then the first generator by display order.
-- Sorted by `order` (lower first), then by `id`.
-
-Consumed by the kids PWA (`/kids/create`), the parent-side chooser (`/story/start`), and the mobile app.
-
-**Authentication**: None required (public endpoint)
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "generators": [
-    {
-      "id": "wizard",
-      "name": "Story Wizard",
-      "description": "Answer four quick questions and watch a whole story appear. The simplest way to make your first story.",
-      "order": 1,
-      "capabilities": {...},
-      "styling": {
-        "gradient": "bg-gradient-to-br from-amber-400 to-orange-500",
-        "icon": "Sparkles",
-        "loadingMessage": "The wizard is creating your adventure..."
-      },
-      "recommended": true
-    }
-  ]
-}
-```
-
-**Error Response**: `500 Internal Server Error`
-```json
-{
-  "ok": false,
-  "errorMessage": "Error message",
-  "generators": []
-}
-```
-
----
-
 ## Storybook Routes
 
 ### GET `/api/storyBook/[bookId]`
 
-**Authentication**: Bearer token. The caller must own the story (`stories.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 / 403 / 404 as for session routes. Help-tour sample stories (`help-*` IDs) are readable by any signed-in user. A `printStoryBookId` is honoured only if that print storybook's `storyId` equals `bookId`.
+**Authentication**: Bearer token. The caller must own the story (`stories.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a token, 403 not the owner, 404 missing. Kept for the old storybooks' order page until the print slice. Help-tour sample stories (`help-*` IDs) are readable by any signed-in user. A `printStoryBookId` is honoured only if that print storybook's `storyId` equals `bookId`.
 
 Get storybook details.
 
@@ -1138,30 +431,6 @@ View a shared storybook (public endpoint - no authentication required).
 
 ---
 
-### POST `/api/storyBook/audio`
-
-**Authentication**: Bearer token, parent or admin. The caller must own the story (`stories.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 / 403 / 404 as for session routes.
-
-Generate full audio narration for storybook.
-
-**Request Body**:
-```json
-{
-  "storyId": "story-id",
-  "voiceId": "voice-id"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "audioUrl": "https://storage.googleapis.com/..."
-}
-```
-
----
-
 ### POST `/api/storyBook/printable`
 
 Generate printable PDF for storybook.
@@ -1185,98 +454,13 @@ Generate printable PDF for storybook.
 
 ---
 
-### POST `/api/storyBook/actorAvatar`
-
-**Authentication**: Bearer token, parent or admin. The caller must own the story (`stories.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 / 403 / 404 as for session routes.
-
-Generate composite avatar from story actors.
-
-**Request Body**:
-```json
-{
-  "storyId": "story-id"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "avatarUrl": "https://storage.googleapis.com/..."
-}
-```
-
----
-
-### GET `/api/stories/[storyId]/storybooks`
-
-Get storybooks for a specific story.
-
-**Path Parameters**:
-- `storyId` (string, required) - Story document ID
-
-**Query Parameters**:
-- `includeAll` (boolean, optional) - If `true`, includes all storybooks regardless of status. Default: `false` (only returns storybooks with `imageGeneration.status === 'ready'`)
-
-**Response**: `200 OK`
-```json
-[
-  {
-    "id": "storybook-id",
-    "storyId": "story-id",
-    "storyOutputTypeId": "picture_book",
-    "imageStyleId": "watercolor",
-    "imageGeneration": { "status": "ready" },
-    "thumbnailUrl": "https://storage.googleapis.com/...",
-    "createdAt": { "seconds": 1704672000, "_seconds": 1704672000 }
-  }
-]
-```
-
-**Notes**:
-- Server-side filtering: By default only returns storybooks with `imageGeneration.status === 'ready'`. Use `?includeAll=true` to get all storybooks.
-- Server-side sorting: Results sorted by `createdAt` descending (most recent first)
-- Thumbnails: If `thumbnailUrl` not set, fetches first page's `imageUrl` automatically
-
----
-
-### GET `/api/stories/[storyId]/storybooks/[storybookId]/pages`
-
-Get pages for a specific storybook with placeholders resolved.
-
-**Path Parameters**:
-- `storyId` (string, required) - Story document ID
-- `storybookId` (string, required) - Storybook document ID
-
-**Response**: `200 OK`
-```json
-[
-  {
-    "id": "page-id",
-    "pageNumber": 0,
-    "kind": "cover_front",
-    "bodyText": "Original text with $$childId$$ placeholders",
-    "displayText": "Resolved text with actual names",
-    "imageUrl": "https://storage.googleapis.com/...",
-    "imageStatus": "ready"
-  }
-]
-```
-
-**Notes**:
-- Server-side filtering: Pages with `kind === 'blank'` or `kind === 'title_page'` are excluded (these are for print only)
-- Server-side sorting: Results sorted by `pageNumber` ascending
-- Placeholder resolution: `displayText` field contains resolved placeholders (child/character names)
-
----
-
 ## Story Creation Routes
 
 A child and the AI create a **Story** in one of five creation modes, behind one interface and these
-routes (slice 5.3; [`creation.md`](architecture/target/creation.md),
-[`5.3-creation-server.md`](architecture/target/slices/5.3-creation-server.md)). **Present on the
-server, not yet used by the UI**: web, kids PWA and mobile switch to them in slice 5.4 and the
-mode-specific routes above are deleted then.
+routes (slices 5.3 and 5.4; [`creation.md`](architecture/target/creation.md),
+[`5.3-creation-server.md`](architecture/target/slices/5.3-creation-server.md),
+[`5.4-creation-clients.md`](architecture/target/slices/5.4-creation-clients.md)). The web app, the
+kids PWA and the mobile app all use them; the mode-specific routes of the retired flows are deleted.
 
 | Mode id | Mode | Today's generator |
 |---------|------|-------------------|
@@ -1288,17 +472,20 @@ mode-specific routes above are deleted then.
 
 **Client usage** (slice 5.4):
 
+0. `GET /api/creation-modes` lists the modes to offer (kid-safe names, one `recommended`).
 1. `POST /api/stories` with the child, the mode and a key made once per tap. The response carries
    the first **turn** (the mode's prompt and options).
 2. For each answer, `POST /api/stories/{storyId}/turns` with the input and a new key; the response
    carries the reply turn. Show `promptDisplay` and each option's `display` (names resolved); send
    back option ids. `expects` says which input the prompt wants.
-3. When a reply's `kind` is `done` the Story is `finishing`; watch `stories/{storyId}` until it is
-   `complete` (title, synopsis) and then make a Book with `POST /api/books`.
-4. Clients may also read `stories/{storyId}` and `stories/{storyId}/turns` (filter on
-   `ownerUid == uid`) directly; they never write them (rules).
+3. When a reply's `kind` is `done` the Story is `finishing`; watch `stories/{storyId}` (or poll
+   `GET /api/stories/{storyId}`) until it is `complete` (title, synopsis) and then make a Book with
+   `POST /api/books`.
+4. The web app reads `stories/{storyId}` and `stories/{storyId}/turns` (filter on
+   `ownerUid == uid`) with listeners while playing; mobile reads `GET /api/stories/{storyId}`. Nobody
+   writes them from a client (rules). Lists and readers use `GET /api/stories?childId=…`.
 
-Common to all four:
+Common to all of them:
 
 - `withRoute({ auth: 'user' })`: `Authorization: Bearer <Firebase ID token>`; 401 `UNAUTHENTICATED`.
 - Ownership: the child / Story must be the caller's (`ownerUid`; for a child, `ownerParentUid`);
@@ -1389,6 +576,74 @@ Story that is `finishing` or `complete` (returns its status).
 **Response** (200 OK): `{ "ok": true, "data": { "storyId": "st_…", "status": "finishing" } }`
 
 **Errors**: 409 `STORY_NOT_FAILED` (`creating` or `abandoned`).
+
+---
+
+### GET `/api/creation-modes`
+
+The ways a child can make a story: modes that are `live` and `enabledForKids`, in display order,
+presented kid-safely (model names scrubbed; `kidFriendlyName` / `kidFriendlyDescription` overrides),
+exactly one `recommended` (the configured one when offered, else the wizard, else the first). The
+chooser is a child surface on every client, so every caller gets the same list. Replaces
+`GET /api/kids-generators`.
+
+**Response** (200 OK):
+```json
+{ "ok": true, "data": { "modes": [
+  { "modeId": "wizard", "name": "Story Wizard", "description": "Answer four quick questions…",
+    "icon": "Wand2", "gradient": "bg-gradient-to-br from-amber-400 to-orange-500", "darkGradient": null,
+    "loadingMessage": "Summoning the Story Wizard...", "recommended": true }
+] } }
+```
+
+### GET `/api/stories`
+
+The child's Stories, newest first; abandoned ones are left out. Every text is rendered with names on
+the server; `status` is the server's (`creating`, `finishing`, `complete`, `failed`).
+
+**Query Parameters**: `childId` (required; 400 `INVALID_QUERY` without it).
+
+**Errors**: 404 `CHILD_NOT_FOUND` (missing or soft-deleted child), 403 not the caller's child,
+403 `PERSONA_SCOPE_MISMATCH`.
+
+**Response** (200 OK):
+```json
+{ "ok": true, "data": { "stories": [ {
+  "id": "st_…", "childId": "c1", "modeId": "wizard", "storyTypeId": null, "status": "complete",
+  "title": "Emma's Big Day", "synopsis": "Emma has a wonderful adventure.",
+  "text": "Once upon a time, Emma woke up early…",
+  "cast": [{ "castId": "c1", "kind": "child", "role": "hero", "displayName": "Emma", "avatarUrl": "https://…" }],
+  "turnCount": 9, "error": null,
+  "createdAt": "2026-10-29T12:00:00.000Z", "updatedAt": "…", "completedAt": "…"
+} ] } }
+```
+`title`, `synopsis` and `text` are null until `story.finish` has run (`text` is set when the mode
+finishes). A title the model proposed with a cast token is resolved too.
+
+### GET `/api/stories/[storyId]`
+
+One of the caller's Stories (owner and persona scope checked) and its turns in order, as the play
+screens need them (mobile plays through this; the web app uses listeners). Turns carry only the
+display words, never the token text.
+
+**Errors**: 404 `STORY_NOT_FOUND` (missing, or a document that is not a Story), 403 not the owner,
+403 `PERSONA_SCOPE_MISMATCH`.
+
+**Response** (200 OK):
+```json
+{ "ok": true, "data": {
+  "story": { "id": "st_…", "status": "creating", "title": null, "text": null, "cast": [ … ], "…": "as in the list" },
+  "turns": [
+    { "index": 0, "role": "ai", "kind": "prompt", "promptDisplay": "Where should the story happen?",
+      "options": [{ "id": "A", "display": "In a castle", "preselected": false }],
+      "expects": "choice", "progress": { "step": 1, "of": 4 }, "inputDisplay": null, "addedCast": [] },
+    { "index": 1, "role": "child", "kind": "input", "promptDisplay": null, "options": null,
+      "expects": null, "progress": null, "inputDisplay": "In a castle", "addedCast": [] }
+  ]
+} }
+```
+
+**Renaming**: there is no rename route; a Story's title comes from its mode or `story.finish`.
 
 ---
 
@@ -1525,16 +780,14 @@ is not locked returns its status.
 
 ### POST `/api/entitlements/check`
 
-Non-consuming **pre-flight** gate for story creation. The kids/parent clients create the
-`storySessions` document directly via the client SDK; this route lets a client block a user who is
-already at their `story_allowance` limit *before* they invest time in the wizard. It **only reads**
+Non-consuming **pre-flight** check of an allowance (no client calls it for stories any more:
+`POST /api/stories` itself refuses with 402 `ENTITLEMENT_LIMIT` before creating anything). It **only reads**
 the ledger (never writes) and reports remaining capacity, scoped to the named child (child pool
 first, then the family pool — see `docs/PRODUCTS.md`). A brand-new family is treated as free-tier
 seeded (1 story) in memory.
 
-The authoritative **decrement** happens server-side at completion — `/api/storyCompile` consumes one
-`story_allowance` when a story is compiled (covering kids and parent flows alike), so enforcement
-holds even if a client skips this check. Only `story_allowance` may be checked here; `storybook_allowance`
+The authoritative **decrement** happens server-side at completion — `story.finish` consumes one
+`story_allowance` in the transaction that sets the Story `complete` (every mode alike). Only `story_allowance` may be checked here; `storybook_allowance`
 is charged inside `POST /api/books` (in the transaction that creates the Book), and `print_credit` is reserved for print time (not yet
 enforced — see `docs/PRODUCTS.md`).
 
@@ -2142,90 +1395,6 @@ Get available image styles for storybook illustrations.
 
 ---
 
-### GET `/api/stories`
-
-Get stories for a specific child with resolved placeholders.
-
-**Authentication**: Required
-
-**Query Parameters**:
-- `childId` (string, required) - Child document ID
-
-**Response**: `200 OK`
-```json
-[
-  {
-    "id": "story-id",
-    "childId": "child-id",
-    "metadata": { "title": "The Adventure of $$childId$$" },
-    "synopsis": "$$childId$$ goes on an adventure...",
-    "titleResolved": "The Adventure of Emma",
-    "synopsisResolved": "Emma goes on an adventure...",
-    "actors": [
-      {
-        "id": "child-id",
-        "displayName": "Emma",
-        "avatarUrl": "https://...",
-        "type": "child"
-      }
-    ],
-    "pageGeneration": { "status": "ready" },
-    "imageGeneration": { "status": "ready" },
-    "createdAt": { "seconds": 1704672000 }
-  }
-]
-```
-
-**Notes**:
-- Server-side filtering: Soft-deleted stories are excluded
-- Server-side sorting: Results sorted by `createdAt` descending (most recent first)
-- Placeholder resolution: `titleResolved` and `synopsisResolved` contain resolved names
-- Actor profiles: `actors` array contains resolved displayName and avatarUrl
-
----
-
-### GET `/api/stories/[storyId]`
-
-Get a single story with fully resolved placeholders.
-
-**Path Parameters**:
-- `storyId` (string, required) - Story document ID
-
-**Response**: `200 OK`
-```json
-{
-  "id": "story-id",
-  "childId": "child-id",
-  "metadata": { "title": "The Adventure" },
-  "storyText": "Original text with $$childId$$ placeholders...",
-  "titleResolved": "The Adventure",
-  "synopsisResolved": "Emma goes on an adventure...",
-  "storyTextResolved": "Emma went on a wonderful adventure...",
-  "actors": [
-    {
-      "id": "child-id",
-      "displayName": "Emma",
-      "avatarUrl": "https://...",
-      "type": "child"
-    },
-    {
-      "id": "char-id",
-      "displayName": "Max",
-      "avatarUrl": "https://...",
-      "type": "character"
-    }
-  ]
-}
-```
-
-**Notes**:
-- Placeholder resolution: All text fields (`titleResolved`, `synopsisResolved`, `storyTextResolved`) contain resolved names
-- Actor profiles: `actors` array contains all children and characters mentioned in the story
-
----
-
-> The following routes require `isAdmin` role:
-
 ### POST `/api/storyOutputTypes/generateImage`
 
 Generate an image for a story output type using AI.
@@ -2766,45 +1935,6 @@ Each order additionally includes server-computed fields (Sprint W3-A — server-
 
 ---
 
-### GET `/api/admin/sessions`
-
-List the 100 most recently updated story sessions with a server-computed `lastError` summary
-joined from the most recent 500 `aiFlowLogs` entries (Sprint W3-A — surfaces failure reasons
-at a glance without opening each record).
-
-**Authentication**: Admin only (Bearer token).
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "sessions": [
-    {
-      "id": "session-id",
-      "childId": "child-id",
-      "status": "in_progress",
-      "currentPhase": "story",
-      "storyTitle": "...",
-      "storyMode": "wizard",
-      "promptConfigId": "...",
-      "promptConfigLevelBand": "low",
-      "createdAtMs": 1750000000000,
-      "updatedAtMs": 1750000000000,
-      "lastError": {
-        "flowName": "storyImageFlow",
-        "message": "Truncated error message (max 300 chars)",
-        "status": "error",
-        "atMs": 1750000000000
-      }
-    }
-  ]
-}
-```
-
-`lastError` is `null` when the session has no error/failure in the recent log window.
-
----
-
 ### GET `/api/admin/ops/metrics`
 
 Aggregated metrics for the ops/KPI dashboard (`/admin/ops`). Sprint W3-A.
@@ -3230,35 +2360,6 @@ Update image prompt configuration. When enabled, this prompt is prepended to all
 {
   "ok": true,
   "message": "Image prompt configuration updated successfully"
-}
-```
-
----
-
-### GET `/api/admin/system-config/kids-flows`
-
-Get kids flow configuration.
-
-**Response**: `200 OK`
-```json
-{
-  "wizardEnabled": true,
-  "chatEnabled": true,
-  "gemini3Enabled": true,
-  "gemini4Enabled": true
-}
-```
-
----
-
-### PUT `/api/admin/system-config/kids-flows`
-
-Update kids flow configuration.
-
-**Response**: `200 OK`
-```json
-{
-  "success": true
 }
 ```
 
@@ -4037,7 +3138,7 @@ Rate-limited responses return status `429` with:
 
 ### GET `/api/user/onboarding`
 
-First-run "create your first book" checklist for the authenticated parent. Step completion is **derived server-side** from real account state (children, story sessions, storybook outputs) and the snapshot is persisted to `users/{uid}.onboardingState`, including the `signupAtMs`/`firstBookAtMs` time-to-first-book pair. Once the state is `dismissed` or complete the route short-circuits on the cached state (no Firestore fan-out).
+First-run "create your first book" checklist for the authenticated parent. Step completion is **derived server-side** from real account state (children, Stories and Books with their server status) and the snapshot is persisted to `users/{uid}.onboardingState`, including the `signupAtMs`/`firstBookAtMs` time-to-first-book pair. Once the state is `dismissed` or complete the route short-circuits on the cached state (no Firestore fan-out).
 
 **Authentication**: Required
 

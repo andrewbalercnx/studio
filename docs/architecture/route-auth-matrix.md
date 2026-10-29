@@ -1,6 +1,6 @@
 # Route Auth Matrix
 
-> **Last Updated**: 2026-10-28 (Phase 0 of `REVIEW_PLAN.md`)
+> **Last Updated**: 2026-10-29 (Phase 5.4: creation and read routes on `withRoute`; the old story-flow routes are deleted — their Phase 0 rows below are history). 2026-10-28 (Phase 0 of `REVIEW_PLAN.md`)
 >
 > Every API route runs on the Firebase Admin SDK, which ignores `firestore.rules`. The route itself
 > is the only access control, so each one must check **who** is calling (authentication) and
@@ -20,9 +20,10 @@
 | Internal secret | `isInternalSecretValid` | Caller holds `INTERNAL_API_SECRET` |
 | Route wrapper (Phase 4) | `withRoute` (`src/server/http/with-route.ts`) | One declared mode per route: `public`, `user` (ID token, header only), `admin` (`isAdmin` claim), `internal` (Cloud Tasks OIDC token for `JOBS_INVOKER_SERVICE_ACCOUNT`). Ownership via `loadOwned` / `assertOwner` on `ownerUid` |
 
-Owner fields: `storySessions.parentUid`, `stories.parentUid`, `children.ownerParentUid`,
-`characters.ownerParentUid`, `printStoryBooks.ownerUserId`, `printOrders.parentUid` (legacy:
-`ownerUserId`).
+Owner fields: `stories.ownerUid` (and `turns`, `books`, `manuscripts`, `jobs`: `ownerUid`),
+`children.ownerParentUid`, `characters.ownerParentUid`, `printStoryBooks.ownerUserId`,
+`printOrders.parentUid` (legacy: `ownerUserId`). `storySessions` and legacy `stories.parentUid`
+are gone with slice 5.4.
 
 Web clients call protected routes through `authFetch` (`src/lib/auth-fetch.ts`), which adds the ID
 token only for same-origin `/api/` URLs. The mobile app and `packages/api-client` send it on every
@@ -76,13 +77,27 @@ These routes were open, or authenticated without checking ownership, before Phas
 | `POST /api/books/[bookId]/pages/[pageNumber]/retry` | `loadOwned(books)` (`ownerUid`, persona scope with the Book's `childId`) |
 | `POST /api/books/[bookId]/lock`, `/unlock` | `loadOwned(books)` |
 
+## Phase 5.3 and 5.4 (2026-10-29)
+
+| Route | Rule |
+|-------|------|
+| `POST /api/stories` | `withRoute({ auth: 'user' })`; the child must be the caller's (`children.ownerParentUid` via `assertOwner`, persona scope with the child); mode live (and `enabledForKids` under a child persona); `story_allowance` checked (402) |
+| `POST /api/stories/[storyId]/turns`, `/abandon`, `/finish` | `withRoute({ auth: 'user' })`; target Story owner (`ownerUid`, persona scope with the Story's `childId`); a non-Story document is 404 |
+| `GET /api/stories?childId=` | `withRoute({ auth: 'user' })`; the child must be the caller's (persona scope applies) |
+| `GET /api/stories/[storyId]` | `withRoute({ auth: 'user' })`; Story owner (persona scope applies) |
+| `GET /api/creation-modes` | `withRoute({ auth: 'user' })`; config read (kid-safe presentation, no prompts) |
+
+Deleted in 5.4: `storyWizard`, `gemini3`, `gemini4`, `storyFriends`, `storyBeat`, `storyEnding`,
+`storyCompile`, `storySession`, `warmupReply`, `ai-warmup`, `storyArc`, `characterTraits`,
+`characters/create`, `storyBook/audio`, `storyBook/actorAvatar`, `kids-flows`, `kids-generators`,
+`admin/system-config/kids-flows`, `admin/sessions`, `parent/storybooks[/thumbnails]`,
+`stories/[storyId]/storybooks[/[storybookId]/pages]`, and the `runKidsWizardStep` server action.
+
 ## Routes that are public by design
 
 | Route | Why |
 |-------|-----|
 | `GET /api/health`, `GET /api/healthz` | Deploy and canary probes. No user data |
-| `GET /api/kids-flows` | Boolean feature switches |
-| `GET /api/kids-generators` | Live generator list with internal fields stripped |
 | `GET /api/printOrders/products` | Product catalogue. Phase 3: trim internal fields (`mixamSpec`) |
 | `GET /api/storyBook/share` | Share token, plus optional passcode |
 | `DELETE /api/persona` | Clears the caller's own persona cookie |
@@ -90,9 +105,9 @@ These routes were open, or authenticated without checking ownership, before Phas
 
 ## Routes already correct before Phase 0
 
-Token plus an ownership check: `parent/storybooks`, `parent/storybooks/thumbnails`,
-`user/onboarding`, `stories`, `stories/[storyId]` and its `storybooks` and `pages` routes,
-`children`, `children/[childId]`, `storySession`, `storybookV2/create`. Token only (config reads):
+Token plus an ownership check: `user/onboarding`, `children`, `children/[childId]` (the other
+routes of this list — `parent/storybooks*`, the old `stories` reads and their `storybooks` routes,
+`storySession`, `storybookV2/create` — are deleted or rewritten on `withRoute`). Token only (config reads):
 `imageStyles`, `storyOutputTypes`. All `admin/*` routes require an admin token. The rest of the
 127 route files authenticate on every method; the Phase 0 audit checked each one.
 

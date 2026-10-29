@@ -83,10 +83,9 @@ detours (and down-scores) the first-time parent.
 ### Goals
 
 1. **`reach-finished-book`** — signup → create child → kids mode → story
-   entry → *(deterministic seam: seeded completed story, marked `simulated`)*
-   → book type → art style → generation → book listed. Story completion has no
-   TEST_MODE seam (the wizard is a live AI call), so the probe seeds the exact
-   wizard/`storyCompile` post-conditions, same as the funnel spec.
+   entry → Story Wizard played through its four TEST_MODE questions (slice
+   5.4: the creation routes have fixtures) → story complete → book type → art
+   style → generation → book listed. Nothing is seeded for the story.
 2. **`read-existing-book`** — returning child on a shared device (mobile
    viewport): profile chooser → kids home → My Books → open book → first page.
    Preconditions are seeded outside the budget.
