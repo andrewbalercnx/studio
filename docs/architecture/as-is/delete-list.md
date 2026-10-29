@@ -3,6 +3,7 @@
 > Phase 1 of `../REVIEW_PLAN.md`. Code and data with no live caller, or superseded, with the
 > evidence for each. Phase 2 confirms the list; deletion happens in the Phase 5 slices (or
 > earlier where it is pure dead code). Citations are in the area maps under `areas/`.
+> Items marked **Done (5.2)** were deleted in slice 5.2 (`target/slices/5.2-book-clients.md`).
 
 ## Creation
 
@@ -21,7 +22,8 @@
 
 | Item | Evidence |
 |------|----------|
-| Calls to `/api/storyBook/pages` and `/api/storyBook/images` (legacy session pages, kids generating page legacy branch) | Route files do not exist; requests hit the GET-only `[bookId]` route and fail |
+| ~~Calls to `/api/storyBook/pages` and `/api/storyBook/images` (legacy session pages, kids generating page legacy branch)~~ **Done (5.2)**: the session generating/compiled/select-image-style pages, the kids generating page and the session page's calls are deleted | Route files do not exist; requests hit the GET-only `[bookId]` route and fail |
+| ~~`/api/storybookV2/{create,pages,images,finalize,pageEdit}`, `story-page-flow`, `story-pagination-flow` (+ `/api/storyPagination`, `/admin/paginationTest`), `story-image-flow`, `story-exemplar-generation-flow`, `story-page-audio-flow` (+ `/api/storyBook/pageAudio`), the client "pages then images" orchestration, the page editor~~ **Done (5.2)** | Replaced by the Book pipeline (`src/server/books`, `/api/books`) |
 | `outputs/storybook` fallbacks in image, audio and order code; `LegacyStoryWithOutput`, `StoryBook` alias, `StoryBookFinalizedPage`, `isFinalized`, `actorExemplars` | Nothing live writes `outputs/storybook` |
 | Top-level `storyBooks` collection | Only the help-sample seed and the rules test page touch it |
 | `actor-exemplar-flow.ts`, `exemplars` collection, `ActorExemplar` type, its `SCHEMA.md` section | Last caller deleted (Phase 0 removed the orphan route) |
@@ -68,5 +70,5 @@
 |------|----------|
 | `/logout` page, `/parent/diagnostics` link | No links / target page missing |
 | `/firestore-test` | Writes test documents into production collections |
-| `packages/api-client` 501 stubs (`createSession`, `getStorybookStatus`) | `/api/storySession` exists |
+| `packages/api-client` 501 stubs (`createSession`, ~~`getStorybookStatus`~~ — **done (5.2)**, with `createStorybook` / `generatePages` / `generateImages`) | `/api/storySession` exists |
 | Mobile's hand-copied `MobileApiClient` | Drifted copy of `packages/api-client` |

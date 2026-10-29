@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-10-29 (Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-10-29 (Phase 5.2: the web app and kids PWA read `books`, `manuscripts` and their pages directly (owner-filtered queries) and create Books through `POST /api/books`; `stories/*/storybooks` is legacy and read-only (no route writes it any more except the old print/share path), kept until the trial data reset. Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -254,22 +254,25 @@ Compiled story content.
 | `imageDescription` | string | No | Legacy freeform scene description (used when `imageScene` is absent) |
 | `imageUrl` | string | No | Generated image URL |
 | `imageStatus` | string | No | `pending`, `generating`, `ready`, `error` |
-| `lastEditedAt` | timestamp | No | Sprint W2-C: last parent edit via `POST /api/storybookV2/pageEdit` |
+| `lastEditedAt` | timestamp | No | Sprint W2-C: last parent edit (the edit route was removed in slice 5.2) |
 | `lastEditedBy` | string | No | Sprint W2-C: UID of the user who last edited this page |
 
-> **Parent page edits (Sprint W2-C)**: `POST /api/storybookV2/pageEdit` writes the parent's wording
-> to BOTH `bodyText` and `displayText` (it becomes canonical for reader, narration, and print). If
-> the text changed on a page with ready narration, the stale audio is reset
-> (`audioStatus: 'pending'`, `audioUrl: null`).
+> **Parent page edits (Sprint W2-C, legacy)**: the removed `storybookV2/pageEdit` route wrote the
+> parent's wording to BOTH `bodyText` and `displayText`. Existing edits stay in the data; nothing
+> writes these fields any more.
 - `shareTokens/{tokenId}` - Share links (see `StoryBookShareToken`)
 
 **Security**: Parents can CRUD their own stories; admins have full access.
 
 ---
 
-### `stories/{storyId}/storybooks/{storybookId}` (Subcollection)
+### `stories/{storyId}/storybooks/{storybookId}` (Subcollection) — legacy, read-only
 
-A specific rendering of a story with output type, image style, and layout.
+A specific rendering of a story with output type, image style, and layout, made by the `storybookV2`
+routes that slice 5.2 deleted. **Nothing creates or generates these any more**: new books are
+`books/{bookId}` (below). Existing trial storybooks stay readable to parents (`/storybook/{id}`,
+`/api/parent/storybooks`, `/api/stories/{id}/storybooks`) and keep their print, order and share path
+(`storyBook/printable`, `printStoryBooks`, `printOrders`, `storyBook/share`) until the data reset.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -286,7 +289,7 @@ A specific rendering of a story with output type, image style, and layout.
 | `pageGeneration` | object | Yes | Page generation status |
 | `imageGeneration` | object | Yes | Image generation status |
 | `exemplarGeneration` | object | No | Character exemplar generation status |
-| `artStatus` | StoryBookArtStatus | No | Degraded-book rollup written by `/api/storybookV2/images` after every run (see below) |
+| `artStatus` | StoryBookArtStatus | No | Degraded-book rollup written by the former `storybookV2/images` route (see below) |
 | `actorExemplarUrls` | map | No | Map of actorId → exemplar image URL |
 | `isFinalized` | boolean | No | Whether book is finalized |
 | `isLocked` | boolean | No | Whether book is locked for edits |
@@ -345,11 +348,14 @@ Share tokens for public storybook viewing.
 
 ---
 
-### Target model: `manuscripts`, `books`, `jobs` (present, not yet used by the UI)
+### Target model: `manuscripts`, `books`, `jobs`
 
 Written by the server-side Book pipeline (slice 5.1; `docs/architecture/target/domain-model.md`,
-`pipeline.md`, `slices/5.1-book-server.md`). The web, kids PWA and mobile apps still use
-`stories/{storyId}/storybooks` until slice 5.2. Schemas are the zod schemas in
+`pipeline.md`, `slices/5.1-book-server.md`) and used by the web app and the kids PWA since slice 5.2
+(`slices/5.2-book-clients.md`): they create Books with `POST /api/books` and read these documents
+directly through listeners (`src/hooks/use-books.ts`). List queries on `books` and on the `pages`
+subcollections filter on `ownerUid == request.auth.uid`, which the owner-read rules require; the
+browser never writes them. The mobile app does not use them yet. Schemas are the zod schemas in
 `src/server/data/schemas/` (repositories validate every read and write). Every document, including
 subcollection documents, carries **`ownerUid`** (ADR-0007). `createdAt` / `updatedAt` are server
 timestamps on all of them.
@@ -1532,6 +1538,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-10-29 | Phase 5.2: `books`, `manuscripts` (+ pages) read by the web app and kids PWA; `stories/*/storybooks` marked legacy read-only (no generation writes); no rules change |
 | 2026-10-29 | Phase 5.1: new `manuscripts` (+ `pages`), `books` (+ `pages`, `castSheets`, `renders`) and `jobs` collections for the server-side Book pipeline, present but not yet used by the UI; rules owner-read, admin-write |
 | 2026-10-29 | Phase 3 security rules: owner cannot write roles/PIN state, session allowance and compile-lock fields, story content, storybook lock/finalization/art/generation state, storybook pages or share tokens; owner fields immutable on update; `help-*` documents admin-only; `systemConfig` admin-only except `diagnostics`. Checked by `npm run test:rules` |
 | 2026-10-29 | Security rules: `printOrders` create/update/delete admin-only (server routes write orders); `printStoryBooks` owner create restricted to `pdfStatus: 'draft'` without PDF fields, owner update removed |
