@@ -16,6 +16,25 @@
 
 ## Changes
 
+### 2026-10-29
+
+#### `#9` - Phase 0 follow-up: close three more access holes
+
+**Type**: Security
+
+**Summary**: Found while mapping the system in Phase 1. `/kids/create` exposed `storyWizardFlow` as an unauthenticated server action; it now calls `runKidsWizardStep`, which checks the token, ownership, child and persona scope. Unresolved `$$Name$$` placeholders were looked up across all families; the fallback is now limited to the story owner. `printOrders` writes are admin/server-only, and `printStoryBooks` owners can only create drafts without PDF fields. **Requires `firebase deploy --only firestore:rules`.**
+
+**Created files**:
+- `src/app/kids/create/actions.ts`
+
+**Modified files**:
+- `src/app/kids/create/page.tsx`, `src/app/admin/characters/page.tsx`
+- `src/lib/resolve-placeholders.server.ts`, `src/ai/flows/story-image-flow.ts` and the 10 callers of `resolveEntitiesInText`
+- `firestore.rules`, `src/app/firestore-test/page.tsx`
+- `docs/SCHEMA.md`, `docs/SYSTEM_DESIGN.md`, `docs/architecture/route-auth-matrix.md`
+
+---
+
 ### 2026-10-28
 
 #### `#7` - Phase 0: require auth and ownership on API routes
