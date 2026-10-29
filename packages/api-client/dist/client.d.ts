@@ -3,7 +3,7 @@
  *
  * Provides typed methods for all child-facing API operations.
  */
-import type { Story, StorySession, StoryBookOutput, StoryOutputPage, StoryGenerator, StoryOutputType, ImageStyle, StoryGeneratorResponse, StoryCompileResponse, StorybookPagesResponse, StorybookImagesResponse, GenerationStatus } from '@storypic/shared-types';
+import type { Story, StorySession, StoryBookOutput, StoryOutputPage, StoryGenerator, StoryOutputType, ImageStyle, StoryGeneratorResponse, StoryCompileResponse } from '@storypic/shared-types';
 /**
  * Configuration for the StoryPic API client.
  */
@@ -78,33 +78,24 @@ export declare class StoryPicClient {
      */
     compileStory(sessionId: string): Promise<StoryCompileResponse>;
     /**
-     * Create a new storybook output for a story.
-     * The server handles print layout lookup and image dimension calculation.
+     * Create a Book: the story's words in a Form (the Manuscript, paginated on
+     * the server with the Form's default length and density) drawn in a Style.
+     * The server runs the whole pipeline; the caller only watches the Book.
      *
-     * @param storyId - The story to create a storybook for
-     * @param outputTypeId - The story output type (e.g., "picture-book", "poem")
-     * @param styleId - The image style ID
-     * @param imageStylePrompt - The style prompt for image generation
-     * @returns The ID of the created storybook
+     * `idempotencyKey` must be made once per user action (e.g. one "make my
+     * book" tap) and repeated on a retry of that action: the server then returns
+     * the same Book and charges the book allowance once.
      */
-    createStorybook(storyId: string, outputTypeId: string, styleId: string, imageStylePrompt: string): Promise<string>;
-    /**
-     * Generate pages for a storybook (pagination).
-     */
-    generatePages(storyId: string, storybookId: string, storyOutputTypeId: string): Promise<StorybookPagesResponse>;
-    /**
-     * Generate images for storybook pages.
-     */
-    generateImages(storyId: string, storybookId: string, imageStyleId: string): Promise<StorybookImagesResponse>;
-    /**
-     * Get the generation status of a storybook.
-     * Note: Status is currently fetched client-side via Firestore subscription.
-     * TODO: Add server endpoint for status polling.
-     */
-    getStorybookStatus(storyId: string, storybookId: string): Promise<{
-        pageGeneration: GenerationStatus;
-        imageGeneration: GenerationStatus;
-        isFinalized: boolean;
+    createBook(input: {
+        storyId: string;
+        formId: string;
+        styleId: string;
+        idempotencyKey: string;
+    }): Promise<{
+        bookId: string;
+        manuscriptId: string;
+        status: string;
+        created: boolean;
     }>;
     /**
      * Get pages for a storybook.

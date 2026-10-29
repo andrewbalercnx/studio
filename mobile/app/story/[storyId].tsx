@@ -110,10 +110,7 @@ export default function StoryScreen() {
   // Check for storybooks (new model) or legacy book (on story itself)
   const hasStorybooks = storybooks.length > 0;
   const hasLegacyBook = story?.imageGeneration?.status === 'ready';
-  const hasBook = hasStorybooks || hasLegacyBook;
   const hasAudio = story?.audioGeneration?.status === 'ready' && story?.audioUrl;
-  const isGenerating = story?.pageGeneration?.status === 'running' ||
-                       story?.imageGeneration?.status === 'running';
 
   if (loading) {
     return (
@@ -220,26 +217,11 @@ export default function StoryScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Show generating indicator if in progress */}
-          {isGenerating && (
-            <View style={[styles.generatingContainer, { marginBottom: 12 }]}>
-              <ActivityIndicator color="#F59E0B" />
-              <Text style={styles.generatingText}>Creating your book...</Text>
-            </View>
-          )}
-
-          {/* Always show create button (unless currently generating) */}
-          {!isGenerating && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.actionButtonSecondary]}
-              onPress={() => router.push(`/create-book/${storyId}`)}
-            >
-              <Text style={styles.actionButtonIcon}>✨</Text>
-              <Text style={styles.actionButtonTextSecondary}>
-                {hasBook ? 'Create Another Book' : 'Create Picture Book'}
-              </Text>
-            </TouchableOpacity>
-          )}
+          {/* Book creation is switched off in the app while books move to the
+              new pipeline (slice 5.2): books are made in the web app for now. */}
+          <View style={[styles.generatingContainer, { marginBottom: 12 }]}>
+            <Text style={styles.generatingText}>Make books in the web app for now.</Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>

@@ -47,7 +47,10 @@ class StoryPicClient {
             clearTimeout(timeoutId);
             const data = await response.json();
             if (!response.ok) {
-                throw new StoryPicApiError(data.errorMessage || data.error || 'Request failed', response.status, data.code);
+                // Older routes answer { errorMessage | error: string }; routes on the
+                // shared route wrapper answer { ok: false, error: { code, message } }.
+                const envelope = typeof data.error === 'object' && data.error !== null ? data.error : null;
+                throw new StoryPicApiError(envelope?.message || data.errorMessage || data.error || 'Request failed', response.status, envelope?.code || data.code);
             }
             return data;
         }
@@ -173,45 +176,20 @@ class StoryPicClient {
     // Storybook Generation
     // ============================================================================
     /**
-     * Create a new storybook output for a story.
-     * The server handles print layout lookup and image dimension calculation.
+     * Create a Book: the story's words in a Form (the Manuscript, paginated on
+     * the server with the Form's default length and density) drawn in a Style.
+     * The server runs the whole pipeline; the caller only watches the Book.
      *
-     * @param storyId - The story to create a storybook for
-     * @param outputTypeId - The story output type (e.g., "picture-book", "poem")
-     * @param styleId - The image style ID
-     * @param imageStylePrompt - The style prompt for image generation
-     * @returns The ID of the created storybook
+     * `idempotencyKey` must be made once per user action (e.g. one "make my
+     * book" tap) and repeated on a retry of that action: the server then returns
+     * the same Book and charges the book allowance once.
      */
-    async createStorybook(storyId, outputTypeId, styleId, imageStylePrompt) {
-        const body = { storyId, outputTypeId, styleId, imageStylePrompt };
-        const response = await this.post('/storybookV2/create', body);
-        if (!response.ok || !response.storybookId) {
-            throw new StoryPicApiError(response.errorMessage || 'Failed to create storybook', 500);
+    async createBook(input) {
+        const response = await this.post('/books', input);
+        if (!response.ok || !response.data?.bookId) {
+            throw new StoryPicApiError('Failed to create book', 500);
         }
-        return response.storybookId;
-    }
-    /**
-     * Generate pages for a storybook (pagination).
-     */
-    async generatePages(storyId, storybookId, storyOutputTypeId) {
-        const body = { storyId, storybookId, storyOutputTypeId };
-        return this.post('/storybookV2/pages', body);
-    }
-    /**
-     * Generate images for storybook pages.
-     */
-    async generateImages(storyId, storybookId, imageStyleId) {
-        const body = { storyId, storybookId, imageStyleId };
-        return this.post('/storybookV2/images', body);
-    }
-    /**
-     * Get the generation status of a storybook.
-     * Note: Status is currently fetched client-side via Firestore subscription.
-     * TODO: Add server endpoint for status polling.
-     */
-    async getStorybookStatus(storyId, storybookId) {
-        // For now, throw not implemented - use Firestore subscription
-        throw new StoryPicApiError('Not implemented - use Firestore subscription', 501);
+        return response.data;
     }
     /**
      * Get pages for a storybook.
