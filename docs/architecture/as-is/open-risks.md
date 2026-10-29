@@ -14,7 +14,7 @@
 | `/api/storyFriends` lacks the persona-scope check `/api/storyWizard` has | creation-modes §6 | Low |
 | `my-orders` returns raw order documents, including our cost snapshot and Mixam logs | print-orders §6 | Low |
 | `/api/children` returns soft-deleted children and internal fields | characters-actors §6 | Low |
-| Other `'use server'` modules (`ledger.server.ts`, `seed-print-products.ts`, config loaders) export unauthenticated functions. None is imported by client code today, so none is callable; a lint rule should keep it that way | `src/lib` | Latent |
+| Other `'use server'` modules (`ledger.server.ts`, `seed-print-products.ts`, config loaders) export unauthenticated functions. After #9 none is imported by client code, so none is callable; a lint rule should keep it that way | `src/lib` | Latent |
 | Both auth helpers accept `?idToken=` in the query string | `server-auth.ts`, `auth-utils.ts` | Low |
 | `users.roles.isParent` is self-writable, so "parent" means "signed in" | `firestore.rules` | Low |
 
@@ -39,10 +39,11 @@
 | Nothing server-side chains pages → images; closing the browser tab stops a book | status-audit |
 | Random picsum placeholder avatars are fed to image generation as if they were the character | characters-actors §6.3 |
 
-## Fixed during Phase 1 (Phase 0 follow-up PR)
+## Fixed during Phase 1 (Phase 0 follow-up, #9)
 
 - `storyWizardFlow` exposed as an unauthenticated server action via `/kids/create`.
 - Placeholder name fallback looked up `displayName` across all families (cross-family photo and
   detail leak into prompts).
 - `printOrders` rules let owners write status, payment and PDF URLs; `printStoryBooks` rules let
   owners set PDF URLs and `pdfStatus`.
+- An unused client import of the `'use server'` `logAIFlow` in `/admin/characters`.

@@ -70,8 +70,8 @@ place an order, and an admin manually approves and submits it to Mixam.
    random stock photo.
 7. **Ordering is not ready for real money.** No payment, our cost shown as the price, no
    idempotency on order creation or Mixam submission.
-8. **Security gaps beyond Phase 0** were found: three were fixed in the Phase 0 follow-up PR, and the
-   rest are listed in `open-risks.md` for Phase 3.
+8. **Security gaps beyond Phase 0** were found: three were fixed in the Phase 0 follow-up (#9), and
+   the rest are listed in `open-risks.md` for Phase 3.
 
 ## Curated configuration
 

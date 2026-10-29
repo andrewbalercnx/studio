@@ -16,6 +16,23 @@
 
 ## Changes
 
+### 2026-10-29
+
+#### `#8` - Phase 1: map the system as it is
+
+**Type**: Documentation / Tooling
+
+**Summary**: A read-only map of the system as input to the Phase 2 target model. It has six area maps with file:line citations, plus a cross-cutting glossary, collection ownership, a status audit, a config inventory, a delete list and open risks. It also adds `scripts/export-config.mjs`, which exports curated config (redacting secrets and listing the Storage files it depends on) before any reset of trial data.
+
+**Created files**:
+- `docs/architecture/as-is/` (README, glossary, collections, status-audit, config-inventory, delete-list, open-risks, `areas/*.md`)
+- `scripts/export-config.mjs`
+
+**Modified files**:
+- `docs/architecture/REVIEW_PLAN.md`, `.gitignore`, `docs/CHANGES.md`
+
+---
+
 ### 2026-10-28
 
 #### `#7` - Phase 0: require auth and ownership on API routes
