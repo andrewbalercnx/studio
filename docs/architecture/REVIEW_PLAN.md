@@ -1,6 +1,6 @@
 # Architecture Review & Rebuild Plan
 
-> **Created**: 2026-10-28 · **Status**: Phase 0 in progress
+> **Created**: 2026-10-28 · **Status**: Phase 1 awaiting owner review
 >
 > The codebase was started in an early Firebase Studio and grew one feature at a time. This plan
 > reviews it end to end and rebuilds the parts that lack a coherent model, above all the process of
@@ -171,8 +171,8 @@ reset trial data for that slice, re-seed config. Order:
 
 | Phase | Status | PR |
 |-------|--------|----|
-| 0 — Stop the bleeding | In progress | — |
-| 1 — As-is map | Not started | — |
+| 0 — Stop the bleeding | Done (follow-up fixes in a second PR) | #7 |
+| 1 — As-is map | Awaiting owner review — see `as-is/README.md` | this PR |
 | 2 — Target model | Not started | — |
 | 3 — Security review | Not started | — |
 | 4 — Foundations | Not started | — |

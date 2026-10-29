@@ -48,7 +48,11 @@ const CONFIG_COLLECTIONS = [
   'printLayouts',
   'products',
   'prices',
+  'storyPhases',
 ];
+
+/** Documents inside exported collections that hold runtime state, not config. */
+const EXCLUDED_DOCS = new Set(['systemConfig/circuitBreakers']);
 
 const SECRET_KEY = /(api[-_]?key|secret|password|passcode|token|private[-_]?key|client[-_]?secret|credential|webhook[-_]?url)/i;
 const STORAGE_URL = /^(gs:\/\/|https:\/\/(firebasestorage\.googleapis\.com|storage\.googleapis\.com)\/)/;
@@ -127,6 +131,7 @@ async function exportCollection(collectionRef, context) {
   const snapshot = await collectionRef.get();
   const docs = [];
   for (const docSnap of snapshot.docs) {
+    if (EXCLUDED_DOCS.has(docSnap.ref.path)) continue;
     docs.push(await exportDocument(docSnap, context));
   }
   return docs;
