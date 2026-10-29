@@ -18,6 +18,20 @@
 
 ### 2026-10-29
 
+#### `#15` - Phase 5.3: Creation on the server (five modes, one interface)
+
+**Type**: Architecture / Feature (server only)
+
+**Summary**: Adds the target Story: one document with server-written turns, `[[cast:id]]` tokens and engine state on the server. Five creation engines (wizard, freeplay, guided, friends, adventure) sit behind one `start`/`respond` interface and read today's `storyGenerators` config. The routes are `POST /api/stories`, `/turns`, `/abandon` and `/finish`; creating a Story and taking a turn both require an idempotency key, and turns run one at a time. Every mode now ends through the `story.finish` job, so title, synopsis and the single allowance charge happen for every Story. Title and synopsis use their own Flash model purpose. Owner-read-only rules cover the new Stories. The Book pipeline reads both Story shapes until 5.4. Adds `scripts/reset-trial-data.mjs`, which defaults to a dry run and has an emulator test. No UI uses this yet (5.4).
+
+**Created files**:
+- `src/server/creation/**`, `src/app/api/stories/route.ts`, `src/app/api/stories/[storyId]/{turns,abandon,finish}/route.ts`, `scripts/reset-trial-data.mjs`, `docs/architecture/target/slices/5.3-creation-server.md`
+
+**Modified files**:
+- `src/server/**` (schemas, AI purposes, job kinds, books story-source), `firestore.rules`, `tests/firestore-rules/check-rules.mjs`, `package.json`, `src/app/admin/regression/page.tsx`, `docs/API.md`, `docs/SCHEMA.md`, `docs/SYSTEM_DESIGN.md`, `docs/DEPLOYMENT.md`, `docs/architecture/**`, `docs/CHANGES.md`
+
+---
+
 #### `#14` - Phase 5.2: Books in the web and kids apps; delete old storybook generation
 
 **Type**: Feature / Removal
