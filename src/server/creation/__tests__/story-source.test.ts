@@ -29,11 +29,11 @@ beforeEach(async () => {
 
 const stamp = Timestamp.fromMillis(0);
 
-describe('story source: both shapes until slice 5.4', () => {
-  it('reads a legacy story (parentUid, storyText, metadata.title)', () => {
-    const legacy = storyFromDocument('s1', { parentUid: 'p1', childId: 'c1', storyText: '$$c1$$ ran.', actors: ['ch1'], metadata: { title: 'Run' } });
-    expect(legacy).toMatchObject({ shape: 'legacy', ownerUid: 'p1', childId: 'c1', text: '$$c1$$ ran.', title: 'Run', actorIds: ['ch1'], status: null });
-    expect(isFinished(legacy)).toBe(true);
+describe('story source: target Stories only (slice 5.4)', () => {
+  it('treats a story written by the retired flows (parentUid, storyText) as not found', () => {
+    expect(() => storyFromDocument('s1', { parentUid: 'p1', childId: 'c1', storyText: '$$c1$$ ran.', actors: ['ch1'], metadata: { title: 'Run' } })).toThrow(
+      expect.objectContaining({ status: 404, code: 'STORY_NOT_FOUND' })
+    );
   });
 
   it('reads a target Story (ownerUid, text with cast tokens, cast) and only a complete one is finished', () => {
@@ -53,7 +53,7 @@ describe('story source: both shapes until slice 5.4', () => {
       updatedAt: stamp,
     };
     const story = storyFromDocument('s2', doc);
-    expect(story).toMatchObject({ shape: 'story', ownerUid: 'p1', text: '[[cast:c1]] and [[cast:ch1]] ran.', actorIds: ['ch1'], status: 'finishing', title: 'Run' });
+    expect(story).toMatchObject({ ownerUid: 'p1', text: '[[cast:c1]] and [[cast:ch1]] ran.', actorIds: ['ch1'], status: 'finishing', title: 'Run' });
     expect(isFinished(story)).toBe(false);
     expect(isFinished({ ...story, status: 'complete' })).toBe(true);
     expect(() => storyFromDocument('s3', { ...doc, modeId: 'gemini3' })).toThrow(DataIntegrityError);
@@ -70,7 +70,7 @@ describe('story source: both shapes until slice 5.4', () => {
     }
     await bench.drain();
     const source = await loadStorySource(bench.db, created.storyId);
-    expect(source).toMatchObject({ shape: 'story', status: 'complete', title: "Emma's Big Day" });
+    expect(source).toMatchObject({ status: 'complete', title: "Emma's Big Day" });
 
     const book = await createBook(bench.bookServices, p1, { storyId: created.storyId, formId: 'picture', styleId: 'water', idempotencyKey: key() });
     await bench.drain();

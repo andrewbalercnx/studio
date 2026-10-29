@@ -4,7 +4,7 @@
  * and TTS. Not a test file itself.
  */
 import { vi } from 'vitest';
-import type { Firestore } from 'firebase-admin/firestore';
+import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { InProcessDispatcher } from '../../jobs/dispatcher';
 import { JobRegistry } from '../../jobs/registry';
 import { JobRunner } from '../../jobs/runner';
@@ -126,16 +126,51 @@ export function createBench(): Bench {
   };
 }
 
+/** A complete target Story (slice 5.3 shape) owned by p1 for child c1. */
+export function completeStory(input: { text: string; castIds?: string[]; title?: string | null; synopsis?: string | null; ownerUid?: string; childId?: string }) {
+  const ownerUid = input.ownerUid ?? 'p1';
+  const childId = input.childId ?? 'c1';
+  const stamp = Timestamp.fromMillis(0);
+  return {
+    schemaVersion: 2,
+    ownerUid,
+    childId,
+    modeId: 'wizard',
+    storyTypeId: null,
+    cast: [
+      { castId: childId, ref: { kind: 'child', id: childId }, role: 'hero', addedBy: 'setup' },
+      ...(input.castIds ?? []).map((id) => ({ castId: id, ref: { kind: 'character', id }, role: 'supporting', addedBy: 'ai' })),
+    ],
+    status: 'complete',
+    text: input.text,
+    title: input.title ?? null,
+    synopsis: input.synopsis ?? null,
+    titleHint: null,
+    modeState: {},
+    turnCount: 2,
+    pendingTurn: null,
+    idempotencyKey: null,
+    finishJobId: null,
+    finishRuns: 1,
+    allowance: null,
+    error: null,
+    completedAt: stamp,
+    abandonedAt: null,
+    createdAt: stamp,
+    updatedAt: stamp,
+  };
+}
+
 /** A family (p1) with a child, a pet without photos, another family's character, a Form and a Style. */
 export async function seed(db: Firestore): Promise<void> {
-  await db.collection('stories').doc('s1').set({
-    parentUid: 'p1',
-    childId: 'c1',
-    storyText: '$$c1$$ found $$ch1$$ in the garden. $$stranger1234567890$$ waved. They had a lovely day.',
-    actors: ['c1', 'ch1', 'stranger1234567890'],
-    synopsis: 'Emma and Rex have a lovely day.',
-    metadata: { title: 'The Big Day' },
-  });
+  await db.collection('stories').doc('s1').set(
+    completeStory({
+      text: '[[cast:c1]] found [[cast:ch1]] in the garden. [[cast:stranger1234567890]] waved. They had a lovely day.',
+      castIds: ['ch1', 'stranger1234567890'],
+      synopsis: 'Emma and Rex have a lovely day.',
+      title: 'The Big Day',
+    })
+  );
   await db.collection('children').doc('c1').set({
     ownerParentUid: 'p1',
     displayName: 'Emma',

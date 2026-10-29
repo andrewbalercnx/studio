@@ -9,6 +9,7 @@ import { defaultEngineDeps } from './deps';
 import type { CreationServiceDeps } from './service';
 
 export * from './service';
+export * from './views';
 export { STORY_FINISH_KIND, registerCreationJobs, finishSpec } from './finish';
 export { MODE_SOURCE_IDS, listCreationModes, loadCreationMode, type CreationMode } from './modes';
 export type { ChildInput, CreationModeEngine, Done, Turn } from './engine';
@@ -17,4 +18,9 @@ export type { ChildInput, CreationModeEngine, Done, Turn } from './engine';
 export async function getCreationServiceDeps(): Promise<CreationServiceDeps> {
   const db = await getDb();
   return { db, runner: getJobRunner(), engines: await defaultEngineDeps(db) };
+}
+
+/** Firestore for the read routes (no engines or job runner needed). */
+export async function getCreationReadDb() {
+  return getDb();
 }
