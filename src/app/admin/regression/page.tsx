@@ -317,6 +317,7 @@ const initialTests: TestResult[] = [
   { id: 'SCENARIO_STORYBOOK_RETRY', name: 'Scenario: Storybook Retry API', status: 'PENDING', message: '' },
   { id: 'API_STORYBOOK_PAGE_EDIT', name: 'API: /api/storybookV2/pageEdit (Validation + Edit + Lock)', status: 'PENDING', message: '' },
   { id: 'API_STORYBOOKV2_GENERATION_AUTH', name: 'API: /api/storybookV2/pages + /images (Auth Required)', status: 'PENDING', message: '' },
+  { id: 'API_BOOKS_V3_AUTH', name: 'API: /api/manuscripts + /api/books (Auth + Not Found)', status: 'PENDING', message: '' },
   { id: 'API_PERSONA', name: 'API: /api/persona (auth + childId validation)', status: 'PENDING', message: '' },
   { id: 'API_VERIFY_PIN_LOCKOUT', name: 'API: /api/parent/verify-pin (lockout policy dry-run)', status: 'PENDING', message: '' },
   { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
@@ -2069,6 +2070,43 @@ export default function AdminRegressionPage() {
         });
     } catch (e: any) {
         updateTestResult('API_STORYBOOKV2_GENERATION_AUTH', { status: 'ERROR', message: e.message });
+    }
+
+    // Test: API_BOOKS_V3_AUTH — the server-side Book pipeline routes (slice 5.1).
+    // All five reject anonymous calls (401). Authenticated calls on ids that do
+    // not exist get past the auth gate and return 404, so no Manuscript or Book
+    // is created, no allowance is charged and no AI runs. The full pipeline is
+    // covered by src/server/books/__tests__/pipeline.test.ts (and runs in the
+    // emulator with TEST_MODE=1).
+    try {
+        const booksToken = await auth?.currentUser?.getIdToken?.();
+        if (!booksToken) throw new Error('Admin authentication required for books auth test.');
+        const missingStory = { storyId: 'regression-missing-story', formId: 'regression-missing-form' };
+        const missingBook = 'regression-missing-book';
+        const routes: Array<{ path: string; body?: unknown }> = [
+            { path: '/api/manuscripts', body: missingStory },
+            { path: '/api/books', body: { ...missingStory, styleId: 'regression-missing-style' } },
+            { path: `/api/books/${missingBook}/pages/2/retry` },
+            { path: `/api/books/${missingBook}/lock` },
+            { path: `/api/books/${missingBook}/unlock` },
+        ];
+        for (const route of routes) {
+            const init = { method: 'POST', body: route.body === undefined ? undefined : JSON.stringify(route.body) };
+            // Plain fetch: authFetch would attach the signed-in admin's token.
+            const anonymous = await fetch(route.path, { ...init, headers: { 'Content-Type': 'application/json' } });
+            if (anonymous.status !== 401) throw new Error(`${route.path}: expected 401 without auth, got ${anonymous.status}`);
+            const authed = await authFetch(route.path, {
+                ...init,
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${booksToken}` },
+            });
+            if (authed.status !== 404) throw new Error(`${route.path}: expected 404 for a missing id, got ${authed.status}`);
+        }
+        updateTestResult('API_BOOKS_V3_AUTH', {
+            status: 'PASS',
+            message: 'manuscripts, books, retry, lock and unlock reject anonymous calls (401) and return 404 for missing ids.',
+        });
+    } catch (e: any) {
+        updateTestResult('API_BOOKS_V3_AUTH', { status: 'ERROR', message: e.message });
     }
 
     // Test: API_PERSONA — the persona cookie endpoint (Sprint W4-A).
