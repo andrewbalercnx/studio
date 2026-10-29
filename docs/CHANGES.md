@@ -18,6 +18,31 @@
 
 ### 2026-10-29
 
+#### `#11` - Phase 3: security review and fixes
+
+**Type**: Security
+
+**Summary**: Threat model with the status of every finding. Firestore rules now stop the browser writing fields the server trusts:
+- roles and PIN state;
+- the session allowance flag and compile lock;
+- story content;
+- storybook lock, finalization (printable PDF URLs), art status and generation state;
+- storybook pages and share tokens.
+
+Owner fields are immutable on update, `help-*` docs are admin-only, and `systemConfig` is admin-only except `diagnostics`. 40 rule cases run against the emulator in CI (`npm run test:rules`). On the API side: tokens are accepted from the header only; `storyFriends` applies the persona scope; `my-orders` returns an allowlist; the children routes exclude soft-deleted children. The Mixam webhook now applies updates only for the stored `mixamOrderId`, never moves an order out of a final state, and returns 500 on internal errors. **Requires `firebase deploy --only firestore:rules`.**
+
+**Created files**:
+- `docs/architecture/security/threat-model.md`, `tests/firestore-rules/check-rules.mjs`
+
+**Modified files**:
+- `firestore.rules`, `.github/workflows/ci.yml`, `package.json`
+- `src/lib/server-auth.ts`, `src/lib/auth-utils.ts`
+- `src/app/api/storyFriends/route.ts`, `src/app/api/printOrders/my-orders/route.ts`, `src/app/api/children/route.ts`, `src/app/api/children/[childId]/route.ts`, `src/app/api/webhooks/mixam/route.ts`
+- `src/app/firestore-test/page.tsx`
+- `docs/API.md`, `docs/SCHEMA.md`, `docs/SYSTEM_DESIGN.md`, `docs/architecture/REVIEW_PLAN.md`, `docs/architecture/route-auth-matrix.md`, `docs/architecture/as-is/open-risks.md`
+
+---
+
 #### `#10` - Phase 2: target domain model, pipeline and ADRs
 
 **Type**: Architecture / Documentation
