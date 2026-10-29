@@ -5,7 +5,7 @@ import { verifyAuthToken } from '@/lib/auth-utils';
 
 /**
  * GET /api/children
- * Returns all children belonging to the authenticated parent.
+ * Returns the authenticated parent's children, excluding soft-deleted ones.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -24,10 +24,14 @@ export async function GET(request: NextRequest) {
       .where('ownerParentUid', '==', authResult.uid)
       .get();
 
-    const children = childrenSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    // Soft-deleted children are hidden, as Firestore rules hide them from
+    // direct reads.
+    const children = childrenSnapshot.docs
+      .filter(doc => !doc.data().deletedAt)
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
     return NextResponse.json(children);
   } catch (error: any) {

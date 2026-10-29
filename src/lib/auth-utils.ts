@@ -21,28 +21,15 @@ async function extractBearerToken(): Promise<string | null> {
 }
 
 /**
- * Extract token from query string (fallback)
- */
-function extractQueryToken(request: Request): string | null {
-  try {
-    const url = new URL(request.url);
-    return url.searchParams.get('idToken');
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Verify Firebase ID token and return user ID
  */
 export async function verifyAuthToken(request: Request): Promise<AuthResult> {
   try {
     await initFirebaseAdminApp();
 
-    // Try header token first, then query string
-    const headerToken = await extractBearerToken();
-    const queryToken = extractQueryToken(request);
-    const token = headerToken || queryToken;
+    // Header only: a token in the query string ends up in URLs, browser
+    // history and request logs.
+    const token = await extractBearerToken();
 
     if (!token) {
       return { valid: false, uid: null, error: 'MISSING_TOKEN' };

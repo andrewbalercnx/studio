@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-10-29 (security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-10-29 (Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -1411,11 +1411,11 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Collection | Read | Write | Notes |
 |------------|------|-------|-------|
-| `users` | Owner, Admin | Owner, Admin | |
-| `children` | Owner, Admin | Owner, Admin | Soft-delete hidden from non-admins |
-| `characters` | Owner, Admin | Owner, Admin | Soft-delete hidden from non-admins |
-| `storySessions` | Owner, Admin | Owner, Admin | Including subcollections |
-| `stories` | Owner, Admin | Owner, Admin | Including subcollections |
+| `users` | Owner, Admin | Owner, Admin | Owner cannot change `roles` or PIN fields (`pinHash`, `pinSalt`, `pinUpdatedAt`, `pinFailedAttempts`, `pinLockedUntil`); signup may only create default parent roles |
+| `children` | Owner, Admin | Owner, Admin | Soft-delete hidden from non-admins; `ownerParentUid` immutable; `help-*` docs admin-only |
+| `characters` | Owner, Admin | Owner, Admin | Soft-delete hidden from non-admins; `ownerParentUid` immutable; `help-*` docs admin-only |
+| `storySessions` | Owner, Admin | Owner, Admin | Including subcollections. Owner cannot set `storyAllowanceConsumed`, `compileInProgress`, `compileStartedAt`, or change `parentUid` |
+| `stories` | Owner, Admin | Admin; owner may update only `metadata.title`, `selectedImageStyleId`, `selectedImageStylePrompt`, soft-delete fields | `storybooks`: owner creates idle storybooks (no lock/finalization/art/generation fields) and may only soft-delete or set `artStatus.recoveryNotified`; pages, share tokens and other subcollections admin/server-only |
 | `printOrders` | Owner, Admin | Admin | Created and updated by server routes (Admin SDK) only |
 | `printStoryBooks` | Owner, Admin | Owner (create draft, delete), Admin (all) | Owner creates only with `pdfStatus: 'draft'` and no PDF fields; layout and PDFs are server-written |
 | `printProducts` | Authenticated | Admin | |
@@ -1425,7 +1425,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 | `storyOutputTypes` | Writer, Admin | Writer, Admin | |
 | `printLayouts` | Writer, Admin | Writer, Admin | |
 | `imageStyles` | Authenticated | Admin | |
-| `systemConfig` | Admin | Admin | |
+| `systemConfig` | Admin (all signed-in users: `diagnostics` only) | Admin | |
 | `aiFlowLogs` | Admin | Admin | |
 | `aiRunTraces` | Admin | Admin | |
 | `helpWizards` | Writer, Admin | Writer, Admin | help-* readable by authenticated |
@@ -1440,6 +1440,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-10-29 | Phase 3 security rules: owner cannot write roles/PIN state, session allowance and compile-lock fields, story content, storybook lock/finalization/art/generation state, storybook pages or share tokens; owner fields immutable on update; `help-*` documents admin-only; `systemConfig` admin-only except `diagnostics`. Checked by `npm run test:rules` |
 | 2026-10-29 | Security rules: `printOrders` create/update/delete admin-only (server routes write orders); `printStoryBooks` owner create restricted to `pdfStatus: 'draft'` without PDF fields, owner update removed |
 | 2026-06-11 | Sprint W3-A: `adminNextAction`/`needsAdminAttention`/`failureSummary` on printOrders (Mixam webhook + admin list API); Added `systemConfig/opsHealth` (health-check thresholds, per-check `lastAlertedAt` dedup, last run results) |
 | 2026-06-11 | Sprint W3-B: Added `systemConfig/featureFlags` (optional boolean-per-flag fallback layer below Firebase Remote Config; see `docs/DEPLOYMENT.md`) |

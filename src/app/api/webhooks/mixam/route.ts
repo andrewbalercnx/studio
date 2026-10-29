@@ -232,6 +232,15 @@ export async function POST(request: Request) {
 
     const order = { id: orderDoc.id, ...orderDoc.data() } as PrintOrder;
 
+    // Only accept updates for the Mixam order we actually submitted for this
+    // order. The externalOrderId in the payload is ours, so a mismatched or
+    // missing mixamOrderId means a stale job (e.g. a resubmitted order) or a
+    // payload that does not belong to this order.
+    if (!order.mixamOrderId || String(webhook.orderId) !== String(order.mixamOrderId)) {
+      console.warn(`[Mixam Webhook] Ignoring webhook for Mixam order ${webhook.orderId}: order ${ourOrderId} expects ${order.mixamOrderId ?? 'none'}`);
+      return NextResponse.json({ received: true, warning: 'Mixam order id does not match' });
+    }
+
     // Log the webhook interaction
     const webhookInteraction = createWebhookInteraction({
       webhookEvent: `status.${webhook.status}`,
@@ -285,8 +294,14 @@ export async function POST(request: Request) {
       lastWebhookAt: FieldValue.serverTimestamp(),
     };
 
+    // Final states are final: a late or replayed webhook must not move a
+    // delivered or cancelled order back into production.
+    const isFinal = order.fulfillmentStatus === 'delivered' || order.fulfillmentStatus === 'cancelled';
+    const statusChanges = !isFinal && order.fulfillmentStatus !== newStatus;
+    const appliedStatus = statusChanges ? newStatus : order.fulfillmentStatus;
+
     // Update fulfillment status if it changed
-    if (order.fulfillmentStatus !== newStatus) {
+    if (statusChanges) {
       updateData.fulfillmentStatus = newStatus;
     }
 
@@ -307,7 +322,7 @@ export async function POST(request: Request) {
     // Add status to history
     const now = new Date();
     updateData.statusHistory = FieldValue.arrayUnion({
-      status: newStatus,
+      status: appliedStatus,
       timestamp: now,
       note: webhook.statusReason || `Mixam status: ${effectiveStatus} (webhook + refresh)`,
       source: 'webhook',
@@ -375,7 +390,7 @@ export async function POST(request: Request) {
     // Conservative by design — the webhook only updates state and flags/queues actions for a
     // human; it never triggers irreversible operations (no auto-confirm, no auto-cancel).
     const nextAction = deriveAdminNextAction({
-      fulfillmentStatus: newStatus,
+      fulfillmentStatus: appliedStatus,
       hasArtworkErrors: webhook.hasErrors,
       statusReason: webhook.statusReason ?? null,
     });
@@ -388,7 +403,7 @@ export async function POST(request: Request) {
 
     // Persist a one-line failure summary (null clears a stale summary once resolved).
     updateData.failureSummary = buildFailureSummary({
-      fulfillmentStatus: newStatus,
+      fulfillmentStatus: appliedStatus,
       validationResult: order.validationResult ?? null,
       mixamArtworkErrors:
         (updateData.mixamArtworkErrors as any) ?? (order as any).mixamArtworkErrors ?? null,
@@ -436,7 +451,7 @@ export async function POST(request: Request) {
     }
 
     // 9. Send email notification to admins if status changed
-    if (order.fulfillmentStatus !== newStatus) {
+    if (statusChanges) {
       try {
         const updatedOrder = { ...order, id: order.id, fulfillmentStatus: newStatus } as PrintOrder;
         await notifyOrderStatusChanged(
@@ -454,17 +469,18 @@ export async function POST(request: Request) {
     return NextResponse.json({
       received: true,
       orderId: ourOrderId,
-      status: newStatus,
+      status: appliedStatus,
     });
 
   } catch (error: any) {
     console.error('[Mixam Webhook] Error processing webhook:', error);
 
-    // Return 200 to prevent Mixam retries for our internal errors
-    // Log the error for investigation
+    // Non-200 so Mixam retries: an internal error (e.g. Firestore
+    // unavailable) must not silently drop a status update. Retries are safe:
+    // status changes and the admin email only happen when the status differs.
     return NextResponse.json(
-      { received: true, error: 'Internal processing error' },
-      { status: 200 }
+      { received: false, error: 'Internal processing error' },
+      { status: 500 }
     );
   }
 }

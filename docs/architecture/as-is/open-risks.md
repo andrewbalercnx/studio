@@ -1,5 +1,8 @@
 # Open Risks (input to Phase 3)
 
+> **Superseded for status tracking by `../security/threat-model.md` (Phase 3).** That file
+> records which risks are fixed and which are accepted until a Phase 5 slice replaces the code.
+
 > Phase 1 of `../REVIEW_PLAN.md`. Security, privacy, billing and data-integrity problems found
 > while mapping the system that are **not** fixed yet. Items fixed during Phase 1 are listed at
 > the end. Citations are in the area maps under `areas/`.
