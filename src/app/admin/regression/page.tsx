@@ -296,6 +296,7 @@ const initialTests: TestResult[] = [
   { id: 'SCENARIO_WARMUP_AUTO', name: 'Scenario: Auto-Warmup', status: 'PENDING', message: '' },
   { id: 'SCENARIO_GEMINI4_FLOW', name: 'Scenario: Gemini4 Story Flow', status: 'PENDING', message: '' },
   { id: 'API_BOOKS_V3_AUTH', name: 'API: /api/manuscripts + /api/books (Auth + Not Found)', status: 'PENDING', message: '' },
+  { id: 'API_STORIES_V3_AUTH', name: 'API: /api/stories + turns/abandon/finish (Auth + Not Found)', status: 'PENDING', message: '' },
   { id: 'API_PERSONA', name: 'API: /api/persona (auth + childId validation)', status: 'PENDING', message: '' },
   { id: 'API_VERIFY_PIN_LOCKOUT', name: 'API: /api/parent/verify-pin (lockout policy dry-run)', status: 'PENDING', message: '' },
   { id: 'API_WARMUP_REPLY', name: 'API: /api/warmupReply (Input)', status: 'PENDING', message: '' },
@@ -1537,6 +1538,40 @@ export default function AdminRegressionPage() {
         });
     } catch (e: any) {
         updateTestResult('API_BOOKS_V3_AUTH', { status: 'ERROR', message: e.message });
+    }
+
+    // Test: API_STORIES_V3_AUTH — the creation routes (slice 5.3). All four
+    // reject anonymous calls (401). Authenticated calls on a child or story that
+    // does not exist get past the auth gate and return 404, so no Story is
+    // created, no allowance is checked or charged and no AI runs. The engines and
+    // story.finish are covered by src/server/creation/__tests__/.
+    try {
+        const storiesToken = await auth?.currentUser?.getIdToken?.();
+        if (!storiesToken) throw new Error('Admin authentication required for stories auth test.');
+        const missingStory = 'regression-missing-story';
+        const routes: Array<{ path: string; body?: unknown }> = [
+            { path: '/api/stories', body: { childId: 'regression-missing-child', modeId: 'wizard', idempotencyKey: 'regression-stories-auth' } },
+            { path: `/api/stories/${missingStory}/turns`, body: { input: { kind: 'choice', optionId: 'A' }, idempotencyKey: 'regression-turns-auth' } },
+            { path: `/api/stories/${missingStory}/abandon` },
+            { path: `/api/stories/${missingStory}/finish` },
+        ];
+        for (const route of routes) {
+            const init = { method: 'POST', body: route.body === undefined ? undefined : JSON.stringify(route.body) };
+            // Plain fetch: authFetch would attach the signed-in admin's token.
+            const anonymous = await fetch(route.path, { ...init, headers: { 'Content-Type': 'application/json' } });
+            if (anonymous.status !== 401) throw new Error(`${route.path}: expected 401 without auth, got ${anonymous.status}`);
+            const authed = await authFetch(route.path, {
+                ...init,
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${storiesToken}` },
+            });
+            if (authed.status !== 404) throw new Error(`${route.path}: expected 404 for a missing id, got ${authed.status}`);
+        }
+        updateTestResult('API_STORIES_V3_AUTH', {
+            status: 'PASS',
+            message: 'stories, turns, abandon and finish reject anonymous calls (401) and return 404 for missing ids.',
+        });
+    } catch (e: any) {
+        updateTestResult('API_STORIES_V3_AUTH', { status: 'ERROR', message: e.message });
     }
 
     // Test: API_PERSONA — the persona cookie endpoint (Sprint W4-A).
