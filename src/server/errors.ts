@@ -76,6 +76,14 @@ export class ConflictError extends AppError {
   }
 }
 
+/** 503: a dependency (e.g. the AI provider) failed; the request can be repeated. */
+export class ServiceUnavailableError extends AppError {
+  readonly status = 503;
+  constructor(message = 'Service temporarily unavailable', options?: AppErrorOptions) {
+    super('SERVICE_UNAVAILABLE', message, options);
+  }
+}
+
 /**
  * 500: a stored document does not match its schema. Thrown by repositories so
  * malformed data fails loudly instead of flowing on as `any`. The response

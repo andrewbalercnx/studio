@@ -3,17 +3,19 @@
  *
  * These collections do not exist yet; Phase 5 slices start writing them. Child
  * and Character repositories (which embed `likenessSchema`) are added by the
- * Characters slice, together with the rest of their fields.
+ * Characters slice, together with the rest of their fields. Story turns were
+ * added by the creation slice (5.3).
  */
 import { defineRepository, defineSubRepository } from './repository';
 import { bookPageSchema, bookSchema, castSheetSchema, renderSchema } from './schemas/book';
 import { jobSchema } from './schemas/job';
 import { manuscriptPageSchema, manuscriptSchema } from './schemas/manuscript';
-import { storySchema } from './schemas/story';
+import { storySchema, turnSchema } from './schemas/story';
 
 export const jobs = defineRepository({ path: 'jobs', schema: jobSchema, label: 'Job' });
 
 export const stories = defineRepository({ path: 'stories', schema: storySchema, label: 'Story' });
+export const storyTurns = defineSubRepository({ parent: 'stories', name: 'turns', schema: turnSchema, label: 'Story turn' });
 
 export const manuscripts = defineRepository({ path: 'manuscripts', schema: manuscriptSchema, label: 'Manuscript' });
 export const manuscriptPages = defineSubRepository({

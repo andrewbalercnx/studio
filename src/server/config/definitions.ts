@@ -42,3 +42,25 @@ export const imagePromptConfig = defineConfig({
   schema: z.object({ imagePrompt: z.string(), enabled: z.boolean() }),
   defaults: { imagePrompt: '', enabled: false },
 });
+
+/**
+ * `systemConfig/prompts`: the admin-editable global prefix prepended to story
+ * prompts when `enabled` (today's `getGlobalPrefix`). Read by the creation
+ * engines (slice 5.3); the old loader stays for today's flows until 5.4.
+ */
+export const globalPromptConfig = defineConfig({
+  path: 'systemConfig/prompts',
+  schema: z.object({ globalPrefix: z.string(), enabled: z.boolean() }),
+  defaults: { globalPrefix: '', enabled: false },
+});
+
+/**
+ * `systemConfig/compilePrompt`: the admin-editable instructions for polishing
+ * an adventure's beats into one story (today's `getCompilePrompt`). Used by
+ * the `adventure` engine when `enabled`.
+ */
+export const compilePromptConfig = defineConfig({
+  path: 'systemConfig/compilePrompt',
+  schema: z.object({ compilePrompt: z.string(), enabled: z.boolean() }),
+  defaults: { compilePrompt: '', enabled: false },
+});
