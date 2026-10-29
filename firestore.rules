@@ -1,5 +1,5 @@
-// Rules version: v21 - Production-hardened rules
-// - Tightened all `list` rules to enforce ownership via resource.data checks
+// Rules version: v22 - Stories server-written only; story sessions and old storybooks removed (slice 5.4)
+// - v21: tightened all `list` rules to enforce ownership via resource.data checks
 // - Clients MUST include matching where() clauses or queries will be rejected
 // - Removed reliance on client-side filtering for security
 //
@@ -91,81 +91,6 @@ service cloud.firestore {
       // that don't include where('ownerParentUid', '==', uid).
       allow list: if isAdmin()
                   || (isAuthenticated() && resource.data.ownerParentUid == request.auth.uid && notDeleted());
-
-      // Legacy sessions sub-collection
-      match /sessions/{sessionId} {
-        allow get: if isAdmin()
-                   || (isHelpDocument(childId) && isAuthenticated())
-                   || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
-
-        allow list: if isAdmin()
-                    || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
-
-        allow update: if isAdmin()
-                      || (isAuthenticated() && !isHelpDocument(childId) && resource.data.parentUid == request.auth.uid
-                          && ownerUnchanged('parentUid'));
-        allow delete: if isAdmin()
-                      || (isAuthenticated() && !isHelpDocument(childId) && resource.data.parentUid == request.auth.uid);
-
-        allow create: if isAdmin()
-                      || (isAuthenticated() && !isHelpDocument(childId) && request.resource.data.parentUid == request.auth.uid);
-      }
-    }
-
-    // ========== STORY SESSIONS ==========
-    match /storySessions/{sessionId} {
-      allow get: if isAdmin()
-                 || (isHelpDocument(sessionId) && isAuthenticated())
-                 || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
-
-      // List: Requires where('parentUid', '==', uid) in query
-      allow list: if isAdmin()
-                  || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
-
-      // The compile lock and the allowance flag are read by /api/storyCompile;
-      // only the server may set them.
-      allow create: if isAdmin()
-                    || (isAuthenticated() && !isHelpDocument(sessionId) && request.resource.data.parentUid == request.auth.uid
-                        && !request.resource.data.keys().hasAny(['storyAllowanceConsumed', 'compileInProgress', 'compileStartedAt']));
-
-      allow update: if isAdmin()
-                    || (isAuthenticated() && !isHelpDocument(sessionId) && resource.data.parentUid == request.auth.uid
-                        && ownerUnchanged('parentUid')
-                        && !changedKeys().hasAny(['storyAllowanceConsumed', 'compileInProgress', 'compileStartedAt']));
-      allow delete: if isAdmin()
-                    || (isAuthenticated() && !isHelpDocument(sessionId) && resource.data.parentUid == request.auth.uid);
-
-      // Messages sub-collection
-      match /messages/{messageId} {
-        allow get: if isAdmin()
-                   || (isHelpDocument(sessionId) && isAuthenticated())
-                   || (isAuthenticated() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
-
-        allow list: if isAdmin()
-                    || (isAuthenticated() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
-
-        allow create: if isAdmin()
-                      || (isAuthenticated() && !isHelpDocument(sessionId) && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
-
-        allow update, delete: if isAdmin()
-                              || (isAuthenticated() && !isHelpDocument(sessionId) && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
-      }
-
-      // Events sub-collection
-      match /events/{eventId} {
-        allow get: if isAdmin()
-                   || (isHelpDocument(sessionId) && isAuthenticated())
-                   || (isAuthenticated() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
-
-        allow list: if isAdmin()
-                    || (isAuthenticated() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
-
-        allow create: if isAdmin()
-                      || (isAuthenticated() && !isHelpDocument(sessionId) && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
-
-        allow update, delete: if isAdmin()
-                              || (isAuthenticated() && !isHelpDocument(sessionId) && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
-      }
     }
 
     // ========== CHARACTERS ==========
@@ -189,95 +114,19 @@ service cloud.firestore {
     }
 
     // ========== STORIES ==========
-    // Two shapes until the trial-data reset (slice 5.4):
-    // - target Stories (slice 5.3, `schemaVersion: 2`, `ownerUid`): created and
-    //   changed only by the creation routes; the owner reads the Story and its
-    //   turns (lists filter on where('ownerUid', '==', uid));
-    // - legacy stories (`parentUid`, no `schemaVersion`): the owner may still
-    //   rename, pick an art style, soft-delete, and acknowledge storybook art.
-    function isTargetStory(data) {
-      return data.get('schemaVersion', 0) == 2;
-    }
-
+    // Stories (`schemaVersion: 2`, `ownerUid`) are created and changed only by
+    // the creation routes (Admin SDK). The owner reads a Story and its turns;
+    // list queries must filter on where('ownerUid', '==', uid). Story sessions
+    // and the storybook subcollections of the retired flows are gone with the
+    // trial-data reset (slice 5.4): no client reads or writes them.
     match /stories/{storyId} {
-      allow get: if isAdmin()
-                 || (isHelpDocument(storyId) && isAuthenticated())
-                 || (isAuthenticated() && resource.data.parentUid == request.auth.uid && notDeleted())
-                 || ownsDoc();
+      allow get, list: if isAdmin() || ownsDoc();
+      allow write: if isAdmin();
 
-      // List: requires where('parentUid', '==', uid) (legacy) or where('ownerUid', '==', uid) (target)
-      allow list: if isAdmin()
-                  || (isAuthenticated() && resource.data.parentUid == request.auth.uid && notDeleted())
-                  || ownsDoc();
-
-      // Stories are written by the server (creation routes, today's compile and
-      // flows). On a legacy story the owner may only rename, pick an art style,
-      // or soft-delete; a target Story has no client writes at all.
-      allow create: if isAdmin();
-
-      allow update: if isAdmin()
-                    || (isAuthenticated() && !isHelpDocument(storyId) && !isTargetStory(resource.data)
-                        && resource.data.parentUid == request.auth.uid
-                        && changedKeys().hasOnly(['metadata', 'selectedImageStyleId', 'selectedImageStylePrompt', 'updatedAt', 'deletedAt', 'deletedBy'])
-                        && (!changedKeys().hasAny(['metadata'])
-                            || request.resource.data.metadata.diff(resource.data.get('metadata', {})).affectedKeys().hasOnly(['title'])));
-      allow delete: if isAdmin();
-
-      // Turns of a target Story: written by the creation routes only; every
-      // turn carries `ownerUid` (lists filter on it).
+      // Turns: written by the creation routes only; every turn carries `ownerUid`.
       match /turns/{turnId} {
         allow get, list: if isAdmin() || ownsDoc();
         allow write: if isAdmin();
-      }
-
-      // Storybooks: the owner creates a new, idle storybook and may later only
-      // soft-delete it or acknowledge an art recovery. Lock state, finalization
-      // (printable PDF URLs), art status and generation state are server-owned:
-      // print orders and sharing trust them.
-      match /storybooks/{storybookId} {
-        allow get, list: if isAdmin()
-                         || (isHelpDocument(storyId) && isAuthenticated())
-                         || (isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid && notDeleted());
-
-        allow create: if isAdmin()
-                      || (isAuthenticated() && !isHelpDocument(storyId)
-                          && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid
-                          && request.resource.data.parentUid == request.auth.uid
-                          && !request.resource.data.keys().hasAny(['isLocked', 'finalization', 'artStatus', 'actorExemplarUrls', 'exemplarGeneration', 'audioGeneration'])
-                          && request.resource.data.get('pageGeneration', {'status': 'idle'}).status == 'idle'
-                          && request.resource.data.get('imageGeneration', {'status': 'idle'}).status == 'idle');
-
-        allow update: if isAdmin()
-                      || (isAuthenticated() && !isHelpDocument(storyId)
-                          && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid
-                          && changedKeys().hasOnly(['deletedAt', 'deletedBy', 'updatedAt', 'artStatus'])
-                          && (!changedKeys().hasAny(['artStatus'])
-                              || request.resource.data.artStatus.diff(resource.data.get('artStatus', {})).affectedKeys().hasOnly(['recoveryNotified'])));
-
-        allow delete: if isAdmin();
-
-        // Pages, exemplars and everything else under a storybook: server-written.
-        match /{rest=**} {
-          allow get, list: if isAdmin()
-                           || (isHelpDocument(storyId) && isAuthenticated())
-                           || (isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid);
-          allow write: if isAdmin();
-        }
-      }
-
-      // Other subcollections (legacy outputs, share tokens…): owner read, server write.
-      match /{sub}/{docId} {
-        allow get, list: if isAdmin()
-                         || (isHelpDocument(storyId) && isAuthenticated())
-                         || (isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid && notDeleted());
-        allow write: if isAdmin();
-
-        match /{rest=**} {
-          allow get, list: if isAdmin()
-                           || (isHelpDocument(storyId) && isAuthenticated())
-                           || (isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid);
-          allow write: if isAdmin();
-        }
       }
     }
 

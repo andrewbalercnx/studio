@@ -43,12 +43,8 @@ async function check(label, expected, operation) {
 
 // Seed as admin.
 await setDoc(doc(admin, 'children', 'c1'), { ownerParentUid: 'p1', displayName: 'Emma' });
-await setDoc(doc(admin, 'storySessions', 's1'), { parentUid: 'p1', childId: 'c1', arcStepIndex: 0 });
+// A story written by the retired flows (parentUid, no schemaVersion): removed by the reset, unreadable before it.
 await setDoc(doc(admin, 'stories', 's1'), { parentUid: 'p1', childId: 'c1', metadata: { title: 'Old', characterIds: [] }, isLocked: false });
-await setDoc(doc(admin, 'stories', 's1', 'storybooks', 'b1'), {
-  parentUid: 'p1', storyId: 's1', isLocked: false,
-  artStatus: { completeness: 'degraded', recoveryNotified: false }, finalization: { status: 'draft' },
-});
 await setDoc(doc(admin, 'systemConfig', 'diagnostics'), { enableAnalytics: false });
 await setDoc(doc(admin, 'systemConfig', 'email'), { from: 'orders@example.com' });
 
@@ -68,51 +64,25 @@ await check('create help-* child', 'deny', () => setDoc(doc(parent, 'children', 
 await check('rename own child', 'allow', () => updateDoc(doc(parent, 'children', 'c1'), { displayName: 'Em' }));
 await check('move child to another family', 'deny', () => updateDoc(doc(parent, 'children', 'c1'), { ownerParentUid: 'victim' }));
 
-// storySessions: compile lock and allowance flag are server-owned.
-await check('create own session', 'allow', () => setDoc(doc(parent, 'storySessions', 's2'), { parentUid: 'p1', childId: 'c1', status: 'in_progress' }));
-await check('create session with allowance flag', 'deny', () => setDoc(doc(parent, 'storySessions', 's3'), { parentUid: 'p1', storyAllowanceConsumed: true }));
-await check('advance arc step / complete', 'allow', () => updateDoc(doc(parent, 'storySessions', 's1'), { arcStepIndex: 1, status: 'completed' }));
-await check('set storyAllowanceConsumed', 'deny', () => updateDoc(doc(parent, 'storySessions', 's1'), { storyAllowanceConsumed: true }));
-await check('set compileInProgress', 'deny', () => updateDoc(doc(parent, 'storySessions', 's1'), { compileInProgress: true }));
-await check('move session to another family', 'deny', () => updateDoc(doc(parent, 'storySessions', 's1'), { parentUid: 'victim' }));
-await check('add message to own session', 'allow', () => addDoc(collection(parent, 'storySessions', 's1', 'messages'), { role: 'user', text: 'hi' }));
-await check('create help-* session', 'deny', () => setDoc(doc(parent, 'storySessions', 'help-s'), { parentUid: 'p1' }));
-
-// stories: server-written; owner may rename, pick a style, soft-delete.
-await check('create story directly', 'deny', () => setDoc(doc(parent, 'stories', 's9'), { parentUid: 'p1' }));
-await check('rename story', 'allow', () => updateDoc(doc(parent, 'stories', 's1'), { 'metadata.title': 'New', updatedAt: serverTimestamp() }));
-await check('pick art style', 'allow', () => setDoc(doc(parent, 'stories', 's1'), {
-  selectedImageStyleId: 'w', selectedImageStylePrompt: 'p', updatedAt: serverTimestamp(),
-}, { merge: true }));
-await check('change other story metadata', 'deny', () => updateDoc(doc(parent, 'stories', 's1'), { 'metadata.characterIds': ['x'] }));
-await check('lock story', 'deny', () => updateDoc(doc(parent, 'stories', 's1'), { isLocked: true }));
-
-// storybooks: idle create; lock, finalization, art status and generation server-owned.
-await check('create idle storybook', 'allow', () => addDoc(collection(parent, 'stories', 's1', 'storybooks'), {
-  parentUid: 'p1', storyId: 's1', pageGeneration: { status: 'idle' }, imageGeneration: { status: 'idle' }, createdAt: serverTimestamp(),
+// Story sessions and the old storybook subcollections are gone (slice 5.4): no client access.
+await check('create a story session', 'deny', () => setDoc(doc(parent, 'storySessions', 's2'), { parentUid: 'p1', childId: 'c1', status: 'in_progress' }));
+await check('read a story session', 'deny', () => getDoc(doc(parent, 'storySessions', 's2')));
+await check('mirror a session under the child', 'deny', () => setDoc(doc(parent, 'children', 'c1', 'sessions', 's2'), { parentUid: 'p1' }));
+await check('create storybook on a story', 'deny', () => addDoc(collection(parent, 'stories', 's1', 'storybooks'), {
+  parentUid: 'p1', storyId: 's1', pageGeneration: { status: 'idle' }, imageGeneration: { status: 'idle' },
 }));
-await check('create storybook with finalization', 'deny', () => addDoc(collection(parent, 'stories', 's1', 'storybooks'), {
-  parentUid: 'p1', finalization: { printableCoverPdfUrl: 'https://example.com/x.pdf' },
-}));
-await check('create storybook already running', 'deny', () => addDoc(collection(parent, 'stories', 's1', 'storybooks'), {
-  parentUid: 'p1', imageGeneration: { status: 'running' },
-}));
-await check('set printable PDF URL', 'deny', () => updateDoc(doc(parent, 'stories', 's1', 'storybooks', 'b1'), { 'finalization.printableCoverPdfUrl': 'https://example.com/x.pdf' }));
-await check('mark art complete', 'deny', () => updateDoc(doc(parent, 'stories', 's1', 'storybooks', 'b1'), { 'artStatus.completeness': 'complete' }));
-await check('acknowledge art recovery', 'allow', () => updateDoc(doc(parent, 'stories', 's1', 'storybooks', 'b1'), { 'artStatus.recoveryNotified': true }));
-await check('lock storybook', 'deny', () => updateDoc(doc(parent, 'stories', 's1', 'storybooks', 'b1'), { isLocked: true }));
-await check('soft-delete storybook', 'allow', () => updateDoc(doc(parent, 'stories', 's1', 'storybooks', 'b1'), {
-  deletedAt: serverTimestamp(), deletedBy: 'p1', updatedAt: serverTimestamp(),
-}));
-await check('write storybook page', 'deny', () => setDoc(doc(parent, 'stories', 's1', 'storybooks', 'b1', 'pages', 'page-001'), { imageUrl: 'x' }));
 await check('write share token', 'deny', () => setDoc(doc(parent, 'stories', 's1', 'shareTokens', 't1'), { status: 'active' }));
-await check('read own story', 'allow', () => getDoc(doc(parent, 'stories', 's1')));
-await check('list own legacy stories', 'allow', () => getDocs(query(collection(parent, 'stories'), where('parentUid', '==', 'p1'))));
-await check('soft-delete own legacy story', 'allow', () => updateDoc(doc(parent, 'stories', 's1'), {
+
+// Stories written by the retired flows: no client reads or writes (owner rename, art style, soft delete are gone).
+await check('create story directly', 'deny', () => setDoc(doc(parent, 'stories', 's9'), { parentUid: 'p1' }));
+await check('read a legacy-shaped story', 'deny', () => getDoc(doc(parent, 'stories', 's1')));
+await check('list legacy stories by parentUid', 'deny', () => getDocs(query(collection(parent, 'stories'), where('parentUid', '==', 'p1'))));
+await check('rename a legacy-shaped story', 'deny', () => updateDoc(doc(parent, 'stories', 's1'), { 'metadata.title': 'New', updatedAt: serverTimestamp() }));
+await check('soft-delete a legacy-shaped story', 'deny', () => updateDoc(doc(parent, 'stories', 's1'), {
   deletedAt: serverTimestamp(), deletedBy: 'p1', updatedAt: serverTimestamp(),
 }));
 
-// Target Stories (slice 5.3): created and changed only by the creation routes; owner reads Story and turns.
+// Stories (slice 5.3): created and changed only by the creation routes; owner reads Story and turns.
 const targetStory = (ownerUid) => ({
   schemaVersion: 2, ownerUid, childId: 'c1', modeId: 'wizard', status: 'creating', cast: [], text: null, title: null, modeState: {},
 });
