@@ -76,6 +76,9 @@ describe('story routes: auth, ownership, persona', () => {
     await bench.db.collection('storyGenerators').doc('gemini3').delete();
     expect((await create({ childId: 'c1', modeId: 'freeplay', idempotencyKey: 'route-key-0006' })).body.error.code).toBe('MODE_NOT_FOUND');
     expect((await turn('missing', choice('A', 'route-key-0007'))).status).toBe(404);
+    // A legacy story (today's flows) is not a Story these routes act on.
+    await bench.db.collection('stories').doc('legacy1').set({ parentUid: 'p1', childId: 'c1', storyText: 'Once.' });
+    expect((await turn('legacy1', choice('A', 'route-key-0030'))).body.error.code).toBe('STORY_NOT_FOUND');
     expect((await turn('missing', { input: { kind: 'dance' }, idempotencyKey: 'route-key-0008' })).status).toBe(400);
     expect((await create({ childId: 'c1', modeId: 'wizard', castIds: ['other1234567890xyz'], idempotencyKey: 'route-key-0009' })).body.error.code).toBe('CAST_NOT_FOUND');
   });

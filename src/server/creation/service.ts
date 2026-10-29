@@ -31,7 +31,8 @@ import {
   type turnSchema,
 } from '../data/schemas/story';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, PaymentRequiredError } from '../errors';
-import { assertOwner, isPrivileged, loadOwned, type VerifiedUser } from '../http';
+import { assertOwner, isPrivileged, type VerifiedUser } from '../http';
+import { isTargetStory } from '../books/story-source';
 import type { JobRunner } from '../jobs/runner';
 import { buildStoryContext, displayText, type StoryContext, type StoryContextInput } from './context';
 import { isDone, type CreationModeEngine, type Done, type NewCastMember, type Turn } from './engine';
@@ -176,7 +177,15 @@ function record(
       if (person && !person.isHero) join({ castId, ref: person.ref, role: 'supporting', addedBy: 'ai' });
     }
     return {
-      reply: { ownerUid: ctx.ownerUid, childId: ctx.childId, index: meta.index, role: 'ai', kind: 'done', idempotencyKey: meta.idempotencyKey, addedCast: added },
+      reply: {
+        ownerUid: ctx.ownerUid,
+        childId: ctx.childId,
+        index: meta.index,
+        role: 'ai',
+        kind: 'done',
+        idempotencyKey: meta.idempotencyKey,
+        addedCast: added.filter((id) => named.has(id)),
+      },
       cast: [...stored.values()].filter((m) => m.role === 'hero' || named.has(m.castId)),
       newCharacters,
       done: result,
@@ -380,6 +389,21 @@ function engineFor(deps: CreationServiceDeps, mode: CreationMode): CreationModeE
   return createEngines(deps.engines)[mode.modeId];
 }
 
+/**
+ * The caller's target Story (owner + persona). A legacy `stories` document
+ * (today's flows) is not a Story these routes act on: 404, not a schema error.
+ */
+async function loadOwnedStory(db: Firestore, user: VerifiedUser, storyId: string): Promise<WithId<Story>> {
+  if (!storyId || storyId.includes('/')) throw new BadRequestError('Missing story id');
+  const snapshot = await db.collection('stories').doc(storyId).get();
+  if (!snapshot.exists || !isTargetStory(snapshot.data())) {
+    throw new NotFoundError('Story not found', { code: 'STORY_NOT_FOUND', details: { id: storyId } });
+  }
+  const story = stories.using(db).parse(snapshot);
+  await assertOwner(user, story, 'Story');
+  return story;
+}
+
 // ---------------------------------------------------------------------------
 // POST /api/stories/{storyId}/turns
 // ---------------------------------------------------------------------------
@@ -401,7 +425,7 @@ async function replyFor(db: Firestore, storyId: string, idempotencyKey: string, 
 export async function submitTurn(deps: CreationServiceDeps, user: VerifiedUser, storyId: string, body: SubmitTurnInput): Promise<StoryTurnResult> {
   const { db } = deps;
   const repo = stories.using(db);
-  await loadOwned(user, repo, storyId);
+  await loadOwnedStory(db, user, storyId);
   const key = body.idempotencyKey;
 
   // 1. Claim the turn (or return the recorded reply of a repeat).
@@ -523,7 +547,7 @@ export async function submitTurn(deps: CreationServiceDeps, user: VerifiedUser, 
 
 export async function abandonStory(deps: CreationServiceDeps, user: VerifiedUser, storyId: string): Promise<{ storyId: string; status: Story['status'] }> {
   const repo = stories.using(deps.db);
-  await loadOwned(user, repo, storyId);
+  await loadOwnedStory(deps.db, user, storyId);
   return deps.db.runTransaction(async (tx) => {
     const story = await repo.requireIn(tx, storyId);
     if (story.status === 'abandoned') return { storyId, status: story.status };
@@ -537,7 +561,7 @@ export async function abandonStory(deps: CreationServiceDeps, user: VerifiedUser
 
 export async function retryFinish(deps: CreationServiceDeps, user: VerifiedUser, storyId: string): Promise<{ storyId: string; status: Story['status'] }> {
   const repo = stories.using(deps.db);
-  await loadOwned(user, repo, storyId);
+  await loadOwnedStory(deps.db, user, storyId);
   const outcome = await deps.db.runTransaction(async (tx) => {
     const story = await repo.requireIn(tx, storyId);
     if (story.status === 'finishing' || story.status === 'complete') return { status: story.status, pending: null };
