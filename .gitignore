@@ -60,3 +60,6 @@ serviceAccount.json
 /probe-results/
 ui-debug.log
 firebase-debug.log
+
+# Binary Storage files downloaded by scripts/export-config.mjs --storage-dir
+/seed/storage/
