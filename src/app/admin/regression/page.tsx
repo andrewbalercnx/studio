@@ -1983,7 +1983,7 @@ export default function AdminRegressionPage() {
         if (invalidRes.status !== 400) throw new Error(`Expected 400 for empty body, got ${invalidRes.status}`);
 
         // 2. Auth: valid body without a token -> 401
-        const unauthedRes = await authFetch('/api/storybookV2/pageEdit', {
+        const unauthedRes = await globalThis.fetch('/api/storybookV2/pageEdit', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ storyId: storyRef.id, storybookId: storybookRef.id, pageId: pageRef.id, pageText: 'x' }),
         });
@@ -2042,12 +2042,12 @@ export default function AdminRegressionPage() {
         const bogusBody = JSON.stringify({ storyId: 'regression-auth-nonexistent-story', storybookId: 'regression-auth-nonexistent-storybook' });
 
         // 1. Unauthenticated -> 401 (both routes)
-        const unauthedPagesRes = await authFetch('/api/storybookV2/pages', {
+        const unauthedPagesRes = await globalThis.fetch('/api/storybookV2/pages', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bogusBody,
         });
         if (unauthedPagesRes.status !== 401) throw new Error(`pages: expected 401 without auth, got ${unauthedPagesRes.status}`);
 
-        const unauthedImagesRes = await authFetch('/api/storybookV2/images', {
+        const unauthedImagesRes = await globalThis.fetch('/api/storybookV2/images', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bogusBody,
         });
         if (unauthedImagesRes.status !== 401) throw new Error(`images: expected 401 without auth, got ${unauthedImagesRes.status}`);
@@ -2085,7 +2085,7 @@ export default function AdminRegressionPage() {
         const missingBook = 'regression-missing-book';
         const routes: Array<{ path: string; body?: unknown }> = [
             { path: '/api/manuscripts', body: missingStory },
-            { path: '/api/books', body: { ...missingStory, styleId: 'regression-missing-style' } },
+            { path: '/api/books', body: { ...missingStory, styleId: 'regression-missing-style', idempotencyKey: 'regression-books-auth' } },
             { path: `/api/books/${missingBook}/pages/2/retry` },
             { path: `/api/books/${missingBook}/lock` },
             { path: `/api/books/${missingBook}/unlock` },
@@ -2118,7 +2118,7 @@ export default function AdminRegressionPage() {
         if (!personaToken) throw new Error('Admin authentication required for persona test.');
 
         // 1. Unauthenticated -> 401
-        const unauthedPersonaRes = await authFetch('/api/persona', {
+        const unauthedPersonaRes = await globalThis.fetch('/api/persona', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ childId: 'regression-persona-child' }),

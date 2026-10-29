@@ -55,7 +55,7 @@ describe('book routes', () => {
     verifyUserToken.mockRejectedValue(new UnauthenticatedError('Missing ID token'));
     const responses = await Promise.all([
       call(createManuscriptRoute(post('/api/manuscripts', { storyId: 's1', formId: 'picture' }))),
-      call(createBookRoute(post('/api/books', { storyId: 's1', formId: 'picture', styleId: 'water' }))),
+      call(createBookRoute(post('/api/books', { storyId: 's1', formId: 'picture', styleId: 'water', idempotencyKey: 'route-test-0001' }))),
       call(retryRoute(post('/api/books/b/pages/2/retry'), params({ bookId: 'b', pageNumber: '2' }))),
       call(lockRoute(post('/api/books/b/lock'), params({ bookId: 'b' }))),
       call(unlockRoute(post('/api/books/b/unlock'), params({ bookId: 'b' }))),
@@ -70,7 +70,7 @@ describe('book routes', () => {
     const again = await call(createManuscriptRoute(post('/api/manuscripts', { storyId: 's1', formId: 'picture', length: 16 })));
     expect(again).toMatchObject({ status: 200, body: { data: { created: false } } });
 
-    const book = await call(createBookRoute(post('/api/books', { storyId: 's1', formId: 'picture', styleId: 'water' })));
+    const book = await call(createBookRoute(post('/api/books', { storyId: 's1', formId: 'picture', styleId: 'water', idempotencyKey: 'route-test-0002' })));
     expect(book).toMatchObject({ status: 201, body: { ok: true, data: { status: 'illustrating', created: true } } });
     const bookId = book.body.data.bookId as string;
     await bench.drain();
@@ -78,8 +78,8 @@ describe('book routes', () => {
     verifyUserToken.mockResolvedValue(user('p2'));
     const denied = await Promise.all([
       call(createManuscriptRoute(post('/api/manuscripts', { storyId: 's1', formId: 'picture' }))),
-      call(createBookRoute(post('/api/books', { storyId: 's1', formId: 'picture', styleId: 'water' }))),
-      call(createBookRoute(post('/api/books', { manuscriptId: manuscript.body.data.manuscriptId, styleId: 'water' }))),
+      call(createBookRoute(post('/api/books', { storyId: 's1', formId: 'picture', styleId: 'water', idempotencyKey: 'route-test-0003' }))),
+      call(createBookRoute(post('/api/books', { manuscriptId: manuscript.body.data.manuscriptId, styleId: 'water', idempotencyKey: 'route-test-0004' }))),
       call(retryRoute(post(`/api/books/${bookId}/pages/2/retry`), params({ bookId, pageNumber: '2' }))),
       call(lockRoute(post(`/api/books/${bookId}/lock`), params({ bookId }))),
       call(unlockRoute(post(`/api/books/${bookId}/unlock`), params({ bookId }))),
@@ -99,7 +99,9 @@ describe('book routes', () => {
 
   it('validate bodies and parameters (400) and report missing things (404)', async () => {
     verifyUserToken.mockResolvedValue(user('p1'));
-    expect((await call(createBookRoute(post('/api/books', { styleId: 'water' })))).status).toBe(400);
+    expect((await call(createBookRoute(post('/api/books', { styleId: 'water', idempotencyKey: 'route-test-0005' })))).status).toBe(400);
+    // A Book must carry an idempotency key, so a double tap cannot charge twice.
+    expect((await call(createBookRoute(post('/api/books', { storyId: 's1', formId: 'picture', styleId: 'water' })))).status).toBe(400);
     expect((await call(createManuscriptRoute(post('/api/manuscripts', { storyId: 's1' })))).status).toBe(400);
     expect((await call(retryRoute(post('/api/books/b/pages/x/retry'), params({ bookId: 'b', pageNumber: 'x' })))).body.error.code).toBe('INVALID_PAGE');
     expect((await call(lockRoute(post('/api/books/missing/lock'), params({ bookId: 'missing' })))).status).toBe(404);
@@ -109,7 +111,7 @@ describe('book routes', () => {
   it('applies the persona scope (403 PERSONA_SCOPE_MISMATCH)', async () => {
     verifyUserToken.mockResolvedValue(user('p1'));
     enforcePersonaScope.mockResolvedValue({ ok: false, status: 403, code: 'PERSONA_SCOPE_MISMATCH', message: 'mismatch' });
-    const response = await call(createBookRoute(post('/api/books', { storyId: 's1', formId: 'picture', styleId: 'water' })));
+    const response = await call(createBookRoute(post('/api/books', { storyId: 's1', formId: 'picture', styleId: 'water', idempotencyKey: 'route-test-0006' })));
     expect(response).toMatchObject({ status: 403, body: { error: { code: 'PERSONA_SCOPE_MISMATCH' } } });
   });
 });

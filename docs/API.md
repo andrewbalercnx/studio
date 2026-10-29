@@ -1616,7 +1616,7 @@ or reused with the Form's defaults unless `length`/`density` are given):
 | `storyId` + `formId` | one of | As for `POST /api/manuscripts`; `length`, `density` optional |
 | `styleId` | yes | An `imageStyles` id; else 404 `STYLE_NOT_FOUND` |
 | `layoutId` | no | A `printLayouts` id; must fit the length (page rules) else 400 `LAYOUT_INCOMPATIBLE`; 404 `LAYOUT_NOT_FOUND`. Omit for a screen Book |
-| `idempotencyKey` | no | 8–128 chars, one per user action. Repeating it returns the same Book (200, `created: false`) without charging again; reusing it for another story → 409 `IDEMPOTENCY_KEY_REUSED` |
+| `idempotencyKey` | **yes** | 8–128 chars, one per user action (a missing key is 400, so a double tap cannot create and charge two Books). Repeating it returns the same Book (200, `created: false`) without charging again; reusing it for another story → 409 `IDEMPOTENCY_KEY_REUSED` |
 
 **Response** (201 Created, or 200 OK for a repeated `idempotencyKey`):
 ```json

@@ -11,7 +11,8 @@ const Body = z
     density: z.string().min(1).optional(),
     styleId: z.string().min(1),
     layoutId: z.string().min(1).optional(),
-    idempotencyKey: z.string().min(8).max(128).optional(),
+    // Required: a double tap must not create and charge two Books.
+    idempotencyKey: z.string().min(8).max(128),
   })
   .refine((b) => !!b.manuscriptId || (!!b.storyId && !!b.formId), {
     message: 'Give a manuscriptId, or a storyId and formId',
@@ -22,7 +23,8 @@ const Body = z
  * print Layout). With storyId + formId the Manuscript is created or reused with
  * the Form's defaults (the child-facing flow: the child picks Form and Style).
  * Charges one `storybook_allowance` in the creating transaction (402
- * ENTITLEMENT_LIMIT when none is left); `idempotencyKey` makes a repeat return
+ * ENTITLEMENT_LIMIT when none is left). `idempotencyKey` (required, one per user
+ * action) makes a repeat return
  * the same Book without charging again.
  */
 export const POST = withRoute({ auth: 'user', body: Body, name: 'books.create' }, async ({ user, body }) => {
