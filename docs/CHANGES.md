@@ -18,6 +18,34 @@
 
 ### 2026-10-29
 
+#### `#16` - Phase 5.4: Story creation in all clients; delete old modes and sessions
+
+**Type**: Feature / Removal
+
+**Summary**:
+- **Clients:** the web child shell, kids PWA and mobile create Stories through `POST /api/stories` and `/turns`. They share a mode chooser and a play view that renders each turn as options, a text box or a cast pick. Answers are idempotent and data is read through read-only listeners.
+- **New routes:** `GET /api/creation-modes`, plus `GET /api/stories` and `GET /api/stories/{id}` rewritten for the new Story shape.
+- **Deleted:**
+  - the old mode routes (wizard, gemini3/4, friends, beat, ending, compile, session, warmup, arc, character traits, character create, kids flows/generators);
+  - their flows, plus story audio and the actor avatar;
+  - StoryBrowser, the legacy session pages and the old storybook readers;
+  - the legacy rules.
+- **Kept for the print slice:** the print and order code.
+- **E2E:** the funnel creates its story through the UI.
+
+**Ships with the trial-data reset** (export config → deploy app and rules → `scripts/reset-trial-data.mjs`).
+
+**Created files**:
+- `src/components/creation/**`, `src/lib/stories/**`, `src/hooks/use-stories.ts`, `src/server/creation/views.ts`, `src/app/api/creation-modes/route.ts`, `src/app/kids/create/[storyId]/**`, `src/app/child/[childId]/create/**`, `docs/architecture/target/slices/5.4-creation-clients.md`
+
+**Deleted files**:
+- 21 API route groups, 19 flows, the `/story/*` legacy pages, `/storybook/[id]` and `/read`, `/kids/play`, five admin test pages, `components/story/**`, `src/app/kids/create/actions.ts`
+
+**Modified files**:
+- `packages/api-client`, `packages/shared-types`, `mobile/**`, `e2e/**`, `firestore.rules`, `tests/firestore-rules/check-rules.mjs`, `src/server/books/story-source.ts`, `src/app/admin/regression/page.tsx`, `docs/**`
+
+---
+
 #### `#15` - Phase 5.3: Creation on the server (five modes, one interface)
 
 **Type**: Architecture / Feature (server only)
