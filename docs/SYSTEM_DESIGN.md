@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-10-29 (Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
+> **Last Updated**: 2026-10-29 (Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -356,6 +356,41 @@ timeline in the `POST /api/printOrders/mixam` response for the new confirmation 
 the activation funnel is untouched; suppression lives server-side so prompt-fatigue rules can
 change without client updates; status mapping lives server-side so new Mixam states never
 require a client release.
+
+### 11. Server Foundations (`src/server`) — present, not yet used by product flows
+
+Phase 4 of the architecture rebuild (`docs/architecture/REVIEW_PLAN.md`) added the modules the
+rebuilt slices are built on. **No existing route, flow or page uses them yet**; everything
+described in sections 1–10 still runs on the code it always did. How a Phase 5 slice uses each
+module is in [`architecture/target/foundations.md`](architecture/target/foundations.md).
+
+| Module | What it is |
+|--------|------------|
+| `src/server/errors.ts` | Typed errors (`BadRequest` 400, `Unauthenticated` 401, `Forbidden` 403, `NotFound` 404, `Conflict` 409, `DataIntegrity` 500) shared by all modules |
+| `src/server/http` | `withRoute({ auth: 'public' \| 'user' \| 'admin' \| 'internal', body })`: verifies the Firebase ID token from the `Authorization` header only (no `?idToken=`), or a Cloud Tasks OIDC token for `internal`; validates the body with zod; maps errors to one envelope (`{ ok: true, data }` / `{ ok: false, error: { code, message, details? } }`). Ownership helpers `assertOwner` / `loadOwned` check `ownerUid` (admin/writer exempt) and the child-persona scope |
+| `src/server/data` | Repositories over the **target** collections (`jobs`, `stories`, `manuscripts` + `pages`, `books` + `pages` / `castSheets` / `renders`). Reads are parsed with zod (malformed docs throw `DataIntegrityError`), writes are validated and stamped with `createdAt` / `updatedAt`. The collections are not created or populated yet |
+| `src/server/jobs` | The job runner (ADR-0002/0003): `JobRegistry` (kind → handler, queue group), `enqueue` (job id derived from the idempotency key), `runJob` (transactional lease, retry with backoff up to `maxAttempts`, fan-in to the coordinator job), and two dispatchers: in-process (default) and Cloud Tasks (`JOBS_DISPATCHER=cloud-tasks`). No job kinds are registered yet |
+| `src/server/ai` | The AI harness (ADR-0008): `AIModelRegistry` resolves a model by purpose from `config/aiModels` (30 s cache) with code defaults equal to today's flow models; `aiCall` / `aiGenerateText` / `aiGenerateImage` add the shared circuit breaker + retry (`ai-circuit-breaker.server.ts`) and one `aiFlowLogs` entry per call when `systemConfig/diagnostics.enableAIFlowLogging` is on |
+| `src/server/config` | `ConfigService`: one typed loader with one cache (60 s default TTL), schema validation, in-flight read sharing and explicit `invalidate()`, replacing the per-file `*-config.server.ts` pattern for new code |
+
+**Internal job route**: `POST /api/internal/jobs/run` (`withRoute({ auth: 'internal' })`)
+accepts only an OIDC token whose audience is `JOBS_OIDC_AUDIENCE` (default `JOBS_RUN_URL`) and
+whose email is `JOBS_INVOKER_SERVICE_ACCOUNT`; without that configuration it rejects every
+call. With no job kinds registered it has nothing to run.
+
+**Configuration (env, none set in `apphosting.yaml` yet)**: `JOBS_DISPATCHER`
+(`in-process` | `cloud-tasks`), `JOBS_TASKS_PROJECT`, `JOBS_TASKS_LOCATION` (default
+`us-central1`), `JOBS_QUEUE_PREFIX`, `JOBS_RUN_URL`, `JOBS_INVOKER_SERVICE_ACCOUNT`,
+`JOBS_OIDC_AUDIENCE`. The Cloud Tasks queues (`ai-text`, `ai-image`, `tts`, `render`, `mixam`)
+and the invoker IAM binding do not exist yet; they are created with the first slice that
+registers a job kind.
+
+**Lint guard**: `eslint.config.mjs` forbids importing `@/server/*` or `@/ai/flows/*` from
+`src/components`, `src/hooks`, `src/contexts` and `src/app/**/page.tsx` / `layout.tsx`.
+
+**Rationale**: the rebuild replaces browser-driven, per-flow plumbing with one route guard, one
+data access path with schemas, one job model and one AI harness. Landing them first, unused and
+unit-tested, lets each Phase 5 slice move onto them and delete its old code in the same PR.
 
 ---
 
@@ -717,6 +752,7 @@ unit tests, and the funnel E2E, but does not deploy.
 │   ├── contexts/              # React contexts
 │   │   └── api-client-context.tsx  # API client provider
 │   ├── hooks/                 # Custom React hooks
+│   ├── server/                # Rebuild foundations (server-only): http, data, jobs, ai, config
 │   ├── lib/                   # Shared utilities
 │   │   ├── types.ts          # Full TypeScript type definitions
 │   │   ├── genkit/           # AI flow definitions
@@ -759,6 +795,10 @@ The project uses npm workspaces to share code between the web app and future mob
 | Admin dashboard | `src/app/admin/page.tsx` |
 | Kids PWA layout | `src/app/kids/layout.tsx` |
 | Diagnostics hook | `src/hooks/use-diagnostics.tsx` |
+| Route wrapper (rebuild) | `src/server/http/with-route.ts` |
+| Repositories + schemas (rebuild) | `src/server/data/` |
+| Job runner (rebuild) | `src/server/jobs/runner.ts` |
+| AI harness (rebuild) | `src/server/ai/harness.ts` |
 
 ---
 

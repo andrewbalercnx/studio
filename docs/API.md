@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-10-29 (Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-10-29 (Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -3803,7 +3803,43 @@ Server-evaluated feature flags for clients (server-first rule: clients never eva
 
 ## Internal Routes
 
-Internal APIs for automated tools (Claude Code). These use a shared secret instead of user authentication.
+Internal APIs for automated tools and the job queue. They do not accept user tokens.
+
+### POST `/api/internal/jobs/run`
+
+Runs one job attempt. Called only by Google Cloud Tasks (one task per job attempt); see
+`docs/architecture/target/pipeline.md` and `docs/architecture/target/foundations.md`. Built on
+`withRoute({ auth: 'internal' })`. Present but unused: no job kinds are registered yet.
+
+**Authentication**: `Authorization: Bearer <OIDC token>` minted by Cloud Tasks. The token must
+verify with audience `JOBS_OIDC_AUDIENCE` (default `JOBS_RUN_URL`) and carry the verified email
+`JOBS_INVOKER_SERVICE_ACCOUNT`. If either setting is missing every call is rejected (401).
+
+**Request Body**:
+```json
+{ "jobId": "job_…" }
+```
+
+**Response** (200 OK) — the delivery was handled. Handler failures are recorded on the job and
+retried by the runner itself, so they also answer 200:
+```json
+{ "ok": true, "data": { "outcome": "succeeded", "jobId": "job_…" } }
+```
+`outcome` is one of `succeeded`, `retry_scheduled` (with `delayMs`, `error`), `failed` (with
+`error: { code, message, retryable }`), `skipped` (already terminal, with `status`), `missing`
+(no such job) or `lease_lost`.
+
+**Response** (409 Conflict) — another runner holds the job's lease; Cloud Tasks redelivers later:
+```json
+{ "ok": false, "error": { "code": "LEASE_HELD", "message": "Job is leased by another runner", "details": { "outcome": "busy", "jobId": "job_…", "leaseUntilMs": 1730000000000 } } }
+```
+
+**Errors**: 400 `INVALID_BODY` / `INVALID_JSON`; 401 `UNAUTHENTICATED` (missing, invalid or
+wrong-account token, or not configured); 500 `INTERNAL`.
+
+### Shared-secret routes
+
+These use a shared secret instead of user authentication.
 
 **Authentication**: `X-Internal-Secret` header with value matching `INTERNAL_API_SECRET` environment variable.
 
