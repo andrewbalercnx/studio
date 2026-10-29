@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
+> **Last Updated**: 2026-10-29 (server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -436,6 +436,7 @@ require a client release.
 - **Two separate enforcement points.** Firestore security rules govern direct client reads and writes (the web app's client SDK and the `/kids/*` PWA). API routes use the Admin SDK, which **bypasses the rules entirely**, so every route must enforce access itself.
 - **Route ownership guards** (`src/lib/route-auth.server.ts`): a route that acts on a session, story, child, character or print storybook loads the doc and compares its owner field (`parentUid`, `ownerParentUid` or `ownerUserId`) with the token uid. A missing owner field counts as not owned. Admin and writer principals are exempt (admin test tools work across families). The guard also applies the persona scope with the token uid. Owner and child IDs for new records come from the verified parent record, never from the request body.
 - **Clients send the ID token** through `authFetch` (`src/lib/auth-fetch.ts`) on the web, which attaches it only to same-origin `/api/` URLs. The mobile app and `packages/api-client` attach it on every request.
+- **Server actions are public endpoints too.** Any exported function in a `'use server'` module that client code imports can be called from any browser with any arguments. Genkit flows must never be imported into client components; a page that needs a server action gets a dedicated one that verifies the caller's ID token and ownership first (e.g. `src/app/kids/create/actions.ts`).
 - The per-route rules are listed in `docs/architecture/route-auth-matrix.md`.
 - Soft delete pattern: `deletedAt` hides from non-admins
 

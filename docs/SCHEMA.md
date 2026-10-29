@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-10-29 (security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -1416,7 +1416,8 @@ Extends `PrintOrderAddress` with metadata for address book management.
 | `characters` | Owner, Admin | Owner, Admin | Soft-delete hidden from non-admins |
 | `storySessions` | Owner, Admin | Owner, Admin | Including subcollections |
 | `stories` | Owner, Admin | Owner, Admin | Including subcollections |
-| `printOrders` | Owner, Admin | Owner (create), Admin (all) | |
+| `printOrders` | Owner, Admin | Admin | Created and updated by server routes (Admin SDK) only |
+| `printStoryBooks` | Owner, Admin | Owner (create draft, delete), Admin (all) | Owner creates only with `pdfStatus: 'draft'` and no PDF fields; layout and PDFs are server-written |
 | `printProducts` | Authenticated | Admin | |
 | `promptConfigs` | Writer, Admin | Writer, Admin | |
 | `storyPhases` | Writer, Admin | Writer, Admin | |
@@ -1439,6 +1440,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-10-29 | Security rules: `printOrders` create/update/delete admin-only (server routes write orders); `printStoryBooks` owner create restricted to `pdfStatus: 'draft'` without PDF fields, owner update removed |
 | 2026-06-11 | Sprint W3-A: `adminNextAction`/`needsAdminAttention`/`failureSummary` on printOrders (Mixam webhook + admin list API); Added `systemConfig/opsHealth` (health-check thresholds, per-check `lastAlertedAt` dedup, last run results) |
 | 2026-06-11 | Sprint W3-B: Added `systemConfig/featureFlags` (optional boolean-per-flag fallback layer below Firebase Remote Config; see `docs/DEPLOYMENT.md`) |
 | 2026-06-11 | Sprint W3-C: new `feedback` collection (ratings/NPS + consented testimonials; one doc per parent+trigger+subject, dismissals included for prompt suppression); new `tickets` collection (tracked issue reports, status open/in_progress/resolved); new `systemConfig/orderTransparency` (turnaround estimate); security rules for feedback (owner read, append-only create) and tickets (owner read, server-only create) |

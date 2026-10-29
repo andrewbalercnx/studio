@@ -278,7 +278,7 @@ Return a single valid JSON object (no markdown, no explanation):
 
             // Replace placeholders in ending texts
             const allEndingTexts = validationResult.endings.map(e => e.text).join(' ');
-            const entityMap = await resolveEntitiesInText(allEndingTexts);
+            const entityMap = await resolveEntitiesInText(allEndingTexts, session.parentUid);
             const endingsWithResolvedNames = await Promise.all(
                 validationResult.endings.map(async (ending) => ({
                     id: ending.id,

@@ -59,7 +59,7 @@ export async function GET(
 
     // Collect all text that needs placeholder resolution
     const allText = readablePages.map((p: any) => p.bodyText || p.displayText || '').join(' ');
-    const entityMap = await resolveEntitiesInText(allText);
+    const entityMap = await resolveEntitiesInText(allText, authResult.uid);
 
     // Resolve placeholders in each page
     const pages = await Promise.all(

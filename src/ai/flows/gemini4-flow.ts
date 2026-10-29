@@ -322,7 +322,7 @@ export const gemini4Flow = ai.defineFlow(
         result.finalStory || ''
       ].join(' ');
 
-      const entityMap = await resolveEntitiesInText(allTexts);
+      const entityMap = await resolveEntitiesInText(allTexts, parentUid);
 
       // Replace placeholders for display
       const resolvedQuestion = await replacePlaceholdersInText(result.question, entityMap);

@@ -154,13 +154,13 @@ const testCases: TestCase[] = [
   { id: 'storybooks-list-own', description: 'Parent can list their own story books', role: 'parent', operation: 'list', path: 'storyBooks', queryConstraints: (ids) => [where('ownerUserId', '==', ids.parentUid)], expected: 'allow' },
 
   // ========== PRINT ORDERS TESTS (Legacy parentUid) ==========
-  { id: 'printorders-create', description: 'Parent can create a print order', role: 'parent', operation: 'create', path: () => `printOrders`, data: (ids) => ({ parentUid: ids.parentUid, storyId: ids.storyId, quantity: 1, paymentStatus: 'unpaid', fulfillmentStatus: 'pending' }), expected: 'allow' },
+  { id: 'printorders-create', description: 'Parent cannot create a print order directly (server-only)', role: 'parent', operation: 'create', path: () => `printOrders`, data: (ids) => ({ parentUid: ids.parentUid, storyId: ids.storyId, quantity: 1, paymentStatus: 'unpaid', fulfillmentStatus: 'pending' }), expected: 'deny' },
   { id: 'printorders-read-own', description: 'Parent can read their own print order', role: 'parent', operation: 'get', path: (ids) => `printOrders/${ids.printOrderId}`, expected: 'allow' },
   { id: 'printorders-read-other', description: 'Parent cannot read other parent\'s print order', role: 'parent', operation: 'get', path: (ids) => `printOrders/${ids.otherPrintOrderId}`, expected: 'deny' },
-  { id: 'printorders-update-own', description: 'Parent can update their own print order', role: 'parent', operation: 'update', path: (ids) => `printOrders/${ids.printOrderId}`, data: { quantity: 2 }, expected: 'allow' },
+  { id: 'printorders-update-own', description: 'Parent cannot update their own print order (server-only)', role: 'parent', operation: 'update', path: (ids) => `printOrders/${ids.printOrderId}`, data: { quantity: 2 }, expected: 'deny' },
 
   // ========== PRINT ORDERS TESTS (Mixam ownerUserId) ==========
-  { id: 'printorders-mixam-create', description: 'Parent can create a Mixam print order', role: 'parent', operation: 'create', path: () => `printOrders`, data: (ids) => ({ ownerUserId: ids.parentUid, storyId: ids.storyId, quantity: 1, fulfillmentStatus: 'pending_approval' }), expected: 'allow' },
+  { id: 'printorders-mixam-create', description: 'Parent cannot create a Mixam print order directly (server-only)', role: 'parent', operation: 'create', path: () => `printOrders`, data: (ids) => ({ ownerUserId: ids.parentUid, storyId: ids.storyId, quantity: 1, fulfillmentStatus: 'pending_approval' }), expected: 'deny' },
   { id: 'printorders-mixam-read-own', description: 'Parent can read their own Mixam print order', role: 'parent', operation: 'get', path: (ids) => `printOrders/${ids.mixamPrintOrderId}`, expected: 'allow' },
   { id: 'printorders-mixam-list-own', description: 'Parent can list their own Mixam print orders', role: 'parent', operation: 'list', path: 'printOrders', queryConstraints: (ids) => [where('ownerUserId', '==', ids.parentUid)], expected: 'allow' },
 
