@@ -71,19 +71,21 @@ class StoryPicClient {
     async post(path, body) {
         return this.request('POST', path, body);
     }
+    /** Routes on the shared route wrapper answer `{ ok: true, data }`. */
+    async data(method, path, body) {
+        const response = await this.request(method, path, body);
+        return response.data;
+    }
     // ============================================================================
-    // Discovery (public endpoints)
+    // Discovery
     // ============================================================================
     /**
-     * Get available story generators for kids.
-     * This is a public endpoint (no auth required).
+     * The ways a child can make a story: live modes enabled for kids, in display
+     * order, presented kid-safely, exactly one `recommended`.
      */
-    async getGenerators() {
-        const response = await this.get('/kids-generators');
-        if (!response.ok) {
-            throw new StoryPicApiError(response.errorMessage || 'Failed to get generators', 500);
-        }
-        return response.generators;
+    async listCreationModes() {
+        const data = await this.data('GET', '/creation-modes');
+        return data.modes;
     }
     /**
      * Get available story output types (picture book, poem, etc.).
@@ -106,74 +108,38 @@ class StoryPicClient {
         return response.imageStyles;
     }
     // ============================================================================
-    // Story Creation
+    // Story Creation (one Story, five modes, the same routes for every client)
     // ============================================================================
     /**
-     * Create a new story session for a generator.
-     * Note: Session creation is currently done client-side via Firestore.
-     * TODO: Add server endpoint for session creation.
+     * Start creating a Story. `idempotencyKey` must be made once per tap and
+     * repeated on a retry of that tap: the server then returns the same Story
+     * and first turn (`created: false`). 402 ENTITLEMENT_LIMIT when the family
+     * has no story allowance left.
      */
-    async createSession(childId, generatorId) {
-        // For now, throw not implemented - sessions created client-side
-        throw new StoryPicApiError('Not implemented - create session via Firestore', 501);
+    async createStory(input) {
+        return this.data('POST', '/stories', input);
     }
     /**
-     * Send a choice to the wizard generator.
+     * Send the child's answer to the latest prompt (a choice, typed text or a
+     * cast pick, as the turn's `expects` says). One `idempotencyKey` per
+     * answer: a repeat returns the recorded reply. 409 TURN_IN_PROGRESS means
+     * the same answer is still being worked on (repeat it later); 409
+     * TURN_CONFLICT means another answer was recorded first; 503 means the AI
+     * was unavailable and nothing was recorded (repeat it).
      */
-    async sendWizardChoice(sessionId, optionId) {
-        const body = { sessionId, selectedOptionId: optionId };
-        return this.post('/storyWizard', body);
+    async sendTurn(storyId, input, idempotencyKey) {
+        return this.data('POST', `/stories/${encodeURIComponent(storyId)}/turns`, { input, idempotencyKey });
     }
-    /**
-     * Send a choice to the beat-based generator.
-     */
-    async sendBeatChoice(sessionId, optionId, moreOptions) {
-        const body = { sessionId, selectedOptionId: optionId, moreOptions };
-        return this.post('/storyBeat', body);
+    /** Stop creating a Story (only while `creating`; idempotent). */
+    async abandonStory(storyId) {
+        return this.data('POST', `/stories/${encodeURIComponent(storyId)}/abandon`);
     }
-    /**
-     * Send a choice/action to the friends generator.
-     */
-    async sendFriendsAction(sessionId, optionId, action, selectedCharacterIds) {
-        const body = {
-            sessionId,
-            selectedOptionId: optionId,
-            action,
-            selectedCharacterIds,
-        };
-        return this.post('/storyFriends', body);
-    }
-    /**
-     * Send a choice/message to the gemini3 generator.
-     */
-    async sendGemini3Choice(sessionId, optionId, userMessage) {
-        const body = {
-            sessionId,
-            selectedOptionId: optionId,
-            userMessage,
-        };
-        return this.post('/gemini3', body);
-    }
-    /**
-     * Send a choice/message to the gemini4 generator.
-     */
-    async sendGemini4Choice(sessionId, optionId, userMessage) {
-        const body = {
-            sessionId,
-            selectedOptionId: optionId,
-            userMessage,
-        };
-        return this.post('/gemini4', body);
-    }
-    /**
-     * Compile a story session into a final story.
-     */
-    async compileStory(sessionId) {
-        const body = { sessionId };
-        return this.post('/storyCompile', body);
+    /** A Story that `failed` while finishing goes back to `finishing`. */
+    async retryFinish(storyId) {
+        return this.data('POST', `/stories/${encodeURIComponent(storyId)}/finish`);
     }
     // ============================================================================
-    // Storybook Generation
+    // Books
     // ============================================================================
     /**
      * Create a Book: the story's words in a Form (the Manuscript, paginated on
@@ -191,40 +157,23 @@ class StoryPicClient {
         }
         return response.data;
     }
-    /**
-     * Get pages for a storybook.
-     * Pages are returned sorted by pageNumber, with blank/title pages filtered out.
-     * Placeholders in displayText are resolved server-side.
-     */
-    async getStorybookPages(storyId, storybookId) {
-        return this.get(`/stories/${storyId}/storybooks/${storybookId}/pages`);
-    }
     // ============================================================================
     // Reading/Viewing
     // ============================================================================
     /**
-     * Get a story by ID.
-     * Returns story with resolved placeholders in title, synopsis, and storyText.
+     * A Story and its turns. Every text (title, synopsis, finished text, each
+     * prompt and option) is rendered with names on the server.
      */
     async getStory(storyId) {
-        return this.get(`/stories/${storyId}`);
+        return this.data('GET', `/stories/${encodeURIComponent(storyId)}`);
     }
     /**
-     * Get all stories for a child.
-     * Stories are returned sorted by createdAt descending (most recent first).
-     * Soft-deleted stories are excluded.
+     * The child's Stories, newest first, with the server's status. Abandoned
+     * Stories are left out.
      */
     async getMyStories(childId) {
-        return this.get(`/stories?childId=${childId}`);
-    }
-    /**
-     * Get all storybooks for a story.
-     * By default only returns storybooks with imageGeneration.status === 'ready'.
-     * Pass includeAll=true to get all storybooks.
-     */
-    async getMyStorybooks(storyId, includeAll) {
-        const query = includeAll ? '?includeAll=true' : '';
-        return this.get(`/stories/${storyId}/storybooks${query}`);
+        const data = await this.data('GET', `/stories?childId=${encodeURIComponent(childId)}`);
+        return data.stories;
     }
     // ============================================================================
     // TTS (Text-to-Speech)

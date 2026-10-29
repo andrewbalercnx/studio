@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,80 +11,89 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useChild } from '../src/contexts/ChildContext';
-import { useApiClient } from '../src/contexts/ApiClientContext';
+import {
+  useApiClient,
+  kidSafeMessage,
+  newIdempotencyKey,
+  type CreationMode,
+  type CreationModeId,
+} from '../src/contexts/ApiClientContext';
 
-interface StoryGenerator {
-  id: string;
-  name: string;
-  description?: string;
-  imageUrl?: string;
-  flowType: string;
-  isEnabled?: boolean;
-}
-
+/**
+ * Choose how to make a story. The list comes from GET /api/creation-modes;
+ * a tap starts the Story with POST /api/stories (one idempotency key per
+ * mode, so a double tap or a retry starts one Story) and opens the play screen.
+ */
 export default function CreateScreen() {
   const router = useRouter();
   const { childId, childProfile } = useChild();
   const apiClient = useApiClient();
 
-  const [generators, setGenerators] = useState<StoryGenerator[]>([]);
+  const [modes, setModes] = useState<CreationMode[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState<string | null>(null);
+  const [creating, setCreating] = useState<CreationModeId | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const keys = useRef(new Map<string, string>());
 
   useEffect(() => {
-    loadGenerators();
+    loadModes();
   }, []);
 
-  const loadGenerators = async () => {
+  const loadModes = async () => {
+    setLoading(true);
     try {
-      const data = await apiClient.getGenerators();
-      // Filter to enabled generators
-      const enabled = data.filter((g: StoryGenerator) => g.isEnabled !== false);
-      setGenerators(enabled);
+      setModes(await apiClient.listCreationModes());
+      setError(null);
     } catch (e) {
-      console.error('Error loading generators:', e);
+      console.error('Error loading modes:', e);
+      setError(kidSafeMessage(e));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSelectGenerator = async (generator: StoryGenerator) => {
-    if (!childId) return;
+  const handleSelectMode = async (mode: CreationMode) => {
+    if (!childId || creating) return;
+    const keyName = `${childId}|${mode.modeId}`;
+    const idempotencyKey = keys.current.get(keyName) ?? newIdempotencyKey();
+    keys.current.set(keyName, idempotencyKey);
 
-    setCreating(generator.id);
+    setCreating(mode.modeId);
+    setError(null);
     try {
-      const session = await apiClient.createSession(childId, generator.id);
-      // Navigate to the play page with the session
-      router.push(`/play/${session.id}?generator=${generator.flowType}`);
-    } catch (e: any) {
-      console.error('Error creating session:', e);
-      alert(e.message || 'Failed to start story');
+      const result = await apiClient.createStory({ childId, modeId: mode.modeId, idempotencyKey });
+      router.push(`/play/${result.storyId}`);
+    } catch (e) {
+      console.error('Error starting story:', e);
+      setError(kidSafeMessage(e));
     } finally {
       setCreating(null);
     }
   };
 
-  const getGeneratorIcon = (flowType: string) => {
-    switch (flowType) {
+  const getModeIcon = (modeId: CreationModeId) => {
+    switch (modeId) {
       case 'wizard':
         return '🧙';
-      case 'gemini3':
-      case 'gemini4':
+      case 'freeplay':
+      case 'guided':
         return '🌟';
       case 'friends':
         return '👫';
+      case 'adventure':
+        return '🧭';
       default:
         return '✨';
     }
   };
 
-  const getGeneratorColor = (flowType: string) => {
-    switch (flowType) {
+  const getModeColor = (modeId: CreationModeId) => {
+    switch (modeId) {
       case 'wizard':
         return '#8B5CF6';
-      case 'gemini3':
+      case 'freeplay':
         return '#F59E0B';
-      case 'gemini4':
+      case 'guided':
         return '#EF4444';
       case 'friends':
         return '#10B981';
@@ -129,35 +138,39 @@ export default function CreateScreen() {
         </Text>
       </View>
 
-      {/* Generator Options */}
-      <Text style={styles.sectionTitle}>Choose how to create your story:</Text>
+      {/* Mode Options */}
+      <Text style={styles.sectionTitle}>How do you want to create your story?</Text>
+      {error && <Text style={styles.errorText}>{error}</Text>}
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.generatorGrid}>
-        {generators.map((generator) => {
-          const color = getGeneratorColor(generator.flowType);
-          const icon = getGeneratorIcon(generator.flowType);
-          const isCreating = creating === generator.id;
+        {modes.length === 0 && !error && (
+          <Text style={styles.generatorDescription}>No story adventures available right now. Please ask a grown-up to check the settings.</Text>
+        )}
+        {modes.map((mode) => {
+          const color = getModeColor(mode.modeId);
+          const icon = getModeIcon(mode.modeId);
+          const isCreating = creating === mode.modeId;
 
           return (
             <TouchableOpacity
-              key={generator.id}
+              key={mode.modeId}
               style={[styles.generatorCard, { borderColor: color }]}
-              onPress={() => handleSelectGenerator(generator)}
+              onPress={() => handleSelectMode(mode)}
               disabled={creating !== null}
             >
               {isCreating ? (
                 <ActivityIndicator size="large" color={color} style={styles.generatorIcon} />
-              ) : generator.imageUrl ? (
-                <Image source={{ uri: generator.imageUrl }} style={styles.generatorImage} />
               ) : (
                 <Text style={[styles.generatorIcon, { color }]}>{icon}</Text>
               )}
-              <Text style={styles.generatorName}>{generator.name}</Text>
-              {generator.description && (
-                <Text style={styles.generatorDescription} numberOfLines={2}>
-                  {generator.description}
+              {mode.recommended && <Text style={styles.recommended}>⭐ Recommended for first-timers</Text>}
+              <Text style={styles.generatorName}>{mode.name}</Text>
+              {!!mode.description && (
+                <Text style={styles.generatorDescription} numberOfLines={3}>
+                  {mode.description}
                 </Text>
               )}
+              {isCreating && !!mode.loadingMessage && <Text style={styles.generatorDescription}>{mode.loadingMessage}</Text>}
             </TouchableOpacity>
           );
         })}
@@ -269,12 +282,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  generatorImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
   generatorIcon: {
     fontSize: 48,
     marginBottom: 12,
@@ -284,6 +291,24 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F2937',
     marginBottom: 8,
+    textAlign: 'center',
+  },
+  recommended: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400E',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  errorText: {
+    fontSize: 15,
+    color: '#B45309',
+    paddingHorizontal: 20,
+    marginBottom: 12,
     textAlign: 'center',
   },
   generatorDescription: {
