@@ -4,8 +4,11 @@
  */
 import { defaultBookJobDeps } from '../books/deps';
 import { registerBookJobs } from '../books/jobs';
+import { defaultFinishDeps } from '../creation/deps';
+import { registerCreationJobs } from '../creation/finish';
 import type { JobRegistry } from './registry';
 
 export function registerJobKinds(registry: JobRegistry): JobRegistry {
-  return registerBookJobs(registry, defaultBookJobDeps);
+  registerBookJobs(registry, defaultBookJobDeps);
+  return registerCreationJobs(registry, defaultFinishDeps);
 }
