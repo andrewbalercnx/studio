@@ -18,6 +18,20 @@
 
 ### 2026-10-29
 
+#### `#10` - Phase 2: target domain model, pipeline and ADRs
+
+**Type**: Architecture / Documentation
+
+**Summary**: The target model for the rebuild. Story → Manuscript → Book, with length and density as the contract between the words and the look. One leased Job model run server-side by Cloud Tasks. Five creation modes behind one interface. Likeness built from photos, with the canonical portrait wired in. Twelve ADRs, all accepted by the owner: picture books of 12, 16 or 24 story pages; the child picks Form and Style and the parent picks Layout and print; Stripe payment is in scope.
+
+**Created files**:
+- `docs/architecture/target/` (README, domain-model, pipeline, creation, `adr/0001`–`0012`)
+
+**Modified files**:
+- `docs/architecture/REVIEW_PLAN.md`, `docs/CHANGES.md`
+
+---
+
 #### `#8` - Phase 1: map the system as it is
 
 **Type**: Documentation / Tooling
