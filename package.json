@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:rules": "npx --yes firebase-tools@15.20.0 emulators:exec --only firestore --project demo-rules \"node tests/firestore-rules/check-rules.mjs\"",
     "build:e2e": "node scripts/build-e2e.mjs",
     "start:e2e": "node scripts/start-e2e-server.mjs",
     "test:e2e": "playwright test --project=desktop-chrome --project=mobile-chrome",

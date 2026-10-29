@@ -87,10 +87,7 @@ Token plus an ownership check: `parent/storybooks`, `parent/storybooks/thumbnail
 `imageStyles`, `storyOutputTypes`. All `admin/*` routes require an admin token. The rest of the
 127 route files authenticate on every method; the Phase 0 audit checked each one.
 
-## Known gaps left for Phase 3
+## Known gaps
 
-- Both auth helpers accept the ID token in an `?idToken=` query string, which puts tokens in URLs
-  and logs.
-- `users/{uid}.roles.isParent` is user-writable under `firestore.rules`, so "parent" means "signed in".
-- No rate limits on AI routes beyond the entitlement check in `storyCompile`.
-- The `/kids/*` PWA reads Firestore directly, governed only by `firestore.rules`.
+Phase 3 closed the gaps listed here earlier (query-string tokens, self-writable roles). Open items
+and their owners are tracked in `security/threat-model.md`.

@@ -174,7 +174,7 @@ reset trial data for that slice, re-seed config. Order:
 | 0 — Stop the bleeding | Done (follow-up fixes in a second PR) | #7 |
 | 1 — As-is map | Done; owner chose the surviving creation modes | #8 |
 | 2 — Target model | Done: `target/`, 12 ADRs accepted | #10 |
-| 3 — Security review | Not started | — |
+| 3 — Security review | Done: `security/threat-model.md` | #11 |
 | 4 — Foundations | In review: `src/server` (route wrapper, repositories, job runner, AI harness, config service), see `target/foundations.md` | #12 |
 | 5 — Rebuild slices | Not started | — |
 | 6 — Clients | Not started | — |

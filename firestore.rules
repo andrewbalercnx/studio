@@ -35,11 +35,34 @@ service cloud.firestore {
       return !('deletedAt' in resource.data) || resource.data.deletedAt == null;
     }
 
+    // Fields an update touches (top-level keys).
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // The owner field must not change on update: otherwise an owner could move
+    // a document into another family's account.
+    function ownerUnchanged(field) {
+      return request.resource.data.get(field, null) == resource.data.get(field, null);
+    }
+
     // ========== USER PROFILES ==========
     match /users/{userId} {
       allow get: if isAdmin() || owns(userId);
       allow list: if isAdmin();
-      allow write: if isAdmin() || owns(userId);
+
+      // Roles and PIN state are server/admin-owned: a signed-in user must not
+      // grant themselves roles, replace the parent PIN, or clear a PIN lockout.
+      // Signup may only create the default parent roles.
+      allow create: if isAdmin()
+                    || (owns(userId)
+                        && request.resource.data.get('roles', {'isAdmin': false, 'isWriter': false, 'isParent': true})
+                             == {'isAdmin': false, 'isWriter': false, 'isParent': true}
+                        && !request.resource.data.keys().hasAny(['pinHash', 'pinSalt', 'pinUpdatedAt', 'pinFailedAttempts', 'pinLockedUntil']));
+      allow update: if isAdmin()
+                    || (owns(userId)
+                        && !changedKeys().hasAny(['roles', 'pinHash', 'pinSalt', 'pinUpdatedAt', 'pinFailedAttempts', 'pinLockedUntil']));
+      allow delete: if isAdmin();
 
       // Subcollections (voices, addresses) - owner or admin only
       match /{subcollection}/{docId} {
@@ -54,12 +77,15 @@ service cloud.firestore {
                  || (isHelpDocument(childId) && isAuthenticated())
                  || (isAuthenticated() && resource.data.ownerParentUid == request.auth.uid && notDeleted());
 
+      // Help-tour samples (help-*) are created server-side only.
       allow create: if isAdmin()
-                    || (isHelpDocument(childId) && isAuthenticated())
-                    || (isAuthenticated() && request.resource.data.ownerParentUid == request.auth.uid);
+                    || (isAuthenticated() && !isHelpDocument(childId) && request.resource.data.ownerParentUid == request.auth.uid);
 
-      allow update, delete: if isAdmin()
-                            || (isAuthenticated() && !isHelpDocument(childId) && resource.data.ownerParentUid == request.auth.uid);
+      allow update: if isAdmin()
+                    || (isAuthenticated() && !isHelpDocument(childId) && resource.data.ownerParentUid == request.auth.uid
+                        && ownerUnchanged('ownerParentUid'));
+      allow delete: if isAdmin()
+                    || (isAuthenticated() && !isHelpDocument(childId) && resource.data.ownerParentUid == request.auth.uid);
 
       // List: Requires ownership filter in query. Firestore will reject queries
       // that don't include where('ownerParentUid', '==', uid).
@@ -75,11 +101,13 @@ service cloud.firestore {
         allow list: if isAdmin()
                     || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
 
-        allow write: if isAdmin()
+        allow update: if isAdmin()
+                      || (isAuthenticated() && !isHelpDocument(childId) && resource.data.parentUid == request.auth.uid
+                          && ownerUnchanged('parentUid'));
+        allow delete: if isAdmin()
                       || (isAuthenticated() && !isHelpDocument(childId) && resource.data.parentUid == request.auth.uid);
 
         allow create: if isAdmin()
-                      || (isHelpDocument(childId) && isAuthenticated())
                       || (isAuthenticated() && !isHelpDocument(childId) && request.resource.data.parentUid == request.auth.uid);
       }
     }
@@ -94,12 +122,18 @@ service cloud.firestore {
       allow list: if isAdmin()
                   || (isAuthenticated() && resource.data.parentUid == request.auth.uid);
 
+      // The compile lock and the allowance flag are read by /api/storyCompile;
+      // only the server may set them.
       allow create: if isAdmin()
-                    || (isHelpDocument(sessionId) && isAuthenticated())
-                    || (isAuthenticated() && request.resource.data.parentUid == request.auth.uid);
+                    || (isAuthenticated() && !isHelpDocument(sessionId) && request.resource.data.parentUid == request.auth.uid
+                        && !request.resource.data.keys().hasAny(['storyAllowanceConsumed', 'compileInProgress', 'compileStartedAt']));
 
-      allow update, delete: if isAdmin()
-                            || (isAuthenticated() && !isHelpDocument(sessionId) && resource.data.parentUid == request.auth.uid);
+      allow update: if isAdmin()
+                    || (isAuthenticated() && !isHelpDocument(sessionId) && resource.data.parentUid == request.auth.uid
+                        && ownerUnchanged('parentUid')
+                        && !changedKeys().hasAny(['storyAllowanceConsumed', 'compileInProgress', 'compileStartedAt']));
+      allow delete: if isAdmin()
+                    || (isAuthenticated() && !isHelpDocument(sessionId) && resource.data.parentUid == request.auth.uid);
 
       // Messages sub-collection
       match /messages/{messageId} {
@@ -111,8 +145,7 @@ service cloud.firestore {
                     || (isAuthenticated() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
 
         allow create: if isAdmin()
-                      || (isHelpDocument(sessionId) && isAuthenticated())
-                      || (isAuthenticated() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
+                      || (isAuthenticated() && !isHelpDocument(sessionId) && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
 
         allow update, delete: if isAdmin()
                               || (isAuthenticated() && !isHelpDocument(sessionId) && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
@@ -128,8 +161,7 @@ service cloud.firestore {
                     || (isAuthenticated() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
 
         allow create: if isAdmin()
-                      || (isHelpDocument(sessionId) && isAuthenticated())
-                      || (isAuthenticated() && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
+                      || (isAuthenticated() && !isHelpDocument(sessionId) && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
 
         allow update, delete: if isAdmin()
                               || (isAuthenticated() && !isHelpDocument(sessionId) && get(/databases/$(database)/documents/storySessions/$(sessionId)).data.parentUid == request.auth.uid);
@@ -147,11 +179,13 @@ service cloud.firestore {
                   || (isAuthenticated() && resource.data.ownerParentUid == request.auth.uid && notDeleted());
 
       allow create: if isAdmin()
-                    || (isHelpDocument(characterId) && isAuthenticated())
-                    || (isAuthenticated() && request.resource.data.ownerParentUid == request.auth.uid);
+                    || (isAuthenticated() && !isHelpDocument(characterId) && request.resource.data.ownerParentUid == request.auth.uid);
 
-      allow update, delete: if isAdmin()
-                            || (isAuthenticated() && !isHelpDocument(characterId) && resource.data.ownerParentUid == request.auth.uid);
+      allow update: if isAdmin()
+                    || (isAuthenticated() && !isHelpDocument(characterId) && resource.data.ownerParentUid == request.auth.uid
+                        && ownerUnchanged('ownerParentUid'));
+      allow delete: if isAdmin()
+                    || (isAuthenticated() && !isHelpDocument(characterId) && resource.data.ownerParentUid == request.auth.uid);
     }
 
     // ========== STORIES ==========
@@ -164,25 +198,65 @@ service cloud.firestore {
       allow list: if isAdmin()
                   || (isAuthenticated() && resource.data.parentUid == request.auth.uid && notDeleted());
 
-      allow create: if isAdmin()
-                    || (isHelpDocument(storyId) && isAuthenticated())
-                    || (isAuthenticated() && request.resource.data.parentUid == request.auth.uid);
+      // Stories are written by the server (compile, flows). The owner may only
+      // rename, pick an art style, or soft-delete.
+      allow create: if isAdmin();
 
-      allow update, delete: if isAdmin()
-                            || (isAuthenticated() && !isHelpDocument(storyId) && resource.data.parentUid == request.auth.uid);
+      allow update: if isAdmin()
+                    || (isAuthenticated() && !isHelpDocument(storyId) && resource.data.parentUid == request.auth.uid
+                        && changedKeys().hasOnly(['metadata', 'selectedImageStyleId', 'selectedImageStylePrompt', 'updatedAt', 'deletedAt', 'deletedBy'])
+                        && (!changedKeys().hasAny(['metadata'])
+                            || request.resource.data.metadata.diff(resource.data.get('metadata', {})).affectedKeys().hasOnly(['title'])));
+      allow delete: if isAdmin();
 
-      // Story outputs, pages, shareTokens, storybooks subcollections
-      match /{allPaths=**} {
-        allow get: if isAdmin()
-                   || (isHelpDocument(storyId) && isAuthenticated())
-                   || (isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid && notDeleted());
+      // Storybooks: the owner creates a new, idle storybook and may later only
+      // soft-delete it or acknowledge an art recovery. Lock state, finalization
+      // (printable PDF URLs), art status and generation state are server-owned:
+      // print orders and sharing trust them.
+      match /storybooks/{storybookId} {
+        allow get, list: if isAdmin()
+                         || (isHelpDocument(storyId) && isAuthenticated())
+                         || (isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid && notDeleted());
 
-        // List: Ownership checked via parent story document
-        allow list: if isAdmin()
-                    || (isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid && notDeleted());
+        allow create: if isAdmin()
+                      || (isAuthenticated() && !isHelpDocument(storyId)
+                          && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid
+                          && request.resource.data.parentUid == request.auth.uid
+                          && !request.resource.data.keys().hasAny(['isLocked', 'finalization', 'artStatus', 'actorExemplarUrls', 'exemplarGeneration', 'audioGeneration'])
+                          && request.resource.data.get('pageGeneration', {'status': 'idle'}).status == 'idle'
+                          && request.resource.data.get('imageGeneration', {'status': 'idle'}).status == 'idle');
 
-        allow write: if isAdmin()
-                      || (isAuthenticated() && !isHelpDocument(storyId) && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid);
+        allow update: if isAdmin()
+                      || (isAuthenticated() && !isHelpDocument(storyId)
+                          && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid
+                          && changedKeys().hasOnly(['deletedAt', 'deletedBy', 'updatedAt', 'artStatus'])
+                          && (!changedKeys().hasAny(['artStatus'])
+                              || request.resource.data.artStatus.diff(resource.data.get('artStatus', {})).affectedKeys().hasOnly(['recoveryNotified'])));
+
+        allow delete: if isAdmin();
+
+        // Pages, exemplars and everything else under a storybook: server-written.
+        match /{rest=**} {
+          allow get, list: if isAdmin()
+                           || (isHelpDocument(storyId) && isAuthenticated())
+                           || (isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid);
+          allow write: if isAdmin();
+        }
+      }
+
+      // Other subcollections (legacy outputs, share tokens…): owner read, server write.
+      match /{sub}/{docId} {
+        allow get, list: if isAdmin()
+                         || (isHelpDocument(storyId) && isAuthenticated())
+                         || (isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid && notDeleted());
+        allow write: if isAdmin();
+
+        match /{rest=**} {
+          allow get, list: if isAdmin()
+                           || (isHelpDocument(storyId) && isAuthenticated())
+                           || (isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.parentUid == request.auth.uid);
+          allow write: if isAdmin();
+        }
       }
     }
 
@@ -331,8 +405,11 @@ service cloud.firestore {
     }
 
     // ========== SYSTEM CONFIGURATION ==========
-    match /systemConfig/{document=**} {
-      allow read: if isAuthenticated();
+    // Only the diagnostics/settings document is read by non-admin pages
+    // (DiagnosticsProvider); everything else (email, addresses, Mixam payment
+    // mode, model config, ops state) is admin-only.
+    match /systemConfig/{docId} {
+      allow read: if isAdmin() || (isAuthenticated() && docId == 'diagnostics');
       allow write: if isAdmin();
     }
 
