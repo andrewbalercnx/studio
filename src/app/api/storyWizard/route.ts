@@ -131,7 +131,7 @@ export async function POST(request: Request) {
 
       // Resolve placeholders in question and choices
       const allText = [askingResult.question, ...askingResult.choices.map(c => c.text)].join(' ');
-      const entityMap = await resolveEntitiesInText(allText);
+      const entityMap = await resolveEntitiesInText(allText, user.uid);
       const questionResolved = await replacePlaceholdersInText(askingResult.question, entityMap);
 
       // Convert choices to StoryGeneratorResponseOption format with resolved text

@@ -218,11 +218,17 @@ service cloud.firestore {
       allow list: if isAdmin()
                   || (isAuthenticated() && resource.data.ownerUserId == request.auth.uid);
 
+      // Owners create a draft only; PDFs and layout are written by the server
+      // (auto-layout, generate-pdfs), and print orders read PDF URLs from here.
       allow create: if isAdmin()
-                    || (isAuthenticated() && request.resource.data.ownerUserId == request.auth.uid);
+                    || (isAuthenticated()
+                        && request.resource.data.ownerUserId == request.auth.uid
+                        && request.resource.data.pdfStatus == 'draft'
+                        && !request.resource.data.keys().hasAny(['coverPdfUrl', 'interiorPdfUrl', 'printableMetadata', 'combinedPdfUrl']));
 
-      allow update, delete: if isAdmin()
-                            || (isAuthenticated() && resource.data.ownerUserId == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin()
+                    || (isAuthenticated() && resource.data.ownerUserId == request.auth.uid);
     }
 
     // ========== PRINT ORDERS ==========
@@ -236,13 +242,9 @@ service cloud.firestore {
                   || (isAuthenticated() && resource.data.parentUid == request.auth.uid)
                   || (isAuthenticated() && resource.data.ownerUserId == request.auth.uid);
 
-      allow create: if isAdmin()
-                    || (isAuthenticated() && request.resource.data.parentUid == request.auth.uid)
-                    || (isAuthenticated() && request.resource.data.ownerUserId == request.auth.uid);
-
-      allow update, delete: if isAdmin()
-                            || (isAuthenticated() && resource.data.parentUid == request.auth.uid)
-                            || (isAuthenticated() && resource.data.ownerUserId == request.auth.uid);
+      // Orders carry status, payment, cost and PDF URLs that the admin submit
+      // route trusts, so only the server (Admin SDK) and admins write them.
+      allow create, update, delete: if isAdmin();
     }
 
     // ========== PRINT PRODUCTS ==========

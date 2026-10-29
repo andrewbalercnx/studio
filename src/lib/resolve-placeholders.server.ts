@@ -12,7 +12,7 @@ function buildCharacterDescription(character: Character): string {
   return `[${character.displayName}, a ${character.type}${likes}]`;
 }
 
-async function fetchEntities(ids: string[]): Promise<EntityMap> {
+async function fetchEntities(ids: string[], ownerUid?: string | null): Promise<EntityMap> {
   const firestore = await getServerFirestore();
   const entityMap: EntityMap = new Map();
   if (ids.length === 0) return entityMap;
@@ -51,14 +51,17 @@ async function fetchEntities(ids: string[]): Promise<EntityMap> {
   }
 
   // Fallback: For IDs that still weren't found, try to find by displayName
-  // This handles legacy data where the AI used displayName instead of document ID
+  // This handles legacy data where the AI used displayName instead of document ID.
+  // Names are not unique across families, so the lookup is limited to the
+  // owning parent's entities and skipped when the owner is unknown.
   const stillRemainingIds = uniqueIds.filter((id) => !entityMap.has(id));
-  if (stillRemainingIds.length > 0) {
+  if (stillRemainingIds.length > 0 && ownerUid) {
     // Try characters by displayName
     for (let i = 0; i < stillRemainingIds.length; i += chunkSize) {
       const chunk = stillRemainingIds.slice(i, i + chunkSize);
       const charsByName = await firestore
         .collection('characters')
+        .where('ownerParentUid', '==', ownerUid)
         .where('displayName', 'in', chunk)
         .get();
       charsByName.forEach((docSnap) => {
@@ -74,6 +77,7 @@ async function fetchEntities(ids: string[]): Promise<EntityMap> {
       const chunk = finalRemaining.slice(i, i + chunkSize);
       const childrenByName = await firestore
         .collection('children')
+        .where('ownerParentUid', '==', ownerUid)
         .where('displayName', 'in', chunk)
         .get();
       childrenByName.forEach((docSnap) => {
@@ -117,7 +121,12 @@ export async function replacePlaceholdersWithDescriptions(text: string): Promise
   return result;
 }
 
-export async function resolveEntitiesInText(text: string): Promise<EntityMap> {
+/**
+ * @param ownerUid the parent who owns the text's story/session. Enables the
+ *   legacy displayName fallback, scoped to that family; omit it and only
+ *   document-ID placeholders resolve.
+ */
+export async function resolveEntitiesInText(text: string, ownerUid?: string | null): Promise<EntityMap> {
   if (!text) return new Map();
   // Extract IDs from double $$ format (correct)
   const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
@@ -125,7 +134,7 @@ export async function resolveEntitiesInText(text: string): Promise<EntityMap> {
   const singleIds = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)].map((match) => match[1]);
   // Filter out empty/invalid IDs before fetching
   const allIds = [...doubleIds, ...singleIds].filter(id => id && id.trim().length > 0);
-  return fetchEntities(allIds);
+  return fetchEntities(allIds, ownerUid);
 }
 
 export async function replacePlaceholdersInText(text: string, entityMap: EntityMap): Promise<string> {

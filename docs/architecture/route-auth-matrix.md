@@ -50,6 +50,16 @@ These routes were open, or authenticated without checking ownership, before Phas
 | `GET /api/healthz` | Returned the last 10 server log lines to anyone (`ENABLE_DEV_LOGS=true` in production) | Logs only for an admin token; status stays public |
 | `POST /api/storybookV2/exemplars` | No auth (persona only); no callers | Deleted |
 
+## Phase 0 follow-up (2026-10-29)
+
+| Surface | Before | Now |
+|---------|--------|-----|
+| `storyWizardFlow` called from `/kids/create` | The flow was imported into a client component, which made it a public server action: no auth, any session ID | Page calls `runKidsWizardStep` (`src/app/kids/create/actions.ts`): ID token + owns session + child matches + persona scope |
+| Placeholder name fallback (`resolveEntitiesInText`, story image flow) | Unresolved `$$Name$$` placeholders were looked up by `displayName` across **all** families, so another family's child photos or character details could reach prompts | Lookup limited to the story owner's entities (`ownerParentUid`); skipped when the owner is unknown |
+| `logAIFlow` imported by `/admin/characters` | An unused import of a `'use server'` module, which can expose it as a public server action (anyone could write `aiFlowLogs` entries) | Import removed; no client component imports a `'use server'` module any more |
+| `printOrders` (Firestore rules) | Owner could create, update and delete orders directly, including status, payment and PDF URLs that the admin submit route trusts | Admin only; server routes write orders |
+| `printStoryBooks` (Firestore rules) | Owner could set `pdfStatus` and PDF URLs | Owner creates drafts only (no PDF fields); updates admin/server only |
+
 ## Routes that are public by design
 
 | Route | Why |
