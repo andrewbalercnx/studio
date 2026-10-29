@@ -55,6 +55,11 @@ const env = {
   // The TEST_MODE AI seam: deterministic fixtures, zero model calls.
   TEST_MODE: '1',
 
+  // The Book pipeline's jobs run on the in-process dispatcher (anything but
+  // 'cloud-tasks' selects it), so the funnel runs the whole pipeline in this
+  // server without Cloud Tasks. Forced here so an inherited env cannot change it.
+  JOBS_DISPATCHER: 'in-process',
+
   // Persona cookie signing key (prod uses PERSONA_COOKIE_SECRET or the
   // Secret Manager INTERNAL_API_SECRET). A fixed value here lets the funnel
   // exercise the real set-cookie + chokepoint-enforcement path.

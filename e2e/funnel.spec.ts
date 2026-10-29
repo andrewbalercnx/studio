@@ -20,11 +20,14 @@ import {
  * the TEST_MODE AI seam active on the server:
  *
  *   signup → parent creates child → story creation entry →
- *   story completion (deterministic seam) → storybook generation → book ready
+ *   story completion (deterministic seam) → choose Form + Style →
+ *   POST /api/books → server pipeline → book ready → reader shows pages
  *
  * Determinism notes:
- *  - Storybook generation (pages/images/audio/exemplars) runs through the real
- *    /api/storybookV2/* routes, short-circuited to fixtures by TEST_MODE=1.
+ *  - The Book pipeline (manuscript.paginate, narration, cast sheets, page
+ *    art) runs as server jobs on the in-process dispatcher of the e2e server
+ *    (JOBS_DISPATCHER unset), with TEST_MODE=1 fixtures instead of AI calls.
+ *    The browser only creates the Book and watches it.
  *  - Story creation/completion has NO server-side seam (the wizard is a live
  *    Gemini call), so the spec asserts the creation entry UI, then seeds the
  *    completed story exactly as the wizard + storyCompile would have written
@@ -48,7 +51,7 @@ test.describe('parent activation funnel @funnel', () => {
     }
   });
 
-  test('signup → create child → story → storybook generation → book ready', async ({ page }) => {
+  test('signup → create child → story → book (Form + Style) → book ready → read', async ({ page }) => {
     test.setTimeout(180_000);
 
     // ── 1. Signup (creates account + PIN, lands on selector) ──
@@ -95,7 +98,7 @@ test.describe('parent activation funnel @funnel', () => {
     });
     await page.getByRole('link', { name: /create picture book/i }).click();
 
-    // ── 6. Storybook: book type + art style selection ──
+    // ── 6. Book: the child picks a Form (book type) and a Style (art style) ──
     await expect(page.getByRole('heading', { name: 'Choose Your Book Type' })).toBeVisible({
       timeout: 30_000,
     });
@@ -104,18 +107,28 @@ test.describe('parent activation funnel @funnel', () => {
     await expect(page.getByRole('heading', { name: 'Pick Your Art Style' })).toBeVisible();
     await page.getByText(SEED.imageStyleTitle).click();
 
-    // ── 7. Generation: TEST_MODE drives idle→running→ready via real routes ──
-    await page.waitForURL(/\/kids\/create\/.+\/generating\?storybookId=.+/, {
-      timeout: 30_000,
-    });
+    // ── 7. POST /api/books → the Book's page; the server makes the book ──
+    await page.waitForURL(/\/kids\/book\/bk_[0-9a-f]+$/, { timeout: 30_000 });
 
-    // The page auto-triggers /api/storybookV2/pages then /images and the
-    // Firestore status listeners advance the UI; with TEST_MODE fixtures this
-    // completes in seconds and auto-redirects to My Books.
-    await page.waitForURL('**/kids/books', { timeout: 60_000 });
+    // The page only watches books/{id} and the Manuscript. With TEST_MODE
+    // fixtures the jobs finish in seconds and the reader replaces the
+    // progress view once the server sets the Book to `ready`.
+    const reader = page.getByTestId('book-reader');
+    await expect(reader).toBeVisible({ timeout: 90_000 });
 
-    // ── 8. Book ready: the finished storybook is listed for the child ──
+    // ── 8. The reader shows the pages: the cover with the title, then words ──
+    await expect(reader.getByRole('heading', { name: SEED.storyTitle })).toBeVisible();
+    await expect(reader.getByRole('img', { name: SEED.storyTitle })).toBeVisible();
+    await page.getByRole('button', { name: 'Next page' }).click();
+    await expect(page.getByTestId('book-page-text')).toContainText(/\w+/);
+    await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
+
+    // ── 9. My Books lists the finished Book with the server's status ──
+    await page.getByRole('link', { name: 'Back to My Books' }).click();
     await expect(page.getByRole('heading', { name: 'My Books' })).toBeVisible();
-    await expect(page.getByText(SEED.storyTitle)).toBeVisible({ timeout: 30_000 });
+    const card = page.getByTestId('book-card').filter({ hasText: SEED.storyTitle });
+    await expect(card).toBeVisible({ timeout: 30_000 });
+    await expect(card).toHaveAttribute('data-book-status', 'ready');
+    await expect(card.getByText('Ready to read')).toBeVisible();
   });
 });

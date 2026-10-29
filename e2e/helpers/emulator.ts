@@ -6,16 +6,18 @@
  * targets the emulators when FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST
  * are set. The `demo-` project id guarantees nothing here can reach production.
  *
- * Three jobs:
- *  1. seedCatalog()        — the minimal catalog docs (generator, output type,
- *                            image style) the funnel UI needs to render choices.
+ * Jobs:
+ *  1. seedCatalog()        — the minimal catalog docs (generator, output type =
+ *                            Form, image style = Style) the funnel UI needs.
  *  2. seedCompletedStory() — a completed story session + compiled story doc,
  *                            shaped exactly like the wizard flow + storyCompile
  *                            leave them. This is the deterministic stand-in for
  *                            the AI-driven story creation steps (see
  *                            docs/testing/e2e.md for why the seam sits here).
- *  3. cleanup helpers      — regressionTest-stamped doc deletion + auth-user
- *                            deletion, mirroring scripts/cleanup-regression-data.mjs.
+ *  3. seedReadyBook()      — a finished Book (server pipeline) for report-only
+ *                            journeys that need one without running the funnel.
+ *  4. cleanup helpers      — per-account doc deletion (children, stories, books,
+ *                            manuscripts, jobs, ledger) + auth-user deletion.
  */
 import { getApps, initializeApp, type App } from 'firebase-admin/app';
 import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore';
@@ -104,8 +106,9 @@ export async function seedCatalog(): Promise<void> {
       createdAt: now,
       updatedAt: now,
     }),
-    // /api/storyOutputTypes returns status==live docs. No defaultPrintLayoutId
-    // so /api/storybookV2/create falls back to default 1024x1024 dimensions.
+    // /api/storyOutputTypes returns status==live docs; the Form adapter reads
+    // this as a picture book (no category), so POST /api/books makes a
+    // 12-page Manuscript (the allowed length nearest layoutHints.pageCount).
     db.collection('storyOutputTypes').doc(SEED.outputTypeId).set({
       id: SEED.outputTypeId,
       name: SEED.outputTypeLabel,
@@ -206,71 +209,54 @@ export async function seedCompletedStory(opts: {
 }
 
 /**
- * Seed a fully-generated storybook under stories/{storyId} — the exact
- * post-conditions of the TEST_MODE /api/storybookV2/pages + /images routes.
- * Used by report-only specs (a11y/visual) that need a ready book without
- * re-running the whole funnel. The blocking funnel spec does NOT use this; it
- * exercises the real routes.
+ * Seed a finished Book (server pipeline) for a story: the Manuscript and its
+ * pages, the Book and its pages, as the TEST_MODE jobs leave them. Used by
+ * report-only journeys that need a ready Book without running the funnel; the
+ * blocking funnel spec creates its Book through the real route and jobs.
  */
-export async function seedReadyStorybook(opts: {
+export async function seedReadyBook(opts: {
   storyId: string;
-}): Promise<{ storybookId: string }> {
+}): Promise<{ bookId: string; manuscriptId: string }> {
   const db = emulatorFirestore();
   const now = FieldValue.serverTimestamp();
-  const storybookId = `e2e-book-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-
-  const storyRef = db.collection('stories').doc(opts.storyId);
-  const storySnap = await storyRef.get();
-  if (!storySnap.exists) throw new Error(`Story ${opts.storyId} not found — seed it first`);
-  const story = storySnap.data()!;
-
-  const storybookRef = storyRef.collection('storybooks').doc(storybookId);
+  const story = (await db.collection('stories').doc(opts.storyId).get()).data();
+  if (!story) throw new Error(`Story ${opts.storyId} not found — seed it first`);
+  const ownerUid = story.parentUid as string;
+  const childId = story.childId as string;
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 1e6)}`;
+  const manuscriptId = `ms_e2e${suffix}`;
+  const bookId = `bk_e2e${suffix}`;
   const transparentPng =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const words = ['Once upon a test.', 'The dragon breathed repeatable fire.', 'The end.'];
+  const scene = { location: 'A bright test garden', presentCast: [], action: '', locationKey: 'test', mood: '', tag: 'outdoor-day', castActions: [] };
 
   const batch = db.batch();
-  batch.set(storybookRef, {
-    id: storybookId,
-    storyId: opts.storyId,
-    childId: story.childId,
-    parentUid: story.parentUid,
-    storyOutputTypeId: SEED.outputTypeId,
-    imageStyleId: SEED.imageStyleId,
-    imageStylePrompt: 'deterministic e2e watercolour style',
-    printLayoutId: null,
-    imageWidthPx: 1024,
-    imageHeightPx: 1024,
-    title: SEED.storyTitle,
-    pageGeneration: { status: 'ready', pagesCount: 3 },
-    imageGeneration: { status: 'ready', pagesReady: 3, pagesTotal: 3 },
-    audioGeneration: { status: 'ready', pagesReady: 3, pagesTotal: 3 },
-    exemplarGeneration: { status: 'ready' },
-    [REGRESSION_FIELD]: true,
-    createdAt: now,
-    updatedAt: now,
+  const manuscriptRef = db.collection('manuscripts').doc(manuscriptId);
+  batch.set(manuscriptRef, {
+    ownerUid, storyId: opts.storyId, childId, form: SEED.outputTypeId, readingLevel: 'all',
+    length: words.length, density: 'balanced', status: 'ready', narration: null, cover: scene,
+    title: SEED.storyTitle, [REGRESSION_FIELD]: true, createdAt: now, updatedAt: now,
   });
-
-  const pages = [
-    { pageNumber: 1, kind: 'title_page', bodyText: SEED.storyTitle, displayText: SEED.storyTitle },
-    { pageNumber: 2, kind: 'text', bodyText: 'Once upon a test.', displayText: 'Once upon a test.' },
-    { pageNumber: 3, kind: 'text', bodyText: 'The end.', displayText: 'The end.' },
-  ];
-  for (const page of pages) {
-    const pageId = `page-${String(page.pageNumber).padStart(3, '0')}`;
-    batch.set(storybookRef.collection('pages').doc(pageId), {
-      ...page,
-      id: pageId,
-      imagePrompt: '',
-      entityIds: [],
-      imageStatus: 'ready',
-      imageUrl: transparentPng,
-      createdAt: now,
-      updatedAt: now,
+  words.forEach((text, i) => {
+    batch.set(manuscriptRef.collection('pages').doc(String(i + 1)), {
+      ownerUid, pageNumber: i + 1, text, narrationText: null, scene, narrationUrl: null, createdAt: now, updatedAt: now,
+    });
+  });
+  const bookRef = db.collection('books').doc(bookId);
+  batch.set(bookRef, {
+    ownerUid, manuscriptId, storyId: opts.storyId, childId, styleId: SEED.imageStyleId, layoutId: null,
+    printProductId: null, status: 'ready', art: { total: words.length + 1, done: words.length + 1, failed: 0 },
+    [REGRESSION_FIELD]: true, createdAt: now, updatedAt: now,
+  });
+  for (let n = 1; n <= words.length + 1; n++) {
+    batch.set(bookRef.collection('pages').doc(String(n)), {
+      ownerUid, pageNumber: n, kind: n === 1 ? 'cover' : 'story', manuscriptPage: n === 1 ? null : n - 1,
+      artUrl: transparentPng, artJob: null, createdAt: now, updatedAt: now,
     });
   }
   await batch.commit();
-
-  return { storybookId };
+  return { bookId, manuscriptId };
 }
 
 /** Find a child doc by owner + display name (used after UI-driven creation). */
@@ -329,6 +315,9 @@ export async function cleanupFunnelAccount(opts: { uid: string }): Promise<void>
   }
 
   await deleteWhere('children', 'ownerParentUid');
+  await deleteWhere('books', 'ownerUid');
+  await deleteWhere('manuscripts', 'ownerUid');
+  await deleteWhere('jobs', 'ownerUid');
   await deleteWhere('storySessions', 'parentUid');
   await deleteWhere('stories', 'parentUid');
   // Ledger docs are keyed by parentUid (see ledger.server.ts ledgerDocPath).
