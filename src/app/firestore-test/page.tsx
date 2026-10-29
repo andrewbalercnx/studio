@@ -133,10 +133,10 @@ const testCases: TestCase[] = [
   { id: 'characters-help-read', description: 'Authenticated user can read help-character', role: 'parent', operation: 'get', path: () => `characters/help-character`, expected: 'allow' },
 
   // ========== STORIES TESTS ==========
-  { id: 'stories-create', description: 'Parent can create a story', role: 'parent', operation: 'create', path: () => `stories`, data: (ids) => ({ parentUid: ids.parentUid, childId: ids.childId, storySessionId: ids.storySessionId, storyText: 'Once upon a time...' }), expected: 'allow' },
+  { id: 'stories-create', description: 'Parent cannot create a story directly (server-only)', role: 'parent', operation: 'create', path: () => `stories`, data: (ids) => ({ parentUid: ids.parentUid, childId: ids.childId, storySessionId: ids.storySessionId, storyText: 'Once upon a time...' }), expected: 'deny' },
   { id: 'stories-read-own', description: 'Parent can read their own story', role: 'parent', operation: 'get', path: (ids) => `stories/${ids.storyId}`, expected: 'allow' },
   { id: 'stories-read-other', description: 'Parent cannot read other parent\'s story', role: 'parent', operation: 'get', path: (ids) => `stories/${ids.otherStoryId}`, expected: 'deny' },
-  { id: 'stories-update-own', description: 'Parent can update their own story', role: 'parent', operation: 'update', path: (ids) => `stories/${ids.storyId}`, data: { storyText: 'Updated story...' }, expected: 'allow' },
+  { id: 'stories-update-own', description: 'Parent cannot rewrite story text (only title, art style, soft delete)', role: 'parent', operation: 'update', path: (ids) => `stories/${ids.storyId}`, data: { storyText: 'Updated story...' }, expected: 'deny' },
   { id: 'stories-help-read', description: 'Authenticated user can read help-story', role: 'parent', operation: 'get', path: () => `stories/help-story`, expected: 'allow' },
   { id: 'stories-help-storybook-read', description: 'Authenticated user can read help-storybook', role: 'parent', operation: 'get', path: () => `stories/help-storybook`, expected: 'allow' },
 

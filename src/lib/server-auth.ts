@@ -19,21 +19,10 @@ async function extractBearerToken(): Promise<string | null> {
   return null;
 }
 
-function extractQueryToken(request: Request): string | null {
-  try {
-    const url = new URL(request.url);
-    return url.searchParams.get('idToken');
-  } catch {
-    return null;
-  }
-}
-
-async function resolveIdToken(request: Request): Promise<string | null> {
-  const headerToken = await extractBearerToken();
-  if (headerToken) return headerToken;
-  const queryToken = extractQueryToken(request);
-  if (queryToken) return queryToken;
-  return null;
+// Header only: a token in the query string ends up in URLs, browser history
+// and request logs.
+async function resolveIdToken(_request: Request): Promise<string | null> {
+  return extractBearerToken();
 }
 
 export async function requireAuthenticatedUser(request: Request): Promise<VerifiedUser> {

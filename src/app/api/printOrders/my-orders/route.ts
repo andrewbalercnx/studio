@@ -63,8 +63,28 @@ export async function GET(request: NextRequest) {
     const orders = [...byId.values()]
       .map((order) => {
         const createdAtIso = toIso(order.createdAt);
+        // Allowlist: the order document also holds our cost snapshot, the
+        // Mixam product spec, process logs and admin ids, none of which a
+        // parent should see.
         return {
-          ...order,
+          id: order.id,
+          version: order.version,
+          storyId: order.storyId,
+          outputId: order.outputId,
+          printProductId: order.printProductId,
+          quantity: order.quantity,
+          trimSize: order.trimSize,
+          pageCount: order.pageCount,
+          shippingAddress: order.shippingAddress,
+          contactEmail: order.contactEmail,
+          paymentStatus: order.paymentStatus,
+          fulfillmentStatus: order.fulfillmentStatus,
+          approvalStatus: order.approvalStatus,
+          rejectedReason: order.rejectedReason ?? null,
+          mixamTrackingUrl: order.mixamTrackingUrl ?? null,
+          mixamTrackingNumber: order.mixamTrackingNumber ?? null,
+          mixamCarrier: order.mixamCarrier ?? null,
+          mixamEstimatedDeliveryIso: toIso(order.mixamEstimatedDelivery),
           createdAtIso,
           updatedAtIso: toIso(order.updatedAt),
           rejectedAtIso: toIso(order.rejectedAt),

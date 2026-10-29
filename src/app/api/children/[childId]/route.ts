@@ -26,7 +26,7 @@ export async function GET(
     // Fetch the child
     const childDoc = await firestore.collection('children').doc(childId).get();
 
-    if (!childDoc.exists) {
+    if (!childDoc.exists || childDoc.data()?.deletedAt) {
       return NextResponse.json({ error: 'Child not found' }, { status: 404 });
     }
 

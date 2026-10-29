@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-10-29 (Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -11,7 +11,7 @@ StoryPic Kids API uses Next.js App Router API routes. All endpoints require auth
 
 **Base URL**: `/api`
 
-**Authentication**: Firebase ID token in `Authorization: Bearer <token>` header.
+**Authentication**: Firebase ID token in `Authorization: Bearer <token>` header. Tokens in the query string (`?idToken=`) are not accepted.
 
 ---
 
@@ -317,6 +317,24 @@ Batch fetch thumbnails and audio status for storybooks. Called after initial lis
 ---
 
 ## Children Routes
+
+### GET `/api/children`
+
+List the caller's children, excluding soft-deleted ones.
+
+**Authentication**: Bearer token; returns only children whose `ownerParentUid` is the caller.
+
+**Response**: `200 OK` with an array of child documents (`id` plus fields).
+
+---
+
+### GET `/api/children/[childId]`
+
+One child. 404 if it does not exist or is soft-deleted; 403 if it belongs to another family.
+
+**Authentication**: Bearer token; caller must own the child.
+
+---
 
 ### POST `/api/children/photos`
 
@@ -660,6 +678,8 @@ Generate wizard questions and final story. The wizard asks 4 questions to gather
 ---
 
 ### POST `/api/storyFriends`
+
+**Authentication**: Bearer token; caller must own the session. Child-persona scope applies (403 if a persona cookie names another child).
 
 Multi-phase "Fun with my friends" story generator. Creates adventure stories featuring the child's characters and friends through a guided 4-phase flow.
 
@@ -1700,6 +1720,13 @@ Get current user's print orders with server-derived presentation fields (Sprint 
 server-first principle: clients render the timeline, they never re-map statuses).
 Orders are matched on both `parentUid` and the legacy `ownerUserId` field and sorted
 newest-first.
+
+Each order is an **allowlist** of parent-facing fields: `id`, `version`, `storyId`, `outputId`,
+`printProductId`, `quantity`, `trimSize`, `pageCount`, `shippingAddress`, `contactEmail`,
+`paymentStatus`, `fulfillmentStatus`, `approvalStatus`, `rejectedReason`, `mixamTrackingUrl`,
+`mixamTrackingNumber`, `mixamCarrier`, `mixamEstimatedDeliveryIso`, plus the derived fields below.
+Internal fields (cost snapshots, product spec, process log, Mixam validation, admin ids) are not
+returned.
 
 **Authentication**: Required (Bearer token, parent or admin).
 
@@ -3824,6 +3851,11 @@ Create a dev todo item. Used by Claude Code to track follow-up work items.
 Mixam webhook for order status updates. Called by Mixam when order status changes.
 
 **Authentication**: A valid `X-Mixam-Signature` (HMAC-SHA256 of the raw body with `MIXAM_WEBHOOK_SECRET`) is required. Missing or invalid signature → 401. Secret not configured → 503.
+
+**Behaviour**:
+- The payload's `metadata.externalOrderId` selects our order; the update is applied only if the payload's `orderId` equals that order's stored `mixamOrderId`. Otherwise the webhook is acknowledged (200, `warning`) and ignored.
+- An order in a final state (`delivered`, `cancelled`) keeps its status; the payload is still recorded.
+- Internal processing errors return **500** so Mixam retries. Retries are safe: the status and the admin email change only when the status actually differs.
 
 **Request Headers**:
 - `X-Mixam-Signature` - HMAC-SHA256 signature (required)
