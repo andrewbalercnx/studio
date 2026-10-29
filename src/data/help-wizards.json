@@ -98,21 +98,21 @@
         {
           "title": "Inside a Storybook",
           "description": "When you open a storybook, you'll see the main viewer with:\n\n- Page-by-page story text\n- Generated illustrations (when complete)\n- Action buttons for reading, printing, and more\n\nThis is where you prepare books for printing!",
-          "route": "/storybook/help-storybook",
+          "route": "/parent/storybooks",
           "wizardTargetId": "storybook-viewer-card",
           "position": "bottom-center"
         },
         {
           "title": "Storybook Actions",
           "description": "The action buttons let you:\n\n- **Generate Art**: Create AI illustrations for each page\n- **Read**: Open the book reader view\n- **Print Layout**: Prepare the book for printing\n\nArt generation typically takes a few minutes per page.",
-          "route": "/storybook/help-storybook",
+          "route": "/parent/storybooks",
           "wizardTargetId": "storybook-actions",
           "position": "top-center"
         },
         {
           "title": "Print Layout Setup",
           "description": "When you're ready to print, click **Print Layout** to:\n\n1. Choose a print size (A4, Letter, etc.)\n2. Arrange pages for professional printing\n3. Add cover designs\n4. Preview the final layout\n\nThis creates a print-ready version of your book!",
-          "route": "/storybook/help-storybook",
+          "route": "/parent/storybooks",
           "wizardTargetId": "storybook-print-layout",
           "position": "top-center"
         },
@@ -215,37 +215,37 @@
         {
           "title": "Choosing a Story Type",
           "description": "First, your child picks what kind of story they want:\n\n- **Adventure** - Exciting quests and discoveries\n- **Bedtime** - Calm, cozy stories for nighttime\n- **Funny** - Silly stories full of giggles\n- **Learning** - Educational adventures\n\nEach type creates a different mood and style!",
-          "route": "/story/start",
+          "route": "/child/help-child/create",
           "position": "center-center"
         },
         {
           "title": "Picking the Story Mode",
-          "description": "Next, they choose how to create the story:\n\n- **Wizard Mode**: Answer guided questions (best for younger kids)\n- **Chat Mode**: Have a conversation with the AI storyteller\n\nBoth create wonderful personalized stories!",
-          "route": "/story/start",
+          "description": "Next, they choose how to create the story:\n\n- **Story Wizard**: Answer a few quick questions (best for younger kids)\n- **Free Play** and **Guided Story**: Build the story step by step\n- **Fun with my friends**: Pick companions, then a scenario\n\nEvery way creates a wonderful personalized story!",
+          "route": "/child/help-child/create",
           "position": "center-center"
         },
         {
           "title": "The Story Wizard",
           "description": "In **Wizard Mode**, your child answers fun questions:\n\n- Who should be in the story? (themselves, pets, friends)\n- What's the setting? (forest, space, underwater)\n- What happens? (find treasure, make friends, solve a mystery)\n\nThe AI uses these answers to craft a unique tale!",
-          "route": "/story/type/help-session",
+          "route": "/child/help-child/create",
           "position": "center-center"
         },
         {
           "title": "Selecting Characters",
           "description": "Your child picks who appears in their story!\n\nThey'll see:\n- Themselves (using their profile photo)\n- Their characters (pets, friends you've created)\n- Special guest characters\n\nSelected characters become the stars of the adventure!",
-          "route": "/story/type/help-session",
+          "route": "/child/help-child/create",
           "position": "bottom-center"
         },
         {
           "title": "Story Generation",
           "description": "Once all choices are made, the AI gets to work!\n\nYour child sees a fun animation while their personalized story is being written. This usually takes about 30 seconds to a minute.",
-          "route": "/story/session/help-session/generating",
+          "route": "/child/help-child/stories",
           "position": "center-center"
         },
         {
           "title": "The Finished Story",
           "description": "The completed story appears with:\n\n- A unique title based on the adventure\n- Personalized text featuring your child's name\n- Their chosen characters woven throughout\n- A satisfying beginning, middle, and end",
-          "route": "/story/session/help-session/compiled",
+          "route": "/child/help-child/stories",
           "position": "center-center"
         },
         {
@@ -269,38 +269,38 @@
         {
           "title": "Choosing an Output Type",
           "description": "First, select what kind of book to create:\n\n- **Picture Book**: Traditional storybook layout\n- **Comic Book**: Panel-style illustrations\n- **Memory Book**: Scrapbook-style pages\n\nEach has a unique visual style!",
-          "route": "/story/session/help-session/select-output-type",
+          "route": "/child/help-child/stories",
           "position": "center-center"
         },
         {
           "title": "Selecting Art Style",
           "description": "Next, choose the **illustration style**:\n\n- **Watercolor**: Soft, painterly look\n- **Digital Art**: Bright and modern\n- **Cartoon**: Fun and expressive\n- **Storybook Classic**: Traditional children's book style\n\nThe AI will create all illustrations in this style!",
-          "route": "/story/session/help-session/select-image-style",
+          "route": "/child/help-child/stories",
           "position": "center-center"
         },
         {
           "title": "Art Generation",
           "description": "The AI now creates beautiful illustrations for each page!\n\nThis is the longest step - each image takes about 30-60 seconds. Your child can watch the progress or come back later.",
-          "route": "/child/help-child/book/help-storybook/generating",
+          "route": "/child/help-child/books",
           "position": "center-center"
         },
         {
           "title": "The Finished Storybook",
           "description": "When complete, your child has a beautiful illustrated storybook!\n\nThey can:\n- Flip through the pages\n- Read with illustrations\n- Show off to family and friends",
-          "route": "/storybook/help-storybook",
+          "route": "/parent/storybooks",
           "position": "center-center"
         },
         {
           "title": "Reading the Storybook",
           "description": "The **Read** button opens an immersive book reader:\n\n- Full-screen illustrations\n- Page-turn animations\n- Read-aloud narration\n- Perfect for bedtime reading!",
-          "route": "/storybook/help-storybook",
+          "route": "/parent/storybooks",
           "wizardTargetId": "storybook-read",
           "position": "top-center"
         },
         {
           "title": "Watching the Book",
           "description": "In the book reader, your child experiences their story like a real book:\n\n- Swipe or click to turn pages\n- Beautiful full-page illustrations\n- Their name and characters throughout\n- Optional background music",
-          "route": "/storybook/help-storybook/read",
+          "route": "/parent/storybooks",
           "position": "center-center"
         },
         {
@@ -312,7 +312,7 @@
         {
           "title": "Printing a Real Book",
           "description": "The best part? You can turn digital books into **real printed books**!\n\nAs a parent, you can:\n1. Open the storybook\n2. Click Print Layout\n3. Configure the print settings\n4. Order a professionally printed book\n\nImagine your child holding their own published book!",
-          "route": "/storybook/help-storybook",
+          "route": "/parent/storybooks",
           "wizardTargetId": "storybook-print-layout",
           "position": "top-center"
         },
@@ -433,7 +433,7 @@
         {
           "title": "Story Beat Testing",
           "description": "The **Story Beat Test** lets you:\n\n1. Select a story type and level band\n2. Provide sample context\n3. Run the AI generation\n4. Review the output quality\n\nThis is essential for tuning your prompts!",
-          "route": "/admin/storyBeatTest",
+          "route": "/admin/storyTypes",
           "position": "center-center"
         },
         {
@@ -533,8 +533,8 @@
         },
         {
           "title": "Kids Flow Selection",
-          "description": "The **Kids Flows** page controls which story modes are available.\n\nYou can enable/disable:\n- **Wizard Mode**: Guided questions\n- **Chat Mode**: Conversational\n- **Gemini 3**: Specific AI model\n- **Gemini 4**: Newer AI model\n\nDisabled flows won't appear to users.",
-          "route": "/admin/kids-flows",
+          "description": "The **Story Generators** page controls which ways of making a story children can choose.\n\nEach mode (Story Wizard, Free Play, Guided Story, Fun with my friends, Choose Your Adventure) is shown to children when it is **live** and **enabled for kids**.",
+          "route": "/admin/storyGenerators",
           "position": "center-center"
         },
         {

@@ -44,7 +44,6 @@ type OwnedCollection = {
   label: string;
 };
 
-const SESSION: OwnedCollection = { collection: 'storySessions', ownerField: 'parentUid', label: 'Story session' };
 const STORY: OwnedCollection = { collection: 'stories', ownerField: 'parentUid', label: 'Story' };
 const CHILD: OwnedCollection = { collection: 'children', ownerField: 'ownerParentUid', label: 'Child' };
 const CHARACTER: OwnedCollection = { collection: 'characters', ownerField: 'ownerParentUid', label: 'Character' };
@@ -117,8 +116,6 @@ async function guard(request: Request, spec: OwnedCollection, id: unknown): Prom
   return loadOwned(user, spec, id);
 }
 
-export const requireSessionOwner = (request: Request, sessionId: unknown) => guard(request, SESSION, sessionId);
-export const requireStoryOwner = (request: Request, storyId: unknown) => guard(request, STORY, storyId);
 /** Read-only variant: also lets any signed-in user read help-tour sample stories. */
 export const requireStoryReader = async (request: Request, storyId: unknown) =>
   loadOwned(await requireUser(request), STORY, storyId, { allowHelpDocuments: true });

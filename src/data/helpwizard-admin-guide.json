@@ -135,8 +135,8 @@
       "title": "Email Configuration"
     },
     {
-      "route": "/admin/kids-flows",
-      "description": "The **Story Flow Selection** page controls available story modes.\n\nYou can enable/disable:\n- **Wizard Mode**: Guided 4-question flow\n- **Chat Mode**: Conversational story creation\n- **Gemini 3/4**: Different AI models\n\nDisabled flows won't appear to users.",
+      "route": "/admin/storyGenerators",
+      "description": "The **Story Generators** page controls which ways of making a story children can choose.\n\nEach mode (Story Wizard, Free Play, Guided Story, Fun with my friends, Choose Your Adventure) is shown to children when it is **live** and **enabled for kids**.",
       "position": "center-center",
       "title": "Story Flow Selection"
     },
