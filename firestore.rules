@@ -189,25 +189,46 @@ service cloud.firestore {
     }
 
     // ========== STORIES ==========
+    // Two shapes until the trial-data reset (slice 5.4):
+    // - target Stories (slice 5.3, `schemaVersion: 2`, `ownerUid`): created and
+    //   changed only by the creation routes; the owner reads the Story and its
+    //   turns (lists filter on where('ownerUid', '==', uid));
+    // - legacy stories (`parentUid`, no `schemaVersion`): the owner may still
+    //   rename, pick an art style, soft-delete, and acknowledge storybook art.
+    function isTargetStory(data) {
+      return data.get('schemaVersion', 0) == 2;
+    }
+
     match /stories/{storyId} {
       allow get: if isAdmin()
                  || (isHelpDocument(storyId) && isAuthenticated())
-                 || (isAuthenticated() && resource.data.parentUid == request.auth.uid && notDeleted());
+                 || (isAuthenticated() && resource.data.parentUid == request.auth.uid && notDeleted())
+                 || ownsDoc();
 
-      // List: Requires where('parentUid', '==', uid) in query
+      // List: requires where('parentUid', '==', uid) (legacy) or where('ownerUid', '==', uid) (target)
       allow list: if isAdmin()
-                  || (isAuthenticated() && resource.data.parentUid == request.auth.uid && notDeleted());
+                  || (isAuthenticated() && resource.data.parentUid == request.auth.uid && notDeleted())
+                  || ownsDoc();
 
-      // Stories are written by the server (compile, flows). The owner may only
-      // rename, pick an art style, or soft-delete.
+      // Stories are written by the server (creation routes, today's compile and
+      // flows). On a legacy story the owner may only rename, pick an art style,
+      // or soft-delete; a target Story has no client writes at all.
       allow create: if isAdmin();
 
       allow update: if isAdmin()
-                    || (isAuthenticated() && !isHelpDocument(storyId) && resource.data.parentUid == request.auth.uid
+                    || (isAuthenticated() && !isHelpDocument(storyId) && !isTargetStory(resource.data)
+                        && resource.data.parentUid == request.auth.uid
                         && changedKeys().hasOnly(['metadata', 'selectedImageStyleId', 'selectedImageStylePrompt', 'updatedAt', 'deletedAt', 'deletedBy'])
                         && (!changedKeys().hasAny(['metadata'])
                             || request.resource.data.metadata.diff(resource.data.get('metadata', {})).affectedKeys().hasOnly(['title'])));
       allow delete: if isAdmin();
+
+      // Turns of a target Story: written by the creation routes only; every
+      // turn carries `ownerUid` (lists filter on it).
+      match /turns/{turnId} {
+        allow get, list: if isAdmin() || ownsDoc();
+        allow write: if isAdmin();
+      }
 
       // Storybooks: the owner creates a new, idle storybook and may later only
       // soft-delete it or acknowledge an art recovery. Lock state, finalization
