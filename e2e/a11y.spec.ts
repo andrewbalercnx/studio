@@ -5,7 +5,7 @@ import {
   cleanupFunnelAccount,
   findChildId,
   seedCatalog,
-  seedCompletedStory,
+  seedCompleteStory,
   seedReadyBook,
 } from './helpers/emulator';
 import {
@@ -99,12 +99,10 @@ test.describe('accessibility scans @a11y', () => {
       account = await signUpNewParent(page, 'a11y-books');
       await createChildViaParentUI(page, account, 'Ellie A11y');
       const childId = await findChildId(account.uid, 'Ellie A11y');
-      const { sessionId } = await seedCompletedStory({ parentUid: account.uid, childId });
-      await seedReadyBook({ storyId: sessionId });
+      const { storyId } = await seedCompleteStory({ ownerUid: account.uid, childId });
+      await seedReadyBook({ storyId });
       await lockKidsModeToChild(page, 'Ellie A11y');
 
-      // Client-side navigation — kids surfaces crash on cold deep-links while
-      // auth hydrates (known app issue, see docs/testing/e2e.md).
       await page.getByText('My Books').click();
       await page.getByText(SEED.storyTitle).click({ timeout: 30_000 });
       await expect(page.getByTestId('book-reader')).toBeVisible({ timeout: 30_000 });
