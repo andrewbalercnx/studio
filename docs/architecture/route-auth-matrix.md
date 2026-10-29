@@ -18,6 +18,7 @@
 | Child persona | `enforcePersonaScope` (`src/lib/persona.server.ts`) | Narrows a parent's access to one child when the persona cookie is present. **Not authentication**: it allows a request without the cookie |
 | Signature | Mixam webhook | Request came from Mixam |
 | Internal secret | `isInternalSecretValid` | Caller holds `INTERNAL_API_SECRET` |
+| Route wrapper (Phase 4) | `withRoute` (`src/server/http/with-route.ts`) | One declared mode per route: `public`, `user` (ID token, header only), `admin` (`isAdmin` claim), `internal` (Cloud Tasks OIDC token for `JOBS_INVOKER_SERVICE_ACCOUNT`). Ownership via `loadOwned` / `assertOwner` on `ownerUid` |
 
 Owner fields: `storySessions.parentUid`, `stories.parentUid`, `children.ownerParentUid`,
 `characters.ownerParentUid`, `printStoryBooks.ownerUserId`, `printOrders.parentUid` (legacy:
@@ -59,6 +60,12 @@ These routes were open, or authenticated without checking ownership, before Phas
 | `logAIFlow` imported by `/admin/characters` | An unused import of a `'use server'` module, which can expose it as a public server action (anyone could write `aiFlowLogs` entries) | Import removed; no client component imports a `'use server'` module any more |
 | `printOrders` (Firestore rules) | Owner could create, update and delete orders directly, including status, payment and PDF URLs that the admin submit route trusts | Admin only; server routes write orders |
 | `printStoryBooks` (Firestore rules) | Owner could set `pdfStatus` and PDF URLs | Owner creates drafts only (no PDF fields); updates admin/server only |
+
+## Phase 4 (2026-10-29)
+
+| Route | Rule |
+|-------|------|
+| `POST /api/internal/jobs/run` | `withRoute({ auth: 'internal' })`: Cloud Tasks OIDC token, audience `JOBS_OIDC_AUDIENCE` (default `JOBS_RUN_URL`), email `JOBS_INVOKER_SERVICE_ACCOUNT`. User tokens and the internal secret are rejected; unset config rejects everything |
 
 ## Routes that are public by design
 
