@@ -67,6 +67,15 @@ These routes were open, or authenticated without checking ownership, before Phas
 |-------|------|
 | `POST /api/internal/jobs/run` | `withRoute({ auth: 'internal' })`: Cloud Tasks OIDC token, audience `JOBS_OIDC_AUDIENCE` (default `JOBS_RUN_URL`), email `JOBS_INVOKER_SERVICE_ACCOUNT`. User tokens and the internal secret are rejected; unset config rejects everything |
 
+## Phase 5.1 (2026-10-29)
+
+| Route | Rule |
+|-------|------|
+| `POST /api/manuscripts` | `withRoute({ auth: 'user' })`; story owner (`stories.parentUid`) via `assertOwner`, persona scope with the story's `childId` |
+| `POST /api/books` | As above for `storyId`; `loadOwned(manuscripts)` for `manuscriptId`. Charges the story owner's `storybook_allowance` in the creating transaction |
+| `POST /api/books/[bookId]/pages/[pageNumber]/retry` | `loadOwned(books)` (`ownerUid`, persona scope with the Book's `childId`) |
+| `POST /api/books/[bookId]/lock`, `/unlock` | `loadOwned(books)` |
+
 ## Routes that are public by design
 
 | Route | Why |
