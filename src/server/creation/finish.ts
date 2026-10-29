@@ -25,7 +25,6 @@ import { JobFailure, type JobDefinition, type JobRegistry, type JobSpec } from '
 import { toJobError } from '../jobs/runner';
 import { chargeAllowance, readLedgerIn } from '../books/allowance';
 import { loadFamilyRoster } from './context';
-import { loadCreationMode } from './modes';
 import { renderCastTokens } from './tokens';
 
 export const STORY_FINISH_KIND = 'story.finish';
@@ -136,11 +135,11 @@ function finishHandler(getDeps: () => Promise<FinishDeps>): JobDefinition['run']
         synopsis = `${family.hero.displayName} has a wonderful adventure.`;
         title = story.titleHint ?? `${family.hero.displayName}'s Story`;
       } else {
-        const mode = await loadCreationMode(ctx.db, story.modeId);
+        // Title and synopsis summarise finished text: a cheap model by purpose,
+        // not the creation mode's conversational model.
         const call = (flowName: string, prompt: string, config: Record<string, unknown>) =>
           deps.ai.generateText({
-            purpose: 'creation.text',
-            creationModeModel: mode?.model ?? null,
+            purpose: 'story.finish',
             flowName,
             ownerUid: story.ownerUid,
             prompt,
