@@ -8,7 +8,7 @@
  * prompt. The results are stored under imageStyles/{styleId}.sceneExemplars and in
  * Firebase Storage at sceneExemplars/{styleId}/{tag}/image.{ext}.
  *
- * These scene exemplars are used by story-image-flow as scene-contextual style references,
+ * These scene exemplars are used by the Book pipeline's page art (src/server/catalog/styles.ts) as scene-contextual style references,
  * replacing the generic exampleImages when a page's sceneTag is known.
  *
  * Rate limiting: tags within a style are processed sequentially with a 2 s gap to avoid

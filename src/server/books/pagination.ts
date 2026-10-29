@@ -1,6 +1,6 @@
 /**
- * Pagination for `manuscript.paginate`, ported from story-pagination-flow.ts and
- * src/lib/image-scene-repair.ts:
+ * Pagination for `manuscript.paginate`, ported from the storybookV2 pagination flow and
+ * scene repair (both deleted in slice 5.2):
  *
  * - One model call producing every page's text, cast and scene (plus the cover
  *   scene), with a deliberately loose output schema.
@@ -54,7 +54,7 @@ export type PaginationOutput = z.infer<typeof paginationOutputSchema>;
 export type RawPage = { text: string; actors: string[]; scene: RepairedScene | null };
 
 // ---------------------------------------------------------------------------
-// Scene repair (ported from src/lib/image-scene-repair.ts)
+// Scene repair (ported from the deleted src/lib/image-scene-repair.ts)
 // ---------------------------------------------------------------------------
 
 export const SCENE_TAGS = ['indoor-day', 'outdoor-day', 'indoor-night', 'outdoor-night'] as const;

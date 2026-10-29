@@ -25,9 +25,7 @@ export const diagnosticsConfig = defineConfig({
 
 /**
  * `systemConfig/paginationPrompt`: the admin-editable general pagination
- * instructions. Read by `manuscript.paginate`; the old loader
- * (src/lib/pagination-prompt-config.server.ts) stays for the storybookV2 code
- * until slice 5.2 deletes it.
+ * instructions. Read by `manuscript.paginate`; the admin route invalidates it on save.
  */
 export const paginationPromptConfig = defineConfig({
   path: 'systemConfig/paginationPrompt',
@@ -37,8 +35,7 @@ export const paginationPromptConfig = defineConfig({
 
 /**
  * `systemConfig/imagePrompt`: an optional global prefix for every page image.
- * Used by `book.pageArt` only when `enabled` (same rule as the old loader,
- * src/lib/image-prompt-config.server.ts, which stays until slice 5.2).
+ * Used by `book.pageArt` only when `enabled`; the admin route invalidates it on save.
  */
 export const imagePromptConfig = defineConfig({
   path: 'systemConfig/imagePrompt',

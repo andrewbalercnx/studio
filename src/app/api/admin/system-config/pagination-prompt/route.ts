@@ -3,7 +3,8 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { requireParentOrAdminUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
-import { clearPaginationPromptConfigCache } from '@/lib/pagination-prompt-config.server';
+import { invalidateConfig } from '@/server/config/config-service';
+import { paginationPromptConfig } from '@/server/config/definitions';
 import type { PaginationPromptConfig } from '@/lib/types';
 import { DEFAULT_PAGINATION_PROMPT_CONFIG } from '@/lib/types';
 
@@ -101,7 +102,7 @@ export async function PUT(request: Request) {
     }, { merge: true });
 
     // Clear the server-side cache so the new config takes effect immediately
-    await clearPaginationPromptConfigCache();
+    invalidateConfig(paginationPromptConfig);
 
     return NextResponse.json({
       ok: true,

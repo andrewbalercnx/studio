@@ -1,7 +1,6 @@
 'use client';
-import { authFetch } from '@/lib/auth-fetch';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
@@ -10,9 +9,8 @@ import { useDocument, useCollection } from '@/lib/firestore-hooks';
 import type { Story, StoryOutputPage, StoryBookOutput } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoaderCircle, ArrowLeft, Settings } from 'lucide-react';
+import { LoaderCircle, ArrowLeft } from 'lucide-react';
 import { useUser } from '@/firebase/auth/use-user';
-import { useToast } from '@/hooks/use-toast';
 import { BookReader } from '@/components/book-reader';
 
 export default function BookReaderPage() {
@@ -26,9 +24,7 @@ export default function BookReaderPage() {
 
   const firestore = useFirestore();
   const { user, idTokenResult, loading: userLoading } = useUser();
-  const { toast } = useToast();
 
-  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
 
   // Wait for authentication before creating Firestore queries
   // This prevents permission errors from queries running before auth is ready
@@ -96,93 +92,6 @@ export default function BookReaderPage() {
     ? `/storybook/${bookId}?storyId=${storyId}`
     : `/storybook/${bookId}`;
 
-  // Generate audio for a single page
-  const handleGeneratePageAudio = useCallback(
-    async (pageId: string) => {
-      if (!user || !storyId) return;
-
-      try {
-        const idToken = await user.getIdToken();
-        const response = await authFetch('/api/storyBook/pageAudio', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({
-            storyId,
-            ...(isNewModel && { storybookId: bookId }),
-            pageId,
-          }),
-        });
-
-        const result = await response.json();
-        if (!result.ok) {
-          toast({
-            title: 'Audio generation failed',
-            description: result.errorMessage || 'Please try again.',
-            variant: 'destructive',
-          });
-        } else {
-          toast({
-            title: 'Generating audio...',
-            description: 'The page will update when ready.',
-          });
-        }
-      } catch (error) {
-        toast({
-          title: 'Audio generation failed',
-          description: 'Please check your connection and try again.',
-          variant: 'destructive',
-        });
-      }
-    },
-    [user, storyId, isNewModel, bookId, toast]
-  );
-
-  // Generate audio for all pages
-  const handleGenerateAllAudio = useCallback(async () => {
-    if (!user || !storyId) return;
-
-    setIsGeneratingAudio(true);
-    try {
-      const idToken = await user.getIdToken();
-      const response = await authFetch('/api/storyBook/pageAudio', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          storyId,
-          ...(isNewModel && { storybookId: bookId }),
-        }),
-      });
-
-      const result = await response.json();
-      if (!result.ok) {
-        toast({
-          title: 'Audio generation failed',
-          description: result.errorMessage || 'Please try again.',
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: 'Generating audio for all pages...',
-          description: 'This may take a few minutes. Pages will update as they complete.',
-        });
-      }
-    } catch (error) {
-      toast({
-        title: 'Audio generation failed',
-        description: 'Please check your connection and try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsGeneratingAudio(false);
-    }
-  }, [user, storyId, isNewModel, bookId, toast]);
-
   // Loading state - wait for auth and data
   if (userLoading || !isAuthReady || bookLoading || pagesLoading) {
     return (
@@ -218,14 +127,14 @@ export default function BookReaderPage() {
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold">No Pages Yet</h1>
           <p className="text-muted-foreground">
-            This storybook doesn't have any pages yet. Generate pages first.
+            This storybook doesn't have any pages.
           </p>
         </div>
         <div className="flex gap-3">
           <Button asChild variant="outline">
             <Link href={viewerUrl}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Editor
+              Back
             </Link>
           </Button>
         </div>
@@ -260,7 +169,7 @@ export default function BookReaderPage() {
           <Button asChild variant="outline">
             <Link href={viewerUrl}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Editor
+              Back
             </Link>
           </Button>
         </div>
@@ -278,12 +187,6 @@ export default function BookReaderPage() {
             Exit Reader
           </Link>
         </Button>
-        <Button asChild variant="ghost" size="sm">
-          <Link href={viewerUrl}>
-            <Settings className="mr-2 h-4 w-4" />
-            Edit Book
-          </Link>
-        </Button>
       </div>
 
       {/* Book Reader */}
@@ -291,9 +194,6 @@ export default function BookReaderPage() {
         <BookReader
           pages={readablePages}
           bookTitle={storyBook?.metadata?.title}
-          onGeneratePageAudio={handleGeneratePageAudio}
-          onGenerateAllAudio={handleGenerateAllAudio}
-          isGeneratingAudio={isGeneratingAudio}
         />
       </div>
     </div>

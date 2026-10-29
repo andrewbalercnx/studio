@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   isTestMode,
-  buildTestModePages,
   TEST_MODE_ENV_VARS,
   TEST_MODE_IMAGE_DATA_URL,
   TEST_MODE_AUDIO_DATA_URL,
@@ -32,26 +31,6 @@ describe('isTestMode', () => {
   it('exposes both env var names', () => {
     expect(TEST_MODE_ENV_VARS).toContain('TEST_MODE');
     expect(TEST_MODE_ENV_VARS).toContain('E2E_FAKE_AI');
-  });
-});
-
-describe('buildTestModePages', () => {
-  it('returns a deterministic title + interior pages with sequential numbers', () => {
-    const pages = buildTestModePages('story-abc');
-    expect(pages.length).toBeGreaterThanOrEqual(3);
-    expect(pages[0].kind).toBe('title_page');
-    expect(pages[0].bodyText).toContain('story-abc');
-    expect(pages.map((p) => p.pageNumber)).toEqual([1, 2, 3]);
-  });
-
-  it('interior pages carry an imagePrompt so the image step has work to do', () => {
-    const interior = buildTestModePages('s').filter((p) => p.kind === 'text');
-    expect(interior.length).toBeGreaterThan(0);
-    interior.forEach((p) => expect(p.imagePrompt.length).toBeGreaterThan(0));
-  });
-
-  it('is deterministic for the same input', () => {
-    expect(buildTestModePages('x')).toEqual(buildTestModePages('x'));
   });
 });
 

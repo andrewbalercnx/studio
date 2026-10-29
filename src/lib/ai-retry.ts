@@ -1,8 +1,8 @@
 /**
  * Generation reliability primitives, consolidated.
  *
- * Three pure(ish) pieces used by the AI flows and the `/api/storybookV2/*`
- * routes so retry/backoff behaviour lives in ONE place instead of being
+ * Pure(ish) pieces used by the AI flows, the AI harness and the job runner
+ * (`src/server`) so retry/backoff behaviour lives in ONE place instead of being
  * re-implemented per flow:
  *
  *  1. `classifyError`     — decide retryable vs not (5xx/timeout = retry,

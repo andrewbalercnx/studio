@@ -69,9 +69,6 @@ export default function DevelopmentPage() {
                 <Link href="/admin/storyCompileTest">Story Compile</Link>
               </Button>
               <Button asChild variant="outline" size="sm">
-                <Link href="/admin/paginationTest">Story Pagination</Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
                 <Link href="/admin/run-traces">Run Traces</Link>
               </Button>
             </div>
