@@ -174,7 +174,7 @@ Example: "A young child around 5 years old with curly brown hair and bright blue
 
     let llmResponse;
     const startTime = Date.now();
-    const modelName = 'googleai/gemini-2.5-flash';
+    const modelName = 'googleai/gemini-3.8-flash';
 
     try {
       llmResponse = await ai.generate({

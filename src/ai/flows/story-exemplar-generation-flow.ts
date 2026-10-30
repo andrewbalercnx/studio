@@ -37,7 +37,7 @@ function extractEntityIds(text: string): string[] {
 
 // Image model loaded dynamically from central config
 // Fallback model name if config fails to load
-const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-3.1-flash-image';
 // Use 1:1 (square) for character reference sheets with 2x2 grid layout
 // Valid options: '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'
 const EXEMPLAR_ASPECT_RATIO = '1:1';

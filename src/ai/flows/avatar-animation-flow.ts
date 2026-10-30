@@ -22,7 +22,7 @@ import { isRetryable } from '@/lib/ai-retry';
 import { withProviderReliability, PROVIDER_GEMINI_IMAGE } from '@/lib/ai-circuit-breaker.server';
 
 // Fallback model name if config fails to load
-const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-3.1-flash-image';
 
 const AvatarAnimationFlowInputSchema = z.object({
   // Either childId or characterId must be provided

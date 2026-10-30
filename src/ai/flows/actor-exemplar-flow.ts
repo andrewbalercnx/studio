@@ -18,7 +18,7 @@ import { Gaxios, GaxiosError } from 'gaxios';
 import { getImageGenerationModel } from '@/lib/ai-model-config';
 
 // Fallback model name if config fails to load
-const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-3.1-flash-image';
 
 // Exemplar images are landscape format to fit 3 views side by side
 const EXEMPLAR_WIDTH_PX = 2400;

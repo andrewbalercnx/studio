@@ -68,7 +68,7 @@ Generate realistic, story-appropriate likes and dislikes that match the characte
   const startTime = Date.now();
   try {
     const result = await ai.generate({
-      model: 'googleai/gemini-2.5-pro',
+      model: 'googleai/gemini-3.8-flash',
       prompt,
       output: {
         schema: CharacterProfileSchema,

@@ -54,7 +54,7 @@ const defaultPromptConfig: StoryTypePromptConfig = {
     warmupInstructions: "Engage the child in friendly conversation to understand their mood and preferences.",
     endingInstructions: "Bring the story to a cozy, satisfying conclusion with warmth and contentment.",
     model: {
-        name: "googleai/gemini-2.5-pro",
+        name: "googleai/gemini-3.8-flash",
         temperature: 0.7,
         maxOutputTokens: 10000
     }
@@ -98,7 +98,7 @@ const sampleStoryTypes: StoryType[] = [
             warmupInstructions: "Ask about the child's favorite animals. Be curious about what animals they might want to meet on an adventure.",
             endingInstructions: "Bring the animal adventure to a cozy conclusion. The animal friend says goodbye with a promise to meet again.",
             model: {
-                name: "googleai/gemini-2.5-pro",
+                name: "googleai/gemini-3.8-flash",
                 temperature: 0.7,
                 maxOutputTokens: 10000
             }

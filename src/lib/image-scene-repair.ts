@@ -1,7 +1,7 @@
 /**
  * Deterministic repair of AI-paginated image scenes.
  *
- * gemini-2.5-flash stochastically violates the strict ImageScene shape in
+ * gemini-3.8-flash stochastically violates the strict ImageScene shape in
  * small, mechanical ways (invalid sceneTag value, missing actors/atmosphere).
  * Rejecting the whole pagination over one such miss collapses the book to the
  * sentence-chunking fallback (no scenes at all), which is strictly worse than

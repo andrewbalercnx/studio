@@ -29,7 +29,7 @@ async function generateSynopsis(
   parentUid: string,
   flowSuffix: string
 ): Promise<string> {
-  const synopsisModelName = 'googleai/gemini-2.5-flash';
+  const synopsisModelName = 'googleai/gemini-3.8-flash';
   const synopsisStartTime = Date.now();
 
   // Improved prompt with explicit completion requirements and action trigger

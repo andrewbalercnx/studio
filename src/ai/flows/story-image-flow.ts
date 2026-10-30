@@ -38,7 +38,7 @@ function isValidDocumentId(id: unknown): id is string {
 }
 
 // Fallback model name if config fails to load
-const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-3.1-flash-image';
 const MOCK_IMAGES = process.env.MOCK_STORYBOOK_IMAGES === 'true';
 
 type GenerateImageResult = {

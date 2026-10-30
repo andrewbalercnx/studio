@@ -29,7 +29,7 @@ const samplePrompts: PromptConfig[] = [
         },
         allowedChatMoves: ["ask_short_question", "ask_for_two_sentences"],
         model: {
-            name: "googleai/gemini-2.5-flash",
+            name: "googleai/gemini-3.8-flash",
             temperature: 0.6,
             maxOutputTokens: 200,
         }
@@ -48,7 +48,7 @@ const samplePrompts: PromptConfig[] = [
         },
         allowedChatMoves: ["ask_short_question", "ask_for_three_sentences", "summarise_child_answer_back"],
         model: {
-            name: "googleai/gemini-2.5-flash",
+            name: "googleai/gemini-3.8-flash",
             temperature: 0.6,
             maxOutputTokens: 250,
         }
@@ -67,7 +67,7 @@ const samplePrompts: PromptConfig[] = [
         },
         allowedChatMoves: ["ask_open_question", "summarise_child_answer_back"],
         model: {
-            name: "googleai/gemini-2.5-flash",
+            name: "googleai/gemini-3.8-flash",
             temperature: 0.7,
             maxOutputTokens: 300,
         }
@@ -82,7 +82,7 @@ const samplePrompts: PromptConfig[] = [
         systemPrompt: "You are a master storyteller for young children (ages 3-5). Your tone is gentle, encouraging, and magical. You will continue a story based on the context provided.",
         modeInstructions: "Your task is to generate the next part of the story. Write one short paragraph to continue the narrative. Then, provide three simple, clear choices for what could happen next. The choices should be distinct and lead to interesting outcomes. You must respond only with a valid JSON object matching the requested schema.",
         model: {
-            name: "googleai/gemini-2.5-flash",
+            name: "googleai/gemini-3.8-flash",
             temperature: 0.8,
             maxOutputTokens: 10000
         }

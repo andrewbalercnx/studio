@@ -488,7 +488,7 @@ function PromptConfigsPanel() {
     systemPrompt: '',
     modeInstructions: '',
     allowedChatMoves: '',
-    modelName: 'gemini-1.5-pro',
+    modelName: 'gemini-3.8-flash',
     modelTemperature: '0.6',
   };
   const [form, setForm] = useState<PromptConfigForm>(defaultForm);
@@ -509,7 +509,7 @@ function PromptConfigsPanel() {
       systemPrompt: config.systemPrompt || '',
       modeInstructions: config.modeInstructions || '',
       allowedChatMoves: config.allowedChatMoves?.join(', ') || '',
-      modelName: config.model?.name || 'gemini-1.5-pro',
+      modelName: config.model?.name || 'gemini-3.8-flash',
       modelTemperature: String(config.model?.temperature ?? 0.6),
     });
     setDialogOpen(true);

@@ -25,7 +25,7 @@ import {
 import { getImageGenerationModel } from '@/lib/ai-model-config';
 
 // Fallback model name if config fails to load
-const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-3.1-flash-image';
 
 const StoryActorAvatarFlowInputSchema = z.object({
   storyId: z.string(),
