@@ -257,13 +257,13 @@ Return JSON only:
 
   try {
     const response = await ai.generate({
-      model: 'googleai/gemini-2.5-flash',
+      model: 'googleai/gemini-3.8-flash',
       prompt,
       output: { schema: CoverImageSceneOutputSchema },
       config: {
         temperature: 0.7,
         maxOutputTokens: 800,
-        thinkingConfig: { thinkingBudget: 0 },
+        thinkingConfig: { thinkingLevel: 'LOW' },
       },
     });
 
@@ -399,13 +399,13 @@ Return JSON only:
 
   try {
     const response = await ai.generate({
-      model: 'googleai/gemini-2.5-flash',
+      model: 'googleai/gemini-3.8-flash',
       prompt,
       output: { schema: BackCoverImageSceneOutputSchema },
       config: {
         temperature: 0.7,
         maxOutputTokens: 600,
-        thinkingConfig: { thinkingBudget: 0 },
+        thinkingConfig: { thinkingLevel: 'LOW' },
       },
     });
 

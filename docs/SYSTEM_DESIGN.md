@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-10-29 (Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
+> **Last Updated**: 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -249,6 +249,12 @@ Central configuration for which AI models to use across the application. Managed
 - Flows call `getImageGenerationModel()`, `getPrimaryTextModel()`, etc.
 - Admin UI includes availability checking against Google AI API
 - Alerts can be sent to maintenance users when models become unavailable
+- Retired models: `src/lib/retired-models.ts` maps every Gemini model Google has shut down
+  (1.5, 2.0, 2.5) to its replacement (`gemini-3.8-flash` for text, `gemini-3.1-flash-image` for
+  images). Every place that reads a model name from Firestore (this config, `config/aiModels`,
+  `storyGenerators`, story types) passes it through `currentModelId`, so a stale stored value
+  cannot route calls to a model that returns 404. Defaults use stable models only; there is no
+  stable Gemini 3 Pro, so Flash serves the former Pro purposes.
 
 **Design Principle**: Content configuration is data-driven, allowing non-developers to adjust AI behavior and story options.
 

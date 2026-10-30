@@ -29,7 +29,7 @@ const defaultPromptConfig: StoryTypePromptConfig = {
   warmupInstructions: "Engage the child in friendly conversation to understand their mood and preferences.",
   endingInstructions: "Bring the story to a cozy, satisfying conclusion with warmth and contentment.",
   model: {
-    name: "googleai/gemini-2.5-pro",
+    name: "googleai/gemini-3.8-flash",
     temperature: 0.7,
     maxOutputTokens: 10000
   }
@@ -168,7 +168,7 @@ export async function migrateStoryType(
         warmupInstructions: defaultPromptConfig.warmupInstructions,
         endingInstructions: defaultPromptConfig.endingInstructions,
         model: {
-          name: legacyPromptConfig.model?.name || 'googleai/gemini-2.5-pro',
+          name: legacyPromptConfig.model?.name || 'googleai/gemini-3.8-flash',
           temperature: legacyPromptConfig.model?.temperature ?? 0.7,
           maxOutputTokens: legacyPromptConfig.model?.maxOutputTokens ?? 10000
         }

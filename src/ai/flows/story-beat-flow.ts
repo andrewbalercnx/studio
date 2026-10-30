@@ -29,6 +29,7 @@ import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
 // New structured prompt system
 import { StoryBeatOutputSchema, generateStoryBeatOutputDescription } from '@/lib/schemas/story-beat-output';
 import { buildStoryBeatPrompt, type StoryBeatPromptContext } from '@/lib/prompt-builders/story-beat-prompt-builder';
+import { currentModelId } from '@/lib/retired-models';
 
 /**
  * Normalizes arc steps to handle both legacy string format and new ArcStep object format.
@@ -315,14 +316,14 @@ ${generateStoryBeatOutputDescription()}
             debug.stage = 'ai_generate';
 
             // Determine model name from storyType or use default (flash for low latency)
-            const modelName = storyType.promptConfig?.model?.name || 'googleai/gemini-2.5-flash';
-            // Disable thinking for beat generation — story beats don't benefit from extended reasoning,
+            const modelName = currentModelId(storyType.promptConfig?.model?.name) || 'googleai/gemini-3.8-flash';
+            // Keep thinking low for beat generation — story beats don't benefit from extended reasoning,
             // and thinking tokens represent ~28% of cost with no quality gain for this task.
-            // Only Flash supports thinkingBudget: 0; Pro requires thinking mode and rejects the call.
+            // Gemini 3 Flash models accept thinkingLevel LOW; Pro models choose their own level.
             const beatGenConfig = {
                 temperature: modelTemperature,
                 maxOutputTokens: maxOutputTokens,
-                ...(modelName.includes('gemini-2.5-flash') && { thinkingConfig: { thinkingBudget: 0 } }),
+                ...(modelName.includes('flash') && { thinkingConfig: { thinkingLevel: 'LOW' } }),
             };
 
             let llmResponse;

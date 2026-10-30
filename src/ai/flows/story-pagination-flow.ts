@@ -43,7 +43,7 @@ const ImageSceneActorSchema = z.object({
 
 // The schema is deliberately LOOSE: it still steers Gemini's constrained
 // decoding toward the right shape, but nothing here can hard-fail the whole
-// response. gemini-2.5-flash stochastically violates a strict schema in small
+// response. gemini-3.8-flash stochastically violates a strict schema in small
 // mechanical ways (invalid sceneTag value, missing actors/atmosphere) and
 // Genkit rejects the ENTIRE response on any one miss — observed to fail even
 // across 3 retries because same-prompt/low-temperature attempts are
@@ -303,10 +303,10 @@ Generate the paginated output now.`;
 
             // Call AI for pagination
             debug.stage = 'ai_generate';
-            // Flash tier suffices: pagination is straightforward. gemini-2.0-flash
+            // Flash tier suffices: pagination is straightforward. gemini-3.8-flash
             // was retired by Google (404s since ~June 2026) and silently pushed every
             // book onto the no-imageScene fallback path.
-            const modelName = 'googleai/gemini-2.5-flash';
+            const modelName = 'googleai/gemini-3.8-flash';
             const startTime = Date.now();
 
             let llmResponse;

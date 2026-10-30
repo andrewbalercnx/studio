@@ -20,6 +20,7 @@ import { logAIFlow } from '@/lib/ai-flow-logger';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
 import { replacePlaceholdersInText, type EntityMap } from '@/lib/resolve-placeholders.server';
 import { isPlaceholderChild } from '@/lib/placeholder-child';
+import { currentModelId } from '@/lib/retired-models';
 
 // ============================================================================
 // Shared prompt rules
@@ -355,7 +356,7 @@ function formatCharacterWithDetails(char: CharacterWithDetails, isMainChild: boo
 /**
  * Default model and temperatures for friends flow prompts.
  */
-const DEFAULT_MODEL: AIModelName = 'googleai/gemini-2.5-pro';
+const DEFAULT_MODEL: AIModelName = 'googleai/gemini-3.8-flash';
 const DEFAULT_TEMPERATURES: Record<string, number> = {
   characterProposal: 0.8,
   scenarioGeneration: 1.2,  // Higher for more inventive scenarios
@@ -375,10 +376,8 @@ function getModelConfig(
   const promptConfig = generator?.promptConfig?.[promptKey];
 
   // Get model: per-prompt -> generator default -> hardcoded default
-  const model: AIModelName =
-    promptConfig?.model ||
-    generator?.defaultModel ||
-    DEFAULT_MODEL;
+  const model = (currentModelId(promptConfig?.model || generator?.defaultModel) ||
+    DEFAULT_MODEL) as AIModelName;
 
   // Get temperature: per-prompt -> generator default -> hardcoded default for this prompt
   const temperature: number =

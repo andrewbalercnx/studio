@@ -265,7 +265,7 @@ export const gemini4Flow = ai.defineFlow(
 
       // Use aiBeta.chat for stateful conversation (chat is a beta API)
       const chat = aiBeta.chat({
-        model: 'googleai/gemini-2.5-pro',
+        model: 'googleai/gemini-3.8-flash',
         system: systemPrompt,
         config: {
           temperature: 0.85,
@@ -279,7 +279,7 @@ export const gemini4Flow = ai.defineFlow(
 
       let llmResponse;
       const startTime = Date.now();
-      const modelName = 'googleai/gemini-2.5-pro';
+      const modelName = 'googleai/gemini-3.8-flash';
       try {
         llmResponse = await chat.send(messageToSend);
         await logAIFlow({
@@ -368,7 +368,7 @@ export const gemini4Flow = ai.defineFlow(
         debug: {
           ...debug,
           systemPrompt: systemPrompt.slice(0, 500) + '...',
-          modelName: 'googleai/gemini-2.5-pro',
+          modelName: 'googleai/gemini-3.8-flash',
         },
       };
 
