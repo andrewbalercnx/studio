@@ -36,6 +36,7 @@ import { abandonStory, kidSafeMessage, retryFinish, StoryApiError, type ChildInp
 import { currentPrompt, type TurnDoc } from '@/lib/stories/types';
 import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import { cn } from '@/lib/utils';
+import { ChildAvatarAnimation } from '@/components/child/child-avatar-animation';
 
 /** Modes whose engine also takes a typed idea where it offers choices. */
 const FREE_TEXT_MODES = new Set(['freeplay', 'guided']);
@@ -44,7 +45,7 @@ const EMOJIS = ['🌟', '🦄', '🏰', '🎭', '✨', '🐉', '🚀', '🌈'];
 
 export type StoryPlayProps = {
   storyId: string;
-  child?: { displayName?: string | null; avatarUrl?: string | null } | null;
+  child?: { displayName?: string | null; avatarUrl?: string | null; avatarAnimationUrl?: string | null } | null;
   /** Where "back" and "home" lead (the story stays and can be continued from the story list). */
   homeHref: string;
   /** Called once when the Story is `complete`; the caller opens the Form + Style chooser. */
@@ -55,10 +56,15 @@ function Centered({ children }: { children: React.ReactNode }) {
   return <div className="min-h-screen flex flex-col items-center justify-center p-4 gap-6 text-center">{children}</div>;
 }
 
-function Thinking({ title, detail, writing }: { title: string; detail: string; writing?: boolean }) {
+type ThinkingChild = StoryPlayProps['child'];
+
+function Thinking({ title, detail, writing, child }: { title: string; detail: string; writing?: boolean; child?: ThinkingChild }) {
   return (
     <Centered>
-      {writing ? (
+      {child?.avatarAnimationUrl || child?.avatarUrl ? (
+        // The child's own avatar dancing while the storyteller works.
+        <ChildAvatarAnimation avatarAnimationUrl={child.avatarAnimationUrl} avatarUrl={child.avatarUrl} size="lg" />
+      ) : writing ? (
         <div className="w-24 h-24 rounded-full bg-gradient-to-br from-amber-200 to-orange-300 flex items-center justify-center animate-pulse">
           <span className="text-5xl" role="img" aria-label="writing">
             📝
@@ -147,11 +153,11 @@ export function StoryPlay({ storyId, child, homeHref, onComplete }: StoryPlayPro
   }
 
   if (status === 'finishing') {
-    return <Thinking writing title="Adding the finishing touches!" detail="Your story is getting its title. Just a moment…" />;
+    return <Thinking writing child={child} title="Adding the finishing touches!" detail="Your story is getting its title. Just a moment…" />;
   }
 
   if (status === 'complete') {
-    return <Thinking title="Your story is ready!" detail="Let's make it into a book…" />;
+    return <Thinking child={child} title="Your story is ready!" detail="Let's make it into a book…" />;
   }
 
   if (status === 'failed') {
@@ -231,9 +237,9 @@ export function StoryPlay({ storyId, child, homeHref, onComplete }: StoryPlayPro
     const answeredTurn = turns.find((t) => t.index === answered);
     const last = !!answeredTurn?.progress?.of && answeredTurn.progress.step >= answeredTurn.progress.of;
     return last ? (
-      <Thinking writing title="The storyteller is writing your whole story!" detail="All your answers are turning into a real story. This is the big one — it can take a minute!" />
+      <Thinking writing child={child} title="The storyteller is writing your whole story!" detail="All your answers are turning into a real story. This is the big one — it can take a minute!" />
     ) : (
-      <Thinking title="The storyteller is thinking..." detail="Dreaming up what happens next — just a few seconds!" />
+      <Thinking child={child} title="The storyteller is thinking..." detail="Dreaming up what happens next — just a few seconds!" />
     );
   }
 

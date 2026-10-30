@@ -30,6 +30,16 @@
 - `retryFinish` (`POST /api/stories/{id}/finish`) on a `finishing` story re-dispatches its job if it is still `queued` (same run and idempotency key, so no duplicate work or charge). The play screen calls it every 45 s while finishing, so a lost dispatch recovers by itself; this also unsticks stories caught by this bug.
 - Test: a lost finish dispatch is recovered by a retry (`finish.test.ts`).
 - Docs: `DEPLOYMENT.md` §9.3.
+#### `#19` - Faster story turns, mode icons, dancing avatar
+
+**Type**: Bug fix
+
+**Summary**: First production run of the new creation flow.
+- **Slow turns.** Gemini 3 thinks at length by default, where the old 2.5 flows turned thinking off. The AI harness now asks Gemini 3 text models for `thinkingLevel: LOW` unless a caller sets its own. Thinking tokens also count against `maxOutputTokens`, so title and synopsis limits rise from 50/200 to 1024 to stop a long think leaving the title empty.
+- **Missing mode icons.** The mode chooser used the mode's stored pale card gradient as the icon tile, which drew the white icon on white. The gradient now colours the card and the tile is always amber.
+- **Dancing avatar.** `ChildAvatarAnimation` (deleted in #16 as orphaned) is back and shows the child's animated avatar, or their still avatar, while the storyteller thinks, writes and finishes.
+
+**Files**: `src/server/ai/harness.ts`, `src/server/creation/finish.ts`, `src/components/creation/mode-chooser.tsx`, `src/components/creation/story-play.tsx`, `src/components/child/child-avatar-animation.tsx` (restored), `src/server/ai/__tests__/harness.test.ts`.
 
 ---
 
