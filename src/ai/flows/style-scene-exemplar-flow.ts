@@ -32,7 +32,7 @@ import {
   type SceneExemplarDefinition,
 } from '@/lib/scene-exemplar-config';
 
-const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-3.1-flash-image';
 const TAG_DELAY_MS = 2000; // 2 s gap between tags — rate limit headroom
 
 const StyleSceneExemplarFlowInputSchema = z.object({

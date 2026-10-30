@@ -75,7 +75,7 @@ async function fetchAvailableModels(): Promise<GoogleAIModelInfo[]> {
 
 /**
  * Convert a Genkit model name to Google AI API format
- * e.g., 'googleai/gemini-2.5-flash-image' -> 'models/gemini-2.5-flash-image'
+ * e.g., 'googleai/gemini-3.1-flash-image' -> 'models/gemini-3.1-flash-image'
  */
 function toGoogleApiModelName(genkitName: string | undefined | null): string {
   if (!genkitName) {
@@ -146,10 +146,10 @@ export async function POST(request: Request) {
     const doc = await docRef.get();
 
     // Hardcoded fallbacks in case DEFAULT_AI_MODELS_CONFIG import has issues
-    const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
-    const FALLBACK_PRIMARY_MODEL = 'googleai/gemini-2.5-pro';
-    const FALLBACK_LIGHTWEIGHT_MODEL = 'googleai/gemini-2.5-flash';
-    const FALLBACK_LEGACY_MODEL = 'googleai/gemini-2.0-flash';
+    const FALLBACK_IMAGE_MODEL = 'googleai/gemini-3.1-flash-image';
+    const FALLBACK_PRIMARY_MODEL = 'googleai/gemini-3.8-flash';
+    const FALLBACK_LIGHTWEIGHT_MODEL = 'googleai/gemini-3.8-flash';
+    const FALLBACK_LEGACY_MODEL = 'googleai/gemini-3.8-flash';
 
     // Build config with explicit defaults for each field
     // This handles cases where doc exists but is missing some model fields

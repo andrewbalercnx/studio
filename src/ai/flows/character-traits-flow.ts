@@ -105,14 +105,14 @@ Important: Return only a single JSON object. Do not include any extra text, expl
             debug.stage = 'ai_generate';
             const maxOutputTokens = 2000;
             const temperature = 0.5;
-            debug.modelName = 'googleai/gemini-2.5-pro';
+            debug.modelName = 'googleai/gemini-3.8-flash';
             debug.temperature = temperature;
             debug.maxOutputTokens = maxOutputTokens;
             debug.usedMessagesArray = conversationMessages.length > 0;
 
             let llmResponse;
             const startTime = Date.now();
-            const modelName = 'googleai/gemini-2.5-pro';
+            const modelName = 'googleai/gemini-3.8-flash';
             try {
                 // Using output parameter for structured schema validation
                 llmResponse = await ai.generate({

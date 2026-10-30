@@ -278,8 +278,8 @@ Respond with only the JSON object now.`;
             // The story text + synopsis JSON can exceed 4000 tokens for longer narratives
             const maxOutputTokens = 8192;
             const temperature = 0.5;
-            const modelName = 'googleai/gemini-2.5-flash';
-            const compileGenConfig = { temperature, maxOutputTokens, thinkingConfig: { thinkingBudget: 0 } };
+            const modelName = 'googleai/gemini-3.8-flash';
+            const compileGenConfig = { temperature, maxOutputTokens, thinkingConfig: { thinkingLevel: 'LOW' } };
 
             let llmResponse;
             let structuredOutput;

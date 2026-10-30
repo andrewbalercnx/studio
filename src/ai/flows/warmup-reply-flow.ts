@@ -116,7 +116,7 @@ Now, as the Story Guide, give the next short, friendly reply to continue the con
 
             // 6. Call Gemini with system prompt and messages array
             const startTime = Date.now();
-            const modelName = 'googleai/gemini-2.5-flash';
+            const modelName = 'googleai/gemini-3.8-flash';
             try {
                 llmResponse = await ai.generate({
                     model: modelName,

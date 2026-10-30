@@ -22,7 +22,7 @@ import { Gaxios, GaxiosError } from 'gaxios';
 import { getImageGenerationModel } from '@/lib/ai-model-config';
 import { toUserSafeMessage } from '@/lib/ai-error-map';
 
-const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-3.1-flash-image';
 
 const CanonicalImageFlowInputSchema = z.object({
   entityId: z.string(),
