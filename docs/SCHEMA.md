@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-10-29 (Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-10-29 (Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -342,6 +342,95 @@ Share tokens for public storybook viewing.
 | `revokedBy` | string | No | UID of revoker |
 
 **Security**: Accessible via public API endpoint with validation; parents can create/revoke for their own stories.
+
+---
+
+### Target model: `manuscripts`, `books`, `jobs` (present, not yet used by the UI)
+
+Written by the server-side Book pipeline (slice 5.1; `docs/architecture/target/domain-model.md`,
+`pipeline.md`, `slices/5.1-book-server.md`). The web, kids PWA and mobile apps still use
+`stories/{storyId}/storybooks` until slice 5.2. Schemas are the zod schemas in
+`src/server/data/schemas/` (repositories validate every read and write). Every document, including
+subcollection documents, carries **`ownerUid`** (ADR-0007). `createdAt` / `updatedAt` are server
+timestamps on all of them.
+
+#### `manuscripts/{manuscriptId}`
+
+The words of a Story in a Form, split into story pages. Id `ms_<hash(storyId, formId, length, density)>`,
+so one per shape.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ownerUid` | string | Story owner (`stories.parentUid`) |
+| `storyId` | string | Today's `stories/{storyId}` |
+| `childId` | string | From the story (persona scope) |
+| `form` | string | Form id (`storyOutputTypes` doc id) |
+| `readingLevel` | string | From the Form (`ageRange`, else `all`) |
+| `length` | number | Story pages (picture books 12, 16 or 24). Fixed |
+| `density` | string | `picture-led`, `balanced` or `text-led`. Fixed |
+| `status` | `draft` \| `paginating` \| `ready` \| `failed` | Narration does not change it |
+| `narration` | `{ voiceId }` \| null | Child's `preferredVoiceId` or the default voice |
+| `cover` | Scene \| null | Scene notes for the cover picture (written by pagination) |
+| `title` | string \| null | Story title at pagination (cover text) |
+
+#### `manuscripts/{manuscriptId}/pages/{n}`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ownerUid` | string | |
+| `pageNumber` | number | 1-based; also the doc id |
+| `text` | string | The words a child reads: names resolved, no `$$id$$` tokens, no audio directions |
+| `narrationText` | string \| null | What the narrator reads: names as pronounced, `[directions]` kept |
+| `scene` | Scene | `{ location, presentCast: castId[], action, locationKey, mood, tag, castActions: [{castId, action}] }`. `tag` ∈ `indoor-day`, `outdoor-day`, `indoor-night`, `outdoor-night`. `castId` = the child/character doc id |
+| `narrationUrl` | string \| null | Storage URL of the page's narration |
+
+#### `books/{bookId}`
+
+A Manuscript drawn in a Style (and, later, laid out with a print Layout).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ownerUid` | string | |
+| `manuscriptId`, `storyId`, `childId` | string | `childId` copied for the persona scope |
+| `styleId` | string | `imageStyles` id |
+| `layoutId` | string \| null | `printLayouts` id; null for a screen Book |
+| `printProductId` | string \| null | Print slice |
+| `status` | `draft` \| `illustrating` \| `ready` \| `partial` \| `failed` \| `locked` | `partial`: some pages failed after retries |
+| `art` | `{ total, done, failed }` | Rollup over pages with art (cover + story pages) |
+
+Subcollections:
+
+| Path | Fields |
+|------|--------|
+| `books/{id}/pages/{n}` | `ownerUid`, `pageNumber` (doc id; 1 = cover, 2… = story pages), `kind` (`cover`, `title`, `story`, `dedication`, `end`, `blank`, `back`; this slice writes `cover` and `story`), `manuscriptPage` (story pages), `artUrl`, `artJob { jobId, status }` |
+| `books/{id}/castSheets/{castId}` | `ownerUid`, `castId`, `ref { kind: child\|character, id }`, `source` (`portrait`, `photos` or `appearance`), `imageUrl`, `job { jobId, status }` |
+| `books/{id}/renders/{renderId}` | Immutable (ADR-0010): `ownerUid`, `medium` (`screen`\|`print`), `layoutId`, `files [{ role, storagePath, url }]`. Defined; written by the print slice |
+
+#### `jobs/{jobId}`
+
+One unit of work (pipeline.md, ADR-0003). Id `job_<hash(idempotencyKey)>`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ownerUid` | string | |
+| `jobId`, `kind` | string | Kinds in use: `manuscript.paginate`, `manuscript.narrate`, `book.prepareCast`, `book.castSheet`, `book.illustrate`, `book.pageArt` |
+| `target` | `{ collection, id, subpath? }` | What the job writes |
+| `input` | map | Handler input |
+| `status` | `queued` \| `running` \| `succeeded` \| `failed` \| `cancelled` | |
+| `attempt`, `maxAttempts` | number | |
+| `leaseUntil` | timestamp \| null | Set while running |
+| `error` | `{ code, message, retryable }` \| null | |
+| `parentJobId` | string \| null | Coordinator (fan-in) |
+| `idempotencyKey` | string | |
+| `fanInCompletedAt`, `startedAt`, `finishedAt` | timestamp \| null | |
+
+**Storage paths** (per Book / Manuscript and per job attempt, so a retry never overwrites a file in
+use): `books/{bookId}/castSheets/{castId}/{jobId}-{attempt}.{ext}`,
+`books/{bookId}/pages/{n}/{jobId}-{attempt}.{ext}`,
+`manuscripts/{manuscriptId}/narration/{n}/{jobId}-{attempt}.mp3`. Download-token URLs, as today.
+
+**Security**: owner reads (`resource.data.ownerUid == request.auth.uid`; lists must filter on
+`ownerUid`); only admins and the server write (ADR-0005). Checked by `npm run test:rules`.
 
 ---
 
@@ -1433,6 +1522,9 @@ Extends `PrintOrderAddress` with metadata for address book management.
 | `devTodos` | Admin | Admin | Development work items |
 | `feedback` | Owner, Admin | Owner (append-only create), Admin (update/delete) | Ratings/NPS/testimonials — written via API |
 | `tickets` | Owner, Admin | Admin | Support tickets — created via report-issue API |
+| `manuscripts` (+ `pages`) | Owner (`ownerUid`), Admin | Admin | Server-written (Book pipeline); lists must filter on `ownerUid` |
+| `books` (+ `pages`, `castSheets`, `renders`) | Owner (`ownerUid`), Admin | Admin | Server-written (Book pipeline) |
+| `jobs` | Owner (`ownerUid`), Admin | Admin | Server-written (job runner) |
 
 ---
 
@@ -1440,6 +1532,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-10-29 | Phase 5.1: new `manuscripts` (+ `pages`), `books` (+ `pages`, `castSheets`, `renders`) and `jobs` collections for the server-side Book pipeline, present but not yet used by the UI; rules owner-read, admin-write |
 | 2026-10-29 | Phase 3 security rules: owner cannot write roles/PIN state, session allowance and compile-lock fields, story content, storybook lock/finalization/art/generation state, storybook pages or share tokens; owner fields immutable on update; `help-*` documents admin-only; `systemConfig` admin-only except `diagnostics`. Checked by `npm run test:rules` |
 | 2026-10-29 | Security rules: `printOrders` create/update/delete admin-only (server routes write orders); `printStoryBooks` owner create restricted to `pdfStatus: 'draft'` without PDF fields, owner update removed |
 | 2026-06-11 | Sprint W3-A: `adminNextAction`/`needsAdminAttention`/`failureSummary` on printOrders (Mixam webhook + admin list API); Added `systemConfig/opsHealth` (health-check thresholds, per-check `lastAlertedAt` dedup, last run results) |

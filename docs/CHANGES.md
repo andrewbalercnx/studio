@@ -18,6 +18,29 @@
 
 ### 2026-10-29
 
+#### `#13` - Phase 5.1: Manuscript → Book pipeline (server side)
+
+**Type**: Architecture / Feature (server only)
+
+**Summary**: Adds the Manuscript → Book pipeline on the Phase 4 foundations. It reads today's `stories` as the Story, and today's output types, image styles and print layouts as Form, Style and Layout.
+- **Jobs:** `manuscript.paginate`, `manuscript.narrate`, `book.castSheet` and `book.pageArt`, plus coordinators. A Book ends `ready` or `partial`.
+- **Likeness:** built from the canonical portrait, then photos, then the written description; never from avatars.
+- **Storage:** files go under per-Book paths that include the attempt.
+- **Routes:** `POST /api/manuscripts`; `POST /api/books`, which charges the allowance once and requires an `idempotencyKey`; page retry; lock and unlock.
+- **Rules:** owner-read-only rules for `manuscripts`, `books` and `jobs`.
+- **Setup:** `scripts/setup-cloud-tasks.sh` and the `JOBS_*` settings in `apphosting.yaml`.
+- **Regression page:** fixes four no-token checks broken in #7.
+
+No UI uses the pipeline yet (slice 5.2). **Requires running the Cloud Tasks setup script before deploy.**
+
+**Created files**:
+- `src/server/catalog/**`, `src/server/books/**`, `src/server/jobs/kinds.ts`, `src/app/api/manuscripts/route.ts`, `src/app/api/books/**`, `scripts/setup-cloud-tasks.sh`, `docs/architecture/target/slices/5.1-book-server.md`
+
+**Modified files**:
+- `src/server/**` (small foundation additions), `firestore.rules`, `tests/firestore-rules/check-rules.mjs`, `apphosting.yaml`, `src/app/admin/regression/page.tsx`, `docs/API.md`, `docs/SCHEMA.md`, `docs/SYSTEM_DESIGN.md`, `docs/DEPLOYMENT.md`, `docs/CHANGES.md`
+
+---
+
 #### `#12` - Phase 4: foundations (route wrapper, data layer, job runner, AI harness)
 
 **Type**: Architecture / Infrastructure

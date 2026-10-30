@@ -1,4 +1,5 @@
 import { createDispatcherFromEnv } from './dispatcher';
+import { registerJobKinds } from './kinds';
 import { JobRegistry } from './registry';
 import { JobRunner } from './runner';
 
@@ -6,12 +7,8 @@ export * from './dispatcher';
 export * from './registry';
 export * from './runner';
 
-/**
- * The production registry. Phase 5 slices register their job kinds here
- * (e.g. in `src/server/jobs/kinds.ts`, imported by this module). It is empty
- * until the first slice lands.
- */
-export const jobRegistry = new JobRegistry();
+/** The production registry, with every slice's job kinds (`./kinds.ts`). */
+export const jobRegistry = registerJobKinds(new JobRegistry());
 
 let defaultRunner: JobRunner | null = null;
 

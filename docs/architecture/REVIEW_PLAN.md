@@ -145,7 +145,10 @@ reset trial data for that slice, re-seed config. Order:
 
 1. **Storybook generation**: the most complex and least consistent part (`story-image-flow.ts`
    1,878 lines, `storyBook/printable/route.ts` 1,289 lines). Replaces both `storyBook` and
-   `storybookV2` APIs.
+   `storybookV2` APIs. Split in two: **5.1** the server pipeline (Manuscript, Book, jobs, routes,
+   rules, Cloud Tasks setup; old code kept, branch `rebuild/phase5-book-server`,
+   [`target/slices/5.1-book-server.md`](target/slices/5.1-book-server.md)); **5.2** moves the
+   clients onto it and deletes `storyBook` / `storybookV2`.
 2. **Story creation modes** behind the shared interface; retired modes deleted.
 3. **Characters and actors**, keeping the original-photo rule in `CLAUDE.md`.
 4. **Print and orders**.

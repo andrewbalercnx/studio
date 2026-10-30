@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-10-29 (Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-10-29 (Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -81,6 +81,7 @@ The `StoryPicClient` provides typed methods for child-facing operations:
 - [Characters Routes](#characters-routes)
 - [Story Session Routes](#story-session-routes)
 - [Storybook Routes](#storybook-routes)
+- [Manuscript and Book Routes](#manuscript-and-book-routes)
 - [Entitlement Routes](#entitlement-routes)
 - [Print Routes](#print-routes)
 - [Admin Routes](#admin-routes)
@@ -1543,6 +1544,123 @@ Get pages for a specific storybook with placeholders resolved.
 - Server-side filtering: Pages with `kind === 'blank'` or `kind === 'title_page'` are excluded (these are for print only)
 - Server-side sorting: Results sorted by `pageNumber` ascending
 - Placeholder resolution: `displayText` field contains resolved placeholders (child/character names)
+
+---
+
+## Manuscript and Book Routes
+
+The server-side Story → Manuscript → Book pipeline (slice 5.1;
+[`docs/architecture/target/slices/5.1-book-server.md`](architecture/target/slices/5.1-book-server.md)).
+**Present, not yet used by the UI**: the web, kids PWA and mobile apps still call the
+`storybookV2` routes above until slice 5.2 moves them here.
+
+Common to all five:
+
+- Built on `withRoute({ auth: 'user' })`: `Authorization: Bearer <Firebase ID token>`; 401
+  `UNAUTHENTICATED` without one.
+- Ownership: the caller must own the story / manuscript / book (`ownerUid`; for today's stories,
+  `stories.parentUid`); admins and writers are exempt. Not the owner → 403 `FORBIDDEN`. A child
+  persona cookie for another child → 403 `PERSONA_SCOPE_MISMATCH`.
+- Envelope: `{ "ok": true, "data": … }` / `{ "ok": false, "error": { "code", "message", "details"? } }`.
+  Invalid JSON or body → 400 `INVALID_JSON` / `INVALID_BODY`.
+- Reads: clients read `manuscripts/{id}` (+ `/pages`), `books/{id}` (+ `/pages`, `/castSheets`) and
+  `jobs` (filtered on `ownerUid`) directly from Firestore for live progress (ADR-0005). There are no
+  GET routes for them yet.
+- Work happens in jobs (Cloud Tasks → `POST /api/internal/jobs/run`), never in these requests.
+
+### POST `/api/manuscripts`
+
+Create (or reuse) the Manuscript for a story in a Form: the words split into story pages with scene
+notes, plus narration per page.
+
+**Request Body**:
+```json
+{ "storyId": "abc", "formId": "picture_book_standard_v1", "length": 16, "density": "balanced" }
+```
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `storyId` | yes | Today's `stories/{storyId}`; must have `storyText` and `childId` (else 409 `STORY_NOT_READY`) |
+| `formId` | yes | A `storyOutputTypes` id with status `live` (admins may use drafts); else 404 `FORM_NOT_FOUND` |
+| `length` | no | Story pages. Picture books: 12, 16 or 24; other Forms: their one length. Default from the Form. Else 400 `INVALID_LENGTH` |
+| `density` | no | `picture-led`, `balanced` or `text-led` (as the Form allows). Default from the Form. Else 400 `INVALID_DENSITY` |
+
+**Idempotent** per (story, form, length, density): the id is derived from them, so a repeat returns
+the same Manuscript. A Manuscript that `failed` is paginated again.
+
+**Response** (201 Created, or 200 OK when it already existed):
+```json
+{ "ok": true, "data": { "manuscriptId": "ms_…", "status": "paginating", "created": true } }
+```
+`status` is `paginating`, `ready` or (never returned on create) `failed`. Pagination runs as the
+`manuscript.paginate` job; on `ready` one `manuscript.narrate` job per page writes `narrationUrl`.
+
+### POST `/api/books`
+
+Create a Book: a Manuscript drawn in a Style, optionally with a print Layout. Charges one
+`storybook_allowance` (child pool first, then family) in the same transaction that creates the Book.
+
+**Request Body** — either an existing Manuscript:
+```json
+{ "manuscriptId": "ms_…", "styleId": "watercolour", "layoutId": "square-8in", "idempotencyKey": "7b0c…" }
+```
+or a story and Form (the child-facing flow: the child picks Form and Style; the Manuscript is created
+or reused with the Form's defaults unless `length`/`density` are given):
+```json
+{ "storyId": "abc", "formId": "picture_book_standard_v1", "styleId": "watercolour" }
+```
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `manuscriptId` | one of | Must not be `failed` (409 `MANUSCRIPT_FAILED`) |
+| `storyId` + `formId` | one of | As for `POST /api/manuscripts`; `length`, `density` optional |
+| `styleId` | yes | An `imageStyles` id; else 404 `STYLE_NOT_FOUND` |
+| `layoutId` | no | A `printLayouts` id; must fit the length (page rules) else 400 `LAYOUT_INCOMPATIBLE`; 404 `LAYOUT_NOT_FOUND`. Omit for a screen Book |
+| `idempotencyKey` | **yes** | 8–128 chars, one per user action (a missing key is 400, so a double tap cannot create and charge two Books). Repeating it returns the same Book (200, `created: false`) without charging again; reusing it for another story → 409 `IDEMPOTENCY_KEY_REUSED` |
+
+**Response** (201 Created, or 200 OK for a repeated `idempotencyKey`):
+```json
+{ "ok": true, "data": { "bookId": "…", "manuscriptId": "ms_…", "status": "illustrating", "created": true } }
+```
+
+**Errors**: 402 `ENTITLEMENT_LIMIT` (`details.remaining`) when no allowance is left; 404 story not
+found; 400/403/404/409 as above.
+
+The Book gets pages `1` (cover) and `2…length+1` (story pages); `art: { total: length + 1, done: 0,
+failed: 0 }`. Jobs: cast sheets (`book.castSheet`, one per cast member) start now if the Manuscript is
+`ready`, otherwise when pagination finishes; then page art (`book.pageArt`, one per page). The Book
+ends `ready` (all art), `partial` (some pages failed after retries) or `failed` (none).
+
+### POST `/api/books/[bookId]/pages/[pageNumber]/retry`
+
+Draw again a page whose picture failed. Starts a new job (new idempotency key per retry); the Book
+returns to `illustrating` and is rolled up again when the page finishes.
+
+**Request Body**: none.
+
+**Response** (200 OK):
+```json
+{ "ok": true, "data": { "bookId": "…", "pageNumber": 4, "status": "illustrating" } }
+```
+
+**Errors**: 400 `INVALID_PAGE` (not a positive integer); 404 book or page not found (or a page
+without art); 409 `PAGE_NOT_FAILED` (the page has art or is still being drawn); 409 `BOOK_LOCKED`.
+
+### POST `/api/books/[bookId]/lock`
+
+Freeze a finished Book (`ready` or `partial`) before printing or sharing. Idempotent.
+
+**Response** (200 OK): `{ "ok": true, "data": { "bookId": "…", "status": "locked" } }`
+
+**Errors**: 409 `BOOK_NOT_FINISHED` (still `illustrating`, or `failed`).
+
+### POST `/api/books/[bookId]/unlock`
+
+Allow changes again; the Book returns to `ready` or `partial` from its art. Share links will be revoked
+here (a later slice registers the revocation in `bookUnlockHooks`). Idempotent: unlocking a Book that
+is not locked returns its status.
+
+**Response** (200 OK): `{ "ok": true, "data": { "bookId": "…", "status": "ready" } }`
 
 ---
 
@@ -3809,7 +3927,9 @@ Internal APIs for automated tools and the job queue. They do not accept user tok
 
 Runs one job attempt. Called only by Google Cloud Tasks (one task per job attempt); see
 `docs/architecture/target/pipeline.md` and `docs/architecture/target/foundations.md`. Built on
-`withRoute({ auth: 'internal' })`. Present but unused: no job kinds are registered yet.
+`withRoute({ auth: 'internal' })`. Runs the Book pipeline's job kinds (`manuscript.paginate`,
+`manuscript.narrate`, `book.prepareCast`, `book.castSheet`, `book.illustrate`, `book.pageArt`;
+registered in `src/server/jobs/kinds.ts`).
 
 **Authentication**: `Authorization: Bearer <OIDC token>` minted by Cloud Tasks. The token must
 verify with audience `JOBS_OIDC_AUDIENCE` (default `JOBS_RUN_URL`) and carry the verified email
