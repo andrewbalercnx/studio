@@ -15,7 +15,7 @@ import { assertOwner, isPrivileged, loadOwned, type VerifiedUser } from '../http
 import type { JobRunner, JobSpec } from '../jobs';
 import { chargeBookAllowance, readLedgerIn } from './allowance';
 import { ART_PAGE_KINDS, illustrateSpec, paginateSpec, prepareCastSpec, rollupArt, statusFromArt } from './jobs';
-import { loadStorySource, type StorySource } from './story-source';
+import { isFinished, loadStorySource, type StorySource } from './story-source';
 import { DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 
 export type BookServiceDeps = {
@@ -46,7 +46,7 @@ export function bookIdFor(ownerUid: string, idempotencyKey: string): string {
 async function loadOwnedStory(db: Firestore, user: VerifiedUser, storyId: string): Promise<StorySource & { ownerUid: string; childId: string }> {
   const story = await loadStorySource(db, storyId);
   await assertOwner(user, { ownerUid: story.ownerUid ?? undefined, childId: story.childId ?? undefined }, 'Story');
-  if (!story.ownerUid || !story.childId || !story.text.trim()) {
+  if (!story.ownerUid || !story.childId || !isFinished(story)) {
     throw new ConflictError('This story is not finished yet', { code: 'STORY_NOT_READY' });
   }
   return story as StorySource & { ownerUid: string; childId: string };

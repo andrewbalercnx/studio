@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:rules": "npx --yes firebase-tools@15.20.0 emulators:exec --only firestore --project demo-rules \"node tests/firestore-rules/check-rules.mjs\"",
+    "test:reset": "npx --yes firebase-tools@15.20.0 emulators:exec --only firestore --project demo-reset \"node tests/reset-trial-data/check-reset.mjs\"",
     "build:e2e": "node scripts/build-e2e.mjs",
     "start:e2e": "node scripts/start-e2e-server.mjs",
     "test:e2e": "playwright test --project=desktop-chrome --project=mobile-chrome",

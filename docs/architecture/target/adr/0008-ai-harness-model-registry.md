@@ -10,7 +10,7 @@ tracing and logging are wired per flow; the logging toggles have no effect.
 
 ## Decision
 
-- `config/aiModels` maps **purposes** (`creation.text`, `manuscript.text`, `likeness.describe`,
+- `config/aiModels` maps **purposes** (`creation.text`, `story.finish`, `manuscript.text`, `likeness.describe`,
   `likeness.portrait`, `book.castSheet`, `book.pageArt`, `narration`) to models.
 - A CreationMode may override `creation.text` only. Nothing else picks a model.
 - Every AI call goes through one harness: resolve model by purpose, call, retry, trace, log

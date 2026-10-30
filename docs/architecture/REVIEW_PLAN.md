@@ -151,7 +151,11 @@ reset trial data for that slice, re-seed config. Order:
    clients onto it and deletes `storybookV2` and the old generation flows
    ([`target/slices/5.2-book-clients.md`](target/slices/5.2-book-clients.md); the `storyBook`
    print/share/order routes stay for old storybooks until the print slice and the data reset).
-2. **Story creation modes** behind the shared interface; retired modes deleted.
+2. **Story creation modes** behind the shared interface; retired modes deleted. Split in two:
+   **5.3** the server side (Story + turns, five engines, the creation routes, `story.finish`, rules,
+   the trial-data reset script; old code kept, branch `rebuild/phase5-creation-server`,
+   [`target/slices/5.3-creation-server.md`](target/slices/5.3-creation-server.md)); **5.4** moves
+   web, kids PWA and mobile onto it, deletes the old modes, routes and flows, and resets trial data.
 3. **Characters and actors**, keeping the original-photo rule in `CLAUDE.md`.
 4. **Print and orders**.
 
@@ -181,6 +185,6 @@ reset trial data for that slice, re-seed config. Order:
 | 2 — Target model | Done: `target/`, 12 ADRs accepted | #10 |
 | 3 — Security review | Done: `security/threat-model.md` | #11 |
 | 4 — Foundations | In review: `src/server` (route wrapper, repositories, job runner, AI harness, config service), see `target/foundations.md` | #12 |
-| 5 — Rebuild slices | 5.1 Book pipeline on the server (#13, in review); 5.2 web app and kids PWA on the Book pipeline, `storybookV2` deleted, mobile book creation off, print for new Books pending the print slice (`target/slices/5.2-book-clients.md`, in review) | #13, 5.2 PR |
+| 5 — Rebuild slices | 5.1 Book pipeline on the server (#13, in review); 5.2 web app and kids PWA on the Book pipeline, `storybookV2` deleted, mobile book creation off, print for new Books pending the print slice (`target/slices/5.2-book-clients.md`, in review); 5.3 Story creation on the server, five mode engines, `story.finish`, reset script (`target/slices/5.3-creation-server.md`, in review) | #13, #14, 5.3 PR |
 | 6 — Clients | Not started | — |
 | 7 — Governance | Not started | — |

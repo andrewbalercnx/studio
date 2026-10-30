@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-10-29 (Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-10-29 (Phase 5.3: new `POST /api/stories`, `POST /api/stories/[storyId]/turns`, `POST /api/stories/[storyId]/abandon`, `POST /api/stories/[storyId]/finish` — Story creation in five modes on the server, not yet used by the UI; `POST /api/manuscripts` and `POST /api/books` also accept Stories made by these routes once `complete`. Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -82,6 +82,7 @@ The `StoryPicClient` provides typed methods for child-facing operations:
 - [Characters Routes](#characters-routes)
 - [Story Session Routes](#story-session-routes)
 - [Storybook Routes](#storybook-routes)
+- [Story Creation Routes](#story-creation-routes)
 - [Manuscript and Book Routes](#manuscript-and-book-routes)
 - [Entitlement Routes](#entitlement-routes)
 - [Print Routes](#print-routes)
@@ -116,7 +117,7 @@ Authorization: Bearer <firebase_id_token>
 |--------|-------------|
 | 401 | Unauthorized - Missing or invalid token |
 | 403 | Forbidden - Insufficient permissions |
-| 403 `PERSONA_SCOPE_MISMATCH` | A valid child-persona cookie is present and the request's effective child does not match it. Story/book chokepoints only (`storySession`, `storyWizard`, `storyCompile`, `/api/manuscripts`, `/api/books/**`). Absent/invalid cookie = legacy behaviour, so bearer-only clients (mobile, api-client) never see this. |
+| 403 `PERSONA_SCOPE_MISMATCH` | A valid child-persona cookie is present and the request's effective child does not match it. Story/book chokepoints only (`storySession`, `storyWizard`, `storyCompile`, `/api/stories/**` (POST), `/api/manuscripts`, `/api/books/**`). Absent/invalid cookie = legacy behaviour, so bearer-only clients (mobile, api-client) never see this. |
 | 404 | Not Found - Resource doesn't exist |
 | 500 | Internal Server Error |
 
@@ -461,6 +462,10 @@ Generate character trait suggestions using AI.
 ---
 
 ## Story Session Routes
+
+> These mode-specific routes are what today's clients call. Their replacement, the three
+> [Story Creation Routes](#story-creation-routes), is on the server since slice 5.3; the clients
+> switch in slice 5.4, which deletes these routes.
 
 All story generation endpoints return a `StoryGeneratorResponse` object with the following common fields:
 
@@ -1265,6 +1270,128 @@ Get pages for a specific storybook with placeholders resolved.
 
 ---
 
+## Story Creation Routes
+
+A child and the AI create a **Story** in one of five creation modes, behind one interface and these
+routes (slice 5.3; [`creation.md`](architecture/target/creation.md),
+[`5.3-creation-server.md`](architecture/target/slices/5.3-creation-server.md)). **Present on the
+server, not yet used by the UI**: web, kids PWA and mobile switch to them in slice 5.4 and the
+mode-specific routes above are deleted then.
+
+| Mode id | Mode | Today's generator |
+|---------|------|-------------------|
+| `wizard` | Story Wizard: four multiple-choice questions, then the whole story | `wizard` |
+| `freeplay` | Free Play: open conversation (choices or typed answers) | `gemini3` |
+| `guided` | Guided Story: phased questions, A–C plus M "tell me more" | `gemini4` |
+| `friends` | Fun with my friends: pick companions → scenario → synopsis → story | `friends` |
+| `adventure` | Choose Your Adventure: StoryType arc beats (A–C), then three endings | `beat` |
+
+**Client usage** (slice 5.4):
+
+1. `POST /api/stories` with the child, the mode and a key made once per tap. The response carries
+   the first **turn** (the mode's prompt and options).
+2. For each answer, `POST /api/stories/{storyId}/turns` with the input and a new key; the response
+   carries the reply turn. Show `promptDisplay` and each option's `display` (names resolved); send
+   back option ids. `expects` says which input the prompt wants.
+3. When a reply's `kind` is `done` the Story is `finishing`; watch `stories/{storyId}` until it is
+   `complete` (title, synopsis) and then make a Book with `POST /api/books`.
+4. Clients may also read `stories/{storyId}` and `stories/{storyId}/turns` (filter on
+   `ownerUid == uid`) directly; they never write them (rules).
+
+Common to all four:
+
+- `withRoute({ auth: 'user' })`: `Authorization: Bearer <Firebase ID token>`; 401 `UNAUTHENTICATED`.
+- Ownership: the child / Story must be the caller's (`ownerUid`; for a child, `ownerParentUid`);
+  admins and writers are exempt. Not the owner → 403 `FORBIDDEN`. A child-persona cookie for another
+  child → 403 `PERSONA_SCOPE_MISMATCH`.
+- Envelope `{ "ok": true, "data": … }` / `{ "ok": false, "error": { "code", "message", "details"? } }`.
+- A model failure is 503 `AI_UNAVAILABLE` / `AI_BAD_OUTPUT`: nothing was recorded; repeat the same
+  request (same key).
+
+**Turn** (as returned, and as stored in `stories/{storyId}/turns/{index}`):
+```json
+{
+  "index": 2, "kind": "prompt",
+  "prompt": "Where does [[cast:c1]] go?", "promptDisplay": "Where does Emma go?",
+  "options": [{ "id": "A", "text": "To [[cast:ch1]]'s house", "display": "To Rex's house", "preselected": false }],
+  "expects": "choice", "progress": { "step": 2, "of": 4 }, "addedCast": []
+}
+```
+`kind` is `prompt` or `done` for replies. `expects`: `choice` (send `optionId`), `text` (free text),
+`castPick` (send castIds; `preselected` marks the mode's proposal). `addedCast`: castIds that joined
+the Story's cast with this turn (an AI-introduced character is created in `characters` with
+`origin: 'story'`).
+
+### POST `/api/stories`
+
+Start creating a Story.
+
+**Request Body**:
+```json
+{ "childId": "c1", "modeId": "friends", "castIds": ["ch1"], "idempotencyKey": "5f0e…" }
+```
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `childId` | yes | One of the caller's children (not soft-deleted); else 404 `CHILD_NOT_FOUND` |
+| `modeId` | yes | `wizard`, `freeplay`, `guided`, `friends` or `adventure` (else 400). The mode's config must exist (404 `MODE_NOT_FOUND`), be `live` (403 `MODE_NOT_LIVE`; admins and writers may use drafts) and, under a child persona, be `enabledForKids` (403 `MODE_NOT_FOR_KIDS`) |
+| `castIds` | no | Family members joining the hero at setup: the owner's children or characters (family-wide or this child's); else 400 `CAST_NOT_FOUND` |
+| `storyTypeId` | no | `adventure` only (400 otherwise): skip the story-type question. A live `storyTypes` id, else 404 `STORY_TYPE_NOT_FOUND` |
+| `idempotencyKey` | **yes** | 8–128 chars, one per tap. A repeat returns the same Story and first turn (200, `created: false`); reusing it for another child or mode → 409 `IDEMPOTENCY_KEY_REUSED` |
+
+Checks the `story_allowance` is available (402 `ENTITLEMENT_LIMIT`, `details.remaining`) **before**
+creating anything; the allowance is consumed only when the Story completes (`story.finish`).
+
+**Response** (201 Created, or 200 OK for a repeated key):
+```json
+{ "ok": true, "data": { "storyId": "st_…", "status": "creating", "created": true, "turn": { "index": 0, "kind": "prompt", … } } }
+```
+
+### POST `/api/stories/[storyId]/turns`
+
+The child's input to a Story that is `creating`.
+
+**Request Body**:
+```json
+{ "input": { "kind": "choice", "optionId": "B" }, "idempotencyKey": "9a1c…" }
+```
+`input` is one of `{ "kind": "choice", "optionId" }`, `{ "kind": "text", "text" }` (1–2000 chars),
+`{ "kind": "castPick", "castIds": [...] }`. `idempotencyKey` (required, 8–128 chars) is one per child
+action.
+
+Records the input and the mode's reply as two turns, with any cast changes, in one transaction. When
+the reply is `done`: the Story gets `text`, moves to `finishing`, and the `story.finish` job is
+enqueued (title, synopsis, then `complete` with one `story_allowance` consumed).
+
+**Response** (201 Created, or 200 OK with the recorded reply for a repeated key):
+```json
+{ "ok": true, "data": { "storyId": "st_…", "status": "creating", "created": true, "turn": { "index": 4, "kind": "prompt", … } } }
+```
+
+**Errors**: 400 `INPUT_NOT_EXPECTED` (an option that is not on offer, a castPick the prompt does not
+take, someone outside the family); 404 story not found; 409 `STORY_NOT_CREATING`; 409
+`TURN_CONFLICT` (another turn is being processed or was recorded first — reload the turns); 409
+`TURN_IN_PROGRESS` (this key is still being processed — repeat it shortly); 503 as above.
+
+### POST `/api/stories/[storyId]/abandon`
+
+Stop creating: `creating` → `abandoned`. Idempotent. Nothing is charged.
+
+**Response** (200 OK): `{ "ok": true, "data": { "storyId": "st_…", "status": "abandoned" } }`
+
+**Errors**: 409 `STORY_NOT_CREATING` (already finishing or finished).
+
+### POST `/api/stories/[storyId]/finish`
+
+Finish again after `story.finish` failed: `failed` → `finishing` with a new job. Idempotent for a
+Story that is `finishing` or `complete` (returns its status).
+
+**Response** (200 OK): `{ "ok": true, "data": { "storyId": "st_…", "status": "finishing" } }`
+
+**Errors**: 409 `STORY_NOT_FAILED` (`creating` or `abandoned`).
+
+---
+
 ## Manuscript and Book Routes
 
 The Story → Manuscript → Book pipeline (slices 5.1 and 5.2;
@@ -1310,7 +1437,7 @@ notes, plus narration per page.
 
 | Field | Required | Notes |
 |-------|----------|-------|
-| `storyId` | yes | Today's `stories/{storyId}`; must have `storyText` and `childId` (else 409 `STORY_NOT_READY`) |
+| `storyId` | yes | A `stories/{storyId}`: a Story made by `POST /api/stories` must be `complete`; a legacy story must have `storyText` and `childId` (else 409 `STORY_NOT_READY`) |
 | `formId` | yes | A `storyOutputTypes` id with status `live` (admins may use drafts); else 404 `FORM_NOT_FOUND` |
 | `length` | no | Story pages. Picture books: 12, 16 or 24; other Forms: their one length. Default from the Form. Else 400 `INVALID_LENGTH` |
 | `density` | no | `picture-led`, `balanced` or `text-led` (as the Form allows). Default from the Form. Else 400 `INVALID_DENSITY` |

@@ -1,6 +1,6 @@
 # Deployment Runbook — Staged Rollout, Feature Flags, Rollback
 
-> **Last Updated**: 2026-10-29 (Phase 5.1: Cloud Tasks for the job runner, §9)
+> **Last Updated**: 2026-10-29 (Phase 5.3: trial-data reset script, §10, run with slice 5.4. Phase 5.1: Cloud Tasks for the job runner, §9)
 >
 > This document supersedes `docs/DEPLOYMENT_ROLLOUT.md` (the original design
 > sketch). It covers: what deploys today, the staged-rollout machinery this
@@ -309,6 +309,7 @@ Hosting → backend → Rollouts → re-deploy the previous successful rollout, 
 | `src/app/api/flags/route.ts` | Server-evaluated flags for clients | Live now (pure addition) |
 | `src/lib/feature-flags{,.server}.ts`, `src/hooks/use-feature-flag.ts` | Flag registry, evaluation, client hook | Live now |
 | `scripts/setup-cloud-tasks.sh` | Cloud Tasks queues, invoker service account, IAM for the job runner (§9) | Run once by the owner; idempotent |
+| `scripts/reset-trial-data.mjs` | Deletes trial user data, keeps families, children, characters and config (§10) | Dry-run default; once, with slice 5.4 |
 
 ---
 
@@ -389,3 +390,52 @@ Firestore `jobs` documents move `queued → running → succeeded`. A job stuck 
 `queued` means dispatch failed: check the app logs for `[jobs] Failed to
 dispatch` (usually a missing queue or IAM binding).
 
+---
+
+## 10. Trial-data reset (ships with slice 5.4)
+
+When the clients switch to the new Story routes (slice 5.4), trial user data is
+reset rather than migrated (`docs/architecture/REVIEW_PLAN.md`). Families,
+children, characters and all curated configuration stay. Run this **once, in the
+5.4 release window**, after the 5.4 deploy is live.
+
+### 10.1 What it deletes and keeps
+
+| Deleted (with every subcollection) | Kept |
+|------------------------------------|------|
+| `storySessions`, `children/{id}/sessions` | `users` (+ addresses), `children`, `characters` |
+| `stories` (turns, legacy `storybooks` + pages, `outputs`, `shareTokens`) | All config: `systemConfig`, `config`, `storyGenerators`, `storyTypes`, `storyOutputTypes`, `imageStyles`, `printLayouts`, `printProducts`, `products`, `prices`, `promptConfigs`, `storyPhases`, `answerAnimations`, `helpWizards`, `emailTemplates` |
+| `storyBooks`, `printStoryBooks` | `aiFlowLogs`, `aiRunTraces`, `devTodos`, `tickets`, `feedback` |
+| `manuscripts`, `books`, `jobs`, `shareLinks` | `entitlementLedgers` — unless `--reset-allowances` |
+| | `printOrders` — unless `--include-orders` |
+
+**Why allowances are kept by default**: a ledger holds what a family bought or was
+granted, not trial content; resetting it would hand back used free allowances and
+wipe purchases. Pass `--reset-allowances` only when the owner wants every family
+back on the free tier. **Print orders** are records tied to Mixam (and money);
+delete them only deliberately with `--include-orders`.
+
+### 10.2 Steps
+
+1. Export curated config first (the script refuses to run without it):
+   ```bash
+   node scripts/export-config.mjs            # writes seed/config/ (+ _manifest.json)
+   ```
+2. Dry run against production (counts per collection; nothing is written):
+   ```bash
+   FIREBASE_SERVICE_ACCOUNT_KEY="$(cat sa.json)" node scripts/reset-trial-data.mjs
+   ```
+3. Delete, naming the project explicitly (it must match the credentials' project):
+   ```bash
+   FIREBASE_SERVICE_ACCOUNT_KEY="$(cat sa.json)" node scripts/reset-trial-data.mjs \
+     --confirm --project <projectId> [--storage --bucket <bucket>] [--reset-allowances] [--include-orders]
+   ```
+   `--storage` also deletes the Storage prefixes of the deleted documents
+   (`stories/{id}/`, `storybook_printables/{id}/`, `books/{id}/`, `manuscripts/{id}/`,
+   `print_storybooks/{id}/`). Children's and characters' photos and avatars are kept.
+4. Check the summary line (`Deleted N documents. Kept: …`) and open the app: children
+   and characters are there, story lists are empty.
+
+Options: `--export-dir <dir>` (export elsewhere), `--skip-export-check` (no export
+needed, e.g. against an emulator). Deletes run in batches of 400 with exponential
+backoff. Tested against the emulator by `npm run test:reset`.

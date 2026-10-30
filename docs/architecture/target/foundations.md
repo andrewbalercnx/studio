@@ -14,6 +14,7 @@ src/server/
   config/            ConfigService (one typed loader, one cache)
   catalog/           Form, Style, Layout in target shapes (read from today's collections)
   books/             slice 5.1: the Book pipeline (services, job kinds) — see slices/5.1-book-server.md
+  creation/          slice 5.3: Story creation (mode engines, services, story.finish) — see slices/5.3-creation-server.md
   testing/           FakeFirestore for unit tests
 ```
 
@@ -49,7 +50,7 @@ export const POST = withRoute<'user', typeof Body, { bookId: string }>(
 - Return a value for `{ ok: true, data }`, `ok(data, 201)` for another status, or a `Response`
   (files, streams) to bypass the envelope.
 - Throw `BadRequestError`, `UnauthenticatedError`, `ForbiddenError`, `NotFoundError`,
-  `ConflictError` (each takes `{ code, details }`). Any other error is a 500 with a generic
+  `ConflictError`, `ServiceUnavailableError` (503; each takes `{ code, details }`). Any other error is a 500 with a generic
   message; `DataIntegrityError` is a 500 whose details are only logged.
 - Ownership: `loadOwned(user, repo, id)` or, for a doc already loaded, `assertOwner(user, doc,
   label)`. Both compare `ownerUid` (missing = not yours), exempt admin/writer, and apply the
@@ -92,7 +93,7 @@ await db.runTransaction(async (tx) => {
 - `replaceIn(tx, id, data)` creates or fully replaces a document (validated like `create`), for
   handlers that rewrite the same document when retried.
 - Child and Character repositories are added by the Characters slice (they embed
-  `likenessSchema`). Story turns are added by the creation slice.
+  `likenessSchema`). Story turns were added by the creation slice (`storyTurns.of(storyId)`, slice 5.3).
 
 ## 3. Jobs
 

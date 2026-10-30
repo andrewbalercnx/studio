@@ -12,6 +12,7 @@ import { currentModelId } from '../../lib/retired-models';
 
 export const AI_PURPOSES = [
   'creation.text',
+  'story.finish',
   'manuscript.text',
   'likeness.describe',
   'likeness.portrait',
@@ -26,6 +27,7 @@ export type AIPurposeKind = 'text' | 'image' | 'tts';
 /** What each purpose produces; the harness uses it to pick the call shape and circuit breaker. */
 export const AI_PURPOSE_KIND: Record<AIPurpose, AIPurposeKind> = {
   'creation.text': 'text',
+  'story.finish': 'text',
   'manuscript.text': 'text',
   'likeness.describe': 'text',
   'likeness.portrait': 'image',
@@ -37,6 +39,7 @@ export const AI_PURPOSE_KIND: Record<AIPurpose, AIPurposeKind> = {
 /**
  * Code defaults, taken from the flows doing this work today:
  * - creation.text: gemini-3.8-flash (wizard, gemini3/4, friends, ending)
+ * - story.finish: gemini-3.8-flash (title and synopsis; the former story-title/synopsis flows)
  * - manuscript.text: gemini-3.8-flash (the former story-pagination-flow)
  * - likeness.describe: gemini-3.8-flash (image-description-flow)
  * - image purposes: gemini-3.1-flash-image (DEFAULT_AI_MODELS_CONFIG.imageGenerationModel)
@@ -44,6 +47,7 @@ export const AI_PURPOSE_KIND: Record<AIPurpose, AIPurposeKind> = {
  */
 export const DEFAULT_AI_MODELS: Record<AIPurpose, string> = {
   'creation.text': 'googleai/gemini-3.8-flash',
+  'story.finish': 'googleai/gemini-3.8-flash',
   'manuscript.text': 'googleai/gemini-3.8-flash',
   'likeness.describe': 'googleai/gemini-3.8-flash',
   'likeness.portrait': 'googleai/gemini-3.1-flash-image',

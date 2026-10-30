@@ -17,7 +17,7 @@ beforeEach(() => {
 const story = {
   ownerUid: 'u1',
   childId: 'c1',
-  mode: 'wizard' as const,
+  modeId: 'wizard' as const,
   status: 'creating' as const,
   cast: [{ castId: 'k1', ref: { kind: 'child' as const, id: 'c1' }, role: 'hero' as const, addedBy: 'setup' as const }],
 };
@@ -33,11 +33,11 @@ describe('Repository reads', () => {
   });
 
   it('fails loudly on a malformed document', async () => {
-    fake.store.set('stories/bad', { ownerUid: 'u1', childId: 'c1', mode: 'gemini3', status: 'creating', cast: [] });
+    fake.store.set('stories/bad', { ownerUid: 'u1', childId: 'c1', modeId: 'gemini3', status: 'creating', cast: [] });
     const error = await stories.using(fake.asFirestore()).get('bad').catch((e) => e);
     expect(error).toBeInstanceOf(DataIntegrityError);
     expect(error.path).toBe('stories/bad');
-    expect(JSON.stringify(error.details)).toContain('mode');
+    expect(JSON.stringify(error.details)).toContain('modeId');
   });
 
   it('returns null / throws NotFoundError for missing documents', async () => {
@@ -59,7 +59,7 @@ describe('Repository reads', () => {
 describe('Repository writes', () => {
   it('validates creates and refuses taken ids', async () => {
     const repo = stories.using(fake.asFirestore());
-    await expect(repo.create({ ...story, mode: 'chat' as never })).rejects.toBeInstanceOf(DataIntegrityError);
+    await expect(repo.create({ ...story, modeId: 'chat' as never })).rejects.toBeInstanceOf(DataIntegrityError);
     await repo.create(story, { id: 's1' });
     await expect(repo.create(story, { id: 's1' })).rejects.toBeInstanceOf(ConflictError);
   });

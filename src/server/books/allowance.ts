@@ -10,9 +10,9 @@
  * through the caller's transaction instead of a transaction of their own.
  */
 import { FieldValue, type DocumentReference, type Firestore, type Transaction } from 'firebase-admin/firestore';
-import { consume } from '@/lib/entitlements/check';
+import { canConsume, consume } from '@/lib/entitlements/check';
 import { buildFreeTierLedger, ensureFreeTier } from '@/lib/entitlements/grant';
-import type { EntitlementLedger } from '@/lib/types';
+import type { EntitlementComponentKey, EntitlementLedger } from '@/lib/types';
 
 export const LEDGERS_COLLECTION = 'entitlementLedgers';
 
@@ -36,10 +36,26 @@ export function chargeBookAllowance(
   childId: string | null,
   now: Date = new Date()
 ): AllowanceCharge {
+  return chargeAllowance(tx, ledger, 'storybook_allowance', ownerUid, childId, now);
+}
+
+/**
+ * Decide one unit of `component` (child pool first, then the family pool);
+ * `write()` records it in the caller's transaction. Used for books here and for
+ * the story allowance by `story.finish` (slice 5.3).
+ */
+export function chargeAllowance(
+  tx: Transaction,
+  ledger: { ref: DocumentReference; stored: EntitlementLedger | null },
+  component: EntitlementComponentKey,
+  ownerUid: string,
+  childId: string | null,
+  now: Date = new Date()
+): AllowanceCharge {
   const ensured = ledger.stored ? ensureFreeTier(ledger.stored, now) : buildFreeTierLedger(ownerUid, now);
-  const result = consume(ensured, 'storybook_allowance', { parentUid: ownerUid, childId: childId ?? undefined }, 1);
+  const result = consume(ensured, component, { parentUid: ownerUid, childId: childId ?? undefined }, 1);
   if (!result.allowed) {
-    return { allowed: false, remaining: result.remaining, reason: result.reason ?? 'insufficient storybook_allowance' };
+    return { allowed: false, remaining: result.remaining, reason: result.reason ?? `insufficient ${component}` };
   }
   return {
     allowed: true,
@@ -57,4 +73,19 @@ export function chargeBookAllowance(
       );
     },
   };
+}
+
+/** Read-only: would one unit of `component` be allowed now? (A missing ledger counts as the free tier.) */
+export async function checkAllowance(
+  db: Firestore,
+  component: EntitlementComponentKey,
+  ownerUid: string,
+  childId: string | null,
+  now: Date = new Date()
+): Promise<{ allowed: boolean; remaining: number }> {
+  const snapshot = await db.collection(LEDGERS_COLLECTION).doc(ownerUid).get();
+  const stored = snapshot.exists ? ({ parentUid: ownerUid, ...snapshot.data() } as EntitlementLedger) : null;
+  const ensured = stored ? ensureFreeTier(stored, now) : buildFreeTierLedger(ownerUid, now);
+  const check = canConsume(ensured, component, { parentUid: ownerUid, childId: childId ?? undefined }, 1);
+  return { allowed: check.allowed, remaining: check.remaining };
 }

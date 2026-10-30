@@ -107,6 +107,38 @@ await check('soft-delete storybook', 'allow', () => updateDoc(doc(parent, 'stori
 await check('write storybook page', 'deny', () => setDoc(doc(parent, 'stories', 's1', 'storybooks', 'b1', 'pages', 'page-001'), { imageUrl: 'x' }));
 await check('write share token', 'deny', () => setDoc(doc(parent, 'stories', 's1', 'shareTokens', 't1'), { status: 'active' }));
 await check('read own story', 'allow', () => getDoc(doc(parent, 'stories', 's1')));
+await check('list own legacy stories', 'allow', () => getDocs(query(collection(parent, 'stories'), where('parentUid', '==', 'p1'))));
+await check('soft-delete own legacy story', 'allow', () => updateDoc(doc(parent, 'stories', 's1'), {
+  deletedAt: serverTimestamp(), deletedBy: 'p1', updatedAt: serverTimestamp(),
+}));
+
+// Target Stories (slice 5.3): created and changed only by the creation routes; owner reads Story and turns.
+const targetStory = (ownerUid) => ({
+  schemaVersion: 2, ownerUid, childId: 'c1', modeId: 'wizard', status: 'creating', cast: [], text: null, title: null, modeState: {},
+});
+await setDoc(doc(admin, 'stories', 'st1'), targetStory('p1'));
+await setDoc(doc(admin, 'stories', 'st1', 'turns', '0000'), { ownerUid: 'p1', childId: 'c1', index: 0, role: 'ai', kind: 'prompt', prompt: 'Hi?' });
+await setDoc(doc(admin, 'stories', 'st2'), targetStory('p2'));
+await setDoc(doc(admin, 'stories', 'st2', 'turns', '0000'), { ownerUid: 'p2', childId: 'k2', index: 0, role: 'ai', kind: 'prompt', prompt: 'Hi?' });
+
+await check('read own target story', 'allow', () => getDoc(doc(parent, 'stories', 'st1')));
+await check('list own target stories', 'allow', () => getDocs(query(collection(parent, 'stories'), where('ownerUid', '==', 'p1'))));
+await check('list own target stories for a child', 'allow', () => getDocs(query(collection(parent, 'stories'), where('ownerUid', '==', 'p1'), where('childId', '==', 'c1'))));
+await check("read another family's target story", 'deny', () => getDoc(doc(parent, 'stories', 'st2')));
+await check('create a target story directly', 'deny', () => setDoc(doc(parent, 'stories', 'st3'), targetStory('p1')));
+await check('rename own target story', 'deny', () => updateDoc(doc(parent, 'stories', 'st1'), { 'metadata.title': 'New', updatedAt: serverTimestamp() }));
+await check('complete own target story', 'deny', () => updateDoc(doc(parent, 'stories', 'st1'), { status: 'complete' }));
+await check('soft-delete own target story', 'deny', () => updateDoc(doc(parent, 'stories', 'st1'), { deletedAt: serverTimestamp(), deletedBy: 'p1' }));
+await check('turn a legacy story into a target story', 'deny', () => updateDoc(doc(parent, 'stories', 's1'), { schemaVersion: 2 }));
+await check('read own turn', 'allow', () => getDoc(doc(parent, 'stories', 'st1', 'turns', '0000')));
+await check('list own turns', 'allow', () => getDocs(query(collection(parent, 'stories', 'st1', 'turns'), where('ownerUid', '==', 'p1'))));
+await check('list turns without the owner filter', 'deny', () => getDocs(collection(parent, 'stories', 'st1', 'turns')));
+await check("read another family's turn", 'deny', () => getDoc(doc(parent, 'stories', 'st2', 'turns', '0000')));
+await check('add a turn to own story', 'deny', () => setDoc(doc(parent, 'stories', 'st1', 'turns', '0001'), { ownerUid: 'p1', role: 'child', kind: 'input' }));
+await check('edit own turn', 'deny', () => updateDoc(doc(parent, 'stories', 'st1', 'turns', '0000'), { prompt: 'x' }));
+await check('create storybook on a target story', 'deny', () => addDoc(collection(parent, 'stories', 'st1', 'storybooks'), {
+  parentUid: 'p1', storyId: 'st1', pageGeneration: { status: 'idle' }, imageGeneration: { status: 'idle' },
+}));
 
 // print (#9).
 await check('create print order', 'deny', () => addDoc(collection(parent, 'printOrders'), { parentUid: 'p1', paymentStatus: 'paid' }));
