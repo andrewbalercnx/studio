@@ -28,6 +28,16 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   // Transpile workspace packages so they work with Next.js bundler
   transpilePackages: ['@storypic/api-client', '@storypic/shared-types'],
+  // Loaded from node_modules at runtime, not bundled: the Cloud Tasks client
+  // reads its JSON config through a computed require, which the bundler turns
+  // into "Cannot find module as expression is too dynamic" (no job could be
+  // dispatched).
+  serverExternalPackages: ['@google-cloud/tasks', 'google-gax'],
+  // ...and file tracing cannot follow those computed requires either, so the
+  // standalone output must be told to ship the JSON they load.
+  outputFileTracingIncludes: {
+    '/api/**/*': ['./node_modules/@google-cloud/tasks/build/**/*.json'],
+  },
   // Configure Turbopack to use correct workspace root (silences lockfile warning)
   turbopack: {
     root: '.',

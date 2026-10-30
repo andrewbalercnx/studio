@@ -18,6 +18,21 @@
 
 ### 2026-10-30
 
+#### `#20` - Fix job dispatch in production; recover stuck finishing
+
+**Type**: Bug fix (production)
+
+**Summary**: No job could reach Cloud Tasks in production: Next.js bundled `@google-cloud/tasks`, whose computed `require` of its own JSON became a stub that throws "Cannot find module as expression is too dynamic". Stories stuck at "Adding the finishing touches". CI missed it because E2E runs jobs in-process.
+
+**Changes**:
+- `next.config.ts`: `@google-cloud/tasks` and `google-gax` in `serverExternalPackages`; their JSON in `outputFileTracingIncludes`, since file tracing cannot follow the computed requires either.
+- `scripts/check-standalone-runtime.mjs` (new), run in CI after the E2E build: fails if the client is bundled, or does not load and initialise from `.next/standalone`. Verified to fail without the fix and pass with it.
+- `retryFinish` (`POST /api/stories/{id}/finish`) on a `finishing` story re-dispatches its job if it is still `queued` (same run and idempotency key, so no duplicate work or charge). The play screen calls it every 45 s while finishing, so a lost dispatch recovers by itself; this also unsticks stories caught by this bug.
+- Test: a lost finish dispatch is recovered by a retry (`finish.test.ts`).
+- Docs: `DEPLOYMENT.md` §9.3.
+
+---
+
 #### `#19` - Faster story turns, mode icons, dancing avatar
 
 **Type**: Bug fix
