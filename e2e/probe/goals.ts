@@ -21,7 +21,7 @@ import {
   findUidByEmail,
   seedCatalog,
   seedCompletedStory,
-  seedReadyStorybook,
+  seedReadyBook,
 } from '../helpers/emulator';
 import {
   createChildViaParentUI,
@@ -152,13 +152,12 @@ export const REACH_FINISHED_BOOK: GoalDef = {
     await drv.click('pick an art style', { text: SEED.imageStyleTitle });
     rec.markFunnelStep(ANALYTICS_EVENTS.storybookGenerationStarted);
 
-    // ── Wait through generation (explicit progress UI → extra patience) ──
+    // ── Wait while the server makes the book (progress UI → extra patience) ──
     await drv.seeWithin(
       'wait for the book to be made',
-      { role: 'heading', name: 'My Books' },
+      { role: 'heading', name: SEED.storyTitle },
       GENERATION_PATIENCE_MS,
     );
-    await drv.see('see the finished book', { text: SEED.storyTitle });
     rec.markFunnelStep(ANALYTICS_EVENTS.storybookArtReady);
   },
 };
@@ -181,7 +180,7 @@ export const READ_EXISTING_BOOK: GoalDef = {
     await createChildViaParentUI(ctx.page, account, CHILD_NAME);
     const childId = await findChildId(account.uid, CHILD_NAME);
     const { sessionId } = await seedCompletedStory({ parentUid: account.uid, childId });
-    await seedReadyStorybook({ storyId: sessionId });
+    await seedReadyBook({ storyId: sessionId });
   },
   run: async (ctx) => {
     const { drv } = ctx;
@@ -191,10 +190,8 @@ export const READ_EXISTING_BOOK: GoalDef = {
     await drv.click('open my books', { text: 'My Books' });
     await drv.see('see the bookshelf', { role: 'heading', name: 'My Books' });
     await drv.click('open the book', { text: SEED.storyTitle });
-    await drv.see('see the book is ready to read', { role: 'button', name: /read myself/i });
-    await drv.click('start reading', { role: 'button', name: /read myself/i });
-    // The immersive reader opens on the first story page (the title page is
-    // shown on the open screen, not as a reader page).
+    await drv.see('see the cover', { role: 'heading', name: SEED.storyTitle });
+    await drv.click('turn to the first page', { role: 'button', name: 'Next page' });
     await drv.see('see the first page', { text: 'Once upon a test' });
   },
 };

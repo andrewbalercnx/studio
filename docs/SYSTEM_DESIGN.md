@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes — present, UI still on storybookV2 (§12); Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
+> **Last Updated**: 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -13,7 +13,7 @@ StoryPic Kids is an interactive story creation platform for children. Children c
 ### Core User Flows
 
 1. **Story Creation**: Child interacts with AI through warmup → story beats → ending → compilation
-2. **Storybook Generation**: Story text is paginated, images are generated, audio narration is added
+2. **Book making**: the child picks a book type (Form) and an art style (Style); the server paginates the story into a Manuscript, narrates it and draws the Book's pictures as background jobs
 3. **Print Ordering**: Parents can order physical copies through Mixam print-on-demand integration
 
 ---
@@ -116,71 +116,53 @@ warmup → story (beats 0-N) → ending → final/completed
 5. At arc completion, `/api/storyEnding` generates endings
 6. `/api/storyCompile` creates final story text
 
-### 3. Storybook Generation Pipeline
+### 3. Books in the clients (web app, kids PWA)
 
-> Every client (web, kids PWA, mobile) still uses this `storybookV2` pipeline. Its server-side
-> replacement (Story → Manuscript → Book on jobs) exists alongside it, unused by the UI: see §12.
-> Slice 5.2 moves the clients and deletes this one.
-
-```
-Story → Pages → Exemplars + Audio (parallel) → Images → Finalization
-```
-
-**Data Model** (new structure):
-```
-stories/{storyId}
-  └── storybooks/{storybookId}
-        └── pages/{pageId}
-```
-
-**Pipeline Steps**:
-1. **Pagination** (`/api/storybookV2/pages`): Story text → page structure
-2. **Exemplar Generation** (parallel with audio): Character reference sheets generated for each actor
-3. **Audio Generation** (parallel with exemplars): Text → TTS narration via ElevenLabs
-4. **Image Generation** (`/api/storybookV2/images`): Page descriptions → illustrations (using exemplars for character consistency)
-5. **Finalization** (`/api/storybookV2/finalize`): Lock content version
-
-**Exemplar System**:
-Character reference sheets ("exemplars") ensure consistent character appearance across all storybook pages:
-- After pagination, the system generates a 2x2 reference sheet for each actor showing: face close-up (top-left), front view, 3/4 view, and back view
-- Exemplars are generated in the storybook's selected art style
-- The image generation flow uses these reference sheets instead of raw photos
-- Exemplar URLs are stored on the storybook document (`actorExemplarUrls`) for reuse
-- If exemplar generation fails, the system falls back to using photos/avatars directly
-
-**Shared Book-View Components (Sprint W2-C)**:
-
-Parent and child book views render pages through the same components in
-`src/components/book-reader/`:
+Books are made by the server pipeline (Story → Manuscript → Book, §12). The clients start a Book and
+then only watch it ([`architecture/target/slices/5.2-book-clients.md`](architecture/target/slices/5.2-book-clients.md)).
 
 ```
-BookPageSpread        — THE single-page renderer (full-bleed art + bottom
-                        gradient + overlaid text). Purely presentational.
-  ├── ImmersivePlayer — kids reader (/kids/read/[bookId]): fullscreen,
-  │                     audio autoplay, fit="cover"
-  └── ParentBookView  — parent view (/storybook/[bookId] Step 1): the same
-                        presentation + navigation affordances, fit="contain"
-                        (full artwork visible for review), with ONE addition —
-                        an Edit button on each page
-BookReader            — page-by-page reader with audio controls
-                        (/storybook/[bookId]/read)
+story complete ─▶ child picks Form + Style (BookChooser)
+               ─▶ POST /api/books { storyId, formId, styleId, idempotencyKey }
+               ─▶ /books/{bookId} (web) | /kids/book/{bookId} (PWA)
+                    watches books/{id} (status, art {total, done, failed}), manuscripts/{id},
+                    and the pages of both — progress, then the reader
 ```
 
-**Rationale**: the parent's view of a child's book must look like what the child sees (one
-canonical page presentation, fixed in one place) while carrying parent-only editing power as an
-overlay, not a fork. Interaction (navigation, audio, editing) lives in the hosts; `BookPageSpread`
-stays dependency-free.
+- **Create**: `src/components/books/book-chooser.tsx` (kids PWA `/kids/create/{storyId}/style`, web
+  child shell `/child/{childId}/create-book/{storyId}`) and the parent's dialog on `/story/{storyId}`.
+  `useCreateBook` (`src/hooks/use-books.ts`) makes one idempotency key per choice, so a double tap
+  or a retry returns the same Book and charges the book allowance once. Length and density default
+  from the Form on the server.
+- **Read**: `src/hooks/use-books.ts` subscribes read-only to `books/{id}`, `books/{id}/pages`,
+  `manuscripts/{id}` and `manuscripts/{id}/pages`; list queries filter on `ownerUid` (the rules
+  require it), with optional `childId` / `storyId`. Nothing is written from the browser.
+- **Status comes from the server**: lists (kids My Books, child My Books and dashboard count, the
+  parent's book list and story page) show `book.status` as written by the job runner; `ready`,
+  `partial` and `locked` open the reader, `illustrating` shows progress. No client derives readiness
+  from pages any more.
+- **Reader** (`src/components/books/book-reader.tsx`): cover with the title, then one story page at
+  a time with its picture, words and narration clip. A partial Book is readable; a page whose
+  picture failed shows a placeholder.
+- **Parent controls** (`/books/{bookId}` in parent mode, behind the PIN guard): draw a failed page
+  again (`POST /api/books/{id}/pages/{n}/retry`) and lock / unlock. **Printing is not available for
+  these Books yet**: the page says "Printing is coming soon" and offers no print layout or order
+  entry (the print slice adds it).
+- **Rationale**: the server drives every step (ADR-0002/0005), so closing the tab no longer stops a
+  book, and every client reads the same documents with the same status vocabulary.
 
-**Parent clean-up vs print — two distinct stages** (`/storybook/[bookId]`):
-1. **Step 1 · Clean up the pages**: `ParentBookView` + `PageEditorDialog`
-   (`src/components/storybook/page-editor-dialog.tsx`). The dialog edits page text and/or the
-   image prompt via `POST /api/storybookV2/pageEdit` (server-first; placeholder round-trip via
-   `replaceNamesWithPlaceholders`), and triggers single-page repaints through the existing
-   `POST /api/storybookV2/images` `{ pageId, forceRegenerate, additionalPrompt }` path — generation
-   logic, locking, concurrency guards, and `artStatus` rollups are never duplicated. Single-page
-   regeneration consumes no entitlement.
-2. **Step 2 · Print & share**: print layout, finalize/unlock, and share links — a clearly
-   subsequent step, gated on `artStatus.isOrderable`.
+**Old storybooks** (`stories/{storyId}/storybooks`, made by the deleted `storybookV2` routes) are
+trial data kept until the data reset. Parents still see them read-only: the "Earlier storybooks"
+section of `/story/{storyId}` and `/parent/storybooks/{childId}`, the viewer `/storybook/{id}` (pages,
+share for locked books, print layout and order) and `/storybook/{id}/read`. Generating, repainting,
+page editing, finalizing and narration for them are gone. Child-facing lists show new Books only.
+
+**Shared page components** (`src/components/book-reader/`): `BookPageSpread`, `ParentBookView`
+and `BookReader` render old storybooks for parents; `ImmersivePlayer` renders shared links
+(`/storybook/share/{id}`).
+
+**Mobile**: book creation is switched off ("Make books in the web app for now"); the app still lists
+and reads old storybooks through `/api/stories/*`. It does not show new Books yet.
 
 ### 4. Print Production System
 
@@ -243,10 +225,10 @@ Central configuration for which AI models to use across the application. Managed
 
 | Model Type | Purpose | Flows Using It |
 |------------|---------|----------------|
-| `imageGenerationModel` | Image generation | story-image-flow, avatar-flow, character-avatar-flow, etc. |
+| `imageGenerationModel` | Image generation | avatar-flow, character-avatar-flow, etc. (the Book pipeline resolves its models through `config/aiModels` purposes, §11) |
 | `primaryTextModel` | Complex text generation | story-beat-flow, story-compile-flow, character-traits-flow |
 | `lightweightTextModel` | Simple text tasks | story-synopsis-flow, image-description-flow |
-| `legacyTextModel` | Specific older use cases | story-title-flow, story-pagination-flow |
+| `legacyTextModel` | Specific older use cases | story-title-flow |
 
 **Implementation**:
 - Central module at `src/lib/ai-model-config.ts` with 1-minute caching
@@ -402,7 +384,7 @@ tests the in-process dispatcher runs jobs in the same process.
 data access path with schemas, one job model and one AI harness, so each Phase 5 slice can move
 onto them and delete its old code.
 
-### 12. Server-side Book pipeline (Story → Manuscript → Book) — present, not yet used by the UI
+### 12. Server-side Book pipeline (Story → Manuscript → Book)
 
 Slice 5.1 of the rebuild (ADR-0001; [`architecture/target/slices/5.1-book-server.md`](architecture/target/slices/5.1-book-server.md)).
 It takes today's `stories/{storyId}` document as the Story and produces:
@@ -441,8 +423,8 @@ POST /api/books/{id}/lock | /unlock (unlock runs bookUnlockHooks: share-link rev
 - **Allowance**: `storybook_allowance` is consumed in the transaction that creates the Book, with
   the ledger semantics of `src/lib/entitlements` (free tier, child pool then family).
 
-**Not yet**: the UI, print and mobile still use `storybookV2` (§3); slice 5.2 moves them and deletes
-the old pipeline. No `book.render` (screen reading uses Book pages; the print slice adds renders).
+**Used by** the web app and the kids PWA (§3). **Not yet**: print (no `book.render`, layouts or
+orders for Books; the print slice adds them) and the mobile app.
 
 ---
 
@@ -463,19 +445,16 @@ the old pipeline. No `book.render` (screen reading uses Book pages; the print sl
                     └──────────────┘
 ```
 
-### Storybook Generation Flow
+### Book Flow
 
 ```
-┌──────────┐    ┌───────────┐    ┌─────────────────────┐    ┌───────────┐    ┌──────────┐
-│  Story   │───▶│  Pages    │───▶│ Exemplars + Audio   │───▶│  Images   │───▶│ Finalize │
-│  Text    │    │  API      │    │   (parallel)        │    │  API      │    │  API     │
-└──────────┘    └───────────┘    └─────────────────────┘    └───────────┘    └──────────┘
-                     │                 │       │                  │
-                     ▼                 ▼       ▼                  ▼
-               ┌───────────┐    ┌─────────┐ ┌───────────┐   ┌───────────┐
-               │  Gemini   │    │ Imagen  │ │ ElevenLabs│   │  Imagen   │
-               │  (Layout) │    │(Ref Sht)│ │  (TTS)    │   │  (Art)    │
-               └───────────┘    └─────────┘ └───────────┘   └───────────┘
+┌──────────┐ POST /api/books ┌──────────────┐ jobs (Cloud Tasks / in-process) ┌──────────────────┐
+│ Browser  │────────────────▶│ books route  │────────────────────────────────▶│ /api/internal/   │
+│ (Form +  │                 │ (one tx:     │                                 │ jobs/run         │
+│  Style)  │                 │ Book, pages, │   manuscript.paginate ─▶ narrate │ (Gemini, image   │
+│          │◀── listeners ───│ allowance)   │   cast sheets ─▶ page art        │  model, TTS)     │
+└──────────┘  books/{id},    └──────────────┘                                 └──────────────────┘
+              manuscripts/{id} (+ pages)  ◀───────────── server writes ─────────────────┘
 ```
 
 ### Print Order Flow
@@ -511,7 +490,7 @@ the old pipeline. No `book.render` (screen reading uses Book pages; the print sl
   - Enter/switch child ("Who is playing?" tap, "Play as <child>", kids-PWA `lockToChild`) → POST sets the cookie for that child (child→child switching stays PIN-free by owner decision)
   - Switch to parent (header, `switchToParentMode`), kids-PWA unlock (PIN-gated), sign-out → DELETE clears the cookie
   - `help-*` demo profiles → cookie cleared (no real child doc backs them)
-- **Enforcement**: the story/storybook chokepoints (`storySession`, `storyWizard`, `storyCompile`, `storybookV2` create/pages/images/finalize/pageEdit/exemplars) call `enforcePersonaScope`. A **valid** cookie whose `uid` matches the request's principal and whose `childId` differs from the request's effective child → `403 PERSONA_SCOPE_MISMATCH` (user-safe message). Admin/writer principals are exempt (admin tooling operates across children).
+- **Enforcement**: the story/book chokepoints (`storySession`, `storyWizard`, `storyCompile`, and the Book routes `/api/manuscripts`, `/api/books/**` through `assertOwner`) call `enforcePersonaScope`. A **valid** cookie whose `uid` matches the request's principal and whose `childId` differs from the request's effective child → `403 PERSONA_SCOPE_MISMATCH` (user-safe message). Admin/writer principals are exempt (admin tooling operates across children).
 - **Fail-open rule (and why)**: an absent, malformed, tampered, or expired cookie means *behave exactly as before* — parentUid ownership checks only. The mobile app and `@storypic/api-client` authenticate with bearer tokens and never carry cookies; enforcing on cookie absence would break every non-browser client. Cookie present + valid = enforce; anything else = legacy.
 
 ### Parent PIN guard
@@ -575,14 +554,14 @@ the old pipeline. No `book.render` (screen reading uses Book pages; the print sl
   - `src/lib/ai-error-map.ts`: the exhaustive, unit-tested raw→user-safe message table
     (`toUserSafeMessage` / `categorizeError`).
 - **Retry adoption**: `storyWizardFlow` (both LLM calls) and `avatarAnimationFlow` run under
-  `withProviderReliability`; `storyImageFlow` keeps its progressive-prompt-simplification loop (a
-  flow-specific recovery) but uses the shared classifier, the shared jittered backoff schedule, and
-  the shared `gemini-image` breaker. ElevenLabs TTS flows use the SDK's built-in
+  `withProviderReliability`; the Book pipeline's `book.pageArt` job simplifies its prompt per job
+  attempt (a flow-specific recovery) and goes through the AI harness (shared classifier, backoff and
+  breakers). ElevenLabs TTS flows use the SDK's built-in
   `maxRetries`/timeout.
 - **No raw error reaches a child/parent — at every layer**:
   - *Routes*: every interactive generation route (`tts`, `storyWizard`, `storyFriends`, `storyArc`,
     `storyEnding`, `storyBeat`, `gemini3`, `gemini4`, `warmupReply`, `storyCompile`,
-    `storybookV2/*`, `generateAvatar`, `generateCharacterAvatar`) maps catch-block errors through
+    `generateAvatar`, `generateCharacterAvatar`) maps catch-block errors through
     `toUserSafeMessage`.
   - *Flow results*: flows that return `{ error | errorMessage }` result objects return user-safe
     strings (routes pass these through verbatim). Raw detail stays in `aiFlowLogs` and
@@ -593,20 +572,15 @@ the old pipeline. No `book.render` (screen reading uses Book pages; the print sl
   - *Kids PWA*: `/kids/*` error/empty states use age-appropriate copy + mascot/emoji (no technical
     text); unexpected client-side exceptions render a kid-safe fallback, never `err.message`.
 
-### Graceful Degradation (degraded-book contract)
-- **Contract**: `StoryBookArtStatus` in `src/lib/types.ts`, canonically derived from per-page
-  `imageStatus` by `deriveStorybookArtStatus` (`src/lib/storybook-status.ts`) — pure and shared by
-  server and client. Completeness: `none | in_progress | complete | degraded | failed`, with
-  explicit `isViewable` / `isOrderable` flags.
-- `/api/storybookV2/images` persists the rollup as `artStatus` on the storybook after every run and
-  detects **recovery** (degraded/failed → complete sets `recoveredAt` + `recoveryNotified=false`).
-- **A text + partial-art book is viewable AND orderable**: the storybook viewer offers Read Book
-  whenever the book has pages and print/finalize whenever `isOrderable`; `/api/storybookV2/finalize`
-  gates on `isOrderable` (degraded allowed; only in-progress or fully-failed art blocks). Failed
-  pages show a calm per-page note with a retry action instead of a dead Error badge.
-- **Recovery notification**: the viewer shows a one-time "your book is complete" toast when
-  `recoveredAt` is set and unacknowledged, then writes `artStatus.recoveryNotified=true`. The kids
-  generating page routes degraded books to "Your Book is Ready to Read!" instead of an error screen.
+### Graceful Degradation (partial Books)
+- **Books**: `partial` is an outcome, not an error (ADR-0003). The job runner rolls the Book's art up
+  from its pages (`art {total, done, failed}`) and sets `ready`, `partial` or `failed`. A partial Book
+  is readable and lockable; each failed page shows a calm placeholder and, for a parent, a retry
+  that starts a new job for that page.
+- **Old storybooks** keep the earlier contract read-only: `StoryBookArtStatus` /
+  `deriveStorybookArtStatus` (`src/lib/storybook-status.ts`) still gate their viewer, print layout
+  and the Mixam order (`evaluateOrderArtGate`), with the persisted `artStatus` written before the
+  `storybookV2` routes were removed.
 
 ### Perceived Latency (wizard)
 - `storyWizardFlow` returns server-authoritative `questionNumber`/`totalQuestions`; the kids create
@@ -615,11 +589,13 @@ the old pipeline. No `book.render` (screen reading uses Book pages; the print sl
   same fields for the parent `StoryBrowser` badge.
 
 ### Testing seam (`TEST_MODE`)
-- `src/lib/test-mode.ts` (`TEST_MODE`/`E2E_FAKE_AI`): when set, the storybook generation flows/routes
-  short-circuit to deterministic fixtures and advance Firestore `*Generation.status` without calling
-  Gemini/ElevenLabs/fal — enabling deterministic E2E. Default (unset) behaviour is unchanged.
+- `src/lib/test-mode.ts` (`TEST_MODE`/`E2E_FAKE_AI`): when set, the Book pipeline's job handlers
+  write deterministic fixtures (pages, cast sheets, art, narration) and advance the real Firestore
+  documents without calling Gemini/ElevenLabs — enabling deterministic E2E with the in-process job
+  dispatcher. Default (unset) behaviour is unchanged.
 - Firebase client config is emulator-aware via `NEXT_PUBLIC_FIREBASE_USE_EMULATOR` (+ host/port vars);
-  default points at prod. Playwright E2E lives in `e2e/` (report-only CI job).
+  default points at prod. Playwright E2E lives in `e2e/`; the funnel spec (blocking in CI) makes a
+  Book through `POST /api/books` and reads it.
 
 ### Entitlements
 - `src/lib/entitlements/` + `entitlementLedgers` collection model per-family balances granted by the
@@ -638,8 +614,10 @@ the old pipeline. No `book.render` (screen reading uses Book pages; the print sl
     abandoned creates never burn quota. `kids/create` additionally calls the non-consuming
     `POST /api/entitlements/check` at start purely for an early, friendly block (fails *open* on
     transport errors — enforcement still holds at compile).
-  - **Storybook creation (`storybook_allowance`)**: `POST /api/storybookV2/create` consumes inline,
-    after validation and immediately before the create, returning `402` at the limit.
+  - **Book creation (`storybook_allowance`)**: `POST /api/books` consumes one unit in the same
+    transaction that creates the Book (`src/server/books/allowance.ts`, same ledger semantics), so a
+    Book exists if and only if a unit was charged; `402 ENTITLEMENT_LIMIT` at the limit. A repeated
+    idempotency key returns the same Book without charging.
   - **`print_credit` is intentionally NOT enforced yet**: the free tier grants none and there is no
     purchase flow to grant it (Stripe is a later sprint), so enforcing it would block *every* print
     order. It lands with the purchase/grant work. See `docs/PRODUCTS.md`.
@@ -839,8 +817,8 @@ The project uses npm workspaces to share code between the web app and future mob
 | API client context | `src/contexts/api-client-context.tsx` |
 | Firestore rules | `firestore.rules` |
 | AI flows | `src/ai/flows/*.ts` |
-| Exemplar generation | `src/ai/flows/story-exemplar-generation-flow.ts` |
-| Image generation | `src/ai/flows/story-image-flow.ts` |
+| Book client hooks and calls | `src/hooks/use-books.ts`, `src/lib/books/` |
+| Book UI (chooser, progress, reader) | `src/components/books/` |
 | AI flow logger | `src/lib/ai-flow-logger.ts` |
 | Animation presets | `src/lib/animation-presets.ts` |
 | API routes | `src/app/api/*/route.ts` |
@@ -870,7 +848,7 @@ The `/packages` workspace structure prepares for mobile development:
 2. `@storypic/api-client` - HTTP client for child-facing API calls
 3. `/mobile` (future) - Expo React Native app sharing the API client
 
-Mobile scope is strictly child-facing: story creation, story reading, storybook generation, storybook viewing. No parent management or print ordering in mobile.
+Mobile scope is strictly child-facing: story creation, story reading and reading old storybooks. Book creation is switched off in the app for now (make books in the web app); `@storypic/api-client` has `createBook` for when it returns. No parent management or print ordering in mobile.
 
 ### Technical Debt
 - Legacy `storyBooks` collection migration to new nested structure

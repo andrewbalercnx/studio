@@ -244,7 +244,7 @@ export default function AdminPaginationPromptPage() {
           <CardTitle>Pagination Prompt Configuration</CardTitle>
           <CardDescription>
             Configure the default prompt used to divide story text into pages for picture books.
-            This is used by the story-pagination-flow when creating storybook pages.
+            This is used by the Book pipeline (manuscript.paginate) when it splits a story into pages.
             Changes take effect within 60 seconds.
           </CardDescription>
         </CardHeader>

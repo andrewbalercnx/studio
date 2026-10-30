@@ -136,41 +136,9 @@ class MobileApiClient {
   }
 
   // ============================================
-  // Storybook generation
+  // Books (reading old storybooks only: book creation is switched off in the
+  // app until it moves to POST /api/books; make books in the web app)
   // ============================================
-
-  async createStorybook(
-    storyId: string,
-    outputTypeId: string,
-    styleId: string,
-    imageStylePrompt: string
-  ): Promise<string> {
-    const response = await this.request<{ ok: boolean; storybookId: string; errorMessage?: string }>(
-      `/api/storybookV2/create`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ storyId, outputTypeId, styleId, imageStylePrompt }),
-      }
-    );
-    if (!response.ok || !response.storybookId) {
-      throw new Error(response.errorMessage || 'Failed to create storybook');
-    }
-    return response.storybookId;
-  }
-
-  async generatePages(storyId: string, storybookId: string): Promise<any> {
-    return this.request('/api/storybookV2/pages', {
-      method: 'POST',
-      body: JSON.stringify({ storyId, storybookId }),
-    });
-  }
-
-  async generateImages(storyId: string, storybookId: string): Promise<any> {
-    return this.request('/api/storybookV2/images', {
-      method: 'POST',
-      body: JSON.stringify({ storyId, storybookId }),
-    });
-  }
 
   async getStorybookPages(storyId: string, storybookId: string): Promise<any[]> {
     return this.request(`/api/stories/${storyId}/storybooks/${storybookId}/pages`);

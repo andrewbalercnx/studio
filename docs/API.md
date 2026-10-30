@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-10-29 (Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-10-29 (Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -53,9 +53,10 @@ The `StoryPicClient` provides typed methods for child-facing operations:
 - `sendGemini4Choice(sessionId, optionId, userMessage)` - Gemini4 generator
 - `compileStory(sessionId)` - Compile story
 
-**Storybook Generation:**
-- `generatePages(storyId, storybookId, storyOutputTypeId)` - Generate pages
-- `generateImages(storyId, storybookId, imageStyleId)` - Generate images
+**Books:**
+- `createBook({ storyId, formId, styleId, idempotencyKey })` - `POST /api/books`; make the key once per
+  user action and repeat it on a retry of that action. Progress is read from Firestore (`books/{id}`),
+  not polled through the client.
 
 **Discovery:**
 - `getGenerators()` - Get available story generators
@@ -65,8 +66,8 @@ The `StoryPicClient` provides typed methods for child-facing operations:
 **Reading/Viewing:**
 - `getMyStories(childId)` - Get stories for a child (with resolved placeholders)
 - `getStory(storyId)` - Get single story (with resolved placeholders and actors)
-- `getMyStorybooks(storyId, includeAll?)` - Get storybooks for a story
-- `getStorybookPages(storyId, storybookId)` - Get pages for a storybook
+- `getMyStorybooks(storyId, includeAll?)` - Get storybooks for a story (old storybooks, read-only)
+- `getStorybookPages(storyId, storybookId)` - Get pages for an old storybook
 
 **TTS:**
 - `speak(text, voiceId, childId)` - Generate text-to-speech audio
@@ -115,7 +116,7 @@ Authorization: Bearer <firebase_id_token>
 |--------|-------------|
 | 401 | Unauthorized - Missing or invalid token |
 | 403 | Forbidden - Insufficient permissions |
-| 403 `PERSONA_SCOPE_MISMATCH` | A valid child-persona cookie is present and the request's effective child does not match it. Story/storybook chokepoints only (`storySession`, `storyWizard`, `storyCompile`, `storybookV2/*`). Absent/invalid cookie = legacy behaviour, so bearer-only clients (mobile, api-client) never see this. |
+| 403 `PERSONA_SCOPE_MISMATCH` | A valid child-persona cookie is present and the request's effective child does not match it. Story/book chokepoints only (`storySession`, `storyWizard`, `storyCompile`, `/api/manuscripts`, `/api/books/**`). Absent/invalid cookie = legacy behaviour, so bearer-only clients (mobile, api-client) never see this. |
 | 404 | Not Found - Resource doesn't exist |
 | 500 | Internal Server Error |
 
@@ -872,51 +873,6 @@ story flows (kids and parent), so it is where `story_allowance` is enforced:
 
 ---
 
-### POST `/api/storyPagination`
-
-**Authentication**: Bearer token. The caller must own the story (`stories.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 / 403 / 404 as for session routes.
-
-Paginate a compiled story into pages using AI-driven pagination.
-
-**Request Body**:
-```json
-{
-  "storyId": "story-id",
-  "storyOutputTypeId": "output-type-id"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "storyId": "story-id",
-  "pages": [
-    {
-      "pageNumber": 1,
-      "bodyText": "Once upon a time...",
-      "entityIds": ["child-id", "character-id"],
-      "imageDescription": "A child standing in a magical forest..."
-    }
-  ],
-  "stats": {
-    "pageCount": 12,
-    "targetPageCount": 12
-  },
-  "debug": {
-    "stage": "done",
-    "details": {}
-  }
-}
-```
-
-**Notes**:
-- Uses AI to split story text into pages based on the output type's pagination prompt
-- Falls back to sentence-based chunking if AI pagination fails
-- Returns `entityIds` (actor IDs) and `imageDescription` for each page
-
----
-
 ### POST `/api/gemini3`
 
 **Authentication**: Bearer token. The caller must own the story session (`storySessions.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a valid token, 403 if not the owner, 404 if the session does not exist.
@@ -1201,32 +1157,6 @@ Generate full audio narration for storybook.
 
 ---
 
-### POST `/api/storyBook/pageAudio`
-
-**Authentication**: Bearer token, parent or admin. The caller must own the story (`stories.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 / 403 / 404 as for session routes.
-
-Generate audio for a specific page.
-
-**Request Body**:
-```json
-{
-  "storyId": "story-id",
-  "storybookId": "storybook-id",
-  "pageId": "page-id",
-  "voiceId": "voice-id"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "audioUrl": "https://storage.googleapis.com/..."
-}
-```
-
----
-
 ### POST `/api/storyBook/printable`
 
 Generate printable PDF for storybook.
@@ -1268,218 +1198,6 @@ Generate composite avatar from story actors.
 {
   "ok": true,
   "avatarUrl": "https://storage.googleapis.com/..."
-}
-```
-
----
-
-### POST `/api/storybookV2/create`
-
-Create a new StoryBookOutput document for a story. The server handles print layout lookup and image dimension calculation.
-
-**Request Body**:
-```json
-{
-  "storyId": "story-id",
-  "outputTypeId": "picture_book",
-  "styleId": "watercolor",
-  "imageStylePrompt": "watercolor illustration with soft colors..."
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "storybookId": "new-storybook-id"
-}
-```
-
-**Entitlement enforcement**: Before the storybook document is created, the server atomically
-checks-and-consumes one `storybook_allowance` unit from the caller's entitlement ledger (the
-story's child pool first, then the family pool — see `docs/PRODUCTS.md`). A brand-new family is
-seeded with the free tier (2 storybooks) on first use. When the allowance is exhausted the route
-returns `402` and creates nothing.
-
-**Errors**:
-- `400 Bad Request`: Missing required fields
-- `401 Unauthorized`: Missing or invalid token
-- `402 Payment Required`: Storybook allowance exhausted (`code: "ENTITLEMENT_LIMIT"`, `remaining`)
-- `403 Forbidden`: Story doesn't belong to user
-- `404 Not Found`: Story or output type not found
-
----
-
-### POST `/api/storybookV2/pages`
-
-Generate storybook pages from story.
-
-**Authentication**: Required (Bearer token). Any authenticated Firebase user; ownership is
-enforced against `story.parentUid` (admins/writers via custom claims bypass ownership). This is a
-cost-bearing AI endpoint — unauthenticated requests are rejected before any generation state is
-written.
-
-**Request Body**:
-```json
-{
-  "storyId": "story-id",
-  "storybookId": "storybook-id",
-  "storyOutputTypeId": "picture_book"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "pagesCount": 12
-}
-```
-
-**Errors**:
-- `400 Bad Request`: Missing `storyId` or `storybookId`
-- `401 Unauthorized`: Missing or invalid token
-- `403 Forbidden`: Story doesn't belong to user
-- `404 Not Found`: Story or storybook not found
-- `409 Conflict`: Storybook is locked
-
----
-
-### POST `/api/storybookV2/images`
-
-Generate images for storybook pages.
-
-**Authentication**: Required (Bearer token). Any authenticated Firebase user; ownership is
-enforced against `story.parentUid` (admins/writers via custom claims bypass ownership). This is a
-cost-bearing AI endpoint — unauthenticated requests are rejected before any generation state is
-written.
-
-**Request Body**:
-```json
-{
-  "storyId": "story-id",
-  "storybookId": "storybook-id",
-  "pageId": "optional-page-id",
-  "forceRegenerate": false,
-  "imageStylePrompt": "optional art style override",
-  "additionalPrompt": "optional user instructions for image generation"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| storyId | string | Yes | The story document ID |
-| storybookId | string | Yes | The storybook document ID |
-| pageId | string | No | If provided, only regenerate this specific page |
-| forceRegenerate | boolean | No | Force regeneration even if image exists |
-| imageStylePrompt | string | No | Override the art style prompt |
-| additionalPrompt | string | No | Additional user instructions appended to the image prompt (only used with pageId) |
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "status": "ready",
-  "ready": 12,
-  "total": 12,
-  "artStatus": { "completeness": "complete", "isOrderable": true, "...": "..." },
-  "rateLimited": false,
-  "logs": []
-}
-```
-
-**Single-page repaint (Sprint W2-C)**: the parent book view's per-page "repaint" goes through this
-route with `pageId` + `forceRegenerate: true` (+ optional `additionalPrompt`). Single-page
-regeneration does **not** consume any entitlement — `storybook_allowance` is only consumed at
-`POST /api/storybookV2/create`.
-
-**Errors**:
-- `400 Bad Request`: Missing `storyId` or `storybookId`, or no pages available
-- `401 Unauthorized`: Missing or invalid token
-- `403 Forbidden`: Story doesn't belong to user
-- `404 Not Found`: Story or storybook not found
-- `409 Conflict`: Storybook is locked, or generation already in progress
-- `429 Too Many Requests`: Upstream model rate limit (`rateLimited: true`, `retryAt`)
-
----
-
-### POST `/api/storybookV2/pageEdit`
-
-Parent per-page clean-up (Sprint W2-C): edit a single page's text and/or image-generation prompt on
-a new-model storybook. Image regeneration deliberately stays in `POST /api/storybookV2/images`
-(single-page path above) so generation logic is never duplicated.
-
-**Authentication**: Required (Bearer token, parent or admin). Ownership is checked against
-`story.parentUid`.
-
-**Request Body**:
-```json
-{
-  "storyId": "story-id",
-  "storybookId": "storybook-id",
-  "pageId": "page-id",
-  "pageText": "New page wording (optional)",
-  "imagePrompt": "New picture description (optional)"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| storyId | string | Yes | The story document ID |
-| storybookId | string | Yes | The storybook document ID |
-| pageId | string | Yes | The page document ID |
-| pageText | string | No* | Replaces BOTH `bodyText` and `displayText` (the parent's wording becomes canonical). May be empty (picture-only page). Max 2000 chars. May contain `$$id$$` placeholders. |
-| imagePrompt | string | No* | Replaces the page's art prompt. Cannot be blanked. Max 4000 chars. Takes effect on the next (re)generation. |
-
-\* At least one of `pageText` / `imagePrompt` is required.
-
-**Side Effects**:
-- Records `lastEditedAt` (server timestamp) and `lastEditedBy` (uid) on the page.
-- If the text changed and the page had narration, the stale audio is reset
-  (`audioStatus: 'pending'`, `audioUrl: null`) so it can be re-recorded to match.
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "storyId": "story-id",
-  "storybookId": "storybook-id",
-  "pageId": "page-id",
-  "textChanged": true,
-  "promptChanged": false,
-  "audioReset": true,
-  "requestId": "..."
-}
-```
-
-**Errors**:
-- `400` - Validation failure (missing ids, nothing to update, blank imagePrompt, length limits)
-- `401` / `403` - Unauthenticated / not the story's owner
-- `404` - Story, storybook, or page not found
-- `409` - Storybook is locked for printing (unlock first)
-
----
-
-### POST `/api/storybookV2/finalize`
-
-Finalize storybook for printing.
-
-**Request Body**:
-```json
-{
-  "storyId": "story-id",
-  "storybookId": "storybook-id"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "finalization": {
-    "status": "finalized",
-    "version": 1
-  }
 }
 ```
 
@@ -1549,10 +1267,22 @@ Get pages for a specific storybook with placeholders resolved.
 
 ## Manuscript and Book Routes
 
-The server-side Story → Manuscript → Book pipeline (slice 5.1;
-[`docs/architecture/target/slices/5.1-book-server.md`](architecture/target/slices/5.1-book-server.md)).
-**Present, not yet used by the UI**: the web, kids PWA and mobile apps still call the
-`storybookV2` routes above until slice 5.2 moves them here.
+The Story → Manuscript → Book pipeline (slices 5.1 and 5.2;
+[`5.1-book-server.md`](architecture/target/slices/5.1-book-server.md),
+[`5.2-book-clients.md`](architecture/target/slices/5.2-book-clients.md)). The only way to make a book:
+the web app and the kids PWA call `POST /api/books`; the mobile app does not make books for now.
+
+**Client usage** (web, kids PWA):
+
+1. The child picks a Form (`GET /api/storyOutputTypes`) and a Style (`GET /api/imageStyles`) once the
+   story is finished. The client calls `POST /api/books` with `{ storyId, formId, styleId,
+   idempotencyKey }`, making the key once per choice (`crypto.randomUUID()`, kept for that choice so a
+   double tap or a retry repeats it). Length and density default from the Form.
+2. It then only watches Firestore (`src/hooks/use-books.ts`): `books/{bookId}` for `status` and the
+   `art` rollup, `manuscripts/{manuscriptId}` for pagination, and the pages of both for the reader.
+   List queries filter on `ownerUid == uid` (the rules require it). Closing the page changes nothing.
+3. A parent (PIN guard) retries a failed picture with `POST …/pages/{n}/retry` and locks or unlocks
+   with `POST …/lock` / `…/unlock`. Printing is not available for these Books yet (print slice).
 
 Common to all five:
 
@@ -1678,7 +1408,7 @@ seeded (1 story) in memory.
 The authoritative **decrement** happens server-side at completion — `/api/storyCompile` consumes one
 `story_allowance` when a story is compiled (covering kids and parent flows alike), so enforcement
 holds even if a client skips this check. Only `story_allowance` may be checked here; `storybook_allowance`
-is enforced inside `/api/storybookV2/create`, and `print_credit` is reserved for print time (not yet
+is charged inside `POST /api/books` (in the transaction that creates the Book), and `print_credit` is reserved for print time (not yet
 enforced — see `docs/PRODUCTS.md`).
 
 **Auth**: Bearer ID token required.
@@ -2696,7 +2426,7 @@ Get current AI models configuration. Admin only.
     }
   },
   "usageMap": {
-    "imageGenerationModel": ["story-image-flow.ts", "avatar-flow.ts", ...],
+    "imageGenerationModel": ["avatar-flow.ts", "character-avatar-flow.ts", ...],
     "primaryTextModel": ["gemini3-flow.ts", ...],
     ...
   },
@@ -2763,7 +2493,7 @@ When `sendAlerts` is true and issues are found, maintenance users will be notifi
     "imageGenerationModel": {
       "model": "googleai/gemini-2.5-flash-image",
       "status": "available",
-      "usedBy": ["story-image-flow.ts", ...]
+      "usedBy": ["avatar-flow.ts", ...]
     },
     ...
   },
@@ -3962,6 +3692,21 @@ wrong-account token, or not configured); 500 `INTERNAL`.
 These use a shared secret instead of user authentication.
 
 **Authentication**: `X-Internal-Secret` header with value matching `INTERNAL_API_SECRET` environment variable.
+
+### POST `/api/internal/system-test`
+
+The daily live pipeline check (`.github/workflows/system-tests.yml`). Seeds a throwaway child and
+story, creates a Book through the same service as `POST /api/books`, and runs only the jobs it needs
+in process with the real models: `manuscript.paginate`, the cast sheet and the cover's
+`book.pageArt` (narration and the other pages stay queued). Cleans up the documents, jobs, ledger and
+Storage files afterwards.
+
+**Response** (200 when every check passes, else 500):
+```json
+{ "ok": true, "results": [{ "name": "pagination_scene_tags", "pass": true, "message": "…", "durationMs": 9000 }], "totalDurationMs": 30000, "timestamp": "…" }
+```
+Checks: `pagination_scene_tags` (every Manuscript page has a valid scene tag), `location_keys`,
+`cover_image`; `setup` appears only when the run could not start.
 
 ### POST `/api/internal/dev-todos`
 

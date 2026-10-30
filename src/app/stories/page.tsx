@@ -62,7 +62,7 @@ function StoryCard({ story, storyBook, bookLoading }: { story: StorySession; sto
   );
   const viewStoryTextButton = hasStoryBook ? (
     <Button asChild variant="outline" className="w-full">
-      <Link href={`/story/session/${story.id}/compiled`}>
+      <Link href={`/story/${story.id}`}>
         View Story Text
       </Link>
     </Button>

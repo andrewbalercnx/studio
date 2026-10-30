@@ -37,7 +37,7 @@ export const AI_PURPOSE_KIND: Record<AIPurpose, AIPurposeKind> = {
 /**
  * Code defaults, taken from the flows doing this work today:
  * - creation.text: gemini-3.8-flash (wizard, gemini3/4, friends, ending)
- * - manuscript.text: gemini-3.8-flash (story-pagination-flow)
+ * - manuscript.text: gemini-3.8-flash (the former story-pagination-flow)
  * - likeness.describe: gemini-3.8-flash (image-description-flow)
  * - image purposes: gemini-3.1-flash-image (DEFAULT_AI_MODELS_CONFIG.imageGenerationModel)
  * - narration: ElevenLabs eleven_v3 (default ElevenLabs version in diagnostics config)

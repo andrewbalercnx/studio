@@ -7,7 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles, Star, Image as ImageIcon } from 'lucide-react';
+import { LoaderCircle, Send, CheckCircle, RefreshCw, Sparkles, Star } from 'lucide-react';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import Link from 'next/link';
 import { useFirestore } from '@/firebase';
@@ -159,13 +159,9 @@ export default function StorySessionPage() {
     const [isBeatRunning, setIsBeatRunning] = useState(false);
     const [isGeneratingMoreOptions, setIsGeneratingMoreOptions] = useState(false);
     const [isEndingRunning, setIsEndingRunning] = useState(false);
-    const [isImageJobRunning, setIsImageJobRunning] = useState(false);
-    const [imageJobError, setImageJobError] = useState<string | null>(null);
     const [isSelectingStoryType, setIsSelectingStoryType] = useState(false);
     const [isCompiling, setIsCompiling] = useState(false);
     const [compileError, setCompileError] = useState<string | null>(null);
-    const [isGeneratingPages, setIsGeneratingPages] = useState(false);
-    const [pagesError, setPagesError] = useState<string | null>(null);
     const [hasTriggeredCompile, setHasTriggeredCompile] = useState(false);
 
     const [selectedOutputTypeId, setSelectedOutputTypeId] = useState<string>('');
@@ -300,23 +296,6 @@ export default function StorySessionPage() {
             } : null,
         }))
     }, [pendingCharacterTraits]);
-
-    // WORKFLOW AUTOMATION: Auto-redirect to generating page when output type is selected
-    useEffect(() => {
-        const shouldShowGenerating =
-            session?.storyOutputTypeId &&
-            session?.status === 'completed' &&
-            storyBook &&
-            (storyBook.pageGeneration?.status === 'idle' ||
-             storyBook.pageGeneration?.status === 'running' ||
-             (storyBook.pageGeneration?.status === 'ready' && !storyBook.selectedImageStyleId) ||
-             (storyBook.selectedImageStyleId && storyBook.imageGeneration?.status === 'running'));
-
-        if (shouldShowGenerating) {
-            console.log('[Session] Redirecting to generating page for progress tracking');
-            router.push(`/story/session/${sessionId}/generating`);
-        }
-    }, [session?.storyOutputTypeId, session?.status, storyBook?.pageGeneration?.status, storyBook?.selectedImageStyleId, storyBook?.imageGeneration?.status, sessionId, router, storyBook]);
 
     // AI connection warm-up: fire a minimal 1-token call on mount so the TCP/TLS connection
     // and HTTP/2 session to Google AI are established before the child selects a story type.
@@ -902,36 +881,6 @@ export default function StorySessionPage() {
         }
     }, [sessionRef, firestore, isCompiling, session?.status, session?.childId, storyBook, sessionId, logClientStage, toast, selectedOutputTypeId, router]);
 
-    const handleGeneratePages = async () => {
-        if (!storyBook) {
-            toast({ title: 'Story not compiled yet', description: 'Compile your story before building pages.' });
-            return;
-        }
-        if (isGeneratingPages) return;
-        setIsGeneratingPages(true);
-        setPagesError(null);
-        try {
-            // Use sessionId as storyId since stories are stored with sessionId as their doc ID
-            const storyId = storyBook.id || sessionId;
-            await logClientStage('pages.started', { storyId });
-            const response = await authFetch('/api/storyBook/pages', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ storyId }),
-            });
-            const result = await response.json();
-            if (!response.ok || !result?.ok) {
-                throw new Error(result?.errorMessage || 'Page generation failed.');
-            }
-            toast({ title: 'Pages queued', description: 'We are laying out your storybook pages.' });
-        } catch (e: any) {
-            setPagesError(e.message || 'Page generation failed.');
-            toast({ title: 'Page generation failed', description: e.message, variant: 'destructive' });
-        } finally {
-            setIsGeneratingPages(false);
-        }
-    };
-
     const handleMoreOptions = async () => {
         if (!firestore || !sessionId) return;
         setIsGeneratingMoreOptions(true);
@@ -1020,39 +969,6 @@ export default function StorySessionPage() {
         error: sessionError?.message || messagesError?.message || null,
     };
 
-    const handleGenerateArt = async (force = false) => {
-        // Use sessionId as storyId since stories are stored with sessionId as their doc ID
-        const storyId = storyBook?.id || sessionId;
-        if (!storyId) {
-            setImageJobError('Storybook not available for this session yet.');
-            return;
-        }
-        setIsImageJobRunning(true);
-        setImageJobError(null);
-        try {
-            await logClientStage('art.started', { storyId, force });
-            const response = await authFetch('/api/storyBook/images', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    storyId,
-                    forceRegenerate: force,
-                }),
-            });
-            const result = await response.json();
-            if (!response.ok || !result?.ok) {
-                throw new Error(result?.errorMessage || 'Failed to generate art.');
-            }
-            toast({ title: 'Art generation started', description: `Status: ${result.status}` });
-        } catch (error: any) {
-            const message = error?.message || 'Unexpected art generation error.';
-            setImageJobError(message);
-            toast({ title: 'Art generation failed', description: message, variant: 'destructive' });
-        } finally {
-            setIsImageJobRunning(false);
-        }
-    };
-
     const renderCreateBookPanel = () => {
         if (!session) return null;
         const isGeminiMode = session.storyMode === 'gemini3' || session.storyMode === 'gemini4';
@@ -1062,16 +978,6 @@ export default function StorySessionPage() {
         const showPanel = (isGeminiMode && geminiFinalStory) || session.selectedEndingId || compileReady;
         if (!showPanel) return null;
         const compileStatus: 'pending' | 'running' | 'ready' = compileReady ? 'ready' : isCompiling ? 'running' : 'pending';
-        const pagesStatus: 'pending' | 'running' | 'ready' = storyBook?.pageGeneration?.status === 'ready'
-            ? 'ready'
-            : storyBook?.pageGeneration?.status === 'running' || isGeneratingPages
-                ? 'running'
-                : 'pending';
-        const artStatus: 'pending' | 'running' | 'ready' = storyBook?.imageGeneration?.status === 'ready'
-            ? 'ready'
-            : storyBook?.imageGeneration?.status === 'running' || isImageJobRunning
-                ? 'running'
-                : 'pending';
         const statusBadge = (status: 'pending' | 'running' | 'ready') => (
             <Badge variant={status === 'ready' ? 'secondary' : status === 'running' ? 'outline' : 'default'}>
                 {status === 'ready' ? 'Ready' : status === 'running' ? 'In progress' : 'Waiting'}
@@ -1118,64 +1024,12 @@ export default function StorySessionPage() {
                             </Button>
                         </div>
                     </div>
-                    <div className="flex items-center justify-between gap-4">
-                        <div>
-                            <p className="font-semibold">2. Build Pages</p>
-                            <p className="text-sm text-muted-foreground">Lay out each page with headings and prompts.</p>
-                            {pagesError && <p className="text-xs text-destructive mt-1">{pagesError}</p>}
-                            {storyBook?.pageGeneration?.lastErrorMessage && (
-                                <p className="text-xs text-destructive mt-1">{storyBook.pageGeneration.lastErrorMessage}</p>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {statusBadge(pagesStatus)}
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={handleGeneratePages}
-                                disabled={!compileReady || pagesStatus === 'ready' || isGeneratingPages}
-                            >
-                                {isGeneratingPages ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                {pagesStatus === 'ready' ? 'Pages Ready' : 'Generate Pages'}
+                    {compileReady && (
+                        <div className="mt-6 pt-6 border-t text-center space-y-3">
+                            <p className="text-muted-foreground">Your story is ready. Choose a book type and an art style to make a book from it.</p>
+                            <Button size="lg" asChild>
+                                <Link href={`/story/${storyBook?.id || sessionId}`}>Make a Book</Link>
                             </Button>
-                        </div>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                        <div>
-                            <p className="font-semibold">3. Paint Art</p>
-                            <p className="text-sm text-muted-foreground">Create watercolor scenes for each page.</p>
-                            {imageJobError && <p className="text-xs text-destructive mt-1">{imageJobError}</p>}
-                            {storyBook?.imageGeneration?.lastErrorMessage && (
-                                <p className="text-xs text-destructive mt-1">{storyBook.imageGeneration.lastErrorMessage}</p>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {statusBadge(artStatus)}
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleGenerateArt(false)}
-                                disabled={!compileReady || pagesStatus !== 'ready' || isImageJobRunning || artStatus === 'ready'}
-                            >
-                                {isImageJobRunning ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                {artStatus === 'ready' ? 'Art Ready' : 'Generate Art'}
-                            </Button>
-                        </div>
-                    </div>
-
-                    {/* Show prominent next step when all steps are complete */}
-                    {artStatus === 'ready' && (
-                        <div className="mt-6 pt-6 border-t">
-                            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950 rounded-lg p-6 text-center">
-                                <CheckCircle className="mx-auto h-12 w-12 text-emerald-500 mb-3" />
-                                <h3 className="text-xl font-bold mb-2">Your Storybook is Ready!</h3>
-                                <p className="text-muted-foreground mb-4">All pages have been illustrated. View your finished storybook now.</p>
-                                <Button size="lg" asChild>
-                                    <Link href={`/story/${storyBook?.id || sessionId}`}>
-                                        View My Story
-                                    </Link>
-                                </Button>
-                            </div>
                         </div>
                     )}
                 </CardContent>
@@ -1189,15 +1043,11 @@ export default function StorySessionPage() {
         const storyComplete = session.currentPhase === 'ending' || session.status === 'completed';
         const endingComplete = !!session.selectedEndingId;
         const compileComplete = !!storyBook;
-        const pagesComplete = storyBook?.pageGeneration?.status === 'ready';
-        const artComplete = storyBook?.imageGeneration?.status === 'ready';
         const steps = [
             { key: 'warmup', label: 'Warmup', complete: warmupComplete, active: session.currentPhase === 'warmup' },
             { key: 'story', label: 'Story', complete: storyComplete, active: session.currentPhase === 'story' },
             { key: 'ending', label: 'Ending', complete: endingComplete, active: !endingComplete && session.currentPhase === 'ending' },
             { key: 'compile', label: 'Compile', complete: compileComplete, active: isCompiling },
-            { key: 'pages', label: 'Pages', complete: pagesComplete, active: isGeneratingPages || storyBook?.pageGeneration?.status === 'running' },
-            { key: 'art', label: 'Art', complete: artComplete, active: isImageJobRunning || storyBook?.imageGeneration?.status === 'running' },
         ];
         return (
             <div className="rounded-lg border bg-muted/40 px-4 py-3 flex flex-wrap items-center gap-3">
@@ -1259,10 +1109,6 @@ export default function StorySessionPage() {
                 : session.status === 'completed'
                     ? 'Run the compile action to unlock the finished text.'
                     : 'Finish this session to generate the storybook.';
-        const imageStatus = storyBook?.imageGeneration?.status ?? 'idle';
-        const imageReadyCount = storyBook?.imageGeneration?.pagesReady ?? 0;
-        const imageTotal = storyBook?.imageGeneration?.pagesTotal ?? storyBook?.pageGeneration?.pagesCount ?? 0;
-        const viewerHref = storyBook?.id ? `/story/${storyBook.id}` : `/story/${sessionId}`;
         
         const showStoryTypePicker = !session.storyTypeId && curatedStoryTypes.length > 0;
 
@@ -1312,11 +1158,11 @@ export default function StorySessionPage() {
                         <div className="flex flex-col gap-1 w-full sm:w-auto">
                             {hasStoryBook ? (
                                 <Button asChild size="sm" variant="secondary">
-                                    <Link href={`/story/session/${sessionId}/compiled`}>View Compiled Story</Link>
+                                    <Link href={`/story/${sessionId}`}>View Story</Link>
                                 </Button>
                             ) : (
                                 <Button size="sm" variant="secondary" disabled>
-                                    {storyBookLoading ? 'Checking…' : 'View Compiled Story'}
+                                    {storyBookLoading ? 'Checking…' : 'View Story'}
                                 </Button>
                             )}
                             {storyBookHelperText && (
@@ -1324,42 +1170,6 @@ export default function StorySessionPage() {
                             )}
                             {storyBookError && (
                                 <span className="text-xs text-destructive text-center sm:text-left">Storybook error: {storyBookError.message}</span>
-                            )}
-                            {hasStoryBook && (
-                                <div className="mt-4 rounded-md border border-dashed bg-muted/30 p-3 text-xs sm:text-sm space-y-2">
-                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                        <div>
-                                            <p className="font-semibold text-sm">Storybook Art</p>
-                                            <p className="text-muted-foreground">
-                                                Status: {imageStatus} · {imageReadyCount}/{imageTotal} ready
-                                            </p>
-                                            {storyBook?.imageGeneration?.status === 'ready' && (
-                                                <p className="text-green-600 font-semibold text-xs mt-1">All done! Open the storybook to read & share.</p>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-wrap gap-2">
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => handleGenerateArt(false)}
-                                                disabled={isImageJobRunning || imageStatus === 'running'}
-                                            >
-                                                {isImageJobRunning ? (
-                                                    <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />
-                                                ) : (
-                                                    <ImageIcon className="mr-1 h-3.5 w-3.5" />
-                                                )}
-                                                Generate Art
-                                            </Button>
-                                            <Button size="sm" variant="ghost" asChild>
-                                                <Link href={viewerHref}>Open Storybook</Link>
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    {imageJobError && (
-                                        <p className="text-destructive">{imageJobError}</p>
-                                    )}
-                                </div>
                             )}
                         </div>
                     </div>

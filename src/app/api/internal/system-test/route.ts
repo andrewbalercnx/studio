@@ -1,22 +1,26 @@
 import { NextResponse } from 'next/server';
+import { FieldValue } from 'firebase-admin/firestore';
+import type { DecodedIdToken } from 'firebase-admin/auth';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { deleteStorageObject } from '@/firebase/admin/storage';
+import { getStoryBucket } from '@/firebase/admin/storage';
 import { isInternalSecretValid } from '@/lib/internal-secret';
-import { storyPageFlow } from '@/ai/flows/story-page-flow';
-import { storyImageFlow } from '@/ai/flows/story-image-flow';
+import { BOOK_JOB_KINDS, createBook } from '@/server/books';
+import { getDb } from '@/server/data/db';
+import { InProcessDispatcher, JobRunner, jobRegistry, type DispatchRequest } from '@/server/jobs';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 // Short story with four clearly distinct scenes (indoor-day, outdoor-day,
-// indoor-night, outdoor-night) so pagination reliably assigns all four sceneTag values.
+// indoor-night, outdoor-night) so pagination reliably assigns all four scene tags.
 const SYSTEM_TEST_STORY_TEXT = [
   'Luna the cat was reading in the sunny kitchen when she noticed her toy mouse had gone missing.',
   'She dashed outside into the bright garden and searched through every flowerpot and patch of grass.',
   'That evening, Luna padded back inside and curled up under the lamp to think about where the mouse could be.',
   'Later, under a sky full of stars, she crept into the moonlit garden one last time — and found the toy mouse sitting right beside the gate.',
 ].join(' ');
+
+const VALID_TAGS = ['indoor-day', 'outdoor-day', 'indoor-night', 'outdoor-night'];
 
 type TestResult = {
   name: string;
@@ -35,6 +39,26 @@ async function runTest(name: string, fn: () => Promise<string>): Promise<TestRes
   }
 }
 
+/**
+ * Runs only the jobs this test needs, in process: pagination, the cast sheet
+ * and the cover picture. Narration and the other pages stay queued (and are
+ * deleted at cleanup), so one run costs one text call and two image calls.
+ */
+class SelectiveDispatcher extends InProcessDispatcher {
+  constructor(private readonly shouldRun: (request: DispatchRequest) => Promise<boolean>) {
+    super();
+  }
+  async dispatch(request: DispatchRequest): Promise<void> {
+    if (await this.shouldRun(request)) await super.dispatch(request);
+  }
+}
+
+/**
+ * POST /api/internal/system-test — the daily live pipeline check
+ * (`.github/workflows/system-tests.yml`): paginates a short story into a
+ * Manuscript through the Book pipeline (`manuscript.paginate`), then draws its
+ * cover (`book.castSheet`, `book.pageArt`) with the real models, and cleans up.
+ */
 export async function POST(request: Request) {
   const secret = request.headers.get('X-Internal-Secret');
   // Constant-time comparison — a plain !== leaks prefix-match length via timing.
@@ -43,179 +67,128 @@ export async function POST(request: Request) {
   }
 
   await initFirebaseAdminApp();
-  const firestore = getFirestore();
+  const db = await getDb();
   const timestamp = new Date().toISOString();
   const overallStart = Date.now();
   const results: TestResult[] = [];
 
-  // IDs for cleanup
   const runId = `system-test-${Date.now()}`;
+  const ownerUid = `${runId}-owner`;
   const childId = `${runId}-child`;
   const storyId = runId;
-  const storybookId = `${runId}-book`;
+  const childRef = db.collection('children').doc(childId);
+  const storyRef = db.collection('stories').doc(storyId);
 
-  // Firestore refs (declared before try so they're accessible in finally)
-  const childRef = firestore.collection('children').doc(childId);
-  const storyRef = firestore.collection('stories').doc(storyId);
-  const storybookRef = storyRef.collection('storybooks').doc(storybookId);
+  const allowed = new Set<string>([
+    BOOK_JOB_KINDS.paginate,
+    BOOK_JOB_KINDS.prepareCast,
+    BOOK_JOB_KINDS.castSheet,
+    BOOK_JOB_KINDS.illustrate,
+  ]);
+  const dispatcher = new SelectiveDispatcher(async (req) => {
+    if (allowed.has(req.kind)) return true;
+    if (req.kind !== BOOK_JOB_KINDS.pageArt) return false;
+    const job = await db.collection('jobs').doc(req.jobId).get();
+    return job.data()?.input?.pageNumber === 1;
+  });
+  const runner = new JobRunner({ registry: jobRegistry, dispatcher, db });
 
-  // Storage paths to clean up (populated during the image generation test)
-  const storagePathsToDelete: string[] = [];
+  let manuscriptId: string | null = null;
+  let bookId: string | null = null;
 
   try {
-    // ── Setup: create minimal Firestore artifacts ──────────────────────────
     await childRef.set({
       regressionTest: true,
       regressionTag: 'system-test',
       displayName: 'Test Child',
-      ownerParentUid: 'system-test',
+      ownerParentUid: ownerUid,
       likes: [],
       dislikes: [],
       createdAt: FieldValue.serverTimestamp(),
     });
-
     await storyRef.set({
       regressionTest: true,
       regressionTag: 'system-test',
+      parentUid: ownerUid,
       childId,
-      actors: [],
+      actors: [childId],
       synopsis: 'A cat loses her toy mouse and searches for it day and night.',
       storyText: SYSTEM_TEST_STORY_TEXT,
+      metadata: { title: 'Luna and the Lost Mouse' },
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    await storybookRef.set({
-      regressionTest: true,
-      storyOutputTypeId: 'picture_book_standard_v1',
-      status: 'draft',
-      createdAt: FieldValue.serverTimestamp(),
+    const user = { uid: ownerUid, email: null, claims: { uid: ownerUid } as unknown as DecodedIdToken };
+    const created = await createBook({ db, runner }, user, {
+      storyId,
+      formId: 'picture_book_standard_v1',
+      styleId: (await db.collection('imageStyles').limit(1).get()).docs[0]?.id ?? 'missing-style',
+      idempotencyKey: runId,
     });
+    manuscriptId = created.manuscriptId;
+    bookId = created.bookId;
+    await dispatcher.drain();
 
-    // ── Test 1: pagination + sceneTag ─────────────────────────────────────
-    let firstTextPageId: string | null = null;
-    const VALID_TAGS = ['indoor-day', 'outdoor-day', 'indoor-night', 'outdoor-night'] as const;
+    // ── Test 1: pagination + scene tags ───────────────────────────────────
+    results.push(
+      await runTest('pagination_scene_tags', async () => {
+        const manuscript = (await db.collection('manuscripts').doc(manuscriptId!).get()).data();
+        if (manuscript?.status !== 'ready') throw new Error(`Manuscript status is ${manuscript?.status ?? 'missing'}`);
+        const pages = (await db.collection('manuscripts').doc(manuscriptId!).collection('pages').get()).docs.map((d) => d.data());
+        if (pages.length !== manuscript.length) throw new Error(`${pages.length} pages written, ${manuscript.length} expected`);
+        const invalid = pages.filter((p) => !VALID_TAGS.includes(p.scene?.tag));
+        if (invalid.length > 0) {
+          throw new Error(`${invalid.length}/${pages.length} page(s) have an invalid scene tag: ${invalid.map((p) => p.scene?.tag || 'missing').join(', ')}`);
+        }
+        const tags = [...new Set(pages.map((p) => p.scene.tag))].join(', ');
+        return `${pages.length} pages, all tagged — ${tags}`;
+      })
+    );
 
-    results.push(await runTest('pagination_scene_tags', async () => {
-      const flowResult = await storyPageFlow({
-        storyId,
-        storyOutputTypeId: 'picture_book_standard_v1',
-      });
+    // ── Test 2: consistent locations ─────────────────────────────────────
+    results.push(
+      await runTest('location_keys', async () => {
+        const pages = (await db.collection('manuscripts').doc(manuscriptId!).collection('pages').get()).docs.map((d) => d.data());
+        const keys = new Set(pages.map((p) => p.scene?.locationKey).filter(Boolean));
+        if (keys.size === 0) throw new Error('No page has a scene locationKey');
+        return `${keys.size} location(s): ${[...keys].join(', ')}`;
+      })
+    );
 
-      if (!flowResult.ok) {
-        throw new Error((flowResult as any).errorMessage ?? 'storyPageFlow returned ok:false');
-      }
-      if (!flowResult.pages?.length) {
-        throw new Error('storyPageFlow returned no pages');
-      }
-
-      // Write pages to Firestore (mirrors what /api/storybookV2/pages does)
-      const pagesCol = storybookRef.collection('pages');
-      const sorted = [...flowResult.pages].sort((a: any, b: any) => a.pageNumber - b.pageNumber);
-      const batch = firestore.batch();
-      for (const page of sorted) {
-        const pageId = `page-${String(page.pageNumber).padStart(3, '0')}`;
-        const pageData = Object.fromEntries(
-          Object.entries(page as Record<string, any>).filter(([, v]) => v !== undefined)
-        );
-        batch.set(pagesCol.doc(pageId), {
-          ...pageData,
-          id: pageId,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      }
-      await batch.commit();
-
-      const textPages = sorted.filter((p: any) => p.kind === 'text');
-      const invalidPages = textPages.filter(
-        (p: any) => !VALID_TAGS.includes(p.imageScene?.sceneTag)
-      );
-
-      if (invalidPages.length > 0) {
-        const badTags = invalidPages.map((p: any) => p.imageScene?.sceneTag ?? 'missing').join(', ');
-        throw new Error(`${invalidPages.length}/${textPages.length} text page(s) have invalid/missing sceneTag: ${badTags}`);
-      }
-
-      // Capture first text page for the image test
-      if (textPages.length > 0) {
-        firstTextPageId = `page-${String((textPages[0] as any).pageNumber).padStart(3, '0')}`;
-      }
-
-      const tags = [...new Set(textPages.map((p: any) => p.imageScene?.sceneTag))].join(', ');
-      return `${sorted.length} pages; ${textPages.length} text page(s) all valid — tags: ${tags}`;
-    }));
-
-    // ── Test 2: locationRegistry persisted to story doc ───────────────────
-    results.push(await runTest('location_registry', async () => {
-      const snap = await storyRef.get();
-      const registry = snap.data()?.locationRegistry as Record<string, string> | undefined;
-      if (!registry || Object.keys(registry).length === 0) {
-        throw new Error('locationRegistry not persisted to story doc after pagination');
-      }
-      return `${Object.keys(registry).length} location(s): ${Object.keys(registry).join(', ')}`;
-    }));
-
-    // ── Test 3: single page image generation ──────────────────────────────
-    results.push(await runTest('single_page_image', async () => {
-      if (!firstTextPageId) {
-        throw new Error('No text page available — pagination test may have failed');
-      }
-
-      const imageResult = await storyImageFlow({
-        storyId,
-        pageId: firstTextPageId,
-        storybookId,
-        forceRegenerate: true,
-      });
-
-      if (!imageResult.ok) {
-        throw new Error(imageResult.errorMessage ?? 'storyImageFlow returned ok:false');
-      }
-
-      // Capture storage path for cleanup
-      const pageSnap = await storybookRef.collection('pages').doc(firstTextPageId).get();
-      const storagePath = pageSnap.data()?.imageMetadata?.storagePath as string | undefined;
-      if (storagePath) storagePathsToDelete.push(storagePath);
-
-      return `Page ${firstTextPageId} image ready — ${imageResult.imageUrl?.slice(0, 60)}…`;
-    }));
-
+    // ── Test 3: the cover picture ─────────────────────────────────────────
+    results.push(
+      await runTest('cover_image', async () => {
+        const cover = (await db.collection('books').doc(bookId!).collection('pages').doc('1').get()).data();
+        if (!cover?.artUrl) throw new Error(`Cover has no picture (art job ${cover?.artJob?.status ?? 'missing'})`);
+        return `Cover ready — ${String(cover.artUrl).slice(0, 60)}…`;
+      })
+    );
+  } catch (e: any) {
+    results.push({ name: 'setup', pass: false, message: e?.message ?? String(e), durationMs: Date.now() - overallStart });
   } finally {
-    // ── Cleanup: Firestore ─────────────────────────────────────────────────
-    const cleanup = async (label: string, fn: () => Promise<void>) => {
-      try { await fn(); } catch (e: any) {
+    const cleanup = async (label: string, fn: () => Promise<unknown>) => {
+      try {
+        await fn();
+      } catch (e: any) {
         console.error(`[system-test] Cleanup failed for ${label}:`, e?.message);
       }
     };
-
-    await cleanup('pages', async () => {
-      const snap = await firestore
-        .collection('stories').doc(storyId)
-        .collection('storybooks').doc(storybookId)
-        .collection('pages').get();
-      const batch = firestore.batch();
-      snap.docs.forEach(d => batch.delete(d.ref));
-      await batch.commit();
+    if (bookId) await cleanup('book', () => db.recursiveDelete(db.collection('books').doc(bookId!)));
+    if (manuscriptId) await cleanup('manuscript', () => db.recursiveDelete(db.collection('manuscripts').doc(manuscriptId!)));
+    await cleanup('jobs', async () => {
+      const jobs = await db.collection('jobs').where('ownerUid', '==', ownerUid).get();
+      await Promise.all(jobs.docs.map((d) => d.ref.delete()));
     });
-
-    await cleanup('storybook', async () => {
-      await storyRef.collection('storybooks').doc(storybookId).delete();
-    });
-    await cleanup('story', async () => { await storyRef.delete(); });
-    await cleanup('child', async () => { await childRef.delete(); });
-
-    // ── Cleanup: Storage (generated images) ───────────────────────────────
-    for (const path of storagePathsToDelete) {
-      await cleanup(`storage:${path}`, async () => { await deleteStorageObject(path); });
-    }
+    await cleanup('ledger', () => db.recursiveDelete(db.collection('entitlementLedgers').doc(ownerUid)));
+    await cleanup('story', () => storyRef.delete());
+    await cleanup('child', () => childRef.delete());
+    if (bookId) await cleanup('storage', async () => (await getStoryBucket()).deleteFiles({ prefix: `books/${bookId}/` }));
   }
 
-  const allPassed = results.every(r => r.pass);
-  const totalDurationMs = Date.now() - overallStart;
-
+  const allPassed = results.every((r) => r.pass);
   return NextResponse.json(
-    { ok: allPassed, results, totalDurationMs, timestamp },
+    { ok: allPassed, results, totalDurationMs: Date.now() - overallStart, timestamp },
     { status: allPassed ? 200 : 500 }
   );
 }

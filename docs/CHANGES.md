@@ -36,6 +36,25 @@
 
 ### 2026-10-29
 
+#### `#14` - Phase 5.2: Books in the web and kids apps; delete old storybook generation
+
+**Type**: Feature / Removal
+
+**Summary**: The web app and kids PWA now make books through `POST /api/books`. The child picks a Form and a Style, and the server runs the pipeline. They watch Book progress through read-only listeners and read Books at `/books/[id]` and `/kids/book/[id]`. Parents can retry pages and lock or unlock Books behind the PIN guard. Lists use the server's status only.
+
+Deleted: the `storybookV2` routes, `/api/storyPagination`, `/api/storyBook/pageAudio`, and the five old generation flows, along with the client-side orchestration and legacy pages. Old storybooks stay readable and printable for parents. Accepted gaps: new Books can't be printed yet, and mobile book creation is off. The E2E funnel now runs the new pipeline.
+
+**Created files**:
+- `src/lib/books/**`, `src/hooks/use-books.ts`, `src/components/books/**`, `src/app/books/[bookId]/page.tsx`, `src/app/kids/book/[bookId]/page.tsx`, `docs/architecture/target/slices/5.2-book-clients.md`
+
+**Deleted files**:
+- `src/app/api/storybookV2/**`, `src/app/api/storyPagination/**`, `src/app/api/storyBook/pageAudio/**`, the five old flows, the admin pagination test page, the legacy session generating, compiled and select-image-style pages, and the kids generating and read pages
+
+**Modified files**:
+- Web/kids creation and list pages, `packages/api-client`, mobile story screen, `e2e/**`, `scripts/start-e2e-server.mjs`, `tests/firestore-rules/check-rules.mjs`, `src/app/api/internal/system-test`, `docs/API.md`, `docs/SCHEMA.md`, `docs/SYSTEM_DESIGN.md`, `docs/testing/e2e.md`, `docs/architecture/**`, `docs/CHANGES.md`
+
+---
+
 #### `#13` - Phase 5.1: Manuscript → Book pipeline (server side)
 
 **Type**: Architecture / Feature (server only)

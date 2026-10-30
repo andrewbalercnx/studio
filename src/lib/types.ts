@@ -749,7 +749,7 @@ export type StoryOutputPage = {
     };
     regressionTag?: string;
     regressionTest?: boolean;
-    // Parent per-page editing (Sprint W2-C) — set by POST /api/storybookV2/pageEdit
+    // Parent per-page editing (Sprint W2-C) — written by the former storybookV2 pageEdit route (legacy data)
     /** Server timestamp of the last parent edit to this page's text/prompt. */
     lastEditedAt?: any;
     /** UID of the user who last edited this page. */
