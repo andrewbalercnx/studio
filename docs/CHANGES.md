@@ -30,6 +30,9 @@
 - `retryFinish` (`POST /api/stories/{id}/finish`) on a `finishing` story re-dispatches its job if it is still `queued` (same run and idempotency key, so no duplicate work or charge). The play screen calls it every 45 s while finishing, so a lost dispatch recovers by itself; this also unsticks stories caught by this bug.
 - Test: a lost finish dispatch is recovered by a retry (`finish.test.ts`).
 - Docs: `DEPLOYMENT.md` §9.3.
+
+---
+
 #### `#19` - Faster story turns, mode icons, dancing avatar
 
 **Type**: Bug fix
