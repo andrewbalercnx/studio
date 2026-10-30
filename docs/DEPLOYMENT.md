@@ -1,6 +1,6 @@
 # Deployment Runbook — Staged Rollout, Feature Flags, Rollback
 
-> **Last Updated**: 2026-10-29 (Phase 5.4: §10 deploy order — export config → deploy app and rules → reset trial data. Phase 5.3: trial-data reset script, §10, run with slice 5.4. Phase 5.1: Cloud Tasks for the job runner, §9)
+> **Last Updated**: 2026-10-30 (§9.3: Cloud Tasks client kept external to the bundle; stuck finishing recovers). 2026-10-29 (Phase 5.4: §10 deploy order — export config → deploy app and rules → reset trial data. Phase 5.3: trial-data reset script, §10, run with slice 5.4. Phase 5.1: Cloud Tasks for the job runner, §9)
 >
 > This document supersedes `docs/DEPLOYMENT_ROLLOUT.md` (the original design
 > sketch). It covers: what deploys today, the staged-rollout machinery this
@@ -388,7 +388,16 @@ After the deploy, a Book created through `POST /api/books` should move from
 `illustrating` to `ready`. In the console: Cloud Tasks → queues show dispatches;
 Firestore `jobs` documents move `queued → running → succeeded`. A job stuck in
 `queued` means dispatch failed: check the app logs for `[jobs] Failed to
-dispatch` (usually a missing queue or IAM binding).
+dispatch` (usually a missing queue or IAM binding; `Cannot find module` means
+the Cloud Tasks client was bundled, see below). A story stuck in `finishing`
+recovers by itself: the play screen asks `POST /api/stories/{id}/finish` every
+45 s, which re-dispatches a finish job that is still `queued`.
+
+The Cloud Tasks client (`@google-cloud/tasks`, `google-gax`) must stay in
+`serverExternalPackages` in `next.config.ts`, with its JSON files in
+`outputFileTracingIncludes`: it loads them through computed requires that the
+bundler and file tracing cannot follow. CI's `scripts/check-standalone-runtime.mjs`
+loads it from `.next/standalone` after every build.
 
 ---
 

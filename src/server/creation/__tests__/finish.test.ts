@@ -70,6 +70,25 @@ describe('story.finish', () => {
     expect(await retryFinish(bench.services, p1, storyId)).toEqual({ storyId, status: 'complete' });
   });
 
+  it('re-dispatches a finish job whose dispatch was lost, without a new job or run', async () => {
+    const created = await createStory(bench.services, p1, { childId: 'c1', modeId: 'guided', idempotencyKey: key() });
+    await submitTurn(bench.services, p1, created.storyId, { input: { kind: 'choice', optionId: 'A' }, idempotencyKey: key() });
+    bench.finishTestMode.on = true;
+    // The queue cannot be reached when the story moves to finishing.
+    vi.spyOn(bench.dispatcher, 'dispatch').mockRejectedValueOnce(new Error('Cannot find module'));
+    await submitTurn(bench.services, p1, created.storyId, { input: { kind: 'choice', optionId: 'B' }, idempotencyKey: key() });
+    await bench.drain();
+    const stuck = await stories.using(bench.db).require(created.storyId);
+    expect(stuck).toMatchObject({ status: 'finishing', finishRuns: 1 });
+    expect(await jobs.using(bench.db).require(stuck.finishJobId!)).toMatchObject({ status: 'queued' });
+
+    expect(await retryFinish(bench.services, p1, created.storyId)).toEqual({ storyId: created.storyId, status: 'finishing' });
+    await bench.drain();
+    const done = await stories.using(bench.db).require(created.storyId);
+    expect(done).toMatchObject({ status: 'complete', finishRuns: 1, finishJobId: stuck.finishJobId });
+    expect(await ledgerUsed(bench.db)).toBe(1);
+  });
+
   it('a permanent failure fails at once', async () => {
     const storyId = await storyAtFinishing(false);
     bench.ai.respond('story.finish.synopsis', new Error('400 INVALID_ARGUMENT'));

@@ -39,6 +39,7 @@ import { cn } from '@/lib/utils';
 
 /** Modes whose engine also takes a typed idea where it offers choices. */
 const FREE_TEXT_MODES = new Set(['freeplay', 'guided']);
+const FINISH_NUDGE_MS = 45_000;
 const EMOJIS = ['🌟', '🦄', '🏰', '🎭', '✨', '🐉', '🚀', '🌈'];
 
 export type StoryPlayProps = {
@@ -99,6 +100,16 @@ export function StoryPlay({ storyId, child, homeHref, onComplete }: StoryPlayPro
       onComplete(storyId);
     }
   }, [status, storyId, story?.modeId, story?.turnCount, onComplete]);
+
+  // Finishing normally takes seconds. If it is still going after a while, nudge the
+  // server: it re-sends the finish job if that job never reached the queue.
+  useEffect(() => {
+    if (status !== 'finishing') return;
+    const timer = setInterval(() => {
+      retryFinish(storyId).catch((err) => console.warn('[StoryPlay] Finish nudge failed', err));
+    }, FINISH_NUDGE_MS);
+    return () => clearInterval(timer);
+  }, [status, storyId]);
 
   const submit = async (promptIndex: number, input: ChildInput) => {
     setError(null);

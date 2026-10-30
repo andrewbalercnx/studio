@@ -5,7 +5,8 @@
  *   createStory   POST /api/stories                 child + mode + allowance check → Story + first turn
  *   submitTurn    POST /api/stories/{id}/turns      input → reply (or done → finishing + story.finish)
  *   abandonStory  POST /api/stories/{id}/abandon
- *   retryFinish   POST /api/stories/{id}/finish     failed → finishing (new story.finish job)
+ *   retryFinish   POST /api/stories/{id}/finish     failed → finishing (new story.finish job);
+ *                                                     finishing → re-dispatch its job if still queued
  *
  * Concurrency of turns: a turn is claimed in a transaction keyed by the
  * request's idempotency key (`Story.pendingTurn`, with a lease), the engine
@@ -564,7 +565,13 @@ export async function retryFinish(deps: CreationServiceDeps, user: VerifiedUser,
   await loadOwnedStory(deps.db, user, storyId);
   const outcome = await deps.db.runTransaction(async (tx) => {
     const story = await repo.requireIn(tx, storyId);
-    if (story.status === 'finishing' || story.status === 'complete') return { status: story.status, pending: null };
+    if (story.status === 'complete') return { status: story.status, pending: null };
+    if (story.status === 'finishing') {
+      // Same run, same idempotency key: no new job. A job still `queued` (its
+      // dispatch was lost) is dispatched again; a running or finished one is left alone.
+      const pending = await deps.runner.enqueueInTransaction(tx, [finishSpec({ id: storyId, ownerUid: story.ownerUid }, story.finishRuns)]);
+      return { status: story.status, pending };
+    }
     if (story.status !== 'failed') {
       throw new ConflictError('Only a story that failed to finish can be retried', { code: 'STORY_NOT_FAILED', details: { status: story.status } });
     }

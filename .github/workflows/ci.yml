@@ -133,6 +133,11 @@ jobs:
       - name: Build app (E2E config — emulator client flags baked in)
         run: npm run build:e2e
 
+      # E2E runs jobs in-process, so it never loads the Cloud Tasks client that
+      # production uses; load it from the standalone output App Hosting deploys.
+      - name: Standalone runtime check
+        run: node scripts/check-standalone-runtime.mjs
+
       - name: Start Firebase emulators
         run: |
           npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} emulators:start \
