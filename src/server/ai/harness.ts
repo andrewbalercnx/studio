@@ -128,6 +128,17 @@ export type AICallOptions = {
 export type AICallResult<T> = { result: T; model: ResolvedModel; attempts: number };
 
 /** Thrown when an image call returns no image; retried like a transient error. */
+/**
+ * Gemini 3 thinks at length unless told otherwise, and thinking tokens count
+ * against maxOutputTokens: a 50-token title call could spend them all thinking.
+ * Every text purpose here is either a child waiting or a short summary, so text
+ * calls default to a low thinking level; a caller can still pass its own.
+ */
+export function withThinkingDefault(model: string, config: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!/(^|\/)gemini-3/.test(model) || config?.thinkingConfig) return config;
+  return { ...config, thinkingConfig: { thinkingLevel: 'LOW' } };
+}
+
 export class NoImageReturnedError extends Error {
   readonly code = 'NO_IMAGE_RETURNED';
   constructor(textPreview: string) {
@@ -240,7 +251,7 @@ export class AIHarness {
           system: options.system,
           messages: options.messages,
           output: options.output,
-          config: options.config,
+          config: withThinkingDefault(resolved.model, options.config),
         }),
     });
     return {
