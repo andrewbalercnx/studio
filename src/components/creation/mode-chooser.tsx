@@ -43,17 +43,19 @@ function ModeIcon({ iconName, className }: { iconName: string | null; className?
 }
 
 function ModeCard({ mode, onClick, disabled }: { mode: CreationModeView; onClick: () => void; disabled?: boolean }) {
-  const gradient = mode.gradient || 'bg-gradient-to-br from-amber-400 to-orange-500';
+  // The mode's stored gradient is a pale card background ('from-purple-50 to-pink-50'),
+  // not a tile colour: as the tile it left the white icon on white.
+  const cardBackground = mode.gradient ? `bg-gradient-to-br ${mode.gradient}` : 'bg-white';
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       data-testid="mode-card"
       data-mode-id={mode.modeId}
-      className="w-full text-left p-6 rounded-3xl bg-white border-2 border-amber-200 hover:border-amber-400 hover:shadow-xl active:scale-98 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+      className={`w-full text-left p-6 rounded-3xl bg-white ${cardBackground} border-2 border-amber-200 hover:border-amber-400 hover:shadow-xl active:scale-98 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
     >
       <div className="flex items-center gap-4">
-        <div className={`flex-shrink-0 w-16 h-16 rounded-2xl ${gradient} flex items-center justify-center shadow-lg`}>
+        <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg">
           <ModeIcon iconName={mode.icon} className="h-8 w-8 text-white" />
         </div>
         <div className="flex-1">

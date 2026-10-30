@@ -153,3 +153,17 @@ describe('AIHarness.call', () => {
     expect(providers).toEqual(['elevenlabs-tts']);
   });
 });
+
+describe('withThinkingDefault', () => {
+  it('asks Gemini 3 text models for low thinking unless the caller set it', async () => {
+    const { withThinkingDefault } = await import('../harness');
+    expect(withThinkingDefault('googleai/gemini-3.8-flash', { temperature: 0.3 })).toEqual({
+      temperature: 0.3,
+      thinkingConfig: { thinkingLevel: 'LOW' },
+    });
+    expect(withThinkingDefault('googleai/gemini-3.8-flash', { thinkingConfig: { thinkingLevel: 'HIGH' } })).toEqual({
+      thinkingConfig: { thinkingLevel: 'HIGH' },
+    });
+    expect(withThinkingDefault('googleai/other-model', undefined)).toBeUndefined();
+  });
+});

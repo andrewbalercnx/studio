@@ -145,10 +145,10 @@ function finishHandler(getDeps: () => Promise<FinishDeps>): JobDefinition['run']
             prompt,
             config,
           });
-        synopsis = tidySynopsis((await call('story.finish.synopsis', synopsisPrompt(readable), { temperature: 0.3, maxOutputTokens: 200 })).text ?? '');
+        synopsis = tidySynopsis((await call('story.finish.synopsis', synopsisPrompt(readable), { temperature: 0.3, maxOutputTokens: 1024 })).text ?? '');
         title = story.titleHint
           ? story.titleHint
-          : tidyTitle((await call('story.finish.title', titlePrompt(synopsis, family.childAge), { temperature: 0.8, maxOutputTokens: 50 })).text ?? '');
+          : tidyTitle((await call('story.finish.title', titlePrompt(synopsis, family.childAge), { temperature: 0.8, maxOutputTokens: 1024 })).text ?? '');
       }
     } catch (error) {
       if (isFinalAttempt(ctx.job, error)) await failStory(ctx.db, storyId, error);
