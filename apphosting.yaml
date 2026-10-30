@@ -116,8 +116,9 @@ env:
     availability:
       - RUNTIME
 
+  # Cloud Tasks has no europe-west4 (the backend's region); europe-west1 is nearest.
   - variable: JOBS_TASKS_LOCATION
-    value: "us-central1"
+    value: "europe-west1"
     availability:
       - RUNTIME
 

@@ -365,7 +365,7 @@ accepts only an OIDC token whose audience is `JOBS_OIDC_AUDIENCE` (default `JOBS
 whose email is `JOBS_INVOKER_SERVICE_ACCOUNT`; without that configuration it rejects every call.
 
 **Configuration**: `apphosting.yaml` sets `JOBS_DISPATCHER=cloud-tasks`, `JOBS_TASKS_PROJECT`,
-`JOBS_TASKS_LOCATION` (`us-central1`), `JOBS_RUN_URL` and `JOBS_INVOKER_SERVICE_ACCOUNT`
+`JOBS_TASKS_LOCATION` (`europe-west1`; Cloud Tasks has no europe-west4, where the backend runs), `JOBS_RUN_URL` and `JOBS_INVOKER_SERVICE_ACCOUNT`
 (`JOBS_QUEUE_PREFIX`, `JOBS_OIDC_AUDIENCE` unset). The queues (`ai-text`, `ai-image`, `tts`,
 `render`, `mixam`), the invoker service account and its IAM bindings are created by
 `scripts/setup-cloud-tasks.sh`, run once by the owner (`docs/DEPLOYMENT.md` §9). Locally and in
