@@ -23,6 +23,8 @@ writes.
 | [`pipeline.md`](pipeline.md) | Jobs, the status vocabulary, orchestration, state machines for Story, Manuscript, Book, PrintOrder, Likeness |
 | [`creation.md`](creation.md) | The five creation modes, the engine interface, the three creation routes |
 | [`adr/`](adr/) | One record per decision |
+| [`foundations.md`](foundations.md) | Phase 4: the server modules every slice is built on |
+| [`slices/5.1-book-server.md`](slices/5.1-book-server.md) | Phase 5.1: the Book pipeline on the server; catalogue mapping; decisions where the docs were silent |
 
 ## Decisions
 

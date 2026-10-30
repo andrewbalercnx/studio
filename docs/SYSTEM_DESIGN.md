@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
+> **Last Updated**: 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes — present, UI still on storybookV2 (§12); Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -117,6 +117,10 @@ warmup → story (beats 0-N) → ending → final/completed
 6. `/api/storyCompile` creates final story text
 
 ### 3. Storybook Generation Pipeline
+
+> Every client (web, kids PWA, mobile) still uses this `storybookV2` pipeline. Its server-side
+> replacement (Story → Manuscript → Book on jobs) exists alongside it, unused by the UI: see §12.
+> Slice 5.2 moves the clients and deletes this one.
 
 ```
 Story → Pages → Exemplars + Audio (parallel) → Images → Finalization
@@ -363,40 +367,82 @@ the activation funnel is untouched; suppression lives server-side so prompt-fati
 change without client updates; status mapping lives server-side so new Mixam states never
 require a client release.
 
-### 11. Server Foundations (`src/server`) — present, not yet used by product flows
+### 11. Server Foundations (`src/server`)
 
 Phase 4 of the architecture rebuild (`docs/architecture/REVIEW_PLAN.md`) added the modules the
-rebuilt slices are built on. **No existing route, flow or page uses them yet**; everything
-described in sections 1–10 still runs on the code it always did. How a Phase 5 slice uses each
-module is in [`architecture/target/foundations.md`](architecture/target/foundations.md).
+rebuilt slices are built on. The first user is the server-side Book pipeline (§12); everything in
+sections 1–10 still runs on the code it always did. How a slice uses each module is in
+[`architecture/target/foundations.md`](architecture/target/foundations.md).
 
 | Module | What it is |
 |--------|------------|
-| `src/server/errors.ts` | Typed errors (`BadRequest` 400, `Unauthenticated` 401, `Forbidden` 403, `NotFound` 404, `Conflict` 409, `DataIntegrity` 500) shared by all modules |
+| `src/server/errors.ts` | Typed errors (`BadRequest` 400, `Unauthenticated` 401, `PaymentRequired` 402, `Forbidden` 403, `NotFound` 404, `Conflict` 409, `DataIntegrity` 500) shared by all modules |
 | `src/server/http` | `withRoute({ auth: 'public' \| 'user' \| 'admin' \| 'internal', body })`: verifies the Firebase ID token from the `Authorization` header only (no `?idToken=`), or a Cloud Tasks OIDC token for `internal`; validates the body with zod; maps errors to one envelope (`{ ok: true, data }` / `{ ok: false, error: { code, message, details? } }`). Ownership helpers `assertOwner` / `loadOwned` check `ownerUid` (admin/writer exempt) and the child-persona scope |
-| `src/server/data` | Repositories over the **target** collections (`jobs`, `stories`, `manuscripts` + `pages`, `books` + `pages` / `castSheets` / `renders`). Reads are parsed with zod (malformed docs throw `DataIntegrityError`), writes are validated and stamped with `createdAt` / `updatedAt`. The collections are not created or populated yet |
-| `src/server/jobs` | The job runner (ADR-0002/0003): `JobRegistry` (kind → handler, queue group), `enqueue` (job id derived from the idempotency key), `runJob` (transactional lease, retry with backoff up to `maxAttempts`, fan-in to the coordinator job), and two dispatchers: in-process (default) and Cloud Tasks (`JOBS_DISPATCHER=cloud-tasks`). No job kinds are registered yet |
+| `src/server/data` | Repositories over the **target** collections (`jobs`, `stories`, `manuscripts` + `pages`, `books` + `pages` / `castSheets` / `renders`). Reads are parsed with zod (malformed docs throw `DataIntegrityError`), writes are validated and stamped with `createdAt` / `updatedAt` |
+| `src/server/jobs` | The job runner (ADR-0002/0003): `JobRegistry` (kind → handler, queue group; kinds registered in `kinds.ts`), `enqueue` (job id derived from the idempotency key), `runJob` (transactional lease, retry with backoff up to `maxAttempts`, fan-in to the coordinator job), and two dispatchers: in-process (default) and Cloud Tasks (`JOBS_DISPATCHER=cloud-tasks`) |
 | `src/server/ai` | The AI harness (ADR-0008): `AIModelRegistry` resolves a model by purpose from `config/aiModels` (30 s cache) with code defaults equal to today's flow models; `aiCall` / `aiGenerateText` / `aiGenerateImage` add the shared circuit breaker + retry (`ai-circuit-breaker.server.ts`) and one `aiFlowLogs` entry per call when `systemConfig/diagnostics.enableAIFlowLogging` is on |
 | `src/server/config` | `ConfigService`: one typed loader with one cache (60 s default TTL), schema validation, in-flight read sharing and explicit `invalidate()`, replacing the per-file `*-config.server.ts` pattern for new code |
+| `src/server/catalog` | Form, Style and Layout in target shapes, read from today's `storyOutputTypes`, `imageStyles` and `printLayouts` until config is re-seeded under the target names |
 
 **Internal job route**: `POST /api/internal/jobs/run` (`withRoute({ auth: 'internal' })`)
 accepts only an OIDC token whose audience is `JOBS_OIDC_AUDIENCE` (default `JOBS_RUN_URL`) and
-whose email is `JOBS_INVOKER_SERVICE_ACCOUNT`; without that configuration it rejects every
-call. With no job kinds registered it has nothing to run.
+whose email is `JOBS_INVOKER_SERVICE_ACCOUNT`; without that configuration it rejects every call.
 
-**Configuration (env, none set in `apphosting.yaml` yet)**: `JOBS_DISPATCHER`
-(`in-process` | `cloud-tasks`), `JOBS_TASKS_PROJECT`, `JOBS_TASKS_LOCATION` (default
-`us-central1`), `JOBS_QUEUE_PREFIX`, `JOBS_RUN_URL`, `JOBS_INVOKER_SERVICE_ACCOUNT`,
-`JOBS_OIDC_AUDIENCE`. The Cloud Tasks queues (`ai-text`, `ai-image`, `tts`, `render`, `mixam`)
-and the invoker IAM binding do not exist yet; they are created with the first slice that
-registers a job kind.
+**Configuration**: `apphosting.yaml` sets `JOBS_DISPATCHER=cloud-tasks`, `JOBS_TASKS_PROJECT`,
+`JOBS_TASKS_LOCATION` (`europe-west1`; Cloud Tasks has no europe-west4, where the backend runs), `JOBS_RUN_URL` and `JOBS_INVOKER_SERVICE_ACCOUNT`
+(`JOBS_QUEUE_PREFIX`, `JOBS_OIDC_AUDIENCE` unset). The queues (`ai-text`, `ai-image`, `tts`,
+`render`, `mixam`), the invoker service account and its IAM bindings are created by
+`scripts/setup-cloud-tasks.sh`, run once by the owner (`docs/DEPLOYMENT.md` §9). Locally and in
+tests the in-process dispatcher runs jobs in the same process.
 
 **Lint guard**: `eslint.config.mjs` forbids importing `@/server/*` or `@/ai/flows/*` from
 `src/components`, `src/hooks`, `src/contexts` and `src/app/**/page.tsx` / `layout.tsx`.
 
 **Rationale**: the rebuild replaces browser-driven, per-flow plumbing with one route guard, one
-data access path with schemas, one job model and one AI harness. Landing them first, unused and
-unit-tested, lets each Phase 5 slice move onto them and delete its old code in the same PR.
+data access path with schemas, one job model and one AI harness, so each Phase 5 slice can move
+onto them and delete its old code.
+
+### 12. Server-side Book pipeline (Story → Manuscript → Book) — present, not yet used by the UI
+
+Slice 5.1 of the rebuild (ADR-0001; [`architecture/target/slices/5.1-book-server.md`](architecture/target/slices/5.1-book-server.md)).
+It takes today's `stories/{storyId}` document as the Story and produces:
+
+```
+POST /api/manuscripts | POST /api/books        (withRoute, owner + persona, one transaction each)
+   │ Manuscript (status paginating)              Book (illustrating) + pages; allowance charged
+   ▼
+manuscript.paginate (ai-text) ─ ready ─┬─▶ manuscript.narrate × pages (tts) → pages.narrationUrl
+                                       └─▶ book.prepareCast (for each Book waiting)
+book.prepareCast ─▶ book.castSheet × cast (ai-image) ─ fan-in ─▶ book.illustrate
+book.illustrate  ─▶ book.pageArt × pages (ai-image)  ─ fan-in ─▶ Book ready | partial | failed
+POST /api/books/{id}/pages/{n}/retry → a new book.illustrate for that page
+POST /api/books/{id}/lock | /unlock (unlock runs bookUnlockHooks: share-link revocation seam)
+```
+
+- **Server-driven**: every step is a Job on Cloud Tasks; closing the browser changes nothing. The
+  browser reads `manuscripts`, `books` and `jobs` (own documents) for progress; only the server
+  writes (rules: owner read, admin write).
+- **Manuscript** (`src/server/books/pagination.ts`): one model call (`manuscript.text` purpose)
+  with today's loose schema, 3 temperatures for degenerate output, deterministic scene repair and
+  continuity, fitted to exactly the chosen length (picture books 12, 16 or 24). Page text is stored
+  with names resolved; `scene.presentCast` lists cast ids so prompts never scrape text.
+- **Cast and likeness** (`cast.ts`): the child and `story.actors`, looked up only inside the
+  owner's family. Cast sheets are drawn from `canonicalImageUrl` (the portrait), else original
+  photos, else the `imageDescription` text (from original photos, CLAUDE.md rule); `avatarUrl` and
+  placeholder images are never a likeness.
+- **Art** (`jobs.ts`, `art-prompts.ts`): page prompts from the scene, the present cast's sheets
+  and the Style's scene reference / example images; each job attempt simplifies the prompt (style
+  images dropped, then all images), as today's flow did within one request.
+- **Files** are stored per Book (or Manuscript) and per job attempt, so two Books never collide and
+  a retry never overwrites a referenced file.
+- **TEST_MODE** (`isTestMode()`): every handler writes fixtures (text split deterministically,
+  `TEST_MODE_IMAGE_DATA_URL`, `TEST_MODE_AUDIO_DATA_URL`) without AI or TTS, so the pipeline runs
+  end to end in the emulator with the in-process dispatcher.
+- **Allowance**: `storybook_allowance` is consumed in the transaction that creates the Book, with
+  the ledger semantics of `src/lib/entitlements` (free tier, child pool then family).
+
+**Not yet**: the UI, print and mobile still use `storybookV2` (§3); slice 5.2 moves them and deletes
+the old pipeline. No `book.render` (screen reading uses Book pages; the print slice adds renders).
 
 ---
 
@@ -804,6 +850,8 @@ The project uses npm workspaces to share code between the web app and future mob
 | Route wrapper (rebuild) | `src/server/http/with-route.ts` |
 | Repositories + schemas (rebuild) | `src/server/data/` |
 | Job runner (rebuild) | `src/server/jobs/runner.ts` |
+| Book pipeline (rebuild) | `src/server/books/` (services, job kinds), `src/server/catalog/`, `src/app/api/manuscripts`, `src/app/api/books` |
+| Cloud Tasks setup | `scripts/setup-cloud-tasks.sh` |
 | AI harness (rebuild) | `src/server/ai/harness.ts` |
 
 ---

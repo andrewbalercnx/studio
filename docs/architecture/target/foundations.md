@@ -12,6 +12,8 @@ src/server/
   jobs/              JobRegistry, JobRunner, in-process and Cloud Tasks dispatchers
   ai/                AIModelRegistry (purpose → model), AIHarness (aiCall / aiGenerateText / aiGenerateImage)
   config/            ConfigService (one typed loader, one cache)
+  catalog/           Form, Style, Layout in target shapes (read from today's collections)
+  books/             slice 5.1: the Book pipeline (services, job kinds) — see slices/5.1-book-server.md
   testing/           FakeFirestore for unit tests
 ```
 
@@ -87,14 +89,17 @@ await db.runTransaction(async (tx) => {
   with the path and the zod issues). Fix the data or the schema; never widen to `any`.
 - `update` takes top-level fields only (no dotted paths); `FieldValue` sentinels pass through.
 - Tests bind a repository to a fake or the emulator: `books.using(new FakeFirestore().asFirestore())`.
+- `replaceIn(tx, id, data)` creates or fully replaces a document (validated like `create`), for
+  handlers that rewrite the same document when retried.
 - Child and Character repositories are added by the Characters slice (they embed
   `likenessSchema`). Story turns are added by the creation slice.
 
 ## 3. Jobs
 
-A slice registers its job kinds on `jobRegistry` (`src/server/jobs/index.ts`; put the
-registrations in `src/server/jobs/kinds.ts` and import it there) and enqueues jobs from its
-services.
+A slice registers its job kinds in `src/server/jobs/kinds.ts` (`registerJobKinds`, called when
+`jobRegistry` is built in `src/server/jobs/index.ts`) and enqueues jobs from its services. Slice 5.1
+registers the Book pipeline there (`registerBookJobs`). Handlers import from `../jobs/registry` and
+`../jobs/runner`, not from `../jobs`, to avoid an import cycle.
 
 ```ts
 import { jobRegistry, JobFailure } from '@/server/jobs';
@@ -117,7 +122,7 @@ jobRegistry.register({
     await enqueueChildren(pages.map((p) => ({ kind: 'book.pageArt', ownerUid: job.ownerUid,
       target: { collection: 'books', id: bookId, subpath: `pages/${p}` }, input: { bookId, pageNumber: p } })));
   },
-  onChildrenComplete({ parent, children }) {        // pure: may re-run if the transaction retries
+  onChildrenComplete({ parent, children }) {        // also gets { tx, db } for reads; pure: may re-run if the transaction retries
     const failed = children.some((c) => c.status === 'failed');
     return {
       enqueue: [{ kind: 'book.render', ownerUid: parent.ownerUid, target: parent.target, input: { medium: 'screen' } }],

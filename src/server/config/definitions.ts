@@ -3,7 +3,7 @@
  * definitions here as it moves a `*-config.server.ts` loader onto the service.
  */
 import { z } from 'zod';
-import { DEFAULT_DIAGNOSTICS_CONFIG } from '@/lib/types';
+import { DEFAULT_DIAGNOSTICS_CONFIG, DEFAULT_PAGINATION_PROMPT } from '@/lib/types';
 import { defineConfig } from './config-service';
 
 /**
@@ -21,4 +21,27 @@ export const diagnosticsConfig = defineConfig({
     enableAIFlowLogging: DEFAULT_DIAGNOSTICS_CONFIG.enableAIFlowLogging,
     enableServerLogging: DEFAULT_DIAGNOSTICS_CONFIG.enableServerLogging,
   },
+});
+
+/**
+ * `systemConfig/paginationPrompt`: the admin-editable general pagination
+ * instructions. Read by `manuscript.paginate`; the old loader
+ * (src/lib/pagination-prompt-config.server.ts) stays for the storybookV2 code
+ * until slice 5.2 deletes it.
+ */
+export const paginationPromptConfig = defineConfig({
+  path: 'systemConfig/paginationPrompt',
+  schema: z.object({ paginationPrompt: z.string(), enabled: z.boolean() }),
+  defaults: { paginationPrompt: DEFAULT_PAGINATION_PROMPT, enabled: true },
+});
+
+/**
+ * `systemConfig/imagePrompt`: an optional global prefix for every page image.
+ * Used by `book.pageArt` only when `enabled` (same rule as the old loader,
+ * src/lib/image-prompt-config.server.ts, which stays until slice 5.2).
+ */
+export const imagePromptConfig = defineConfig({
+  path: 'systemConfig/imagePrompt',
+  schema: z.object({ imagePrompt: z.string(), enabled: z.boolean() }),
+  defaults: { imagePrompt: '', enabled: false },
 });

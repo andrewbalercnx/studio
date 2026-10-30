@@ -100,6 +100,39 @@ env:
     availability:
       - RUNTIME
 
+  # Server-side job runner (src/server/jobs, ADR-0002): jobs are delivered by
+  # Cloud Tasks to /api/internal/jobs/run with an OIDC token for the invoker
+  # service account. Created by scripts/setup-cloud-tasks.sh (see
+  # docs/DEPLOYMENT.md, "Cloud Tasks for the job runner") — run it BEFORE
+  # deploying with these values. Without JOBS_DISPATCHER=cloud-tasks, jobs run
+  # in-process and die with the instance.
+  - variable: JOBS_DISPATCHER
+    value: "cloud-tasks"
+    availability:
+      - RUNTIME
+
+  - variable: JOBS_TASKS_PROJECT
+    value: "studio-6508342045-13669"
+    availability:
+      - RUNTIME
+
+  # Cloud Tasks has no europe-west4 (the backend's region); europe-west1 is nearest.
+  - variable: JOBS_TASKS_LOCATION
+    value: "europe-west1"
+    availability:
+      - RUNTIME
+
+  # Also the OIDC audience the job route checks (JOBS_OIDC_AUDIENCE unset).
+  - variable: JOBS_RUN_URL
+    value: "https://storypic.rcnx.io/api/internal/jobs/run"
+    availability:
+      - RUNTIME
+
+  - variable: JOBS_INVOKER_SERVICE_ACCOUNT
+    value: "storypic-jobs-invoker@studio-6508342045-13669.iam.gserviceaccount.com"
+    availability:
+      - RUNTIME
+
   # Enable server-side log buffer surfaced in /api/healthz as recentLogs.
   # Remove this entry when no longer needed.
   - variable: ENABLE_DEV_LOGS

@@ -12,7 +12,7 @@
  */
 import { initializeApp } from 'firebase/app';
 import {
-  getFirestore, connectFirestoreEmulator, doc, setDoc, updateDoc, getDoc, addDoc, collection, serverTimestamp,
+  getFirestore, connectFirestoreEmulator, doc, setDoc, updateDoc, getDoc, getDocs, addDoc, collection, query, where, serverTimestamp,
 } from 'firebase/firestore';
 
 const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080').split(':');
@@ -115,6 +115,40 @@ await check('create print storybook with PDF', 'deny', () => setDoc(doc(parent, 
   ownerUserId: 'p1', storyId: 's1', pdfStatus: 'draft', coverPdfUrl: 'https://example.com/x.pdf',
 }));
 await check('update own print storybook', 'deny', () => updateDoc(doc(parent, 'printStoryBooks', 'pb1'), { pdfStatus: 'ready' }));
+
+// manuscripts, books, jobs (Phase 5): owner reads; only the server (Admin SDK) and admins write.
+await setDoc(doc(admin, 'manuscripts', 'm1'), { ownerUid: 'p1', storyId: 's1', status: 'ready' });
+await setDoc(doc(admin, 'manuscripts', 'm1', 'pages', '1'), { ownerUid: 'p1', pageNumber: 1, text: 'Once' });
+await setDoc(doc(admin, 'manuscripts', 'm2'), { ownerUid: 'p2', storyId: 's2', status: 'ready' });
+await setDoc(doc(admin, 'books', 'k1'), { ownerUid: 'p1', manuscriptId: 'm1', status: 'illustrating' });
+await setDoc(doc(admin, 'books', 'k1', 'pages', '1'), { ownerUid: 'p1', pageNumber: 1, kind: 'cover', artUrl: null });
+await setDoc(doc(admin, 'books', 'k1', 'castSheets', 'c1'), { ownerUid: 'p1', castId: 'c1', imageUrl: null });
+await setDoc(doc(admin, 'books', 'k2'), { ownerUid: 'p2', manuscriptId: 'm2', status: 'ready' });
+await setDoc(doc(admin, 'books', 'k2', 'pages', '1'), { ownerUid: 'p2', pageNumber: 1, kind: 'cover' });
+await setDoc(doc(admin, 'jobs', 'j1'), { ownerUid: 'p1', kind: 'book.pageArt', status: 'running' });
+await setDoc(doc(admin, 'jobs', 'j2'), { ownerUid: 'p2', kind: 'book.pageArt', status: 'running' });
+
+await check('read own manuscript', 'allow', () => getDoc(doc(parent, 'manuscripts', 'm1')));
+await check('read own manuscript page', 'allow', () => getDoc(doc(parent, 'manuscripts', 'm1', 'pages', '1')));
+await check("read another family's manuscript", 'deny', () => getDoc(doc(parent, 'manuscripts', 'm2')));
+await check('create manuscript', 'deny', () => setDoc(doc(parent, 'manuscripts', 'm3'), { ownerUid: 'p1', status: 'ready' }));
+await check('update own manuscript', 'deny', () => updateDoc(doc(parent, 'manuscripts', 'm1'), { status: 'failed' }));
+await check('write own manuscript page', 'deny', () => updateDoc(doc(parent, 'manuscripts', 'm1', 'pages', '1'), { text: 'x' }));
+await check('read own book', 'allow', () => getDoc(doc(parent, 'books', 'k1')));
+await check('list own books', 'allow', () => getDocs(query(collection(parent, 'books'), where('ownerUid', '==', 'p1'))));
+await check('list all books', 'deny', () => getDocs(collection(parent, 'books')));
+await check('read own book page', 'allow', () => getDoc(doc(parent, 'books', 'k1', 'pages', '1')));
+await check('read own cast sheet', 'allow', () => getDoc(doc(parent, 'books', 'k1', 'castSheets', 'c1')));
+await check("read another family's book", 'deny', () => getDoc(doc(parent, 'books', 'k2')));
+await check("read another family's book page", 'deny', () => getDoc(doc(parent, 'books', 'k2', 'pages', '1')));
+await check('create book', 'deny', () => setDoc(doc(parent, 'books', 'k3'), { ownerUid: 'p1', status: 'ready' }));
+await check('lock own book directly', 'deny', () => updateDoc(doc(parent, 'books', 'k1'), { status: 'locked' }));
+await check('set own page art', 'deny', () => updateDoc(doc(parent, 'books', 'k1', 'pages', '1'), { artUrl: 'https://example.com/x.png' }));
+await check('read own job', 'allow', () => getDoc(doc(parent, 'jobs', 'j1')));
+await check('list own jobs', 'allow', () => getDocs(query(collection(parent, 'jobs'), where('ownerUid', '==', 'p1'))));
+await check("read another family's job", 'deny', () => getDoc(doc(parent, 'jobs', 'j2')));
+await check('mark own job succeeded', 'deny', () => updateDoc(doc(parent, 'jobs', 'j1'), { status: 'succeeded' }));
+await check('admin updates a book', 'allow', () => updateDoc(doc(admin, 'books', 'k1'), { status: 'ready' }));
 
 // systemConfig: only diagnostics is readable by non-admins.
 await check('read diagnostics', 'allow', () => getDoc(doc(parent, 'systemConfig', 'diagnostics')));

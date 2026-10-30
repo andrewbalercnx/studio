@@ -8,7 +8,11 @@ export const JOB_KINDS = [
   'story.finish',
   'manuscript.paginate',
   'manuscript.narrate',
+  /** Coordinator: fans out one `book.castSheet` per cast member, then starts `book.illustrate`. */
+  'book.prepareCast',
   'book.castSheet',
+  /** Coordinator: fans out `book.pageArt` for a set of pages, then rolls the Book up. */
+  'book.illustrate',
   'book.pageArt',
   'book.render',
   'order.submit',

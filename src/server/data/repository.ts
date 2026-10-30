@@ -248,6 +248,19 @@ export class Repository<S extends z.AnyZodObject> {
     const ref = await this.ref(id);
     tx.update(ref, this.validatePatch(ref.path, patch) as UpdateData<DocumentData>);
   }
+
+  /**
+   * Create or fully replace a document inside a transaction (validated like
+   * `create`; both stamps are set). For idempotent handlers that rewrite the
+   * same document on a retry. Not allowed on immutable collections.
+   */
+  async replaceIn(tx: Transaction, id: string, data: CreateInput<S>): Promise<void> {
+    const ref = await this.ref(id);
+    if (this.config.immutable) {
+      throw new ConflictError(`${this.config.label} documents are immutable`, { code: 'IMMUTABLE' });
+    }
+    tx.set(ref, this.validateCreate(ref.path, data));
+  }
 }
 
 export function defineRepository<S extends z.AnyZodObject>(config: RepositoryConfig<S>): Repository<S> {

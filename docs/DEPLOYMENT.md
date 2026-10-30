@@ -1,6 +1,6 @@
 # Deployment Runbook — Staged Rollout, Feature Flags, Rollback
 
-> **Last Updated**: 2026-06-11 (Sprint W3-B)
+> **Last Updated**: 2026-10-29 (Phase 5.1: Cloud Tasks for the job runner, §9)
 >
 > This document supersedes `docs/DEPLOYMENT_ROLLOUT.md` (the original design
 > sketch). It covers: what deploys today, the staged-rollout machinery this
@@ -308,3 +308,84 @@ Hosting → backend → Rollouts → re-deploy the previous successful rollout, 
 | `src/app/api/health/route.ts` | Version/uptime/dependency probe | Live now (pure addition) |
 | `src/app/api/flags/route.ts` | Server-evaluated flags for clients | Live now (pure addition) |
 | `src/lib/feature-flags{,.server}.ts`, `src/hooks/use-feature-flag.ts` | Flag registry, evaluation, client hook | Live now |
+| `scripts/setup-cloud-tasks.sh` | Cloud Tasks queues, invoker service account, IAM for the job runner (§9) | Run once by the owner; idempotent |
+
+---
+
+## 9. Cloud Tasks for the job runner (one-time, owner)
+
+The server-side pipeline (`src/server/jobs`, ADR-0002) runs every unit of work
+(pagination, narration, cast sheets, page art) as a Job delivered by **Cloud
+Tasks** to `POST /api/internal/jobs/run`, which accepts only an OIDC token
+minted for the job invoker service account. `apphosting.yaml` sets
+`JOBS_DISPATCHER=cloud-tasks` and the values below, so **run the setup script
+before deploying a build that carries them**. Until it has run, task creation
+fails: jobs stay `queued` in Firestore (nothing is lost; enqueueing the same
+work again re-dispatches it), and nothing user-facing uses the new pipeline yet
+(slice 5.2 moves the UI onto it).
+
+### 9.1 Run the script
+
+```bash
+gcloud auth login                       # a project owner
+DRY_RUN=1 scripts/setup-cloud-tasks.sh   # preview
+scripts/setup-cloud-tasks.sh             # backend studio-1 (europe-west4), queues in europe-west1
+```
+
+Settings (environment variables, all optional):
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `PROJECT_ID` | `studio-6508342045-13669` | GCP project (from `.firebaserc`) |
+| `REGION` | `europe-west1` | Cloud Tasks location (`JOBS_TASKS_LOCATION`). Cloud Tasks does not offer europe-west4, the backend's region; the tasks call the public URL, so the regions need not match |
+| `BACKEND_ID` | `studio-1` | App Hosting backend / Cloud Run service (`firebase apphosting:backends:list`); empty skips the `run.invoker` grant |
+| `BACKEND_REGION` | `europe-west4` | Region of that service |
+| `APP_URL` | `https://storypic.rcnx.io` | Public URL; the tasks call `$APP_URL/api/internal/jobs/run` |
+| `QUEUE_PREFIX` | empty | Prefix for queue ids (`JOBS_QUEUE_PREFIX`) |
+| `INVOKER_SA_NAME` | `storypic-jobs-invoker` | Invoker service account name |
+| `RUNTIME_SA` | `firebase-app-hosting-compute@<project>.iam.gserviceaccount.com` | The app's runtime service account |
+
+It is idempotent: it enables the Cloud Tasks API, creates or updates the five
+queues, creates the invoker service account if missing, and (re)applies the IAM
+bindings. If a binding fails right after the account was created (IAM
+propagation), run it again.
+
+| Queue | Rate | Concurrent | Used by |
+|-------|------|------------|---------|
+| `ai-text` | 5/s | 10 | `manuscript.paginate` |
+| `ai-image` | 1/s | 5 | `book.castSheet`, `book.pageArt` |
+| `tts` | 2/s | 3 | `manuscript.narrate` |
+| `render` | 2/s | 5 | coordinators (`book.prepareCast`, `book.illustrate`); PDF renders later |
+| `mixam` | 1/s | 2 | print orders (print slice) |
+
+Queue retries are short (5 attempts, 30 s → 10 min): the runner retries failed
+work itself; queue retries only redeliver when a delivery was not handled (409
+`LEASE_HELD` while another runner holds the job, or a 5xx).
+
+IAM it grants: the runtime account gets `roles/cloudtasks.enqueuer` (project)
+and `roles/iam.serviceAccountUser` on the invoker; the Cloud Tasks service agent
+gets `roles/iam.serviceAccountTokenCreator` on the invoker; the invoker gets
+`roles/run.invoker` on the backend service.
+
+### 9.2 Env values (already in `apphosting.yaml`)
+
+| Variable | Value |
+|----------|-------|
+| `JOBS_DISPATCHER` | `cloud-tasks` |
+| `JOBS_TASKS_PROJECT` | `studio-6508342045-13669` |
+| `JOBS_TASKS_LOCATION` | `europe-west1` |
+| `JOBS_RUN_URL` | `https://storypic.rcnx.io/api/internal/jobs/run` (also the OIDC audience) |
+| `JOBS_INVOKER_SERVICE_ACCOUNT` | `storypic-jobs-invoker@studio-6508342045-13669.iam.gserviceaccount.com` |
+| `JOBS_QUEUE_PREFIX`, `JOBS_OIDC_AUDIENCE` | unset (no prefix; audience = run URL) |
+
+If you change `REGION`, `APP_URL`, `QUEUE_PREFIX` or the account name, change
+`apphosting.yaml` to match (the script prints the values).
+
+### 9.3 Check it works
+
+After the deploy, a Book created through `POST /api/books` should move from
+`illustrating` to `ready`. In the console: Cloud Tasks → queues show dispatches;
+Firestore `jobs` documents move `queued → running → succeeded`. A job stuck in
+`queued` means dispatch failed: check the app logs for `[jobs] Failed to
+dispatch` (usually a missing queue or IAM binding).
+
