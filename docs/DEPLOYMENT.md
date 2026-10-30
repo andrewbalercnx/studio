@@ -328,10 +328,8 @@ work again re-dispatches it), and nothing user-facing uses the new pipeline yet
 
 ```bash
 gcloud auth login                       # a project owner
-gcloud run services list --project=studio-6508342045-13669   # note the App Hosting backend's service name
-BACKEND_ID=<that service name> scripts/setup-cloud-tasks.sh
-# Preview first if you like:
-DRY_RUN=1 BACKEND_ID=<name> scripts/setup-cloud-tasks.sh
+DRY_RUN=1 scripts/setup-cloud-tasks.sh   # preview
+scripts/setup-cloud-tasks.sh             # backend studio-1 (europe-west4), queues in europe-west1
 ```
 
 Settings (environment variables, all optional):
@@ -339,9 +337,9 @@ Settings (environment variables, all optional):
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `PROJECT_ID` | `studio-6508342045-13669` | GCP project (from `.firebaserc`) |
-| `REGION` | `us-central1` | Cloud Tasks location (`JOBS_TASKS_LOCATION`) |
-| `BACKEND_ID` | — | App Hosting backend / Cloud Run service; without it the `run.invoker` grant is skipped |
-| `BACKEND_REGION` | `$REGION` | Region of that service |
+| `REGION` | `europe-west1` | Cloud Tasks location (`JOBS_TASKS_LOCATION`). Cloud Tasks does not offer europe-west4, the backend's region; the tasks call the public URL, so the regions need not match |
+| `BACKEND_ID` | `studio-1` | App Hosting backend / Cloud Run service (`firebase apphosting:backends:list`); empty skips the `run.invoker` grant |
+| `BACKEND_REGION` | `europe-west4` | Region of that service |
 | `APP_URL` | `https://storypic.rcnx.io` | Public URL; the tasks call `$APP_URL/api/internal/jobs/run` |
 | `QUEUE_PREFIX` | empty | Prefix for queue ids (`JOBS_QUEUE_PREFIX`) |
 | `INVOKER_SA_NAME` | `storypic-jobs-invoker` | Invoker service account name |
@@ -375,7 +373,7 @@ gets `roles/iam.serviceAccountTokenCreator` on the invoker; the invoker gets
 |----------|-------|
 | `JOBS_DISPATCHER` | `cloud-tasks` |
 | `JOBS_TASKS_PROJECT` | `studio-6508342045-13669` |
-| `JOBS_TASKS_LOCATION` | `us-central1` |
+| `JOBS_TASKS_LOCATION` | `europe-west1` |
 | `JOBS_RUN_URL` | `https://storypic.rcnx.io/api/internal/jobs/run` (also the OIDC audience) |
 | `JOBS_INVOKER_SERVICE_ACCOUNT` | `storypic-jobs-invoker@studio-6508342045-13669.iam.gserviceaccount.com` |
 | `JOBS_QUEUE_PREFIX`, `JOBS_OIDC_AUDIENCE` | unset (no prefix; audience = run URL) |
