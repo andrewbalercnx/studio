@@ -247,7 +247,7 @@ const storyWizardFlowInternal = ai.defineFlow(
         const storyGenPromptTemplate = generator?.prompts?.storyGeneration || DEFAULT_STORY_GEN_PROMPT;
         const storyGenSystemPrompt = fillPromptTemplate(storyGenPromptTemplate, templateVars);
 
-        const modelName = 'googleai/gemini-2.5-pro';
+        const modelName = 'googleai/gemini-3.8-flash';
 
         // Shared retry/backoff + systemConfig circuit breaker: transient
         // failures self-heal with jittered exponential backoff; a provider
@@ -381,7 +381,7 @@ const storyWizardFlowInternal = ai.defineFlow(
         const questionGenPromptTemplate = generator?.prompts?.questionGeneration || DEFAULT_QUESTION_GEN_PROMPT;
         const questionGenSystemPrompt = fillPromptTemplate(questionGenPromptTemplate, templateVars);
 
-        const modelName2 = 'googleai/gemini-2.5-pro';
+        const modelName2 = 'googleai/gemini-3.8-flash';
 
         // Shared retry/backoff + systemConfig circuit breaker (see above).
         let questionAttempt = 0;

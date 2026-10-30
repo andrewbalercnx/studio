@@ -72,9 +72,9 @@ const DEFAULT_GENERATOR_INFO: Record<string, { name: string; description: string
 
 // Available AI models
 const AI_MODELS: { value: AIModelName; label: string; description: string }[] = [
-  { value: 'googleai/gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Most capable, best for complex tasks' },
-  { value: 'googleai/gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Fast and efficient' },
-  { value: 'googleai/gemini-2.0-flash', label: 'Gemini 2.0 Flash', description: 'Previous generation, very fast' },
+  { value: 'googleai/gemini-3.8-flash', label: 'Gemini 3.8 Flash', description: 'Newest stable model (default)' },
+  { value: 'googleai/gemini-3.5-flash', label: 'Gemini 3.5 Flash', description: 'Previous stable Flash' },
+  { value: 'googleai/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (preview)', description: 'Most capable; preview, can change or be withdrawn' },
 ];
 
 // Sentinel value for "use default" option (Radix Select doesn't allow empty string values)

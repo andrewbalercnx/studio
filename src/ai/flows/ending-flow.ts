@@ -29,6 +29,7 @@ import { getGlobalPrefix } from '@/lib/global-prompt-config.server';
 // New structured prompt system
 import { EndingOutputSchema } from '@/lib/schemas/ending-output';
 import { buildEndingPrompt, type EndingPromptContext } from '@/lib/prompt-builders/ending-prompt-builder';
+import { currentModelId } from '@/lib/retired-models';
 
 /**
  * Normalizes arc steps to handle both legacy string format and new ArcStep object format.
@@ -200,7 +201,7 @@ Return a single valid JSON object (no markdown, no explanation):
             debug.details.usedMessagesArray = conversationMessages.length > 0;
 
             // Determine model name from storyType or use default
-            const modelName = storyType.promptConfig?.model?.name || 'googleai/gemini-2.5-pro';
+            const modelName = currentModelId(storyType.promptConfig?.model?.name) || 'googleai/gemini-3.8-flash';
 
             let llmResponse;
             const startTime = Date.now();

@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-10-29 (Phase 5.2: the web app and kids PWA read `books`, `manuscripts` and their pages directly (owner-filtered queries) and create Books through `POST /api/books`; `stories/*/storybooks` is legacy and read-only (no route writes it any more except the old print/share path), kept until the trial data reset. Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-10-30 (AI model names: Gemini 2.5 and older retired, mapped to 3.x on read). 2026-10-29 (Phase 5.2: the web app and kids PWA read `books`, `manuscripts` and their pages directly (owner-filtered queries) and create Books through `POST /api/books`; `stories/*/storybooks` is legacy and read-only (no route writes it any more except the old print/share path), kept until the trial data reset. Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -766,7 +766,7 @@ Story generator configurations. Defines capabilities and API endpoints for each 
 | `createdAt` | timestamp | No | Creation time |
 | `updatedAt` | timestamp | No | Last update time |
 
-**AIModelName Values**: `'googleai/gemini-2.5-pro'`, `'googleai/gemini-2.5-flash'`, `'googleai/gemini-2.0-flash'`
+**AIModelName Values**: `'googleai/gemini-3.8-flash'`, `'googleai/gemini-3.5-flash'`, `'googleai/gemini-3.1-pro-preview'`. Retired names stored in Firestore are mapped to current models on read (`src/lib/retired-models.ts`)
 
 **Prompts Keys by Generator**:
 - **wizard**: `questionGeneration`, `storyGeneration`
@@ -1044,10 +1044,10 @@ Centralized configuration for AI model selections across the application.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `imageGenerationModel` | string | Yes | Model for image generation (e.g., 'googleai/gemini-2.5-flash-image') |
-| `primaryTextModel` | string | Yes | Primary text model for complex tasks (e.g., 'googleai/gemini-2.5-pro') |
-| `lightweightTextModel` | string | Yes | Lightweight text model for simple tasks (e.g., 'googleai/gemini-2.5-flash') |
-| `legacyTextModel` | string | Yes | Legacy model for specific use cases (e.g., 'googleai/gemini-2.0-flash') |
+| `imageGenerationModel` | string | Yes | Model for image generation (e.g., 'googleai/gemini-3.1-flash-image') |
+| `primaryTextModel` | string | Yes | Primary text model for complex tasks (e.g., 'googleai/gemini-3.8-flash') |
+| `lightweightTextModel` | string | Yes | Lightweight text model for simple tasks (e.g., 'googleai/gemini-3.8-flash') |
+| `legacyTextModel` | string | Yes | Legacy model for specific use cases (e.g., 'googleai/gemini-3.8-flash') |
 | `availabilityCheck` | object | No | Last model availability check result |
 | `availabilityCheck.lastCheckedAt` | timestamp | No | When availability was last checked |
 | `availabilityCheck.status` | 'ok' \| 'warning' \| 'error' | No | Overall availability status |
@@ -1056,10 +1056,10 @@ Centralized configuration for AI model selections across the application.
 | `updatedBy` | string | No | Email of last updater |
 
 **Defaults** (if document doesn't exist):
-- `imageGenerationModel`: 'googleai/gemini-2.5-flash-image'
-- `primaryTextModel`: 'googleai/gemini-2.5-pro'
-- `lightweightTextModel`: 'googleai/gemini-2.5-flash'
-- `legacyTextModel`: 'googleai/gemini-2.0-flash'
+- `imageGenerationModel`: 'googleai/gemini-3.1-flash-image'
+- `primaryTextModel`: 'googleai/gemini-3.8-flash'
+- `lightweightTextModel`: 'googleai/gemini-3.8-flash'
+- `legacyTextModel`: 'googleai/gemini-3.8-flash'
 
 **Security**: Admin only.
 

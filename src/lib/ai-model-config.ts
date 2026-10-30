@@ -15,6 +15,7 @@ import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import type { AIModelsConfig } from './types';
 import { DEFAULT_AI_MODELS_CONFIG } from './types';
+import { currentModelId } from '@/lib/retired-models';
 
 // Cache for model config
 let cachedConfig: AIModelsConfig | null = null;
@@ -37,7 +38,14 @@ export async function getAIModelConfig(): Promise<AIModelsConfig> {
     const doc = await firestore.doc('systemConfig/aiModels').get();
 
     if (doc.exists) {
-      cachedConfig = { ...DEFAULT_AI_MODELS_CONFIG, ...doc.data() } as AIModelsConfig;
+      const merged = { ...DEFAULT_AI_MODELS_CONFIG, ...doc.data() } as AIModelsConfig;
+      cachedConfig = {
+        ...merged,
+        imageGenerationModel: currentModelId(merged.imageGenerationModel),
+        primaryTextModel: currentModelId(merged.primaryTextModel),
+        lightweightTextModel: currentModelId(merged.lightweightTextModel),
+        legacyTextModel: currentModelId(merged.legacyTextModel),
+      };
     } else {
       cachedConfig = DEFAULT_AI_MODELS_CONFIG;
     }

@@ -6,7 +6,7 @@ import { logAIFlow } from '@/lib/ai-flow-logger';
 import { getImageGenerationModel } from '@/lib/ai-model-config';
 
 // Fallback model name if config fails to load
-const FALLBACK_IMAGE_MODEL = 'googleai/gemini-2.5-flash-image';
+const FALLBACK_IMAGE_MODEL = 'googleai/gemini-3.1-flash-image';
 
 const ImageStyleSampleInputSchema = z.object({
     imageStyleId: z.string().describe("The ID of the imageStyle document"),

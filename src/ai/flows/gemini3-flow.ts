@@ -205,7 +205,7 @@ export const gemini3Flow = ai.defineFlow(
 
             let llmResponse;
             const startTime = Date.now();
-            const modelName = 'googleai/gemini-2.5-pro';
+            const modelName = 'googleai/gemini-3.8-flash';
             try {
                 llmResponse = await ai.generate({
                     model: modelName,
@@ -288,7 +288,7 @@ export const gemini3Flow = ai.defineFlow(
                 debug: {
                     ...debug,
                     fullPrompt: systemPrompt, // Include full prompt for diagnostics
-                    modelName: 'googleai/gemini-2.5-pro',
+                    modelName: 'googleai/gemini-3.8-flash',
                 },
             };
 

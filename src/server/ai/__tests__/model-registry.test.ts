@@ -16,8 +16,8 @@ describe('AIModelRegistry', () => {
     for (const purpose of AI_PURPOSES) {
       await expect(registry.resolve(purpose)).resolves.toMatchObject({ purpose, model: DEFAULT_AI_MODELS[purpose], source: 'default' });
     }
-    expect(DEFAULT_AI_MODELS['creation.text']).toBe('googleai/gemini-2.5-pro');
-    expect(DEFAULT_AI_MODELS['book.pageArt']).toBe('googleai/gemini-2.5-flash-image');
+    expect(DEFAULT_AI_MODELS['creation.text']).toBe('googleai/gemini-3.8-flash');
+    expect(DEFAULT_AI_MODELS['book.pageArt']).toBe('googleai/gemini-3.1-flash-image');
   });
 
   it('uses config/aiModels where set', async () => {
@@ -29,6 +29,15 @@ describe('AIModelRegistry', () => {
       source: 'config',
     });
     await expect(registry.resolve('book.castSheet')).resolves.toMatchObject({ source: 'default' });
+  });
+
+  it('maps retired models in config and CreationModes to their replacements', async () => {
+    const { registry } = registryWith({ purposes: { 'book.pageArt': 'googleai/gemini-2.5-flash-image' } });
+    await expect(registry.resolve('book.pageArt')).resolves.toMatchObject({ model: 'googleai/gemini-3.1-flash-image', source: 'config' });
+    await expect(registry.resolve('creation.text', { creationModeModel: 'googleai/gemini-2.5-pro' })).resolves.toMatchObject({
+      model: 'googleai/gemini-3.8-flash',
+      source: 'creationMode',
+    });
   });
 
   it('lets a CreationMode override creation.text only', async () => {

@@ -200,7 +200,7 @@ OUTPUT: Return ONLY the synopsis text (no quotes, no labels, just the synopsis).
 
       let llmResponse;
       const startTime = Date.now();
-      const modelName = 'googleai/gemini-2.5-flash';
+      const modelName = 'googleai/gemini-3.8-flash';
       try {
         llmResponse = await ai.generate({
           model: modelName,
