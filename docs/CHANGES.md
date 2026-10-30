@@ -18,6 +18,14 @@
 
 ### 2026-10-30
 
+#### `#18` - Reset script: parallel, with progress
+
+**Type**: Tooling fix
+
+**Summary**: `scripts/reset-trial-data.mjs` printed nothing until it had visited every document, one Firestore call at a time. From a laptop that looks like a hang. It now runs up to 32 calls at once, shows a live count per collection, prints each collection's line as it finishes, names the credentials it uses, and stops after 30 s with a credentials hint if Firestore does not answer. Output format and behaviour are otherwise unchanged (`npm run test:reset`: 18/18).
+
+---
+
 #### `#17` - Hotfix: move off retired Gemini 2.5 models
 
 **Type**: Bug fix (production outage)

@@ -64,6 +64,8 @@ const STORAGE_PREFIXES = {
 
 const BATCH_SIZE = 400;
 const PAGE_SIZE = 500;
+/** Firestore calls in flight at once. Run one at a time, a laptop needs minutes per thousand documents. */
+const CONCURRENCY = 32;
 
 export function parseArgs(argv) {
   const args = {
@@ -101,11 +103,29 @@ function resolvedProject(app) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Gates every Firestore call. Only leaf calls take a slot, so nested work cannot deadlock. */
+let inFlight = 0;
+const waiting = [];
+async function limited(fn) {
+  if (inFlight >= CONCURRENCY) await new Promise((resolve) => waiting.push(resolve));
+  inFlight += 1;
+  try {
+    return await fn();
+  } finally {
+    inFlight -= 1;
+    waiting.shift()?.();
+  }
+}
+
+function progress(text) {
+  if (process.stdout.isTTY) process.stdout.write(`\r[reset]   ${text}\x1b[K`);
+}
+
 /** Retry with exponential backoff (contention, quota, transient errors). */
 async function withBackoff(label, fn, attempts = 6) {
   for (let attempt = 1; ; attempt += 1) {
     try {
-      return await fn();
+      return await limited(fn);
     } catch (error) {
       if (attempt >= attempts) throw error;
       const delay = Math.min(30_000, 500 * 2 ** (attempt - 1)) + Math.floor(Math.random() * 250);
@@ -130,11 +150,12 @@ async function* pages(collectionRef) {
 }
 
 /** A document and everything below it, children before parents (so a crash never orphans data unreachable from the top). */
-async function subtree(docRef, out) {
+async function subtree(docRef) {
   const subcollections = await withBackoff(`list ${docRef.path}`, () => docRef.listCollections());
+  const out = [];
   for (const sub of subcollections) {
     for await (const refs of pages(sub)) {
-      for (const ref of refs) await subtree(ref, out);
+      for (const tree of await Promise.all(refs.map((ref) => subtree(ref)))) out.push(...tree);
     }
   }
   out.push(docRef);
@@ -155,34 +176,45 @@ async function deleteRefs(db, refs) {
 /** Process one top-level collection: count (and delete) each document's subtree. */
 async function processCollection(db, name, { confirm, storagePrefixes }) {
   const summary = { collection: name, documents: 0, withSubcollections: 0 };
+  progress(`${name}…`);
   for await (const refs of pages(db.collection(name))) {
-    for (const ref of refs) {
-      const tree = await subtree(ref, []);
+    await Promise.all(refs.map(async (ref) => {
+      const tree = await subtree(ref);
+      if (confirm) await deleteRefs(db, tree);
       summary.documents += 1;
       summary.withSubcollections += tree.length;
       if (STORAGE_PREFIXES[name]) storagePrefixes.push(...STORAGE_PREFIXES[name](ref.id));
-      if (confirm) await deleteRefs(db, tree);
-    }
+      progress(`${name}: ${summary.documents} documents (${summary.withSubcollections} with subcollections)`);
+    }));
   }
+  report(summary);
   return summary;
 }
 
 /** children/{childId}/sessions (the legacy session mirror); the children themselves are kept. */
 async function processChildSessions(db, { confirm }) {
   const summary = { collection: 'children/*/sessions', documents: 0, withSubcollections: 0 };
+  progress(`${summary.collection}…`);
   for await (const children of pages(db.collection('children'))) {
-    for (const child of children) {
+    await Promise.all(children.map(async (child) => {
       for await (const refs of pages(child.collection('sessions'))) {
-        for (const ref of refs) {
-          const tree = await subtree(ref, []);
+        await Promise.all(refs.map(async (ref) => {
+          const tree = await subtree(ref);
+          if (confirm) await deleteRefs(db, tree);
           summary.documents += 1;
           summary.withSubcollections += tree.length;
-          if (confirm) await deleteRefs(db, tree);
-        }
+          progress(`${summary.collection}: ${summary.documents} documents`);
+        }));
       }
-    }
+    }));
   }
+  report(summary);
   return summary;
+}
+
+function report(r) {
+  if (process.stdout.isTTY) process.stdout.write('\r\x1b[K');
+  console.log(`[reset]   ${r.collection.padEnd(22)} ${String(r.documents).padStart(6)} documents (${r.withSubcollections} with subcollections)`);
 }
 
 async function deleteStorage(bucketName, prefixes) {
@@ -207,6 +239,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const app = initAdmin();
   const project = resolvedProject(app);
+  console.log(`[reset] Credentials: ${process.env.FIREBASE_SERVICE_ACCOUNT_KEY ? 'FIREBASE_SERVICE_ACCOUNT_KEY' : process.env.GOOGLE_APPLICATION_CREDENTIALS ? 'GOOGLE_APPLICATION_CREDENTIALS' : 'application default (gcloud auth application-default login)'}`);
   if (args.confirm) {
     if (!args.project) {
       console.error('[reset] --confirm needs --project <projectId> (the project you mean to reset).');
@@ -228,14 +261,20 @@ export async function main(argv = process.argv.slice(2)) {
   const kept = [...KEPT_COLLECTIONS, ...Object.entries(OPTIONAL_COLLECTIONS).filter(([, flag]) => !args[flag]).map(([name]) => name)];
 
   console.log(`[reset] ${args.confirm ? 'DELETING' : 'DRY RUN (nothing is deleted)'} in project ${project ?? 'unknown'}${process.env.FIRESTORE_EMULATOR_HOST ? ` (emulator ${process.env.FIRESTORE_EMULATOR_HOST})` : ''}`);
+  const reachable = await Promise.race([
+    db.collection('users').limit(1).get().then(() => true, (error) => error),
+    sleep(30_000).then(() => false),
+  ]);
+  if (reachable !== true) {
+    console.error(`[reset] Cannot read Firestore${reachable ? `: ${reachable.message ?? reachable}` : ' (no answer in 30 s)'}.`);
+    console.error('[reset] Check credentials: gcloud auth application-default login, and GOOGLE_CLOUD_PROJECT.');
+    return 1;
+  }
   const storagePrefixes = [];
   const results = [];
   for (const name of collections) results.push(await processCollection(db, name, { confirm: args.confirm, storagePrefixes }));
   results.push(await processChildSessions(db, { confirm: args.confirm }));
 
-  for (const r of results) {
-    console.log(`[reset]   ${r.collection.padEnd(22)} ${String(r.documents).padStart(6)} documents (${r.withSubcollections} with subcollections)`);
-  }
   const total = results.reduce((sum, r) => sum + r.withSubcollections, 0);
   let storageFiles = null;
   if (args.storage) {
