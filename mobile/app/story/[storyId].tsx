@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,107 +10,35 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Audio } from 'expo-av';
-import { useChild } from '../../src/contexts/ChildContext';
-import { useApiClient } from '../../src/contexts/ApiClientContext';
+import { useApiClient, type StoryView } from '../../src/contexts/ApiClientContext';
 
-interface Story {
-  id: string;
-  metadata?: {
-    title?: string;
-  };
-  synopsis?: string;
-  storyText?: string;
-  actorAvatarUrl?: string;
-  audioUrl?: string;
-  audioGeneration?: { status: string };
-  pageGeneration?: { status: string };
-  imageGeneration?: { status: string };
-}
-
-interface Storybook {
-  id: string;
-  storyId: string;
-  imageGeneration?: { status: string };
-  thumbnailUrl?: string;
-  imageStyleName?: string;
-  outputTypeName?: string;
-}
-
+/**
+ * Read a finished Story (GET /api/stories/{id}: title and text with names
+ * resolved on the server). A Story still being made opens the play screen.
+ */
 export default function StoryScreen() {
   const router = useRouter();
   const { storyId } = useLocalSearchParams<{ storyId: string }>();
-  const { childProfile } = useChild();
   const apiClient = useApiClient();
 
-  const [story, setStory] = useState<Story | null>(null);
-  const [storybooks, setStorybooks] = useState<Storybook[]>([]);
+  const [story, setStory] = useState<StoryView | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
 
   useEffect(() => {
     loadStory();
-    return () => {
-      // Cleanup audio
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
   }, [storyId]);
 
   const loadStory = async () => {
     if (!storyId) return;
     try {
-      const [storyData, storybooksData] = await Promise.all([
-        apiClient.getStory(storyId),
-        apiClient.getMyStorybooks(storyId).catch(() => []),
-      ]);
-      setStory(storyData);
-      // Server returns only ready storybooks by default
-      setStorybooks(storybooksData);
+      const result = await apiClient.getStory(storyId);
+      setStory(result.story);
     } catch (e) {
       console.error('Error loading story:', e);
     } finally {
       setLoading(false);
     }
   };
-
-  const handlePlayAudio = async () => {
-    if (!story?.audioUrl) return;
-
-    if (isPlaying && sound) {
-      await sound.pauseAsync();
-      setIsPlaying(false);
-      return;
-    }
-
-    try {
-      if (sound) {
-        await sound.playAsync();
-        setIsPlaying(true);
-      } else {
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: story.audioUrl },
-          { shouldPlay: true },
-          (status) => {
-            if (status.isLoaded && status.didJustFinish) {
-              setIsPlaying(false);
-            }
-          }
-        );
-        setSound(newSound);
-        setIsPlaying(true);
-      }
-    } catch (e) {
-      console.error('Error playing audio:', e);
-    }
-  };
-
-  // Check for storybooks (new model) or legacy book (on story itself)
-  const hasStorybooks = storybooks.length > 0;
-  const hasLegacyBook = story?.imageGeneration?.status === 'ready';
-  const hasAudio = story?.audioGeneration?.status === 'ready' && story?.audioUrl;
 
   if (loading) {
     return (
@@ -133,7 +61,27 @@ export default function StoryScreen() {
     );
   }
 
-  const title = story.metadata?.title || 'Your Story';
+  if (story.status !== 'complete' || !story.text) {
+    const finishing = story.status === 'finishing';
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorIcon}>{finishing ? '⏳' : '✏️'}</Text>
+        <Text style={styles.errorTitle}>{finishing ? 'Adding the finishing touches…' : "This story isn't finished yet"}</Text>
+        {finishing ? (
+          <TouchableOpacity style={styles.backButton} onPress={() => { setLoading(true); loadStory(); }}>
+            <Text style={styles.backButtonText}>Check again</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.backButton} onPress={() => router.replace(`/play/${story.id}`)}>
+            <Text style={styles.backButtonText}>Keep going</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  }
+
+  const title = story.title || 'Your Story';
+  const hero = story.cast.find((member) => member.role === 'hero');
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -146,79 +94,26 @@ export default function StoryScreen() {
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {/* Story Avatar */}
-        {story.actorAvatarUrl && (
+        {hero?.avatarUrl && (
           <View style={styles.avatarSection}>
-            <Image source={{ uri: story.actorAvatarUrl }} style={styles.storyAvatar} />
+            <Image source={{ uri: hero.avatarUrl }} style={styles.storyAvatar} />
           </View>
         )}
 
         {/* Title */}
         <Text style={styles.title}>{title}</Text>
 
-        {/* Audio Button */}
-        {hasAudio && (
-          <TouchableOpacity
-            style={[styles.audioButton, isPlaying && styles.audioButtonPlaying]}
-            onPress={handlePlayAudio}
-          >
-            <Text style={styles.audioButtonIcon}>{isPlaying ? '⏸️' : '🔊'}</Text>
-            <Text style={styles.audioButtonText}>
-              {isPlaying ? 'Pause' : 'Read to Me'}
-            </Text>
-          </TouchableOpacity>
-        )}
-
         {/* Story Text */}
         <View style={styles.storyTextContainer}>
-          {story.storyText?.split('\n\n').map((paragraph, index) => (
+          {story.text.split(/\n\s*\n/).map((paragraph, index) => (
             <Text key={index} style={styles.paragraph}>
               {paragraph}
             </Text>
           ))}
         </View>
 
-        {/* Actions */}
+        {/* Books are made and read in the web app until the app reads Books (clients phase). */}
         <View style={styles.actionsContainer}>
-          {/* Show existing storybooks */}
-          {hasStorybooks && storybooks.map((sb) => (
-            <TouchableOpacity
-              key={sb.id}
-              style={[styles.storybookButton, { marginBottom: 12 }]}
-              onPress={() => router.push(`/book/${storyId}?storybookId=${sb.id}`)}
-            >
-              {sb.thumbnailUrl ? (
-                <Image source={{ uri: sb.thumbnailUrl }} style={styles.storybookThumbnail} />
-              ) : (
-                <View style={styles.storybookThumbnailPlaceholder}>
-                  <Text style={styles.storybookThumbnailPlaceholderText}>📚</Text>
-                </View>
-              )}
-              <View style={styles.storybookButtonContent}>
-                <Text style={styles.storybookButtonTitle}>
-                  {sb.imageStyleName || 'Picture Book'}
-                </Text>
-                {sb.outputTypeName && (
-                  <Text style={styles.storybookButtonSubtitle}>{sb.outputTypeName}</Text>
-                )}
-              </View>
-              <Text style={styles.storybookButtonArrow}>›</Text>
-            </TouchableOpacity>
-          ))}
-
-          {/* Show legacy book button if exists */}
-          {hasLegacyBook && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.actionButtonPrimary, { marginBottom: 12 }]}
-              onPress={() => router.push(`/book/${storyId}`)}
-            >
-              <Text style={styles.actionButtonIcon}>📚</Text>
-              <Text style={styles.actionButtonTextPrimary}>Read Picture Book</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Book creation is switched off in the app while books move to the
-              new pipeline (slice 5.2): books are made in the web app for now. */}
           <View style={[styles.generatingContainer, { marginBottom: 12 }]}>
             <Text style={styles.generatingText}>Make books in the web app for now.</Text>
           </View>

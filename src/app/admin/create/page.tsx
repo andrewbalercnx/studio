@@ -40,33 +40,6 @@ export default function AdminCreateDataPage() {
     }
   };
   
-    const handleCreateSession = async () => {
-    if (!firestore || !user) {
-      toast({ title: 'Error', description: 'You must be logged in.', variant: 'destructive' });
-      return;
-    }
-    const sessionId = `session_${user.uid.slice(0, 8)}_${Date.now().toString().slice(-4)}`;
-    const sessionData = {
-        id: sessionId,
-        childId: `child_${user.uid.slice(0,8)}`, // assumes a child exists
-        parentUid: user.uid,
-        status: 'in_progress',
-        currentPhase: 'warmup',
-        currentStepIndex: 0,
-        storyTypeId: "animal_adventure_v1",
-        storyPhaseId: "warmup_phase_v1",
-        arcStepIndex: 0,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-    };
-     try {
-      await setDoc(doc(firestore, 'storySessions', sessionId), sessionData);
-      toast({ title: 'Success', description: `Story session created: ${sessionId}` });
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
-  }
-
   const handleCreateHelpSamples = async () => {
     if (!firestore) return;
     try {
@@ -84,21 +57,6 @@ export default function AdminCreateDataPage() {
         avatarUrl: 'https://picsum.photos/seed/help-child/200/200'
       });
 
-      // Help Session
-      const helpSessionRef = doc(firestore, 'storySessions', 'help-session');
-      batch.set(helpSessionRef, {
-        id: 'help-session',
-        childId: 'help-child',
-        parentUid: 'help-system-owner',
-        status: 'completed',
-        currentPhase: 'final',
-        currentStepIndex: 0,
-        storyTypeId: "animal_adventure_v1",
-        storyTitle: "A Helpful Adventure",
-        createdAt: now,
-        updatedAt: now,
-      });
-      
       // Help Character
       const helpCharacterRef = doc(firestore, 'characters', 'help-character');
       batch.set(helpCharacterRef, {
@@ -106,7 +64,6 @@ export default function AdminCreateDataPage() {
           ownerParentUid: 'help-system-owner',
           displayName: 'Guide Bot',
           role: 'friend',
-          sessionId: 'help-session',
           traits: ['friendly', 'knowledgeable'],
           createdAt: now,
           updatedAt: now,
@@ -132,7 +89,6 @@ export default function AdminCreateDataPage() {
     return (
       <div className="flex flex-wrap gap-4">
         <Button onClick={handleCreateChild}>Create Sample Child</Button>
-        <Button onClick={handleCreateSession}>Create Sample Session</Button>
         <Button onClick={handleCreateHelpSamples} variant="secondary">Seed Help System Samples</Button>
       </div>
     );

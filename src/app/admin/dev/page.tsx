@@ -60,15 +60,6 @@ export default function DevelopmentPage() {
           <CardContent>
             <div className="flex flex-wrap gap-2">
               <Button asChild variant="outline" size="sm">
-                <Link href="/admin/storyBeatTest">Story Beat</Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/admin/storyArcTest">Story Arc</Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/admin/storyCompileTest">Story Compile</Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
                 <Link href="/admin/run-traces">Run Traces</Link>
               </Button>
             </div>

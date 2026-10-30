@@ -4,6 +4,7 @@ import { displayText, extractCastTokens, isPlaceholderImageUrl, loadCast } from 
 import { castSheetReferences, castSheetSource, rollupArt, statusFromArt } from '../jobs';
 import { coerceSceneTag, degenerateReason, fitPageCount, rawPagesFrom, repairScene, type RawPage } from '../pagination';
 import { storyFromDocument } from '../story-source';
+import { completeStory } from './helpers';
 
 describe('cast tokens', () => {
   it('finds every token format in order', () => {
@@ -27,12 +28,7 @@ describe('loadCast', () => {
     await db.collection('characters').doc('x2').set({ ownerParentUid: 'p2', displayName: 'Granny Smith' });
     await db.collection('characters').doc('x3').set({ ownerParentUid: 'p1', displayName: 'Granny Smith' });
 
-    const story = storyFromDocument('s', {
-      parentUid: 'p1',
-      childId: 'c1',
-      storyText: '$$c1$$ visits $$theirs$$, $$gone$$ and $$Granny Smith$$.',
-      actors: ['c1', 'mine'],
-    });
+    const story = storyFromDocument('s', completeStory({ text: '[[cast:c1]] visits $$theirs$$, [[cast:gone]] and $$Granny Smith$$.', castIds: ['mine'] }));
     const cast = await loadCast(db, story);
     expect(cast.members.map((m) => [m.castId, m.role])).toEqual([
       ['c1', 'hero'],

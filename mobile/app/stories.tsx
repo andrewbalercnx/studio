@@ -12,21 +12,9 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useChild } from '../src/contexts/ChildContext';
-import { useApiClient } from '../src/contexts/ApiClientContext';
+import { useApiClient, type StoryView } from '../src/contexts/ApiClientContext';
 
-interface Story {
-  id: string;
-  storySessionId: string;
-  metadata?: {
-    title?: string;
-  };
-  synopsis?: string;
-  storyText?: string;
-  actorAvatarUrl?: string;
-  pageGeneration?: { status: string };
-  imageGeneration?: { status: string };
-  createdAt?: any;
-}
+type Story = StoryView;
 
 export default function StoriesScreen() {
   const router = useRouter();
@@ -40,14 +28,8 @@ export default function StoriesScreen() {
   const loadStories = useCallback(async () => {
     if (!childId) return;
     try {
-      const data = await apiClient.getMyStories(childId);
-      // Sort by createdAt descending
-      const sorted = data.sort((a: Story, b: Story) => {
-        const aTime = a.createdAt?.seconds || 0;
-        const bTime = b.createdAt?.seconds || 0;
-        return bTime - aTime;
-      });
-      setStories(sorted);
+      // Newest first, abandoned ones left out: the server's order and status.
+      setStories(await apiClient.getMyStories(childId));
     } catch (e) {
       console.error('Error loading stories:', e);
     } finally {
@@ -66,37 +48,33 @@ export default function StoriesScreen() {
   };
 
   const getStatusInfo = (story: Story) => {
-    const pageStatus = story.pageGeneration?.status ?? 'idle';
-    const imageStatus = story.imageGeneration?.status ?? 'idle';
-    const hasBook = imageStatus === 'ready';
-    const hasStoryText = !!story.storyText;
-
-    if (hasBook) {
-      return { text: 'Book ready!', color: '#10B981', icon: '📚' };
+    switch (story.status) {
+      case 'complete':
+        return { text: 'Story ready', color: '#8B5CF6', icon: '📖' };
+      case 'finishing':
+        return { text: 'Finishing touches…', color: '#F59E0B', icon: '⏳' };
+      case 'failed':
+        return { text: 'Got a bit stuck — tap to try again', color: '#B45309', icon: '🧙' };
+      default:
+        return { text: 'Still being made — tap to keep going', color: '#6B7280', icon: '✏️' };
     }
-    if (pageStatus === 'running' || imageStatus === 'running') {
-      return { text: 'Creating...', color: '#F59E0B', icon: '⏳' };
-    }
-    if (hasStoryText) {
-      return { text: 'Story ready', color: '#8B5CF6', icon: '📖' };
-    }
-    return { text: 'In progress', color: '#6B7280', icon: '✏️' };
   };
 
   const renderStoryCard = ({ item }: { item: Story }) => {
     const status = getStatusInfo(item);
-    const storyId = item.id || item.storySessionId;
-    const title = item.metadata?.title || 'Untitled Story';
+    const storyId = item.id;
+    const title = item.title || (item.status === 'complete' ? 'My Story' : 'A story in the making');
+    const avatarUrl = item.cast.find((member) => member.role === 'hero')?.avatarUrl;
 
     return (
       <TouchableOpacity
         style={styles.storyCard}
-        onPress={() => router.push(`/story/${storyId}`)}
+        onPress={() => router.push(item.status === 'complete' || item.status === 'finishing' ? `/story/${storyId}` : `/play/${storyId}`)}
       >
         {/* Thumbnail */}
         <View style={styles.thumbnailContainer}>
-          {item.actorAvatarUrl ? (
-            <Image source={{ uri: item.actorAvatarUrl }} style={styles.thumbnail} />
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.thumbnail} />
           ) : (
             <View style={[styles.thumbnailPlaceholder, { backgroundColor: status.color + '20' }]}>
               <Text style={styles.thumbnailIcon}>{status.icon}</Text>
@@ -162,7 +140,7 @@ export default function StoriesScreen() {
       ) : (
         <FlatList
           data={stories}
-          keyExtractor={(item) => item.id || item.storySessionId}
+          keyExtractor={(item) => item.id}
           renderItem={renderStoryCard}
           contentContainerStyle={styles.listContent}
           refreshControl={

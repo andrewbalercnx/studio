@@ -1,6 +1,6 @@
 # E2E Testing: Emulator + TEST_MODE Playwright Suite
 
-> Sprint W1-B deliverable. Last updated: 2026-10-29 (slice 5.2: the funnel makes a Book through `POST /api/books` and the server pipeline)
+> Sprint W1-B deliverable. Last updated: 2026-10-29 (slice 5.4: the funnel creates its Story through the UI — mode chooser, `POST /api/stories`, TEST_MODE wizard turns, `story.finish` — and no longer seeds a completed story; slice 5.2: the funnel makes a Book through `POST /api/books` and the server pipeline)
 
 The E2E suite runs the real app (production `standalone` build) against the
 **Firebase Emulator Suite** with the **TEST_MODE AI seam** active, so the whole
@@ -32,7 +32,7 @@ To point the suite at an already-running stack instead, set
 | `scripts/build-e2e.mjs` | `next build` with `NEXT_PUBLIC_FIREBASE_USE_EMULATOR=true` + `NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-storypic-e2e` baked into the client bundle, then writes the `.next/E2E_BUILD.json` marker. |
 | `scripts/start-e2e-server.mjs` | Assembles and serves the standalone build with `TEST_MODE=1` and the Admin-SDK emulator env vars. **Refuses to run without the marker** — serving a prod-config bundle would point the funnel's signup at production Firebase. Scrubs `FIREBASE_SERVICE_ACCOUNT_KEY` / `GOOGLE_APPLICATION_CREDENTIALS` etc. |
 | `scripts/start-e2e-emulators.mjs` | `firebase emulators:start --only auth,firestore,storage --project demo-storypic-e2e`. The `demo-` prefix makes the emulators fully offline: requests to non-emulated services for that project always fail, so prod is unreachable by construction. |
-| `e2e/helpers/emulator.ts` | Seeding + cleanup via firebase-admin pointed at the emulators (catalog docs, completed-story fixture, ready-Book fixture, per-account teardown including books, manuscripts and jobs). Every seeded doc is stamped `regressionTest: true`, mirroring `scripts/cleanup-regression-data.mjs`. |
+| `e2e/helpers/emulator.ts` | Seeding + cleanup via firebase-admin pointed at the emulators (catalog docs incl. two creation modes, the TEST_MODE wizard fixture constants, a complete-Story and a ready-Book fixture for report-only journeys, per-account teardown of children, characters, Stories with turns, Books, Manuscripts, jobs and the ledger). Every seeded doc is stamped `regressionTest: true`, mirroring `scripts/cleanup-regression-data.mjs`. |
 | `e2e/helpers/flows.ts` | UI flows (signup, parent PIN guard, child creation, kids-mode lock) with web-first assertions. |
 
 ### Conventions
@@ -41,7 +41,8 @@ To point the suite at an already-running stack instead, set
   banned — flag it in review.
 - Disposable accounts: every spec signs up a fresh
   `e2e-<tag>-<ts>-<rand>@example.com` user and deletes it (auth user, `users`
-  doc, children, sessions, stories, entitlement ledger) in `afterEach`, so a
+  doc, children, characters, stories + turns, books, manuscripts, jobs, entitlement ledger) in
+  `afterEach`, so a
   long-lived local emulator stays clean across runs.
 - Artifacts (screenshots/videos/traces) can contain synthetic child-like
   content: failure-only, 7-day CI retention, never committed
@@ -51,11 +52,14 @@ To point the suite at an already-running stack instead, set
 
 Covers: **signup (no placeholder child is seeded; the home screen shows the
 "Add your first child" prompt) → parent creates child (PIN guard passed only
-if it appears — the fresh-PIN grace usually skips it) → kids-mode lock →
-story-creation entry → story completion → the child picks a Form (book type)
-and a Style (art style) → `POST /api/books` → the server pipeline makes the
-book → book ready → the reader shows the cover and a page → My Books lists it
-as ready**,
+if it appears — the fresh-PIN grace usually skips it) → kids-mode lock → the
+mode chooser (`GET /api/creation-modes`) → Story Wizard → `POST /api/stories`
+→ four questions answered in the UI (`POST /api/stories/{id}/turns`; prompts
+and options shown with the child's name) → `story.finish` → story complete →
+the child picks a Form (book type) and a Style (art style) → `POST /api/books`
+→ the server pipeline makes the book → book ready → the reader shows the cover
+and a page → My Books lists it as ready → My Stories lists the Story as
+complete and its reader shows the text with names**,
 on `desktop-chrome` and `mobile-chrome`. Checkout/pay is out of scope until
 Stripe lands (sprint WG-1).
 
@@ -70,16 +74,19 @@ Stripe lands (sprint WG-1).
   `TEST_MODE=1` makes each handler write fixtures instead of calling a model;
   the Firestore documents advance exactly as in production
   (`paginating → ready`, `illustrating → ready`). The browser only watches.
-- **Story creation/completion has no server seam**: the wizard
-  (`storyWizardFlow`) is a live Gemini call invoked as a server action, and
-  `src/ai/flows/*` is outside this track's write territory. The spec therefore
-  asserts the creation entry UI (generator cards render for the locked child),
-  then **seeds the exact post-conditions** of the wizard + `/api/storyCompile`
-  (completed `storySessions` doc + child session mirror + compiled `stories`
-  doc — shapes copied from `story-compile-flow.ts`'s wizard branch) and resumes
-  UI-driven from My Stories → Read Story → Create Picture Book → Form and Style choosers.
-  When a TEST_MODE seam is added to the wizard route, replace the seed with
-  real clicks.
+- **Story creation** runs through the real creation routes (slice 5.4). With
+  `TEST_MODE=1` every engine returns fixtures instead of calling a model (the
+  engines' state machines still run): the wizard asks four fixed questions
+  ("Where should the story happen?" …) with three options each (one names the
+  hero) and writes a story titled "<child>'s Big Day"; `story.finish` (on the
+  in-process dispatcher) adds the synopsis and consumes the story allowance in
+  the same transaction that sets `complete`. The browser creates the Story,
+  sends each answer and watches `stories/{id}` and its `turns`; on `complete`
+  it opens the Form + Style chooser. No story data is seeded for the funnel.
+- **Report-only journeys** (a11y book view, probe "read an existing book") still
+  seed a complete Story in the server's shape (`seedCompleteStory`) and a ready
+  Book, because they measure screens, not creation; the probe's "reach a
+  finished book" goal plays the wizard like the funnel.
 
 ### Promotion status
 
@@ -107,12 +114,11 @@ commit them as the linux baselines; comparison is active from the next run.
 
 ## Known app issues found by this suite (not fixed here — other tracks own the files)
 
-1. **Cold deep-links to kids surfaces crash while Firebase auth hydrates.**
-   `useRequiredApiClient` throws during the first render of `/kids/stories`,
-   `/kids/books`, `/kids/create/[id]/style` etc. on a direct page load, landing
-   on the global error boundary ("Oops! Something got muddled."). Real users
-   hit this when a PWA reopens on a deep URL. The specs work around it with
-   client-side navigation.
+1. ~~**Cold deep-links to kids surfaces crash while Firebase auth hydrates.**~~
+   **Resolved in slice 5.4**: the kids pages no longer use the api-client context
+   (`useRequiredApiClient`, which threw on the first render); they wait for auth
+   and read through the shared creation components. The funnel opens `/kids`
+   directly for its last step.
 2. **a11y findings** (see CI artifact for details): icon-only buttons/links
    without accessible names on the kids surfaces (critical), color-contrast
    failures on amber-on-amber text, `aria-hidden` focusable elements on

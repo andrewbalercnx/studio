@@ -1,11 +1,8 @@
 'use client';
 
-import { use, useEffect, useMemo } from 'react';
+import { use, useEffect } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
-import { useFirestore } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
-import { useCollection } from '@/lib/firestore-hooks';
-import type { Story } from '@/lib/types';
+import { useStoryList } from '@/hooks/use-stories';
 import { useBooks } from '@/hooks/use-books';
 import { isReadableStatus } from '@/lib/books/types';
 import { useAppContext } from '@/hooks/use-app-context';
@@ -18,8 +15,7 @@ import { DashboardNavCard } from '@/components/child/dashboard-nav-card';
 export default function ChildDashboardPage({ params }: { params: Promise<{ childId: string }> }) {
   const resolvedParams = use(params);
   const routeChildId = resolvedParams.childId;
-  const { user, idTokenResult, loading: userLoading } = useUser();
-  const firestore = useFirestore();
+  const { user, loading: userLoading } = useUser();
   const {
     activeChildId,
     setActiveChildId,
@@ -34,18 +30,9 @@ export default function ChildDashboardPage({ params }: { params: Promise<{ child
     }
   }, [routeChildId, activeChildId, setActiveChildId]);
 
-  // Query stories for this child to get count (only when authenticated and auth token is ready)
-  // We wait for idTokenResult to ensure Firebase auth is fully synced with Firestore
-  const storiesQuery = useMemo(() => {
-    if (!firestore || !activeChildId || !user || userLoading || !idTokenResult) return null;
-    return query(
-      collection(firestore, 'stories'),
-      where('childId', '==', activeChildId)
-    );
-  }, [firestore, activeChildId, user, userLoading, idTokenResult]);
-
-  const { data: stories, loading: storiesLoading } = useCollection<Story>(storiesQuery);
-  const storiesCount = stories?.length ?? 0;
+  // The child's Stories from the server (finished ones counted).
+  const { stories, loading: storiesLoading } = useStoryList(user ? activeChildId : null);
+  const storiesCount = stories.filter((story) => story.status === 'complete').length;
 
   // Books ready to read, by the server's status (new Book pipeline).
   const { books, loading: booksCountLoading } = useBooks({ childId: activeChildId });
@@ -105,7 +92,7 @@ export default function ChildDashboardPage({ params }: { params: Promise<{ child
             title="New Story"
             description="Create a magical new adventure"
             icon={<Sparkles className="h-8 w-8" />}
-            href="/story/start"
+            href={`/child/${activeChildId}/create`}
             data-wiz-target="child-new-story"
           />
 

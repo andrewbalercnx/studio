@@ -3,7 +3,7 @@
  *
  * The "create your first book" checklist (Sprint W2-B) shows new parents the
  * path from an empty account to a finished storybook. Steps are derived from
- * REAL account state — children/sessions/storybooks in Firestore — never from
+ * REAL account state — children, stories and books in Firestore — never from
  * client-side bookkeeping, so the checklist self-heals if a parent completes a
  * step on another device.
  *
@@ -86,25 +86,17 @@ export type OnboardingSnapshot = {
     photos?: string[] | null;
     avatarUrl?: string | null;
   }>;
-  /** Story sessions owned by the parent (status field only). */
-  storySessions: Array<{ status?: string | null }>;
-  /** True if any non-deleted compiled `stories` doc exists for the parent. */
-  hasCompiledStory: boolean;
-  /**
-   * Storybook outputs (new-model subcollection docs, plus legacy story-doc
-   * generations mapped to the same shape). Existence = generation started.
-   */
-  storybooks: Array<{
-    imageGenerationStatus?: string | null;
-    pageGenerationStatus?: string | null;
-  }>;
+  /** The parent's Stories (server status only). */
+  stories: Array<{ status?: string | null }>;
+  /** The parent's Books (server status only). Existence = art generation started. */
+  books: Array<{ status?: string | null }>;
 };
 
 export type OnboardingStepStates = Record<OnboardingStepId, boolean>;
 
-/** A storybook is viewable once its pages or images are ready (same rule as /api/parent/storybooks). */
-function isBookViewable(sb: OnboardingSnapshot['storybooks'][number]): boolean {
-  return sb.pageGenerationStatus === 'ready' || sb.imageGenerationStatus === 'ready';
+/** A Book can be read once the server marks it ready, partial or locked (same rule as the readers). */
+function isBookViewable(book: OnboardingSnapshot['books'][number]): boolean {
+  return book.status === 'ready' || book.status === 'partial' || book.status === 'locked';
 }
 
 /**
@@ -118,15 +110,11 @@ export function deriveOnboardingStepStates(snapshot: OnboardingSnapshot): Onboar
   const addPhoto = activeChildren.some(
     (c) => (c.photos?.length ?? 0) > 0 || !!c.avatarUrl
   );
-  // A story counts once completed: either a session reached `completed` or a
-  // compiled story document exists (the compile pipeline writes `stories/*`).
-  const createStory =
-    snapshot.hasCompiledStory ||
-    (snapshot.storySessions ?? []).some((s) => s.status === 'completed');
-  // Art generation has started as soon as any storybook output exists — the
-  // storybook doc is created when the child picks a style.
-  const generateArt = (snapshot.storybooks ?? []).length > 0;
-  const previewBook = (snapshot.storybooks ?? []).some(isBookViewable);
+  // A story counts once the server has finished it.
+  const createStory = (snapshot.stories ?? []).some((s) => s.status === 'complete');
+  // Art generation has started as soon as a Book exists (created when the child picks a Style).
+  const generateArt = (snapshot.books ?? []).length > 0;
+  const previewBook = (snapshot.books ?? []).some(isBookViewable);
 
   return { createChild, addPhoto, createStory, generateArt, previewBook };
 }

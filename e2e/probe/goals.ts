@@ -20,7 +20,8 @@ import {
   findChildId,
   findUidByEmail,
   seedCatalog,
-  seedCompletedStory,
+  seedCompleteStory,
+  WIZARD_FIXTURE,
   seedReadyBook,
 } from '../helpers/emulator';
 import {
@@ -129,21 +130,13 @@ export const REACH_FINISHED_BOOK: GoalDef = {
     await drv.see('see a story method to pick', { text: SEED.generatorName });
     rec.markFunnelStep(ANALYTICS_EVENTS.storyStarted);
 
-    // ── Story completion: deterministic seam (no wizard AI seam exists) ──
-    const childId = await findChildId(ctx.state.uid, CHILD_NAME);
-    await seedCompletedStory({ parentUid: ctx.state.uid, childId });
-    rec.markFunnelStep(ANALYTICS_EVENTS.storyCompleted, { simulated: true });
-
-    // ── Find the story and make a book from it ──
-    // Back out of the chooser (client-side; cold deep-links crash — known app
-    // issue, docs/testing/e2e.md).
-    await drv.back('go back to the kids home');
-    await drv.see('back on the kids home', { text: 'Welcome back' });
-    await drv.click('open my stories', { text: 'My Stories' });
-    await drv.see('see the finished story', { text: SEED.storyTitle });
-    await drv.click('open the story', { role: 'link', name: 'Read Story' });
-    await drv.see('see the story page', { role: 'heading', name: SEED.storyTitle });
-    await drv.click('turn it into a picture book', { role: 'link', name: /create picture book/i });
+    // ── Play the Story Wizard (TEST_MODE engine: four questions, then the story) ──
+    await drv.click('pick the story wizard', { text: SEED.generatorName });
+    for (let q = 0; q < WIZARD_FIXTURE.questions.length; q++) {
+      await drv.see(`see question ${q + 1}`, { text: WIZARD_FIXTURE.questions[q] });
+      await drv.click(`answer question ${q + 1}`, { text: `Choice one for question ${q + 1}` });
+    }
+    rec.markFunnelStep(ANALYTICS_EVENTS.storyCompleted);
 
     // ── Book type + art style ──
     await drv.see('see the book-type chooser', { role: 'heading', name: 'Choose Your Book Type' });
@@ -155,7 +148,7 @@ export const REACH_FINISHED_BOOK: GoalDef = {
     // ── Wait while the server makes the book (progress UI → extra patience) ──
     await drv.seeWithin(
       'wait for the book to be made',
-      { role: 'heading', name: SEED.storyTitle },
+      { role: 'heading', name: WIZARD_FIXTURE.title(CHILD_NAME) },
       GENERATION_PATIENCE_MS,
     );
     rec.markFunnelStep(ANALYTICS_EVENTS.storybookArtReady);
@@ -179,8 +172,8 @@ export const READ_EXISTING_BOOK: GoalDef = {
     ctx.state.uid = account.uid;
     await createChildViaParentUI(ctx.page, account, CHILD_NAME);
     const childId = await findChildId(account.uid, CHILD_NAME);
-    const { sessionId } = await seedCompletedStory({ parentUid: account.uid, childId });
-    await seedReadyBook({ storyId: sessionId });
+    const { storyId } = await seedCompleteStory({ ownerUid: account.uid, childId });
+    await seedReadyBook({ storyId });
   },
   run: async (ctx) => {
     const { drv } = ctx;

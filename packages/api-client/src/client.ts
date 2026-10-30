@@ -5,24 +5,16 @@
  */
 
 import type {
-  Story,
-  StorySession,
-  StoryBookOutput,
-  StoryOutputPage,
-  StoryGenerator,
+  ChildInput,
+  CreateStoryRequest,
+  CreationModeView,
   StoryOutputType,
   ImageStyle,
-  ChildProfile,
-  Character,
-  StoryGeneratorResponse,
-  StoryCompileResponse,
-  KidsGeneratorsResponse,
+  StoryStatus,
+  StoryTurnResult,
+  StoryTurnView,
+  StoryView,
   TTSResponse,
-  StoryWizardRequest,
-  StoryFriendsRequest,
-  StoryGeminiRequest,
-  StoryBeatRequest,
-  StoryCompileRequest,
   TTSRequest,
 } from '@storypic/shared-types';
 
@@ -125,24 +117,27 @@ export class StoryPicClient {
     return this.request<T>('GET', path);
   }
 
-  private async post<T>(path: string, body: unknown): Promise<T> {
+  private async post<T>(path: string, body?: unknown): Promise<T> {
     return this.request<T>('POST', path, body);
   }
 
+  /** Routes on the shared route wrapper answer `{ ok: true, data }`. */
+  private async data<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+    const response = await this.request<{ ok: boolean; data: T }>(method, path, body);
+    return response.data;
+  }
+
   // ============================================================================
-  // Discovery (public endpoints)
+  // Discovery
   // ============================================================================
 
   /**
-   * Get available story generators for kids.
-   * This is a public endpoint (no auth required).
+   * The ways a child can make a story: live modes enabled for kids, in display
+   * order, presented kid-safely, exactly one `recommended`.
    */
-  async getGenerators(): Promise<StoryGenerator[]> {
-    const response = await this.get<KidsGeneratorsResponse>('/kids-generators');
-    if (!response.ok) {
-      throw new StoryPicApiError(response.errorMessage || 'Failed to get generators', 500);
-    }
-    return response.generators;
+  async listCreationModes(): Promise<CreationModeView[]> {
+    const data = await this.data<{ modes: CreationModeView[] }>('GET', '/creation-modes');
+    return data.modes;
   }
 
   /**
@@ -168,102 +163,43 @@ export class StoryPicClient {
   }
 
   // ============================================================================
-  // Story Creation
+  // Story Creation (one Story, five modes, the same routes for every client)
   // ============================================================================
 
   /**
-   * Create a new story session for a generator.
-   * Note: Session creation is currently done client-side via Firestore.
-   * TODO: Add server endpoint for session creation.
+   * Start creating a Story. `idempotencyKey` must be made once per tap and
+   * repeated on a retry of that tap: the server then returns the same Story
+   * and first turn (`created: false`). 402 ENTITLEMENT_LIMIT when the family
+   * has no story allowance left.
    */
-  async createSession(childId: string, generatorId: string): Promise<StorySession> {
-    // For now, throw not implemented - sessions created client-side
-    throw new StoryPicApiError('Not implemented - create session via Firestore', 501);
+  async createStory(input: CreateStoryRequest): Promise<StoryTurnResult> {
+    return this.data<StoryTurnResult>('POST', '/stories', input);
   }
 
   /**
-   * Send a choice to the wizard generator.
+   * Send the child's answer to the latest prompt (a choice, typed text or a
+   * cast pick, as the turn's `expects` says). One `idempotencyKey` per
+   * answer: a repeat returns the recorded reply. 409 TURN_IN_PROGRESS means
+   * the same answer is still being worked on (repeat it later); 409
+   * TURN_CONFLICT means another answer was recorded first; 503 means the AI
+   * was unavailable and nothing was recorded (repeat it).
    */
-  async sendWizardChoice(
-    sessionId: string,
-    optionId?: string
-  ): Promise<StoryGeneratorResponse> {
-    const body: StoryWizardRequest = { sessionId, selectedOptionId: optionId };
-    return this.post<StoryGeneratorResponse>('/storyWizard', body);
+  async sendTurn(storyId: string, input: ChildInput, idempotencyKey: string): Promise<StoryTurnResult> {
+    return this.data<StoryTurnResult>('POST', `/stories/${encodeURIComponent(storyId)}/turns`, { input, idempotencyKey });
   }
 
-  /**
-   * Send a choice to the beat-based generator.
-   */
-  async sendBeatChoice(
-    sessionId: string,
-    optionId?: string,
-    moreOptions?: boolean
-  ): Promise<StoryGeneratorResponse> {
-    const body: StoryBeatRequest = { sessionId, selectedOptionId: optionId, moreOptions };
-    return this.post<StoryGeneratorResponse>('/storyBeat', body);
+  /** Stop creating a Story (only while `creating`; idempotent). */
+  async abandonStory(storyId: string): Promise<{ storyId: string; status: StoryStatus }> {
+    return this.data('POST', `/stories/${encodeURIComponent(storyId)}/abandon`);
   }
 
-  /**
-   * Send a choice/action to the friends generator.
-   */
-  async sendFriendsAction(
-    sessionId: string,
-    optionId?: string,
-    action?: 'confirm_characters' | 'change_characters' | 'more_synopses',
-    selectedCharacterIds?: string[]
-  ): Promise<StoryGeneratorResponse> {
-    const body: StoryFriendsRequest = {
-      sessionId,
-      selectedOptionId: optionId,
-      action,
-      selectedCharacterIds,
-    };
-    return this.post<StoryGeneratorResponse>('/storyFriends', body);
-  }
-
-  /**
-   * Send a choice/message to the gemini3 generator.
-   */
-  async sendGemini3Choice(
-    sessionId: string,
-    optionId?: string,
-    userMessage?: string
-  ): Promise<StoryGeneratorResponse> {
-    const body: StoryGeminiRequest = {
-      sessionId,
-      selectedOptionId: optionId,
-      userMessage,
-    };
-    return this.post<StoryGeneratorResponse>('/gemini3', body);
-  }
-
-  /**
-   * Send a choice/message to the gemini4 generator.
-   */
-  async sendGemini4Choice(
-    sessionId: string,
-    optionId?: string,
-    userMessage?: string
-  ): Promise<StoryGeneratorResponse> {
-    const body: StoryGeminiRequest = {
-      sessionId,
-      selectedOptionId: optionId,
-      userMessage,
-    };
-    return this.post<StoryGeneratorResponse>('/gemini4', body);
-  }
-
-  /**
-   * Compile a story session into a final story.
-   */
-  async compileStory(sessionId: string): Promise<StoryCompileResponse> {
-    const body: StoryCompileRequest = { sessionId };
-    return this.post<StoryCompileResponse>('/storyCompile', body);
+  /** A Story that `failed` while finishing goes back to `finishing`. */
+  async retryFinish(storyId: string): Promise<{ storyId: string; status: StoryStatus }> {
+    return this.data('POST', `/stories/${encodeURIComponent(storyId)}/finish`);
   }
 
   // ============================================================================
-  // Storybook Generation
+  // Books
   // ============================================================================
 
   /**
@@ -291,47 +227,25 @@ export class StoryPicClient {
     return response.data;
   }
 
-  /**
-   * Get pages for a storybook.
-   * Pages are returned sorted by pageNumber, with blank/title pages filtered out.
-   * Placeholders in displayText are resolved server-side.
-   */
-  async getStorybookPages(
-    storyId: string,
-    storybookId: string
-  ): Promise<StoryOutputPage[]> {
-    return this.get<StoryOutputPage[]>(`/stories/${storyId}/storybooks/${storybookId}/pages`);
-  }
-
   // ============================================================================
   // Reading/Viewing
   // ============================================================================
 
   /**
-   * Get a story by ID.
-   * Returns story with resolved placeholders in title, synopsis, and storyText.
+   * A Story and its turns. Every text (title, synopsis, finished text, each
+   * prompt and option) is rendered with names on the server.
    */
-  async getStory(storyId: string): Promise<Story> {
-    return this.get<Story>(`/stories/${storyId}`);
+  async getStory(storyId: string): Promise<{ story: StoryView; turns: StoryTurnView[] }> {
+    return this.data('GET', `/stories/${encodeURIComponent(storyId)}`);
   }
 
   /**
-   * Get all stories for a child.
-   * Stories are returned sorted by createdAt descending (most recent first).
-   * Soft-deleted stories are excluded.
+   * The child's Stories, newest first, with the server's status. Abandoned
+   * Stories are left out.
    */
-  async getMyStories(childId: string): Promise<Story[]> {
-    return this.get<Story[]>(`/stories?childId=${childId}`);
-  }
-
-  /**
-   * Get all storybooks for a story.
-   * By default only returns storybooks with imageGeneration.status === 'ready'.
-   * Pass includeAll=true to get all storybooks.
-   */
-  async getMyStorybooks(storyId: string, includeAll?: boolean): Promise<StoryBookOutput[]> {
-    const query = includeAll ? '?includeAll=true' : '';
-    return this.get<StoryBookOutput[]>(`/stories/${storyId}/storybooks${query}`);
+  async getMyStories(childId: string): Promise<StoryView[]> {
+    const data = await this.data<{ stories: StoryView[] }>('GET', `/stories?childId=${encodeURIComponent(childId)}`);
+    return data.stories;
   }
 
   // ============================================================================

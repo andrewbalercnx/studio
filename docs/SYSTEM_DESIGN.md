@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.3: server-side Story creation (§13) — five modes behind one engine interface, `POST /api/stories` + turns + abandon + finish, `story.finish` job, target Stories and turns in `stories`, trial-data reset script; not yet used by the clients (5.4). Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
+> **Last Updated**: 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.4: every client creates Stories through the creation routes (§2) — one mode chooser and play view for the web child shell and the kids PWA, mobile on the same routes, `GET /api/stories[/{id}]` and `GET /api/creation-modes`; the session engine, chat mode, warmup, arc engine, every old mode route and flow, `storySessions` and the old storybook read paths are deleted; Stories are server-written only; the trial data is reset at deploy (`docs/DEPLOYMENT.md` §10). Phase 5.3: server-side Story creation (§13) — five modes behind one engine interface, `POST /api/stories` + turns + abandon + finish, `story.finish` job, target Stories and turns in `stories`, trial-data reset script; not yet used by the clients (5.4). Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -12,7 +12,7 @@ StoryPic Kids is an interactive story creation platform for children. Children c
 
 ### Core User Flows
 
-1. **Story Creation**: Child interacts with AI through warmup → story beats → ending → compilation
+1. **Story Creation**: the child picks a creation mode (Story Wizard, Free Play, Guided Story, Fun with my friends, Choose Your Adventure) and answers the AI turn by turn; the server records every turn and finishes the Story (title, synopsis)
 2. **Book making**: the child picks a book type (Form) and an art style (Style); the server paginates the story into a Manuscript, narrates it and draws the Book's pictures as background jobs
 3. **Print Ordering**: Parents can order physical copies through Mixam print-on-demand integration
 
@@ -97,28 +97,49 @@ Firebase Auth → Custom Claims → Role-Based Access
 
 **Implementation**: Custom claims set via Firebase Admin SDK. Firestore security rules enforce access based on claims.
 
-### 2. Story Session Engine
+### 2. Story creation in the clients (web app, kids PWA, mobile)
 
-> What today's clients run. Its replacement — one Story, five creation modes behind one interface,
-> three routes and the `story.finish` job — is on the server since slice 5.3 (§13); slice 5.4 moves
-> the clients and deletes this engine.
+Every client creates Stories through the creation routes of §13
+([`architecture/target/slices/5.4-creation-clients.md`](architecture/target/slices/5.4-creation-clients.md)).
+There is no client-side session creation and no client write to `stories` or its turns.
 
 ```
-Session State Machine:
-warmup → story (beats 0-N) → ending → final/completed
+mode chooser ── GET /api/creation-modes (live + enabledForKids, kid-safe names, one recommended)
+   tap ─▶ POST /api/stories {childId, modeId, idempotencyKey}  (one key per child + mode: a double tap starts one Story)
+play view ── web/PWA: read-only listeners on stories/{id} and stories/{id}/turns (where ownerUid == uid)
+             mobile:  GET /api/stories/{id} (Story + turns, names resolved), polled while finishing
+   answer ─▶ POST /api/stories/{id}/turns {input, idempotencyKey}  (one key per answer; a repeat returns the recorded reply)
+   creating → finishing (story.finish: title + synopsis) → complete ─▶ Form + Style chooser (§3)
+lists, readers ── GET /api/stories?childId (newest first, abandoned left out) and GET /api/stories/{id}
 ```
 
-**Key Collections**:
-- `storySessions`: Session state and metadata
-- `storySessions/{id}/messages`: Chat history
-
-**Flow**:
-1. Session created with `currentPhase: 'warmup'`
-2. `/api/warmupReply` handles warmup interactions
-3. Session transitions to `story` phase with `storyTypeId` set
-4. `/api/storyBeat` generates story options, advances `arcStepIndex`
-5. At arc completion, `/api/storyEnding` generates endings
-6. `/api/storyCompile` creates final story text
+- **One web experience** (`src/components/creation/`): `ModeChooser`, `StoryPlay`, `StoryList`,
+  `StoryReader`, used by the kids PWA (`/kids/create`, `/kids/create/{storyId}`, `/kids/stories`,
+  `/kids/story/{id}/read`) and the web child shell (`/child/{childId}/create`,
+  `/child/{childId}/create/{storyId}`, `/child/{childId}/stories`, `/child/{childId}/story/{id}/read`).
+  The parent's `/stories` and `/story/{storyId}` use the same API views.
+- **The latest turn drives the screen**: its `promptDisplay` and option `display` are stored with
+  names, and `expects` says what to show — option buttons (`choice`), a text box (`text`; Free Play
+  and Guided also take a typed idea where they offer choices), or a pick of who comes along
+  (`castPick`, the mode's suggestions preselected, the hero always included).
+- **Idempotency and errors**: `useSendTurn` keeps one key per (prompt, answer), so a double tap or
+  "Try again" repeats it; 409 `TURN_IN_PROGRESS` is retried with the same key after a short wait; 409
+  `TURN_CONFLICT` shows the newest question (another device answered first); 503 (`AI_UNAVAILABLE`)
+  offers a retry. The play view never shows an old prompt's buttons once it has answered it. Copy
+  is kid-safe (`kidSafeMessage`); the allowance message (402) is the server's.
+- **Finishing**: `finishing` shows progress; `failed` offers `POST /api/stories/{id}/finish`;
+  `complete` opens the Form + Style chooser. A Story left half-way is "Still being made" in the list
+  and can be continued; the play view's ✕ can stop it (`POST /api/stories/{id}/abandon`).
+- **Names are resolved on the server**: the turn documents carry display words, and the read routes
+  render title, synopsis and text with names (`src/server/creation/views.ts`). The client-side
+  placeholder resolvers are gone.
+- **Renaming a Story** (formerly a client write of `metadata.title`) is dropped: titles come from the
+  mode or `story.finish`.
+- **Mobile** (`mobile/app/create.tsx`, `play/[storyId].tsx`, `stories.tsx`, `story/[storyId].tsx`)
+  calls the same routes through its API client (API only); every mode works on one play screen.
+  Books are made and read in the web app until the app reads Books.
+- **Rationale**: one Story model and one set of routes for every client (ADR-0004, ADR-0009); the
+  server owns the conversation, so rules can deny every client write (ADR-0005).
 
 ### 3. Books in the clients (web app, kids PWA)
 
@@ -155,18 +176,17 @@ story complete ─▶ child picks Form + Style (BookChooser)
 - **Rationale**: the server drives every step (ADR-0002/0005), so closing the tab no longer stops a
   book, and every client reads the same documents with the same status vocabulary.
 
-**Old storybooks** (`stories/{storyId}/storybooks`, made by the deleted `storybookV2` routes) are
-trial data kept until the data reset. Parents still see them read-only: the "Earlier storybooks"
-section of `/story/{storyId}` and `/parent/storybooks/{childId}`, the viewer `/storybook/{id}` (pages,
-share for locked books, print layout and order) and `/storybook/{id}/read`. Generating, repainting,
-page editing, finalizing and narration for them are gone. Child-facing lists show new Books only.
+**Old storybooks** (`stories/{storyId}/storybooks`) are removed with the trial-data reset; their
+read paths (viewer, `/read`, parent list section, `/api/parent/storybooks`,
+`/api/stories/{id}/storybooks`) are deleted. The print and order code for them
+(`printStoryBooks`, `/api/storyBook/printable`, `/api/storyBook/share`, `/api/storyBook/{id}`,
+`/storybook/{id}/print-layout` and `/order`) is kept unchanged until the print slice rebuilds it;
+it is no longer reachable from the UI.
 
-**Shared page components** (`src/components/book-reader/`): `BookPageSpread`, `ParentBookView`
-and `BookReader` render old storybooks for parents; `ImmersivePlayer` renders shared links
+**Shared page components** (`src/components/book-reader/`): `ImmersivePlayer` renders shared links
 (`/storybook/share/{id}`).
 
-**Mobile**: book creation is switched off ("Make books in the web app for now"); the app still lists
-and reads old storybooks through `/api/stories/*`. It does not show new Books yet.
+**Mobile**: book creation and reading are not in the app yet ("Make books in the web app for now").
 
 ### 4. Print Production System
 
@@ -293,7 +313,7 @@ Gets a brand-new family from an empty account to a finished book unaided. The bi
 
 **Components**:
 - **Step derivation** (`src/lib/onboarding.ts`): pure, unit-tested function mapping real account state → completion of the five steps (`createChild` → `addPhoto` → `createStory` → `generateArt` → `previewBook`).
-- **`GET/POST /api/user/onboarding`**: the only place steps are computed (server-first principle — clients render, never decide). GET derives from Firestore (children, `storySessions`, `stories` + `storybooks` subcollections), persists the snapshot to `users/{uid}.onboardingState`, and records the `signupAtMs`/`firstBookAtMs` pair. Short-circuits on cached state once complete/dismissed, so established accounts cost one doc read.
+- **`GET/POST /api/user/onboarding`**: the only place steps are computed (server-first principle — clients render, never decide). GET derives from Firestore (children, Stories by `ownerUid` with their server status, Books by `ownerUid`), persists the snapshot to `users/{uid}.onboardingState`, and records the `signupAtMs`/`firstBookAtMs` pair. Short-circuits on cached state once complete/dismissed, so established accounts cost one doc read.
 - **`OnboardingChecklist`** (`src/components/onboarding/onboarding-checklist.tsx`): non-modal, dismissible card on `/` and `/parent` listing the five steps with the next action highlighted and deep-linked. Renders nothing for non-parents, after dismissal, or once complete — zero change for established accounts. Deliberately never blocks the funnel (no modal, no required interaction).
 - **`OnboardingTipTrigger`** (`src/components/onboarding/onboarding-tip-trigger.tsx`): auto-starts a help wizard once per account on first use of story creation (`/kids/create`) and art generation (`/kids/create/[sessionId]/style`). Reuses the existing help-wizard infrastructure — the tips are ordinary `helpWizards` docs (`tip-first-story`, `tip-first-art`, seeded from `src/data/help-wizards.json` via the admin Help Wizards page). Conditioned on `onboardingState.tipsSeen` (server-persisted), never stacks on another wizard, and no-ops when the wizard docs aren't seeded.
 - **Empty states**: child/character/storybook list pages all point at the concrete next action (create profile / create character / start a story with this child) instead of dead-ending.
@@ -434,8 +454,8 @@ orders for Books; the print slice adds them) and the mobile app.
 
 Slice 5.3 of the rebuild (ADR-0004, ADR-0009; [`architecture/target/creation.md`](architecture/target/creation.md),
 [`architecture/target/slices/5.3-creation-server.md`](architecture/target/slices/5.3-creation-server.md)).
-**On the server, not yet used by the clients**: today's clients still run the Story Session Engine
-(§2); slice 5.4 moves web, kids PWA and mobile onto these routes and deletes §2.
+Used by every client since slice 5.4 (§2), together with the read routes `GET /api/stories`,
+`GET /api/stories/{id}` and `GET /api/creation-modes`.
 
 ```
 POST /api/stories {childId, modeId, castIds?, idempotencyKey}
@@ -472,12 +492,13 @@ POST /api/stories/{id}/finish    failed → finishing (new job)
 - **Allowance**: checked when a Story starts (402 before anything is created), consumed exactly once
   by `story.finish` in the transaction that sets `complete`. Every mode ends through it (today
   Wizard and Friends skip compile and are never charged).
-- **TEST_MODE**: every engine and `story.finish` model call returns a deterministic fixture, so the
-  emulator E2E (slice 5.4) can create a Story end to end through the UI.
-- **Books**: `src/server/books/story-source.ts` reads both shapes (target Stories must be
-  `complete`); the legacy branch is deleted in 5.4. Rules: owner reads target Stories and turns; no
-  client writes.
-- **Trial-data reset** (`scripts/reset-trial-data.mjs`, `docs/DEPLOYMENT.md` §10) ships with 5.4.
+- **TEST_MODE**: every engine and `story.finish` model call returns a deterministic fixture; the
+  blocking emulator E2E creates its Story through the UI with them.
+- **Books**: `src/server/books/story-source.ts` reads Stories only (a document without
+  `schemaVersion: 2` is "not found"); a Story makes Books only when `complete`. Rules: the owner reads
+  Stories and turns; no client writes.
+- **Trial-data reset** (`scripts/reset-trial-data.mjs`, `docs/DEPLOYMENT.md` §10) runs at the deploy
+  of 5.4: the retired flows' sessions, stories and storybooks are deleted, not migrated.
 
 ---
 
@@ -543,7 +564,7 @@ POST /api/stories/{id}/finish    failed → finishing (new job)
   - Enter/switch child ("Who is playing?" tap, "Play as <child>", kids-PWA `lockToChild`) → POST sets the cookie for that child (child→child switching stays PIN-free by owner decision)
   - Switch to parent (header, `switchToParentMode`), kids-PWA unlock (PIN-gated), sign-out → DELETE clears the cookie
   - `help-*` demo profiles → cookie cleared (no real child doc backs them)
-- **Enforcement**: the story/book chokepoints (`storySession`, `storyWizard`, `storyCompile`, and the Book routes `/api/manuscripts`, `/api/books/**` through `assertOwner`) call `enforcePersonaScope`. A **valid** cookie whose `uid` matches the request's principal and whose `childId` differs from the request's effective child → `403 PERSONA_SCOPE_MISMATCH` (user-safe message). Admin/writer principals are exempt (admin tooling operates across children).
+- **Enforcement**: the story/book chokepoints (the creation routes `/api/stories/**`, the read routes `GET /api/stories[/{id}]`, and the Book routes `/api/manuscripts`, `/api/books/**`, all through `assertOwner`) call `enforcePersonaScope`. A **valid** cookie whose `uid` matches the request's principal and whose `childId` differs from the request's effective child → `403 PERSONA_SCOPE_MISMATCH` (user-safe message). Admin/writer principals are exempt (admin tooling operates across children).
 - **Fail-open rule (and why)**: an absent, malformed, tampered, or expired cookie means *behave exactly as before* — parentUid ownership checks only. The mobile app and `@storypic/api-client` authenticate with bearer tokens and never carry cookies; enforcing on cookie absence would break every non-browser client. Cookie present + valid = enforce; anything else = legacy.
 
 ### Parent PIN guard
@@ -606,16 +627,16 @@ POST /api/stories/{id}/finish    failed → finishing (new job)
     abandon retries if any instance trips the circuit mid-flight).
   - `src/lib/ai-error-map.ts`: the exhaustive, unit-tested raw→user-safe message table
     (`toUserSafeMessage` / `categorizeError`).
-- **Retry adoption**: `storyWizardFlow` (both LLM calls) and `avatarAnimationFlow` run under
-  `withProviderReliability`; the Book pipeline's `book.pageArt` job simplifies its prompt per job
+- **Retry adoption**: `avatarAnimationFlow` runs under `withProviderReliability`; the creation
+  engines and `story.finish` call models through the AI harness (retries, breakers); the Book pipeline's `book.pageArt` job simplifies its prompt per job
   attempt (a flow-specific recovery) and goes through the AI harness (shared classifier, backoff and
   breakers). ElevenLabs TTS flows use the SDK's built-in
   `maxRetries`/timeout.
 - **No raw error reaches a child/parent — at every layer**:
-  - *Routes*: every interactive generation route (`tts`, `storyWizard`, `storyFriends`, `storyArc`,
-    `storyEnding`, `storyBeat`, `gemini3`, `gemini4`, `warmupReply`, `storyCompile`,
-    `generateAvatar`, `generateCharacterAvatar`) maps catch-block errors through
-    `toUserSafeMessage`.
+  - *Routes*: the routes on `withRoute` (creation, Books) answer `{ ok: false, error: { code,
+    message } }` with user-safe messages (model failures are 503 `AI_UNAVAILABLE`); the older
+    generation routes (`tts`, `generateAvatar`, `generateCharacterAvatar`) map catch-block errors
+    through `toUserSafeMessage`. Clients map codes to kid-safe copy (`src/lib/stories/api.ts`).
   - *Flow results*: flows that return `{ error | errorMessage }` result objects return user-safe
     strings (routes pass these through verbatim). Raw detail stays in `aiFlowLogs` and
     diagnostics-gated `debug` payloads.
@@ -630,16 +651,14 @@ POST /api/stories/{id}/finish    failed → finishing (new job)
   from its pages (`art {total, done, failed}`) and sets `ready`, `partial` or `failed`. A partial Book
   is readable and lockable; each failed page shows a calm placeholder and, for a parent, a retry
   that starts a new job for that page.
-- **Old storybooks** keep the earlier contract read-only: `StoryBookArtStatus` /
-  `deriveStorybookArtStatus` (`src/lib/storybook-status.ts`) still gate their viewer, print layout
-  and the Mixam order (`evaluateOrderArtGate`), with the persisted `artStatus` written before the
-  `storybookV2` routes were removed.
+- **Old storybooks**: `src/lib/storybook-status.ts` (`evaluateOrderArtGate`) is kept for the
+  unchanged Mixam order route until the print slice; their viewers are deleted.
 
-### Perceived Latency (wizard)
-- `storyWizardFlow` returns server-authoritative `questionNumber`/`totalQuestions`; the kids create
-  page renders "Question N of 4" plus a questions+story progress strip, and the long final
-  story-writing call has distinct expectation-setting copy. `StoryGeneratorResponse` carries the
-  same fields for the parent `StoryBrowser` badge.
+### Perceived Latency (creation)
+- The play view shows the server's `progress` ("Step N of M" and a progress strip) and, while the
+  answer to the last step is being written up, distinct "writing your whole story" copy; while the
+  Story is `finishing` it says the finishing touches are being added. The mode chooser shows the
+  mode's loading message while the first turn is made.
 
 ### Testing seam (`TEST_MODE`)
 - `src/lib/test-mode.ts` (`TEST_MODE`/`E2E_FAKE_AI`): when set, the Book pipeline's job handlers
@@ -647,8 +666,9 @@ POST /api/stories/{id}/finish    failed → finishing (new job)
   documents without calling Gemini/ElevenLabs — enabling deterministic E2E with the in-process job
   dispatcher. Default (unset) behaviour is unchanged.
 - Firebase client config is emulator-aware via `NEXT_PUBLIC_FIREBASE_USE_EMULATOR` (+ host/port vars);
-  default points at prod. Playwright E2E lives in `e2e/`; the funnel spec (blocking in CI) makes a
-  Book through `POST /api/books` and reads it.
+  default points at prod. Playwright E2E lives in `e2e/`; the funnel spec (blocking in CI) creates
+  a Story through the UI (wizard fixtures), makes a Book through `POST /api/books` and reads it.
+- The creation engines and `story.finish` return fixtures under `TEST_MODE` too (§13).
 
 ### Entitlements
 - `src/lib/entitlements/` + `entitlementLedgers` collection model per-family balances granted by the
@@ -659,14 +679,11 @@ POST /api/stories/{id}/finish    failed → finishing (new job)
   `checkEntitlement` (read-only pre-flight, treats a missing ledger as free-tier-seeded in memory)
   and `consumeEntitlement` (the authoritative decrement — a Firestore **transaction** read-modify-
   writes the ledger so concurrent creates cannot double-spend, seeding the free tier on first use).
-  - **Story creation (`story_allowance`)**: enforced at the **completion chokepoint**. Every flow
-    (kids and the six parent `/story/start/*` flows) finishes a story through `POST /api/storyCompile`,
-    so that route both (a) **pre-flight blocks** with a `402` when the family is at its limit (no
-    story doc is produced → the whole funnel is blocked) and (b) **consumes one `story_allowance` on
-    success**, idempotently via a `storyAllowanceConsumed` flag. This is *consume-on-completion*:
-    abandoned creates never burn quota. `kids/create` additionally calls the non-consuming
-    `POST /api/entitlements/check` at start purely for an early, friendly block (fails *open* on
-    transport errors — enforcement still holds at compile).
+  - **Story creation (`story_allowance`)**: `POST /api/stories` checks the allowance before
+    anything is created (`402 ENTITLEMENT_LIMIT`, shown to the child as the server's message), and
+    `story.finish` consumes one unit in the transaction that sets the Story `complete` (§13). This is
+    *consume-on-completion*: abandoned Stories never burn quota, and every mode is charged the same
+    way.
   - **Book creation (`storybook_allowance`)**: `POST /api/books` consumes one unit in the same
     transaction that creates the Book (`src/server/books/allowance.ts`, same ledger semantics), so a
     Book exists if and only if a unit was charged; `402 ENTITLEMENT_LIMIT` at the limit. A repeated
@@ -827,13 +844,14 @@ unit tests, and the funnel E2E, but does not deploy.
 │   │   ├── admin/             # Admin dashboard pages
 │   │   ├── parent/            # Parent-facing pages
 │   │   ├── kids/              # Kids PWA pages
-│   │   ├── story/             # Story creation pages
-│   │   └── storybook/         # Storybook viewing pages
+│   │   ├── child/             # Web child shell (create, play, stories, books)
+│   │   ├── story/             # Parent story view
+│   │   └── storybook/         # Kept print/order and share pages (old storybooks)
 │   ├── components/            # React components
 │   │   ├── ui/               # Base UI components (shadcn)
+│   │   ├── creation/         # Mode chooser, play view, story list and reader
+│   │   ├── books/            # Book chooser, progress, reader
 │   │   └── admin/            # Admin-specific components
-│   ├── contexts/              # React contexts
-│   │   └── api-client-context.tsx  # API client provider
 │   ├── hooks/                 # Custom React hooks
 │   ├── server/                # Rebuild foundations (server-only): http, data, jobs, ai, config
 │   ├── lib/                   # Shared utilities
@@ -841,7 +859,7 @@ unit tests, and the funnel E2E, but does not deploy.
 │   │   ├── genkit/           # AI flow definitions
 │   │   └── firestore-hooks.ts # Firestore React hooks
 │   └── firebase/             # Firebase client setup
-└── mobile/                    # (Future) Expo React Native app
+└── mobile/                    # Expo React Native app (API only)
 ```
 
 ### Workspace Packages
@@ -849,14 +867,15 @@ unit tests, and the funnel E2E, but does not deploy.
 The project uses npm workspaces to share code between the web app and future mobile clients:
 
 **@storypic/shared-types**: TypeScript type definitions for API contracts
-- Child-facing types only (ChildProfile, Story, StoryBookOutput, etc.)
-- API request/response types
-- Used by both web app and API client
+- Child-facing types (ChildProfile, Character, StoryOutputType, ImageStyle) and the creation
+  contract (CreationModeView, StoryView, StoryTurnView, ChildInput, StoryTurnResult)
+- Used by the API client
 
 **@storypic/api-client**: Typed HTTP client for child-facing features
-- `StoryPicClient` class with methods for story creation, storybook generation
-- Used via `ApiClientProvider` context in React components
-- Designed for reuse in mobile apps
+- `StoryPicClient`: `listCreationModes`, `createStory`, `sendTurn`, `abandonStory`, `retryFinish`,
+  `getStory`, `getMyStories`, `createBook`, catalog and TTS calls
+- The web app calls the routes directly (`src/lib/stories/api.ts`, `src/lib/books/api.ts`); the
+  mobile app carries its own copy (`mobile/src/contexts/ApiClientContext.tsx`) with the same methods
 
 ---
 
@@ -867,7 +886,9 @@ The project uses npm workspaces to share code between the web app and future mob
 | Type definitions | `src/lib/types.ts` |
 | API contract types | `packages/shared-types/src/index.ts` |
 | API client | `packages/api-client/src/client.ts` |
-| API client context | `src/contexts/api-client-context.tsx` |
+| Story client hooks and calls | `src/hooks/use-stories.ts`, `src/lib/stories/` |
+| Creation UI (mode chooser, play view, story list, reader) | `src/components/creation/` |
+| Creation server (engines, services, views) | `src/server/creation/` |
 | Firestore rules | `firestore.rules` |
 | AI flows | `src/ai/flows/*.ts` |
 | Book client hooks and calls | `src/hooks/use-books.ts`, `src/lib/books/` |

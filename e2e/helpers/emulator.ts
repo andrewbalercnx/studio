@@ -7,17 +7,17 @@
  * are set. The `demo-` project id guarantees nothing here can reach production.
  *
  * Jobs:
- *  1. seedCatalog()        — the minimal catalog docs (generator, output type =
- *                            Form, image style = Style) the funnel UI needs.
- *  2. seedCompletedStory() — a completed story session + compiled story doc,
- *                            shaped exactly like the wizard flow + storyCompile
- *                            leave them. This is the deterministic stand-in for
- *                            the AI-driven story creation steps (see
- *                            docs/testing/e2e.md for why the seam sits here).
- *  3. seedReadyBook()      — a finished Book (server pipeline) for report-only
- *                            journeys that need one without running the funnel.
- *  4. cleanup helpers      — per-account doc deletion (children, stories, books,
- *                            manuscripts, jobs, ledger) + auth-user deletion.
+ *  1. seedCatalog()        — the minimal catalog docs (creation modes, output
+ *                            type = Form, image style = Style) the funnel UI needs.
+ *  2. seedCompleteStory()  — a complete Story as the creation routes and
+ *                            story.finish leave it, for REPORT-ONLY journeys
+ *                            (a11y, probe) that need one without playing. The
+ *                            blocking funnel creates its Story through the UI.
+ *  3. seedReadyBook()      — a finished Book (server pipeline) for the same
+ *                            report-only journeys.
+ *  4. cleanup helpers      — per-account doc deletion (children, characters,
+ *                            stories + turns, books, manuscripts, jobs, ledger)
+ *                            + auth-user deletion.
  */
 import { getApps, initializeApp, type App } from 'firebase-admin/app';
 import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore';
@@ -50,18 +50,25 @@ export function emulatorFirestore(): Firestore {
 
 /** Catalog doc ids — referenced by specs for click targets and assertions. */
 export const SEED = {
+  // storyGenerators/wizard is the `wizard` creation mode (src/server/creation/modes.ts).
   generatorId: 'wizard',
   generatorName: 'Story Wizard',
-  // A second generator is seeded so /kids/create renders the selection screen:
-  // with exactly one live generator the page AUTO-selects it, which for the
-  // wizard immediately starts the live-AI flow.
-  secondGeneratorId: 'chat',
-  secondGeneratorName: 'Chat Adventure',
+  // A second mode (storyGenerators/gemini3 = `freeplay`, presented as "Free
+  // Play") so the chooser shows a real choice.
+  secondGeneratorId: 'gemini3',
+  secondGeneratorName: 'Free Play',
   outputTypeId: 'e2e-picture-book',
   outputTypeLabel: 'E2E Picture Book',
   imageStyleId: 'e2e-watercolour',
   imageStyleTitle: 'E2E Watercolour',
+  /** Title of a seeded (report-only) Story. */
   storyTitle: 'The Deterministic Dragon',
+} as const;
+
+/** The TEST_MODE wizard (src/server/creation/engines/wizard.ts): four questions, then a story titled "<hero>'s Big Day". */
+export const WIZARD_FIXTURE = {
+  questions: ['Where should the story happen?', 'Who do you meet there?', 'What goes wrong?', 'How is it fixed?'],
+  title: (heroName: string) => `${heroName}'s Big Day`,
 } as const;
 
 /**
@@ -73,7 +80,7 @@ export async function seedCatalog(): Promise<void> {
   const now = FieldValue.serverTimestamp();
 
   await Promise.all([
-    // /kids/create reads storyGenerators where status==live && enabledForKids.
+    // GET /api/creation-modes lists the modes that are live and enabledForKids.
     db.collection('storyGenerators').doc(SEED.generatorId).set({
       id: SEED.generatorId,
       name: SEED.generatorName,
@@ -93,12 +100,12 @@ export async function seedCatalog(): Promise<void> {
     db.collection('storyGenerators').doc(SEED.secondGeneratorId).set({
       id: SEED.secondGeneratorId,
       name: SEED.secondGeneratorName,
-      description: 'Chat with a storyteller to build your adventure.',
+      description: 'Make the story up as you go.',
       status: 'live',
       enabledForKids: true,
       order: 2,
       styling: {
-        icon: 'MessageCircle',
+        icon: 'Sparkles',
         gradient: 'bg-gradient-to-br from-blue-400 to-purple-500',
         loadingMessage: 'Starting your adventure...',
       },
@@ -135,77 +142,58 @@ export async function seedCatalog(): Promise<void> {
 }
 
 /**
- * Seed a COMPLETED story for {parentUid, childId}: the storySessions doc, the
- * per-child session mirror, and the compiled stories/{id} doc — the exact
- * post-conditions of the wizard flow + /api/storyCompile (see
- * story-compile-flow.ts wizard branch). This is the deterministic seam that
- * replaces the live-AI story creation steps in the funnel spec.
+ * Seed a COMPLETE Story for {ownerUid, childId}, shaped as the creation routes
+ * and `story.finish` leave it (schemaVersion 2). REPORT-ONLY journeys (a11y,
+ * probe) use it to reach the book screens without playing; the blocking
+ * funnel creates its Story through the UI and the TEST_MODE engines.
  */
-export async function seedCompletedStory(opts: {
-  parentUid: string;
+export async function seedCompleteStory(opts: {
+  ownerUid: string;
   childId: string;
-}): Promise<{ sessionId: string }> {
+}): Promise<{ storyId: string }> {
   const db = emulatorFirestore();
   const now = FieldValue.serverTimestamp();
-  const sessionId = `e2e-story-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-
-  const sessionData = {
-    id: sessionId,
-    childId: opts.childId,
-    parentUid: opts.parentUid,
-    status: 'completed' as const,
-    currentPhase: 'final' as const,
-    storyMode: 'wizard' as const,
-    storyTitle: SEED.storyTitle,
-    storyVibe: 'adventurous',
-    storyAllowanceConsumed: true,
-    [REGRESSION_FIELD]: true,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const storyText = [
-    'Once upon a test, a small dragon learned to breathe perfectly repeatable fire.',
+  const storyId = `st_e2e${Date.now()}${Math.floor(Math.random() * 1e6)}`;
+  const hero = `[[cast:${opts.childId}]]`;
+  const text = [
+    `Once upon a test, ${hero} met a small dragon who breathed perfectly repeatable fire.`,
     'Every flame came out exactly the same, which made the other dragons very jealous.',
-    'And so the deterministic dragon lived happily, green build after green build.',
+    `And so ${hero} and the deterministic dragon lived happily, green build after green build.`,
   ].join('\n\n');
 
   const batch = db.batch();
-  batch.set(db.collection('storySessions').doc(sessionId), sessionData);
-  batch.set(
-    db.collection('children').doc(opts.childId).collection('sessions').doc(sessionId),
-    sessionData,
-  );
   // Parent-created children default to autoReadAloud=true, which makes the
-  // story read page fire a live TTS call on open. Disable it for determinism —
-  // narration is covered by the TEST_MODE audio fixtures instead.
+  // story reader speak on open. Disable it for determinism.
   batch.update(db.collection('children').doc(opts.childId), { autoReadAloud: false });
-  batch.set(db.collection('stories').doc(sessionId), {
-    id: sessionId,
-    parentUid: opts.parentUid,
+  batch.set(db.collection('stories').doc(storyId), {
+    schemaVersion: 2,
+    ownerUid: opts.ownerUid,
     childId: opts.childId,
-    deletedAt: null,
-    storyText,
-    rawStoryText: storyText,
+    modeId: 'wizard',
+    storyTypeId: null,
+    cast: [{ castId: opts.childId, ref: { kind: 'child', id: opts.childId }, role: 'hero', addedBy: 'setup' }],
+    status: 'complete',
+    text,
+    title: SEED.storyTitle,
     synopsis: 'A small dragon masters perfectly repeatable fire.',
-    actors: [opts.childId],
-    storyMode: 'wizard',
-    metadata: {
-      title: SEED.storyTitle,
-      paragraphs: 3,
-      storyOutputTypeId: SEED.outputTypeId,
-      storyOutputTypeName: SEED.outputTypeLabel,
-    },
-    titleGeneration: { status: 'ready' },
-    synopsisGeneration: { status: 'ready' },
-    actorAvatarGeneration: { status: 'ready' },
+    titleHint: SEED.storyTitle,
+    modeState: {},
+    turnCount: 0,
+    pendingTurn: null,
+    idempotencyKey: null,
+    finishJobId: null,
+    finishRuns: 1,
+    allowance: null,
+    error: null,
+    completedAt: now,
+    abandonedAt: null,
     [REGRESSION_FIELD]: true,
     createdAt: now,
     updatedAt: now,
   });
   await batch.commit();
 
-  return { sessionId };
+  return { storyId };
 }
 
 /**
@@ -221,7 +209,7 @@ export async function seedReadyBook(opts: {
   const now = FieldValue.serverTimestamp();
   const story = (await db.collection('stories').doc(opts.storyId).get()).data();
   if (!story) throw new Error(`Story ${opts.storyId} not found — seed it first`);
-  const ownerUid = story.parentUid as string;
+  const ownerUid = story.ownerUid as string;
   const childId = story.childId as string;
   const suffix = `${Date.now()}${Math.floor(Math.random() * 1e6)}`;
   const manuscriptId = `ms_e2e${suffix}`;
@@ -288,8 +276,8 @@ export async function findUidByEmail(email: string): Promise<string> {
  * and stories from earlier runs would make selectors ambiguous.
  *
  * Mirrors scripts/cleanup-regression-data.mjs (regressionTest flag) and extends
- * it with the gaps that script is documented to miss: auth users, `users` docs
- * and `stories` docs (deleted here via the per-run seed/spec data).
+ * it with the gaps that script is documented to miss: auth users, `users` docs,
+ * Stories with their turns, Books, Manuscripts and jobs.
  */
 export async function cleanupFunnelAccount(opts: { uid: string }): Promise<void> {
   const db = emulatorFirestore();
@@ -315,11 +303,13 @@ export async function cleanupFunnelAccount(opts: { uid: string }): Promise<void>
   }
 
   await deleteWhere('children', 'ownerParentUid');
+  // Includes characters a story introduced (origin: 'story').
+  await deleteWhere('characters', 'ownerParentUid');
+  // Stories with their turns.
+  await deleteWhere('stories', 'ownerUid');
   await deleteWhere('books', 'ownerUid');
   await deleteWhere('manuscripts', 'ownerUid');
   await deleteWhere('jobs', 'ownerUid');
-  await deleteWhere('storySessions', 'parentUid');
-  await deleteWhere('stories', 'parentUid');
   // Ledger docs are keyed by parentUid (see ledger.server.ts ledgerDocPath).
   await deleteDocWithSubcollections(db.collection('entitlementLedgers').doc(uid)).catch(() => {});
   await deleteDocWithSubcollections(db.collection('users').doc(uid)).catch(() => {});

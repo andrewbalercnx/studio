@@ -1,6 +1,6 @@
 # Deployment Runbook — Staged Rollout, Feature Flags, Rollback
 
-> **Last Updated**: 2026-10-29 (Phase 5.3: trial-data reset script, §10, run with slice 5.4. Phase 5.1: Cloud Tasks for the job runner, §9)
+> **Last Updated**: 2026-10-29 (Phase 5.4: §10 deploy order — export config → deploy app and rules → reset trial data. Phase 5.3: trial-data reset script, §10, run with slice 5.4. Phase 5.1: Cloud Tasks for the job runner, §9)
 >
 > This document supersedes `docs/DEPLOYMENT_ROLLOUT.md` (the original design
 > sketch). It covers: what deploys today, the staged-rollout machinery this
@@ -309,7 +309,7 @@ Hosting → backend → Rollouts → re-deploy the previous successful rollout, 
 | `src/app/api/flags/route.ts` | Server-evaluated flags for clients | Live now (pure addition) |
 | `src/lib/feature-flags{,.server}.ts`, `src/hooks/use-feature-flag.ts` | Flag registry, evaluation, client hook | Live now |
 | `scripts/setup-cloud-tasks.sh` | Cloud Tasks queues, invoker service account, IAM for the job runner (§9) | Run once by the owner; idempotent |
-| `scripts/reset-trial-data.mjs` | Deletes trial user data, keeps families, children, characters and config (§10) | Dry-run default; once, with slice 5.4 |
+| `scripts/reset-trial-data.mjs` | Deletes trial user data, keeps families, children, characters and config (§10) | Dry-run default; once, right after the slice 5.4 deploy |
 
 ---
 
@@ -392,12 +392,19 @@ dispatch` (usually a missing queue or IAM binding).
 
 ---
 
-## 10. Trial-data reset (ships with slice 5.4)
+## 10. Trial-data reset (with the slice 5.4 release)
 
-When the clients switch to the new Story routes (slice 5.4), trial user data is
-reset rather than migrated (`docs/architecture/REVIEW_PLAN.md`). Families,
-children, characters and all curated configuration stay. Run this **once, in the
-5.4 release window**, after the 5.4 deploy is live.
+Slice 5.4 moves every client to the new Story routes and deletes the old
+creation flows, story sessions and old storybook views; trial user data is reset
+rather than migrated (`docs/architecture/REVIEW_PLAN.md`). Families, children,
+characters and all curated configuration stay. **Order: export config → deploy →
+reset**, once, in the 5.4 release window.
+
+Between the deploy and the reset the old documents are harmless: the app and the
+Book pipeline treat a `stories` document without `schemaVersion: 2` as not found
+(lists leave it out), and the 5.4 rules deny clients every read and write of
+`storySessions`, `children/*/sessions`, old story documents and their
+`storybooks`. Keep the window short anyway: the reset is what empties the lists.
 
 ### 10.1 What it deletes and keeps
 
@@ -417,15 +424,22 @@ delete them only deliberately with `--include-orders`.
 
 ### 10.2 Steps
 
-1. Export curated config first (the script refuses to run without it):
+1. **Export curated config** before anything changes (the reset script refuses to
+   run without it):
    ```bash
    node scripts/export-config.mjs            # writes seed/config/ (+ _manifest.json)
    ```
-2. Dry run against production (counts per collection; nothing is written):
+2. **Deploy 5.4**: merge the PR (App Hosting builds and rolls out `main`, §1) and
+   deploy the rules with it:
+   ```bash
+   firebase deploy --only firestore:rules --project <projectId>
+   ```
+   Smoke-test: a child can pick a mode, answer a question and see the next one.
+3. **Dry run** against production (counts per collection; nothing is written):
    ```bash
    FIREBASE_SERVICE_ACCOUNT_KEY="$(cat sa.json)" node scripts/reset-trial-data.mjs
    ```
-3. Delete, naming the project explicitly (it must match the credentials' project):
+4. **Delete**, naming the project explicitly (it must match the credentials' project):
    ```bash
    FIREBASE_SERVICE_ACCOUNT_KEY="$(cat sa.json)" node scripts/reset-trial-data.mjs \
      --confirm --project <projectId> [--storage --bucket <bucket>] [--reset-allowances] [--include-orders]
@@ -433,8 +447,9 @@ delete them only deliberately with `--include-orders`.
    `--storage` also deletes the Storage prefixes of the deleted documents
    (`stories/{id}/`, `storybook_printables/{id}/`, `books/{id}/`, `manuscripts/{id}/`,
    `print_storybooks/{id}/`). Children's and characters' photos and avatars are kept.
-4. Check the summary line (`Deleted N documents. Kept: …`) and open the app: children
-   and characters are there, story lists are empty.
+5. Check the summary line (`Deleted N documents. Kept: …`) and open the app: children
+   and characters are there, story and book lists are empty, and a new story can be
+   made end to end (mode → turns → complete → Form + Style → Book).
 
 Options: `--export-dir <dir>` (export elsewhere), `--skip-export-check` (no export
 needed, e.g. against an emulator). Deletes run in batches of 400 with exponential

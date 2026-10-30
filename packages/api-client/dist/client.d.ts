@@ -3,7 +3,7 @@
  *
  * Provides typed methods for all child-facing API operations.
  */
-import type { Story, StorySession, StoryBookOutput, StoryOutputPage, StoryGenerator, StoryOutputType, ImageStyle, StoryGeneratorResponse, StoryCompileResponse } from '@storypic/shared-types';
+import type { ChildInput, CreateStoryRequest, CreationModeView, StoryOutputType, ImageStyle, StoryStatus, StoryTurnResult, StoryTurnView, StoryView } from '@storypic/shared-types';
 /**
  * Configuration for the StoryPic API client.
  */
@@ -34,11 +34,13 @@ export declare class StoryPicClient {
     private request;
     private get;
     private post;
+    /** Routes on the shared route wrapper answer `{ ok: true, data }`. */
+    private data;
     /**
-     * Get available story generators for kids.
-     * This is a public endpoint (no auth required).
+     * The ways a child can make a story: live modes enabled for kids, in display
+     * order, presented kid-safely, exactly one `recommended`.
      */
-    getGenerators(): Promise<StoryGenerator[]>;
+    listCreationModes(): Promise<CreationModeView[]>;
     /**
      * Get available story output types (picture book, poem, etc.).
      */
@@ -48,35 +50,31 @@ export declare class StoryPicClient {
      */
     getImageStyles(): Promise<ImageStyle[]>;
     /**
-     * Create a new story session for a generator.
-     * Note: Session creation is currently done client-side via Firestore.
-     * TODO: Add server endpoint for session creation.
+     * Start creating a Story. `idempotencyKey` must be made once per tap and
+     * repeated on a retry of that tap: the server then returns the same Story
+     * and first turn (`created: false`). 402 ENTITLEMENT_LIMIT when the family
+     * has no story allowance left.
      */
-    createSession(childId: string, generatorId: string): Promise<StorySession>;
+    createStory(input: CreateStoryRequest): Promise<StoryTurnResult>;
     /**
-     * Send a choice to the wizard generator.
+     * Send the child's answer to the latest prompt (a choice, typed text or a
+     * cast pick, as the turn's `expects` says). One `idempotencyKey` per
+     * answer: a repeat returns the recorded reply. 409 TURN_IN_PROGRESS means
+     * the same answer is still being worked on (repeat it later); 409
+     * TURN_CONFLICT means another answer was recorded first; 503 means the AI
+     * was unavailable and nothing was recorded (repeat it).
      */
-    sendWizardChoice(sessionId: string, optionId?: string): Promise<StoryGeneratorResponse>;
-    /**
-     * Send a choice to the beat-based generator.
-     */
-    sendBeatChoice(sessionId: string, optionId?: string, moreOptions?: boolean): Promise<StoryGeneratorResponse>;
-    /**
-     * Send a choice/action to the friends generator.
-     */
-    sendFriendsAction(sessionId: string, optionId?: string, action?: 'confirm_characters' | 'change_characters' | 'more_synopses', selectedCharacterIds?: string[]): Promise<StoryGeneratorResponse>;
-    /**
-     * Send a choice/message to the gemini3 generator.
-     */
-    sendGemini3Choice(sessionId: string, optionId?: string, userMessage?: string): Promise<StoryGeneratorResponse>;
-    /**
-     * Send a choice/message to the gemini4 generator.
-     */
-    sendGemini4Choice(sessionId: string, optionId?: string, userMessage?: string): Promise<StoryGeneratorResponse>;
-    /**
-     * Compile a story session into a final story.
-     */
-    compileStory(sessionId: string): Promise<StoryCompileResponse>;
+    sendTurn(storyId: string, input: ChildInput, idempotencyKey: string): Promise<StoryTurnResult>;
+    /** Stop creating a Story (only while `creating`; idempotent). */
+    abandonStory(storyId: string): Promise<{
+        storyId: string;
+        status: StoryStatus;
+    }>;
+    /** A Story that `failed` while finishing goes back to `finishing`. */
+    retryFinish(storyId: string): Promise<{
+        storyId: string;
+        status: StoryStatus;
+    }>;
     /**
      * Create a Book: the story's words in a Form (the Manuscript, paginated on
      * the server with the Form's default length and density) drawn in a Style.
@@ -98,28 +96,18 @@ export declare class StoryPicClient {
         created: boolean;
     }>;
     /**
-     * Get pages for a storybook.
-     * Pages are returned sorted by pageNumber, with blank/title pages filtered out.
-     * Placeholders in displayText are resolved server-side.
+     * A Story and its turns. Every text (title, synopsis, finished text, each
+     * prompt and option) is rendered with names on the server.
      */
-    getStorybookPages(storyId: string, storybookId: string): Promise<StoryOutputPage[]>;
+    getStory(storyId: string): Promise<{
+        story: StoryView;
+        turns: StoryTurnView[];
+    }>;
     /**
-     * Get a story by ID.
-     * Returns story with resolved placeholders in title, synopsis, and storyText.
+     * The child's Stories, newest first, with the server's status. Abandoned
+     * Stories are left out.
      */
-    getStory(storyId: string): Promise<Story>;
-    /**
-     * Get all stories for a child.
-     * Stories are returned sorted by createdAt descending (most recent first).
-     * Soft-deleted stories are excluded.
-     */
-    getMyStories(childId: string): Promise<Story[]>;
-    /**
-     * Get all storybooks for a story.
-     * By default only returns storybooks with imageGeneration.status === 'ready'.
-     * Pass includeAll=true to get all storybooks.
-     */
-    getMyStorybooks(storyId: string, includeAll?: boolean): Promise<StoryBookOutput[]>;
+    getMyStories(childId: string): Promise<StoryView[]>;
     /**
      * Generate text-to-speech audio.
      * Returns a URL to the audio file.
