@@ -23,7 +23,7 @@ export const ai = genkit({
     // Add Vertex AI plugin for Veo video generation and other Vertex-specific models
     ...(gcpProject ? [vertexAI({ projectId: gcpProject, location: gcpLocation })] : []),
   ],
-  model: 'googleai/gemini-2.5-pro',
+  model: 'googleai/gemini-3.8-flash',
 });
 
 // Beta API instance for chat functionality
@@ -32,5 +32,5 @@ export const aiBeta = genkitBeta({
     googleAI(googleAIConfig),
     ...(gcpProject ? [vertexAI({ projectId: gcpProject, location: gcpLocation })] : []),
   ],
-  model: 'googleai/gemini-2.5-pro',
+  model: 'googleai/gemini-3.8-flash',
 });

@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-10-29 (Phase 5.4: every client creates Stories through the creation routes (§2) — one mode chooser and play view for the web child shell and the kids PWA, mobile on the same routes, `GET /api/stories[/{id}]` and `GET /api/creation-modes`; the session engine, chat mode, warmup, arc engine, every old mode route and flow, `storySessions` and the old storybook read paths are deleted; Stories are server-written only; the trial data is reset at deploy (`docs/DEPLOYMENT.md` §10). Phase 5.3: server-side Story creation (§13) — five modes behind one engine interface, `POST /api/stories` + turns + abandon + finish, `story.finish` job, target Stories and turns in `stories`, trial-data reset script; not yet used by the clients (5.4). Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
+> **Last Updated**: 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.4: every client creates Stories through the creation routes (§2) — one mode chooser and play view for the web child shell and the kids PWA, mobile on the same routes, `GET /api/stories[/{id}]` and `GET /api/creation-modes`; the session engine, chat mode, warmup, arc engine, every old mode route and flow, `storySessions` and the old storybook read paths are deleted; Stories are server-written only; the trial data is reset at deploy (`docs/DEPLOYMENT.md` §10). Phase 5.3: server-side Story creation (§13) — five modes behind one engine interface, `POST /api/stories` + turns + abandon + finish, `story.finish` job, target Stories and turns in `stories`, trial-data reset script; not yet used by the clients (5.4). Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -259,6 +259,12 @@ Central configuration for which AI models to use across the application. Managed
 - Flows call `getImageGenerationModel()`, `getPrimaryTextModel()`, etc.
 - Admin UI includes availability checking against Google AI API
 - Alerts can be sent to maintenance users when models become unavailable
+- Retired models: `src/lib/retired-models.ts` maps every Gemini model Google has shut down
+  (1.5, 2.0, 2.5) to its replacement (`gemini-3.8-flash` for text, `gemini-3.1-flash-image` for
+  images). Every place that reads a model name from Firestore (this config, `config/aiModels`,
+  `storyGenerators`, story types) passes it through `currentModelId`, so a stale stored value
+  cannot route calls to a model that returns 404. Defaults use stable models only; there is no
+  stable Gemini 3 Pro, so Flash serves the former Pro purposes.
 
 **Design Principle**: Content configuration is data-driven, allowing non-developers to adjust AI behavior and story options.
 
@@ -389,7 +395,7 @@ accepts only an OIDC token whose audience is `JOBS_OIDC_AUDIENCE` (default `JOBS
 whose email is `JOBS_INVOKER_SERVICE_ACCOUNT`; without that configuration it rejects every call.
 
 **Configuration**: `apphosting.yaml` sets `JOBS_DISPATCHER=cloud-tasks`, `JOBS_TASKS_PROJECT`,
-`JOBS_TASKS_LOCATION` (`us-central1`), `JOBS_RUN_URL` and `JOBS_INVOKER_SERVICE_ACCOUNT`
+`JOBS_TASKS_LOCATION` (`europe-west1`; Cloud Tasks has no europe-west4, where the backend runs), `JOBS_RUN_URL` and `JOBS_INVOKER_SERVICE_ACCOUNT`
 (`JOBS_QUEUE_PREFIX`, `JOBS_OIDC_AUDIENCE` unset). The queues (`ai-text`, `ai-image`, `tts`,
 `render`, `mixam`), the invoker service account and its IAM bindings are created by
 `scripts/setup-cloud-tasks.sh`, run once by the owner (`docs/DEPLOYMENT.md` §9). Locally and in

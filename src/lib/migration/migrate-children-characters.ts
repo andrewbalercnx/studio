@@ -275,7 +275,7 @@ Return the most appropriate pronouns.`;
 
   try {
     const result = await ai.generate({
-      model: 'googleai/gemini-2.0-flash',
+      model: 'googleai/gemini-3.8-flash',
       prompt,
       output: {
         schema: PronounInferenceSchema,

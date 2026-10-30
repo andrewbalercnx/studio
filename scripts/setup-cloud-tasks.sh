@@ -7,7 +7,7 @@
 # Admin roles).
 #
 #   scripts/setup-cloud-tasks.sh                 # defaults below
-#   BACKEND_ID=studio REGION=europe-west1 scripts/setup-cloud-tasks.sh
+#   BACKEND_ID=studio-1 REGION=europe-west1 scripts/setup-cloud-tasks.sh
 #   DRY_RUN=1 scripts/setup-cloud-tasks.sh       # print the commands only
 #
 # What it does:
@@ -29,9 +29,9 @@
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-studio-6508342045-13669}"         # .firebaserc default project
-REGION="${REGION:-us-central1}"                              # Cloud Tasks location (JOBS_TASKS_LOCATION)
-BACKEND_ID="${BACKEND_ID:-}"                                 # App Hosting backend id = its Cloud Run service name
-BACKEND_REGION="${BACKEND_REGION:-$REGION}"                  # region of the App Hosting backend
+REGION="${REGION:-europe-west1}"                             # Cloud Tasks location (JOBS_TASKS_LOCATION); no europe-west4
+BACKEND_ID="${BACKEND_ID:-studio-1}"                         # App Hosting backend id = its Cloud Run service name
+BACKEND_REGION="${BACKEND_REGION:-europe-west4}"             # region of the App Hosting backend
 APP_URL="${APP_URL:-https://storypic.rcnx.io}"               # public URL the tasks call
 QUEUE_PREFIX="${QUEUE_PREFIX:-}"                             # JOBS_QUEUE_PREFIX, e.g. "storypic-"
 INVOKER_SA_NAME="${INVOKER_SA_NAME:-storypic-jobs-invoker}"

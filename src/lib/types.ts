@@ -1274,7 +1274,7 @@ export type ArcStep = {
 // === Story Type Prompt Configuration ===
 
 export type StoryTypeModelConfig = {
-  name: string;                    // e.g., 'googleai/gemini-2.5-pro'
+  name: string;                    // e.g., 'googleai/gemini-3.8-flash'
   temperature?: number;            // Default: 0.7
   maxOutputTokens?: number;        // Default: 10000
 };
@@ -2021,9 +2021,9 @@ export type StoryGeneratorStyling = {
  * Available AI models for story generation.
  */
 export type AIModelName =
-  | 'googleai/gemini-2.5-pro'
-  | 'googleai/gemini-2.5-flash'
-  | 'googleai/gemini-2.0-flash';
+  | 'googleai/gemini-3.8-flash'
+  | 'googleai/gemini-3.5-flash'
+  | 'googleai/gemini-3.1-pro-preview';
 
 /**
  * Configuration for a specific prompt within a generator.
@@ -2289,16 +2289,16 @@ export const DEFAULT_MIXAM_CONFIG: MixamConfig = {
  * Used to centrally manage which AI models are used across the application
  */
 export type AIModelsConfig = {
-  // Image generation model (e.g., 'googleai/gemini-2.5-flash-image')
+  // Image generation model (e.g., 'googleai/gemini-3.1-flash-image')
   imageGenerationModel: string;
 
-  // Primary text model for complex tasks (e.g., 'googleai/gemini-2.5-pro')
+  // Primary text model for complex tasks (e.g., 'googleai/gemini-3.8-flash')
   primaryTextModel: string;
 
-  // Lightweight text model for simple tasks (e.g., 'googleai/gemini-2.5-flash')
+  // Lightweight text model for simple tasks (e.g., 'googleai/gemini-3.8-flash')
   lightweightTextModel: string;
 
-  // Legacy text model for specific use cases (e.g., 'googleai/gemini-2.0-flash')
+  // Legacy text model for specific use cases (e.g., 'googleai/gemini-3.8-flash')
   legacyTextModel: string;
 
   // Availability status from last check
@@ -2313,10 +2313,10 @@ export type AIModelsConfig = {
  * Default AI model configuration
  */
 export const DEFAULT_AI_MODELS_CONFIG: AIModelsConfig = {
-  imageGenerationModel: 'googleai/gemini-2.5-flash-image',
-  primaryTextModel: 'googleai/gemini-2.5-pro',
-  lightweightTextModel: 'googleai/gemini-2.5-flash',
-  legacyTextModel: 'googleai/gemini-2.0-flash',
+  imageGenerationModel: 'googleai/gemini-3.1-flash-image',
+  primaryTextModel: 'googleai/gemini-3.8-flash',
+  lightweightTextModel: 'googleai/gemini-3.8-flash',
+  legacyTextModel: 'googleai/gemini-3.8-flash',
 };
 
 /**
@@ -2343,7 +2343,7 @@ export type AIModelIssue = {
  * Model info from Google AI API ListModels response
  */
 export type GoogleAIModelInfo = {
-  name: string;                           // e.g., 'models/gemini-2.5-pro'
+  name: string;                           // e.g., 'models/gemini-3.8-flash'
   displayName: string;
   description?: string;
   version?: string;

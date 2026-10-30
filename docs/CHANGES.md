@@ -16,6 +16,24 @@
 
 ## Changes
 
+### 2026-10-30
+
+#### `#17` - Hotfix: move off retired Gemini 2.5 models
+
+**Type**: Bug fix (production outage)
+
+**Summary**: Google shut down `gemini-2.5-pro`, `gemini-2.5-flash` and `gemini-2.5-flash-image`. All three returned 404 with the production key, so every AI call failed. Text now uses `gemini-3.8-flash` and images use `gemini-3.1-flash-image`, the newest stable models; there is no stable Gemini 3 Pro.
+
+**Changes**:
+- `src/lib/retired-models.ts` (new): maps retired ids (1.5, 2.0, 2.5) to the replacements. `ai-model-config.ts`, `server/ai/model-registry.ts`, `friends-flow`, `story-beat-flow` and `ending-flow` apply it to model names read from Firestore.
+- Hard-coded model ids in flows, routes, admin pages and migrations replaced.
+- `thinkingBudget: 0` replaced with `thinkingLevel: 'LOW'` (Gemini 3).
+- `AIModelName` and the story-generator model picker now offer 3.8 Flash, 3.5 Flash and 3.1 Pro (preview).
+- Tests: `src/lib/__tests__/retired-models.test.ts` (new); registry tests updated.
+- Docs: `SCHEMA.md`, `SYSTEM_DESIGN.md`.
+
+---
+
 ### 2026-10-29
 
 #### `#16` - Phase 5.4: Story creation in all clients; delete old modes and sessions
