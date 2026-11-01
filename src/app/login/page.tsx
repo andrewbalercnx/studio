@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { useAuth } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +17,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSendingReset, setIsSendingReset] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const auth = useAuth();
@@ -49,6 +50,31 @@ export default function LoginPage() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!auth) return;
+    if (!email.trim()) {
+      toast({ title: 'Enter your email first', description: 'Type the email you signed up with, then tap "Forgot password?" again.' });
+      return;
+    }
+    setIsSendingReset(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+    } catch (error: any) {
+      // Only a malformed address is worth reporting; "no such user" must look
+      // the same as success, so the form cannot be used to probe for accounts.
+      if (error?.code === 'auth/invalid-email') {
+        toast({ title: 'That email address is not valid', variant: 'destructive' });
+        setIsSendingReset(false);
+        return;
+      }
+    }
+    toast({
+      title: 'Check your email',
+      description: `If ${email.trim()} has an account, a link to reset its password is on its way.`,
+    });
+    setIsSendingReset(false);
+  };
+
   return (
     <div className="container flex items-center justify-center min-h-[calc(100vh-3.5rem)]">
       <Card className="w-full max-w-sm">
@@ -63,7 +89,17 @@ export default function LoginPage() {
               <Input id="email" name="email" type="email" autoComplete="email" placeholder="m@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={isSendingReset}
+                  className="text-sm text-primary hover:underline disabled:opacity-50"
+                >
+                  {isSendingReset ? 'Sending…' : 'Forgot password?'}
+                </button>
+              </div>
               <Input id="password" name="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
           </CardContent>

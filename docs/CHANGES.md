@@ -18,6 +18,16 @@
 
 ### 2026-11-01
 
+#### `#22` - "Forgot password?" on the login page
+
+**Type**: Bug fix (missing feature)
+
+**Summary**: The login page had no way to reset a password. "Forgot password?" next to the password field sends Firebase's reset email to the address typed in. The confirmation reads the same whether or not the address has an account, so the form cannot be used to find out which emails are registered; only a malformed address is reported.
+
+**Files**: `src/app/login/page.tsx`.
+
+---
+
 #### `#21` - Book & Story trace: correlated AI logs, admin timeline
 
 **Type**: Diagnostics
