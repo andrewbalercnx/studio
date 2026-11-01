@@ -23,8 +23,6 @@ const reliability = async <T,>(provider: string, fn: () => Promise<T>, options?:
 };
 
 let logs: AICallLogEntry[];
-let loggingEnabled: boolean;
-const config = { get: vi.fn(async () => ({ enableAIFlowLogging: loggingEnabled, enableServerLogging: true })) };
 
 function harness(generate: GenerateFn) {
   return new AIHarness({
@@ -34,14 +32,12 @@ function harness(generate: GenerateFn) {
     log: async (entry) => {
       logs.push(entry);
     },
-    config: config as never,
   });
 }
 
 beforeEach(() => {
   providers = [];
   logs = [];
-  loggingEnabled = true;
   registry.resolve.mockClear();
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
@@ -107,10 +103,17 @@ describe('AIHarness.generateText', () => {
     expect(logs[1]).toMatchObject({ attempts: 1, error: expect.any(Error) });
   });
 
-  it('honours the AI flow logging toggle', async () => {
-    loggingEnabled = false;
-    await harness(vi.fn<GenerateFn>().mockResolvedValue({ text: 'x' })).generateText({ purpose: 'creation.text', flowName: 'f', prompt: 'p' });
-    expect(logs).toEqual([]);
+  it('logs every call with the trace context it runs in', async () => {
+    const { withTraceContext } = await import('../trace-context');
+    const h = harness(vi.fn<GenerateFn>().mockResolvedValue({ text: 'x' }));
+    await withTraceContext({ jobId: 'job_1', jobKind: 'book.pageArt', bookId: 'bk_1' }, () =>
+      h.generateText({ purpose: 'creation.text', flowName: 'f', prompt: 'p' })
+    );
+    await h.generateText({ purpose: 'creation.text', flowName: 'g', prompt: 'p' });
+    expect(logs.map((l) => [l.flowName, l.trace])).toEqual([
+      ['f', { jobId: 'job_1', jobKind: 'book.pageArt', bookId: 'bk_1' }],
+      ['g', {}],
+    ]);
   });
 
   it('refuses a purpose of the wrong kind', async () => {

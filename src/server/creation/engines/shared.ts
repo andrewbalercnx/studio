@@ -4,6 +4,7 @@
  * history from turns, and adding people to the cast (existing family members
  * or AI-introduced characters).
  */
+import { withTraceContext } from '../../ai/trace-context';
 import { createHash } from 'node:crypto';
 import type { MessageData } from 'genkit';
 import { z } from 'zod';
@@ -76,7 +77,7 @@ export async function generate<O>(deps: EngineDeps, ctx: StoryContext, request: 
   if (deps.testMode()) return request.fixture();
   let response: { text: string; output: O | null };
   try {
-    response = await deps.ai.generateText<O>({
+    response = await withTraceContext({ storyId: ctx.storyId }, () => deps.ai.generateText<O>({
       purpose: 'creation.text',
       creationModeModel: ctx.mode.model,
       flowName: request.flowName,
@@ -89,7 +90,7 @@ export async function generate<O>(deps: EngineDeps, ctx: StoryContext, request: 
         ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
         ...(request.maxOutputTokens !== undefined ? { maxOutputTokens: request.maxOutputTokens } : {}),
       },
-    });
+    }));
   } catch (error) {
     console.error(`[creation] ${request.flowName} failed`, (error as Error)?.message ?? error);
     throw new ServiceUnavailableError('The story helper could not answer just now. Please try again.', {

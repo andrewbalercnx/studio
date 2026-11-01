@@ -2,7 +2,8 @@
 
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
+import { Activity, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppContext } from '@/hooks/use-app-context';
 import { useParentGuard } from '@/hooks/use-parent-guard';
@@ -30,10 +31,20 @@ export default function BookPage({ params }: { params: Promise<{ bookId: string 
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-50">
       <div className="container mx-auto max-w-3xl px-2 py-4">
-        <Button variant="ghost" onClick={() => router.back()} className="mb-2 text-amber-800">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
+        <div className="mb-2 flex items-center justify-between">
+          <Button variant="ghost" onClick={() => router.back()} className="text-amber-800">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+          {roleMode === 'admin' && (
+            <Button asChild variant="ghost" size="sm" className="text-amber-800">
+              <Link href={`/admin/trace?bookId=${bookId}`}>
+                <Activity className="mr-1 h-4 w-4" />
+                Trace
+              </Link>
+            </Button>
+          )}
+        </div>
         <BookView bookId={bookId} parent={isParent ? { requireGuard } : undefined} />
       </div>
     </div>
