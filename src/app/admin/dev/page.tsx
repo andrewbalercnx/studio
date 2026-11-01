@@ -60,11 +60,14 @@ export default function DevelopmentPage() {
           <CardContent>
             <div className="flex flex-wrap gap-2">
               <Button asChild variant="outline" size="sm">
-                <Link href="/admin/run-traces">Run Traces</Link>
+                <Link href="/admin/trace">Book &amp; Story Trace</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/admin/run-traces">Run Traces (legacy sessions)</Link>
               </Button>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              Run Traces aggregates all AI calls for a story session with full prompts, outputs, and costs.
+              Book &amp; Story Trace shows every job and AI call for one Book or Story: timings, tokens, prompts and errors.
             </p>
           </CardContent>
         </Card>

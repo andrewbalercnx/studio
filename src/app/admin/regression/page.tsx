@@ -179,6 +179,7 @@ const initialTests: TestResult[] = [
   { id: 'API_BOOKS_V3_AUTH', name: 'API: /api/manuscripts + /api/books (Auth + Not Found)', status: 'PENDING', message: '' },
   { id: 'API_STORIES_V3_AUTH', name: 'API: /api/stories + turns/abandon/finish (Auth + Not Found)', status: 'PENDING', message: '' },
   { id: 'API_STORIES_READ', name: 'API: GET /api/stories, /api/stories/{id}, /api/creation-modes (Auth + shape)', status: 'PENDING', message: '' },
+  { id: 'API_ADMIN_TRACE', name: 'API: /api/admin/trace (admin only, id required, 404)', status: 'PENDING', message: '' },
   { id: 'API_PERSONA', name: 'API: /api/persona (auth + childId validation)', status: 'PENDING', message: '' },
   { id: 'API_VERIFY_PIN_LOCKOUT', name: 'API: /api/parent/verify-pin (lockout policy dry-run)', status: 'PENDING', message: '' },
   { id: 'API_USER_ONBOARDING_GET', name: 'API: /api/user/onboarding (GET shape)', status: 'PENDING', message: '' },
@@ -724,6 +725,23 @@ export default function AdminRegressionPage() {
         updateTestResult('API_STORIES_READ', { status: 'PASS', message: 'Story list, story and mode list refuse anonymous calls; missing ids are 404; modes have the kid-safe shape.' });
     } catch (e: any) {
         updateTestResult('API_STORIES_READ', { status: 'ERROR', message: e.message });
+    }
+
+    // Test: API_ADMIN_TRACE — the Book/Story trace route: anonymous 401, no id
+    // 400, an unknown Book 404. Read-only.
+    try {
+        const traceToken = await auth?.currentUser?.getIdToken?.();
+        if (!traceToken) throw new Error('Admin authentication required for trace test.');
+        const anonymous = await globalThis.fetch('/api/admin/trace?bookId=bk_regression', { cache: 'no-store' });
+        if (anonymous.status !== 401) throw new Error(`anonymous: expected 401, got ${anonymous.status}`);
+        const headers = { Authorization: `Bearer ${traceToken}` };
+        const noId = await authFetch('/api/admin/trace', { headers, cache: 'no-store' });
+        if (noId.status !== 400) throw new Error(`no id: expected 400, got ${noId.status}`);
+        const missing = await authFetch('/api/admin/trace?bookId=bk_regression_missing', { headers, cache: 'no-store' });
+        if (missing.status !== 404) throw new Error(`missing book: expected 404, got ${missing.status}`);
+        updateTestResult('API_ADMIN_TRACE', { status: 'PASS', message: 'Trace refuses anonymous calls, requires an id and 404s an unknown Book.' });
+    } catch (e: any) {
+        updateTestResult('API_ADMIN_TRACE', { status: 'ERROR', message: e.message });
     }
 
     // Test: API_PERSONA — the persona cookie endpoint (Sprint W4-A).

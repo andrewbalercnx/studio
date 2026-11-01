@@ -29,6 +29,14 @@ type LogAIFlowParams = {
   failureReason?: string;
   /** Story ID for storybook-related flows */
   storyId?: string | null;
+  /** AI harness purpose (src/server/ai/model-registry.ts), e.g. `book.pageArt` */
+  purpose?: string | null;
+  /** Book / Manuscript the call worked for (set by the job runner's trace context) */
+  bookId?: string | null;
+  manuscriptId?: string | null;
+  /** Job the call ran in, and its kind */
+  jobId?: string | null;
+  jobKind?: string | null;
   /** Storybook ID for storybook-related flows */
   storybookId?: string | null;
 };
@@ -51,6 +59,11 @@ export async function logAIFlow({
   failureReason,
   storyId,
   storybookId,
+  purpose,
+  bookId,
+  manuscriptId,
+  jobId,
+  jobKind,
 }: LogAIFlowParams) {
   try {
     const firestore = await getServerFirestore();
@@ -65,6 +78,9 @@ export async function logAIFlow({
     // Add storybook context if provided (for storybook-related flows)
     if (storyId) {
       logData.storyId = storyId;
+    }
+    for (const [field, value] of Object.entries({ purpose, bookId, manuscriptId, jobId, jobKind })) {
+      if (value) logData[field] = value;
     }
     if (storybookId) {
       logData.storybookId = storybookId;

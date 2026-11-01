@@ -16,6 +16,25 @@
 
 ## Changes
 
+### 2026-11-01
+
+#### `#21` - Book & Story trace: correlated AI logs, admin timeline
+
+**Type**: Diagnostics
+
+**Summary**: A Book is made by a dozen background jobs across queues, and nothing tied its AI calls together: logs carried only the family id and were off unless a diagnostics switch was on. Now every AI call through the harness is logged, tagged with the Story, Manuscript, Book and job it worked for, and `/admin/trace` shows one Book's or Story's whole run.
+
+**Changes**:
+- `src/server/ai/trace-context.ts` (new): an `AsyncLocalStorage` trace context. The job runner sets it around every job (job id, kind, target); creation sets the story id around its model calls. The harness copies it onto each `aiFlowLogs` entry (`purpose`, `storyId`, `manuscriptId`, `bookId`, `jobId`, `jobKind`).
+- Harness calls are logged whatever `enableAIFlowLogging` says (legacy flows still follow it).
+- `src/server/diagnostics/trace.ts` + `GET /api/admin/trace?bookId=|storyId=` (new, admin): jobs with queue wait, run time, attempts and errors; AI calls with model, latency, tokens (in / out / thinking), prompt and response; totals by purpose.
+- `/admin/trace` (new page, live refresh every 5 s), linked from Admin → Development and, for admins, from each Book page.
+- `scripts/trace-book.mjs` (new): the same timeline in a terminal.
+- Tests: trace context, harness tagging, trace builder. Regression page: `API_ADMIN_TRACE`.
+- Docs: `API.md`, `SCHEMA.md` (`aiFlowLogs` fields), `SYSTEM_DESIGN.md`.
+
+---
+
 ### 2026-10-30
 
 #### `#20` - Fix job dispatch in production; recover stuck finishing

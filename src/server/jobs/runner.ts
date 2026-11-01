@@ -27,6 +27,7 @@ import { resolveDb, type DbSource } from '../data/db';
 import { jobs as jobsRepository } from '../data/repositories';
 import type { CreateInput, Repository, WithId } from '../data/repository';
 import { isTerminalJobStatus, jobSchema, type Job, type JobError, type JobTarget } from '../data/schemas/job';
+import { traceContextForJob, withTraceContext } from '../ai/trace-context';
 import type { Dispatcher, DispatchRequest } from './dispatcher';
 import {
   DEFAULT_LEASE_MS,
@@ -284,12 +285,15 @@ export class JobRunner {
     const definition = this.registry.require(job.kind);
     let failure: JobError | null = null;
     try {
-      await definition.run({
-        job,
-        db,
-        enqueue: (specs) => this.enqueue(specs),
-        enqueueChildren: (specs) => this.enqueue(specs.map((spec) => ({ ...spec, parentJobId: job.jobId }))),
-      });
+      // Every AI call this job makes is logged with the job and what it works on.
+      await withTraceContext(traceContextForJob(job), () =>
+        definition.run({
+          job,
+          db,
+          enqueue: (specs) => this.enqueue(specs),
+          enqueueChildren: (specs) => this.enqueue(specs.map((spec) => ({ ...spec, parentJobId: job.jobId }))),
+        })
+      );
     } catch (error) {
       failure = toJobError(error);
       console.warn(`[jobs] ${job.kind} ${jobId} attempt ${job.attempt} failed: ${failure.code} ${failure.message}`);

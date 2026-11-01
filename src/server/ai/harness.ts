@@ -9,10 +9,11 @@
  *   (shared Firestore-backed breaker per provider + jittered retry of
  *   transient errors from src/lib/ai-retry.ts).
  * - Logging: one `aiFlowLogs` entry per call (via src/lib/ai-flow-logger.ts),
- *   written only when `systemConfig/diagnostics.enableAIFlowLogging` is on.
+ *   always, tagged with the job / Book / Manuscript / Story (trace-context.ts).
  *
  * Flow code built on it only builds prompts and parses output.
  */
+import { currentTraceContext, type TraceContext } from './trace-context';
 import type { MessageData, Part } from 'genkit';
 import type { z } from 'zod';
 import {
@@ -23,8 +24,6 @@ import {
   type ProviderReliabilityOptions,
 } from '@/lib/ai-circuit-breaker.server';
 import { isRetryable } from '@/lib/ai-retry';
-import { configService, type ConfigService } from '../config/config-service';
-import { diagnosticsConfig } from '../config/definitions';
 import {
   AI_PURPOSE_KIND,
   aiModelRegistry,
@@ -66,6 +65,8 @@ export type ReliabilityFn = <T>(
 export type AICallLogEntry = {
   flowName: string;
   purpose: AIPurpose;
+  /** Job, Book, Manuscript, Story the call worked for (trace-context.ts). */
+  trace: TraceContext;
   model: string;
   ownerUid: string | null;
   prompt: string;
@@ -82,7 +83,6 @@ export type AIHarnessDeps = {
   generate?: GenerateFn;
   reliability?: ReliabilityFn;
   log?: AICallLogger;
-  config?: Pick<ConfigService, 'get'>;
 };
 
 const PROVIDER_FOR_KIND: Record<AIPurposeKind, string> = {
@@ -108,6 +108,12 @@ const defaultLogger: AICallLogger = async (entry) => {
     startTime: entry.startTime,
     modelName: entry.model,
     attemptNumber: entry.attempts,
+    purpose: entry.purpose,
+    storyId: entry.trace.storyId ?? null,
+    bookId: entry.trace.bookId ?? null,
+    manuscriptId: entry.trace.manuscriptId ?? null,
+    jobId: entry.trace.jobId ?? null,
+    jobKind: entry.trace.jobKind ?? null,
   });
 };
 
@@ -165,14 +171,12 @@ export class AIHarness {
   private readonly generateFn: GenerateFn;
   private readonly reliability: ReliabilityFn;
   private readonly log: AICallLogger;
-  private readonly config: Pick<ConfigService, 'get'>;
 
   constructor(deps: AIHarnessDeps = {}) {
     this.registry = deps.registry ?? aiModelRegistry;
     this.generateFn = deps.generate ?? defaultGenerate;
     this.reliability = deps.reliability ?? withProviderReliability;
     this.log = deps.log ?? defaultLogger;
-    this.config = deps.config ?? configService;
   }
 
   /**
@@ -217,6 +221,7 @@ export class AIHarness {
     await this.writeLog({
       flowName: options.flowName,
       purpose: options.purpose,
+      trace: currentTraceContext(),
       model: model.model,
       ownerUid: options.ownerUid ?? null,
       prompt: options.logPrompt ?? '',
@@ -294,10 +299,13 @@ export class AIHarness {
     }
   }
 
+  /**
+   * Every call through the harness is logged, whatever the diagnostics switch
+   * (which still governs the legacy flows): the Book and Story traces
+   * (/admin/trace) are built from these entries.
+   */
   private async writeLog(entry: AICallLogEntry): Promise<void> {
     try {
-      const diagnostics = await this.config.get(diagnosticsConfig);
-      if (!diagnostics.enableAIFlowLogging) return;
       await this.log(entry);
     } catch (error) {
       console.warn('[ai] Failed to write AI call log', (error as Error)?.message ?? error);
