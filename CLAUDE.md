@@ -78,6 +78,20 @@ The regression test page contains automated tests for API routes and data access
 3. **Computed fields**: Add computed/derived fields (e.g., `hasBook`, `isReady`) to the API response rather than computing them client-side
 4. **Status logic**: Business logic determining states/statuses should be in API routes
 
+### Counts Link to Their Lists
+
+**Principle**: Anything that stands for a set of items (an icon, a tile, a "N books" label, a
+child's card) shows how many there are, and is a link to the list of them.
+
+**Rationale**: A count without a link is a dead end, and a link without a count makes the parent
+open a page to find out whether there is anything there. "1 storybook" must take you to the book.
+
+**Guidelines**:
+1. Counts come from the server (e.g. `GET /api/library/summary`), counted the same way the list
+   counts: never computed in the client (Server-First principle).
+2. The whole count is the link target (`3 books →`), not a separate "View" button.
+3. Say what the number is: "3 books" (made) is not "1 more on your plan" (allowance).
+
 ### Character Appearance Descriptions Must Come From Original Photos
 
 **Principle**: `imageDescriptionFlow` reads from `entity.photos` (raw uploaded originals). Never change it to read from `entity.canonicalImageUrl` or any other AI-generated image.
@@ -352,6 +366,7 @@ When you complete a todo item, inform the admin so they can mark it as completed
 
 | Date | Changes |
 |------|---------|
+| 2026-11-02 | Added "Counts Link to Their Lists" UI principle |
 | 2026-10-28 | Replaced push-to-main with branch + PR workflow; CHANGES.md entries keyed by PR number; added rebuild plan reference |
 | 2026-01-19 | Added dev todo API secret and URL to CLAUDE.md, added curl command to allowed commands |
 | 2026-01-17 | Added Development Todo List section with instructions for Claude to add items |
