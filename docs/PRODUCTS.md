@@ -76,6 +76,23 @@ double-spend. `print_credit` enforcement is deliberately deferred — see Deferr
   server-side (server-first).
 - Firestore rules: `products`/`prices` readable by authenticated users, writable by admins only.
 
+## Allowance management (admin, now) and the road to monetisation
+
+`/admin/allowances` (`GET/POST /api/admin/allowances`, `src/server/entitlements/admin-allowances.ts`)
+finds a family by email and shows the family pool and each child's own balances; an admin adds to,
+takes from, or sets what is left of any component, with a required reason. Each change and the
+balance it changed are written in one transaction, and the change is recorded in
+`entitlementLedgers/{uid}/grants` (`source: 'admin'`, who, before → after, reason).
+
+That history is the seam for monetisation. A completed purchase will apply its product's grants
+with `applyProductGrants` and write a `grants` record with `source: 'purchase'`, the product and
+price ids and the payment reference. Gift redemption will do the same with `source: 'gift'`. The
+admin page then shows bought, gifted and manual changes in one list. Still to come, in order:
+1. Product-driven grants (admin "grant product X" using the catalog, not raw numbers).
+2. Stripe Checkout + webhook → grant on payment (`externalPriceId` is the hook).
+3. Subscriptions: per-period renewal of quota grants.
+4. Parent-facing plan page: current balances, history, buy more.
+
 ## Design decisions (agreed defaults)
 
 1. **Components fixed in code; products fully admin-assembled.**

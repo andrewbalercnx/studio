@@ -18,6 +18,21 @@
 
 ### 2026-11-02
 
+#### `#26` - Admin allowance management, with a grant history
+
+**Type**: Feature (admin)
+
+**Summary**: There was no way to top up a family's stories or books short of editing Firestore. `/admin/allowances` finds a family by email, shows the family pool and each child's own balances (left / used / total per allowance), and adjusts any of them: add or take away N, or set what is left, with a required reason. Each change is written with the balance in one transaction and recorded in `entitlementLedgers/{uid}/grants` (who, before → after, reason), the history purchases will write to when payment lands (`docs/PRODUCTS.md`, "Allowance management … and the road to monetisation").
+
+**Changes**:
+- `src/server/entitlements/admin-allowances.ts` (new): `getFamilyAllowances`, `adjustAllowance`, pure `adjustBalances`.
+- `GET/POST /api/admin/allowances` (new, admin).
+- `/admin/allowances` page (new), linked from the admin dashboard next to Products & Pricing.
+- Tests: `src/server/entitlements/__tests__/admin-allowances.test.ts`; regression `API_ADMIN_ALLOWANCES`.
+- Docs: `API.md`, `SCHEMA.md` (`grants` subcollection), `PRODUCTS.md`, `SYSTEM_DESIGN.md`.
+
+---
+
 #### `#24` - Send our own password reset email; plain sign-in errors
 
 **Type**: Feature / Bug fix

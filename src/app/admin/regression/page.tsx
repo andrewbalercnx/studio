@@ -179,6 +179,7 @@ const initialTests: TestResult[] = [
   { id: 'API_BOOKS_V3_AUTH', name: 'API: /api/manuscripts + /api/books (Auth + Not Found)', status: 'PENDING', message: '' },
   { id: 'API_STORIES_V3_AUTH', name: 'API: /api/stories + turns/abandon/finish (Auth + Not Found)', status: 'PENDING', message: '' },
   { id: 'API_STORIES_READ', name: 'API: GET /api/stories, /api/stories/{id}, /api/creation-modes (Auth + shape)', status: 'PENDING', message: '' },
+  { id: 'API_ADMIN_ALLOWANCES', name: 'API: /api/admin/allowances (admin only, read own family)', status: 'PENDING', message: '' },
   { id: 'API_ADMIN_TRACE', name: 'API: /api/admin/trace (admin only, id required, 404)', status: 'PENDING', message: '' },
   { id: 'API_PERSONA', name: 'API: /api/persona (auth + childId validation)', status: 'PENDING', message: '' },
   { id: 'API_VERIFY_PIN_LOCKOUT', name: 'API: /api/parent/verify-pin (lockout policy dry-run)', status: 'PENDING', message: '' },
@@ -726,6 +727,23 @@ export default function AdminRegressionPage() {
         updateTestResult('API_STORIES_READ', { status: 'PASS', message: 'Story list, story and mode list refuse anonymous calls; missing ids are 404; modes have the kid-safe shape.' });
     } catch (e: any) {
         updateTestResult('API_STORIES_READ', { status: 'ERROR', message: e.message });
+    }
+
+    // Test: API_ADMIN_ALLOWANCES — anonymous 401; the admin reads their own family's
+    // allowances (read-only: nothing is adjusted).
+    try {
+        const anonymous = await globalThis.fetch('/api/admin/allowances?q=x', { cache: 'no-store' });
+        if (anonymous.status !== 401) throw new Error(`anonymous: expected 401, got ${anonymous.status}`);
+        const uid = auth?.currentUser?.uid;
+        if (!uid) throw new Error('Admin authentication required for allowances test.');
+        const res = await authFetch(`/api/admin/allowances?q=${encodeURIComponent(uid)}`, { cache: 'no-store' });
+        const body = await res.json();
+        if (!res.ok || !Array.isArray(body?.data?.family) || !Array.isArray(body?.data?.history)) {
+            throw new Error(`unexpected response ${res.status}: ${JSON.stringify(body).slice(0, 200)}`);
+        }
+        updateTestResult('API_ADMIN_ALLOWANCES', { status: 'PASS', message: `Read ${body.data.family.length} family balances, ${body.data.history.length} history entries.` });
+    } catch (e: any) {
+        updateTestResult('API_ADMIN_ALLOWANCES', { status: 'ERROR', message: e.message });
     }
 
     // Test: API_ADMIN_TRACE — the Book/Story trace route: anonymous 401, no id
