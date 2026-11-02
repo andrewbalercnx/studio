@@ -33,6 +33,19 @@
 
 ---
 
+#### `#25` - Counts that link to their lists
+
+**Type**: UX
+
+**Summary**: Parents could see a child or a "1 storybook" figure but not how many books there were, or get from the number to the books. New rule in `CLAUDE.md` ("Counts Link to Their Lists"), applied:
+- `GET /api/library/summary` (new): Story and Book counts per child and in total, counted on the server the way the lists count them.
+- Parent home ("Who is playing?"): under each child, "N books" (→ `/parent/storybooks/{child}`) and "N stories" (→ `/child/{child}/stories`).
+- Storybooks page: each child card reads "N books · M stories →" instead of "View storybooks →".
+- The "Your plan" card is now "Your library": "N stories →" / "N books →" (made, linking to the books page), with "K more on your plan" underneath, so the allowance is no longer mistaken for the number of books.
+- Tests: `src/server/library/__tests__/summary.test.ts`; regression `API_LIBRARY_SUMMARY`.
+
+---
+
 #### `#24` - Send our own password reset email; plain sign-in errors
 
 **Type**: Feature / Bug fix

@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { plural, useLibrarySummary } from '@/hooks/use-library-summary';
 
 type Child = {
   id: string;
@@ -19,6 +20,7 @@ type Child = {
 export default function ParentStorybooksPage() {
   const { user, idTokenResult, loading: userLoading } = useUser();
   const { isParentGuardValidated } = useParentGuard();
+  const { summary, forChild } = useLibrarySummary();
 
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,7 +97,9 @@ export default function ParentStorybooksPage() {
                   </Avatar>
                   <div className="text-center">
                     <p className="font-semibold text-lg">{child.displayName}</p>
-                    <p className="text-sm text-muted-foreground mt-0.5">View storybooks →</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {summary ? `${plural(forChild(child.id).books, 'book', 'books')} · ${plural(forChild(child.id).stories, 'story', 'stories')} →` : 'View books →'}
+                    </p>
                   </div>
                 </CardContent>
               </Card>

@@ -180,6 +180,7 @@ const initialTests: TestResult[] = [
   { id: 'API_STORIES_V3_AUTH', name: 'API: /api/stories + turns/abandon/finish (Auth + Not Found)', status: 'PENDING', message: '' },
   { id: 'API_STORIES_READ', name: 'API: GET /api/stories, /api/stories/{id}, /api/creation-modes (Auth + shape)', status: 'PENDING', message: '' },
   { id: 'API_ADMIN_ALLOWANCES', name: 'API: /api/admin/allowances (admin only, read own family)', status: 'PENDING', message: '' },
+  { id: 'API_LIBRARY_SUMMARY', name: 'API: /api/library/summary (auth + shape)', status: 'PENDING', message: '' },
   { id: 'API_ADMIN_TRACE', name: 'API: /api/admin/trace (admin only, id required, 404)', status: 'PENDING', message: '' },
   { id: 'API_PERSONA', name: 'API: /api/persona (auth + childId validation)', status: 'PENDING', message: '' },
   { id: 'API_VERIFY_PIN_LOCKOUT', name: 'API: /api/parent/verify-pin (lockout policy dry-run)', status: 'PENDING', message: '' },
@@ -744,6 +745,21 @@ export default function AdminRegressionPage() {
         updateTestResult('API_ADMIN_ALLOWANCES', { status: 'PASS', message: `Read ${body.data.family.length} family balances, ${body.data.history.length} history entries.` });
     } catch (e: any) {
         updateTestResult('API_ADMIN_ALLOWANCES', { status: 'ERROR', message: e.message });
+    }
+
+    // Test: API_LIBRARY_SUMMARY — counts for the caller's family; anonymous 401.
+    try {
+        const anonymous = await globalThis.fetch('/api/library/summary', { cache: 'no-store' });
+        if (anonymous.status !== 401) throw new Error(`anonymous: expected 401, got ${anonymous.status}`);
+        const res = await authFetch('/api/library/summary', { cache: 'no-store' });
+        const body = await res.json();
+        const totals = body?.data?.totals;
+        if (!res.ok || typeof totals?.stories !== 'number' || typeof totals?.books !== 'number' || typeof body?.data?.byChild !== 'object') {
+            throw new Error(`unexpected response ${res.status}: ${JSON.stringify(body).slice(0, 200)}`);
+        }
+        updateTestResult('API_LIBRARY_SUMMARY', { status: 'PASS', message: `Totals: ${totals.stories} stories, ${totals.books} books.` });
+    } catch (e: any) {
+        updateTestResult('API_LIBRARY_SUMMARY', { status: 'ERROR', message: e.message });
     }
 
     // Test: API_ADMIN_TRACE — the Book/Story trace route: anonymous 401, no id

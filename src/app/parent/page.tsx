@@ -7,7 +7,7 @@ import { useFirestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
 import type { ChildProfile } from '@/lib/types';
-import { LoaderCircle, Plus, User } from 'lucide-react';
+import { BookOpen, LoaderCircle, Plus, Sparkles, User } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -17,8 +17,10 @@ import { useAppContext } from '@/hooks/use-app-context';
 import { useParentGuard } from '@/hooks/use-parent-guard';
 import { EntitlementSummaryCard } from '@/components/entitlements/entitlement-summary';
 import { OnboardingChecklist } from '@/components/onboarding/onboarding-checklist';
+import { plural, useLibrarySummary } from '@/hooks/use-library-summary';
+import type { LibraryCounts } from '@/lib/library/types';
 
-function ChildIcon({ profile }: { profile: ChildProfile }) {
+function ChildIcon({ profile, counts }: { profile: ChildProfile; counts: LibraryCounts }) {
   const router = useRouter();
   const { setActiveChildId } = useAppContext();
 
@@ -42,6 +44,16 @@ function ChildIcon({ profile }: { profile: ChildProfile }) {
         </Avatar>
       </button>
       <p className="font-bold text-lg truncate w-full">{profile.displayName}</p>
+      <div className="flex flex-col items-center gap-0.5 text-sm">
+        <Link href={`/parent/storybooks/${profile.id}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+          <BookOpen className="h-3.5 w-3.5" />
+          {plural(counts.books, 'book', 'books')}
+        </Link>
+        <Link href={`/child/${profile.id}/stories`} className="inline-flex items-center gap-1 text-primary hover:underline">
+          <Sparkles className="h-3.5 w-3.5" />
+          {plural(counts.stories, 'story', 'stories')}
+        </Link>
+      </div>
     </div>
   );
 }
@@ -50,6 +62,7 @@ export default function ParentOverviewPage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const { isParentGuardValidated } = useParentGuard();
+  const { forChild } = useLibrarySummary();
 
   const childrenQuery = useMemo(() => {
     if (!user || !firestore) return null;
@@ -95,7 +108,7 @@ export default function ParentOverviewPage() {
     return (
       <div className="flex flex-wrap items-center justify-center gap-8">
         {visibleChildren.map(child => (
-          <ChildIcon key={child.id} profile={child} />
+          <ChildIcon key={child.id} profile={child} counts={forChild(child.id)} />
         ))}
       </div>
     );
