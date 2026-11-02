@@ -1,6 +1,6 @@
 # Deployment Runbook — Staged Rollout, Feature Flags, Rollback
 
-> **Last Updated**: 2026-11-02 (§11: auth email links on our domain). 2026-10-30 (§9.3: Cloud Tasks client kept external to the bundle; stuck finishing recovers). 2026-10-29 (Phase 5.4: §10 deploy order — export config → deploy app and rules → reset trial data. Phase 5.3: trial-data reset script, §10, run with slice 5.4. Phase 5.1: Cloud Tasks for the job runner, §9)
+> **Last Updated**: 2026-11-02 (§11: reset emails sent by the app, links on our domain). 2026-10-30 (§9.3: Cloud Tasks client kept external to the bundle; stuck finishing recovers). 2026-10-29 (Phase 5.4: §10 deploy order — export config → deploy app and rules → reset trial data. Phase 5.3: trial-data reset script, §10, run with slice 5.4. Phase 5.1: Cloud Tasks for the job runner, §9)
 >
 > This document supersedes `docs/DEPLOYMENT_ROLLOUT.md` (the original design
 > sketch). It covers: what deploys today, the staged-rollout machinery this
@@ -466,22 +466,15 @@ backoff. Tested against the emulator by `npm run test:reset`.
 
 ---
 
-## 11. Auth email links on our domain (one-time, owner, after `/auth/action` is deployed)
+## 11. Auth email links on our domain
 
-Firebase's default email links point at `https://studio-6508342045-13669.firebaseapp.com/__/auth/action`.
-To send them to the app's own handler (`src/app/auth/action/page.tsx`):
+Password reset emails are sent by the app (`POST /api/auth/password-reset`, Microsoft Graph, the
+sender in `systemConfig/email`) with links to `https://storypic.rcnx.io/auth/action`. Nothing to
+configure in Firebase: this project may not change Firebase's email templates (setting the
+action URL fails with `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`), which is why the app sends its own.
 
-1. Deploy a build that contains `/auth/action`, and check that `https://storypic.rcnx.io/auth/action`
-   shows "This link is incomplete" (no code in the URL).
-2. Firebase console → **Authentication → Templates** → edit any template (pencil) →
-   **Customize action URL** → `https://storypic.rcnx.io/auth/action` → Save. One setting covers
-   every template.
-3. Firebase console → **Authentication → Settings → Authorized domains**: `storypic.rcnx.io` must
-   be listed.
-4. Project settings → General → **Public-facing name**: `StoryPic Kids` (it replaces
-   `%APP_NAME%`, otherwise the project id, in every template).
-5. Test: "Forgot password?" on `/login`, follow the link, set a password, sign in.
-
-Do step 2 only after step 1: until the page is deployed, a changed action URL breaks every link.
-The sender domain (`noreply@storypic.rcnx.io`) is set separately under Templates → Customize domain.
-
+- `APP_BASE_URL` (optional, default `https://storypic.rcnx.io`) is the site the links point at.
+- Project settings → General → **Public-facing name** (`StoryPic Kids`) still names the app in
+  any email Firebase itself sends.
+- Test: "Forgot password?" on `/login` → the email comes from the StoryPic sender and its button
+  opens `storypic.rcnx.io/auth/action?mode=resetPassword…`.

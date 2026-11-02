@@ -187,6 +187,7 @@ const initialTests: TestResult[] = [
   { id: 'API_ADMIN_OPS_METRICS', name: 'API: /api/admin/ops/metrics (GET shape)', status: 'PENDING', message: '' },
   { id: 'API_ADMIN_OPS_HEALTH_CHECK', name: 'API: /api/admin/ops/health-check (POST dry-run)', status: 'PENDING', message: '' },
   { id: 'API_HEALTH', name: 'API: /api/health (version + dependency probe)', status: 'PENDING', message: '' },
+  { id: 'API_AUTH_PASSWORD_RESET', name: 'API: /api/auth/password-reset (validation only, sends nothing)', status: 'PENDING', message: '' },
   { id: 'API_ROUTE_AUTH_ANON', name: 'API: protected routes reject anonymous calls (401)', status: 'PENDING', message: '' },
   { id: 'API_FLAGS', name: 'API: /api/flags (server-evaluated feature flags)', status: 'PENDING', message: '' },
   { id: 'API_FEEDBACK_POST_VALIDATION', name: 'API: /api/feedback (POST validation)', status: 'PENDING', message: '' },
@@ -996,6 +997,21 @@ export default function AdminRegressionPage() {
         }
     } catch (e: any) {
         updateTestResult('API_HEALTH', { status: 'FAIL', message: e.message });
+    }
+
+    // Test: API_AUTH_PASSWORD_RESET — public route; an invalid address is a 400.
+    // A valid address is not tried: it would email a real person.
+    try {
+        const bad = await globalThis.fetch('/api/auth/password-reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: 'not-an-email' }),
+            cache: 'no-store',
+        });
+        if (bad.status !== 400) throw new Error(`invalid email: expected 400, got ${bad.status}`);
+        updateTestResult('API_AUTH_PASSWORD_RESET', { status: 'PASS', message: 'Rejects an invalid address with 400.' });
+    } catch (e: any) {
+        updateTestResult('API_AUTH_PASSWORD_RESET', { status: 'FAIL', message: e.message });
     }
 
     // Test: API_ROUTE_AUTH_ANON — Phase 0 route auth. Calls protected routes
