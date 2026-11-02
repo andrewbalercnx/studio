@@ -6,7 +6,8 @@
  *
  * - `useEntitlementSummary(childId?)` — fetches the summary for the signed-in family (optionally a
  *   child scope). Re-fetches when `childId` changes or `refreshKey` bumps.
- * - `EntitlementSummaryCard` — parent-app card: "Stories left / Storybooks left" with a gentle
+ * - `EntitlementSummaryCard` — parent-app card: how many stories and books the family has made
+ *   (each a link to where they are listed) and how many more the plan allows, with a gentle
  *   at-limit hint.
  * - `StoriesLeftBadge` — compact "N stories left" pill for the kids create screen.
  */
@@ -15,7 +16,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import type { EntitlementSummary } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import Link from 'next/link';
 import { BookOpen, Sparkles } from 'lucide-react';
+import { plural, useLibrarySummary } from '@/hooks/use-library-summary';
 
 type SummaryState = {
   summary: EntitlementSummary | null;
@@ -66,35 +69,50 @@ export function useEntitlementSummary(childId?: string, refreshKey?: unknown): S
   return state;
 }
 
-/** Parent-app card showing the family's remaining stories and storybooks. */
+/**
+ * Parent-app card: what the family has made, each count a link to where it is
+ * listed, and what the plan still allows. Books are listed per child on
+ * /parent/storybooks, which also shows each child's story count.
+ */
 export function EntitlementSummaryCard({ className }: { className?: string }) {
   const { summary, loading, error } = useEntitlementSummary();
+  const { summary: library } = useLibrarySummary();
 
   // Stay quiet on error/while loading — this is supplementary info, never a blocker.
   if (loading || error || !summary) return null;
 
-  const items: { label: string; remaining: number; icon: typeof Sparkles }[] = [
-    { label: 'Stories', remaining: summary.story.remaining, icon: Sparkles },
-    { label: 'Storybooks', remaining: summary.storybook.remaining, icon: BookOpen },
+  const items: { made: string; left: string; href: string; icon: typeof Sparkles }[] = [
+    {
+      made: library ? plural(library.totals.stories, 'story', 'stories') : 'Stories',
+      left: `${summary.story.remaining} more on your plan`,
+      href: '/parent/storybooks',
+      icon: Sparkles,
+    },
+    {
+      made: library ? plural(library.totals.books, 'book', 'books') : 'Books',
+      left: `${summary.storybook.remaining} more on your plan`,
+      href: '/parent/storybooks',
+      icon: BookOpen,
+    },
   ];
 
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="text-base">Your plan</CardTitle>
+        <CardTitle className="text-base">Your library</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-4">
-          {items.map(({ label, remaining, icon: Icon }) => (
-            <div key={label} className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary">
+          {items.map(({ made, left, href, icon: Icon }) => (
+            <Link key={href + made} href={href} className="flex items-center gap-3 rounded-lg p-1 -m-1 hover:bg-secondary/50 transition-colors">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary">
                 <Icon className="h-5 w-5 text-secondary-foreground" />
               </div>
               <div>
-                <p className="text-2xl font-bold leading-none">{remaining}</p>
-                <p className="text-sm text-muted-foreground">{label} left</p>
+                <p className="text-lg font-bold leading-tight text-primary">{made} →</p>
+                <p className="text-sm text-muted-foreground">{left}</p>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
         {(summary.story.remaining === 0 || summary.storybook.remaining === 0) && (
