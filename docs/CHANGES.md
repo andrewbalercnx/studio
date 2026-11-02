@@ -18,6 +18,19 @@
 
 ### 2026-11-02
 
+#### `#24` - Send our own password reset email; plain sign-in errors
+
+**Type**: Feature / Bug fix
+
+**Summary**: Pointing Firebase's reset email at `/auth/action` (#23) failed: this project may not change Firebase's email templates (`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`). The app now sends the reset email itself.
+- `POST /api/auth/password-reset` (new, public): the Admin SDK makes the one-time code, the link points at `/auth/action` on a fixed base URL (`APP_BASE_URL`, default `https://storypic.rcnx.io`, never the request host), and a StoryPic-branded email goes out through Microsoft Graph. It answers the same for unknown addresses, and sends at most one email a minute per address (`authEmailThrottle`).
+- "Forgot password?" on `/login` and "Reset my password" on `/auth/action` use it.
+- Sign-in errors are plain words ("The email or password is incorrect…") instead of `Firebase: Error (auth/invalid-credential)`.
+- Tests: `src/server/auth-email/__tests__/password-reset.test.ts`; regression `API_AUTH_PASSWORD_RESET`.
+- Docs: `API.md`, `SCHEMA.md` (`authEmailThrottle`), `SYSTEM_DESIGN.md`, `DEPLOYMENT.md` §11.
+
+---
+
 #### `#23` - Auth email links on our own domain (`/auth/action`)
 
 **Type**: Feature

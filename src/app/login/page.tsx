@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useAuth } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,40 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import Link from 'next/link';
+
+/** Our own reset email (POST /api/auth/password-reset): its link opens /auth/action on this site. */
+async function requestPasswordReset(email: string): Promise<void> {
+  const response = await fetch('/api/auth/password-reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const error = new Error(body?.error?.message ?? `HTTP ${response.status}`) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
+  }
+}
+
+/** Firebase sign-in errors in plain words. Wrong email and wrong password read the same on purpose. */
+function signInErrorMessage(code: string | undefined): string {
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+    case 'auth/invalid-email':
+      return 'The email or password is incorrect. Check them, or use "Forgot password?" to set a new one.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Wait a few minutes, or use "Forgot password?".';
+    case 'auth/user-disabled':
+      return 'This account has been disabled. Please contact us.';
+    case 'auth/network-request-failed':
+      return 'We could not reach the server. Check your connection and try again.';
+    default:
+      return 'Something went wrong. Please try again.';
+  }
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -42,7 +76,7 @@ export default function LoginPage() {
     } catch (error: any) {
       toast({
         title: 'Sign-in failed',
-        description: error.message,
+        description: signInErrorMessage(error?.code),
         variant: 'destructive',
       });
     } finally {
@@ -51,22 +85,23 @@ export default function LoginPage() {
   };
 
   const handleForgotPassword = async () => {
-    if (!auth) return;
     if (!email.trim()) {
       toast({ title: 'Enter your email first', description: 'Type the email you signed up with, then tap "Forgot password?" again.' });
       return;
     }
     setIsSendingReset(true);
     try {
-      await sendPasswordResetEmail(auth, email.trim());
+      // The server answers the same whether or not the address has an account,
+      // so the form cannot be used to probe for accounts.
+      await requestPasswordReset(email.trim());
     } catch (error: any) {
-      // Only a malformed address is worth reporting; "no such user" must look
-      // the same as success, so the form cannot be used to probe for accounts.
-      if (error?.code === 'auth/invalid-email') {
-        toast({ title: 'That email address is not valid', variant: 'destructive' });
-        setIsSendingReset(false);
-        return;
-      }
+      toast({
+        title: error?.status === 400 ? 'That email address is not valid' : 'We could not send the email just now',
+        description: error?.status === 400 ? undefined : 'Please try again in a minute.',
+        variant: 'destructive',
+      });
+      setIsSendingReset(false);
+      return;
     }
     toast({
       title: 'Check your email',

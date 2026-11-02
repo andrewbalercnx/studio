@@ -16,7 +16,6 @@ import {
   applyActionCode,
   checkActionCode,
   confirmPasswordReset,
-  sendPasswordResetEmail,
   verifyPasswordResetCode,
 } from 'firebase/auth';
 import { LoaderCircle } from 'lucide-react';
@@ -45,6 +44,21 @@ function explain(error: unknown): string {
   if (code === 'auth/user-not-found') return 'We could not find this account.';
   if (code === 'auth/weak-password') return `Choose a password with at least ${MIN_PASSWORD_LENGTH} characters.`;
   return 'Something went wrong with this link. Please ask for a new one.';
+}
+
+/** Our own reset email (POST /api/auth/password-reset): its link opens /auth/action on this site. */
+async function requestPasswordReset(email: string): Promise<void> {
+  const response = await fetch('/api/auth/password-reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const error = new Error(body?.error?.message ?? `HTTP ${response.status}`) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
+  }
 }
 
 export default function AuthActionPage() {
@@ -129,10 +143,9 @@ export default function AuthActionPage() {
   };
 
   const resendReset = async (email: string) => {
-    if (!auth) return;
     setBusy(true);
     try {
-      await sendPasswordResetEmail(auth, email);
+      await requestPasswordReset(email);
       setState({ kind: 'done', title: 'Check your email', message: `A link to reset your password is on its way to ${email}.` });
     } catch (error) {
       setState({ kind: 'error', message: explain(error) });
