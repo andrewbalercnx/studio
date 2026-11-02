@@ -16,6 +16,20 @@
 
 ## Changes
 
+### 2026-11-02
+
+#### `#23` - Auth email links on our own domain (`/auth/action`)
+
+**Type**: Feature
+
+**Summary**: Password-reset and verification emails linked to Firebase's default handler on `…firebaseapp.com`, which App Hosting cannot replace. New page `/auth/action` handles every Firebase Auth email action itself: `resetPassword` (shows the account, asks for the new password twice, `confirmPasswordReset`), `verifyEmail` and `verifyAndChangeEmail` (`applyActionCode`), and `recoverEmail` (`checkActionCode` + `applyActionCode`, with a one-tap password reset). Expired, used or broken links get a plain explanation and a way back to sign in.
+
+**Owner action after deploy**: `DEPLOYMENT.md` §11. Set Authentication → Templates → Customize action URL to `https://storypic.rcnx.io/auth/action`, and set Project settings → Public-facing name.
+
+**Files**: `src/app/auth/action/page.tsx` (new); docs `SYSTEM_DESIGN.md`, `DEPLOYMENT.md`.
+
+---
+
 ### 2026-11-01
 
 #### `#22` - "Forgot password?" on the login page

@@ -1,6 +1,6 @@
 # Deployment Runbook — Staged Rollout, Feature Flags, Rollback
 
-> **Last Updated**: 2026-10-30 (§9.3: Cloud Tasks client kept external to the bundle; stuck finishing recovers). 2026-10-29 (Phase 5.4: §10 deploy order — export config → deploy app and rules → reset trial data. Phase 5.3: trial-data reset script, §10, run with slice 5.4. Phase 5.1: Cloud Tasks for the job runner, §9)
+> **Last Updated**: 2026-11-02 (§11: auth email links on our domain). 2026-10-30 (§9.3: Cloud Tasks client kept external to the bundle; stuck finishing recovers). 2026-10-29 (Phase 5.4: §10 deploy order — export config → deploy app and rules → reset trial data. Phase 5.3: trial-data reset script, §10, run with slice 5.4. Phase 5.1: Cloud Tasks for the job runner, §9)
 >
 > This document supersedes `docs/DEPLOYMENT_ROLLOUT.md` (the original design
 > sketch). It covers: what deploys today, the staged-rollout machinery this
@@ -463,3 +463,25 @@ delete them only deliberately with `--include-orders`.
 Options: `--export-dir <dir>` (export elsewhere), `--skip-export-check` (no export
 needed, e.g. against an emulator). Deletes run in batches of 400 with exponential
 backoff. Tested against the emulator by `npm run test:reset`.
+
+---
+
+## 11. Auth email links on our domain (one-time, owner, after `/auth/action` is deployed)
+
+Firebase's default email links point at `https://studio-6508342045-13669.firebaseapp.com/__/auth/action`.
+To send them to the app's own handler (`src/app/auth/action/page.tsx`):
+
+1. Deploy a build that contains `/auth/action`, and check that `https://storypic.rcnx.io/auth/action`
+   shows "This link is incomplete" (no code in the URL).
+2. Firebase console → **Authentication → Templates** → edit any template (pencil) →
+   **Customize action URL** → `https://storypic.rcnx.io/auth/action` → Save. One setting covers
+   every template.
+3. Firebase console → **Authentication → Settings → Authorized domains**: `storypic.rcnx.io` must
+   be listed.
+4. Project settings → General → **Public-facing name**: `StoryPic Kids` (it replaces
+   `%APP_NAME%`, otherwise the project id, in every template).
+5. Test: "Forgot password?" on `/login`, follow the link, set a password, sign in.
+
+Do step 2 only after step 1: until the page is deployed, a changed action URL breaks every link.
+The sender domain (`noreply@storypic.rcnx.io`) is set separately under Templates → Customize domain.
+
