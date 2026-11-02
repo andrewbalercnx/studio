@@ -157,13 +157,15 @@ export default function AuthActionPage() {
               <CardDescription>For {state.email}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Lets password managers file the new password under this account on this site. */}
+              <input type="email" name="username" autoComplete="username" value={state.email} readOnly className="sr-only" tabIndex={-1} aria-hidden="true" />
               <div className="space-y-2">
                 <Label htmlFor="new-password">New password</Label>
-                <Input id="new-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <Input id="new-password" name="new-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirm-password">Type it again</Label>
-                <Input id="confirm-password" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+                <Input id="confirm-password" name="confirm-password" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
               </div>
               {formError && <p className="text-sm text-destructive">{formError}</p>}
             </CardContent>

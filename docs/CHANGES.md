@@ -22,7 +22,7 @@
 
 **Type**: Feature
 
-**Summary**: Password-reset and verification emails linked to Firebase's default handler on `…firebaseapp.com`, which App Hosting cannot replace. New page `/auth/action` handles every Firebase Auth email action itself: `resetPassword` (shows the account, asks for the new password twice, `confirmPasswordReset`), `verifyEmail` and `verifyAndChangeEmail` (`applyActionCode`), and `recoverEmail` (`checkActionCode` + `applyActionCode`, with a one-tap password reset). Expired, used or broken links get a plain explanation and a way back to sign in.
+**Summary**: Password-reset and verification emails linked to Firebase's default handler on `…firebaseapp.com`, which App Hosting cannot replace. New page `/auth/action` handles every Firebase Auth email action itself: `resetPassword` (shows the account, asks for the new password twice, `confirmPasswordReset`), `verifyEmail` and `verifyAndChangeEmail` (`applyActionCode`), and `recoverEmail` (`checkActionCode` + `applyActionCode`, with a one-tap password reset). Expired, used or broken links get a plain explanation and a way back to sign in. The reset form carries the account email as a hidden `autocomplete="username"` field, so password managers save the new password under this account on storypic.rcnx.io (on Firebase's page they saved it under firebaseapp.com).
 
 **Owner action after deploy**: `DEPLOYMENT.md` §11. Set Authentication → Templates → Customize action URL to `https://storypic.rcnx.io/auth/action`, and set Project settings → Public-facing name.
 
