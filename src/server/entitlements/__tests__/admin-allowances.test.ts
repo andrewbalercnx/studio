@@ -76,3 +76,19 @@ describe('admin allowances', () => {
     await expect(adjustAllowance(deps, admin, { uid: 'p1', childId: 'x', component: 'story_allowance', mode: 'add', quantity: 1, reason: 'nope' })).rejects.toMatchObject({ status: 404 });
   });
 });
+
+describe('allowanceTotals', () => {
+  it("sums each family's pool and children's own balances, with the free tier for families without a ledger", async () => {
+    const { deps, fake } = setup();
+    fake.store.set('entitlementLedgers/p9', {
+      family: { story_allowance: { allowance: 5, used: 2, reset: 'lifetime' } },
+      children: { k1: { story_allowance: { allowance: 3, used: 0, reset: 'lifetime' }, storybook_allowance: { allowance: 1, used: 1, reset: 'lifetime' } } },
+      freeTierGranted: true,
+    });
+    const { allowanceTotals } = await import('../admin-allowances');
+    const totals = await allowanceTotals(deps.db, deps.now());
+    expect(totals.byUid.p1).toEqual({ stories: 0, books: 1 });
+    expect(totals.byUid.p9).toEqual({ stories: 6, books: 0 });
+    expect(totals.freeTier).toEqual({ stories: 1, books: 2 });
+  });
+});

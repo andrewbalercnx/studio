@@ -12,10 +12,10 @@ import { ENTITLEMENT_COMPONENT_LIST, ENTITLEMENT_COMPONENTS } from '@/lib/catalo
 import { remainingInBalances } from '@/lib/entitlements/check';
 import { buildFreeTierLedger, ensureFreeTier } from '@/lib/entitlements/grant';
 import type { ConsumableBalance, EntitlementBalances, EntitlementComponentKey, EntitlementLedger, QuotaBalance } from '@/lib/types';
-import type { AllowanceAdjustment, AllowanceRow, FamilyAllowances, GrantRecordView } from '@/lib/entitlements/admin-types';
+import type { AllowanceAdjustment, AllowanceRow, AllowanceTotals, AllowanceTotalsResponse, FamilyAllowances, GrantRecordView } from '@/lib/entitlements/admin-types';
 import { BadRequestError, NotFoundError } from '../errors';
 
-export type { AllowanceAdjustment, AllowanceRow, FamilyAllowances, GrantRecordView };
+export type { AllowanceAdjustment, AllowanceRow, AllowanceTotals, AllowanceTotalsResponse, FamilyAllowances, GrantRecordView };
 
 const LEDGERS = 'entitlementLedgers';
 const HISTORY_LIMIT = 30;
@@ -160,3 +160,24 @@ export async function adjustAllowance(
   const account = await deps.findAccount(uid);
   return loadView(deps, uid, account?.email ?? null);
 }
+
+/** What is left, family pool plus every child's own balance. */
+function leftIn(ledger: EntitlementLedger): AllowanceTotals {
+  const scopes = [ledger.family, ...Object.values(ledger.children ?? {})];
+  const sum = (component: EntitlementComponentKey) => scopes.reduce((n, b) => n + remainingInBalances(b, component), 0);
+  return { stories: sum('story_allowance'), books: sum('storybook_allowance') };
+}
+
+/**
+ * Stories and books left for every family with a ledger, for the admin Users
+ * list; a family without one has the free tier (`freeTier`).
+ */
+export async function allowanceTotals(db: Firestore, now: Date): Promise<AllowanceTotalsResponse> {
+  const snap = await db.collection(LEDGERS).get();
+  const byUid: Record<string, AllowanceTotals> = {};
+  for (const doc of snap.docs) {
+    byUid[doc.id] = leftIn(ensureFreeTier({ parentUid: doc.id, ...doc.data() } as EntitlementLedger, now));
+  }
+  return { byUid, freeTier: leftIn(buildFreeTierLedger('free-tier', now)) };
+}
+

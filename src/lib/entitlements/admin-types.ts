@@ -49,3 +49,9 @@ export type AllowanceAdjustment = {
   quantity: number;
   reason: string;
 };
+
+/** Stories and books a family can still make (family pool plus children's own). */
+export type AllowanceTotals = { stories: number; books: number };
+
+/** GET /api/admin/allowances/summary. A uid missing from `byUid` has made nothing yet: use `freeTier`. */
+export type AllowanceTotalsResponse = { byUid: Record<string, AllowanceTotals>; freeTier: AllowanceTotals };
