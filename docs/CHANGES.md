@@ -16,6 +16,18 @@
 
 ## Changes
 
+### 2026-11-03
+
+#### `#27` - Allowances on the admin Users list
+
+**Type**: UX (admin)
+
+**Summary**: Admins look for a family's allowances on the Users page, not a separate screen. Each user now shows "N stories · M books →" left (family pool plus children's own, counted on the server), linking to that family on `/admin/allowances`.
+
+**Changes**: `GET /api/admin/allowances/summary` (new, admin) and `allowanceTotals` in `src/server/entitlements/admin-allowances.ts`; "Allowance left" column on `/admin/users`; test in `admin-allowances.test.ts`; `API.md`.
+
+---
+
 ### 2026-11-02
 
 #### `#26` - Admin allowance management, with a grant history

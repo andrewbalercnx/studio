@@ -15,6 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import type { UserProfile } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import type { TokenUsageByParent, TokenUsageResponse } from '@/app/api/admin/token-usage/route';
+import type { AllowanceTotalsResponse } from '@/lib/entitlements/admin-types';
+import { authFetch } from '@/lib/auth-fetch';
 
 function formatNumber(num: number): string {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -35,6 +37,16 @@ export default function AdminUsersPage() {
     month: { inputTokens: number; outputTokens: number; totalTokens: number; thoughtsTokens: number; flowCount: number };
   } | null>(null);
   const [tokenUsageLoading, setTokenUsageLoading] = useState(false);
+  const [allowances, setAllowances] = useState<AllowanceTotalsResponse | null>(null);
+
+  // Stories and books each family has left (server totals), shown as links to /admin/allowances.
+  useEffect(() => {
+    if (!isAdmin) return;
+    authFetch('/api/admin/allowances/summary', { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((body) => body?.ok && setAllowances(body.data as AllowanceTotalsResponse))
+      .catch(() => undefined);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!firestore || !isAdmin) {
@@ -176,6 +188,7 @@ export default function AdminUsersPage() {
         <TableRow>
           <TableHead>Email</TableHead>
           <TableHead>Roles</TableHead>
+          <TableHead>Allowance left</TableHead>
           <TableHead className="text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
@@ -187,6 +200,16 @@ export default function AdminUsersPage() {
               {user.roles?.isAdmin && <Badge><Shield className="mr-1"/>Admin</Badge>}
               {user.roles?.isWriter && <Badge variant="secondary"><Pencil className="mr-1"/>Writer</Badge>}
               {user.roles?.isParent && <Badge variant="outline">Parent</Badge>}
+            </TableCell>
+            <TableCell className="whitespace-nowrap">
+              {(() => {
+                const left = allowances ? allowances.byUid[user.id] ?? allowances.freeTier : null;
+                return (
+                  <Link href={`/admin/allowances?q=${encodeURIComponent(user.email || user.id)}`} className="text-primary hover:underline text-sm">
+                    {left ? `${left.stories} stories · ${left.books} books →` : 'Allowances →'}
+                  </Link>
+                );
+              })()}
             </TableCell>
             <TableCell className="text-right space-x-2">
               <Button variant="outline" size="sm" onClick={() => toggleRole(user, 'isWriter')}>
