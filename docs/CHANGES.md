@@ -18,6 +18,16 @@
 
 ### 2026-11-03
 
+#### `#28` - Pagination output cap; faster page-art queue
+
+**Type**: Performance / reliability
+
+**Summary**: From the first fully traced Book (`bk_91466ccb…`, 2 min 37 s): pagination produced 7,042 of its 8,000-token cap, so a longer story would be cut off, fail to parse and retry; and page art (25 × ~13 s) took ~90 s because only 5 images ran at once, with pages queued up to 62 s.
+- `manuscript.paginate`: `maxOutputTokens` 8,000 → 16,000.
+- `ai-image` queue: 1/s and 5 concurrent → 5/s and 10 (`scripts/setup-cloud-tasks.sh`, `DEPLOYMENT.md`). Applied to production with `gcloud tasks queues update`; the script keeps a rerun in step.
+
+---
+
 #### `#27` - Allowances on the admin Users list
 
 **Type**: UX (admin)

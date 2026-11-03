@@ -65,7 +65,7 @@ run gcloud services enable cloudtasks.googleapis.com --project="$PROJECT_ID"
 # name  max-dispatches/s  max-concurrent
 QUEUES=(
   "ai-text  5  10"   # Gemini text: pagination (one call per Manuscript)
-  "ai-image 1  5"    # Gemini image: cast sheets and page art (tightest quota)
+  "ai-image 5  10"   # Gemini image: cast sheets and page art. 25 pages × ~13 s each; 5 at once left pages queued up to 60 s
   "tts      2  3"    # ElevenLabs: 5 concurrent allowed; leave room for on-demand TTS
   "render   2  5"    # coordinators now; PDF renders in the print slice
   "mixam    1  2"    # print orders (print slice)
