@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import type { TokenUsageByParent, TokenUsageResponse } from '@/app/api/admin/token-usage/route';
 import type { AllowanceTotalsResponse } from '@/lib/entitlements/admin-types';
 import { authFetch } from '@/lib/auth-fetch';
+import { plural } from '@/hooks/use-library-summary';
 
 function formatNumber(num: number): string {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -206,7 +207,7 @@ export default function AdminUsersPage() {
                 const left = allowances ? allowances.byUid[user.id] ?? allowances.freeTier : null;
                 return (
                   <Link href={`/admin/allowances?q=${encodeURIComponent(user.email || user.id)}`} className="text-primary hover:underline text-sm">
-                    {left ? `${left.stories} stories · ${left.books} books →` : 'Allowances →'}
+                    {left ? `${plural(left.stories, 'story', 'stories')} · ${plural(left.books, 'book', 'books')} →` : 'Allowances →'}
                   </Link>
                 );
               })()}
