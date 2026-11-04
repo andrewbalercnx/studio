@@ -159,7 +159,7 @@ reset trial data for that slice, re-seed config. Order:
    (branch `rebuild/phase5-creation-clients`,
    [`target/slices/5.4-creation-clients.md`](target/slices/5.4-creation-clients.md)).
 3. **Characters and actors**, keeping the original-photo rule in `CLAUDE.md`.
-4. **Print and orders**.
+4. **Print and orders** (`target/slices/5.5-print-orders.md`).
 
 **Exit per slice**: old code deleted, end-to-end test green, docs updated.
 
@@ -187,6 +187,6 @@ reset trial data for that slice, re-seed config. Order:
 | 2 — Target model | Done: `target/`, 12 ADRs accepted | #10 |
 | 3 — Security review | Done: `security/threat-model.md` | #11 |
 | 4 — Foundations | In review: `src/server` (route wrapper, repositories, job runner, AI harness, config service), see `target/foundations.md` | #12 |
-| 5 — Rebuild slices | 5.1 Book pipeline on the server (#13, in review); 5.2 web app and kids PWA on the Book pipeline, `storybookV2` deleted, mobile book creation off, print for new Books pending the print slice (`target/slices/5.2-book-clients.md`, in review); 5.3 Story creation on the server, five mode engines, `story.finish`, reset script (`target/slices/5.3-creation-server.md`, in review); 5.4 web, kids PWA and mobile create Stories through the creation routes, old modes/flows/sessions and old storybook reads deleted, E2E funnel plays the wizard, trial data reset at deploy (`target/slices/5.4-creation-clients.md`, in review). Story creation slice done once merged; next: characters, then print | #13, #14, #15, 5.4 PR |
+| 5 — Rebuild slices | 5.1 Book pipeline on the server (#13, in review); 5.2 web app and kids PWA on the Book pipeline, `storybookV2` deleted, mobile book creation off, print for new Books pending the print slice (`target/slices/5.2-book-clients.md`, in review); 5.3 Story creation on the server, five mode engines, `story.finish`, reset script (`target/slices/5.3-creation-server.md`, in review); 5.4 web, kids PWA and mobile create Stories through the creation routes, old modes/flows/sessions and old storybook reads deleted, E2E funnel plays the wizard, trial data reset at deploy (`target/slices/5.4-creation-clients.md`, in review). Story creation slice merged (#13–#16); since then: diagnostics, auth emails, allowances, mobile Books (#17–#34). 5.5 print and orders with Stripe planned (`target/slices/5.5-print-orders.md`): 5.5a render, 5.5b orders and payment, 5.6 clients and deletions | #13–#34, 5.5 plan PR |
 | 6 — Clients | Not started | — |
 | 7 — Governance | Not started | — |
