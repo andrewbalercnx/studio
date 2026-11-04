@@ -16,6 +16,21 @@
 
 ## Changes
 
+### 2026-11-04
+
+#### `#29` - Trace small fixes: single cast list, pronoun-aware appearance, blocked-generation count
+
+**Type**: Fix / diagnostics
+
+**Summary**: Three small fixes from the first fully traced Book.
+- Page-art prompt listed the cast twice (scene bullets plus a JSON block). `buildPagePrompt` now carries role/pronouns/appearance/description into the one scene list and drops the JSON; the `minimal` level stays terse (name + action).
+- `imageDescriptionFlow` said "They…" regardless of the child's pronouns. It now passes the entity's pronouns into the prompt (he/she/they), still derived from the original photos only (CLAUDE.md rule).
+- Trace counts safety-filter blocks ("Generation blocked" / `FAILED_PRECONDITION`) as `blockedCalls` in `TraceTotals` (global and per purpose), shown on `/admin/trace` in the summary and a new "Blocked" column.
+
+**Changes**: `src/server/books/art-prompts.ts`, `src/ai/flows/image-description-flow.ts`, `src/server/diagnostics/trace.ts`, `src/lib/diagnostics/trace-types.ts`, `src/app/admin/trace/page.tsx`; tests `src/server/books/__tests__/art-prompts.test.ts` (new) and `trace.test.ts`. No API/schema/route changes.
+
+---
+
 ### 2026-11-03
 
 #### `#28` - Pagination output cap; faster page-art queue
