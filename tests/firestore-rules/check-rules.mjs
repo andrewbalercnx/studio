@@ -53,10 +53,18 @@ await check('signup creates default roles', 'allow', () => setDoc(doc(parent, 'u
   email: 'p@example.com', roles: { isAdmin: false, isWriter: false, isParent: true }, createdAt: serverTimestamp(),
 }));
 await check('signup with isAdmin', 'deny', () => setDoc(doc(parent, 'users', 'p1'), { roles: { isAdmin: true, isWriter: false, isParent: true } }));
+await check('signup with flat isAdmin', 'deny', () => setDoc(doc(parent, 'users', 'p1'), {
+  email: 'p@example.com', roles: { isAdmin: false, isWriter: false, isParent: true }, isAdmin: true, createdAt: serverTimestamp(),
+}));
 await check('grant own role', 'deny', () => updateDoc(doc(parent, 'users', 'p1'), { 'roles.isWriter': true }));
+await check('grant own flat isAdmin', 'deny', () => updateDoc(doc(parent, 'users', 'p1'), { isAdmin: true }));
+await check('grant own flat isWriter', 'deny', () => updateDoc(doc(parent, 'users', 'p1'), { isWriter: true }));
+await check('turn on own wizard targets', 'deny', () => updateDoc(doc(parent, 'users', 'p1'), { canShowWizardTargets: true }));
 await check('replace own PIN hash', 'deny', () => updateDoc(doc(parent, 'users', 'p1'), { pinHash: 'x' }));
 await check('clear own PIN lockout', 'deny', () => updateDoc(doc(parent, 'users', 'p1'), { pinFailedAttempts: 0 }));
 await check('mark startup wizard complete', 'allow', () => updateDoc(doc(parent, 'users', 'p1'), { hasCompletedStartupWizard: true }));
+await check('admin grants a role', 'allow', () => updateDoc(doc(admin, 'users', 'p1'), { 'roles.isWriter': true }));
+await check('admin toggles wizard targets', 'allow', () => updateDoc(doc(admin, 'users', 'p1'), { canShowWizardTargets: true }));
 
 // children: owner field immutable; help-* samples server-only.
 await check('create own child', 'allow', () => setDoc(doc(parent, 'children', 'c2'), { ownerParentUid: 'p1', displayName: 'Sam' }));

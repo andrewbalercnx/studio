@@ -7,30 +7,43 @@
  */
 import { LoaderCircle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import type { BookDoc, ManuscriptDoc } from '@/lib/books/types';
+import { bookProgress, type BookCastSheetDoc, type BookPageDoc, type ManuscriptDoc } from '@/lib/books/types';
 
-export function BookProgress({ book, manuscript }: { book: BookDoc; manuscript: ManuscriptDoc | null }) {
-  const art = book.art ?? { total: 0, done: 0, failed: 0 };
-  const writing = !manuscript || manuscript.status === 'paginating' || manuscript.status === 'draft';
-  const percent = writing ? 10 : art.total > 0 ? Math.round(10 + (90 * (art.done + art.failed)) / art.total) : 10;
+const STAGE_COPY = {
+  writing: { emoji: '✏️', label: 'Writing the pages…', aria: 'pencil' },
+  characters: { emoji: '🧑‍🎨', label: 'Drawing the characters…', aria: 'artist' },
+  pages: { emoji: '🎨', label: 'Drawing the pictures…', aria: 'paint brush' },
+} as const;
+
+export function BookProgress({
+  manuscript,
+  pages,
+  castSheets,
+}: {
+  manuscript: ManuscriptDoc | null;
+  pages: BookPageDoc[];
+  castSheets: BookCastSheetDoc[];
+}) {
+  const progress = bookProgress({ manuscriptStatus: manuscript?.status, pages, castSheets });
+  const copy = STAGE_COPY[progress.stage];
+  const count =
+    progress.stage === 'characters' && progress.total
+      ? `${progress.done} of ${progress.total} characters ready`
+      : progress.stage === 'pages' && progress.total
+        ? `page ${Math.min(progress.done! + 1, progress.total)} of ${progress.total}`
+        : null;
 
   return (
     <div className="flex flex-col items-center gap-6 px-4 py-10 text-center" data-testid="book-progress">
-      <div className="text-6xl animate-bounce" role="img" aria-label="paint brush">
-        {writing ? '✏️' : '🎨'}
+      <div className="text-6xl animate-bounce" role="img" aria-label={copy.aria}>
+        {copy.emoji}
       </div>
       <div className="space-y-2">
-        <h1 className="text-2xl font-bold text-amber-900">
-          {writing ? 'Writing the pages…' : 'Drawing the pictures…'}
-        </h1>
-        {!writing && art.total > 0 && (
-          <p className="text-amber-700">
-            {art.done} of {art.total} pictures ready
-          </p>
-        )}
+        <h1 className="text-2xl font-bold text-amber-900">{copy.label}</h1>
+        {count && <p className="text-amber-700" data-testid="book-progress-count">{count}</p>}
       </div>
       <div className="w-full max-w-sm space-y-2">
-        <Progress value={percent} className="h-3" />
+        <Progress value={progress.percent} className="h-3" />
         <p className="text-sm text-muted-foreground flex items-center justify-center gap-2">
           <LoaderCircle className="h-4 w-4 animate-spin" />
           Your book keeps getting made even if you close this page.

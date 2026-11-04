@@ -18,15 +18,17 @@ interface AdminStatus {
 export function useAdminStatus(): AdminStatus {
   const { user, idTokenResult, loading: authLoading } = useUser();
   const firestore = useFirestore();
-  const [firestoreAdmin, setFirestoreAdmin] = useState<boolean>(false);
-  const [firestoreWriter, setFirestoreWriter] = useState<boolean>(false);
   const [canShowWizardTargets, setCanShowWizardTargets] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Get claims from ID token (the authoritative source for role-based access)
-  const claimsAdmin = idTokenResult?.claims?.isAdmin === true;
-  const claimsWriter = idTokenResult?.claims?.isWriter === true;
+  // Roles come from the ID token's custom claims — the single source of truth,
+  // the same one the server trusts (src/server/http/auth.ts, firestore.rules).
+  // A `users/{uid}` doc field is NOT trusted for roles: the owner can write doc
+  // fields, so trusting one there would let a user grant themselves admin.
+  // Set a claim with `scripts/set-admin.mjs`.
+  const isAdmin = idTokenResult?.claims?.isAdmin === true;
+  const isWriter = idTokenResult?.claims?.isWriter === true;
 
   useEffect(() => {
     if (authLoading) {
@@ -35,8 +37,6 @@ export function useAdminStatus(): AdminStatus {
     }
 
     if (!user || !firestore) {
-      setFirestoreAdmin(false);
-      setFirestoreWriter(false);
       setCanShowWizardTargets(false);
       setLoading(false);
       return;
@@ -45,27 +45,17 @@ export function useAdminStatus(): AdminStatus {
     setLoading(true);
     const userDocRef = doc(firestore, 'users', user.uid);
 
+    // Only `canShowWizardTargets` (a per-user diagnostic-overlay toggle, not a
+    // role) is read from the doc; roles come from the claim above.
     const unsubscribe = onSnapshot(userDocRef,
       (doc) => {
-        if (doc.exists()) {
-          const data = doc.data();
-          setFirestoreAdmin(data.isAdmin === true);
-          setFirestoreWriter(data.isWriter === true);
-          setCanShowWizardTargets(data.canShowWizardTargets === true);
-        } else {
-          // Document might not exist yet if sign-up is in progress
-          setFirestoreAdmin(false);
-          setFirestoreWriter(false);
-          setCanShowWizardTargets(false);
-        }
+        setCanShowWizardTargets(doc.exists() && doc.data().canShowWizardTargets === true);
         setError(null);
         setLoading(false);
       },
       (e) => {
         console.error("Error fetching user profile:", e);
         setError("Could not verify admin status.");
-        setFirestoreAdmin(false);
-        setFirestoreWriter(false);
         setCanShowWizardTargets(false);
         setLoading(false);
       }
@@ -73,10 +63,6 @@ export function useAdminStatus(): AdminStatus {
 
     return () => unsubscribe();
   }, [user, authLoading, firestore]);
-
-  // Combine claims and Firestore - either source grants the role
-  const isAdmin = claimsAdmin || firestoreAdmin;
-  const isWriter = claimsWriter || firestoreWriter;
 
   return {
     isAuthenticated: !!user,

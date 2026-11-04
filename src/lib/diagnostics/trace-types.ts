@@ -44,6 +44,8 @@ export type TraceAICall = {
 export type TraceTotals = {
   calls: number;
   failedCalls: number;
+  /** Calls the provider's safety filter blocked ("Generation blocked"). A subset of failedCalls. */
+  blockedCalls: number;
   modelMs: number;
   inputTokens: number;
   outputTokens: number;
