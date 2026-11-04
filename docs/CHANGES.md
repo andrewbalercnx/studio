@@ -18,6 +18,23 @@
 
 ### 2026-11-04
 
+#### `#34` - Mobile: make, watch and read Books
+
+**Type**: Feature (mobile)
+
+**Summary**: The mobile app could make stories but sent parents to the web app for Books. It now covers the whole loop on top of the Books read API (#32):
+- **Story screen**: lists the Books made from the story (status per Book) and offers "Make a picture book" → the Form + Style chooser (`create-book/[storyId]`, `POST /api/books`).
+- **Book screen** (`book/[bookId]`, new): while the Book is being made, the stage ("Writing the pages…", "Drawing the characters…", "Drawing page n of m…") and a progress bar, checked every 4 s; once ready, a page-by-page reader with picture, words and "Read to me" narration (`expo-av`); a partial Book shows a placeholder where a picture is missing.
+- **My Books**: the child's Books, newest first, each opening the Book screen; refreshes on return and on pull-down.
+- **Home**: the My Stories and My Books cards show the child's counts (`GET /api/library/summary`).
+- `mobile/src/lib/books.ts` (new): status and progress wording.
+
+Started by a session on the owner's laptop (API-client methods and the chooser, `ffc0197`), finished in the cloud. Ships to devices with the next APK build (CLAUDE.md "Mobile App (APK) Updates").
+
+**Checks**: mobile `tsc --noEmit` clean (covers the new screens).
+
+---
+
 #### `#32` - Books read API (mobile can list and read Books)
 
 **Type**: Feature / API

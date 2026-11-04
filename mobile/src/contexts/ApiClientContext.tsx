@@ -143,6 +143,17 @@ export interface StyleOption {
   ageTo?: number | null;
 }
 
+/** Story and Book counts (GET /api/library/summary), counted on the server as the lists count them. */
+export interface LibraryCounts {
+  stories: number;
+  books: number;
+}
+export interface LibrarySummary {
+  totals: LibraryCounts;
+  /** Per child id; a child with nothing yet is absent (zeros). */
+  byChild: Record<string, LibraryCounts>;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -317,6 +328,11 @@ class MobileApiClient {
     if (filter.storyId) query.set('storyId', filter.storyId);
     const suffix = query.toString() ? `?${query.toString()}` : '';
     return this.data<BookListItem[]>(`/api/books${suffix}`);
+  }
+
+  /** The family's Story and Book counts, in total and per child. */
+  async getLibrarySummary(): Promise<LibrarySummary> {
+    return this.data<LibrarySummary>('/api/library/summary');
   }
 
   /** One Book in full: meta, every page (words + picture), and live progress. */

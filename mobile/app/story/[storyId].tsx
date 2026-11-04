@@ -10,11 +10,13 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useApiClient, type StoryView } from '../../src/contexts/ApiClientContext';
+import { useApiClient, type BookListItem, type StoryView } from '../../src/contexts/ApiClientContext';
+import { bookStatusLabel } from '../../src/lib/books';
 
 /**
  * Read a finished Story (GET /api/stories/{id}: title and text with names
- * resolved on the server). A Story still being made opens the play screen.
+ * resolved on the server), see the Books made from it (GET /api/books?storyId)
+ * and make a new one. A Story still being made opens the play screen.
  */
 export default function StoryScreen() {
   const router = useRouter();
@@ -22,6 +24,7 @@ export default function StoryScreen() {
   const apiClient = useApiClient();
 
   const [story, setStory] = useState<StoryView | null>(null);
+  const [books, setBooks] = useState<BookListItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,8 +34,13 @@ export default function StoryScreen() {
   const loadStory = async () => {
     if (!storyId) return;
     try {
-      const result = await apiClient.getStory(storyId);
+      const [result, storyBooks] = await Promise.all([
+        apiClient.getStory(storyId),
+        // A missing Books list only hides the Books section; the story still reads.
+        apiClient.getBooks({ storyId }).catch(() => [] as BookListItem[]),
+      ]);
       setStory(result.story);
+      setBooks(storyBooks);
     } catch (e) {
       console.error('Error loading story:', e);
     } finally {
@@ -112,11 +120,27 @@ export default function StoryScreen() {
           ))}
         </View>
 
-        {/* Books are made and read in the web app until the app reads Books (clients phase). */}
+        {/* Books from this story, then a new one (Form + Style chooser). */}
         <View style={styles.actionsContainer}>
-          <View style={[styles.generatingContainer, { marginBottom: 12 }]}>
-            <Text style={styles.generatingText}>Make books in the web app for now.</Text>
-          </View>
+          {books.length > 0 && (
+            <Text style={styles.booksHeading}>{books.length === 1 ? '1 picture book' : `${books.length} picture books`}</Text>
+          )}
+          {books.map((book) => (
+            <TouchableOpacity key={book.id} style={[styles.storybookButton, { marginBottom: 12 }]} onPress={() => router.push(`/book/${book.id}`)}>
+              <View style={styles.storybookThumbnailPlaceholder}>
+                <Text style={styles.storybookThumbnailPlaceholderText}>📖</Text>
+              </View>
+              <View style={styles.storybookButtonContent}>
+                <Text style={styles.storybookButtonTitle}>{book.title || title}</Text>
+                <Text style={styles.storybookButtonSubtitle}>{bookStatusLabel(book)}</Text>
+              </View>
+              <Text style={styles.storybookButtonArrow}>›</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity style={[styles.actionButton, styles.actionButtonSecondary]} onPress={() => router.push(`/create-book/${story.id}`)}>
+            <Text style={styles.actionButtonIcon}>🎨</Text>
+            <Text style={styles.actionButtonTextSecondary}>{books.length > 0 ? 'Make another picture book' : 'Make a picture book'}</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -267,6 +291,12 @@ const styles = StyleSheet.create({
   },
   actionsContainer: {
     marginTop: 8,
+  },
+  booksHeading: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#92400E',
+    marginBottom: 8,
   },
   actionButton: {
     flexDirection: 'row',
