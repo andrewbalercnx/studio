@@ -208,7 +208,9 @@ async function paginateWithModel(
         ownerUid: args.job.ownerUid,
         prompt,
         output: { schema: paginationOutputSchema },
-        config: { temperature, maxOutputTokens: 8000 },
+        // A 24-page book measured 7,042 output tokens (trace, 2026-11-03): 8,000 left
+        // too little room, and a cut-off reply fails to parse and burns an attempt.
+        config: { temperature, maxOutputTokens: 16000 },
       });
       output = response.output ?? parseManually(response.text);
     } catch (error) {

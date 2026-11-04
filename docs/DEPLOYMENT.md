@@ -354,7 +354,7 @@ propagation), run it again.
 | Queue | Rate | Concurrent | Used by |
 |-------|------|------------|---------|
 | `ai-text` | 5/s | 10 | `manuscript.paginate` |
-| `ai-image` | 1/s | 5 | `book.castSheet`, `book.pageArt` |
+| `ai-image` | 5/s | 10 | `book.castSheet`, `book.pageArt`. Raised from 1/s, 5 (2026-11-03): page art took ~90 s with pages queued up to 60 s; watch the trace for RESOURCE_EXHAUSTED before raising further |
 | `tts` | 2/s | 3 | `manuscript.narrate` |
 | `render` | 2/s | 5 | coordinators (`book.prepareCast`, `book.illustrate`); PDF renders later |
 | `mixam` | 1/s | 2 | print orders (print slice) |
