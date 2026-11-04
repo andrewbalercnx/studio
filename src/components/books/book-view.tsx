@@ -11,7 +11,7 @@ import { Lock, LoaderCircle, Printer, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useBook, useBookPages, useManuscript, useManuscriptPages } from '@/hooks/use-books';
+import { useBook, useBookCastSheets, useBookPages, useManuscript, useManuscriptPages } from '@/hooks/use-books';
 import { lockBook, retryBookPage, unlockBook } from '@/lib/books/api';
 import { isReadableStatus } from '@/lib/books/types';
 import { BookFailed, BookProgress } from './book-progress';
@@ -26,6 +26,7 @@ export function BookView({ bookId, parent }: { bookId: string; parent?: BookView
   const { toast } = useToast();
   const { data: book, loading: bookLoading } = useBook(bookId);
   const { pages } = useBookPages(book ? bookId : null);
+  const { castSheets } = useBookCastSheets(book && !isReadableStatus(book.status) ? bookId : null);
   const { data: manuscript } = useManuscript(book?.manuscriptId);
   const { pages: words } = useManuscriptPages(manuscript?.status === 'ready' ? manuscript.id : null);
   const [busy, setBusy] = useState(false);
@@ -81,7 +82,7 @@ export function BookView({ bookId, parent }: { bookId: string; parent?: BookView
   } else if (isReadableStatus(book.status) || (book.status === 'failed' && parent)) {
     body = <BookReader title={title} pages={pages} words={words} onRetryPage={retryPage} locked={locked} />;
   } else {
-    body = <BookProgress book={book} manuscript={manuscript} />;
+    body = <BookProgress manuscript={manuscript} pages={pages} castSheets={castSheets} />;
   }
 
   return (

@@ -33,6 +33,18 @@
 
 ---
 
+#### `#31` - Book progress: staged copy instead of "0 of 25"
+
+**Type**: UX
+
+**Summary**: A new Book sat on "Drawing the pictures… 0 of 25" for the first ~80 s (page docs exist with no art while pagination finishes and cast sheets are drawn; `book.art` is the server's only end-of-run signal). The progress view now derives the stage live: Writing the pages… → Drawing the characters… (character N of M) → Drawing the pictures… (page N of 25).
+- `bookProgress()` in `src/lib/books/types.ts`: pure `{stage, done, total, percent}` helper from manuscript status, page docs' `artUrl`, and cast sheets (monotonic percent across stages).
+- `useBookCastSheets` watches `books/{id}/castSheets` (owner-filtered); `BookProgress` takes manuscript + pages + castSheets.
+
+**Changes**: `src/lib/books/types.ts`, `src/hooks/use-books.ts`, `src/components/books/book-progress.tsx`, `src/components/books/book-view.tsx`; tests in `books-client.test.ts`. No API/schema/route changes.
+
+---
+
 #### `#30` - Admin role: the custom claim is the single source of truth
 
 **Type**: Security / fix
