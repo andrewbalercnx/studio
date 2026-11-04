@@ -641,27 +641,33 @@ export default function AdminRegressionPage() {
         if (!booksToken) throw new Error('Admin authentication required for books auth test.');
         const missingStory = { storyId: 'regression-missing-story', formId: 'regression-missing-form' };
         const missingBook = 'regression-missing-book';
-        const routes: Array<{ path: string; body?: unknown }> = [
+        // method defaults to POST; authed calls on missing ids return 404 unless
+        // `expectAuthed` says otherwise (the Books list returns 200 for any owner).
+        const routes: Array<{ path: string; body?: unknown; method?: 'GET' | 'POST'; expectAuthed?: number }> = [
             { path: '/api/manuscripts', body: missingStory },
             { path: '/api/books', body: { ...missingStory, styleId: 'regression-missing-style', idempotencyKey: 'regression-books-auth' } },
             { path: `/api/books/${missingBook}/pages/2/retry` },
             { path: `/api/books/${missingBook}/lock` },
             { path: `/api/books/${missingBook}/unlock` },
+            { path: '/api/books', method: 'GET', expectAuthed: 200 },
+            { path: `/api/books/${missingBook}`, method: 'GET', expectAuthed: 404 },
         ];
         for (const route of routes) {
-            const init = { method: 'POST', body: route.body === undefined ? undefined : JSON.stringify(route.body) };
+            const method = route.method ?? 'POST';
+            const init = { method, body: method === 'GET' || route.body === undefined ? undefined : JSON.stringify(route.body) };
             // Plain fetch: authFetch would attach the signed-in admin's token.
             const anonymous = await fetch(route.path, { ...init, headers: { 'Content-Type': 'application/json' } });
-            if (anonymous.status !== 401) throw new Error(`${route.path}: expected 401 without auth, got ${anonymous.status}`);
+            if (anonymous.status !== 401) throw new Error(`${method} ${route.path}: expected 401 without auth, got ${anonymous.status}`);
             const authed = await authFetch(route.path, {
                 ...init,
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${booksToken}` },
             });
-            if (authed.status !== 404) throw new Error(`${route.path}: expected 404 for a missing id, got ${authed.status}`);
+            const expected = route.expectAuthed ?? 404;
+            if (authed.status !== expected) throw new Error(`${method} ${route.path}: expected ${expected} authed, got ${authed.status}`);
         }
         updateTestResult('API_BOOKS_V3_AUTH', {
             status: 'PASS',
-            message: 'manuscripts, books, retry, lock and unlock reject anonymous calls (401) and return 404 for missing ids.',
+            message: 'manuscripts, books (create/list/get), retry, lock and unlock reject anonymous calls (401); authed calls return 404 for missing ids and 200 for the Books list.',
         });
     } catch (e: any) {
         updateTestResult('API_BOOKS_V3_AUTH', { status: 'ERROR', message: e.message });

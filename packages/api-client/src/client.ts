@@ -5,6 +5,8 @@
  */
 
 import type {
+  BookListItem,
+  BookReadView,
   ChildInput,
   CreateStoryRequest,
   CreationModeView,
@@ -225,6 +227,27 @@ export class StoryPicClient {
       throw new StoryPicApiError('Failed to create book', 500);
     }
     return response.data;
+  }
+
+  /**
+   * The family's Books, newest first, optionally for one child or one story.
+   * The server computes the status, art rollup and `isReady` flag.
+   */
+  async getBooks(filter: { childId?: string; storyId?: string } = {}): Promise<BookListItem[]> {
+    const query = new URLSearchParams();
+    if (filter.childId) query.set('childId', filter.childId);
+    if (filter.storyId) query.set('storyId', filter.storyId);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.data<BookListItem[]>('GET', `/books${suffix}`);
+  }
+
+  /**
+   * One Book in full: meta and title, every page with its words and picture,
+   * and the live making-of progress (stage + percent). Read this to show both
+   * the progress view and the finished reader.
+   */
+  async getBook(bookId: string): Promise<BookReadView> {
+    return this.data<BookReadView>('GET', `/books/${encodeURIComponent(bookId)}`);
   }
 
   // ============================================================================
