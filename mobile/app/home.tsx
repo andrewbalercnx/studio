@@ -1,11 +1,31 @@
+import { useCallback, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useChild } from '../src/contexts/ChildContext';
+import { useApiClient, type LibraryCounts } from '../src/contexts/ApiClientContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { childProfile, clearChild } = useChild();
+  const apiClient = useApiClient();
+  const [counts, setCounts] = useState<LibraryCounts | null>(null);
+
+  // How many stories and books this child has (server counts), refreshed on return.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      apiClient
+        .getLibrarySummary()
+        .then((summary) => {
+          if (!cancelled) setCounts((childProfile?.id && summary.byChild[childProfile.id]) || { stories: 0, books: 0 });
+        })
+        .catch(() => undefined); // the cards still work without counts
+      return () => {
+        cancelled = true;
+      };
+    }, [apiClient, childProfile?.id])
+  );
 
   const handleSwitchChild = async () => {
     await clearChild();
@@ -55,7 +75,7 @@ export default function HomeScreen() {
           <Text style={styles.cardIcon}>📖</Text>
           <Text style={styles.cardTitle}>My Stories</Text>
           <Text style={styles.cardDescription}>
-            Read your amazing stories!
+            {counts ? `${counts.stories} ${counts.stories === 1 ? 'story' : 'stories'} to read →` : 'Read your amazing stories!'}
           </Text>
         </TouchableOpacity>
 
@@ -67,7 +87,7 @@ export default function HomeScreen() {
           <Text style={styles.cardIcon}>📚</Text>
           <Text style={styles.cardTitle}>My Books</Text>
           <Text style={styles.cardDescription}>
-            View your picture books!
+            {counts ? `${counts.books} picture ${counts.books === 1 ? 'book' : 'books'} →` : 'View your picture books!'}
           </Text>
         </TouchableOpacity>
       </ScrollView>
