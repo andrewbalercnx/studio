@@ -16,6 +16,7 @@ export const AI_PURPOSES = [
   'manuscript.text',
   'likeness.describe',
   'likeness.portrait',
+  'character.avatar',
   'book.castSheet',
   'book.pageArt',
   'narration',
@@ -31,6 +32,7 @@ export const AI_PURPOSE_KIND: Record<AIPurpose, AIPurposeKind> = {
   'manuscript.text': 'text',
   'likeness.describe': 'text',
   'likeness.portrait': 'image',
+  'character.avatar': 'image',
   'book.castSheet': 'image',
   'book.pageArt': 'image',
   narration: 'tts',
@@ -42,7 +44,8 @@ export const AI_PURPOSE_KIND: Record<AIPurpose, AIPurposeKind> = {
  * - story.finish: gemini-3.8-flash (title and synopsis; the former story-title/synopsis flows)
  * - manuscript.text: gemini-3.8-flash (the former story-pagination-flow)
  * - likeness.describe: gemini-3.8-flash (image-description-flow)
- * - image purposes: gemini-3.1-flash-image (DEFAULT_AI_MODELS_CONFIG.imageGenerationModel)
+ * - image purposes (likeness.portrait, character.avatar, book.*): gemini-3.1-flash-image
+ *   (DEFAULT_AI_MODELS_CONFIG.imageGenerationModel)
  * - narration: ElevenLabs eleven_v3 (default ElevenLabs version in diagnostics config)
  */
 export const DEFAULT_AI_MODELS: Record<AIPurpose, string> = {
@@ -51,6 +54,7 @@ export const DEFAULT_AI_MODELS: Record<AIPurpose, string> = {
   'manuscript.text': 'googleai/gemini-3.8-flash',
   'likeness.describe': 'googleai/gemini-3.8-flash',
   'likeness.portrait': 'googleai/gemini-3.1-flash-image',
+  'character.avatar': 'googleai/gemini-3.1-flash-image',
   'book.castSheet': 'googleai/gemini-3.1-flash-image',
   'book.pageArt': 'googleai/gemini-3.1-flash-image',
   narration: 'elevenlabs/eleven_v3',

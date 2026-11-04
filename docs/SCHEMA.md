@@ -139,6 +139,7 @@ Story characters with traits, owned by parents.
 | `namePronunciation` | string | No | Phonetic pronunciation for TTS |
 | `photos` | string[] | No | Photo URLs |
 | `avatarUrl` | string | No | AI-generated avatar URL |
+| `avatarGeneration` | object | No | `character.avatar` job status: `{ status: 'running' \| 'ready' \| 'failed', jobId, updatedAt }`. Drawn from the character's words for a story-introduced character (no photos); UI display only, never a likeness (ADR-0006) |
 | `avatarAnimationUrl` | string | No | Dancing avatar animation URL |
 | `likes` | string[] | Yes | Character likes |
 | `dislikes` | string[] | Yes | Character dislikes |
@@ -347,7 +348,7 @@ One unit of work (pipeline.md, ADR-0003). Id `job_<hash(idempotencyKey)>`.
 | Field | Type | Description |
 |-------|------|-------------|
 | `ownerUid` | string | |
-| `jobId`, `kind` | string | Kinds in use: `story.finish`, `manuscript.paginate`, `manuscript.narrate`, `book.prepareCast`, `book.castSheet`, `book.illustrate`, `book.pageArt` |
+| `jobId`, `kind` | string | Kinds in use: `story.finish`, `character.avatar`, `manuscript.paginate`, `manuscript.narrate`, `book.prepareCast`, `book.castSheet`, `book.illustrate`, `book.pageArt` |
 | `target` | `{ collection, id, subpath? }` | What the job writes |
 | `input` | map | Handler input |
 | `status` | `queued` \| `running` \| `succeeded` \| `failed` \| `cancelled` | |
