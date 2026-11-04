@@ -157,6 +157,27 @@ class StoryPicClient {
         }
         return response.data;
     }
+    /**
+     * The family's Books, newest first, optionally for one child or one story.
+     * The server computes the status, art rollup and `isReady` flag.
+     */
+    async getBooks(filter = {}) {
+        const query = new URLSearchParams();
+        if (filter.childId)
+            query.set('childId', filter.childId);
+        if (filter.storyId)
+            query.set('storyId', filter.storyId);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return this.data('GET', `/books${suffix}`);
+    }
+    /**
+     * One Book in full: meta and title, every page with its words and picture,
+     * and the live making-of progress (stage + percent). Read this to show both
+     * the progress view and the finished reader.
+     */
+    async getBook(bookId) {
+        return this.data('GET', `/books/${encodeURIComponent(bookId)}`);
+    }
     // ============================================================================
     // Reading/Viewing
     // ============================================================================

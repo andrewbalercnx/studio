@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createBook, getBookServiceDeps } from '@/server/books';
+import { createBook, getBookReadDb, getBookServiceDeps, listBooks } from '@/server/books';
 import { ok, withRoute } from '@/server/http';
 
 const Body = z
@@ -30,4 +30,17 @@ const Body = z
 export const POST = withRoute({ auth: 'user', body: Body, name: 'books.create' }, async ({ user, body }) => {
   const result = await createBook(await getBookServiceDeps(), user, body);
   return ok(result, result.created ? 201 : 200);
+});
+
+/**
+ * GET /api/books[?childId=&storyId=] — the caller's Books, newest first,
+ * optionally for one child or story. Server-first: filtering, sorting and the
+ * `isReady` flag are computed here. Response: `{ ok: true, data: BookListItem[] }`.
+ */
+export const GET = withRoute({ auth: 'user', name: 'books.list' }, async ({ user, request }) => {
+  const params = new URL(request.url).searchParams;
+  return listBooks(await getBookReadDb(), user, {
+    childId: params.get('childId')?.trim() || null,
+    storyId: params.get('storyId')?.trim() || null,
+  });
 });

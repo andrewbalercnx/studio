@@ -14,7 +14,7 @@ import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
 import { ChoiceKeys, createBook, type CreateBookResponse } from '@/lib/books/api';
-import type { BookDoc, BookPageDoc, ManuscriptDoc, ManuscriptPageDoc } from '@/lib/books/types';
+import type { BookCastSheetDoc, BookDoc, BookPageDoc, ManuscriptDoc, ManuscriptPageDoc } from '@/lib/books/types';
 
 function byPageNumber<T extends { pageNumber: number }>(items: T[] | null): T[] {
   return items ? [...items].sort((a, b) => a.pageNumber - b.pageNumber) : [];
@@ -43,6 +43,22 @@ export function useBookPages(bookId: string | null | undefined) {
   const result = useCollection<BookPageDoc>(q);
   const pages = useMemo(() => byPageNumber(result.data), [result.data]);
   return { pages, loading: result.loading || !uid, error: result.error };
+}
+
+/** `books/{bookId}/castSheets` — the per-character reference sheets, for progress. */
+export function useBookCastSheets(bookId: string | null | undefined) {
+  const firestore = useFirestore();
+  const { user } = useUser();
+  const uid = user?.uid;
+  const q = useMemo(
+    () =>
+      firestore && bookId && uid
+        ? query(collection(firestore, 'books', bookId, 'castSheets'), where('ownerUid', '==', uid))
+        : null,
+    [firestore, bookId, uid]
+  );
+  const result = useCollection<BookCastSheetDoc>(q);
+  return { castSheets: result.data ?? [], loading: result.loading || !uid, error: result.error };
 }
 
 /** One page of a Book (e.g. the cover, page 1). */
