@@ -83,9 +83,19 @@ export const renderSchema = z.object({
         role: z.string().min(1),
         storagePath: z.string().min(1),
         url: z.string().nullable().default(null),
+        /** sha256 of the file, so an order can prove what it printed. */
+        sha256: z.string().nullable().default(null),
+        bytes: z.number().int().nonnegative().nullable().default(null),
+        pageCount: z.number().int().nonnegative().nullable().default(null),
       })
     )
     .min(1),
+  /** Print renders: the product and the page arithmetic used (slice 5.5). */
+  printProductId: z.string().nullable().default(null),
+  interiorPages: z.number().int().nonnegative().nullable().default(null),
+  trim: z.object({ widthIn: z.number().positive(), heightIn: z.number().positive() }).nullable().default(null),
+  bleedIn: z.number().nonnegative().nullable().default(null),
+  spineWidthMm: z.number().nonnegative().nullable().default(null),
   ...stampFields,
 });
 export type Render = z.infer<typeof renderSchema>;

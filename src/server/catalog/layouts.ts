@@ -14,17 +14,20 @@
  *   printLayouts.supportedLengths / supportedDensities (target fields, when present)
  *                                             → Layout.supportedLengths / supportedDensities
  *
- * A Book is physical pages = story pages + front/back matter (title, dedication,
- * end page), padded to the page rules (ADR-0011: 12 and 16 story pages print as
- * 24 interior pages, 24 as 28). A Layout supports a length when that fits under
- * its maximum.
+ * The template decides the page arithmetic (slice 5.5): interior pages =
+ * matter (title page, end page) + story pages × `leavesPerSpread` (a spread
+ * template prints each story page as two leaves: words on one, picture on the
+ * other), padded to the product's page multiple and minimum (ADR-0011: 12 and
+ * 16 story pages print as 24 interior pages, 24 as 28 on a single-leaf
+ * template). The covers are a separate PDF. A Layout supports a length when
+ * that fits under its maximum.
  */
 import type { Firestore } from 'firebase-admin/firestore';
 import { resolvePageConstraints } from '@/lib/print-constraints';
 import type { PrintLayout, PrintProduct } from '@/lib/types';
 
-/** Title page, dedication and end page added around the story pages. */
-export const FRONT_BACK_MATTER_PAGES = 3;
+/** Interior pages around the story: the title page and the end page (a dedication comes later). */
+export const INTERIOR_MATTER_PAGES = 2;
 
 export type PageRules = { minPages: number; maxPages: number; pageMultiple: 1 | 2 | 4 };
 
@@ -35,6 +38,10 @@ export type Layout = {
   /** Width / height of a page, or null when unknown. */
   aspect: number | null;
   pageRules: PageRules;
+  /** Printed leaves per story page: 1, or 2 for a spread template (words and picture on facing pages). */
+  leavesPerSpread: 1 | 2;
+  /** The linked print product (trim, bleed, binding), or null. */
+  printProductId: string | null;
   /** Explicit menus from a re-seeded `layouts` document; null = derived from `pageRules`. */
   supportedLengths: number[] | null;
   supportedDensities: string[] | null;
@@ -59,6 +66,8 @@ export function layoutFromDocuments(layoutId: string, layoutDoc: Record<string, 
     medium: layoutDoc.medium === 'screen' ? 'screen' : 'print',
     aspect: width > 0 && height > 0 ? width / height : null,
     pageRules: { minPages: rules.minPages, maxPages: rules.maxPages, pageMultiple: rules.pageMultiple },
+    leavesPerSpread: Number(layout.leavesPerSpread) === 2 ? 2 : 1,
+    printProductId: typeof layout.printProductId === 'string' && layout.printProductId ? layout.printProductId : null,
     supportedLengths: asNumbers(layoutDoc.supportedLengths),
     supportedDensities: asStrings(layoutDoc.supportedDensities),
   };
@@ -77,10 +86,15 @@ export async function loadLayout(db: Firestore, layoutId: string): Promise<Layou
   return layoutFromDocuments(snapshot.id, data, product);
 }
 
-/** Interior pages a Book of `storyPages` needs under these rules. */
-export function physicalPageCount(storyPages: number, rules: PageRules): number {
+/** Interior pages with content (before padding): matter + story pages × leaves per story page. */
+export function contentPageCount(storyPages: number, leavesPerSpread: 1 | 2 = 1): number {
+  return INTERIOR_MATTER_PAGES + storyPages * leavesPerSpread;
+}
+
+/** Interior pages a Book of `storyPages` prints as under these rules, padding included. */
+export function physicalPageCount(storyPages: number, rules: PageRules, leavesPerSpread: 1 | 2 = 1): number {
   const multiple = rules.pageMultiple || 1;
-  const padded = Math.ceil((storyPages + FRONT_BACK_MATTER_PAGES) / multiple) * multiple;
+  const padded = Math.ceil(contentPageCount(storyPages, leavesPerSpread) / multiple) * multiple;
   const minimum = rules.minPages > 0 ? Math.ceil(rules.minPages / multiple) * multiple : 0;
   return Math.max(padded, minimum);
 }
@@ -93,7 +107,7 @@ export function layoutSupports(layout: Layout, length: number, density: string):
   if (layout.supportedDensities && !layout.supportedDensities.includes(density)) {
     return { ok: false, reason: `${layout.name} does not support ${density} pages` };
   }
-  const pages = physicalPageCount(length, layout.pageRules);
+  const pages = physicalPageCount(length, layout.pageRules, layout.leavesPerSpread);
   if (layout.pageRules.maxPages > 0 && pages > layout.pageRules.maxPages) {
     return { ok: false, reason: `${layout.name} holds at most ${layout.pageRules.maxPages} pages; this book needs ${pages}` };
   }

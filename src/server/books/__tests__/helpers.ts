@@ -12,11 +12,14 @@ import type { VerifiedUser } from '../../http/auth';
 import { FakeFirestore } from '../../testing/fake-firestore';
 import type { BookJobDeps } from '../deps';
 import { registerBookJobs } from '../jobs';
+import { registerPrintJobs, type RenderJobDeps } from '../../print/jobs';
 import type { BookServiceDeps } from '../service';
 import type { PaginationOutput } from '../pagination';
 import type { ConfigDefinition } from '../../config/config-service';
 
 export const PNG_DATA_URL = 'data:image/png;base64,iVBORw0KGgo=';
+/** A real 1×1 PNG, for the PDF renderer (pdf-lib parses what it embeds). */
+export const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 
 export function user(uid: string, claims: Record<string, unknown> = {}): VerifiedUser {
   return { uid, email: null, claims: { uid, ...claims } as unknown as VerifiedUser['claims'] };
@@ -108,7 +111,14 @@ export function createBench(): Bench {
     now: () => new Date('2026-10-29T12:00:00Z'),
   };
 
-  const registry = registerBookJobs(new JobRegistry(), async () => deps);
+  const printDeps: RenderJobDeps = {
+    blobs: deps.blobs,
+    fetchImage: async (url) => {
+      fetched.push(url);
+      return url.includes('missing') ? null : { bytes: new Uint8Array(PNG_1X1), type: 'png' };
+    },
+  };
+  const registry = registerPrintJobs(registerBookJobs(new JobRegistry(), async () => deps), async () => printDeps);
   const runner = new JobRunner({ registry, dispatcher, db, retryDelayMs: () => 0 });
   return {
     fake,
