@@ -3,7 +3,7 @@
  *
  * Provides typed methods for all child-facing API operations.
  */
-import type { ChildInput, CreateStoryRequest, CreationModeView, StoryOutputType, ImageStyle, StoryStatus, StoryTurnResult, StoryTurnView, StoryView } from '@storypic/shared-types';
+import type { BookListItem, BookReadView, ChildInput, CreateStoryRequest, CreationModeView, StoryOutputType, ImageStyle, StoryStatus, StoryTurnResult, StoryTurnView, StoryView } from '@storypic/shared-types';
 /**
  * Configuration for the StoryPic API client.
  */
@@ -95,6 +95,20 @@ export declare class StoryPicClient {
         status: string;
         created: boolean;
     }>;
+    /**
+     * The family's Books, newest first, optionally for one child or one story.
+     * The server computes the status, art rollup and `isReady` flag.
+     */
+    getBooks(filter?: {
+        childId?: string;
+        storyId?: string;
+    }): Promise<BookListItem[]>;
+    /**
+     * One Book in full: meta and title, every page with its words and picture,
+     * and the live making-of progress (stage + percent). Read this to show both
+     * the progress view and the finished reader.
+     */
+    getBook(bookId: string): Promise<BookReadView>;
     /**
      * A Story and its turns. Every text (title, synopsis, finished text, each
      * prompt and option) is rendered with names on the server.

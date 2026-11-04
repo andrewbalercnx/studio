@@ -188,6 +188,60 @@ export type StoryTurnResult = {
     /** False when this repeated an earlier request (same idempotency key). */
     created: boolean;
 };
+export type BookStatus = 'draft' | 'illustrating' | 'ready' | 'partial' | 'failed' | 'locked';
+/** One Book in the family's library list (GET /api/books). */
+export type BookListItem = {
+    id: string;
+    storyId: string;
+    childId: string;
+    styleId: string;
+    status: BookStatus;
+    title: string | null;
+    art: {
+        total: number;
+        done: number;
+        failed: number;
+    };
+    /** Server-derived: the Book can be opened in the reader. */
+    isReady: boolean;
+    createdAt: string | null;
+    updatedAt: string | null;
+};
+/** The making-of stage of a Book and how far through it is. */
+export type BookProgressView = {
+    stage: 'writing' | 'characters' | 'pages';
+    done: number | null;
+    total: number | null;
+    percent: number;
+};
+/** One page of a Book read view, words and picture joined. */
+export type BookReadPage = {
+    pageNumber: number;
+    kind: 'cover' | 'title' | 'story' | 'dedication' | 'end' | 'blank' | 'back';
+    artUrl: string | null;
+    text: string | null;
+    narrationUrl: string | null;
+};
+/** One Book in full (GET /api/books/{bookId}). */
+export type BookReadView = {
+    id: string;
+    storyId: string;
+    childId: string;
+    styleId: string;
+    layoutId: string | null;
+    status: BookStatus;
+    title: string | null;
+    art: {
+        total: number;
+        done: number;
+        failed: number;
+    };
+    isReady: boolean;
+    pages: BookReadPage[];
+    progress: BookProgressView;
+    createdAt: string | null;
+    updatedAt: string | null;
+};
 /** Response from TTS endpoint. */
 export type TTSResponse = {
     ok: boolean;

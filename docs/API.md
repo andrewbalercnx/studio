@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-11-03 (new `GET /api/admin/allowances/summary`). 2026-11-02 (new `GET/POST /api/admin/allowances`; new `GET /api/library/summary`; new `POST /api/auth/password-reset`). 2026-11-01 (new `GET /api/admin/trace`). 2026-10-30 (`POST /api/stories/[storyId]/finish` re-dispatches a lost finish job). 2026-10-29 (Phase 5.4: every client creates Stories with the creation routes; new `GET /api/creation-modes`; `GET /api/stories?childId` and `GET /api/stories/[storyId]` rewritten for Stories (names resolved on the server; the latter also returns the turns); removed `POST /api/storyWizard`, `/api/gemini3`, `/api/gemini4`, `/api/storyFriends`, `/api/storyBeat`, `/api/storyEnding`, `/api/storyCompile`, `/api/storySession`, `/api/warmupReply`, `/api/ai-warmup`, `/api/storyArc`, `/api/characterTraits`, `/api/characters/create`, `/api/storyBook/audio`, `/api/storyBook/actorAvatar`, `GET /api/kids-flows`, `GET /api/kids-generators`, `GET/PUT /api/admin/system-config/kids-flows`, `GET /api/admin/sessions`, `GET /api/parent/storybooks`, `POST /api/parent/storybooks/thumbnails`, `GET /api/stories/[storyId]/storybooks` and its `pages` route; api-client: `listCreationModes`, `createStory`, `sendTurn`, `abandonStory`, `retryFinish`. Phase 5.3: new `POST /api/stories`, `POST /api/stories/[storyId]/turns`, `POST /api/stories/[storyId]/abandon`, `POST /api/stories/[storyId]/finish` — Story creation in five modes on the server, not yet used by the UI; `POST /api/manuscripts` and `POST /api/books` also accept Stories made by these routes once `complete`. Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-11-04 (new `GET /api/books` (list) and `GET /api/books/[bookId]` (read, with pages, words and server-computed progress) so the mobile app can list and read Books without Firestore; api-client `getBooks`/`getBook`; shared-types `BookListItem`/`BookReadView`). 2026-11-03 (new `GET /api/admin/allowances/summary`). 2026-11-02 (new `GET/POST /api/admin/allowances`; new `GET /api/library/summary`; new `POST /api/auth/password-reset`). 2026-11-01 (new `GET /api/admin/trace`). 2026-10-30 (`POST /api/stories/[storyId]/finish` re-dispatches a lost finish job). 2026-10-29 (Phase 5.4: every client creates Stories with the creation routes; new `GET /api/creation-modes`; `GET /api/stories?childId` and `GET /api/stories/[storyId]` rewritten for Stories (names resolved on the server; the latter also returns the turns); removed `POST /api/storyWizard`, `/api/gemini3`, `/api/gemini4`, `/api/storyFriends`, `/api/storyBeat`, `/api/storyEnding`, `/api/storyCompile`, `/api/storySession`, `/api/warmupReply`, `/api/ai-warmup`, `/api/storyArc`, `/api/characterTraits`, `/api/characters/create`, `/api/storyBook/audio`, `/api/storyBook/actorAvatar`, `GET /api/kids-flows`, `GET /api/kids-generators`, `GET/PUT /api/admin/system-config/kids-flows`, `GET /api/admin/sessions`, `GET /api/parent/storybooks`, `POST /api/parent/storybooks/thumbnails`, `GET /api/stories/[storyId]/storybooks` and its `pages` route; api-client: `listCreationModes`, `createStory`, `sendTurn`, `abandonStory`, `retryFinish`. Phase 5.3: new `POST /api/stories`, `POST /api/stories/[storyId]/turns`, `POST /api/stories/[storyId]/abandon`, `POST /api/stories/[storyId]/finish` — Story creation in five modes on the server, not yet used by the UI; `POST /api/manuscripts` and `POST /api/books` also accept Stories made by these routes once `complete`. Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -37,8 +37,12 @@ const client = new StoryPicClient({ baseUrl: '/api', getToken: () => user.getIdT
 
 **Books:**
 - `createBook({ storyId, formId, styleId, idempotencyKey })` - `POST /api/books`; make the key once per
-  user action and repeat it on a retry of that action. Progress is read from Firestore (`books/{id}`),
-  not polled through the client.
+  user action and repeat it on a retry of that action. On the web, progress is read from Firestore
+  (`books/{id}`); the mobile app has no Firestore and reads the two routes below.
+- `getBooks({ childId?, storyId? })` - `GET /api/books`; the family's Books, newest first, with
+  server-computed `status`, `art` and `isReady`.
+- `getBook(bookId)` - `GET /api/books/{bookId}`; one Book in full — pages (words + picture), and the
+  live `progress` (stage + percent) for the making-of screen.
 
 **Catalog:**
 - `getOutputTypes()` - Get available story output types (Forms)
@@ -744,6 +748,45 @@ The Book gets pages `1` (cover) and `2…length+1` (story pages); `art: { total:
 failed: 0 }`. Jobs: cast sheets (`book.castSheet`, one per cast member) start now if the Manuscript is
 `ready`, otherwise when pagination finishes; then page art (`book.pageArt`, one per page). The Book
 ends `ready` (all art), `partial` (some pages failed after retries) or `failed` (none).
+
+### GET `/api/books`
+
+The caller's Books, newest first. **Auth**: `user`. Server-first: filtering, sorting and the `isReady`
+flag are computed on the server (a thin client — the mobile app — renders the list without its own
+Firestore access). Admin/writer principals see the Book they ask for across families, same as the
+ownership guard.
+
+**Query**: `?childId=` and/or `?storyId=` to narrow to one child or one story (both optional).
+
+**Response** (200 OK): `{ "ok": true, "data": BookListItem[] }`, each:
+```json
+{ "id": "bk_…", "storyId": "st_…", "childId": "ch_…", "styleId": "watercolour", "status": "illustrating",
+  "title": "The Gate", "art": { "total": 25, "done": 12, "failed": 0 }, "isReady": false,
+  "createdAt": "2026-11-04T…Z", "updatedAt": "2026-11-04T…Z" }
+```
+`title` comes from the Book's Manuscript; `isReady` is true for `ready`/`partial`/`locked`.
+
+### GET `/api/books/[bookId]`
+
+One of the caller's Books in full. **Auth**: `user`; owner and child-persona scope are enforced
+(403 `PERSONA_SCOPE_MISMATCH` on a persona mismatch; absent/invalid persona cookie = legacy). 404 when
+the Book does not exist. The mobile app lists with `GET /api/books` and reads one here.
+
+**Response** (200 OK): `{ "ok": true, "data": BookReadView }`:
+```json
+{ "id": "bk_…", "storyId": "st_…", "childId": "ch_…", "styleId": "watercolour", "layoutId": null,
+  "status": "illustrating", "title": "The Gate", "art": { "total": 25, "done": 12, "failed": 0 },
+  "isReady": false,
+  "pages": [ { "pageNumber": 1, "kind": "cover", "artUrl": "https://…", "text": null, "narrationUrl": null },
+             { "pageNumber": 2, "kind": "story", "artUrl": null, "text": "Once upon a time…", "narrationUrl": "https://…" } ],
+  "progress": { "stage": "characters", "done": 1, "total": 3, "percent": 15 },
+  "createdAt": "2026-11-04T…Z", "updatedAt": "2026-11-04T…Z" }
+```
+Each page joins its picture (`artUrl`) to its words (`text`, display names already resolved) and
+narration. `progress` is the live making-of stage computed on the server — `writing` (pagination) →
+`characters` (cast sheets, `done`/`total` sheets) → `pages` (page art, `done`/`total` pictures) — with
+a monotonic `percent`, so a client shows "Drawing the characters…" / "page N of M" without reading
+`book.art` (which the server writes only at the end).
 
 ### POST `/api/books/[bookId]/pages/[pageNumber]/retry`
 
