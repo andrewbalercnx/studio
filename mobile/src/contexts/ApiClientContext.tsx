@@ -75,6 +75,74 @@ export interface StoryTurnResult {
   created: boolean;
 }
 
+export type BookStatus = 'draft' | 'illustrating' | 'ready' | 'partial' | 'failed' | 'locked';
+
+/** One Book in the family's library list (GET /api/books). */
+export interface BookListItem {
+  id: string;
+  storyId: string;
+  childId: string;
+  styleId: string;
+  status: BookStatus;
+  title: string | null;
+  art: { total: number; done: number; failed: number };
+  /** Server-derived: the Book can be opened in the reader. */
+  isReady: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/** The making-of stage of a Book and how far through it is. */
+export interface BookProgressView {
+  stage: 'writing' | 'characters' | 'pages';
+  done: number | null;
+  total: number | null;
+  percent: number;
+}
+
+/** One page of a Book read view, words and picture joined. */
+export interface BookReadPage {
+  pageNumber: number;
+  kind: 'cover' | 'title' | 'story' | 'dedication' | 'end' | 'blank' | 'back';
+  artUrl: string | null;
+  text: string | null;
+  narrationUrl: string | null;
+}
+
+/** One Book in full (GET /api/books/{bookId}). */
+export interface BookReadView {
+  id: string;
+  storyId: string;
+  childId: string;
+  styleId: string;
+  layoutId: string | null;
+  status: BookStatus;
+  title: string | null;
+  art: { total: number; done: number; failed: number };
+  isReady: boolean;
+  pages: BookReadPage[];
+  progress: BookProgressView;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/** A Form (story output type) the child can choose, as the chooser shows it. */
+export interface FormOption {
+  id: string;
+  name?: string;
+  childFacingLabel?: string;
+  shortDescription?: string;
+}
+
+/** An art Style the child can choose. */
+export interface StyleOption {
+  id: string;
+  title?: string;
+  sampleImageUrl?: string | null;
+  ageFrom?: number | null;
+  ageTo?: number | null;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -210,6 +278,50 @@ class MobileApiClient {
   /** A Story that failed to finish goes back to finishing. */
   async retryFinish(storyId: string): Promise<{ storyId: string; status: StoryStatus }> {
     return this.data(`/api/stories/${encodeURIComponent(storyId)}/finish`, { method: 'POST' });
+  }
+
+  // ============================================
+  // Books (make from a finished Story; list and read)
+  // ============================================
+
+  /** The Forms a finished Story can become (live output types). */
+  async getOutputTypes(): Promise<FormOption[]> {
+    const res = await this.request<{ ok: boolean; outputTypes: FormOption[] }>('/api/storyOutputTypes');
+    return res.outputTypes || [];
+  }
+
+  /** The art Styles a Book can be drawn in (preferred first). */
+  async getImageStyles(): Promise<StyleOption[]> {
+    const res = await this.request<{ ok: boolean; imageStyles: StyleOption[] }>('/api/imageStyles');
+    return res.imageStyles || [];
+  }
+
+  /**
+   * Make a Book from a finished Story in a Form and Style. The server runs the
+   * whole pipeline; the caller watches the Book. `idempotencyKey` is one per
+   * tap (a repeat returns the same Book and charges the allowance once).
+   */
+  async createBook(input: { storyId: string; formId: string; styleId: string; idempotencyKey: string }): Promise<{
+    bookId: string;
+    manuscriptId: string;
+    status: BookStatus;
+    created: boolean;
+  }> {
+    return this.data('/api/books', { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  /** The family's Books, newest first, optionally for one child or one story. */
+  async getBooks(filter: { childId?: string; storyId?: string } = {}): Promise<BookListItem[]> {
+    const query = new URLSearchParams();
+    if (filter.childId) query.set('childId', filter.childId);
+    if (filter.storyId) query.set('storyId', filter.storyId);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.data<BookListItem[]>(`/api/books${suffix}`);
+  }
+
+  /** One Book in full: meta, every page (words + picture), and live progress. */
+  async getBook(bookId: string): Promise<BookReadView> {
+    return this.data<BookReadView>(`/api/books/${encodeURIComponent(bookId)}`);
   }
 
   // ============================================
