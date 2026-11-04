@@ -15,6 +15,8 @@ import { books, bookPages, castSheets, manuscriptPages, manuscripts } from '../d
 export type { BookListItem, BookReadView };
 
 const ART_PAGE_KINDS: ReadonlySet<BookPage['kind']> = new Set(['cover', 'story', 'back']);
+/** Pages the on-screen readers show: the covers and the story (title and end pages are typeset for print). */
+const READER_PAGE_KINDS: ReadonlySet<BookPage['kind']> = new Set(['cover', 'story', 'back']);
 
 /**
  * The making-of stage and how far through, from the live documents (not
@@ -121,6 +123,7 @@ export async function getBook(db: Firestore, user: VerifiedUser, bookId: string)
         artUrl: page.artUrl,
         text: words?.text ?? null,
         narrationUrl: words?.narrationUrl ?? null,
+        inReader: READER_PAGE_KINDS.has(page.kind),
       };
     });
 

@@ -29,6 +29,7 @@ function seed() {
   // bk_new pages: a cover (no art yet) and one story page.
   fake.store.set('books/bk_new/pages/1', { ownerUid: 'p1', pageNumber: 1, kind: 'cover', manuscriptPage: null, artUrl: null, artJob: null, createdAt: t(30), updatedAt: t(30) });
   fake.store.set('books/bk_new/pages/2', { ownerUid: 'p1', pageNumber: 2, kind: 'story', manuscriptPage: 1, artUrl: null, artJob: null, createdAt: t(30), updatedAt: t(30) });
+  fake.store.set('books/bk_new/pages/3', { ownerUid: 'p1', pageNumber: 3, kind: 'end', manuscriptPage: null, artUrl: null, artJob: null, createdAt: t(30), updatedAt: t(30) });
   // One cast sheet still drawing → "characters" stage.
   fake.store.set('books/bk_new/castSheets/ch_1', { ownerUid: 'p1', castId: 'ch_1', ref: { kind: 'child', id: 'ch_1' }, source: 'appearance', imageUrl: null, job: { jobId: 'j', status: 'running' }, createdAt: t(31), updatedAt: t(31) });
   return fake.asFirestore();
@@ -55,9 +56,10 @@ describe('book read views', () => {
   it('reads one Book with its pages joined to the words and the live progress', async () => {
     const view = await getBook(seed(), p1, 'bk_new');
     expect(view).toMatchObject({ id: 'bk_new', title: 'The New One', isReady: false });
-    expect(view.pages.map((p) => [p.pageNumber, p.kind, p.text])).toEqual([
-      [1, 'cover', null],
-      [2, 'story', 'Once upon a time.'],
+    expect(view.pages.map((p) => [p.pageNumber, p.kind, p.text, p.inReader])).toEqual([
+      [1, 'cover', null, true],
+      [2, 'story', 'Once upon a time.', true],
+      [3, 'end', null, false], // typeset for print, not shown on screen
     ]);
     // Manuscript ready, a cast sheet still drawing, no page art done → characters stage.
     expect(view.progress.stage).toBe('characters');

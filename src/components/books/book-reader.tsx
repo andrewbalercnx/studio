@@ -30,6 +30,7 @@ export function BookReader({ title, pages, words, onRetryPage, locked }: BookRea
   const wordsByPage = useMemo(() => new Map(words.map((w) => [w.pageNumber, w])), [words]);
   // On screen: the covers and the story pages (the title and end pages are for print).
   const shown = useMemo(() => pages.filter((p) => p.kind === 'cover' || p.kind === 'story' || p.kind === 'back'), [pages]);
+  const storyCount = useMemo(() => shown.filter((p) => p.kind === 'story').length, [shown]);
   const page = shown[Math.min(index, Math.max(shown.length - 1, 0))];
   const pageWords = page?.manuscriptPage ? wordsByPage.get(page.manuscriptPage) : undefined;
 
@@ -139,7 +140,7 @@ export function BookReader({ title, pages, words, onRetryPage, locked }: BookRea
           <ChevronLeft className="h-5 w-5" />
         </Button>
         <span className="text-sm text-amber-800">
-          {isCover ? 'Cover' : `Page ${page.manuscriptPage} of ${shown.length - 1}`}
+          {page.kind === 'back' ? 'Back cover' : isCover ? 'Cover' : `Page ${page.manuscriptPage} of ${storyCount}`}
         </span>
         <Button
           variant="outline"

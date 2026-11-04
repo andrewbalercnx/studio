@@ -107,6 +107,8 @@ export interface BookReadPage {
   artUrl: string | null;
   text: string | null;
   narrationUrl: string | null;
+  /** Shown in the reader (covers and story pages); title and end pages are for print. Absent from older servers. */
+  inReader?: boolean;
 }
 
 /** One Book in full (GET /api/books/{bookId}). */

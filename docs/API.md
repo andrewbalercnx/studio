@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-11-04 (new `GET /api/books` (list) and `GET /api/books/[bookId]` (read, with pages, words and server-computed progress) so the mobile app can list and read Books without Firestore; api-client `getBooks`/`getBook`; shared-types `BookListItem`/`BookReadView`). 2026-11-03 (new `GET /api/admin/allowances/summary`). 2026-11-02 (new `GET/POST /api/admin/allowances`; new `GET /api/library/summary`; new `POST /api/auth/password-reset`). 2026-11-01 (new `GET /api/admin/trace`). 2026-10-30 (`POST /api/stories/[storyId]/finish` re-dispatches a lost finish job). 2026-10-29 (Phase 5.4: every client creates Stories with the creation routes; new `GET /api/creation-modes`; `GET /api/stories?childId` and `GET /api/stories/[storyId]` rewritten for Stories (names resolved on the server; the latter also returns the turns); removed `POST /api/storyWizard`, `/api/gemini3`, `/api/gemini4`, `/api/storyFriends`, `/api/storyBeat`, `/api/storyEnding`, `/api/storyCompile`, `/api/storySession`, `/api/warmupReply`, `/api/ai-warmup`, `/api/storyArc`, `/api/characterTraits`, `/api/characters/create`, `/api/storyBook/audio`, `/api/storyBook/actorAvatar`, `GET /api/kids-flows`, `GET /api/kids-generators`, `GET/PUT /api/admin/system-config/kids-flows`, `GET /api/admin/sessions`, `GET /api/parent/storybooks`, `POST /api/parent/storybooks/thumbnails`, `GET /api/stories/[storyId]/storybooks` and its `pages` route; api-client: `listCreationModes`, `createStory`, `sendTurn`, `abandonStory`, `retryFinish`. Phase 5.3: new `POST /api/stories`, `POST /api/stories/[storyId]/turns`, `POST /api/stories/[storyId]/abandon`, `POST /api/stories/[storyId]/finish` — Story creation in five modes on the server, not yet used by the UI; `POST /api/manuscripts` and `POST /api/books` also accept Stories made by these routes once `complete`. Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-11-04 (print render, slice 5.5a: new `GET /api/books/[bookId]/print-options`, `POST`/`GET /api/books/[bookId]/renders`, `GET /api/books/[bookId]/renders/[renderId]`; `GET /api/books/[bookId]` pages gain `inReader`). 2026-11-04 (new `GET /api/books` (list) and `GET /api/books/[bookId]` (read, with pages, words and server-computed progress) so the mobile app can list and read Books without Firestore; api-client `getBooks`/`getBook`; shared-types `BookListItem`/`BookReadView`). 2026-11-03 (new `GET /api/admin/allowances/summary`). 2026-11-02 (new `GET/POST /api/admin/allowances`; new `GET /api/library/summary`; new `POST /api/auth/password-reset`). 2026-11-01 (new `GET /api/admin/trace`). 2026-10-30 (`POST /api/stories/[storyId]/finish` re-dispatches a lost finish job). 2026-10-29 (Phase 5.4: every client creates Stories with the creation routes; new `GET /api/creation-modes`; `GET /api/stories?childId` and `GET /api/stories/[storyId]` rewritten for Stories (names resolved on the server; the latter also returns the turns); removed `POST /api/storyWizard`, `/api/gemini3`, `/api/gemini4`, `/api/storyFriends`, `/api/storyBeat`, `/api/storyEnding`, `/api/storyCompile`, `/api/storySession`, `/api/warmupReply`, `/api/ai-warmup`, `/api/storyArc`, `/api/characterTraits`, `/api/characters/create`, `/api/storyBook/audio`, `/api/storyBook/actorAvatar`, `GET /api/kids-flows`, `GET /api/kids-generators`, `GET/PUT /api/admin/system-config/kids-flows`, `GET /api/admin/sessions`, `GET /api/parent/storybooks`, `POST /api/parent/storybooks/thumbnails`, `GET /api/stories/[storyId]/storybooks` and its `pages` route; api-client: `listCreationModes`, `createStory`, `sendTurn`, `abandonStory`, `retryFinish`. Phase 5.3: new `POST /api/stories`, `POST /api/stories/[storyId]/turns`, `POST /api/stories/[storyId]/abandon`, `POST /api/stories/[storyId]/finish` — Story creation in five modes on the server, not yet used by the UI; `POST /api/manuscripts` and `POST /api/books` also accept Stories made by these routes once `complete`. Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -818,6 +818,59 @@ here (a later slice registers the revocation in `bookUnlockHooks`). Idempotent: 
 is not locked returns its status.
 
 **Response** (200 OK): `{ "ok": true, "data": { "bookId": "…", "status": "ready" } }`
+
+Every `GET /api/books/[bookId]` page also carries `inReader` (true for the covers and story pages;
+the `title` and `end` pages are typeset for print and not shown on screen).
+
+### GET `/api/books/[bookId]/print-options`
+
+Print templates (`printLayouts`) this Book can be printed in: its length fits the template's page model
+(title + end + story pages × `leavesPerSpread`, padded to the product's page multiple and minimum) and
+maximum. Each has a retail price when an active catalogue Product links to its print product. Cheapest
+first, then by name. Auth: owner (or admin).
+
+**Response** (200 OK):
+```json
+{ "ok": true, "data": [
+  { "layoutId": "mixam-8x10-hardcover", "name": "Mixam 8x10 Hardcover", "printProductId": "hardcover",
+    "trim": { "widthIn": 8, "heightIn": 10 }, "leavesPerSpread": 2, "interiorPages": 28,
+    "price": { "productId": "book-hardcover", "priceId": "…", "currency": "GBP", "amountMinor": 2499 },
+    "isCurrent": false }
+] }
+```
+
+### POST `/api/books/[bookId]/renders`
+
+Start a print render of the Book in a template (`book.render` job on the `render` queue). A `ready` Book is
+locked here (content frozen, ADR-0010); a `locked` Book is used as it is. The job writes
+`books/{id}/renders/{renderId}/{interior,cover}.pdf` (trim + bleed on every page; the cover is front,
+spine when the product has one, back) and then the immutable render document. Auth: owner (or admin).
+
+**Body**: `{ "layoutId": "…", "idempotencyKey": "8–128 chars" }` (same key → same render).
+
+**Response**: 202 `{ "ok": true, "data": { "renderId": "rn_…", "jobId": "job_…", "status": "rendering" } }`,
+or 200 with `"status": "ready"` when that render already exists.
+
+**Errors**: 404 `LAYOUT_NOT_FOUND`; 400 `LAYOUT_NOT_PRINT`; 409 `LAYOUT_UNSUPPORTED` (the Book does not fit);
+409 `BOOK_HAS_MISSING_ART` (a picture failed: retry it first); 409 `BOOK_NOT_FINISHED`.
+
+### GET `/api/books/[bookId]/renders`
+
+The Book's finished renders, newest first: `RenderView[]` (below). Auth: owner (or admin).
+
+### GET `/api/books/[bookId]/renders/[renderId]`
+
+One render. While the render document does not exist yet, its job's progress.
+
+**Response** (200 OK):
+```json
+{ "ok": true, "data": { "renderId": "rn_…", "status": "ready", "layoutId": "…", "medium": "print",
+  "interiorPages": 28, "spineWidthMm": 6.1,
+  "files": [ { "role": "interior", "url": "https://…", "pageCount": 28 }, { "role": "cover", "url": "https://…", "pageCount": 3 } ],
+  "error": null, "createdAt": "2026-11-04T…" } }
+```
+`status` is `rendering` (job queued or running), `ready`, or `failed` (with `error`, e.g. the Book was
+unlocked before the render ran). **Errors**: 404 `RENDER_NOT_FOUND`.
 
 ---
 

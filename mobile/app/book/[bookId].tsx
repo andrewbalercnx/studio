@@ -147,7 +147,7 @@ export default function BookScreen() {
     );
   }
 
-  const pages = book.pages;
+  const pages = book.pages.filter((p) => p.inReader !== false);
   const page = pages[Math.min(pageIndex, pages.length - 1)];
   const imageSize = Math.min(width - 32, 520);
 

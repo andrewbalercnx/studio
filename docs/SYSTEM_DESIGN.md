@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-11-04 (mobile makes and reads Books). 2026-11-04 (story-introduced characters get a drawn avatar: a `character.avatar` ai-image job (`src/server/characters/avatar.ts`, new AI purpose) enqueued with the turn that creates them, drawing a head-and-shoulders avatar from the character's words into `avatarUrl` — UI only, never the likeness portrait (ADR-0006)). 2026-11-04 (admin/writer roles come from the custom claim only — the client no longer trusts a `users/{uid}` doc role field; `scripts/set-admin.mjs` sets the claim; rules also refuse owner writes to flat `isAdmin`/`isWriter`/`canShowWizardTargets`). 2026-11-02 (admin allowance management with grant history; `/auth/action` handles auth email links on our domain; reset emails sent by us via `POST /api/auth/password-reset`). 2026-11-01 (Book & Story trace: AI calls tagged by trace context and always logged; `/admin/trace`). 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.4: every client creates Stories through the creation routes (§2) — one mode chooser and play view for the web child shell and the kids PWA, mobile on the same routes, `GET /api/stories[/{id}]` and `GET /api/creation-modes`; the session engine, chat mode, warmup, arc engine, every old mode route and flow, `storySessions` and the old storybook read paths are deleted; Stories are server-written only; the trial data is reset at deploy (`docs/DEPLOYMENT.md` §10). Phase 5.3: server-side Story creation (§13) — five modes behind one engine interface, `POST /api/stories` + turns + abandon + finish, `story.finish` job, target Stories and turns in `stories`, trial-data reset script; not yet used by the clients (5.4). Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
+> **Last Updated**: 2026-11-04 (print render, slice 5.5a: Books gain title, end and AI back-cover pages; `src/server/print/` renders a locked Book to interior and cover PDFs per template, with bleed and spine width, as immutable renders via `book.render`). 2026-11-04 (mobile makes and reads Books). 2026-11-04 (story-introduced characters get a drawn avatar: a `character.avatar` ai-image job (`src/server/characters/avatar.ts`, new AI purpose) enqueued with the turn that creates them, drawing a head-and-shoulders avatar from the character's words into `avatarUrl` — UI only, never the likeness portrait (ADR-0006)). 2026-11-04 (admin/writer roles come from the custom claim only — the client no longer trusts a `users/{uid}` doc role field; `scripts/set-admin.mjs` sets the claim; rules also refuse owner writes to flat `isAdmin`/`isWriter`/`canShowWizardTargets`). 2026-11-02 (admin allowance management with grant history; `/auth/action` handles auth email links on our domain; reset emails sent by us via `POST /api/auth/password-reset`). 2026-11-01 (Book & Story trace: AI calls tagged by trace context and always logged; `/admin/trace`). 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.4: every client creates Stories through the creation routes (§2) — one mode chooser and play view for the web child shell and the kids PWA, mobile on the same routes, `GET /api/stories[/{id}]` and `GET /api/creation-modes`; the session engine, chat mode, warmup, arc engine, every old mode route and flow, `storySessions` and the old storybook read paths are deleted; Stories are server-written only; the trial data is reset at deploy (`docs/DEPLOYMENT.md` §10). Phase 5.3: server-side Story creation (§13) — five modes behind one engine interface, `POST /api/stories` + turns + abandon + finish, `story.finish` job, target Stories and turns in `stories`, trial-data reset script; not yet used by the clients (5.4). Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -440,6 +440,7 @@ book.prepareCast ─▶ book.castSheet × cast (ai-image) ─ fan-in ─▶ book
 book.illustrate  ─▶ book.pageArt × pages (ai-image)  ─ fan-in ─▶ Book ready | partial | failed
 POST /api/books/{id}/pages/{n}/retry → a new book.illustrate for that page
 POST /api/books/{id}/lock | /unlock (unlock runs bookUnlockHooks: share-link revocation seam)
+POST /api/books/{id}/renders (locks) ─▶ book.render (render queue) ─▶ books/{id}/renders/{renderId}
 ```
 
 - **Server-driven**: every step is a Job on Cloud Tasks; closing the browser changes nothing. The
@@ -461,11 +462,27 @@ POST /api/books/{id}/lock | /unlock (unlock runs bookUnlockHooks: share-link rev
 - **TEST_MODE** (`isTestMode()`): every handler writes fixtures (text split deterministically,
   `TEST_MODE_IMAGE_DATA_URL`, `TEST_MODE_AUDIO_DATA_URL`) without AI or TTS, so the pipeline runs
   end to end in the emulator with the in-process dispatcher.
+- **Pages**: a Book is made as cover, title, story pages, end, back. The covers and story pages have
+  art (the back cover is its own AI scene from pagination: everyone together, celebrating, the hero
+  always present, no text); the title and end pages are typeset when printed. The on-screen readers
+  show the covers and story pages (`inReader`).
+- **Print render** (`src/server/print/`, slice 5.5a): `book.render` reads the Book through the same
+  join as `GET /api/books/{id}`, maps it onto a print template (`adapter.ts`), and renders the
+  interior and cover PDFs with pdf-lib (`render.ts`, moved from the legacy printable route). The
+  template decides the page arithmetic: title + end + story pages × `leavesPerSpread`, padded to the
+  product's page multiple and minimum (`catalog/layouts.ts`); a template is offered only when the
+  Book fits its maximum. Every page carries the product's bleed (boxes touching a trim edge extend
+  into it); the spine width comes from the page count and paper (case binding adds board allowance);
+  art is fitted to each template's boxes (stretch under 10 %, else letterbox), so one Book prints in
+  any template. Files are written before the immutable render document (ADR-0010), with sha256
+  checksums, so an order can prove what it printed. A print render needs a locked Book; starting one
+  locks a `ready` Book and refuses one with missing pictures. Admins get a proof panel on the Book
+  page; parents order in 5.5b.
 - **Allowance**: `storybook_allowance` is consumed in the transaction that creates the Book, with
   the ledger semantics of `src/lib/entitlements` (free tier, child pool then family).
 
-**Used by** the web app and the kids PWA (§3). **Not yet**: print (no `book.render`, layouts or
-orders for Books; the print slice adds them). The mobile app makes and reads Books (§2).
+**Used by** the web app and the kids PWA (§3). **Not yet**: print orders and payment for Books
+(slice 5.5b); the print render exists (above). The mobile app makes and reads Books (§2).
 
 ### 13. Server-side Story creation (five modes, one interface)
 

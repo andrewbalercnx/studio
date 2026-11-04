@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-11-04 (`users`: roles are custom claims only — owner writes to `roles`, the flat `isAdmin`/`isWriter`/`canShowWizardTargets` fields, and PIN fields are refused; `scripts/set-admin.mjs` sets the claim). 2026-11-02 (`entitlementLedgers/*/grants` history; new `authEmailThrottle`). 2026-11-01 (`aiFlowLogs`: `purpose`, `storyId`, `manuscriptId`, `bookId`, `jobId`, `jobKind`; harness calls always logged). 2026-10-30 (AI model names: Gemini 2.5 and older retired, mapped to 3.x on read). 2026-10-29 (Phase 5.4: `stories` holds Stories (`schemaVersion: 2`) only and is server-written only — the owner reads a Story and its `turns`; `storySessions` (with `messages`, `events`), `children/{id}/sessions`, the legacy story fields and the `stories/{id}/storybooks` subcollection are removed (trial-data reset at deploy, `docs/DEPLOYMENT.md` §10; rules deny every client access to them); `systemConfig/kids-flows` removed; `storyGenerators` is read through `GET /api/creation-modes`. Phase 5.3: target-shaped Stories (`schemaVersion: 2`, `ownerUid`, `modeId`, `cast`, `modeState`…) and the `stories/{id}/turns` subcollection, written by the new creation routes — present, the UI switches in 5.4; AI-introduced characters get `origin: 'story'` / `originStoryId`; rules: owner-read, no client writes on target Stories and turns, legacy owner updates unchanged; `jobs.kind` adds `story.finish`. Phase 5.2: the web app and kids PWA read `books`, `manuscripts` and their pages directly (owner-filtered queries) and create Books through `POST /api/books`; `stories/*/storybooks` is legacy and read-only (no route writes it any more except the old print/share path), kept until the trial data reset. Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-11-04 (print render, slice 5.5a: `manuscripts.backCover`; Books get `title`, `end` and `back` pages; `books/*/renders` written by `book.render` with checksums, page count, trim, bleed and spine width; `jobs.kind` adds `book.render`). 2026-11-04 (`users`: roles are custom claims only — owner writes to `roles`, the flat `isAdmin`/`isWriter`/`canShowWizardTargets` fields, and PIN fields are refused; `scripts/set-admin.mjs` sets the claim). 2026-11-02 (`entitlementLedgers/*/grants` history; new `authEmailThrottle`). 2026-11-01 (`aiFlowLogs`: `purpose`, `storyId`, `manuscriptId`, `bookId`, `jobId`, `jobKind`; harness calls always logged). 2026-10-30 (AI model names: Gemini 2.5 and older retired, mapped to 3.x on read). 2026-10-29 (Phase 5.4: `stories` holds Stories (`schemaVersion: 2`) only and is server-written only — the owner reads a Story and its `turns`; `storySessions` (with `messages`, `events`), `children/{id}/sessions`, the legacy story fields and the `stories/{id}/storybooks` subcollection are removed (trial-data reset at deploy, `docs/DEPLOYMENT.md` §10; rules deny every client access to them); `systemConfig/kids-flows` removed; `storyGenerators` is read through `GET /api/creation-modes`. Phase 5.3: target-shaped Stories (`schemaVersion: 2`, `ownerUid`, `modeId`, `cast`, `modeState`…) and the `stories/{id}/turns` subcollection, written by the new creation routes — present, the UI switches in 5.4; AI-introduced characters get `origin: 'story'` / `originStoryId`; rules: owner-read, no client writes on target Stories and turns, legacy owner updates unchanged; `jobs.kind` adds `story.finish`. Phase 5.2: the web app and kids PWA read `books`, `manuscripts` and their pages directly (owner-filtered queries) and create Books through `POST /api/books`; `stories/*/storybooks` is legacy and read-only (no route writes it any more except the old print/share path), kept until the trial data reset. Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -306,6 +306,7 @@ so one per shape.
 | `status` | `draft` \| `paginating` \| `ready` \| `failed` | Narration does not change it |
 | `narration` | `{ voiceId }` \| null | Child's `preferredVoiceId` or the default voice |
 | `cover` | Scene \| null | Scene notes for the cover picture (written by pagination) |
+| `backCover` | Scene \| null | Scene notes for the back cover picture: everyone together, celebrating, the hero always present (written by pagination; older Manuscripts derive it from the last page) |
 | `title` | string \| null | Story title at pagination (cover text) |
 
 #### `manuscripts/{manuscriptId}/pages/{n}`
@@ -331,15 +332,15 @@ A Manuscript drawn in a Style (and, later, laid out with a print Layout).
 | `layoutId` | string \| null | `printLayouts` id; null for a screen Book |
 | `printProductId` | string \| null | Print slice |
 | `status` | `draft` \| `illustrating` \| `ready` \| `partial` \| `failed` \| `locked` | `partial`: some pages failed after retries |
-| `art` | `{ total, done, failed }` | Rollup over pages with art (cover + story pages) |
+| `art` | `{ total, done, failed }` | Rollup over pages with art (front cover, story pages, back cover) |
 
 Subcollections:
 
 | Path | Fields |
 |------|--------|
-| `books/{id}/pages/{n}` | `ownerUid`, `pageNumber` (doc id; 1 = cover, 2… = story pages), `kind` (`cover`, `title`, `story`, `dedication`, `end`, `blank`, `back`; this slice writes `cover` and `story`), `manuscriptPage` (story pages), `artUrl`, `artJob { jobId, status }` |
+| `books/{id}/pages/{n}` | `ownerUid`, `pageNumber` (doc id: 1 = cover, 2 = title, 3…n+2 = story pages, n+3 = end, n+4 = back), `kind` (`cover`, `title`, `story`, `dedication`, `end`, `blank`, `back`; Books are made with `cover`, `title`, `story`, `end`, `back`; `title` and `end` are typeset in print and have no art), `manuscriptPage` (story pages), `artUrl`, `artJob { jobId, status }` |
 | `books/{id}/castSheets/{castId}` | `ownerUid`, `castId`, `ref { kind: child\|character, id }`, `source` (`portrait`, `photos` or `appearance`), `imageUrl`, `job { jobId, status }` |
-| `books/{id}/renders/{renderId}` | Immutable (ADR-0010): `ownerUid`, `medium` (`screen`\|`print`), `layoutId`, `files [{ role, storagePath, url }]`. Defined; written by the print slice |
+| `books/{id}/renders/{renderId}` | Immutable (ADR-0010), written last by `book.render`: `ownerUid`, `medium` (`screen`\|`print`), `layoutId`, `files [{ role (`interior`\|`cover`), storagePath, url, sha256, bytes, pageCount }]`, `printProductId`, `interiorPages` (padding included), `trim { widthIn, heightIn }`, `bleedIn`, `spineWidthMm` (null without a spine). Id `rn_<hash(bookId, layoutId, idempotencyKey)>` |
 
 #### `jobs/{jobId}`
 
@@ -348,7 +349,7 @@ One unit of work (pipeline.md, ADR-0003). Id `job_<hash(idempotencyKey)>`.
 | Field | Type | Description |
 |-------|------|-------------|
 | `ownerUid` | string | |
-| `jobId`, `kind` | string | Kinds in use: `story.finish`, `character.avatar`, `manuscript.paginate`, `manuscript.narrate`, `book.prepareCast`, `book.castSheet`, `book.illustrate`, `book.pageArt` |
+| `jobId`, `kind` | string | Kinds in use: `story.finish`, `character.avatar`, `manuscript.paginate`, `manuscript.narrate`, `book.prepareCast`, `book.castSheet`, `book.illustrate`, `book.pageArt`, `book.render` |
 | `target` | `{ collection, id, subpath? }` | What the job writes |
 | `input` | map | Handler input |
 | `status` | `queued` \| `running` \| `succeeded` \| `failed` \| `cancelled` | |
@@ -362,7 +363,8 @@ One unit of work (pipeline.md, ADR-0003). Id `job_<hash(idempotencyKey)>`.
 **Storage paths** (per Book / Manuscript and per job attempt, so a retry never overwrites a file in
 use): `books/{bookId}/castSheets/{castId}/{jobId}-{attempt}.{ext}`,
 `books/{bookId}/pages/{n}/{jobId}-{attempt}.{ext}`,
-`manuscripts/{manuscriptId}/narration/{n}/{jobId}-{attempt}.mp3`. Download-token URLs, as today.
+`manuscripts/{manuscriptId}/narration/{n}/{jobId}-{attempt}.mp3`, and print renders at
+`books/{bookId}/renders/{renderId}/{interior,cover}.pdf` (written before the render document, never after it). Download-token URLs, as today.
 
 **Security**: owner reads (`resource.data.ownerUid == request.auth.uid`; lists must filter on
 `ownerUid`); only admins and the server write (ADR-0005). Checked by `npm run test:rules`.
@@ -764,7 +766,7 @@ Print layout templates.
 | `name` | string | Yes | Layout name |
 | `leafWidth` | number | Yes | Leaf width in inches |
 | `leafHeight` | number | Yes | Leaf height in inches |
-| `leavesPerSpread` | 1 \| 2 | Yes | Pages per spread |
+| `leavesPerSpread` | 1 \| 2 | Yes | Printed leaves per story page: 2 = a spread template (words and picture on facing pages). Drives the interior page count: title + end + story pages × this, padded to the product's page multiple and minimum |
 | `font` | string | No | Font family |
 | `fontSize` | number | No | Font size in points |
 | `coverLayout` | PageLayoutConfig | No | Front cover config |
@@ -1500,6 +1502,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-11-04 | Print render (5.5a): `manuscripts.backCover`; Book pages `title`, `end`, `back`; `books/*/renders` written by `book.render`; no rules change (server-written, owner-read as before) |
 | 2026-10-29 | Phase 5.3: target-shaped Stories (`schemaVersion: 2`) and `stories/{id}/turns`, written by the creation routes and `story.finish`, present but not yet used by the UI; `characters.origin` / `originStoryId`; rules: owner-read and no client writes for target Stories and turns (legacy owner updates unchanged) |
 | 2026-10-29 | Phase 5.2: `books`, `manuscripts` (+ pages) read by the web app and kids PWA; `stories/*/storybooks` marked legacy read-only (no generation writes); no rules change |
 | 2026-10-29 | Phase 5.1: new `manuscripts` (+ `pages`), `books` (+ `pages`, `castSheets`, `renders`) and `jobs` collections for the server-side Book pipeline, present but not yet used by the UI; rules owner-read, admin-write |
