@@ -58,6 +58,7 @@ function TotalsRow({ label, totals }: { label: string; totals: TraceTotals }) {
       <td className="py-1 pr-4 font-mono text-xs">{label}</td>
       <td className="py-1 pr-4 text-right">{totals.calls}</td>
       <td className="py-1 pr-4 text-right">{totals.failedCalls}</td>
+      <td className={`py-1 pr-4 text-right ${totals.blockedCalls ? 'text-red-700 font-medium' : ''}`}>{totals.blockedCalls}</td>
       <td className="py-1 pr-4 text-right">{seconds(totals.modelMs)}</td>
       <td className="py-1 pr-4 text-right">{tokens(totals.inputTokens)}</td>
       <td className="py-1 pr-4 text-right">{tokens(totals.outputTokens)}</td>
@@ -212,7 +213,8 @@ export default function AdminTracePage() {
               )}
               {trace.manuscriptId && <div><b>Manuscript</b> {trace.manuscriptId}</div>}
               <div>
-                <b>Span</b> {seconds(trace.spanMs)} · <b>{trace.totals.calls}</b> AI calls ({trace.totals.failedCalls} failed),{' '}
+                <b>Span</b> {seconds(trace.spanMs)} · <b>{trace.totals.calls}</b> AI calls ({trace.totals.failedCalls} failed
+                {trace.totals.blockedCalls ? `, ${trace.totals.blockedCalls} blocked by safety filter` : ''}),{' '}
                 {seconds(trace.totals.modelMs)} model time, {tokens(trace.totals.inputTokens)} in / {tokens(trace.totals.outputTokens)} out /{' '}
                 {tokens(trace.totals.thoughtsTokens)} thinking tokens
               </div>
@@ -230,6 +232,7 @@ export default function AdminTracePage() {
                     <th className="pr-4">Purpose</th>
                     <th className="pr-4 text-right">Calls</th>
                     <th className="pr-4 text-right">Failed</th>
+                    <th className="pr-4 text-right">Blocked</th>
                     <th className="pr-4 text-right">Model time</th>
                     <th className="pr-4 text-right">In</th>
                     <th className="pr-4 text-right">Out</th>
