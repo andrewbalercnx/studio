@@ -113,10 +113,29 @@ export type PagePromptInput = {
   level: ArtPromptLevel;
 };
 
-function sceneBlock(scene: Scene, present: PresentMember[]): string {
+function roleOf(member: CastEntry): string {
+  return member.role === 'hero' ? 'main character' : member.characterType ?? 'supporting character';
+}
+
+/**
+ * The one list of who is in the scene. At `detailed` levels each bullet also
+ * carries the character's role, pronouns, appearance and description, so the
+ * cast is named once rather than repeated as a separate JSON block.
+ */
+function sceneBlock(scene: Scene, present: PresentMember[], detailed: boolean): string {
   const count = present.length;
   const countWord = count === 1 ? '1 character' : `${count} characters`;
-  const lines = present.map((p) => `• ${p.member.displayName}: ${p.action}`).join('\n');
+  const lines = present
+    .map((p) => {
+      const head = `• ${p.member.displayName} (${roleOf(p.member)}, ${p.member.pronouns ?? 'they/them'}): ${p.action}`;
+      if (!detailed) return `• ${p.member.displayName}: ${p.action}`;
+      const extra = [
+        p.member.likeness.appearance ? `  Appearance: ${p.member.likeness.appearance}` : null,
+        p.member.description ? `  Description: ${p.member.description}` : null,
+      ].filter(Boolean);
+      return extra.length ? `${head}\n${extra.join('\n')}` : head;
+    })
+    .join('\n');
   if (count === 0) {
     return `Location: ${scene.location}\nAtmosphere: ${scene.mood}\n\nNo characters appear in this illustration.`;
   }
@@ -129,24 +148,13 @@ ${lines}
 IMPORTANT: Only the ${countWord} listed above may appear in this illustration. Do not add any other people, children, figures, crowd members, or background characters.`;
 }
 
-function characterDetails(present: PresentMember[]): string {
-  const details = present.map((p) => ({
-    name: p.member.displayName,
-    role: p.member.role === 'hero' ? 'main character' : p.member.characterType ?? 'supporting character',
-    pronouns: p.member.pronouns ?? undefined,
-    appearance: p.member.likeness.appearance ?? undefined,
-    description: p.member.description ?? undefined,
-  }));
-  return JSON.stringify(details, null, 2);
-}
-
 export function buildPagePrompt(input: PagePromptInput): string {
   const parts: string[] = [];
   if (input.globalPrefix) parts.push(input.globalPrefix);
 
   if (input.level === 'minimal') {
     parts.push(`Art Style: ${input.stylePrompt}`);
-    parts.push(`Scene: ${sceneBlock(input.scene, input.present)}`);
+    parts.push(`Scene: ${sceneBlock(input.scene, input.present, false)}`);
     if (input.kind === 'cover' && input.title) parts.push(`This is the front cover; include the title "${input.title}" in large, clear letters at the top.`);
     return parts.join('\n\n');
   }
@@ -169,14 +177,14 @@ ILLUSTRATION REQUIREMENTS:
 - Show the main character(s) in a dynamic, engaging pose
 - Capture the story's spirit and invite readers in
 - Make it eye-catching and appealing to both children and parents`);
-    parts.push(sceneBlock(input.scene, input.present));
+    parts.push(sceneBlock(input.scene, input.present, true));
   } else {
     parts.push(
       input.heroName && input.heroAge
         ? `Create an image for a child's storybook. The main child (${input.heroName}) is ${input.heroAge}. Create an image of the following scene, suitable for a child of this age.`
         : `Create an image for a child's storybook.`
     );
-    parts.push(`Scene: ${sceneBlock(input.scene, input.present)}`);
+    parts.push(`Scene: ${sceneBlock(input.scene, input.present, true)}`);
   }
 
   const styleImages = input.level === 'full' ? input.styleImageCount : 0;
@@ -202,7 +210,6 @@ Each reference sheet is a 2x2 grid: TOP-LEFT face close-up (use it for facial fe
 ` : ''}
 CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin tone) EXACTLY as shown in their reference. The face must be recognizably the same person, rendered in the art style.`);
     }
-    parts.push(`Characters in this scene:\n${characterDetails(input.present)}`);
   }
   return parts.join('\n\n');
 }

@@ -13,7 +13,7 @@ function seed() {
   fake.store.set('jobs/j2', { jobId: 'j2', kind: 'book.pageArt', target: { collection: 'books', id: 'bk_1', subpath: 'pages/2' }, status: 'failed', attempt: 3, maxAttempts: 3, parentJobId: 'j9', error: { code: 'TRANSIENT', message: '503', retryable: true }, createdAt: t(21), startedAt: t(30), finishedAt: t(40) });
   fake.store.set('jobs/other', { jobId: 'other', kind: 'book.pageArt', target: { collection: 'books', id: 'bk_other' }, status: 'queued', attempt: 0, maxAttempts: 3, createdAt: t(21) });
   fake.store.set('aiFlowLogs/a1', { flowName: 'manuscript.paginate', purpose: 'manuscript.text', manuscriptId: 'ms_1', jobId: 'j1', status: 'success', modelName: 'googleai/gemini-3.8-flash', latencyMs: 7000, usage: { inputTokens: 1000, outputTokens: 500, thoughtsTokens: 100 }, prompt: 'p', createdAt: t(19) });
-  fake.store.set('aiFlowLogs/a2', { flowName: 'book.pageArt', purpose: 'book.pageArt', bookId: 'bk_1', jobId: 'j2', status: 'error', errorMessage: '503', latencyMs: 9000, prompt: 'draw', createdAt: t(39) });
+  fake.store.set('aiFlowLogs/a2', { flowName: 'book.pageArt', purpose: 'book.pageArt', bookId: 'bk_1', jobId: 'j2', status: 'error', errorMessage: 'FAILED_PRECONDITION: Generation blocked', latencyMs: 9000, prompt: 'draw', createdAt: t(39) });
   fake.store.set('aiFlowLogs/a3', { flowName: 'story.turn', purpose: 'creation.text', storyId: 'st_1', status: 'success', latencyMs: 3000, usage: { inputTokens: 200, outputTokens: 50 }, prompt: 'q', createdAt: t(2) });
   fake.store.set('aiFlowLogs/unrelated', { flowName: 'x', bookId: 'bk_other', status: 'success', createdAt: t(5) });
   return fake.asFirestore();
@@ -31,8 +31,8 @@ describe('buildTrace', () => {
     expect(trace.jobs[1]).toMatchObject({ target: 'books/bk_1/pages/2', error: { code: 'TRANSIENT', message: '503' } });
     expect(trace.jobCounts).toEqual({ 'manuscript.paginate': { succeeded: 1 }, 'book.pageArt': { failed: 1 } });
     expect(trace.aiCalls.map((c) => c.id)).toEqual(['a3', 'a1', 'a2']);
-    expect(trace.totals).toEqual({ calls: 3, failedCalls: 1, modelMs: 19000, inputTokens: 1200, outputTokens: 550, thoughtsTokens: 100 });
-    expect(trace.totalsByPurpose['book.pageArt']).toMatchObject({ calls: 1, failedCalls: 1 });
+    expect(trace.totals).toEqual({ calls: 3, failedCalls: 1, blockedCalls: 1, modelMs: 19000, inputTokens: 1200, outputTokens: 550, thoughtsTokens: 100 });
+    expect(trace.totalsByPurpose['book.pageArt']).toMatchObject({ calls: 1, failedCalls: 1, blockedCalls: 1 });
     expect(trace.spanMs).toBe(38000); // first AI call (2 s) to the last job finishing (40 s)
   });
 
