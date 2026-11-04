@@ -154,6 +154,13 @@ export const imageDescriptionFlow = ai.defineFlow(
     // Build the prompt
     const entityLabel = entityType === 'child' ? 'child' : ('type' in entity ? (entity as Character).type.toLowerCase() : 'character');
 
+    // Describe the child/character in their own pronouns, not a generic "they".
+    // The description is still derived from the original photos only (CLAUDE.md
+    // rule); pronouns only change how the appearance is phrased.
+    const pronouns = entity.pronouns ?? 'they/them';
+    const subject = pronouns === 'he/him' ? 'he' : pronouns === 'she/her' ? 'she' : 'they';
+    const verb = subject === 'they' ? 'have' : 'has';
+
     const promptText = `Analyze the provided photo(s) of a ${entityLabel} and generate a concise description of their physical appearance suitable for AI image generation.
 
 Include:
@@ -163,9 +170,9 @@ Include:
 - Approximate age appearance (for children)
 - Any distinctive features (glasses, freckles, etc.)
 
-Output 2-3 sentences, approximately 50-100 words. Focus only on visual appearance, not personality. Use neutral, descriptive language suitable for image generation prompts.
+Output 2-3 sentences, approximately 50-100 words. Focus only on visual appearance, not personality. Use neutral, descriptive language suitable for image generation prompts. Refer to this ${entityLabel} as "${subject}" (${pronouns}); do not use "they" unless those are their pronouns.
 
-Example: "A young child around 5 years old with curly brown hair and bright blue eyes. Fair skin with a few freckles across the nose. Often seen with a cheerful expression."`;
+Example: "A young child around 5 years old. ${subject.charAt(0).toUpperCase() + subject.slice(1)} ${verb} curly brown hair and bright blue eyes, with fair skin and a few freckles across the nose."`;
 
     const promptParts = [
       ...imageParts,

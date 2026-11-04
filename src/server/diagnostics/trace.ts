@@ -28,12 +28,18 @@ function num(value: unknown): number | null {
 }
 
 function emptyTotals(): TraceTotals {
-  return { calls: 0, failedCalls: 0, modelMs: 0, inputTokens: 0, outputTokens: 0, thoughtsTokens: 0 };
+  return { calls: 0, failedCalls: 0, blockedCalls: 0, modelMs: 0, inputTokens: 0, outputTokens: 0, thoughtsTokens: 0 };
+}
+
+/** A safety-filter block (Gemini "Generation blocked" / FAILED_PRECONDITION), not a transient failure. */
+function isBlocked(call: TraceAICall): boolean {
+  return call.status !== 'success' && /\bblocked\b/i.test(call.error ?? '');
 }
 
 function add(totals: TraceTotals, call: TraceAICall): void {
   totals.calls += 1;
   if (call.status !== 'success') totals.failedCalls += 1;
+  if (isBlocked(call)) totals.blockedCalls += 1;
   totals.modelMs += call.latencyMs ?? 0;
   totals.inputTokens += call.inputTokens ?? 0;
   totals.outputTokens += call.outputTokens ?? 0;
