@@ -5,6 +5,7 @@ import { jobStatusSchema, ownerFields, stampFields, timestampSchema } from './co
 export const JOB_KINDS = [
   'likeness.describe',
   'likeness.portrait',
+  'character.avatar',
   'story.finish',
   'manuscript.paginate',
   'manuscript.narrate',

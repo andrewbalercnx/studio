@@ -26,6 +26,23 @@
 
 ---
 
+#### `#33` - Avatars for story-introduced characters
+
+**Type**: Feature
+
+**Summary**: When a creation mode invents a character mid-story it was written to `characters/{id}` with no photos and no picture, so it showed a blank tile. The turn that creates such a character now enqueues a `character.avatar` job that draws a friendly head-and-shoulders avatar from the character's words (name, type, pronouns, description) and sets `avatarUrl`. The avatar is UI only — never `canonicalImageUrl`/the likeness portrait (ADR-0006: a likeness comes from original photos), so the Book pipeline keeps drawing these characters from their description text.
+
+**Changed**:
+- `src/server/characters/avatar.ts` (new): the `character.avatar` job (spec, prompt builder, handler, registration, production deps). Image call through the AI harness; per-attempt Storage path; idempotent; TEST_MODE fixture; marks `avatarGeneration.status` running → ready/failed.
+- `src/server/ai/model-registry.ts`: new `character.avatar` AI purpose (image kind, default `googleai/gemini-3.1-flash-image`, config-overridable via `config/aiModels`).
+- `src/server/data/schemas/job.ts`: `character.avatar` added to `JOB_KINDS`.
+- `src/server/jobs/kinds.ts`: register the kind on the production registry.
+- `src/server/creation/service.ts`: `createStory` and `submitTurn` enqueue one `character.avatar` per newly introduced character, in the same transaction (reads before writes), dispatched after commit.
+- Tests: `src/server/characters/__tests__/avatar.test.ts` (new); creation bench registers the kind; `engines.test.ts` asserts the job is enqueued with the turn.
+- Docs: `SCHEMA.md` (`avatarGeneration` field, job kind), `SYSTEM_DESIGN.md`.
+
+---
+
 #### `#32` - Books read API (mobile can list and read Books)
 
 **Type**: Feature / API

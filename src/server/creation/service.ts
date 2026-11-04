@@ -20,6 +20,7 @@ import { createHash } from 'node:crypto';
 import { FieldValue, Timestamp, type DocumentReference, type Firestore, type Transaction } from 'firebase-admin/firestore';
 import { enforcePersonaScope } from '@/lib/persona.server';
 import { checkAllowance } from '../books/allowance';
+import { characterAvatarSpec } from '../characters/avatar';
 import { stories, storyTurns } from '../data/repositories';
 import type { CreateInput, WithId } from '../data/repository';
 import {
@@ -344,8 +345,13 @@ export async function createStory(deps: CreationServiceDeps, user: VerifiedUser,
 
   const outcome = await db.runTransaction(async (tx) => {
     const raced = await repo.getIn(tx, storyId);
-    if (raced) return { raced };
+    if (raced) return { raced, avatars: null };
     const writeCharacters = await prepareCharacters(tx, db, recorded.newCharacters);
+    // Draw an avatar for every character the mode just invented (reads before writes).
+    const avatars =
+      recorded.newCharacters.length > 0
+        ? await deps.runner.enqueueInTransaction(tx, recorded.newCharacters.map((c) => characterAvatarSpec({ id: c.id, ownerUid })))
+        : null;
     writeCharacters();
     await repo.createIn(
       tx,
@@ -363,9 +369,10 @@ export async function createStory(deps: CreationServiceDeps, user: VerifiedUser,
       { id: storyId }
     );
     await storyTurns.using(db).of(storyId).createIn(tx, recorded.reply, { id: turnDocId(0) });
-    return { raced: null };
+    return { raced: null, avatars };
   });
   if (outcome.raced) return existingResult(db, outcome.raced, body.idempotencyKey);
+  await outcome.avatars?.dispatch();
   return { storyId, status: 'creating', turn: view({ ...defaultsOf(recorded.reply) }), created: true };
 }
 
@@ -509,7 +516,13 @@ export async function submitTurn(deps: CreationServiceDeps, user: VerifiedUser, 
     }
     const writeCharacters = await prepareCharacters(tx, db, recorded.newCharacters);
     const run = current.finishRuns + 1;
-    const pending = recorded.done ? await deps.runner.enqueueInTransaction(tx, [finishSpec({ id: storyId, ownerUid: story.ownerUid }, run)]) : null;
+    // One in-transaction enqueue (reads before writes): the finish job when the story
+    // is done, and an avatar job for every character this turn introduced.
+    const specs = [
+      ...(recorded.done ? [finishSpec({ id: storyId, ownerUid: story.ownerUid }, run)] : []),
+      ...recorded.newCharacters.map((c) => characterAvatarSpec({ id: c.id, ownerUid: story.ownerUid })),
+    ];
+    const pending = specs.length > 0 ? await deps.runner.enqueueInTransaction(tx, specs) : null;
 
     writeCharacters();
     await turnRepo.createIn(tx, inputTurn, { id: turnDocId(story.turnCount) });
