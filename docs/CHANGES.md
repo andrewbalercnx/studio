@@ -33,6 +33,34 @@
 
 ---
 
+#### `#30` - Admin role: the custom claim is the single source of truth
+
+**Type**: Security / fix
+
+**Summary**: The client (`use-admin-status.tsx`) granted admin/writer on the ID-token claim OR a `users/{uid}` doc field, while the server and the rules trust the claim only. Since an owner can write their own doc, the doc fallback was a privilege-escalation path. Roles now come from the claim everywhere.
+- `use-admin-status.tsx`: `isAdmin`/`isWriter` from the claim only; the user-doc snapshot is kept solely for `canShowWizardTargets` (a diagnostic flag, not a role).
+- `firestore.rules`: owners can no longer write the flat `isAdmin`/`isWriter`/`canShowWizardTargets` fields (only the nested `roles` map was guarded before); new allow/deny cases in `check-rules.mjs`.
+- `scripts/set-admin.mjs` (new): grant/revoke the admin or writer claim by email or uid (`--writer`, `--revoke`), mirrored into `users/{uid}.roles` for display.
+
+**Changes**: `src/hooks/use-admin-status.tsx`, `firestore.rules`, `tests/firestore-rules/check-rules.mjs`, `scripts/set-admin.mjs` (new), `docs/SYSTEM_DESIGN.md`, `docs/SCHEMA.md`. No API/schema field changes.
+
+**Known follow-up**: the admin Users page's `roles.*` toggles write the doc but don't set the claim (display-only until `set-admin.mjs` runs); a follow-up could wire them to an admin route. Filed as a dev todo.
+
+---
+
+#### `#29` - Trace small fixes: single cast list, pronoun-aware appearance, blocked-generation count
+
+**Type**: Fix / diagnostics
+
+**Summary**: Three small fixes from the first fully traced Book.
+- Page-art prompt listed the cast twice (scene bullets plus a JSON block). `buildPagePrompt` now carries role/pronouns/appearance/description into the one scene list and drops the JSON; the `minimal` level stays terse (name + action).
+- `imageDescriptionFlow` said "They…" regardless of the child's pronouns. It now passes the entity's pronouns into the prompt (he/she/they), still derived from the original photos only (CLAUDE.md rule).
+- Trace counts safety-filter blocks ("Generation blocked" / `FAILED_PRECONDITION`) as `blockedCalls` in `TraceTotals` (global and per purpose), shown on `/admin/trace` in the summary and a new "Blocked" column.
+
+**Changes**: `src/server/books/art-prompts.ts`, `src/ai/flows/image-description-flow.ts`, `src/server/diagnostics/trace.ts`, `src/lib/diagnostics/trace-types.ts`, `src/app/admin/trace/page.tsx`; tests `src/server/books/__tests__/art-prompts.test.ts` (new) and `trace.test.ts`. No API/schema/route changes.
+
+---
+
 ### 2026-11-03
 
 #### `#28` - Pagination output cap; faster page-art queue
