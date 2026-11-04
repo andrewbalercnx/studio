@@ -48,6 +48,7 @@ export const paginationOutputSchema = z.object({
     })
   ),
   cover: looseSceneSchema.optional(),
+  backCover: looseSceneSchema.optional(),
 });
 export type PaginationOutput = z.infer<typeof paginationOutputSchema>;
 
@@ -276,6 +277,13 @@ Return a JSON object with this exact structure:
     "actors": [ { "id": "actor-id-1", "action": "a dynamic, iconic cover pose and expression" } ],
     "atmosphere": "Cover composition: framing and focal point; character positions; mood and lighting",
     "sceneTag": "outdoor-day"
+  },
+  "backCover": {
+    "locationKey": "short-label",
+    "locationDescription": "a warm setting from the story where everyone can be together",
+    "actors": [ { "id": "actor-id-1", "action": "a specific joyful action and expression" } ],
+    "atmosphere": "Warm, celebratory composition: character positions; mood and lighting",
+    "sceneTag": "outdoor-day"
   }
 }
 
@@ -290,6 +298,7 @@ IMPORTANT:
   * atmosphere: mood, lighting, time of day and emotional tone
   * sceneTag: exactly one of indoor-day, outdoor-day, indoor-night, outdoor-night
 - cover designs the FRONT COVER: the hero moment of the story, characters large and engaging${required ? `; it MUST include ${required.castId} (${required.displayName})` : ''}
+- backCover designs the BACK COVER: all the main characters together in a warm, joyful, celebratory scene — the story is over and everyone is happy, relaxed, celebrating or reflecting; a concrete action and expression for each character; no text or words in the picture${required ? `; it MUST include ${required.castId} (${required.displayName})` : ''}
 
 Generate the paginated output now.`;
 }
@@ -403,6 +412,39 @@ export function coverScene(output: PaginationOutput | null, pages: ManuscriptPag
     locationKey: first?.locationKey ?? 'cover',
     mood: 'Cover composition: characters large and centred, inviting and full of wonder',
     tag: first?.tag ?? 'outdoor-day',
+    castActions,
+  };
+}
+
+/**
+ * The back cover scene (ported from the old storybook pipeline's back-cover
+ * scene): the model's, repaired, with the hero guaranteed; else every main
+ * character together at the last page's place, celebrating.
+ */
+export function backCoverScene(output: PaginationOutput | null, pages: ReadonlyArray<{ scene: Scene }>, cast: Cast): Scene {
+  const hero = cast.members.find((m) => m.role === 'hero');
+  const celebrating = 'smiling and celebrating together, happy the adventure is over';
+  const repaired = repairScene(output?.backCover, hero ? [hero.castId] : [], 0);
+  if (repaired?.locationDescription) {
+    const scene = toScene(repaired, [], cast, repaired.locationDescription);
+    if (hero && !scene.presentCast.includes(hero.castId)) {
+      scene.presentCast.unshift(hero.castId);
+      scene.castActions.unshift({ castId: hero.castId, action: celebrating });
+      scene.action = `${hero.displayName}: ${celebrating}\n${scene.action}`.trim();
+    }
+    return scene;
+  }
+  const last = pages[pages.length - 1]?.scene;
+  const everyone = cast.members.map((m) => m.castId);
+  const present = hero ? [hero.castId, ...everyone.filter((id) => id !== hero.castId)] : everyone;
+  const castActions = present.map((castId) => ({ castId, action: celebrating }));
+  return {
+    location: last?.location ?? 'a magical storybook world',
+    presentCast: present,
+    action: castActions.map((c) => `${cast.byId.get(c.castId)?.displayName ?? c.castId}: ${c.action}`).join('\n'),
+    locationKey: last?.locationKey ?? 'back-cover',
+    mood: 'Warm, celebratory back-cover composition: everyone together, relaxed and joyful, soft golden light',
+    tag: last?.tag ?? 'outdoor-day',
     castActions,
   };
 }

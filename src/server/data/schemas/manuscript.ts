@@ -47,6 +47,8 @@ export const manuscriptSchema = z.object({
     .default(null),
   /** Scene notes for the cover illustration, written by `manuscript.paginate`. */
   cover: sceneSchema.nullable().default(null),
+  /** Scene notes for the back cover illustration (everyone together, celebrating), from `manuscript.paginate`. */
+  backCover: sceneSchema.nullable().default(null),
   /** The Story's title when the Manuscript was paginated (cover text). */
   title: z.string().nullable().default(null),
   ...stampFields,

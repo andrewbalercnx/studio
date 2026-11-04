@@ -14,7 +14,7 @@ import { books, bookPages, castSheets, manuscriptPages, manuscripts } from '../d
 
 export type { BookListItem, BookReadView };
 
-const ART_PAGE_KINDS: ReadonlySet<BookPage['kind']> = new Set(['cover', 'story']);
+const ART_PAGE_KINDS: ReadonlySet<BookPage['kind']> = new Set(['cover', 'story', 'back']);
 
 /**
  * The making-of stage and how far through, from the live documents (not

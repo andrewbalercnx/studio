@@ -8,7 +8,7 @@ import type { Firestore, Transaction } from 'firebase-admin/firestore';
 import { layoutSupports, loadForm, loadLayout, loadStyle, resolveManuscriptShape, type Form, type ManuscriptShape } from '../catalog';
 import { bookPages, books, manuscripts } from '../data/repositories';
 import type { WithId } from '../data/repository';
-import type { Book } from '../data/schemas/book';
+import type { Book, BookPage } from '../data/schemas/book';
 import type { Manuscript } from '../data/schemas/manuscript';
 import { BadRequestError, ConflictError, NotFoundError, PaymentRequiredError } from '../errors';
 import { assertOwner, isPrivileged, loadOwned, type VerifiedUser } from '../http';
@@ -186,6 +186,22 @@ export type CreateBookInput = {
 };
 export type CreateBookResult = { bookId: string; manuscriptId: string; status: Book['status']; created: boolean };
 
+/**
+ * A Book's pages in physical order (pipeline.md, slice 5.5): front cover, title
+ * page, the story pages, end page, back cover. Art is drawn for the covers and
+ * the story pages; the title and end pages are typeset when printed.
+ */
+export function bookPagePlan(storyPages: number): Array<{ pageNumber: number; kind: BookPage['kind']; manuscriptPage?: number }> {
+  const pages: Array<{ pageNumber: number; kind: BookPage['kind']; manuscriptPage?: number }> = [
+    { pageNumber: 1, kind: 'cover' },
+    { pageNumber: 2, kind: 'title' },
+  ];
+  for (let n = 1; n <= storyPages; n++) pages.push({ pageNumber: n + 2, kind: 'story', manuscriptPage: n });
+  pages.push({ pageNumber: storyPages + 3, kind: 'end' });
+  pages.push({ pageNumber: storyPages + 4, kind: 'back' });
+  return pages;
+}
+
 export async function createBook(deps: BookServiceDeps, user: VerifiedUser, body: CreateBookInput): Promise<CreateBookResult> {
   const { db } = deps;
   const now = deps.now ?? (() => new Date());
@@ -269,18 +285,15 @@ export async function createBook(deps: BookServiceDeps, user: VerifiedUser, body
         styleId: style.styleId,
         layoutId: body.layoutId ?? null,
         status: 'illustrating',
-        art: { total: shape.length + 1, done: 0, failed: 0 },
+        // Art: the front cover, every story page and the back cover (the title and end pages are typeset).
+        art: { total: shape.length + 2, done: 0, failed: 0 },
       },
       { id: bookId }
     );
+    // Physical order: front cover, title page, story pages, end page, back cover.
     const pageRepo = bookPages.using(db).of(bookId);
-    await pageRepo.createIn(tx, { ownerUid: story.ownerUid, pageNumber: 1, kind: 'cover' }, { id: '1' });
-    for (let n = 1; n <= shape.length; n++) {
-      await pageRepo.createIn(
-        tx,
-        { ownerUid: story.ownerUid, pageNumber: n + 1, kind: 'story', manuscriptPage: n },
-        { id: String(n + 1) }
-      );
+    for (const page of bookPagePlan(shape.length)) {
+      await pageRepo.createIn(tx, { ownerUid: story.ownerUid, ...page }, { id: String(page.pageNumber) });
     }
     return { result: { bookId, manuscriptId, status: 'illustrating' as const, created: true }, pending };
   });

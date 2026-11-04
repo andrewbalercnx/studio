@@ -28,7 +28,8 @@ export function BookReader({ title, pages, words, onRetryPage, locked }: BookRea
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const wordsByPage = useMemo(() => new Map(words.map((w) => [w.pageNumber, w])), [words]);
-  const shown = useMemo(() => pages.filter((p) => p.kind === 'cover' || p.kind === 'story'), [pages]);
+  // On screen: the covers and the story pages (the title and end pages are for print).
+  const shown = useMemo(() => pages.filter((p) => p.kind === 'cover' || p.kind === 'story' || p.kind === 'back'), [pages]);
   const page = shown[Math.min(index, Math.max(shown.length - 1, 0))];
   const pageWords = page?.manuscriptPage ? wordsByPage.get(page.manuscriptPage) : undefined;
 
@@ -50,7 +51,7 @@ export function BookReader({ title, pages, words, onRetryPage, locked }: BookRea
   }
 
   const art = pageArtState(page);
-  const isCover = page.kind === 'cover';
+  const isCover = page.kind === 'cover' || page.kind === 'back';
 
   const toggleNarration = () => {
     if (!pageWords?.narrationUrl) return;

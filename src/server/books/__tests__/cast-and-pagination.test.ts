@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FakeFirestore } from '../../testing/fake-firestore';
 import { displayText, extractCastTokens, isPlaceholderImageUrl, loadCast } from '../cast';
 import { castSheetReferences, castSheetSource, rollupArt, statusFromArt } from '../jobs';
-import { coerceSceneTag, degenerateReason, fitPageCount, rawPagesFrom, repairScene, type RawPage } from '../pagination';
+import { backCoverScene, coerceSceneTag, degenerateReason, fitPageCount, rawPagesFrom, repairScene, type PaginationOutput, type RawPage } from '../pagination';
 import { storyFromDocument } from '../story-source';
 import { completeStory } from './helpers';
 
@@ -74,6 +74,39 @@ describe('pagination repair and fitting', () => {
     expect(split.map((p) => p.text).join(' ')).toBe('One. Two. Three. Four.');
     expect(fitPageCount([page('Hi')], 2)).toBeNull();
     expect(degenerateReason(merged, 3)).toBe('no text page has a usable scene');
+  });
+});
+
+describe('back cover scene', () => {
+  async function twoCast() {
+    const db = new FakeFirestore().asFirestore();
+    await db.collection('children').doc('c1').set({ ownerParentUid: 'p1', displayName: 'Emma' });
+    await db.collection('characters').doc('g').set({ ownerParentUid: 'p1', displayName: 'Granny', type: 'Family' });
+    const story = storyFromDocument('s', completeStory({ text: '[[cast:c1]] and [[cast:g]].', castIds: ['g'] }));
+    return loadCast(db, story);
+  }
+  const lastPage = {
+    scene: { location: 'a moonlit garden', presentCast: ['g'], action: '', locationKey: 'garden', mood: '', tag: 'outdoor-night', castActions: [] },
+  };
+
+  it("keeps the model's scene and guarantees the hero", async () => {
+    const cast = await twoCast();
+    const output = {
+      pages: [],
+      backCover: { locationKey: 'picnic', locationDescription: 'a hilltop picnic', actors: [{ id: 'g', action: 'waving' }], sceneTag: 'outdoor-day' },
+    } as PaginationOutput;
+    const scene = backCoverScene(output, [lastPage], cast);
+    expect(scene.location).toBe('a hilltop picnic');
+    expect(scene.presentCast).toEqual(['c1', 'g']);
+    expect(scene.action.split('\n')[0]).toBe('Emma: smiling and celebrating together, happy the adventure is over');
+  });
+
+  it("falls back to everyone at the last page's place", async () => {
+    const cast = await twoCast();
+    const scene = backCoverScene(null, [lastPage], cast);
+    expect(scene).toMatchObject({ location: 'a moonlit garden', locationKey: 'garden', tag: 'outdoor-night', presentCast: ['c1', 'g'] });
+    expect(scene.castActions.every((c) => c.action.startsWith('smiling'))).toBe(true);
+    expect(backCoverScene(null, [], cast)).toMatchObject({ location: 'a magical storybook world', locationKey: 'back-cover' });
   });
 });
 

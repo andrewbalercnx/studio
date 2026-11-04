@@ -101,7 +101,7 @@ export type PresentMember = {
 };
 
 export type PagePromptInput = {
-  kind: 'cover' | 'story';
+  kind: 'cover' | 'story' | 'back';
   scene: Scene;
   present: PresentMember[];
   stylePrompt: string;
@@ -156,6 +156,7 @@ export function buildPagePrompt(input: PagePromptInput): string {
     parts.push(`Art Style: ${input.stylePrompt}`);
     parts.push(`Scene: ${sceneBlock(input.scene, input.present, false)}`);
     if (input.kind === 'cover' && input.title) parts.push(`This is the front cover; include the title "${input.title}" in large, clear letters at the top.`);
+    if (input.kind === 'back') parts.push('This is the back cover: everyone together and happy; no text or words in the image.');
     return parts.join('\n\n');
   }
 
@@ -177,6 +178,16 @@ ILLUSTRATION REQUIREMENTS:
 - Show the main character(s) in a dynamic, engaging pose
 - Capture the story's spirit and invite readers in
 - Make it eye-catching and appealing to both children and parents`);
+    parts.push(sceneBlock(input.scene, input.present, true));
+  } else if (input.kind === 'back') {
+    // Ported from the old storybook pipeline's back-cover prompt.
+    parts.push(`Create a BACK COVER illustration for a personalized children's storybook.
+
+REQUIREMENTS FOR THE BACK COVER:
+- This is the BACK COVER of a printed book: the final image a child sees
+- Show the characters together in a warm, joyful, celebratory scene; the story is over and everyone is happy
+- Do NOT include any text, words, letters or titles in the image
+- Leave a calm area of background where a short blurb can be printed over the picture`);
     parts.push(sceneBlock(input.scene, input.present, true));
   } else {
     parts.push(

@@ -68,11 +68,18 @@ describe('story → manuscript → book (happy path)', () => {
     expect(sorted[11].scene.tag).toBe('indoor-day');
 
     const book = await books.using(bench.db).require(result.bookId);
-    expect(book).toMatchObject({ status: 'ready', art: { total: 13, done: 13, failed: 0 }, layoutId: null, childId: 'c1' });
-    const bookPageList = await bookPages.using(bench.db).of(result.bookId).where({});
-    expect(bookPageList).toHaveLength(13);
-    expect(bookPageList.every((p) => p.artUrl?.startsWith(`https://storage.test/books/${result.bookId}/pages/`))).toBe(true);
-    expect(bookPageList.every((p) => p.artJob?.status === 'succeeded')).toBe(true);
+    // Art for the front cover, the 12 story pages and the back cover; the title and end pages are typeset.
+    expect(book).toMatchObject({ status: 'ready', art: { total: 14, done: 14, failed: 0 }, layoutId: null, childId: 'c1' });
+    const bookPageList = (await bookPages.using(bench.db).of(result.bookId).where({})).sort((a, b) => a.pageNumber - b.pageNumber);
+    expect(bookPageList.map((p) => p.kind)).toEqual(['cover', 'title', ...Array(12).fill('story'), 'end', 'back']);
+    expect(bookPageList.filter((p) => p.kind === 'story').map((p) => p.manuscriptPage)).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
+    const drawn = bookPageList.filter((p) => p.kind !== 'title' && p.kind !== 'end');
+    expect(drawn.every((p) => p.artUrl?.startsWith(`https://storage.test/books/${result.bookId}/pages/`))).toBe(true);
+    expect(drawn.every((p) => p.artJob?.status === 'succeeded')).toBe(true);
+    expect(bookPageList.filter((p) => p.kind === 'title' || p.kind === 'end').every((p) => p.artUrl === null && p.artJob === null)).toBe(true);
+    // The back cover has its own scene: the hero there with everyone, celebrating.
+    const paginated = await manuscripts.using(bench.db).require(result.manuscriptId);
+    expect(paginated.backCover?.presentCast[0]).toBe('c1');
 
     // Cast: Emma (portrait) and Rex (no photos → appearance); another family's character is not in it.
     const sheets = await castSheets.using(bench.db).of(result.bookId).where({});
@@ -87,7 +94,7 @@ describe('story → manuscript → book (happy path)', () => {
     // Narration got the child's voice; one job per page.
     expect(bench.tts).toHaveBeenCalledWith(expect.objectContaining({ voiceId: 'voice-emma', modelId: 'eleven_v3' }));
     expect(await jobsOfKind('manuscript.narrate')).toHaveLength(12);
-    expect(await jobsOfKind('book.pageArt')).toHaveLength(13);
+    expect(await jobsOfKind('book.pageArt')).toHaveLength(14);
   });
 
   it('never uses a picsum avatar as a likeness', async () => {
@@ -214,8 +221,8 @@ describe('partial outcome and page retry', () => {
     const result = await makeBook();
 
     let book = await books.using(bench.db).require(result.bookId);
-    expect(book).toMatchObject({ status: 'partial', art: { total: 13, done: 12, failed: 1 } });
-    const page = await bookPages.using(bench.db).of(result.bookId).require('4'); // story page 3
+    expect(book).toMatchObject({ status: 'partial', art: { total: 14, done: 13, failed: 1 } });
+    const page = await bookPages.using(bench.db).of(result.bookId).require('5'); // story page 3 (after the cover and the title page)
     expect(page).toMatchObject({ artUrl: null, artJob: { status: 'failed' } });
 
     // Attempts 1-3 for that page: style images, then none, then no images at all.
@@ -225,20 +232,20 @@ describe('partial outcome and page retry', () => {
     expect(attempts).toHaveLength(3);
     expect(attempts.map((o) => o.prompt.filter((p) => 'media' in p).length)).toEqual([3, 2, 0]);
 
-    await expect(retryPage(bench.services, p1, result.bookId, 5)).rejects.toMatchObject({ status: 409, code: 'PAGE_NOT_FAILED' });
+    await expect(retryPage(bench.services, p1, result.bookId, 6)).rejects.toMatchObject({ status: 409, code: 'PAGE_NOT_FAILED' });
 
     bench.ai.generateImage.mockImplementation(async () => ({ mediaUrl: 'data:image/png;base64,iVBORw0KGgo=', text: '', model: {}, attempts: 1 }));
-    const retry = await retryPage(bench.services, p1, result.bookId, 4);
+    const retry = await retryPage(bench.services, p1, result.bookId, 5);
     expect(retry.status).toBe('illustrating');
     await bench.drain();
     book = await books.using(bench.db).require(result.bookId);
-    expect(book).toMatchObject({ status: 'ready', art: { total: 13, done: 13, failed: 0 } });
+    expect(book).toMatchObject({ status: 'ready', art: { total: 14, done: 14, failed: 0 } });
 
     // A second retry is a new job (new idempotency key); the first page job is untouched.
-    const pageJobs = (await jobsOfKind('book.pageArt')).filter((j) => j.target.subpath === 'pages/4');
+    const pageJobs = (await jobsOfKind('book.pageArt')).filter((j) => j.target.subpath === 'pages/5');
     expect(pageJobs.map((j) => j.status).sort()).toEqual(['failed', 'succeeded']);
     // Each attempt writes its own file: retries never overwrite a referenced file.
-    const files = [...bench.saved.keys()].filter((path) => path.startsWith(`books/${result.bookId}/pages/4/`));
+    const files = [...bench.saved.keys()].filter((path) => path.startsWith(`books/${result.bookId}/pages/5/`));
     expect(files).toHaveLength(1);
   });
 
@@ -248,7 +255,7 @@ describe('partial outcome and page retry', () => {
       return { mediaUrl: 'data:image/png;base64,iVBORw0KGgo=', text: '', model: {}, attempts: 1 };
     });
     const result = await makeBook();
-    expect(await books.using(bench.db).require(result.bookId)).toMatchObject({ status: 'failed', art: { done: 0, failed: 13 } });
+    expect(await books.using(bench.db).require(result.bookId)).toMatchObject({ status: 'failed', art: { done: 0, failed: 14 } });
   });
 
   it('still draws the pages when a cast sheet fails, using the portrait instead', async () => {
@@ -324,9 +331,9 @@ describe('TEST_MODE', () => {
     expect(bench.tts).not.toHaveBeenCalled();
 
     const book = await books.using(bench.db).require(result.bookId);
-    expect(book).toMatchObject({ status: 'ready', art: { total: 13, done: 13, failed: 0 } });
+    expect(book).toMatchObject({ status: 'ready', art: { total: 14, done: 14, failed: 0 } });
     const pages = await bookPages.using(bench.db).of(result.bookId).where({});
-    expect(pages.every((p) => p.artUrl === TEST_MODE_IMAGE_DATA_URL)).toBe(true);
+    expect(pages.filter((p) => p.kind !== 'title' && p.kind !== 'end').every((p) => p.artUrl === TEST_MODE_IMAGE_DATA_URL)).toBe(true);
     const words = await manuscriptPages.using(bench.db).of(result.manuscriptId).where({});
     expect(words).toHaveLength(12);
     expect(words.every((p) => p.narrationUrl === TEST_MODE_AUDIO_DATA_URL && !p.text.includes('$$'))).toBe(true);
