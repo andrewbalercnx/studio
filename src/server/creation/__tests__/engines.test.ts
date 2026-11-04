@@ -5,7 +5,7 @@ vi.mock('@/lib/persona.server', () => ({
   enforcePersonaScope: (...args: unknown[]) => enforcePersonaScope(...args),
 }));
 
-import { stories, storyTurns } from '../../data/repositories';
+import { jobs, stories, storyTurns } from '../../data/repositories';
 import { createStory, submitTurn, type StoryTurnResult } from '../service';
 import { createBench, key, ledgerUsed, seed, user, type Bench } from './helpers';
 
@@ -103,6 +103,10 @@ describe('freeplay', () => {
       photos: [],
     });
     expect(character.avatarUrl).toBeUndefined(); // no stock placeholder (ADR-0006)
+
+    // An avatar is drawn from the character's words (no photos to draw from).
+    const avatarJobs = await jobs.using(bench.db).where({ kind: 'character.avatar' });
+    expect(avatarJobs.map((j) => j.target.id)).toContain(castId);
 
     const story = await stories.using(bench.db).require(created.storyId);
     expect(story.cast).toContainEqual({ castId, ref: { kind: 'character', id: castId }, role: 'supporting', addedBy: 'ai' });
