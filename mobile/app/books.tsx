@@ -1,14 +1,44 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useChild } from '../src/contexts/ChildContext';
+import { useApiClient, type BookListItem } from '../src/contexts/ApiClientContext';
+import { bookStatusLabel } from '../src/lib/books';
 
 /**
- * My Books. Books are made by the server pipeline and read in the web app;
- * the app gets a Books list and reader in the clients phase. The storybooks
- * this screen used to read were removed with the trial-data reset (slice 5.4).
+ * My Books: the active child's Books, newest first (GET /api/books?childId,
+ * filtered, sorted and flagged on the server). Each opens the Book view, which
+ * shows progress for a Book still being made and the reader once it is ready.
  */
 export default function BooksScreen() {
   const router = useRouter();
+  const apiClient = useApiClient();
+  const { childProfile } = useChild();
+  const [books, setBooks] = useState<BookListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setBooks(await apiClient.getBooks(childProfile?.id ? { childId: childProfile.id } : {}));
+      setError(false);
+    } catch (e) {
+      console.error('Error loading books:', e);
+      setError(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [apiClient, childProfile?.id]);
+
+  // Reload when the screen comes back into view (a Book may have finished meanwhile).
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -16,18 +46,43 @@ export default function BooksScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Books</Text>
+        <Text style={styles.headerTitle}>{books.length > 0 ? `My Books (${books.length})` : 'My Books'}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyIcon}>📚</Text>
-        <Text style={styles.emptyTitle}>Your books live in the web app for now</Text>
-        <Text style={styles.emptyText}>Make a story here, then ask a grown-up to open StoryPic on the web to turn it into a picture book.</Text>
-        <TouchableOpacity style={styles.createButton} onPress={() => router.push('/stories')}>
-          <Text style={styles.createButtonText}>See My Stories</Text>
-        </TouchableOpacity>
-      </View>
+      {loading ? (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color="#F59E0B" />
+        </View>
+      ) : books.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>📚</Text>
+          <Text style={styles.emptyTitle}>{error ? "We couldn't load your books" : 'No books yet'}</Text>
+          <Text style={styles.emptyText}>
+            {error ? 'Pull down to try again.' : 'Finish a story, then tap "Make a picture book" to turn it into a book with pictures.'}
+          </Text>
+          <TouchableOpacity style={styles.createButton} onPress={() => (error ? load() : router.push('/stories'))}>
+            <Text style={styles.createButtonText}>{error ? 'Try again' : 'See My Stories'}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={books}
+          keyExtractor={(book) => book.id}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
+          renderItem={({ item }) => (
+            <TouchableOpacity style={styles.card} onPress={() => router.push(`/book/${item.id}`)}>
+              <Text style={styles.cardIcon}>{item.isReady ? '📖' : item.status === 'failed' ? '😕' : '🎨'}</Text>
+              <View style={styles.cardContent}>
+                <Text style={styles.cardTitle} numberOfLines={2}>{item.title || 'My Book'}</Text>
+                <Text style={styles.cardSubtitle}>{bookStatusLabel(item)}</Text>
+              </View>
+              <Text style={styles.cardArrow}>›</Text>
+            </TouchableOpacity>
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -99,5 +154,40 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  list: {
+    padding: 16,
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  cardIcon: {
+    fontSize: 32,
+    marginRight: 12,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    color: '#B45309',
+    marginTop: 4,
+  },
+  cardArrow: {
+    fontSize: 24,
+    color: '#F59E0B',
+    marginLeft: 8,
   },
 });
