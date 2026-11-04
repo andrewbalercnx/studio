@@ -16,6 +16,23 @@
 
 ## Changes
 
+### 2026-11-04
+
+#### `#32` - Books read API (mobile can list and read Books)
+
+**Type**: Feature / API
+
+**Summary**: Mobile authenticates with bearer tokens and has no direct Firestore, but the Book API only had create/lock/unlock/retry. Added two server-first read routes so a thin client can list and read Books.
+- `GET /api/books[?childId=&storyId=]` — the family's Books, newest first, server-computed `status`/`art`/`isReady`.
+- `GET /api/books/{bookId}` — one Book in full: meta + title, each page with words and picture joined, and the live making-of progress (writing → characters → pages, with percent). Owner + persona scope enforced.
+- `src/server/books/read.ts` (`listBooks`, `getBook`); api-client `getBooks`/`getBook`; shared-types `BookListItem`/`BookReadView`/`BookReadPage`/`BookProgressView` (dist rebuilt).
+
+**Changes**: `src/server/books/read.ts` (new), `src/app/api/books/route.ts` (+GET), `src/app/api/books/[bookId]/route.ts` (new), `src/lib/books/types.ts`, `packages/api-client/src/client.ts` (+dist), `packages/shared-types/src/index.ts` (+dist), `src/app/admin/regression/page.tsx`, `docs/API.md`; tests in `src/server/books/__tests__/read.test.ts`. No schema/rule changes.
+
+**Follow-up**: the React Native screens consuming these are a separate PR (dev todo).
+
+---
+
 ### 2026-11-03
 
 #### `#28` - Pagination output cap; faster page-art queue
