@@ -53,15 +53,17 @@ service cloud.firestore {
 
       // Roles and PIN state are server/admin-owned: a signed-in user must not
       // grant themselves roles, replace the parent PIN, or clear a PIN lockout.
-      // Signup may only create the default parent roles.
+      // Signup may only create the default parent roles. Roles live in `roles`,
+      // but top-level `isAdmin`/`isWriter`/`canShowWizardTargets` are refused
+      // too, so a legacy or forged flat field can never confer privilege.
       allow create: if isAdmin()
                     || (owns(userId)
                         && request.resource.data.get('roles', {'isAdmin': false, 'isWriter': false, 'isParent': true})
                              == {'isAdmin': false, 'isWriter': false, 'isParent': true}
-                        && !request.resource.data.keys().hasAny(['pinHash', 'pinSalt', 'pinUpdatedAt', 'pinFailedAttempts', 'pinLockedUntil']));
+                        && !request.resource.data.keys().hasAny(['isAdmin', 'isWriter', 'canShowWizardTargets', 'pinHash', 'pinSalt', 'pinUpdatedAt', 'pinFailedAttempts', 'pinLockedUntil']));
       allow update: if isAdmin()
                     || (owns(userId)
-                        && !changedKeys().hasAny(['roles', 'pinHash', 'pinSalt', 'pinUpdatedAt', 'pinFailedAttempts', 'pinLockedUntil']));
+                        && !changedKeys().hasAny(['roles', 'isAdmin', 'isWriter', 'canShowWizardTargets', 'pinHash', 'pinSalt', 'pinUpdatedAt', 'pinFailedAttempts', 'pinLockedUntil']));
       allow delete: if isAdmin();
 
       // Subcollections (voices, addresses) - owner or admin only

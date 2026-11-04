@@ -18,6 +18,21 @@
 
 ### 2026-11-04
 
+#### `#30` - Admin role: the custom claim is the single source of truth
+
+**Type**: Security / fix
+
+**Summary**: The client (`use-admin-status.tsx`) granted admin/writer on the ID-token claim OR a `users/{uid}` doc field, while the server and the rules trust the claim only. Since an owner can write their own doc, the doc fallback was a privilege-escalation path. Roles now come from the claim everywhere.
+- `use-admin-status.tsx`: `isAdmin`/`isWriter` from the claim only; the user-doc snapshot is kept solely for `canShowWizardTargets` (a diagnostic flag, not a role).
+- `firestore.rules`: owners can no longer write the flat `isAdmin`/`isWriter`/`canShowWizardTargets` fields (only the nested `roles` map was guarded before); new allow/deny cases in `check-rules.mjs`.
+- `scripts/set-admin.mjs` (new): grant/revoke the admin or writer claim by email or uid (`--writer`, `--revoke`), mirrored into `users/{uid}.roles` for display.
+
+**Changes**: `src/hooks/use-admin-status.tsx`, `firestore.rules`, `tests/firestore-rules/check-rules.mjs`, `scripts/set-admin.mjs` (new), `docs/SYSTEM_DESIGN.md`, `docs/SCHEMA.md`. No API/schema field changes.
+
+**Known follow-up**: the admin Users page's `roles.*` toggles write the doc but don't set the claim (display-only until `set-admin.mjs` runs); a follow-up could wire them to an admin route. Filed as a dev todo.
+
+---
+
 #### `#29` - Trace small fixes: single cast list, pronoun-aware appearance, blocked-generation count
 
 **Type**: Fix / diagnostics
