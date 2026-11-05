@@ -18,6 +18,25 @@
 
 ### 2026-11-05
 
+#### `#42` - Plan: slice 5.7 Characters and likeness; rebuild progress up to date
+
+**Type**: Plan (docs only)
+
+**Summary**:
+- **`docs/architecture/target/slices/5.7-characters.md`**:
+  - Children and Characters move to server schemas, repositories and `withRoute` routes.
+  - The Likeness of ADR-0006 is made by four jobs on the harness (`likeness.describe`, `likeness.portrait`, `likeness.avatar` folding in `character.avatar`, `likeness.animate`) instead of fire-and-forget promises inside requests.
+  - The browser stops writing these documents.
+  - Owner decisions:
+    - migrate the old field names once;
+    - a no-photo avatar is drawn from the description and shown as "imagined";
+    - keep the animated avatar, as a job;
+    - removing a photo redoes the likeness.
+  - Built in two PRs: 5.7a server, 5.7b clients and deletions.
+- **`REVIEW_PLAN.md`**: the progress table is brought up to date: Phases 0–4 done, Phase 5 done for Books, Story creation and Print; Characters planned; the Phase 6 and 7 leftovers measured.
+
+---
+
 #### `#41` - Print cleanup (slice 5.6b): delete the legacy storybook print and order code
 
 **Type**: Removal
