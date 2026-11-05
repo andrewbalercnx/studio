@@ -182,29 +182,32 @@ service cloud.firestore {
     }
 
     // ========== CONFIGURATION COLLECTIONS ==========
+    // Authored configuration (slice 6.4a): writers and admins change it through
+    // `/api/admin/catalog/**` (Admin SDK). Browser writes are left to admins only,
+    // for the database and rules-test tools.
     match /promptConfigs/{document=**} {
       allow read: if isAuthenticated();
-      allow write: if isWriter() || isAdmin();
+      allow write: if isAdmin();
     }
 
     match /storyPhases/{document=**} {
       allow read: if isAuthenticated();
-      allow write: if isWriter() || isAdmin();
+      allow write: if isAdmin();
     }
 
     match /storyTypes/{document=**} {
       allow read: if isAuthenticated();
-      allow write: if isWriter() || isAdmin();
+      allow write: if isAdmin();
     }
 
     match /storyOutputTypes/{document=**} {
       allow read: if isAuthenticated();
-      allow write: if isWriter() || isAdmin();
+      allow write: if isAdmin();
     }
 
     match /printLayouts/{document=**} {
       allow read: if isAuthenticated();
-      allow write: if isWriter() || isAdmin();
+      allow write: if isAdmin();
     }
 
     match /imageStyles/{document=**} {

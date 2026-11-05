@@ -173,7 +173,7 @@ const testCases: TestCase[] = [
   // ========== CONFIGURATION COLLECTIONS TESTS ==========
   { id: 'promptconfigs-read-parent', description: 'Parent can read prompt configs', role: 'parent', operation: 'get', path: () => `promptConfigs/config-1`, expected: 'allow' },
   { id: 'promptconfigs-write-parent', description: 'Parent cannot write prompt configs', role: 'parent', operation: 'update', path: () => `promptConfigs/config-1`, data: { version: 2 }, expected: 'deny' },
-  { id: 'promptconfigs-write-writer', description: 'Writer can write prompt configs', role: 'writer', operation: 'update', path: () => `promptConfigs/config-1`, data: { version: 2 }, expected: 'allow' },
+  { id: 'promptconfigs-write-writer', description: 'Writer cannot write prompt configs directly (catalog route only)', role: 'writer', operation: 'update', path: () => `promptConfigs/config-1`, data: { version: 2 }, expected: 'deny' },
 
   { id: 'storyphases-read-parent', description: 'Parent can read story phases', role: 'parent', operation: 'get', path: () => `storyPhases/phase-1`, expected: 'allow' },
   { id: 'storyphases-write-parent', description: 'Parent cannot write story phases', role: 'parent', operation: 'update', path: () => `storyPhases/phase-1`, data: { name: 'Updated' }, expected: 'deny' },

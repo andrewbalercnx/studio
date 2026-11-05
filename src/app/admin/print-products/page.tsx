@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useCallback } from 'react';
 import { useFirestore } from '@/firebase';
-import { collection, doc, setDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, query, orderBy } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { api } from '@/lib/api';
 
 // Zod schema helpers
 const positiveNumber = z.preprocess(
@@ -294,7 +295,6 @@ function PrintProductForm({
     setIsSaving(true);
     try {
       const docId = data.id || `product-${Date.now()}`;
-      const docRef = doc(firestore, 'printProducts', docId);
 
       // Build the document, omitting undefined values (Firestore doesn't accept undefined)
       const docData: Record<string, any> = {
@@ -308,8 +308,6 @@ function PrintProductForm({
         mixamSpec: data.mixamSpec,
         pricingTiers: data.pricingTiers,
         shippingCost: data.shippingCost,
-        createdAt: editingProduct?.createdAt || serverTimestamp(),
-        updatedAt: serverTimestamp(),
         createdBy: editingProduct?.createdBy || 'admin',
       };
 
@@ -323,7 +321,7 @@ function PrintProductForm({
         docData.mixamMapping = mixamMapping;
       }
 
-      await setDoc(docRef, docData, { merge: true });
+      await api.catalog.admin.set('printProducts', docId, docData, { merge: true });
 
       toast({ title: 'Print product saved' });
       onSave();
@@ -923,7 +921,7 @@ function PrintProductsPanel() {
 
     setIsDeleting(true);
     try {
-      await deleteDoc(doc(firestore, 'printProducts', productToDelete.id));
+      await api.catalog.admin.remove('printProducts', productToDelete.id);
       toast({ title: 'Product deleted' });
     } catch (error: any) {
       toast({ title: 'Error deleting product', description: error.message, variant: 'destructive' });

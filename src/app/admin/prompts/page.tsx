@@ -8,10 +8,11 @@ import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffect, useState } from 'react';
 import { useFirestore } from '@/firebase';
-import { collection, doc, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { PromptConfig } from '@/lib/types';
+import { api } from '@/lib/api';
 
 
 const samplePrompts: PromptConfig[] = [
@@ -127,12 +128,7 @@ export default function AdminPromptsPage() {
   const handleCreateSampleConfigs = async () => {
     if (!firestore) return;
     try {
-        const batch = writeBatch(firestore);
-        samplePrompts.forEach(p => {
-            const docRef = doc(firestore, "promptConfigs", p.id);
-            batch.set(docRef, p);
-        });
-        await batch.commit();
+        await api.catalog.admin.batch('promptConfigs', samplePrompts.map((p) => ({ id: p.id, data: p as unknown as Record<string, unknown> })));
         toast({ title: 'Success', description: 'Sample prompt configs created.' });
     } catch (e: any) {
         console.error("Error creating sample configs:", e);

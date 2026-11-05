@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { useEffect, useState, useRef } from 'react';
 import { useFirestore, useAuth } from '@/firebase';
-import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import type { StoryGenerator, AIModelName, StoryGeneratorPromptConfig } from '@/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Cpu } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { api } from '@/lib/api';
 
 // Prompt key descriptions for each generator
 const PROMPT_DESCRIPTIONS: Record<string, Record<string, string>> = {
@@ -882,24 +883,21 @@ export default function AdminStoryGeneratorsPage() {
 
   const handleUpdateMusic = async (generatorId: string, prompt: string) => {
     if (!firestore) return;
-    const docRef = doc(firestore, 'storyGenerators', generatorId);
-    await updateDoc(docRef, {
+    await api.catalog.admin.update('storyGenerators', generatorId, {
       'backgroundMusic.prompt': prompt,
     });
   };
 
   const handleUpdatePrompts = async (generatorId: string, prompts: Record<string, string>) => {
     if (!firestore) return;
-    const docRef = doc(firestore, 'storyGenerators', generatorId);
-    await updateDoc(docRef, {
+    await api.catalog.admin.update('storyGenerators', generatorId, {
       prompts,
     });
   };
 
   const handleUpdateInfo = async (generatorId: string, data: { name: string; description: string; enabledForKids?: boolean; order?: number }) => {
     if (!firestore) return;
-    const docRef = doc(firestore, 'storyGenerators', generatorId);
-    await updateDoc(docRef, {
+    await api.catalog.admin.update('storyGenerators', generatorId, {
       name: data.name,
       description: data.description,
       ...(data.enabledForKids !== undefined && { enabledForKids: data.enabledForKids }),
@@ -912,8 +910,7 @@ export default function AdminStoryGeneratorsPage() {
     data: { defaultModel?: AIModelName; defaultTemperature?: number; promptConfig?: Record<string, StoryGeneratorPromptConfig> }
   ) => {
     if (!firestore) return;
-    const docRef = doc(firestore, 'storyGenerators', generatorId);
-    await updateDoc(docRef, {
+    await api.catalog.admin.update('storyGenerators', generatorId, {
       ...(data.defaultModel !== undefined && { defaultModel: data.defaultModel }),
       ...(data.defaultTemperature !== undefined && { defaultTemperature: data.defaultTemperature }),
       ...(data.promptConfig !== undefined && { promptConfig: data.promptConfig }),

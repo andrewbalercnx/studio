@@ -8,10 +8,11 @@ import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffect, useState } from 'react';
 import { useFirestore } from '@/firebase';
-import { collection, doc, onSnapshot, writeBatch, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { StoryPhase } from '@/lib/types';
+import { api } from '@/lib/api';
 
 
 const samplePhases: StoryPhase[] = [
@@ -87,12 +88,7 @@ export default function AdminStoryPhasesPage() {
   const handleCreateSamplePhases = async () => {
     if (!firestore) return;
     try {
-        const batch = writeBatch(firestore);
-        samplePhases.forEach(p => {
-            const docRef = doc(firestore, "storyPhases", p.id);
-            batch.set(docRef, p);
-        });
-        await batch.commit();
+        await api.catalog.admin.batch('storyPhases', samplePhases.map((p) => ({ id: p.id, data: p as unknown as Record<string, unknown> })));
         toast({ title: 'Success', description: 'Sample story phases created.' });
     } catch (e: any) {
         console.error("Error creating sample phases:", e);

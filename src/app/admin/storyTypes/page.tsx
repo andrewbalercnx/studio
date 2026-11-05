@@ -8,7 +8,7 @@ import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFirestore, useAuth } from '@/firebase';
-import { collection, doc, onSnapshot, writeBatch, query, orderBy, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,6 +18,7 @@ import type { StoryType, StoryTypePromptConfig, ArcStep } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { api } from '@/lib/api';
 
 // Helper to format age range for display
 function formatAgeRange(storyType: StoryType): string {
@@ -1607,12 +1608,7 @@ export default function AdminStoryTypesPage() {
   const handleCreateSampleTypes = async () => {
     if (!firestore) return;
     try {
-        const batch = writeBatch(firestore);
-        sampleStoryTypes.forEach(t => {
-            const docRef = doc(firestore, "storyTypes", t.id);
-            batch.set(docRef, t);
-        });
-        await batch.commit();
+        await api.catalog.admin.batch('storyTypes', sampleStoryTypes.map((t) => ({ id: t.id, data: t as unknown as Record<string, unknown> })));
         toast({ title: 'Success', description: 'Sample story types created.' });
     } catch (e: any) {
         console.error("Error creating sample types:", e);
@@ -1623,12 +1619,7 @@ export default function AdminStoryTypesPage() {
   const handleCreateStoryType = async (storyType: Omit<StoryType, 'createdAt' | 'updatedAt'>) => {
     if (!firestore) return;
     try {
-      const docRef = doc(firestore, 'storyTypes', storyType.id);
-      await setDoc(docRef, {
-        ...storyType,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
+      await api.catalog.admin.set('storyTypes', storyType.id, storyType as unknown as Record<string, unknown>);
       toast({ title: 'Success', description: `Story type "${storyType.name}" created.` });
     } catch (e: any) {
       console.error("Error creating story type:", e);
@@ -1640,10 +1631,7 @@ export default function AdminStoryTypesPage() {
   const handleUpdateArcSteps = async (storyTypeId: string, steps: ArcStep[]) => {
     if (!firestore) return;
     try {
-      const docRef = doc(firestore, 'storyTypes', storyTypeId);
-      await updateDoc(docRef, {
-        'arcTemplate.steps': steps
-      });
+      await api.catalog.admin.update('storyTypes', storyTypeId, { 'arcTemplate.steps': steps });
       toast({ title: 'Success', description: 'Arc steps updated.' });
     } catch (e: any) {
       console.error("Error updating arc steps:", e);
@@ -1654,10 +1642,7 @@ export default function AdminStoryTypesPage() {
   const handleUpdatePromptConfig = async (storyTypeId: string, promptConfig: StoryTypePromptConfig) => {
     if (!firestore) return;
     try {
-      const docRef = doc(firestore, 'storyTypes', storyTypeId);
-      await updateDoc(docRef, {
-        promptConfig: promptConfig
-      });
+      await api.catalog.admin.update('storyTypes', storyTypeId, { promptConfig });
       toast({ title: 'Success', description: 'Prompt configuration updated.' });
     } catch (e: any) {
       console.error("Error updating prompt config:", e);
@@ -1668,11 +1653,7 @@ export default function AdminStoryTypesPage() {
   const handleUpdateSettings = async (storyTypeId: string, updates: Partial<StoryType>) => {
     if (!firestore) return;
     try {
-      const docRef = doc(firestore, 'storyTypes', storyTypeId);
-      await updateDoc(docRef, {
-        ...updates,
-        updatedAt: new Date()
-      });
+      await api.catalog.admin.update('storyTypes', storyTypeId, updates as Record<string, unknown>);
       toast({ title: 'Success', description: 'Story type settings updated.' });
     } catch (e: any) {
       console.error("Error updating settings:", e);
@@ -1683,11 +1664,7 @@ export default function AdminStoryTypesPage() {
   const handleUpdateMusic = async (storyTypeId: string, musicConfig: { prompt: string }) => {
     if (!firestore) return;
     try {
-      const docRef = doc(firestore, 'storyTypes', storyTypeId);
-      await updateDoc(docRef, {
-        'backgroundMusic.prompt': musicConfig.prompt,
-        updatedAt: new Date()
-      });
+      await api.catalog.admin.update('storyTypes', storyTypeId, { 'backgroundMusic.prompt': musicConfig.prompt });
       // Note: toast is shown by the BackgroundMusicEditor component
     } catch (e: any) {
       console.error("Error updating music config:", e);

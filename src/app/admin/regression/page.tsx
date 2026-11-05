@@ -20,6 +20,7 @@ import type { PromptConfig, ChildProfile, PrintLayout } from '@/lib/types';
 import { IdTokenResult } from 'firebase/auth';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
+import { api } from '@/lib/api';
 
 type TestStatus = 'PENDING' | 'PASS' | 'FAIL' | 'ERROR' | 'SKIP';
 type TestResult = {
@@ -160,12 +161,12 @@ const cleanupRegressionArtifacts = async (firestore: Firestore, tracker: Regress
 
     for (const configId of tracker.promptConfigs) {
         await deleteWithLogging(`promptConfigs/${configId}`, async () => {
-            await deleteDoc(doc(firestore, 'promptConfigs', configId));
+            await api.catalog.admin.remove('promptConfigs', configId);
         });
     }
     for (const layoutId of tracker.printLayouts) {
         await deleteWithLogging(`printLayouts/${layoutId}`, async () => {
-            await deleteDoc(doc(firestore, 'printLayouts', layoutId));
+            await api.catalog.admin.remove('printLayouts', layoutId);
         });
     }
 };
@@ -326,14 +327,14 @@ export default function AdminRegressionPage() {
       } else {
           let writerTestPassed = true;
           let failMessage = '';
-          let tempWriterConfigRef: DocumentReference | null = null;
+          let tempWriterConfigId: string | null = null;
           try {
               await getDocs(query(collection(firestore!, 'promptConfigs'), limit(1)));
               await getDocs(query(collection(firestore!, 'storyTypes'), limit(1)));
-              tempWriterConfigRef = await addDoc(
-                  collection(firestore!, 'promptConfigs'),
-                  addRegressionMeta({ id: `test_${user.uid}`, phase: 'test' }, 'DATA_AUTH_WRITER_CONFIGS')
-              );
+              // Config is written through the catalog route (slice 6.4a); the rules refuse browser writes.
+              tempWriterConfigId = (
+                  await api.catalog.admin.create('promptConfigs', addRegressionMeta({ phase: 'test' }, 'DATA_AUTH_WRITER_CONFIGS'))
+              ).id;
               
               let failedChildReadAsExpected = false;
               try {
@@ -350,8 +351,8 @@ export default function AdminRegressionPage() {
               writerTestPassed = false;
               failMessage = `Writer test failed unexpectedly: ${e.message}`;
           } finally {
-              if (tempWriterConfigRef) {
-                  await deleteDoc(tempWriterConfigRef);
+              if (tempWriterConfigId) {
+                  await api.catalog.admin.remove('promptConfigs', tempWriterConfigId);
               }
           }
 
@@ -1090,6 +1091,8 @@ export default function AdminRegressionPage() {
             { path: '/api/children/regression-anon/avatar', init: { method: 'POST', body: '{}' }, expect: [401] },
             { path: '/api/admin/children/regression-anon', init: { method: 'PATCH', body: '{}' }, expect: [401] },
             { path: '/api/admin/children?ownerUid=regression-anon', init: { method: 'GET' }, expect: [401] },
+            { path: '/api/admin/catalog/storyTypes/regression-anon', init: { method: 'PATCH', body: '{"data":{}}' }, expect: [401] },
+            { path: '/api/admin/catalog/storyTypes', init: { method: 'POST', body: '{"data":{}}' }, expect: [401] },
             { path: '/api/admin/characters?ownerUid=regression-anon', init: { method: 'GET' }, expect: [401] },
         ];
         const failures: string[] = [];
