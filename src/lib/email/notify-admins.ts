@@ -1,12 +1,6 @@
 import { getNotifiedEmails, getMaintenanceEmails } from './get-notified-users';
 import { sendEmail } from './send-email';
-import type { PrintOrder } from '@/lib/types';
 import {
-  orderSubmittedTemplate,
-  orderStatusChangedTemplate,
-  orderApprovedTemplate,
-  orderRejectedTemplate,
-  orderCancelledTemplate,
   maintenanceErrorTemplate,
   type MaintenanceErrorDetails,
 } from './templates';
@@ -33,85 +27,6 @@ export async function notifyAdmins(
     console.error(`[Email] Failed to notify admins: ${error.message}`);
     // Don't throw - email failures shouldn't break the main flow
   }
-}
-
-/**
- * Notify admins about a new print order submission.
- */
-export async function notifyOrderSubmitted(
-  firestore: FirebaseFirestore.Firestore,
-  order: PrintOrder
-): Promise<void> {
-  const email = await orderSubmittedTemplate(order);
-  if (!email) {
-    console.log('[Email] Order submitted notification disabled, skipping');
-    return;
-  }
-  await notifyAdmins(firestore, email.subject, email.html);
-}
-
-/**
- * Notify admins about an order status change (from Mixam webhook).
- */
-export async function notifyOrderStatusChanged(
-  firestore: FirebaseFirestore.Firestore,
-  order: PrintOrder,
-  oldStatus: string,
-  newStatus: string
-): Promise<void> {
-  const email = await orderStatusChangedTemplate(order, oldStatus, newStatus);
-  if (!email) {
-    console.log('[Email] Order status changed notification disabled, skipping');
-    return;
-  }
-  await notifyAdmins(firestore, email.subject, email.html);
-}
-
-/**
- * Notify admins about an approved order.
- */
-export async function notifyOrderApproved(
-  firestore: FirebaseFirestore.Firestore,
-  order: PrintOrder
-): Promise<void> {
-  const email = await orderApprovedTemplate(order);
-  if (!email) {
-    console.log('[Email] Order approved notification disabled, skipping');
-    return;
-  }
-  await notifyAdmins(firestore, email.subject, email.html);
-}
-
-/**
- * Notify admins about a rejected order.
- */
-export async function notifyOrderRejected(
-  firestore: FirebaseFirestore.Firestore,
-  order: PrintOrder,
-  reason?: string
-): Promise<void> {
-  const email = await orderRejectedTemplate(order, reason);
-  if (!email) {
-    console.log('[Email] Order rejected notification disabled, skipping');
-    return;
-  }
-  await notifyAdmins(firestore, email.subject, email.html);
-}
-
-/**
- * Notify admins about a cancelled order.
- */
-export async function notifyOrderCancelled(
-  firestore: FirebaseFirestore.Firestore,
-  order: PrintOrder,
-  reason?: string
-): Promise<void> {
-  const email = await orderCancelledTemplate(order, reason);
-  if (!email) {
-    console.log('[Email] Order cancelled notification disabled, skipping');
-    return;
-  }
-  await notifyAdmins(firestore, email.subject, email.html);
 }
 
 /**

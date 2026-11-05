@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { UserProfile, ChildProfile, Character, Story, PrintOrder } from '@/lib/types';
+import type { UserProfile, ChildProfile, Character, Story } from '@/lib/types';
 import { format } from 'date-fns';
 
 function formatFriendlyDate(date: Date): string {
@@ -285,7 +285,20 @@ function StoriesTab({ stories, children, loading }: { stories: Story[] | null; c
   );
 }
 
-function OrdersTab({ orders, loading }: { orders: PrintOrder[] | null; loading: boolean }) {
+/** A print order as stored (`printOrders`, schemaVersion 2, slice 5.5b): the fields this tab shows. */
+type ParentOrderDoc = {
+  id: string;
+  status: string;
+  quantity: number;
+  amountMinor: number;
+  currency: string;
+  layoutId: string;
+  shippingAddress?: { name: string; line1: string; line2?: string | null; city: string; postalCode: string };
+  payment?: { method?: string | null };
+  createdAt?: { toMillis?: () => number };
+};
+
+function OrdersTab({ orders, loading }: { orders: ParentOrderDoc[] | null; loading: boolean }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -303,12 +316,7 @@ function OrdersTab({ orders, loading }: { orders: PrintOrder[] | null; loading: 
     );
   }
 
-  // Sort by createdAt descending
-  const sortedOrders = [...orders].sort((a, b) => {
-    const aTime = a.createdAt?.toMillis?.() || 0;
-    const bTime = b.createdAt?.toMillis?.() || 0;
-    return bTime - aTime;
-  });
+  const sortedOrders = [...orders].sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -317,16 +325,8 @@ function OrdersTab({ orders, loading }: { orders: PrintOrder[] | null; loading: 
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-mono">{order.id}</CardTitle>
-              <Badge
-                variant={
-                  order.fulfillmentStatus === 'delivered' || order.fulfillmentStatus === 'shipped'
-                    ? 'default'
-                    : order.fulfillmentStatus === 'cancelled' || order.fulfillmentStatus === 'failed'
-                    ? 'destructive'
-                    : 'secondary'
-                }
-              >
-                {order.fulfillmentStatus}
+              <Badge variant={order.status === 'delivered' || order.status === 'shipped' ? 'default' : order.status === 'cancelled' || order.status === 'refunded' ? 'destructive' : 'secondary'}>
+                {order.status.replace(/_/g, ' ')}
               </Badge>
             </div>
             <CardDescription>
@@ -334,12 +334,11 @@ function OrdersTab({ orders, loading }: { orders: PrintOrder[] | null; loading: 
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            {order.productSnapshot?.name && (
-              <p><span className="text-muted-foreground">Product:</span> {order.productSnapshot.name}</p>
-            )}
-            {order.quantity && (
-              <p><span className="text-muted-foreground">Quantity:</span> {order.quantity}</p>
-            )}
+            <p>
+              <span className="text-muted-foreground">Order:</span> {order.quantity} × {order.layoutId} ·{' '}
+              {new Intl.NumberFormat('en-GB', { style: 'currency', currency: order.currency || 'GBP' }).format((order.amountMinor ?? 0) / 100)}
+              {order.payment?.method ? ` · ${order.payment.method}` : ''}
+            </p>
             {order.shippingAddress && (
               <div>
                 <p className="text-muted-foreground">Ship to:</p>
@@ -347,15 +346,11 @@ function OrdersTab({ orders, loading }: { orders: PrintOrder[] | null; loading: 
                   {order.shippingAddress.name}<br />
                   {order.shippingAddress.line1}<br />
                   {order.shippingAddress.line2 && <>{order.shippingAddress.line2}<br /></>}
-                  {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.postalCode}<br />
-                  {order.shippingAddress.country}
+                  {order.shippingAddress.city} {order.shippingAddress.postalCode}
                 </p>
               </div>
             )}
             <div className="flex gap-2 pt-2">
-              <Badge variant={order.paymentStatus === 'paid' ? 'default' : 'outline'}>
-                {order.paymentStatus || 'unpaid'}
-              </Badge>
               <Link href={`/admin/print-orders/${order.id}`}>
                 <Button variant="outline" size="sm">View Details</Button>
               </Link>
@@ -399,13 +394,13 @@ export default function ViewAsParentPage() {
 
   const ordersQuery = useMemo(() => {
     if (!firestore || !targetUid) return null;
-    return query(collection(firestore, 'printOrders'), where('parentUid', '==', targetUid));
+    return query(collection(firestore, 'printOrders'), where('ownerUid', '==', targetUid));
   }, [firestore, targetUid]);
 
   const { data: children, loading: childrenLoading } = useCollection<ChildProfile>(childrenQuery);
   const { data: characters, loading: charactersLoading } = useCollection<Character>(charactersQuery);
   const { data: stories, loading: storiesLoading } = useCollection<Story>(storiesQuery);
-  const { data: orders, loading: ordersLoading } = useCollection<PrintOrder>(ordersQuery);
+  const { data: orders, loading: ordersLoading } = useCollection<ParentOrderDoc>(ordersQuery);
 
   // Count visible items for tab badges
   const childCount = children?.filter(c => !c.deletedAt).length || 0;

@@ -110,10 +110,9 @@
           "position": "top-center"
         },
         {
-          "title": "Print Layout Setup",
-          "description": "When you're ready to print, click **Print Layout** to:\n\n1. Choose a print size (A4, Letter, etc.)\n2. Arrange pages for professional printing\n3. Add cover designs\n4. Preview the final layout\n\nThis creates a print-ready version of your book!",
+          "title": "Ordering a Printed Copy",
+          "description": "When every picture in a book is finished, open the book and click **Order a printed copy** to:\n\n1. Choose a print format (each shows its page count and price, UK delivery included)\n2. Choose how many copies\n3. Enter the delivery address\n4. Pay by card or with print credits\n\nOrdering locks the book so the printed copy matches exactly what you saw.",
           "route": "/parent/storybooks",
-          "wizardTargetId": "storybook-print-layout",
           "position": "top-center"
         },
         {
@@ -311,9 +310,8 @@
         },
         {
           "title": "Printing a Real Book",
-          "description": "The best part? You can turn digital books into **real printed books**!\n\nAs a parent, you can:\n1. Open the storybook\n2. Click Print Layout\n3. Configure the print settings\n4. Order a professionally printed book\n\nImagine your child holding their own published book!",
+          "description": "The best part? You can turn digital books into **real printed books**!\n\nAs a parent, you can:\n1. Open the finished book\n2. Click Order a printed copy\n3. Choose a format and the number of copies\n4. Pay, and the book is printed and posted to you\n\nImagine your child holding their own published book!",
           "route": "/parent/storybooks",
-          "wizardTargetId": "storybook-print-layout",
           "position": "top-center"
         },
         {

@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-11-05 (print clients, slice 5.6: order pages for parents, admin order pages and the approval switch on the v2 order routes). 2026-11-05 (print orders and payment, slice 5.5b: `src/server/orders/` with Stripe Checkout behind a gateway, print credits, the approval switch, `order.submit` on the mixam queue that never submits twice, the Mixam webhook forward only). 2026-11-04 (print render, slice 5.5a: Books gain title, end and AI back-cover pages; `src/server/print/` renders a locked Book to interior and cover PDFs per template, with bleed and spine width, as immutable renders via `book.render`). 2026-11-04 (mobile makes and reads Books). 2026-11-04 (story-introduced characters get a drawn avatar: a `character.avatar` ai-image job (`src/server/characters/avatar.ts`, new AI purpose) enqueued with the turn that creates them, drawing a head-and-shoulders avatar from the character's words into `avatarUrl` — UI only, never the likeness portrait (ADR-0006)). 2026-11-04 (admin/writer roles come from the custom claim only — the client no longer trusts a `users/{uid}` doc role field; `scripts/set-admin.mjs` sets the claim; rules also refuse owner writes to flat `isAdmin`/`isWriter`/`canShowWizardTargets`). 2026-11-02 (admin allowance management with grant history; `/auth/action` handles auth email links on our domain; reset emails sent by us via `POST /api/auth/password-reset`). 2026-11-01 (Book & Story trace: AI calls tagged by trace context and always logged; `/admin/trace`). 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.4: every client creates Stories through the creation routes (§2) — one mode chooser and play view for the web child shell and the kids PWA, mobile on the same routes, `GET /api/stories[/{id}]` and `GET /api/creation-modes`; the session engine, chat mode, warmup, arc engine, every old mode route and flow, `storySessions` and the old storybook read paths are deleted; Stories are server-written only; the trial data is reset at deploy (`docs/DEPLOYMENT.md` §10). Phase 5.3: server-side Story creation (§13) — five modes behind one engine interface, `POST /api/stories` + turns + abandon + finish, `story.finish` job, target Stories and turns in `stories`, trial-data reset script; not yet used by the clients (5.4). Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
+> **Last Updated**: 2026-11-05 (legacy storybook print and order code deleted, slice 5.6b). 2026-11-05 (print clients, slice 5.6: order pages for parents, admin order pages and the approval switch on the v2 order routes). 2026-11-05 (print orders and payment, slice 5.5b: `src/server/orders/` with Stripe Checkout behind a gateway, print credits, the approval switch, `order.submit` on the mixam queue that never submits twice, the Mixam webhook forward only). 2026-11-04 (print render, slice 5.5a: Books gain title, end and AI back-cover pages; `src/server/print/` renders a locked Book to interior and cover PDFs per template, with bleed and spine width, as immutable renders via `book.render`). 2026-11-04 (mobile makes and reads Books). 2026-11-04 (story-introduced characters get a drawn avatar: a `character.avatar` ai-image job (`src/server/characters/avatar.ts`, new AI purpose) enqueued with the turn that creates them, drawing a head-and-shoulders avatar from the character's words into `avatarUrl` — UI only, never the likeness portrait (ADR-0006)). 2026-11-04 (admin/writer roles come from the custom claim only — the client no longer trusts a `users/{uid}` doc role field; `scripts/set-admin.mjs` sets the claim; rules also refuse owner writes to flat `isAdmin`/`isWriter`/`canShowWizardTargets`). 2026-11-02 (admin allowance management with grant history; `/auth/action` handles auth email links on our domain; reset emails sent by us via `POST /api/auth/password-reset`). 2026-11-01 (Book & Story trace: AI calls tagged by trace context and always logged; `/admin/trace`). 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.4: every client creates Stories through the creation routes (§2) — one mode chooser and play view for the web child shell and the kids PWA, mobile on the same routes, `GET /api/stories[/{id}]` and `GET /api/creation-modes`; the session engine, chat mode, warmup, arc engine, every old mode route and flow, `storySessions` and the old storybook read paths are deleted; Stories are server-written only; the trial data is reset at deploy (`docs/DEPLOYMENT.md` §10). Phase 5.3: server-side Story creation (§13) — five modes behind one engine interface, `POST /api/stories` + turns + abandon + finish, `story.finish` job, target Stories and turns in `stories`, trial-data reset script; not yet used by the clients (5.4). Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -195,10 +195,8 @@ story complete ─▶ child picks Form + Style (BookChooser)
 
 **Old storybooks** (`stories/{storyId}/storybooks`) are removed with the trial-data reset; their
 read paths (viewer, `/read`, parent list section, `/api/parent/storybooks`,
-`/api/stories/{id}/storybooks`) are deleted. The print and order code for them
-(`printStoryBooks`, `/api/storyBook/printable`, `/api/storyBook/share`, `/api/storyBook/{id}`,
-`/storybook/{id}/print-layout` and `/order`) is kept unchanged until the print slice rebuilds it;
-it is no longer reachable from the UI.
+`/api/stories/{id}/storybooks`) are deleted. Their print and order code was deleted in slice 5.6b; the read-only share link
+route (`/api/storyBook/share`, `/storybook/share/{id}`) is kept and finds no storybooks after the reset.
 
 **Shared page components** (`src/components/book-reader/`): `ImmersivePlayer` renders shared links
 (`/storybook/share/{id}`).
@@ -242,33 +240,11 @@ order.submit (mixam queue) ─▶ submitted ─▶ POST /api/webhooks/mixam (for
   approval emails and Stripe mode, the order list with each order's next action, and the order page
   with the admin actions. Every status and action comes from the server.
 
-**Legacy storybook print flow**:
-
-```
-Storybook → PrintStoryBook → PDF Generation → Mixam Order
-```
-
-**Key Collections**:
-- `printStoryBooks`: Print-specific layout and configuration
-- `printOrders`: Order tracking and fulfillment
-- `printProducts`: Product catalog (hardcover, paperback options)
-- `printLayouts`: Page layout templates
-
-**Workflow**:
-1. Parent initiates print from finalized storybook
-2. `PrintStoryBook` created with layout configuration
-3. PDFs generated (separate cover and interior for Mixam)
-4. Order created (`POST /api/printOrders/mixam`), awaits admin approval
-5. Admin approves → submitted to Mixam API
-6. Webhooks update order status through fulfillment
-
-**Degraded-order gate (Sprint W2-C)**: the order route evaluates `evaluateOrderArtGate`
-(`src/lib/storybook-status.ts`) against the book's `artStatus`. A degraded (partial-art) book is
-orderable but only with an explicit `acknowledgeDegraded: true` — otherwise the route returns
-`409 degraded_confirmation_required` and the checkout shows a "pages will print without pictures"
-confirmation. Acknowledged orders carry `degradedArtAcknowledged` + `artStatusSnapshot` for audit.
-Fully-failed or in-progress art blocks the order; books with no rollup (legacy) fail open with the
-printable-PDF checks as backstop.
+**Legacy storybook print flow**: removed in slice 5.6b (`printStoryBooks`, `/api/storyBook/printable`,
+`/api/storyBook/{id}`, `/api/printOrders/**`, `/api/printStoryBooks/**`, `/api/admin/print-orders/**`,
+`/storybook/{id}/print-layout` and `/order`, the `storybook-status` art gate). Print uses the Book
+render and the order service above; `printProducts` and `printLayouts` stay as the templates and
+Mixam products.
 
 **Saved addresses (Sprint W2-C)**: checkout offers "save this address"; the order route persists it
 server-side to `users/{uid}/addresses` (deduped), and the order page pre-offers saved addresses on

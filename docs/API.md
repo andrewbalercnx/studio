@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-11-05 (print clients, slice 5.6: new `GET/PUT /api/admin/orders/settings`; `OrderView` gains `actions.canPayWithCredits` and `creditsAvailable`). 2026-11-05 (print orders, slice 5.5b: new `POST/GET /api/orders`, `GET /api/orders/[orderId]`, `POST /api/orders/[orderId]/{checkout,pay-with-credits,cancel}`, `POST /api/webhooks/stripe`, `GET /api/admin/orders[/[orderId]]`, `POST /api/admin/orders/[orderId]/{approve,cancel,mark-paid,retry,refresh}`; `POST /api/webhooks/mixam` rewritten for v2 orders, forward only). 2026-11-04 (print render, slice 5.5a: new `GET /api/books/[bookId]/print-options`, `POST`/`GET /api/books/[bookId]/renders`, `GET /api/books/[bookId]/renders/[renderId]`; `GET /api/books/[bookId]` pages gain `inReader`). 2026-11-04 (new `GET /api/books` (list) and `GET /api/books/[bookId]` (read, with pages, words and server-computed progress) so the mobile app can list and read Books without Firestore; api-client `getBooks`/`getBook`; shared-types `BookListItem`/`BookReadView`). 2026-11-03 (new `GET /api/admin/allowances/summary`). 2026-11-02 (new `GET/POST /api/admin/allowances`; new `GET /api/library/summary`; new `POST /api/auth/password-reset`). 2026-11-01 (new `GET /api/admin/trace`). 2026-10-30 (`POST /api/stories/[storyId]/finish` re-dispatches a lost finish job). 2026-10-29 (Phase 5.4: every client creates Stories with the creation routes; new `GET /api/creation-modes`; `GET /api/stories?childId` and `GET /api/stories/[storyId]` rewritten for Stories (names resolved on the server; the latter also returns the turns); removed `POST /api/storyWizard`, `/api/gemini3`, `/api/gemini4`, `/api/storyFriends`, `/api/storyBeat`, `/api/storyEnding`, `/api/storyCompile`, `/api/storySession`, `/api/warmupReply`, `/api/ai-warmup`, `/api/storyArc`, `/api/characterTraits`, `/api/characters/create`, `/api/storyBook/audio`, `/api/storyBook/actorAvatar`, `GET /api/kids-flows`, `GET /api/kids-generators`, `GET/PUT /api/admin/system-config/kids-flows`, `GET /api/admin/sessions`, `GET /api/parent/storybooks`, `POST /api/parent/storybooks/thumbnails`, `GET /api/stories/[storyId]/storybooks` and its `pages` route; api-client: `listCreationModes`, `createStory`, `sendTurn`, `abandonStory`, `retryFinish`. Phase 5.3: new `POST /api/stories`, `POST /api/stories/[storyId]/turns`, `POST /api/stories/[storyId]/abandon`, `POST /api/stories/[storyId]/finish` — Story creation in five modes on the server, not yet used by the UI; `POST /api/manuscripts` and `POST /api/books` also accept Stories made by these routes once `complete`. Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-11-05 (legacy print removed, slice 5.6b: `GET /api/storyBook/[bookId]`, `POST /api/storyBook/printable`, `/api/printOrders/**`, `/api/printStoryBooks/**` and `/api/admin/print-orders/**` deleted; the order routes replace them). 2026-11-05 (print clients, slice 5.6: new `GET/PUT /api/admin/orders/settings`; `OrderView` gains `actions.canPayWithCredits` and `creditsAvailable`). 2026-11-05 (print orders, slice 5.5b: new `POST/GET /api/orders`, `GET /api/orders/[orderId]`, `POST /api/orders/[orderId]/{checkout,pay-with-credits,cancel}`, `POST /api/webhooks/stripe`, `GET /api/admin/orders[/[orderId]]`, `POST /api/admin/orders/[orderId]/{approve,cancel,mark-paid,retry,refresh}`; `POST /api/webhooks/mixam` rewritten for v2 orders, forward only). 2026-11-04 (print render, slice 5.5a: new `GET /api/books/[bookId]/print-options`, `POST`/`GET /api/books/[bookId]/renders`, `GET /api/books/[bookId]/renders/[renderId]`; `GET /api/books/[bookId]` pages gain `inReader`). 2026-11-04 (new `GET /api/books` (list) and `GET /api/books/[bookId]` (read, with pages, words and server-computed progress) so the mobile app can list and read Books without Firestore; api-client `getBooks`/`getBook`; shared-types `BookListItem`/`BookReadView`). 2026-11-03 (new `GET /api/admin/allowances/summary`). 2026-11-02 (new `GET/POST /api/admin/allowances`; new `GET /api/library/summary`; new `POST /api/auth/password-reset`). 2026-11-01 (new `GET /api/admin/trace`). 2026-10-30 (`POST /api/stories/[storyId]/finish` re-dispatches a lost finish job). 2026-10-29 (Phase 5.4: every client creates Stories with the creation routes; new `GET /api/creation-modes`; `GET /api/stories?childId` and `GET /api/stories/[storyId]` rewritten for Stories (names resolved on the server; the latter also returns the turns); removed `POST /api/storyWizard`, `/api/gemini3`, `/api/gemini4`, `/api/storyFriends`, `/api/storyBeat`, `/api/storyEnding`, `/api/storyCompile`, `/api/storySession`, `/api/warmupReply`, `/api/ai-warmup`, `/api/storyArc`, `/api/characterTraits`, `/api/characters/create`, `/api/storyBook/audio`, `/api/storyBook/actorAvatar`, `GET /api/kids-flows`, `GET /api/kids-generators`, `GET/PUT /api/admin/system-config/kids-flows`, `GET /api/admin/sessions`, `GET /api/parent/storybooks`, `POST /api/parent/storybooks/thumbnails`, `GET /api/stories/[storyId]/storybooks` and its `pages` route; api-client: `listCreationModes`, `createStory`, `sendTurn`, `abandonStory`, `retryFinish`. Phase 5.3: new `POST /api/stories`, `POST /api/stories/[storyId]/turns`, `POST /api/stories/[storyId]/abandon`, `POST /api/stories/[storyId]/finish` — Story creation in five modes on the server, not yet used by the UI; `POST /api/manuscripts` and `POST /api/books` also accept Stories made by these routes once `complete`. Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -295,41 +295,6 @@ Manually trigger regeneration of the image description for a child or character.
 
 ## Storybook Routes
 
-### GET `/api/storyBook/[bookId]`
-
-**Authentication**: Bearer token. The caller must own the story (`stories.parentUid`); admin and writer principals are exempt. Child-persona scope applies. 401 without a token, 403 not the owner, 404 missing. Kept for the old storybooks' order page until the print slice. Help-tour sample stories (`help-*` IDs) are readable by any signed-in user. A `printStoryBookId` is honoured only if that print storybook's `storyId` equals `bookId`.
-
-Get storybook details.
-
-**Path Parameters**:
-- `bookId` (string, required) - Storybook document ID
-
-**Response**: `200 OK`
-```json
-{
-  "id": "book-id",
-  "title": "My Adventure",
-  "pages": [...],
-  "finalization": {...},
-  "artStatus": {
-    "completeness": "degraded",
-    "pagesTotal": 12,
-    "pagesReady": 10,
-    "pagesFailed": 2,
-    "pagesPending": 0,
-    "failedPageIds": ["page7", "page9"],
-    "isViewable": true,
-    "isOrderable": true
-  }
-}
-```
-
-`artStatus` (Sprint W2-C) is the persisted degraded-book rollup from the new-model storybook
-subcollection document; `null` for legacy books or when no `storybookId` query param is provided.
-The order page uses it for the proactive "pages will print without art" banner.
-
----
-
 ### POST `/api/storyBook/share`
 
 Create or revoke share link for a finalized storybook.
@@ -430,29 +395,6 @@ View a shared storybook (public endpoint - no authentication required).
 {
   "ok": false,
   "errorMessage": "This share link has expired"
-}
-```
-
----
-
-### POST `/api/storyBook/printable`
-
-Generate printable PDF for storybook.
-
-**Request Body**:
-```json
-{
-  "bookId": "book-id",
-  "printLayoutId": "a4-portrait-spread-v1"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "coverPdfUrl": "https://...",
-  "interiorPdfUrl": "https://..."
 }
 ```
 
@@ -1069,235 +1011,6 @@ Generate avatar for a character.
 {
   "ok": true,
   "avatarUrl": "https://storage.googleapis.com/..."
-}
-```
-
----
-
-## Print Routes
-
-### GET `/api/printOrders/products`
-
-Get available print products.
-
-**Response**: `200 OK`
-```json
-{
-  "products": [
-    {
-      "id": "hardcover-a4",
-      "name": "Premium Hardcover",
-      "description": "...",
-      "pricingTiers": [...]
-    }
-  ]
-}
-```
-
----
-
-### GET `/api/printOrders/my-orders`
-
-Get current user's print orders with server-derived presentation fields (Sprint W3-C,
-server-first principle: clients render the timeline, they never re-map statuses).
-Orders are matched on both `parentUid` and the legacy `ownerUserId` field and sorted
-newest-first.
-
-Each order is an **allowlist** of parent-facing fields: `id`, `version`, `storyId`, `outputId`,
-`printProductId`, `quantity`, `trimSize`, `pageCount`, `shippingAddress`, `contactEmail`,
-`paymentStatus`, `fulfillmentStatus`, `approvalStatus`, `rejectedReason`, `mixamTrackingUrl`,
-`mixamTrackingNumber`, `mixamCarrier`, `mixamEstimatedDeliveryIso`, plus the derived fields below.
-Internal fields (cost snapshots, product spec, process log, Mixam validation, admin ids) are not
-returned.
-
-**Authentication**: Required (Bearer token, parent or admin).
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "orders": [
-    {
-      "id": "order-id",
-      "storyId": "story-id",
-      "fulfillmentStatus": "submitted",
-      "createdAtIso": "2026-06-01T10:00:00.000Z",
-      "updatedAtIso": "2026-06-02T09:00:00.000Z",
-      "rejectedAtIso": null,
-      "statusCategory": "in_progress",
-      "timeline": {
-        "steps": [
-          { "id": "placed", "label": "Order placed", "state": "complete", "at": "2026-06-01T10:00:00.000Z" },
-          { "id": "review", "label": "Quality review", "state": "complete" },
-          { "id": "submitted", "label": "Sent to printer", "state": "complete" },
-          { "id": "printing", "label": "Printing", "state": "current" },
-          { "id": "shipped", "label": "Shipped", "state": "upcoming" }
-        ],
-        "state": "active",
-        "currentStepId": "printing",
-        "attention": false
-      }
-    }
-  ],
-  "estimatedTurnaround": {
-    "minBusinessDays": 10,
-    "maxBusinessDays": 15,
-    "label": "Estimated 10–15 business days from order to delivery — this is an estimate, not a guarantee."
-  }
-}
-```
-
-| Derived field | Description |
-|---------------|-------------|
-| `timeline` | Parent-facing progress (placed → review → sent to printer → printing → shipped) derived from `fulfillmentStatus` by `deriveOrderTimeline` (`src/lib/order-timeline.ts`). `state` is `active`/`shipped`/`delivered`/`cancelled`/`failed`; `attention` + `attentionNote` flag `on_hold`/`validation_failed`. |
-| `statusCategory` | Filter bucket: `pending` / `in_progress` / `completed` / `cancelled`. |
-| `createdAtIso` etc. | Firestore timestamps serialised to ISO strings. |
-| `estimatedTurnaround` | From `systemConfig/orderTransparency` (defaults 10–15 business days), honestly labelled as an estimate. |
-
----
-
-### POST `/api/printOrders`
-
-Create a new print order.
-
-**Request Body**:
-```json
-{
-  "storyId": "story-id",
-  "outputId": "output-id",
-  "printProductId": "hardcover-a4",
-  "quantity": 1,
-  "shippingAddress": {
-    "name": "John Doe",
-    "line1": "123 Main St",
-    "city": "London",
-    "state": "Greater London",
-    "postalCode": "SW1A 1AA",
-    "country": "GB"
-  },
-  "contactEmail": "john@example.com"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "orderId": "order-id",
-  "estimatedCost": {
-    "total": 29.99,
-    "currency": "GBP"
-  }
-}
-```
-
----
-
-### POST `/api/printOrders/[orderId]/pay`
-
-Mark order as paid.
-
-**Path Parameters**:
-- `orderId` (string, required) - Order document ID
-
-**Response**: `200 OK`
-```json
-{
-  "success": true
-}
-```
-
----
-
-### POST `/api/printOrders/mixam`
-
-Create a Mixam print order (parent checkout). Validates the product, ownership, printable PDFs,
-UK shipping address, and the degraded-book order gate.
-
-**Authentication**: Required (Bearer token, parent or admin).
-
-**Request Body**:
-```json
-{
-  "storyId": "story-id",
-  "storybookId": "storybook-id",
-  "printStoryBookId": "optional-print-storybook-id",
-  "productId": "hardcover-8x10",
-  "quantity": 1,
-  "customOptions": { "endPaperColor": "white", "headTailBandColor": "white" },
-  "shippingAddress": { "name": "...", "line1": "...", "city": "...", "state": "", "postalCode": "SW1A 1AA", "country": "GB" },
-  "acknowledgeDegraded": false,
-  "saveAddress": true,
-  "addressLabel": "Home"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| acknowledgeDegraded | boolean | No | Sprint W2-C: explicit confirmation that a degraded (partial-art) book may print with art-less pages. Required (server-enforced) when the book's `artStatus.completeness` is `degraded`. |
-| saveAddress | boolean | No | Sprint W2-C: save `shippingAddress` to `users/{uid}/addresses` (deduped on line1+postcode; first address becomes default). Best-effort — never fails the order. |
-| addressLabel | string | No | Optional label for the saved address (max 50 chars). |
-
-**Degraded-book order gate** (`evaluateOrderArtGate` in `src/lib/storybook-status.ts`):
-- `complete` art → allowed.
-- `degraded` art → allowed **only** with `acknowledgeDegraded: true`; otherwise
-  `409 { ok: false, code: "degraded_confirmation_required", artStatus }` and the client shows the
-  explicit confirmation dialog.
-- `failed` / `in_progress` art → `400 { ok: false, code: "not_orderable", artStatus }`.
-- No rollup available (legacy paths) → gate fails open; the printable-PDF checks remain the backstop.
-
-When a degraded order is acknowledged, the order document records `degradedArtAcknowledged: true`,
-an `artStatusSnapshot`, and a `degraded_art_acknowledged` processLog entry.
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "orderId": "order-id",
-  "estimatedCost": { "unitPrice": 15.0, "subtotal": 15.0, "shipping": 5.0, "setupFee": 0, "total": 20.0, "currency": "GBP" },
-  "timeline": { "steps": [ "…initial timeline (review current)…" ], "state": "active", "currentStepId": "review", "attention": false },
-  "estimatedTurnaround": { "minBusinessDays": 10, "maxBusinessDays": 15, "label": "Estimated 10–15 business days …" }
-}
-```
-
-`timeline` and `estimatedTurnaround` (Sprint W3-C) feed the post-order confirmation screen —
-same shapes as `GET /api/printOrders/my-orders`.
-
----
-
-### POST `/api/printStoryBooks/[printStoryBookId]/auto-layout`
-
-**Authentication**: Bearer token. The caller must own the print storybook (`printStoryBooks.ownerUserId`) and the story it lays out (`stories.parentUid`); admin and writer principals are exempt.
-
-Auto-layout print storybook pages.
-
-**Path Parameters**:
-- `printStoryBookId` (string, required) - PrintStoryBook document ID
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "pages": [...]
-}
-```
-
----
-
-### POST `/api/printStoryBooks/[printStoryBookId]/generate-pdfs`
-
-**Authentication**: Bearer token. The caller must own the print storybook (`printStoryBooks.ownerUserId`); admin and writer principals are exempt.
-
-Generate PDFs for print storybook.
-
-**Path Parameters**:
-- `printStoryBookId` (string, required) - PrintStoryBook document ID
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "coverPdfUrl": "https://...",
-  "interiorPdfUrl": "https://..."
 }
 ```
 
@@ -2144,30 +1857,6 @@ Delete a development todo item. Admin only.
 
 ---
 
-### GET `/api/admin/print-orders`
-
-List all print orders (admin view).
-
-**Query Parameters**:
-- `status` (string, optional) - Filter by fulfillment status
-- `limit` (number, optional) - Limit results (default: 50)
-
-**Response**: `200 OK`
-```json
-{
-  "orders": [...]
-}
-```
-
-Each order additionally includes server-computed fields (Sprint W3-A — server-first):
-- `adminNextAction` — `{ action, label, urgent, source: 'derived' }`, the next required admin
-  action derived fresh from current order state (mapping in `src/lib/mixam/order-state.ts`)
-- `needsAdminAttention` — boolean rollup of `adminNextAction.urgent`
-- `failureSummary` — one-line failure summary (artwork errors > validation > rejection >
-  Mixam status reason), or `null`
-
----
-
 ### GET `/api/admin/ops/metrics`
 
 Aggregated metrics for the ops/KPI dashboard (`/admin/ops`). Sprint W3-A.
@@ -2269,184 +1958,15 @@ Designed to be called from the ops dashboard ("Run checks now"), the daily syste
 
 ---
 
-### GET `/api/admin/print-orders/[orderId]`
-
-Get detailed order info.
-
-**Response**: `200 OK`
-```json
-{
-  "order": {...}
-}
-```
-
----
-
-### POST `/api/admin/print-orders/[orderId]/approve`
-
-Approve order for submission.
-
-**Response**: `200 OK`
-```json
-{
-  "success": true
-}
-```
-
----
-
-### POST `/api/admin/print-orders/[orderId]/reject`
-
-Reject order.
-
-**Request Body**:
-```json
-{
-  "reason": "Rejection reason"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "success": true
-}
-```
-
----
-
-### POST `/api/admin/print-orders/[orderId]/submit`
-
-Submit order to Mixam.
-
-**Response**: `200 OK`
-```json
-{
-  "success": true,
-  "mixamOrderId": "..."
-}
-```
-
----
-
-### POST `/api/admin/print-orders/[orderId]/reset`
-
-Reset order status.
-
-**Response**: `200 OK`
-```json
-{
-  "success": true
-}
-```
-
----
-
-### POST `/api/admin/print-orders/[orderId]/cancel`
-
-Cancel an order. If already submitted to Mixam, will attempt to cancel with them (only works if not in production).
-
-**Request Body** (optional):
-```json
-{
-  "reason": "Cancellation reason"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "orderId": "...",
-  "mixamCancelled": true
-}
-```
-
-**Error Responses**:
-- `400 Bad Request` - Order cannot be cancelled from current status
-- `403 Forbidden` - Admin access required
-- `404 Not Found` - Order not found
-- `409 Conflict` - Order already in production with Mixam
-
----
-
-### POST `/api/admin/print-orders/[orderId]/confirm`
-
-Confirm an order with Mixam using the Mixam Public API. This moves the order from `submitted` or `on_hold` status to `confirmed`.
-
-**Requirements**:
-- Order must be in `submitted` or `on_hold` status
-- Order must have a valid `mixamOrderId`
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "orderId": "...",
-  "mixamStatus": "confirmed"
-}
-```
-
-**Error Responses**:
-- `400 Bad Request` - Order not in confirmable status or missing Mixam order ID
-- `403 Forbidden` - Admin access required
-- `404 Not Found` - Order not found
-- `500 Internal Server Error` - Failed to confirm with Mixam API
-
----
-
-### POST `/api/admin/print-orders/[orderId]/resubmit`
-
-Resubmit an on_hold order to Mixam. This cancels the previous Mixam order (if possible) and creates a new one using the existing PDFs.
-
-**Requirements**:
-- Order must be in `on_hold` status
-- Cover and interior PDFs must already be generated
-- Interior page count must meet binding requirements
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "mixamJobNumber": "UK123456",
-  "mixamOrderId": "abc-123-def",
-  "previousMixamOrderId": "old-order-id",
-  "previousMixamJobNumber": "UK123455",
-  "previousOrderCancelled": true
-}
-```
-
-**Error Responses**:
-- `400 Bad Request` - Order not on_hold, missing PDFs, or page count issues
-- `403 Forbidden` - Admin access required
-- `404 Not Found` - Order not found
-- `500 Internal Server Error` - Mixam submission failed
-
----
-
-### POST `/api/admin/print-orders/[orderId]/refresh-status`
-
-Refresh order status from Mixam.
-
-**Response**: `200 OK`
-```json
-{
-  "success": true,
-  "status": "in_production"
-}
-```
-
----
-
 ### Mixam Order Management
 
-After an order is submitted to Mixam, it can be viewed in the Mixam dashboard at:
+After an order is submitted to Mixam (`order.submit`), it can be viewed in the Mixam dashboard at:
 
 ```
 https://mixam.co.uk/orders/{mixamOrderId}
 ```
 
-Where `{mixamOrderId}` is the order ID returned from the `/api/admin/print-orders/[orderId]/submit` endpoint.
+where `{mixamOrderId}` is `mixam.orderId` on the order (`GET /api/admin/orders/[orderId]`).
 
 ---
 
@@ -2668,7 +2188,7 @@ Seed print product catalog.
 
 ### POST `/api/admin/help-sample-data`
 
-Seed sample data for Help Wizard demonstrations. Creates demo documents with "help-*" IDs in multiple collections (children, characters, storySessions, stories, storyBooks, printStoryBooks, printOrders).
+Seed sample data for Help Wizard demonstrations. Creates demo documents with "help-*" IDs in multiple collections (children, characters, storySessions, stories, storyBooks, printOrders).
 
 **Required Role**: Admin or Writer
 
@@ -2683,7 +2203,6 @@ Seed sample data for Help Wizard demonstrations. Creates demo documents with "he
     "storySessions/help-session",
     "stories/help-story",
     "storyBooks/help-storybook",
-    "printStoryBooks/help-print-storybook",
     "printOrders/help-print-order"
   ]
 }
