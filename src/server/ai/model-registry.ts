@@ -16,6 +16,8 @@ export const AI_PURPOSES = [
   'manuscript.text',
   'likeness.describe',
   'likeness.portrait',
+  'likeness.avatar',
+  'likeness.animate',
   'character.avatar',
   'book.castSheet',
   'book.pageArt',
@@ -23,7 +25,7 @@ export const AI_PURPOSES = [
 ] as const;
 export type AIPurpose = (typeof AI_PURPOSES)[number];
 
-export type AIPurposeKind = 'text' | 'image' | 'tts';
+export type AIPurposeKind = 'text' | 'image' | 'tts' | 'video';
 
 /** What each purpose produces; the harness uses it to pick the call shape and circuit breaker. */
 export const AI_PURPOSE_KIND: Record<AIPurpose, AIPurposeKind> = {
@@ -32,6 +34,8 @@ export const AI_PURPOSE_KIND: Record<AIPurpose, AIPurposeKind> = {
   'manuscript.text': 'text',
   'likeness.describe': 'text',
   'likeness.portrait': 'image',
+  'likeness.avatar': 'image',
+  'likeness.animate': 'video',
   'character.avatar': 'image',
   'book.castSheet': 'image',
   'book.pageArt': 'image',
@@ -46,6 +50,10 @@ export const AI_PURPOSE_KIND: Record<AIPurpose, AIPurposeKind> = {
  * - likeness.describe: gemini-3.8-flash (image-description-flow)
  * - image purposes (likeness.portrait, character.avatar, book.*): gemini-3.1-flash-image
  *   (DEFAULT_AI_MODELS_CONFIG.imageGenerationModel)
+ * - likeness.avatar: gemini-3.1-flash-image (avatar-flow / character-avatar-flow; `character.avatar` is its
+ *   former name, kept so a configured model still applies)
+ * - likeness.animate: fal.ai Kling 1.6 pro image-to-video (avatar-animation-flow); a `veo-…` model id
+ *   uses Veo through the Gemini API instead
  * - narration: ElevenLabs eleven_v3 (default ElevenLabs version in diagnostics config)
  */
 export const DEFAULT_AI_MODELS: Record<AIPurpose, string> = {
@@ -54,6 +62,8 @@ export const DEFAULT_AI_MODELS: Record<AIPurpose, string> = {
   'manuscript.text': 'googleai/gemini-3.8-flash',
   'likeness.describe': 'googleai/gemini-3.8-flash',
   'likeness.portrait': 'googleai/gemini-3.1-flash-image',
+  'likeness.avatar': 'googleai/gemini-3.1-flash-image',
+  'likeness.animate': 'fal-ai/kling-video/v1.6/pro/image-to-video',
   'character.avatar': 'googleai/gemini-3.1-flash-image',
   'book.castSheet': 'googleai/gemini-3.1-flash-image',
   'book.pageArt': 'googleai/gemini-3.1-flash-image',

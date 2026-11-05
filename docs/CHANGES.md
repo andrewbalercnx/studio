@@ -18,6 +18,52 @@
 
 ### 2026-11-05
 
+#### `#43` - Characters and likeness on the server (slice 5.7a)
+
+**Type**: Feature (server)
+
+**Summary**: Children and Characters get server schemas, routes and likeness jobs (plan: `target/slices/5.7-characters.md`). The web pages move onto them in 5.7b; until then they keep their old paths, and the server reads and mirrors both field shapes.
+- **Schemas**: `childSchema`, `characterSchema` and the extended `likenessSchema` (`avatarSource`, `avatarAnimation`, and job summaries for describe, portrait, avatar and animate). `characters/entities.ts` maps stored documents in either shape (target `likeness.*` + `ownerUid`, or the old `imageDescription` / `canonicalImageUrl` / `avatarUrl` / `avatarAnimationUrl` + `ownerParentUid`), drops placeholder images, and mirrors likeness writes into the old fields.
+- **Jobs** (on the job runner and the AI harness, replacing fire-and-forget promises inside requests):
+  - `likeness.describe` and `likeness.portrait`: from the original photos only. The portrait no longer reads the generated description, which used to race it.
+  - `likeness.avatar`: from the portrait, or else from the description (shown as "imagined"). This folds in `character.avatar`, which still runs for jobs already queued.
+  - `likeness.animate`: fal.ai Kling, or Veo, behind the new `video` purpose kind.
+  - Each job writes only if the document still has the inputs it was made from, so the newest photo set wins.
+- **Routes** (`withRoute`):
+  - `GET /api/children[/{id}]` keeps the bare shape the mobile app reads.
+  - `POST /api/children`; `GET`/`POST /api/characters`.
+  - `GET`/`PATCH`/`DELETE …/{id}`, `…/restore`.
+  - `…/photos` (stores the file and updates `photos` in one step), `…/photos/{photoId}` (deletes the file and redoes the likeness).
+  - `…/likeness/refresh`, `…/avatar`.
+  - Admin owner reassignment.
+- **Readers**: `books/cast.ts`, `creation/context.ts` and `creation/views.ts` read through the normalizer. Story-introduced characters get `likeness.avatar` jobs.
+- **Migration**: `scripts/migrate-likeness.mjs` (dry run by default; target fields win). Run it with 5.7b (`DEPLOYMENT.md` §12).
+- **Tests**:
+  - both shapes, placeholders and the migration mapping;
+  - create → imagined avatar → animation;
+  - a photo in one step → appearance and portrait from the photos only → avatar from the portrait;
+  - the newest photo set wins;
+  - photo removal clears the likeness and deletes the file;
+  - a photo chosen as the avatar survives new portraits;
+  - a changed description redraws an imagined avatar;
+  - ownership and persona scope;
+  - the mobile shape of `GET /api/children`;
+  - a legacy `character.avatar` job still runs.
+
+**Files**:
+- New:
+  - `src/server/characters/{entities,likeness-jobs,animation,service,index}.ts` and its tests;
+  - `src/server/data/schemas/people.ts`;
+  - routes under `src/app/api/{children,characters}/**` and `src/app/api/admin/{children,characters}/**`;
+  - `scripts/migrate-likeness.mjs`.
+- Modified:
+  - `likeness.ts`, `job.ts`, `model-registry.ts`, `harness.ts`, `ai-circuit-breaker.server.ts`;
+  - `books/{cast,media}.ts`, `creation/{context,views,service}.ts`, `jobs/kinds.ts`;
+  - the regression page and docs (API, SCHEMA, SYSTEM_DESIGN, DEPLOYMENT §12).
+- Removed: `src/server/characters/avatar.ts` and its test (folded into the likeness jobs).
+
+---
+
 #### `#42` - Plan: slice 5.7 Characters and likeness; rebuild progress up to date
 
 **Type**: Plan (docs only)

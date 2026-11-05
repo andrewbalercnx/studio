@@ -16,6 +16,14 @@ export type StoredFile = { url: string; storagePath: string };
 
 export interface BlobStore {
   save(storagePath: string, data: Buffer, contentType: string, metadata?: Record<string, string>): Promise<StoredFile>;
+  /** Delete a stored file; missing files are not an error. Optional so test stores can omit it. */
+  delete?(storagePath: string): Promise<void>;
+}
+
+/** The Storage path inside a Firebase download URL (`…/o/<encoded path>?alt=media…`), or null. */
+export function storagePathOfUrl(url: string): string | null {
+  const match = /\/o\/([^?]+)/.exec(url);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 /** Firebase Storage with a download-token URL, as today's flows write. */
@@ -36,6 +44,11 @@ export const firebaseBlobStore: BlobStore = {
       storagePath,
       url: `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`,
     };
+  },
+  async delete(storagePath) {
+    const { getStoryBucket } = await import('@/firebase/admin/storage');
+    const bucket = await getStoryBucket();
+    await bucket.file(storagePath).delete({ ignoreNotFound: true });
   },
 };
 

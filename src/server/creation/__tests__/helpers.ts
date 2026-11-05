@@ -13,7 +13,7 @@ import type { VerifiedUser } from '../../http/auth';
 import { FakeFirestore } from '../../testing/fake-firestore';
 import { registerBookJobs } from '../../books/jobs';
 import type { BookJobDeps } from '../../books/deps';
-import { registerCharacterJobs, type CharacterAvatarDeps } from '../../characters/avatar';
+import { registerLikenessJobs, type LikenessJobDeps } from '../../characters/likeness-jobs';
 import type { BookServiceDeps } from '../../books/service';
 import type { EngineSetDeps } from '../engines';
 import { registerCreationJobs, type FinishDeps } from '../finish';
@@ -79,15 +79,16 @@ export function createBench(options: { testMode?: boolean } = {}): Bench {
     testMode: () => true,
     now: () => NOW,
   };
-  const characterDeps: CharacterAvatarDeps = {
-    ai: { generateImage: vi.fn(async () => ({ mediaUrl: 'data:image/png;base64,AAAA', text: '', model: {}, attempts: 1 })) } as unknown as CharacterAvatarDeps['ai'],
+  const characterDeps: LikenessJobDeps = {
+    ai: { generateImage: vi.fn(async () => ({ mediaUrl: 'data:image/png;base64,AAAA', text: '', model: {}, attempts: 1 })) } as unknown as LikenessJobDeps['ai'],
     blobs: { save: async (storagePath) => ({ storagePath, url: `https://storage.test/${storagePath}` }) },
+    fetchImage: async (url) => `data:image/png;base64,${Buffer.from(url).toString('base64')}`,
     testMode: () => testMode.on,
-    now: () => NOW,
+    env: {},
   };
   const registry = new JobRegistry();
   registerBookJobs(registry, async () => bookDeps);
-  registerCharacterJobs(registry, async () => characterDeps);
+  registerLikenessJobs(registry, async () => characterDeps);
   registerCreationJobs(registry, async () => finishDeps);
   const runner = new JobRunner({ registry, dispatcher, db, retryDelayMs: () => 0 });
 

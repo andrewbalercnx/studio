@@ -145,7 +145,9 @@ describe('subcollections and embedded schemas', () => {
       appearance: null,
       portrait: null,
       avatar: null,
-      likenessJob: { describe: null, portrait: null },
+      avatarSource: null,
+      avatarAnimation: null,
+      likenessJob: { describe: null, portrait: null, avatar: null, animate: null },
     });
   });
 });

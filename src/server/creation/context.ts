@@ -12,6 +12,7 @@
  * Likeness summary = `imageDescription`, which is generated from the original
  * photos only (CLAUDE.md rule); this module never derives it from anything else.
  */
+import { ownerOf, readLikeness } from '../characters/entities';
 import type { Firestore } from 'firebase-admin/firestore';
 import { isPlaceholderChild } from '@/lib/placeholder-child';
 import type { ConfigService } from '../config/config-service';
@@ -135,7 +136,7 @@ function personFrom(kind: 'child' | 'character', id: string, data: Raw, heroId: 
     relationship: kind === 'character' ? str(data.relationship) : null,
     age: ageInYears(data.dateOfBirth, now),
     dateOfBirth: dob ? dob.toISOString().split('T')[0] : null,
-    appearance: str(data.imageDescription),
+    appearance: readLikeness(data).appearance,
     isHero: kind === 'child' && id === heroId,
     scopedChildId: kind === 'character' ? str(data.childId) : null,
     origin: data.origin === 'story' || data.isParentGenerated === false ? 'story' : 'parent',
@@ -158,7 +159,7 @@ export type FamilyRoster = { hero: CastPerson; childAge: number | null; heroData
 export async function loadFamilyRoster(db: Firestore, ownerUid: string, childId: string, now: Date): Promise<FamilyRoster> {
   const heroSnap = await db.collection('children').doc(childId).get();
   const heroData = heroSnap.data();
-  if (!heroSnap.exists || !notDeleted(heroData) || heroData.ownerParentUid !== ownerUid) {
+  if (!heroSnap.exists || !notDeleted(heroData) || ownerOf(heroData) !== ownerUid) {
     throw new NotFoundError('Child not found', { code: 'CHILD_NOT_FOUND', details: { childId } });
   }
   const [siblings, characters] = await Promise.all([
