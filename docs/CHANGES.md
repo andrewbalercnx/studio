@@ -18,6 +18,20 @@
 
 ### 2026-11-05
 
+#### `#45` - Phase 6 plan: clients
+
+**Type**: Docs (plan)
+
+**Summary**: `docs/architecture/target/slices/6-clients.md` lays out Phase 6 in four PRs, following the owner's decisions:
+- **6.1**: one API client (`packages/api-client`) for web, kids PWA and mobile.
+- **6.2**: children and characters read through the API views on web and in the kids PWA, and the server helpers read through `entities.ts`.
+- **6.3**: mobile moves onto `likeness.*`, the server stops mirroring, `scripts/drop-legacy-likeness.mjs` removes the old fields, and a new APK goes out.
+- **6.4**: the six pages over 1,000 lines are split, and their config writes move to admin routes.
+
+Books and Stories keep their live Firestore reads (ADR-0005). `REVIEW_PLAN.md` is updated.
+
+### 2026-11-05
+
 #### `#44` - Characters and likeness on the clients (slice 5.7b)
 
 **Type**: Feature (clients) + Security (rules) + Cleanup

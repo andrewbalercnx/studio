@@ -165,10 +165,14 @@ reset trial data for that slice, re-seed config. Order:
 
 ### Phase 6 — Clients
 
-- Break up the largest pages (story session 1,586 lines, admin story types 1,790, story browser
-  1,443).
-- `/kids/*` PWA moves onto the API.
-- Web, PWA and mobile all use `packages/api-client`.
+Plan: [`target/slices/6-clients.md`](target/slices/6-clients.md). Four PRs:
+- **6.1** one API client (`packages/api-client`) for web, kids PWA and mobile;
+- **6.2** children and characters read through the API on web and in the kids PWA;
+- **6.3** mobile moves onto the likeness fields, the server stops mirroring, and the old fields are
+  removed;
+- **6.4** the six pages over 1,000 lines are split up, with their config writes moved to admin routes.
+
+The story session and story browser pages this phase once named were deleted in Phase 5.
 
 ### Phase 7 — Governance
 
@@ -188,5 +192,5 @@ reset trial data for that slice, re-seed config. Order:
 | 3 — Security review | Done: `security/threat-model.md` | #11 |
 | 4 — Foundations | Done: `src/server` (route wrapper, repositories, job runner, AI harness, config service), see `target/foundations.md`. Left for Phase 7: 34 of 110 routes not on `withRoute`, 3 old `*-config.server.ts` loaders, `types.ts` not split, `shared-types` not generated from the zod schemas | #12 |
 | 5 — Rebuild slices | **5.1–5.2 Books** done (#13, #14). **5.3–5.4 Story creation** done (#15, #16). Production hardening between slices: model retirement, Cloud Tasks packaging, diagnostics and trace, auth emails, allowances, admin claim, mobile Books (#17–#34). **5.5–5.6 Print and orders** done: plan (#35), render (#36), orders and Stripe (#37), order pages and admin (#39), legacy print deleted (#41; #40 merged into the stacked base). **5.7 Characters and likeness** done: plan (#42), server (#43), clients and rules (#44) | #13–#44 |
-| 6 — Clients | Not started. Pages over 1,000 lines: admin story types, regression, print layouts, writer, print products, story generators; `/kids/*` still reads Firestore directly in 3 files; `packages/api-client` used in one place | — |
+| 6 — Clients | Planned (`target/slices/6-clients.md`): 6.1 one API client, 6.2 people reads through the API, 6.3 old fields removed, 6.4 big pages split | #45 |
 | 7 — Governance | Not started. 113 files outside `src/server` import Firestore | — |
