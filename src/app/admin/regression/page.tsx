@@ -1086,6 +1086,7 @@ export default function AdminRegressionPage() {
             // Unsigned Stripe events: 400 (bad signature), or 503 while Stripe is not configured.
             { path: '/api/webhooks/stripe', init: { method: 'POST', body: '{}' }, expect: [400, 503] },
             { path: '/api/admin/orders', expect: [401] },
+            { path: '/api/admin/orders/settings', expect: [401] },
         ];
         const failures: string[] = [];
         for (const { path, init, expect } of anonymous) {

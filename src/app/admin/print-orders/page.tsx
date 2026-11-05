@@ -1,273 +1,183 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+/**
+ * Admin: print orders (slice 5.6, the v2 order service). The approval switch
+ * and approval emails (`systemConfig/orders`), the Stripe mode, and every
+ * order newest first with what an admin should do next. Refreshes every 30 s.
+ */
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useUser } from '@/firebase/auth/use-user';
-import type { PrintOrder, MixamOrderStatus } from '@/lib/types';
+import { LoaderCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { useAdminStatus } from '@/hooks/use-admin-status';
+import { useToast } from '@/hooks/use-toast';
+import {
+  formatMoney,
+  getOrderSettings,
+  listAdminOrders,
+  ORDER_STATUS_LABELS,
+  updateOrderSettings,
+  type AdminOrderView,
+  type OrderSettings,
+  type OrderStatus,
+} from '@/lib/orders/api';
 
-export default function PrintOrdersPage() {
-  const router = useRouter();
-  const { user, loading: userLoading } = useUser();
-  const [orders, setOrders] = useState<PrintOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'submitted' | 'shipped' | 'on_hold'>('pending');
+const FILTERS: Array<{ key: OrderStatus | null; label: string }> = [
+  { key: null, label: 'All' },
+  { key: 'awaiting_approval', label: 'Waiting for approval' },
+  { key: 'awaiting_payment', label: 'Waiting for payment' },
+  { key: 'submitting', label: 'Sending' },
+  { key: 'submitted', label: 'With Mixam' },
+  { key: 'shipped', label: 'Shipped' },
+  { key: 'cancelled', label: 'Cancelled' },
+];
+
+function SettingsCard() {
+  const { toast } = useToast();
+  const [settings, setSettings] = useState<OrderSettings | null>(null);
+  const [emails, setEmails] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!userLoading && user) {
-      loadOrders();
-      // Poll so webhook-driven state changes (e.g. Mixam status updates) appear without a
-      // manual refresh. Background refreshes don't toggle the loading state.
-      const interval = setInterval(() => loadOrders(true), 30_000);
-      return () => clearInterval(interval);
-    }
-  }, [filter, user, userLoading]);
+    getOrderSettings()
+      .then((s) => {
+        setSettings(s);
+        setEmails(s.notifyEmails.join(', '));
+      })
+      .catch((err: Error) => toast({ title: 'Could not load order settings', description: err.message, variant: 'destructive' }));
+  }, [toast]);
 
-  async function loadOrders(background = false) {
-    if (!user) return;
-
+  const save = async (patch: Parameters<typeof updateOrderSettings>[0]) => {
+    setSaving(true);
     try {
-      if (!background) setLoading(true);
-      setError(null);
-
-      const idToken = await user.getIdToken();
-      const response = await fetch(`/api/admin/print-orders?filter=${filter}`, {
-        headers: {
-          'Authorization': `Bearer ${idToken}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || data.errorMessage || 'Failed to load orders');
-      }
-
-      setOrders(data.orders || []);
-    } catch (err: any) {
-      setError(err.message);
+      const next = await updateOrderSettings(patch);
+      setSettings(next);
+      setEmails(next.notifyEmails.join(', '));
+      toast({ title: 'Order settings saved' });
+    } catch (err) {
+      toast({ title: 'Could not save', description: (err as Error).message, variant: 'destructive' });
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
-  }
+  };
 
-  function getStatusBadgeColor(status: MixamOrderStatus): string {
-    const colors: Record<MixamOrderStatus, string> = {
-      draft: 'bg-gray-200 text-gray-800',
-      validating: 'bg-blue-200 text-blue-800',
-      validation_failed: 'bg-red-200 text-red-800',
-      ready_to_submit: 'bg-green-200 text-green-800',
-      awaiting_approval: 'bg-yellow-200 text-yellow-800',
-      approved: 'bg-green-300 text-green-900',
-      submitting: 'bg-purple-100 text-purple-700',
-      submitted: 'bg-purple-200 text-purple-800',
-      confirmed: 'bg-purple-300 text-purple-900',
-      in_production: 'bg-indigo-200 text-indigo-800',
-      on_hold: 'bg-orange-200 text-orange-800',
-      shipped: 'bg-blue-300 text-blue-900',
-      delivered: 'bg-green-400 text-green-950',
-      cancelled: 'bg-gray-300 text-gray-900',
-      failed: 'bg-red-300 text-red-900',
-    };
-    return colors[status] || 'bg-gray-200 text-gray-800';
-  }
+  if (!settings) return null;
+  const stripe = settings.stripeMode === null ? 'not configured (card payments off)' : settings.stripeMode === 'fake' ? 'fake (TEST_MODE)' : `${settings.stripeMode} mode`;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Settings</CardTitle>
+        <CardDescription>Stripe: {stripe}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <label className="flex items-center justify-between gap-4">
+          <span>
+            <span className="block font-medium">Approve paid orders before they go to Mixam</span>
+            <span className="text-sm text-muted-foreground">Off: paid orders are sent to Mixam straight away.</span>
+          </span>
+          <Switch checked={settings.requireAdminApproval} disabled={saving} onCheckedChange={(on) => void save({ requireAdminApproval: on })} />
+        </label>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="min-w-64 flex-1 space-y-1">
+            <span className="text-sm font-medium">Email when an order waits for approval</span>
+            <Input value={emails} onChange={(e) => setEmails(e.target.value)} placeholder="ops@example.com, …" />
+          </label>
+          <Button
+            variant="outline"
+            disabled={saving}
+            onClick={() => void save({ notifyEmails: emails.split(/[,\s]+/).map((e) => e.trim()).filter(Boolean) })}
+          >
+            Save emails
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
-  function formatDate(timestamp: any): string {
-    if (!timestamp) return 'N/A';
+export default function AdminPrintOrdersPage() {
+  const { isAuthenticated, isAdmin, loading: authLoading } = useAdminStatus();
+  const [filter, setFilter] = useState<OrderStatus | null>(null);
+  const [orders, setOrders] = useState<AdminOrderView[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-    let date: Date;
-
-    // Handle Firestore Timestamp with toDate() method (client SDK)
-    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
-      date = timestamp.toDate();
+  const load = useCallback(async () => {
+    try {
+      setOrders(await listAdminOrders(filter));
+      setError(null);
+    } catch (err) {
+      setError((err as Error).message);
     }
-    // Handle serialized Firestore Timestamp from Admin SDK ({ _seconds, _nanoseconds } or { seconds, nanoseconds })
-    else if (timestamp._seconds !== undefined || timestamp.seconds !== undefined) {
-      const seconds = timestamp._seconds ?? timestamp.seconds;
-      date = new Date(seconds * 1000);
-    }
-    // Handle ISO string or other date formats
-    else {
-      date = new Date(timestamp);
-    }
+  }, [filter]);
 
-    // Check if the date is valid
-    if (isNaN(date.getTime())) {
-      return 'Invalid Date';
-    }
+  useEffect(() => {
+    if (!isAdmin) return;
+    void load();
+    const timer = setInterval(() => void load(), 30_000);
+    return () => clearInterval(timer);
+  }, [isAdmin, load]);
 
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-  }
-
-  function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(amount);
-  }
+  if (authLoading) return <LoaderCircle className="m-8 h-6 w-6 animate-spin" />;
+  if (!isAuthenticated || !isAdmin) return <p className="p-6">You must be an admin to view this page.</p>;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Print Orders</h1>
-            <p className="text-gray-600 mt-1">Review and manage print orders</p>
-          </div>
-          <Link
-            href="/admin"
-            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-          >
-            Back to Admin
-          </Link>
-        </div>
-
-        {/* Filter Tabs */}
-        <div className="bg-white rounded-lg shadow mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="flex -mb-px">
-              {[
-                { key: 'pending', label: 'Pending Approval' },
-                { key: 'approved', label: 'Approved' },
-                { key: 'submitted', label: 'In Progress' },
-                { key: 'shipped', label: 'Shipped' },
-                { key: 'on_hold', label: 'On Hold' },
-                { key: 'all', label: 'All Orders' },
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setFilter(tab.key as any)}
-                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                    filter === tab.key
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
-            {error}
-          </div>
-        )}
-
-        {(loading || userLoading) ? (
-          <div className="text-center py-12">
-            <div className="text-gray-500">Loading orders...</div>
-          </div>
-        ) : !user ? (
-          <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded mb-6">
-            Please sign in to view orders.
-          </div>
-        ) : orders.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-12 text-center">
-            <p className="text-gray-500 text-lg">No orders found</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {orders.map((order) => (
-              <div
-                key={order.id}
-                className="bg-white rounded-lg shadow hover:shadow-md transition-shadow"
-              >
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          Order #{order.id?.slice(-8).toUpperCase()}
-                        </h3>
-                        <span
-                          className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusBadgeColor(
-                            order.fulfillmentStatus
-                          )}`}
-                        >
-                          {order.fulfillmentStatus.replace(/_/g, ' ').toUpperCase()}
-                        </span>
-                        {order.adminNextAction && order.adminNextAction.action !== 'none' && (
-                          <span
-                            title={order.adminNextAction.label}
-                            className={`px-3 py-1 text-xs font-medium rounded-full ${
-                              order.adminNextAction.urgent
-                                ? 'bg-amber-200 text-amber-900 border border-amber-400'
-                                : 'bg-gray-100 text-gray-600 border border-gray-200'
-                            }`}
-                          >
-                            {order.adminNextAction.urgent ? '⚠ ' : ''}
-                            {order.adminNextAction.action.replace(/_/g, ' ').toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                      {order.adminNextAction && order.adminNextAction.urgent && (
-                        <p className="text-sm text-amber-800 mb-1">
-                          Next: {order.adminNextAction.label}
-                        </p>
-                      )}
-                      <p className="text-sm text-gray-600">
-                        Created: {formatDate(order.createdAt)}
-                      </p>
-                    </div>
-                    <Link
-                      href={`/admin/print-orders/${order.id}`}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
-                    >
-                      Review Order
-                    </Link>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Product</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {order.productSnapshot?.name || 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Quantity</p>
-                      <p className="text-sm font-medium text-gray-900">{order.quantity}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Total Cost</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {order.estimatedCost?.total ? formatCurrency(order.estimatedCost.total) : 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Delivery To</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {order.shippingAddress ? `${order.shippingAddress.city}, ${order.shippingAddress.postalCode}` : 'N/A'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {order.failureSummary && (
-                    <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
-                      <p className="text-sm text-red-800">
-                        <span className="font-medium">Failure: </span>
-                        {order.failureSummary}
-                      </p>
-                    </div>
-                  )}
-
-                  {order.validationResult && !order.validationResult.valid && (
-                    <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
-                      <p className="text-sm font-medium text-red-800 mb-1">Validation Issues:</p>
-                      <ul className="text-sm text-red-700 list-disc list-inside">
-                        {order.validationResult.errors.map((error, i) => (
-                          <li key={i}>{error}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+    <div className="container mx-auto max-w-5xl space-y-6 px-4 py-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Print orders</h1>
+        <Link href="/admin" className="text-sm underline">
+          Back to Admin
+        </Link>
       </div>
+
+      <SettingsCard />
+
+      <div className="flex flex-wrap gap-2">
+        {FILTERS.map((f) => (
+          <Button key={f.label} size="sm" variant={filter === f.key ? 'default' : 'outline'} onClick={() => setFilter(f.key)}>
+            {f.label}
+          </Button>
+        ))}
+      </div>
+
+      {error && <p className="text-red-700">{error}</p>}
+      {!orders ? (
+        <LoaderCircle className="h-6 w-6 animate-spin" />
+      ) : orders.length === 0 ? (
+        <p className="text-muted-foreground">No orders.</p>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">
+              {orders.length} {orders.length === 1 ? 'order' : 'orders'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {orders.map((o) => (
+                <li key={o.id}>
+                  <Link href={`/admin/print-orders/${encodeURIComponent(o.id)}`} className="flex flex-wrap items-center justify-between gap-2 py-3 hover:bg-muted/40">
+                    <span className="min-w-0">
+                      <span className="block font-mono text-sm">{o.id}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {o.createdAt ? new Date(o.createdAt).toLocaleString('en-GB') : ''} · {o.quantity} × {o.layoutId} · {formatMoney(o.amountMinor, o.currency)}
+                        {o.payment.method ? ` · ${o.payment.method}` : ''}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {o.nextAction !== 'none' && <Badge variant="destructive">{o.nextAction === 'approve' ? 'Approve' : 'Retry'}</Badge>}
+                      <Badge variant="secondary">{ORDER_STATUS_LABELS[o.status]}</Badge>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
