@@ -427,6 +427,34 @@ class MixamAPIClient {
   }
 
   /**
+   * Finds the Mixam order we submitted for one of our order ids (the
+   * `metadata.externalOrderId` we send), so a retried submission never creates
+   * a second order. Returns null when the order is not in the account's list,
+   * or when the list does not carry our id (then the caller must not resubmit
+   * blindly). MOCK MODE: always null.
+   */
+  async findOrderByExternalId(externalOrderId: string): Promise<{ orderId: string; jobNumber: string; status: string } | null> {
+    if (MIXAM_MOCK_MODE) return null;
+    const token = await this.authenticate();
+    const response = await fetch(`${MIXAM_API_BASE_URL}/api/public/user/orders`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(`Failed to get orders: ${response.status}`);
+    const data = await response.json();
+    const orders: any[] = Array.isArray(data) ? data : Array.isArray(data?.orders) ? data.orders : Array.isArray(data?.content) ? data.content : [];
+    const match = orders.find(
+      (o: any) => o?.metadata?.externalOrderId === externalOrderId || o?.externalOrderId === externalOrderId
+    );
+    if (!match) return null;
+    return {
+      orderId: String(match.id ?? match.orderId),
+      jobNumber: String(match.orderNumber ?? match.jobNumber ?? ''),
+      status: String(match.orderStatus ?? match.status ?? 'UNKNOWN'),
+    };
+  }
+
+  /**
    * Cancels an order with Mixam
    * MOCK MODE: Returns success immediately
    *

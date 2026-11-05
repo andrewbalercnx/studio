@@ -1,505 +1,68 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { initFirebaseAdminApp } from '@/firebase/admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import type { PrintOrder, DiagnosticsConfig } from '@/lib/types';
-import { DEFAULT_DIAGNOSTICS_CONFIG } from '@/lib/types';
-import { notifyOrderStatusChanged } from '@/lib/email/notify-admins';
-import { logMixamInteraction, logMixamInteractions, createWebhookInteraction, toMixamInteractions } from '@/lib/mixam/interaction-logger';
-import { mixamClient } from '@/lib/mixam/client';
-import { deriveAdminNextAction, buildFailureSummary } from '@/lib/mixam/order-state';
-
-// Helper to check if debug logging is enabled
-async function isDebugLoggingEnabled(firestore: FirebaseFirestore.Firestore): Promise<boolean> {
-  try {
-    const configDoc = await firestore.doc('systemConfig/diagnostics').get();
-    if (!configDoc.exists) return DEFAULT_DIAGNOSTICS_CONFIG.enableMixamWebhookLogging;
-    const config = configDoc.data() as DiagnosticsConfig;
-    return config.enableMixamWebhookLogging ?? DEFAULT_DIAGNOSTICS_CONFIG.enableMixamWebhookLogging;
-  } catch {
-    return DEFAULT_DIAGNOSTICS_CONFIG.enableMixamWebhookLogging;
-  }
-}
+import { applyMixamStatus, getOrderDeps } from '@/server/orders';
 
 /**
- * Mixam Webhook Handler
- * Receives status updates from Mixam for print orders
+ * POST /api/webhooks/mixam — Mixam status updates for print orders (slice 5.5b).
  *
- * Based on Mixam Webhooks API documentation:
- * When order status changes, Mixam sends a POST to the statusCallbackUrl
- * specified when creating the order.
+ * Signed with HMAC-SHA256 of the raw body (`X-Mixam-Signature`, secret
+ * `MIXAM_WEBHOOK_SECRET`); unsigned or wrongly signed requests get 401, and
+ * 503 while the secret is not configured. The order is found by our id
+ * (`metadata.externalOrderId`) and must carry the Mixam order id we submitted.
+ * Updates only move an order forward (submitted → in_production → shipped →
+ * delivered); anything else is recorded on the order and changes nothing. A
+ * shipped order emails the parent the tracking link. Unknown orders answer 200
+ * so Mixam stops retrying; internal errors answer 500 so it retries.
  */
-
-// Mixam webhook payload structure (from their API docs)
 type MixamWebhookPayload = {
-  orderId: string; // Mixam's order ID
-  status: string; // e.g., "PENDING", "INPRODUCTION", "DISPATCHED", "ONHOLD"
-  statusReason?: string; // Reason for current status (e.g., why on hold)
-  metadata: {
-    externalOrderId: string; // Our order ID
-    statusCallbackUrl: string;
-  };
-  items: Array<{
-    itemId: string;
-    metadata: {
-      externalItemId: string;
-    };
-    errors?: Array<{
-      filename: string;
-      page: number;
-      message: string;
-    }>;
-    hasErrors: boolean;
-  }>;
-  hasErrors: boolean;
-  artworkComplete: boolean;
-  shipments?: Array<{
-    itemsInShipment: Record<string, number>;
-    trackingUrl?: string;
-    consignmentNumber?: string;
-    courier?: string;
-    parcelNumbers?: string[];
-    date?: {
-      date: string;
-      timestamp: number;
-    };
-  }>;
+  orderId: string;
+  status: string;
+  statusReason?: string;
+  metadata?: { externalOrderId?: string };
+  hasErrors?: boolean;
+  shipments?: Array<{ trackingUrl?: string }>;
 };
 
-// Map Mixam status strings to our internal status
-type MixamOrderStatus =
-  | 'submitted'
-  | 'confirmed'
-  | 'in_production'
-  | 'shipped'
-  | 'delivered'
-  | 'cancelled'
-  | 'on_hold'
-  | 'validation_failed';
-
-function mapMixamStatusToInternal(status: string, hasErrors: boolean): MixamOrderStatus {
-  // Normalize status to uppercase for comparison
-  const normalizedStatus = status.toUpperCase();
-
-  // If there are errors, it's validation failed
-  if (hasErrors) {
-    return 'on_hold';
-  }
-
-  switch (normalizedStatus) {
-    case 'PENDING':
-    case 'RECEIVED':
-      return 'submitted';
-    case 'CONFIRMED':
-    case 'ACCEPTED':
-      return 'confirmed';
-    case 'INPRODUCTION':
-    case 'IN_PRODUCTION':
-    case 'PRINTING':
-      return 'in_production';
-    case 'DISPATCHED':
-    case 'SHIPPED':
-      return 'shipped';
-    case 'DELIVERED':
-      return 'delivered';
-    case 'CANCELLED':
-    case 'CANCELED':
-      return 'cancelled';
-    case 'ONHOLD':
-    case 'ON_HOLD':
-      return 'on_hold';
-    default:
-      console.log(`[Mixam Webhook] Unknown status: ${status}, defaulting to submitted`);
-      return 'submitted';
-  }
-}
-
-/**
- * Verifies webhook signature from Mixam
- * Uses HMAC-SHA256 with shared secret
- * Requests without a valid signature are rejected.
- */
-function verifyWebhookSignature(
-  payload: string,
-  signature: string | null,
-  secret: string
-): boolean {
-  // Unsigned requests are rejected: this endpoint rewrites order status and
-  // tracking URLs and emails customers, so it must only accept Mixam.
-  if (!signature) {
-    console.warn('[Mixam Webhook] No signature provided, rejecting request');
-    return false;
-  }
-
-  const crypto = require('crypto');
-  const hmac = crypto.createHmac('sha256', secret);
-  hmac.update(payload);
-  const expectedSignature = hmac.digest('hex');
-
-  // Use timing-safe comparison
-  try {
-    return crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSignature)
-    );
-  } catch {
-    return false;
-  }
+function validSignature(payload: string, signature: string | null, secret: string): boolean {
+  if (!signature) return false;
+  const expected = createHmac('sha256', secret).update(payload).digest('hex');
+  const given = Buffer.from(signature);
+  const wanted = Buffer.from(expected);
+  return given.length === wanted.length && timingSafeEqual(given, wanted);
 }
 
 export async function POST(request: Request) {
-  try {
-    await initFirebaseAdminApp();
-    const firestore = getFirestore();
-
-    // Check if debug logging is enabled
-    const debugLogging = await isDebugLoggingEnabled(firestore);
-
-    // 1. Read raw body for signature verification
-    const rawBody = await request.text();
-
-    if (debugLogging) {
-      console.log('[Mixam Webhook] Received webhook payload:', rawBody.substring(0, 500));
-    }
-
-    // 2. Verify webhook signature (required)
-    const signature = request.headers.get('X-Mixam-Signature');
-    const webhookSecret = process.env.MIXAM_WEBHOOK_SECRET;
-
-    if (!webhookSecret || webhookSecret === 'your_webhook_secret_from_mixam') {
-      console.error('[Mixam Webhook] MIXAM_WEBHOOK_SECRET is not configured; rejecting request');
-      return NextResponse.json(
-        { error: 'Webhook not configured' },
-        { status: 503 }
-      );
-    }
-
-    if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
-      console.error('[Mixam Webhook] Invalid signature');
-      return NextResponse.json(
-        { error: 'Invalid signature' },
-        { status: 401 }
-      );
-    }
-
-    // 3. Parse webhook payload
-    const webhook: MixamWebhookPayload = JSON.parse(rawBody);
-
-    // Always log basic info
-    console.log(`[Mixam Webhook] Order ${webhook.orderId} status: ${webhook.status}`);
-
-    if (debugLogging) {
-      console.log(`[Mixam Webhook] External Order ID: ${webhook.metadata?.externalOrderId}`);
-      console.log(`[Mixam Webhook] Has errors: ${webhook.hasErrors}, Artwork complete: ${webhook.artworkComplete}`);
-    }
-
-    // 4. Find the print order by our external order ID
-    const ourOrderId = webhook.metadata?.externalOrderId;
-
-    if (!ourOrderId) {
-      console.error('[Mixam Webhook] No externalOrderId in webhook metadata');
-      return NextResponse.json({ received: true, error: 'Missing externalOrderId' });
-    }
-
-    if (debugLogging) {
-      console.log(`[Mixam Webhook] Looking up order: ${ourOrderId}`);
-      console.log(`[Mixam Webhook] Firestore project: ${(firestore as any)._settings?.projectId || 'unknown'}`);
-    }
-
-    const orderDoc = await firestore.collection('printOrders').doc(ourOrderId).get();
-
-    if (debugLogging) {
-      console.log(`[Mixam Webhook] Order exists: ${orderDoc.exists}`);
-    }
-
-    if (!orderDoc.exists) {
-      // Try listing a few orders to verify collection access (only if debug logging enabled)
-      if (debugLogging) {
-        try {
-          const testQuery = await firestore.collection('printOrders').limit(1).get();
-          console.log(`[Mixam Webhook] Test query found ${testQuery.size} orders`);
-          if (testQuery.size > 0) {
-            console.log(`[Mixam Webhook] Sample order ID: ${testQuery.docs[0].id}`);
-          }
-        } catch (e: any) {
-          console.error(`[Mixam Webhook] Test query failed: ${e.message}`);
-        }
-      }
-
-      console.error(`[Mixam Webhook] Order not found: ${ourOrderId}`);
-      // Return 200 anyway to prevent Mixam retries
-      return NextResponse.json({ received: true, warning: 'Order not found' });
-    }
-
-    const order = { id: orderDoc.id, ...orderDoc.data() } as PrintOrder;
-
-    // Only accept updates for the Mixam order we actually submitted for this
-    // order. The externalOrderId in the payload is ours, so a mismatched or
-    // missing mixamOrderId means a stale job (e.g. a resubmitted order) or a
-    // payload that does not belong to this order.
-    if (!order.mixamOrderId || String(webhook.orderId) !== String(order.mixamOrderId)) {
-      console.warn(`[Mixam Webhook] Ignoring webhook for Mixam order ${webhook.orderId}: order ${ourOrderId} expects ${order.mixamOrderId ?? 'none'}`);
-      return NextResponse.json({ received: true, warning: 'Mixam order id does not match' });
-    }
-
-    // Log the webhook interaction
-    const webhookInteraction = createWebhookInteraction({
-      webhookEvent: `status.${webhook.status}`,
-      webhookPayload: webhook,
-      orderId: webhook.orderId,
-    });
-
-    // 5. Immediately call refresh-status API to get authoritative status from Mixam
-    // This ensures we have the most current status and logs both interactions
-    let refreshStatus: { status: string; trackingUrl?: string; estimatedDelivery?: string } | null = null;
-    let refreshInteractions: any[] = [];
-
-    if (order.mixamOrderId) {
-      try {
-        console.log(`[Mixam Webhook] Fetching fresh status from Mixam API for order ${order.mixamOrderId}`);
-        const refreshResult = await mixamClient.getOrderStatusWithLogging(order.mixamOrderId);
-        const { interactions, ...statusData } = refreshResult;
-        refreshStatus = statusData;
-        refreshInteractions = interactions;
-        console.log(`[Mixam Webhook] Refresh status result: ${refreshStatus.status}`);
-      } catch (refreshError: any) {
-        console.warn(`[Mixam Webhook] Failed to refresh status from Mixam API: ${refreshError.message}`);
-        // Log the failed attempt if we have interactions
-        if (refreshError.interactions) {
-          refreshInteractions = refreshError.interactions;
-        }
-      }
-    }
-
-    // Log both webhook and refresh interactions together
-    const allInteractions = [
-      webhookInteraction,
-      ...toMixamInteractions(refreshInteractions, order.mixamOrderId || undefined),
-    ];
-    await logMixamInteractions(firestore, ourOrderId, allInteractions);
-
-    // 6. Determine final status - prefer refresh result if available, otherwise use webhook
-    const effectiveStatus = refreshStatus?.status || webhook.status;
-    const newStatus = mapMixamStatusToInternal(effectiveStatus, webhook.hasErrors);
-
-    // 7. Build update data
-    const updateData: Record<string, any> = {
-      mixamStatus: effectiveStatus,
-      mixamArtworkComplete: webhook.artworkComplete,
-      mixamHasErrors: webhook.hasErrors,
-      fulfillmentUpdatedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      mixamStatusCheckedAt: FieldValue.serverTimestamp(),
-      // Store full webhook payload for debugging
-      lastWebhookPayload: webhook,
-      lastWebhookAt: FieldValue.serverTimestamp(),
-    };
-
-    // Final states are final: a late or replayed webhook must not move a
-    // delivered or cancelled order back into production.
-    const isFinal = order.fulfillmentStatus === 'delivered' || order.fulfillmentStatus === 'cancelled';
-    const statusChanges = !isFinal && order.fulfillmentStatus !== newStatus;
-    const appliedStatus = statusChanges ? newStatus : order.fulfillmentStatus;
-
-    // Update fulfillment status if it changed
-    if (statusChanges) {
-      updateData.fulfillmentStatus = newStatus;
-    }
-
-    // Store status reason if provided
-    if (webhook.statusReason) {
-      updateData.mixamStatusReason = webhook.statusReason;
-      updateData.fulfillmentNotes = webhook.statusReason;
-    }
-
-    // Add tracking info from refresh if available
-    if (refreshStatus?.trackingUrl) {
-      updateData.mixamTrackingUrl = refreshStatus.trackingUrl;
-    }
-    if (refreshStatus?.estimatedDelivery) {
-      updateData.mixamEstimatedDelivery = refreshStatus.estimatedDelivery;
-    }
-
-    // Add status to history
-    const now = new Date();
-    updateData.statusHistory = FieldValue.arrayUnion({
-      status: appliedStatus,
-      timestamp: now,
-      note: webhook.statusReason || `Mixam status: ${effectiveStatus} (webhook + refresh)`,
-      source: 'webhook',
-      mixamStatus: effectiveStatus,
-    });
-
-    // Extract and store artwork errors if present
-    if (webhook.hasErrors && webhook.items) {
-      const allErrors: Array<{ itemId: string; filename: string; page: number; message: string }> = [];
-
-      for (const item of webhook.items) {
-        if (item.hasErrors && item.errors) {
-          for (const error of item.errors) {
-            allErrors.push({
-              itemId: item.itemId,
-              filename: error.filename,
-              page: error.page,
-              message: error.message,
-            });
-          }
-        }
-      }
-
-      if (allErrors.length > 0) {
-        updateData.mixamArtworkErrors = allErrors;
-        updateData.mixamValidation = {
-          valid: false,
-          errors: allErrors.map(e => `Page ${e.page}: ${e.message}`),
-          warnings: [],
-          checkedAt: Date.now(),
-        };
-
-        // Set fulfillment notes with error summary
-        const errorSummary = allErrors.map(e => e.message).join('; ');
-        updateData.fulfillmentNotes = `Artwork errors: ${errorSummary}`;
-      }
-    }
-
-    // Extract shipment information
-    if (webhook.shipments && webhook.shipments.length > 0) {
-      const latestShipment = webhook.shipments[webhook.shipments.length - 1];
-
-      if (latestShipment.trackingUrl) {
-        updateData.mixamTrackingUrl = latestShipment.trackingUrl;
-      }
-      if (latestShipment.consignmentNumber) {
-        updateData.mixamTrackingNumber = latestShipment.consignmentNumber;
-      }
-      if (latestShipment.courier) {
-        updateData.mixamCarrier = latestShipment.courier;
-      }
-      if (latestShipment.parcelNumbers && latestShipment.parcelNumbers.length > 0) {
-        updateData.mixamParcelNumbers = latestShipment.parcelNumbers;
-      }
-      if (latestShipment.date) {
-        updateData.mixamShipmentDate = latestShipment.date.date;
-      }
-
-      // Store all shipments for reference
-      updateData.mixamShipments = webhook.shipments;
-    }
-
-    // Advance the admin-facing order state machine: record the next required admin action
-    // directly on the order doc so the admin list shows it without opening the record.
-    // Conservative by design — the webhook only updates state and flags/queues actions for a
-    // human; it never triggers irreversible operations (no auto-confirm, no auto-cancel).
-    const nextAction = deriveAdminNextAction({
-      fulfillmentStatus: appliedStatus,
-      hasArtworkErrors: webhook.hasErrors,
-      statusReason: webhook.statusReason ?? null,
-    });
-    updateData.adminNextAction = {
-      ...nextAction,
-      setAt: FieldValue.serverTimestamp(),
-      source: 'webhook',
-    };
-    updateData.needsAdminAttention = nextAction.urgent;
-
-    // Persist a one-line failure summary (null clears a stale summary once resolved).
-    updateData.failureSummary = buildFailureSummary({
-      fulfillmentStatus: appliedStatus,
-      validationResult: order.validationResult ?? null,
-      mixamArtworkErrors:
-        (updateData.mixamArtworkErrors as any) ?? (order as any).mixamArtworkErrors ?? null,
-      mixamStatusReason: webhook.statusReason ?? (order as any).mixamStatusReason ?? null,
-      rejectedReason: order.rejectedReason ?? null,
-      fulfillmentNotes: (updateData.fulfillmentNotes as any) ?? order.fulfillmentNotes ?? null,
-    });
-
-    // 7. Update order in Firestore
-    await orderDoc.ref.update(updateData);
-
-    // 8. Log event in session history if available
-    if (order.storyId) {
-      try {
-        const storyDoc = await firestore.collection('stories').doc(order.storyId).get();
-        const storyData = storyDoc.data();
-
-        if (storyData?.storySessionId) {
-          await firestore
-            .collection('storySessions')
-            .doc(storyData.storySessionId)
-            .collection('events')
-            .add({
-              event: 'print_order.webhook_received',
-              status: 'completed',
-              source: 'mixam_webhook',
-              attributes: {
-                orderId: order.id,
-                mixamOrderId: webhook.orderId,
-                newStatus,
-                mixamStatus: webhook.status,
-                hasErrors: webhook.hasErrors,
-              },
-              createdAt: FieldValue.serverTimestamp(),
-            });
-        }
-      } catch (error) {
-        console.warn('[Mixam Webhook] Failed to log session event', error);
-      }
-    }
-
-    console.log(`[Mixam Webhook] Successfully processed webhook for order ${ourOrderId}`);
-    if (debugLogging) {
-      console.log(`[Mixam Webhook] Status: ${newStatus}, Has errors: ${webhook.hasErrors}`);
-    }
-
-    // 9. Send email notification to admins if status changed
-    if (statusChanges) {
-      try {
-        const updatedOrder = { ...order, id: order.id, fulfillmentStatus: newStatus } as PrintOrder;
-        await notifyOrderStatusChanged(
-          firestore,
-          updatedOrder,
-          order.fulfillmentStatus,
-          newStatus
-        );
-      } catch (emailError: any) {
-        console.warn('[Mixam Webhook] Failed to send status change notification:', emailError.message);
-        // Don't fail the webhook due to email errors
-      }
-    }
-
-    return NextResponse.json({
-      received: true,
-      orderId: ourOrderId,
-      status: appliedStatus,
-    });
-
-  } catch (error: any) {
-    console.error('[Mixam Webhook] Error processing webhook:', error);
-
-    // Non-200 so Mixam retries: an internal error (e.g. Firestore
-    // unavailable) must not silently drop a status update. Retries are safe:
-    // status changes and the admin email only happen when the status differs.
-    return NextResponse.json(
-      { received: false, error: 'Internal processing error' },
-      { status: 500 }
-    );
+  const rawBody = await request.text();
+  const secret = process.env.MIXAM_WEBHOOK_SECRET;
+  if (!secret || secret === 'your_webhook_secret_from_mixam') {
+    console.error('[Mixam Webhook] MIXAM_WEBHOOK_SECRET is not configured; rejecting request');
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 });
   }
-}
+  if (!validSignature(rawBody, request.headers.get('X-Mixam-Signature'), secret)) {
+    console.warn('[Mixam Webhook] Missing or invalid signature');
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+  }
 
-/**
- * GET endpoint to verify webhook is accessible
- */
-export async function GET() {
-  return NextResponse.json({
-    service: 'Mixam Webhook Handler',
-    status: 'ready',
-    timestamp: new Date().toISOString(),
-    endpoint: '/api/webhooks/mixam',
-    expectedPayload: {
-      orderId: 'Mixam order ID',
-      status: 'Order status (PENDING, INPRODUCTION, DISPATCHED, etc.)',
-      metadata: {
-        externalOrderId: 'Your order ID',
-      },
-    },
-  });
+  let webhook: MixamWebhookPayload;
+  try {
+    webhook = JSON.parse(rawBody) as MixamWebhookPayload;
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+  const orderId = webhook.metadata?.externalOrderId;
+  if (!orderId || !webhook.status) {
+    return NextResponse.json({ received: true, warning: 'Missing externalOrderId or status' });
+  }
+
+  try {
+    const trackingUrl = webhook.shipments?.find((s) => s.trackingUrl)?.trackingUrl ?? null;
+    // Artwork errors put the order on hold at Mixam: record it, change nothing.
+    const status = webhook.hasErrors ? 'ONHOLD' : webhook.status;
+    const { outcome } = await applyMixamStatus(await getOrderDeps(), orderId, { mixamOrderId: String(webhook.orderId ?? ''), status, trackingUrl });
+    console.log(`[Mixam Webhook] Order ${orderId}: Mixam ${webhook.status}${webhook.statusReason ? ` (${webhook.statusReason})` : ''} → ${outcome}`);
+    return NextResponse.json({ received: true, outcome });
+  } catch (error) {
+    console.error('[Mixam Webhook] Failed to apply update', (error as Error)?.message ?? error);
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+  }
 }

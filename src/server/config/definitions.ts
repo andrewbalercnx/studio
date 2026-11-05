@@ -64,3 +64,19 @@ export const compilePromptConfig = defineConfig({
   schema: z.object({ compilePrompt: z.string(), enabled: z.boolean() }),
   defaults: { compilePrompt: '', enabled: false },
 });
+
+/**
+ * `systemConfig/orders` (slice 5.5b): whether paid print orders wait for an
+ * admin before going to Mixam (default on), and who is emailed when one does.
+ */
+export const ordersConfig = defineConfig({
+  path: 'systemConfig/orders',
+  schema: z.object({
+    requireAdminApproval: z.boolean(),
+    notifyEmails: z.array(z.string().email()),
+  }),
+  defaults: {
+    requireAdminApproval: true,
+    notifyEmails: [],
+  },
+});

@@ -656,6 +656,20 @@ export default function AdminRegressionPage() {
             { path: `/api/books/${missingBook}/renders`, body: { layoutId: 'regression-missing-layout', idempotencyKey: 'regression-render-auth' } },
             { path: `/api/books/${missingBook}/renders`, method: 'GET', expectAuthed: 404 },
             { path: `/api/books/${missingBook}/renders/regression-missing-render`, method: 'GET', expectAuthed: 404 },
+            // Print orders (slice 5.5b): a missing Book or order is 404 before any render, payment or Stripe call.
+            {
+                path: '/api/orders',
+                body: {
+                    bookId: missingBook, layoutId: 'regression-missing-layout', quantity: 1, idempotencyKey: 'regression-orders-auth',
+                    contactEmail: 'regression@storypic.test',
+                    shippingAddress: { name: 'Regression Test', line1: '1 High Street', city: 'London', postalCode: 'SW1A 1AA' },
+                },
+            },
+            { path: '/api/orders', method: 'GET', expectAuthed: 200 },
+            { path: '/api/orders/regression-missing-order', method: 'GET', expectAuthed: 404 },
+            { path: '/api/orders/regression-missing-order/checkout' },
+            { path: '/api/orders/regression-missing-order/pay-with-credits' },
+            { path: '/api/orders/regression-missing-order/cancel' },
         ];
         for (const route of routes) {
             const method = route.method ?? 'POST';
@@ -672,7 +686,7 @@ export default function AdminRegressionPage() {
         }
         updateTestResult('API_BOOKS_V3_AUTH', {
             status: 'PASS',
-            message: 'manuscripts, books (create/list/get), retry, lock, unlock, print-options and renders reject anonymous calls (401); authed calls return 404 for missing ids and 200 for the Books list.',
+            message: 'manuscripts, books (create/list/get), retry, lock, unlock, print-options, renders and orders reject anonymous calls (401); authed calls return 404 for missing ids and 200 for the Books list.',
         });
     } catch (e: any) {
         updateTestResult('API_BOOKS_V3_AUTH', { status: 'ERROR', message: e.message });
@@ -1069,6 +1083,9 @@ export default function AdminRegressionPage() {
             { path: '/api/printStoryBooks/regression-anon/generate-pdfs', init: { method: 'POST' }, expect: [401] },
             { path: '/api/postcode/lookup?postcode=SW1A1AA', expect: [401] },
             { path: '/api/webhooks/mixam', init: { method: 'POST', body: '{}' }, expect: [401, 503] },
+            // Unsigned Stripe events: 400 (bad signature), or 503 while Stripe is not configured.
+            { path: '/api/webhooks/stripe', init: { method: 'POST', body: '{}' }, expect: [400, 503] },
+            { path: '/api/admin/orders', expect: [401] },
         ];
         const failures: string[] = [];
         for (const { path, init, expect } of anonymous) {

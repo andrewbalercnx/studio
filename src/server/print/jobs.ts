@@ -150,8 +150,15 @@ function renderHandler(getDeps: () => Promise<RenderJobDeps>): JobDefinition['ru
       );
     } catch (error) {
       // A concurrent attempt finished first: renders are immutable, keep theirs.
-      if (await renderRepo.get(renderId)) return;
-      throw error;
+      if (!(await renderRepo.get(renderId))) throw error;
+    }
+    // Orders waiting on this render can now be paid (slice 5.5b). Reads on order
+    // pages promote them too, so a failure here only delays the change.
+    try {
+      const { promoteOrdersForRender } = await import('../orders/service');
+      await promoteOrdersForRender({ db, now: () => new Date() }, renderId);
+    } catch (error) {
+      console.warn('[print] Could not move orders on after render', renderId, (error as Error)?.message ?? error);
     }
   };
 }

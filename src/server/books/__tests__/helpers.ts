@@ -13,6 +13,8 @@ import { FakeFirestore } from '../../testing/fake-firestore';
 import type { BookJobDeps } from '../deps';
 import { registerBookJobs } from '../jobs';
 import { registerPrintJobs, type RenderJobDeps } from '../../print/jobs';
+import { registerOrderJobs } from '../../orders/jobs';
+import { FakeMixamGateway } from '../../orders/mixam';
 import type { BookServiceDeps } from '../service';
 import type { PaginationOutput } from '../pagination';
 import type { ConfigDefinition } from '../../config/config-service';
@@ -69,6 +71,7 @@ export type Bench = {
   saved: Map<string, { contentType: string; size: number }>;
   tts: ReturnType<typeof vi.fn>;
   testMode: { on: boolean };
+  mixam: FakeMixamGateway;
   drain: () => Promise<void>;
 };
 
@@ -118,7 +121,11 @@ export function createBench(): Bench {
       return url.includes('missing') ? null : { bytes: new Uint8Array(PNG_1X1), type: 'png' };
     },
   };
-  const registry = registerPrintJobs(registerBookJobs(new JobRegistry(), async () => deps), async () => printDeps);
+  const mixam = new FakeMixamGateway();
+  const registry = registerOrderJobs(
+    registerPrintJobs(registerBookJobs(new JobRegistry(), async () => deps), async () => printDeps),
+    async () => ({ mixam: async () => mixam, now: () => new Date('2026-10-29T12:00:00Z') })
+  );
   const runner = new JobRunner({ registry, dispatcher, db, retryDelayMs: () => 0 });
   return {
     fake,
@@ -132,6 +139,7 @@ export function createBench(): Bench {
     saved,
     tts,
     testMode,
+    mixam,
     drain: () => dispatcher.drain(),
   };
 }

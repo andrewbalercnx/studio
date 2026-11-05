@@ -16,6 +16,48 @@
 
 ## Changes
 
+### 2026-11-05
+
+#### `#37` - Print orders and payment (slice 5.5b): Stripe Checkout, print credits, approval switch, submit never twice
+
+**Type**: Feature (print, server)
+
+**Summary**: The server side of ordering printed Books. The order pages come in 5.6.
+- **Orders** (`printOrders` v2, `src/server/orders/`):
+  - `POST /api/orders` prices an order from the catalogue and starts the order's own render, which locks the Book. The order then waits for payment once the files exist.
+  - Parents list, read and cancel their orders.
+  - One transition table drives the lifecycle, and every change is kept in `statusHistory`.
+- **Stripe** behind a gateway:
+  - Checkout Sessions use the Price's `externalPriceId`, or `price_data` with the same amount.
+  - `POST /api/webhooks/stripe` verifies the signature and applies each event once (`stripeEvents/{eventId}`): paid, refunded, and a refund when payment arrives after a cancel.
+  - Without `STRIPE_SECRET_KEY`, checkout answers 503 `STRIPE_NOT_CONFIGURED`. In TEST_MODE a fake gateway is used. The real keys come later from the owner.
+- **Print credits**: one per copy, spent in the transaction that marks the order paid. A cancel returns them to the pool they came from.
+- **Approval switch**: `systemConfig/orders.requireAdminApproval` (default on), plus `notifyEmails`.
+- **`order.submit`** (mixam queue) never submits twice:
+  - It marks the request before sending. A retry that finds the mark looks the order up at Mixam first (new `mixamClient.findOrderByExternalId`), and stops with `SUBMIT_UNCERTAIN` when it cannot.
+  - A Mixam 4xx stops without retrying.
+- **Mixam webhook** rewritten for v2 orders, forward only. The shipped status emails the tracking link.
+- **Admin routes** `/api/admin/orders`: list, get, approve, cancel (at Mixam first, then refund), audited mark-paid, retry (optionally forced), refresh.
+- **Emails**: confirmation when paid, approval request, shipped.
+- **Rules**: owners read v2 orders by `ownerUid`; `stripeEvents` is server only. Rules checks added.
+
+**Not in this PR**:
+- The order pages, the admin page on the new shape and the approval switch in System config (5.6).
+- The Stripe secrets in `apphosting.yaml`, added once the owner has created them.
+- The old webhook's legacy-order admin emails and interaction log.
+
+**Files**:
+- New:
+  - `src/server/orders/{lifecycle,stripe,mixam,emails,jobs,service,index}.ts` and its tests;
+  - `src/server/data/schemas/order.ts`;
+  - routes under `src/app/api/orders/**`, `src/app/api/admin/orders/**` and `src/app/api/webhooks/stripe/`.
+- Modified:
+  - `src/app/api/webhooks/mixam/route.ts`, `src/lib/mixam/client.ts`;
+  - `src/server/books/allowance.ts` (amount, source, `returnConsumable`), `src/server/config/definitions.ts`, `src/server/data/repositories.ts`, `src/server/jobs/kinds.ts`, `src/server/print/jobs.ts` (orders move on when their render is ready);
+  - `firestore.rules`, `tests/firestore-rules/check-rules.mjs`, `package.json` (`stripe`), the regression page and docs.
+
+---
+
 ### 2026-11-04
 
 #### `#36` - Print render (slice 5.5a): back cover, template page model, PDFs per template
