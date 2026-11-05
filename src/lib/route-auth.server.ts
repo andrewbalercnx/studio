@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ownerOf } from '@/server/characters/entities';
 import { getFirestore, type DocumentReference } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { AuthError } from './auth-error';
@@ -40,13 +41,14 @@ export class RouteAuthError extends Error {
 
 type OwnedCollection = {
   collection: string;
-  ownerField: string;
+  /** The owner field, or a function that reads the owner (children and characters carry two field names until slice 6.3). */
+  ownerField: string | ((data: Record<string, any>) => string | null);
   label: string;
 };
 
 const STORY: OwnedCollection = { collection: 'stories', ownerField: 'parentUid', label: 'Story' };
-const CHILD: OwnedCollection = { collection: 'children', ownerField: 'ownerParentUid', label: 'Child' };
-const CHARACTER: OwnedCollection = { collection: 'characters', ownerField: 'ownerParentUid', label: 'Character' };
+const CHILD: OwnedCollection = { collection: 'children', ownerField: ownerOf, label: 'Child' };
+const CHARACTER: OwnedCollection = { collection: 'characters', ownerField: ownerOf, label: 'Character' };
 
 export function isPrivileged(user: VerifiedUser): boolean {
   return user.claims.isAdmin === true || user.claims.isWriter === true;
@@ -67,10 +69,11 @@ export async function requireUser(request: Request): Promise<VerifiedUser> {
 export async function assertOwns(
   user: VerifiedUser,
   data: Record<string, any>,
-  ownerField: string,
+  ownerField: OwnedCollection['ownerField'],
   label: string
 ): Promise<void> {
-  if (!isPrivileged(user) && data[ownerField] !== user.uid) {
+  const owner = typeof ownerField === 'function' ? ownerField(data) : data[ownerField];
+  if (!isPrivileged(user) && owner !== user.uid) {
     throw new RouteAuthError(403, 'FORBIDDEN', `You do not have access to this ${label.toLowerCase()}.`);
   }
   const persona = await enforcePersonaScope({

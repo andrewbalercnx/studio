@@ -19,7 +19,7 @@ export type BookPageSpreadProps = {
   page: StoryOutputPage;
   /**
    * Resolved text to display ($$id$$ placeholders already substituted).
-   * Hosts resolve via useResolvePlaceholders*; falls back to raw page text.
+   * Names are resolved on the server before the text reaches the reader.
    */
   displayText?: string | null;
   /** `cover` = kids full-bleed (crops); `contain` = parent review (full art visible). */

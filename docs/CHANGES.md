@@ -18,6 +18,35 @@
 
 ### 2026-11-05
 
+#### `#47` - Children and characters read through the API (slice 6.2)
+
+**Type**: Refactor (clients and server helpers) + Cleanup
+
+**Summary**: No parent, child or kids page reads `children` or `characters` from Firestore any more, and no page or server helper depends on the old `avatarUrl` / `ownerParentUid` names. That clears the way for 6.3 to remove the old fields.
+- **Hooks**: `usePerson(kind, id)` joins `useChildren` and `useCharacters` (`src/lib/people/use-people.ts`); it refreshes while a likeness part is working.
+- **Pages moved onto the API**:
+  - the active child in `use-app-context` (now a `ChildView`);
+  - the kids PWA: layout (a child that is gone or not the caller's clears the lock), setup, home, stories and books;
+  - the home "Who is playing?" screen and the parent dashboard;
+  - `parent/storybooks` and `parent/storybooks/[childId]`;
+  - `ModeChooser` and `StoryPlay`, which read `likeness.avatar` and `likeness.avatarAnimation`.
+- **Admin**:
+  - new `GET /api/admin/{children,characters}?ownerUid=` and api-client `people.listOf`, used by view-as-parent;
+  - the other admin tools read stored documents through `src/lib/people/stored.ts` (either field shape);
+  - the sample writers also set `ownerUid`.
+- **Help samples**: `GET` of a `help-*` child or character works for any signed-in user, as the rules allow; it can never be changed.
+- **Server**:
+  - `ownerOf` and the new `listOwnedPeople` in `characters/entities.ts` are used by `route-auth.server.ts`, persona, both entitlements routes, onboarding, voice clone, placeholder resolution and admin cleanup;
+  - the help-sample and system-test writers set `ownerUid` too.
+- **Onboarding**: "add a photo" counts photos only, since every child now gets an imagined avatar.
+- **Deleted** (no callers):
+  - `src/lib/story-context-builder.ts`, `src/lib/prompt-builders/`, `src/lib/schemas/` (ported to `src/server/creation` in Phase 5);
+  - `use-resolve-placeholders` (the share route already resolves names on the server);
+  - `extractEntityMetadataFromText`.
+- **Tests**: help-sample read and refusal; onboarding photos only. The blocking E2E (funnel, which locks the kids PWA to a child through setup, and characters) stays green.
+
+### 2026-11-05
+
 #### `#46` - One API client for web, kids PWA and mobile (slice 6.1)
 
 **Type**: Refactor (clients) + CI

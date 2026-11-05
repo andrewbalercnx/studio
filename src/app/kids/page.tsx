@@ -73,8 +73,8 @@ export default function KidsHomePage() {
       {/* Header with Avatar */}
       <header className="px-4 py-6 flex flex-col items-center">
         <Avatar className="h-24 w-24 border-4 border-amber-300 shadow-lg">
-          {childProfile.avatarUrl ? (
-            <AvatarImage src={childProfile.avatarUrl} alt={childProfile.displayName} />
+          {childProfile.likeness.avatar ? (
+            <AvatarImage src={childProfile.likeness.avatar} alt={childProfile.displayName} />
           ) : null}
           <AvatarFallback className="bg-gradient-to-br from-amber-200 to-orange-300 text-amber-800 text-3xl font-bold">
             {childProfile.displayName.charAt(0).toUpperCase()}

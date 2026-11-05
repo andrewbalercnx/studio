@@ -80,11 +80,10 @@ export function isOnboardingTipId(value: unknown): value is OnboardingTipId {
  * route builds this from Firestore; tests build it literally.
  */
 export type OnboardingSnapshot = {
-  /** All `children` docs owned by the parent (including soft-deleted ones). */
+  /** The parent's children (`likeness.photos`); soft-deleted ones are left out or carry `deletedAt`. */
   children: Array<{
     deletedAt?: unknown;
     photos?: string[] | null;
-    avatarUrl?: string | null;
   }>;
   /** The parent's Stories (server status only). */
   stories: Array<{ status?: string | null }>;
@@ -107,9 +106,8 @@ export function deriveOnboardingStepStates(snapshot: OnboardingSnapshot): Onboar
   const activeChildren = (snapshot.children ?? []).filter((c) => !c.deletedAt);
 
   const createChild = activeChildren.length > 0;
-  const addPhoto = activeChildren.some(
-    (c) => (c.photos?.length ?? 0) > 0 || !!c.avatarUrl
-  );
+  // Photos only: every child gets an "imagined" avatar from the description, so an avatar proves nothing.
+  const addPhoto = activeChildren.some((c) => (c.photos?.length ?? 0) > 0);
   // A story counts once the server has finished it.
   const createStory = (snapshot.stories ?? []).some((s) => s.status === 'complete');
   // Art generation has started as soon as a Book exists (created when the child picks a Style).

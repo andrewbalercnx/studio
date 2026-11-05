@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { ChildProfile } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
+import { storedOwner } from '@/lib/people/stored';
 
 export default function AdminChildrenPage() {
   const { isAuthenticated, isAdmin, loading: authLoading, error: authError } = useAdminStatus();
@@ -54,7 +55,7 @@ export default function AdminChildrenPage() {
   const handleEdit = (child: ChildProfile) => {
     setEditingRows(prev => ({
       ...prev,
-      [child.id]: { ownerParentUid: child.ownerParentUid }
+      [child.id]: { ownerParentUid: storedOwner(child) ?? '' }
     }));
   };
 
@@ -137,7 +138,7 @@ export default function AdminChildrenPage() {
                             className="h-8"
                           />
                         ) : (
-                          child.ownerParentUid
+                          storedOwner(child)
                         )}
                       </TableCell>
                       <TableCell className="text-right">

@@ -5,7 +5,6 @@ import type { StoryOutputPage } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, BookOpen, Loader2, Play, Volume2, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
-import { useResolvePlaceholdersMultiple } from '@/hooks/use-resolve-placeholders';
 import { BookPageSpread } from './book-page-spread';
 
 export type ReadMode = 'listen' | 'read';
@@ -45,17 +44,8 @@ export function ImmersivePlayer({
   const totalPages = displayablePages.length;
   const hasNextPage = currentPageIndex < totalPages - 1;
 
-  // Collect all page texts that may need placeholder resolution
-  // This resolves placeholders client-side as a fallback for pages that weren't
-  // processed with the newer storyPageFlow that pre-resolves displayText
-  const pageTexts = useMemo(
-    () => displayablePages.map((p) => p.displayText || p.bodyText || p.title || null),
-    [displayablePages]
-  );
-  const { resolvedTexts } = useResolvePlaceholdersMultiple(pageTexts);
-
-  // Get text to display - use resolved text if available
-  const displayText = resolvedTexts[currentPageIndex] || currentPage?.displayText || currentPage?.bodyText || currentPage?.title || '';
+  // Names are resolved on the server (the share route resolves any $$id$$ left in the text).
+  const displayText = currentPage?.displayText || currentPage?.bodyText || currentPage?.title || '';
 
   // Clean up audio on unmount
   useEffect(() => {

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { listOwnedPeople } from '@/server/characters/entities';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -290,17 +291,15 @@ export async function DELETE(request: Request) {
     console.log('[api/voices/clone] Voice metadata deleted from Firestore');
 
     // Update any children using this voice to use the default voice
-    const childrenSnapshot = await firestore
-      .collection('children')
-      .where('ownerParentUid', '==', authUser.uid)
-      .where('preferredVoiceId', '==', voiceId)
-      .get();
+    const usingVoice = (await listOwnedPeople(firestore, 'child', authUser.uid)).filter(
+      (child) => child.kind === 'child' && child.preferredVoiceId === voiceId
+    );
 
     let childrenUpdated = 0;
-    if (!childrenSnapshot.empty) {
+    if (usingVoice.length > 0) {
       const batch = firestore.batch();
-      childrenSnapshot.docs.forEach((doc) => {
-        batch.update(doc.ref, { preferredVoiceId: DEFAULT_TTS_VOICE });
+      usingVoice.forEach((child) => {
+        batch.update(firestore.collection('children').doc(child.id), { preferredVoiceId: DEFAULT_TTS_VOICE });
         childrenUpdated++;
       });
       await batch.commit();

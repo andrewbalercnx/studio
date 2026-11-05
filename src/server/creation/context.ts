@@ -279,7 +279,7 @@ export function displayText(ctx: Pick<StoryContext, 'roster'>, text: string | nu
 }
 
 // ---------------------------------------------------------------------------
-// Prompt context (port of src/lib/story-context-builder.ts formatting)
+// Prompt context (ported from the former src/lib/story-context-builder.ts)
 // ---------------------------------------------------------------------------
 
 function ageText(age: number | null): string {

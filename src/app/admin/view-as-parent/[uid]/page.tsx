@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAdminStatus } from '@/hooks/use-admin-status';
@@ -25,7 +25,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { UserProfile, ChildProfile, Character, Story } from '@/lib/types';
+import type { UserProfile, Story } from '@/lib/types';
+import { api, type CharacterView, type ChildView } from '@/lib/api';
 import { format } from 'date-fns';
 
 function formatFriendlyDate(date: Date): string {
@@ -60,7 +61,7 @@ function getDisplayDate(date: any): string {
   return '';
 }
 
-function ChildrenTab({ children, loading }: { children: ChildProfile[] | null; loading: boolean }) {
+function ChildrenTab({ kids, loading }: { kids: ChildView[] | null; loading: boolean }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -70,7 +71,7 @@ function ChildrenTab({ children, loading }: { children: ChildProfile[] | null; l
     );
   }
 
-  const visibleChildren = children?.filter(c => !c.deletedAt) || [];
+  const visibleChildren = kids || [];
 
   if (visibleChildren.length === 0) {
     return (
@@ -86,7 +87,7 @@ function ChildrenTab({ children, loading }: { children: ChildProfile[] | null; l
         <Card key={child.id}>
           <CardHeader className="flex flex-row items-center gap-4">
             <Avatar className="h-16 w-16">
-              <AvatarImage src={child.avatarUrl} alt={child.displayName} className="object-cover" />
+              <AvatarImage src={child.likeness.avatar ?? undefined} alt={child.displayName} className="object-cover" />
               <AvatarFallback>{child.displayName?.charAt(0) || '?'}</AvatarFallback>
             </Avatar>
             <div>
@@ -133,7 +134,7 @@ function ChildrenTab({ children, loading }: { children: ChildProfile[] | null; l
   );
 }
 
-function CharactersTab({ characters, loading }: { characters: Character[] | null; loading: boolean }) {
+function CharactersTab({ characters, loading }: { characters: CharacterView[] | null; loading: boolean }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -143,7 +144,7 @@ function CharactersTab({ characters, loading }: { characters: Character[] | null
     );
   }
 
-  const visibleCharacters = characters?.filter(c => !c.deletedAt) || [];
+  const visibleCharacters = characters || [];
 
   if (visibleCharacters.length === 0) {
     return (
@@ -159,7 +160,7 @@ function CharactersTab({ characters, loading }: { characters: Character[] | null
         <Card key={char.id}>
           <CardHeader className="flex flex-row items-center gap-4">
             <Avatar className="h-16 w-16">
-              <AvatarImage src={char.avatarUrl} alt={char.displayName} className="object-cover" />
+              <AvatarImage src={char.likeness.avatar ?? undefined} alt={char.displayName} className="object-cover" />
               <AvatarFallback>{char.displayName?.charAt(0) || '?'}</AvatarFallback>
             </Avatar>
             <div>
@@ -203,7 +204,7 @@ function CharactersTab({ characters, loading }: { characters: Character[] | null
   );
 }
 
-function StoriesTab({ stories, children, loading }: { stories: Story[] | null; children: ChildProfile[] | null; loading: boolean }) {
+function StoriesTab({ stories, kids, loading }: { stories: Story[] | null; kids: ChildView[] | null; loading: boolean }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -224,7 +225,7 @@ function StoriesTab({ stories, children, loading }: { stories: Story[] | null; c
   }
 
   // Group stories by childId
-  const childMap = new Map((children || []).map(c => [c.id, c]));
+  const childMap = new Map((kids || []).map(c => [c.id, c]));
   const storiesByChild = new Map<string, Story[]>();
 
   for (const story of visibleStories) {
@@ -243,7 +244,7 @@ function StoriesTab({ stories, children, loading }: { stories: Story[] | null; c
           <div key={childId}>
             <div className="flex items-center gap-2 mb-3">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={child?.avatarUrl} alt={child?.displayName} className="object-cover" />
+                <AvatarImage src={child?.likeness.avatar ?? undefined} alt={child?.displayName} className="object-cover" />
                 <AvatarFallback>{child?.displayName?.charAt(0) || '?'}</AvatarFallback>
               </Avatar>
               <h3 className="font-semibold">{child?.displayName || 'Unknown Child'}</h3>
@@ -377,16 +378,6 @@ export default function ViewAsParentPage() {
   const { data: parentProfile, loading: parentLoading } = useDocument<UserProfile>(parentDocRef);
 
   // Queries for parent's data
-  const childrenQuery = useMemo(() => {
-    if (!firestore || !targetUid) return null;
-    return query(collection(firestore, 'children'), where('ownerParentUid', '==', targetUid));
-  }, [firestore, targetUid]);
-
-  const charactersQuery = useMemo(() => {
-    if (!firestore || !targetUid) return null;
-    return query(collection(firestore, 'characters'), where('ownerParentUid', '==', targetUid));
-  }, [firestore, targetUid]);
-
   const storiesQuery = useMemo(() => {
     if (!firestore || !targetUid) return null;
     return query(collection(firestore, 'stories'), where('parentUid', '==', targetUid));
@@ -397,14 +388,27 @@ export default function ViewAsParentPage() {
     return query(collection(firestore, 'printOrders'), where('ownerUid', '==', targetUid));
   }, [firestore, targetUid]);
 
-  const { data: children, loading: childrenLoading } = useCollection<ChildProfile>(childrenQuery);
-  const { data: characters, loading: charactersLoading } = useCollection<Character>(charactersQuery);
+  // Children and characters through the admin routes (slice 6.2), in either stored shape.
+  const [people, setPeople] = useState<{ children: ChildView[] | null; characters: CharacterView[] | null }>({ children: null, characters: null });
+  useEffect(() => {
+    if (!isAdmin || !targetUid) return;
+    let cancelled = false;
+    Promise.all([api.people.listOf('child', targetUid), api.people.listOf('character', targetUid)])
+      .then(([children, characters]) => !cancelled && setPeople({ children, characters }))
+      .catch(() => !cancelled && setPeople({ children: [], characters: [] }));
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, targetUid]);
+  const { children, characters } = people;
+  const childrenLoading = children === null;
+  const charactersLoading = characters === null;
   const { data: stories, loading: storiesLoading } = useCollection<Story>(storiesQuery);
   const { data: orders, loading: ordersLoading } = useCollection<ParentOrderDoc>(ordersQuery);
 
   // Count visible items for tab badges
-  const childCount = children?.filter(c => !c.deletedAt).length || 0;
-  const charCount = characters?.filter(c => !c.deletedAt).length || 0;
+  const childCount = children?.length || 0;
+  const charCount = characters?.length || 0;
   const storyCount = stories?.filter(s => !s.deletedAt).length || 0;
   const orderCount = orders?.length || 0;
 
@@ -531,7 +535,7 @@ export default function ViewAsParentPage() {
         <TabsContent value="children">
           <Card>
             <CardContent className="pt-6">
-              <ChildrenTab children={children} loading={childrenLoading} />
+              <ChildrenTab kids={children} loading={childrenLoading} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -547,7 +551,7 @@ export default function ViewAsParentPage() {
         <TabsContent value="stories">
           <Card>
             <CardContent className="pt-6">
-              <StoriesTab stories={stories} children={children} loading={storiesLoading} />
+              <StoriesTab stories={stories} kids={children} loading={storiesLoading} />
             </CardContent>
           </Card>
         </TabsContent>

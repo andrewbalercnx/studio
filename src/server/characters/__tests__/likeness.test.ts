@@ -200,6 +200,9 @@ describe('people service and likeness jobs', () => {
     await createPerson(deps, p1, 'character', { displayName: 'Rex', idempotencyKey: 'create-rex-3' });
     expect((await listPeople(db, p1, 'character')).map((p) => p.id)).not.toContain('help-character');
     expect((await listPeople(db, p1, 'character', { includeHelp: true })).map((p) => p.displayName)).toEqual(['Rex', 'Helper']);
+    // Any signed-in user may read a help sample, and nobody may change it.
+    expect((await getPerson(db, p2, 'character', 'help-character')).displayName).toBe('Helper');
+    await expect(updatePerson(deps, p1, 'character', 'help-character', { displayName: 'Mine' })).rejects.toThrow();
   });
 
   it('answers GET /api/children in the shape the mobile app reads', async () => {

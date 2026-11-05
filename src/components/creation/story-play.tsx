@@ -45,7 +45,7 @@ const EMOJIS = ['🌟', '🦄', '🏰', '🎭', '✨', '🐉', '🚀', '🌈'];
 
 export type StoryPlayProps = {
   storyId: string;
-  child?: { displayName?: string | null; avatarUrl?: string | null; avatarAnimationUrl?: string | null } | null;
+  child?: { displayName?: string | null; likeness?: { avatar: string | null; avatarAnimation: string | null } | null } | null;
   /** Where "back" and "home" lead (the story stays and can be continued from the story list). */
   homeHref: string;
   /** Called once when the Story is `complete`; the caller opens the Form + Style chooser. */
@@ -61,9 +61,9 @@ type ThinkingChild = StoryPlayProps['child'];
 function Thinking({ title, detail, writing, child }: { title: string; detail: string; writing?: boolean; child?: ThinkingChild }) {
   return (
     <Centered>
-      {child?.avatarAnimationUrl || child?.avatarUrl ? (
+      {child?.likeness?.avatarAnimation || child?.likeness?.avatar ? (
         // The child's own avatar dancing while the storyteller works.
-        <ChildAvatarAnimation avatarAnimationUrl={child.avatarAnimationUrl} avatarUrl={child.avatarUrl} size="lg" />
+        <ChildAvatarAnimation avatarAnimationUrl={child.likeness?.avatarAnimation} avatarUrl={child.likeness?.avatar} size="lg" />
       ) : writing ? (
         <div className="w-24 h-24 rounded-full bg-gradient-to-br from-amber-200 to-orange-300 flex items-center justify-center animate-pulse">
           <span className="text-5xl" role="img" aria-label="writing">
@@ -253,7 +253,7 @@ export function StoryPlay({ storyId, child, homeHref, onComplete }: StoryPlayPro
         </Button>
         <div className="flex-1 flex items-center justify-center gap-2">
           <Avatar className="h-8 w-8 border-2 border-amber-300">
-            {child?.avatarUrl ? <AvatarImage src={child.avatarUrl} alt={child.displayName ?? ''} /> : null}
+            {child?.likeness?.avatar ? <AvatarImage src={child.likeness.avatar} alt={child.displayName ?? ''} /> : null}
             <AvatarFallback className="bg-gradient-to-br from-amber-200 to-orange-300 text-amber-800 text-sm font-bold">
               {child?.displayName?.charAt(0).toUpperCase() || '?'}
             </AvatarFallback>

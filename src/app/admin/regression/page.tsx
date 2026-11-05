@@ -894,6 +894,7 @@ export default function AdminRegressionPage() {
 
         const childRef = await createRegressionChild({
             displayName: 'Photo Trigger Test Child',
+            ownerUid: `${REGRESSION_SUITE_TAG}-photo-parent`,
             ownerParentUid: `${REGRESSION_SUITE_TAG}-photo-parent`,
             createdAt: serverTimestamp(),
             likes: [],
@@ -1088,6 +1089,8 @@ export default function AdminRegressionPage() {
             { path: '/api/characters/regression-anon/photos', init: { method: 'POST', body: '{}' }, expect: [401] },
             { path: '/api/children/regression-anon/avatar', init: { method: 'POST', body: '{}' }, expect: [401] },
             { path: '/api/admin/children/regression-anon', init: { method: 'PATCH', body: '{}' }, expect: [401] },
+            { path: '/api/admin/children?ownerUid=regression-anon', init: { method: 'GET' }, expect: [401] },
+            { path: '/api/admin/characters?ownerUid=regression-anon', init: { method: 'GET' }, expect: [401] },
         ];
         const failures: string[] = [];
         for (const { path, init, expect } of anonymous) {

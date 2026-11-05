@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ownerOf } from '@/server/characters/entities';
 import { createLogger, generateRequestId } from '@/lib/server-logger';
 import { requireAuthenticatedUser } from '@/lib/server-auth';
 import { AuthError } from '@/lib/auth-error';
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
     if (childId) {
       const firestore = await getServerFirestore();
       const childSnap = await firestore.collection('children').doc(childId).get();
-      if (!childSnap.exists || childSnap.data()?.ownerParentUid !== uid) {
+      if (!childSnap.exists || ownerOf(childSnap.data() ?? {}) !== uid) {
         logger.warn('Child ownership verification failed', { uid, childId });
         return NextResponse.json(
           { ok: false, errorMessage: 'Child not found', requestId },

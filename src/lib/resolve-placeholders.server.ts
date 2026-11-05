@@ -59,11 +59,14 @@ async function fetchEntities(ids: string[], ownerUid?: string | null): Promise<E
     // Try characters by displayName
     for (let i = 0; i < stillRemainingIds.length; i += chunkSize) {
       const chunk = stillRemainingIds.slice(i, i + chunkSize);
-      const charsByName = await firestore
-        .collection('characters')
-        .where('ownerParentUid', '==', ownerUid)
-        .where('displayName', 'in', chunk)
-        .get();
+      // Either owner field (children and characters carry both until slice 6.3).
+      const charsByName = (
+        await Promise.all(
+          (['ownerUid', 'ownerParentUid'] as const).map((field) =>
+            firestore.collection('characters').where(field, '==', ownerUid).where('displayName', 'in', chunk).get()
+          )
+        )
+      ).flatMap((snap) => snap.docs);
       charsByName.forEach((docSnap) => {
         const character = docSnap.data() as Character;
         // Map the displayName (which was used as the placeholder) to the entity
@@ -75,11 +78,14 @@ async function fetchEntities(ids: string[], ownerUid?: string | null): Promise<E
     const finalRemaining = stillRemainingIds.filter((id) => !entityMap.has(id));
     for (let i = 0; i < finalRemaining.length; i += chunkSize) {
       const chunk = finalRemaining.slice(i, i + chunkSize);
-      const childrenByName = await firestore
-        .collection('children')
-        .where('ownerParentUid', '==', ownerUid)
-        .where('displayName', 'in', chunk)
-        .get();
+      // Either owner field (children and characters carry both until slice 6.3).
+      const childrenByName = (
+        await Promise.all(
+          (['ownerUid', 'ownerParentUid'] as const).map((field) =>
+            firestore.collection('children').where(field, '==', ownerUid).where('displayName', 'in', chunk).get()
+          )
+        )
+      ).flatMap((snap) => snap.docs);
       childrenByName.forEach((docSnap) => {
         const child = docSnap.data() as ChildProfile;
         entityMap.set(child.displayName, { displayName: child.displayName, document: child });
@@ -206,34 +212,6 @@ export async function replacePlaceholdersForTTS(text: string, entityMap: EntityM
   }
 
   return result;
-}
-
-export type EntityMetadata = {
-  id: string;
-  displayName: string;
-  avatarUrl?: string;
-  type: 'character' | 'child';
-};
-
-export async function extractEntityMetadataFromText(text: string, entityMap: EntityMap): Promise<EntityMetadata[]> {
-  if (!text) return [];
-  // Extract IDs from both double $$ and single $ formats
-  const doubleIds = [...text.matchAll(/\$\$([^$]+)\$\$/g)].map((match) => match[1]);
-  const singleIds = [...text.matchAll(/\$([a-zA-Z0-9_-]{15,})\$/g)].map((match) => match[1]);
-  const uniqueIds = [...new Set([...doubleIds, ...singleIds])];
-  return uniqueIds
-    .map((id) => {
-      const entity = entityMap.get(id);
-      if (!entity) return null;
-      const isCharacter = 'type' in entity.document && !('favouriteGenres' in entity.document);
-      return {
-        id,
-        displayName: entity.displayName,
-        avatarUrl: entity.document.avatarUrl,
-        type: isCharacter ? 'character' : 'child',
-      } as EntityMetadata;
-    })
-    .filter((e): e is EntityMetadata => e !== null);
 }
 
 export async function getEntitiesInText(text: string, entityMap: EntityMap): Promise<Character[]> {

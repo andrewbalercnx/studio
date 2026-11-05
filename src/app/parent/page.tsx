@@ -3,10 +3,8 @@
 
 import { useMemo } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
-import { useFirestore } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
-import { useCollection } from '@/lib/firestore-hooks';
-import type { ChildProfile } from '@/lib/types';
+import type { ChildView } from '@/lib/api';
+import { useChildren } from '@/lib/people/use-people';
 import { BookOpen, LoaderCircle, Plus, Sparkles, User } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -20,7 +18,7 @@ import { OnboardingChecklist } from '@/components/onboarding/onboarding-checklis
 import { plural, useLibrarySummary } from '@/hooks/use-library-summary';
 import type { LibraryCounts } from '@/lib/library/types';
 
-function ChildIcon({ profile, counts }: { profile: ChildProfile; counts: LibraryCounts }) {
+function ChildIcon({ profile, counts }: { profile: ChildView; counts: LibraryCounts }) {
   const router = useRouter();
   const { setActiveChildId } = useAppContext();
 
@@ -37,7 +35,7 @@ function ChildIcon({ profile, counts }: { profile: ChildProfile; counts: Library
         data-wiz-target={`parent-child-${profile.id}`}
       >
         <Avatar className="h-24 w-24 border-4 border-white shadow-md">
-          <AvatarImage src={profile.avatarUrl} alt={profile.displayName} className="object-cover" />
+          <AvatarImage src={profile.likeness.avatar ?? undefined} alt={profile.displayName} className="object-cover" />
           <AvatarFallback className="text-3xl bg-secondary text-secondary-foreground">
              {profile.displayName ? profile.displayName.charAt(0) : <User />}
           </AvatarFallback>
@@ -60,21 +58,11 @@ function ChildIcon({ profile, counts }: { profile: ChildProfile; counts: Library
 
 export default function ParentOverviewPage() {
   const { user } = useUser();
-  const firestore = useFirestore();
   const { isParentGuardValidated } = useParentGuard();
   const { forChild } = useLibrarySummary();
 
-  const childrenQuery = useMemo(() => {
-    if (!user || !firestore) return null;
-    return query(collection(firestore, 'children'), where('ownerParentUid', '==', user.uid));
-  }, [user, firestore]);
-
-  const { data: children, loading: childrenLoading, error: childrenError } = useCollection<ChildProfile>(childrenQuery);
-
-  // Filter out deleted children
-  const visibleChildren = useMemo(() => {
-    return (children || []).filter(child => !child.deletedAt);
-  }, [children]);
+  // The family's children through the API (slice 6.2); the server leaves out deleted ones.
+  const { items: visibleChildren, loading: childrenLoading, error: childrenError } = useChildren();
 
   const renderContent = () => {
     if (childrenLoading) {

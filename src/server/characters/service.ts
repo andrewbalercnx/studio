@@ -18,7 +18,7 @@ import { COLLECTION_FOR, editableCharacterSchema, editableChildSchema, type Pers
 import { BadRequestError, ConflictError, NotFoundError } from '../errors';
 import { assertOwner, isPrivileged, type VerifiedUser } from '../http';
 import type { JobRunner, JobSpec } from '../jobs';
-import { likenessWrite, normalize, ownerOf, personaChildId, photoIdOf, type Person } from './entities';
+import { likenessWrite, listOwnedPeople, normalize, ownerOf, personaChildId, photoIdOf, type Person } from './entities';
 import { avatarSpec, likenessSpecs } from './likeness-jobs';
 
 export type PeopleDeps = {
@@ -78,7 +78,17 @@ async function loadOwnedRaw(db: Firestore, user: VerifiedUser, kind: PersonKind,
   return { person, raw };
 }
 
+/** The help-tour samples (`help-*`), readable by any signed-in user as the rules allow; never writable. */
+export function isHelpId(id: string): boolean {
+  return id.startsWith('help-');
+}
+
 export async function getPerson(db: Firestore, user: VerifiedUser, kind: PersonKind, id: string): Promise<PersonView> {
+  if (isHelpId(id)) {
+    const snapshot = await db.collection(COLLECTION_FOR[kind]).doc(id).get();
+    if (!snapshot.exists) throw new NotFoundError(`${LABEL[kind]} not found`, { code: `${kind.toUpperCase()}_NOT_FOUND` });
+    return viewOf(normalize(kind, id, snapshot.data() ?? {}));
+  }
   return viewOf((await loadOwnedRaw(db, user, kind, id)).person);
 }
 
@@ -93,14 +103,8 @@ export async function listPeople(
   filter: { childId?: string | null; includeHelp?: boolean } = {}
 ): Promise<PersonView[]> {
   const collection = db.collection(COLLECTION_FOR[kind]);
-  // Documents carry `ownerParentUid` until the migration and `ownerUid` after it.
-  const [legacy, target] = await Promise.all([collection.where('ownerParentUid', '==', user.uid).get(), collection.where('ownerUid', '==', user.uid).get()]);
-  const byId = new Map<string, Person>();
-  for (const doc of [...legacy.docs, ...target.docs]) {
-    if (byId.has(doc.id)) continue;
-    const person = normalize(kind, doc.id, doc.data());
-    if (!person.deleted) byId.set(doc.id, person);
-  }
+  const owned = await listOwnedPeople(db, kind, user.uid);
+  const byId = new Map(owned.map((p) => [p.id, p] as const));
   let people = [...byId.values()];
   if (kind === 'character' && filter.childId) people = people.filter((p) => p.kind === 'character' && (!p.childId || p.childId === filter.childId));
   people.sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -110,6 +114,12 @@ export async function listPeople(
     if (help.exists && !byId.has(helpId)) people.push(normalize(kind, helpId, help.data() ?? {}));
   }
   return people.map(viewOf);
+}
+
+/** Admin: one family's children or characters (not deleted), by name. */
+export async function listPeopleOf(db: Firestore, kind: PersonKind, ownerUid: string): Promise<PersonView[]> {
+  const people = await listOwnedPeople(db, kind, ownerUid);
+  return people.sort((a, b) => a.displayName.localeCompare(b.displayName)).map(viewOf);
 }
 
 /**

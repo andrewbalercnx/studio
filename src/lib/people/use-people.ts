@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
-import { api, likenessBusy, type CharacterView, type ChildView } from '@/lib/api';
+import { api, likenessBusy, StoryPicApiError, type CharacterView, type ChildView } from '@/lib/api';
 
 const POLL_MS = 5_000;
 
@@ -56,4 +56,50 @@ export function useChildren() {
 /** The family's characters (and the help-tour sample), from `GET /api/characters`. */
 export function useCharacters() {
   return usePeopleList<CharacterView>(() => api.people.listCharacters({ includeHelp: true }), 'characters');
+}
+
+type PersonState<K extends 'child' | 'character'> = {
+  person: (K extends 'child' ? ChildView : CharacterView) | null;
+  loading: boolean;
+  /** The API's error code (e.g. `CHILD_NOT_FOUND`, `FORBIDDEN`), or null. */
+  errorCode: string | null;
+};
+
+/**
+ * One child or character through the API (`PersonView`), refreshed while a
+ * likeness job is still working. `id` null means none; reading waits for
+ * sign-in.
+ */
+export function usePerson<K extends 'child' | 'character'>(kind: K, id: string | null) {
+  const { user, loading: userLoading } = useUser();
+  const [state, setState] = useState<PersonState<K>>({ person: null, loading: !!id, errorCode: null });
+
+  const reload = useCallback(async () => {
+    if (!id) return;
+    try {
+      const person = await api.people.get(kind, id);
+      setState({ person: person as PersonState<K>['person'], loading: false, errorCode: null });
+    } catch (error) {
+      setState({ person: null, loading: false, errorCode: error instanceof StoryPicApiError ? error.code : 'REQUEST_FAILED' });
+    }
+  }, [kind, id]);
+
+  useEffect(() => {
+    if (userLoading) return;
+    if (!user || !id) {
+      setState({ person: null, loading: false, errorCode: null });
+      return;
+    }
+    setState((s) => ({ ...s, loading: s.person?.id !== id }));
+    void reload();
+  }, [user, userLoading, id, reload]);
+
+  const busy = state.person ? likenessBusy(state.person) : false;
+  useEffect(() => {
+    if (!busy) return;
+    const timer = setInterval(() => void reload(), POLL_MS);
+    return () => clearInterval(timer);
+  }, [busy, reload]);
+
+  return { ...state, loading: state.loading || (userLoading && !!id), reload };
 }

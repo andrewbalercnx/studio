@@ -52,12 +52,12 @@ describe('deriveOnboardingStepStates', () => {
     expect(states.addPhoto).toBe(true);
   });
 
-  it('completes addPhoto when a child has an avatar but no photos array', () => {
+  it('does not complete addPhoto for an avatar alone (every child gets an imagined one)', () => {
     const states = deriveOnboardingStepStates({
       ...emptySnapshot,
-      children: [{ avatarUrl: 'https://x/a.png' }],
+      children: [{ photos: [] }],
     });
-    expect(states.addPhoto).toBe(true);
+    expect(states.addPhoto).toBe(false);
   });
 
   it('does not complete createStory for a story still being made', () => {
@@ -94,7 +94,7 @@ describe('deriveOnboardingStepStates', () => {
 
   it('marks the whole funnel complete for a fully activated account', () => {
     const states = deriveOnboardingStepStates({
-      children: [{ photos: ['https://x/p.jpg'], avatarUrl: 'https://x/a.png' }],
+      children: [{ photos: ['https://x/p.jpg'] }],
       stories: [{ status: 'complete' }],
       books: [{ status: 'ready' }],
     });

@@ -3,10 +3,8 @@
 
 import { useMemo, useEffect } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
-import { useFirestore } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
-import { useCollection } from '@/lib/firestore-hooks';
-import type { ChildProfile } from '@/lib/types';
+import type { ChildView } from '@/lib/api';
+import { useChildren } from '@/lib/people/use-people';
 import { LoaderCircle, Plus, User } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -16,7 +14,7 @@ import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
 import { OnboardingChecklist } from '@/components/onboarding/onboarding-checklist';
 
-function ChildIcon({ profile }: { profile: ChildProfile }) {
+function ChildIcon({ profile }: { profile: ChildView }) {
   const router = useRouter();
   const { setActiveChildId } = useAppContext();
 
@@ -29,7 +27,7 @@ function ChildIcon({ profile }: { profile: ChildProfile }) {
     <div className="flex flex-col items-center gap-2 text-center w-32">
       <button onClick={handleSelectChild} className="rounded-full hover:ring-4 hover:ring-primary/50 transition-all">
         <Avatar className="h-24 w-24 border-4 border-white shadow-md">
-          <AvatarImage src={profile.avatarUrl} alt={profile.displayName} className="object-cover" />
+          <AvatarImage src={profile.likeness.avatar ?? undefined} alt={profile.displayName} className="object-cover" />
           <AvatarFallback className="text-3xl bg-secondary text-secondary-foreground">
              {profile.displayName ? profile.displayName.charAt(0) : <User />}
           </AvatarFallback>
@@ -42,7 +40,6 @@ function ChildIcon({ profile }: { profile: ChildProfile }) {
 
 export default function HomePage() {
   const { user, loading: userLoading, idTokenResult } = useUser();
-  const firestore = useFirestore();
   const router = useRouter();
   const { roleMode, activeChildProfileLoading } = useAppContext();
 
@@ -63,17 +60,8 @@ export default function HomePage() {
   }, [user, userLoading, idTokenResult, router]);
 
 
-  const childrenQuery = useMemo(() => {
-    if (!user || !firestore) return null;
-    return query(collection(firestore, 'children'), where('ownerParentUid', '==', user.uid));
-  }, [user, firestore]);
-
-  const { data: children, loading: childrenLoading, error: childrenError } = useCollection<ChildProfile>(childrenQuery);
-
-  // Filter out deleted children
-  const visibleChildren = useMemo(() => {
-    return (children || []).filter(child => !child.deletedAt);
-  }, [children]);
+  // The family's children through the API (slice 6.2); the server leaves out deleted ones.
+  const { items: visibleChildren, loading: childrenLoading, error: childrenError } = useChildren();
 
   const renderContent = () => {
     if (childrenLoading) {
