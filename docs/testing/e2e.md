@@ -108,11 +108,12 @@ stored file URLs point at production Storage, so it checks the elements, not tha
 
 ## Report-only checks
 
-All three run in CI under `continue-on-error` and publish artifacts. "Report-
+All four run in CI under `continue-on-error` and publish artifacts. "Report-
 only" is **not** "forever": each has an explicit promotion criterion.
 
 | Check | Spec/config | Scope | Promote when |
 |-------|------------|-------|--------------|
+| Admin pages | `e2e/admin-config.spec.ts` (`@admin`, slice 6.4) | an admin opens the split admin and writer pages and saves a story phase through `/api/admin/catalog/**` | 3 consecutive green runs in CI → move into the blocking step. |
 | Accessibility | `e2e/a11y.spec.ts` (axe-core, WCAG 2.1 A/AA) | signup, who-is-playing, story creation, book view (seeded ready Book), orders | serious+critical count reaches 0 and stays for 2 weeks → set `A11Y_ENFORCE=1` in the CI step (turns scans into hard assertions) and drop `continue-on-error`. |
 | Visual | `e2e/visual.spec.ts` | login, signup, kids home (avatars masked — they're seeded from picsum and vary per account) | <2% flake over 2 weeks after linux baselines are committed → drop `continue-on-error`. |
 | Lighthouse | `lighthouserc.cjs` | /login, /signup, /kids — CWV budgets: LCP ≤ 4000ms, CLS ≤ 0.1, TBT ≤ 600ms (error-level); perf ≥ 0.7, a11y ≥ 0.9 (warn-level) | budgets stable for 2 weeks → drop `continue-on-error`. |

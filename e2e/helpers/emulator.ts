@@ -376,3 +376,30 @@ export function assertIsE2EEmail(email: string): void {
     throw new Error(`Refusing to operate on non-e2e account: ${email}`);
   }
 }
+
+/**
+ * An admin account in the Auth emulator (custom claim `isAdmin`, as
+ * `scripts/set-admin.mjs` sets in production). Returns its email and uid.
+ */
+export async function createAdminUser(tag: string, password: string): Promise<{ email: string; uid: string }> {
+  const auth = getAuth(adminApp());
+  const email = `e2e-admin-${tag}-${Date.now()}@example.com`;
+  const user = await auth.createUser({ email, password, emailVerified: true });
+  await auth.setCustomUserClaims(user.uid, { isAdmin: true });
+  await emulatorFirestore().collection('users').doc(user.uid).set({
+    email,
+    roles: { isAdmin: true, isWriter: false, isParent: false },
+    hasCompletedStartupWizard: true,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return { email, uid: user.uid };
+}
+
+/** Remove an account made by `createAdminUser` and the story phases it saved. */
+export async function cleanupAdminUser(uid: string, phaseName: string): Promise<void> {
+  const db = emulatorFirestore();
+  const phases = await db.collection('storyPhases').where('name', '==', phaseName).get();
+  await Promise.all(phases.docs.map((d) => d.ref.delete()));
+  await db.collection('users').doc(uid).delete();
+  await getAuth(adminApp()).deleteUser(uid).catch(() => undefined);
+}
