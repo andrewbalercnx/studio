@@ -1,7 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # Claude Code agent worktrees (temporary workspace, not project files)
-.claude/
+.claude/*
+!.claude/settings.json
 
 # dependencies
 /node_modules

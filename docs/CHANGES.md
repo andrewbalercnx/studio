@@ -18,6 +18,16 @@
 
 ### 2026-11-05
 
+#### `#38` - Claude Code: always allow session and agent messaging
+
+**Type**: Chore (tooling)
+
+**Summary**: A checked-in `.claude/settings.json` allows `SendMessage` (subagents and teammates) and `mcp__claude-code-remote__send_message` (other Claude Code sessions) without a permission prompt, for every session on this repository, cloud ones included. `.gitignore` now ignores the contents of `.claude/` except `settings.json`, so agent worktrees stay untracked.
+
+**Files**: `.claude/settings.json` (new), `.gitignore`, `docs/CHANGES.md`.
+
+---
+
 #### `#37` - Print orders and payment (slice 5.5b): Stripe Checkout, print credits, approval switch, submit never twice
 
 **Type**: Feature (print, server)
