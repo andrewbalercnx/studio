@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import type { Firestore, Transaction } from 'firebase-admin/firestore';
 import { validateUKAddress } from '@/lib/mixam/address-validator';
 import type { PrintOrderAddress } from '@/lib/types';
-import { chargeAllowance, readLedgerIn, returnConsumable } from '../books/allowance';
+import { chargeAllowance, checkAllowance, readLedgerIn, returnConsumable } from '../books/allowance';
 import type { ConfigService } from '../config/config-service';
 import { ordersConfig } from '../config/definitions';
 import { books, printOrders, renders, stripeEvents } from '../data/repositories';
@@ -77,7 +77,9 @@ export type OrderView = {
   tracking: { jobNumber: string | null; trackingUrl: string | null };
   render: Pick<RenderView, 'status' | 'files' | 'error'> | null;
   /** Server-computed actions the client may offer. */
-  actions: { canPay: boolean; canCancel: boolean };
+  actions: { canPay: boolean; canPayWithCredits: boolean; canCancel: boolean };
+  /** Print credits the family could spend on this order (read views of one order only; else null). */
+  creditsAvailable: number | null;
   createdAt: string | null;
 };
 
@@ -96,7 +98,7 @@ function iso(value: unknown): string | null {
   return null;
 }
 
-function viewOf(order: WithId<PrintOrderV2>, render: RenderView | null): OrderView {
+function viewOf(order: WithId<PrintOrderV2>, render: RenderView | null, creditsAvailable: number | null = null): OrderView {
   return {
     id: order.id,
     bookId: order.bookId,
@@ -112,7 +114,12 @@ function viewOf(order: WithId<PrintOrderV2>, render: RenderView | null): OrderVi
     payment: { method: order.payment.method, paidAt: order.payment.paidAt, refundedAt: order.payment.refundedAt },
     tracking: { jobNumber: order.mixam.jobNumber, trackingUrl: order.mixam.trackingUrl },
     render: render ? { status: render.status, files: render.files, error: render.error } : null,
-    actions: { canPay: order.status === 'awaiting_payment', canCancel: PARENT_CANCELLABLE.has(order.status) },
+    actions: {
+      canPay: order.status === 'awaiting_payment',
+      canPayWithCredits: order.status === 'awaiting_payment' && (creditsAvailable ?? 0) >= order.quantity,
+      canCancel: PARENT_CANCELLABLE.has(order.status),
+    },
+    creditsAvailable,
     createdAt: iso(order.createdAt),
   };
 }
@@ -237,7 +244,8 @@ export async function getOrder(deps: OrderDeps, user: VerifiedUser, orderId: str
   await promoteIfRendered(deps, orderId);
   const order = await printOrders.using(deps.db).require(orderId);
   const render = await getRender(deps.db, user, order.bookId, order.renderId).catch(() => null);
-  return viewOf(order, render);
+  const credits = order.status === 'awaiting_payment' ? (await checkAllowance(deps.db, 'print_credit', order.ownerUid, order.childId, deps.now())).remaining : null;
+  return viewOf(order, render, credits);
 }
 
 /** The family's orders, newest first (server-sorted). */
@@ -605,3 +613,23 @@ export async function refreshFromMixam(deps: OrderDeps, orderId: string): Promis
   return getAdminOrder(deps, orderId);
 }
 
+
+// ---------------------------------------------------------------------------
+// Settings (admin): systemConfig/orders
+// ---------------------------------------------------------------------------
+
+export type OrderSettings = { requireAdminApproval: boolean; notifyEmails: string[]; stripeMode: 'test' | 'live' | 'fake' | null };
+
+export async function getOrderSettings(deps: OrderDeps): Promise<OrderSettings> {
+  const [config, stripe] = await Promise.all([deps.config.get(ordersConfig), deps.stripe()]);
+  return { ...config, stripeMode: stripe?.mode ?? null };
+}
+
+export async function updateOrderSettings(deps: OrderDeps, patch: Partial<Pick<OrderSettings, 'requireAdminApproval' | 'notifyEmails'>>): Promise<OrderSettings> {
+  const current = await deps.config.get(ordersConfig);
+  const next = ordersConfig.schema.parse({ ...current, ...patch });
+  await deps.db.doc(ordersConfig.path).set(next, { merge: true });
+  const { invalidateConfig } = await import('../config/config-service');
+  invalidateConfig(ordersConfig);
+  return getOrderSettings(deps);
+}

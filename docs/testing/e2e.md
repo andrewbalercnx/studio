@@ -94,6 +94,12 @@ The funnel spec is the **blocking** step of the CI `e2e` job (plus the login
 smoke). Promotion criterion (3 consecutive deterministic green runs locally,
 cold start each time) was met on 2026-06-11.
 
+The order spec (`e2e/order.spec.ts`, `@order`, slice 5.6) joined the blocking step on 2026-11-05
+after 3 consecutive green runs on both projects. It seeds a ready Book (cover, title, story pages,
+end, back), a print template, product and GBP price, and two print credits; then orders a printed
+copy through the UI, waits for the order's render, and pays with print credits. The card path ends
+at Stripe's hosted page, so the order service tests cover it with the fake gateway and webhook.
+
 ## Report-only checks
 
 All three run in CI under `continue-on-error` and publish artifacts. "Report-

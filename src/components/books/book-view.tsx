@@ -7,6 +7,7 @@
  * caller's guard (`useParentGuard` on the web).
  */
 import { useState } from 'react';
+import Link from 'next/link';
 import { Lock, LoaderCircle, Printer, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -107,10 +108,19 @@ export function BookView({ bookId, parent, admin = false }: { bookId: string; pa
                 Lock book
               </Button>
             )}
-            <span className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="print-coming-soon">
-              <Printer className="h-4 w-4" />
-              Printing is coming soon for new books.
-            </span>
+            {(book.status === 'ready' || locked) && (book.art?.failed ?? 0) === 0 ? (
+              <Button asChild variant="default" data-testid="order-print">
+                <Link href={`/books/${encodeURIComponent(bookId)}/order`}>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Order a printed copy
+                </Link>
+              </Button>
+            ) : (
+              <span className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="print-unavailable">
+                <Printer className="h-4 w-4" />
+                {book.status === 'partial' ? 'Draw the missing pictures again to print this book.' : 'You can order a printed copy once the pictures are finished.'}
+              </span>
+            )}
           </CardContent>
         </Card>
       )}

@@ -18,6 +18,41 @@
 
 ### 2026-11-05
 
+#### `#39` - Print clients (slice 5.6a): order a printed copy, order pages, admin orders and the approval switch
+
+**Type**: Feature (web)
+
+**Summary**: Parents can order printed Books on the web, and admins run orders on the v2 routes from #37.
+- **Book page**: "Order a printed copy" once every picture is drawn. A partial Book is told to redraw its missing pictures first.
+- **`/books/[bookId]/order`**:
+  - choose a format, with its page count and price including UK delivery;
+  - choose the number of copies (1–10) and a UK address, and confirm the email for updates;
+  - placing the order is PIN-guarded, tells the parent the Book will be locked, and sends one idempotency key per choice.
+- **`/orders/[orderId]`**:
+  - shows the status, timeline, proof PDFs and delivery address;
+  - offers pay by card (Stripe Checkout), pay with print credits (shown only when the family has enough), and cancel (refund or credits back);
+  - checks for updates while the files are made or a payment is confirmed (`?paid=1` from Stripe).
+- **`/parent/orders`**: rewritten for v2 orders, each linking to its order page. The support tickets section moves to `SupportTickets`. The legacy "Mark as Paid (test)" button is gone.
+- **`/admin/print-orders`** and **`/admin/print-orders/[orderId]`**: rewritten for v2.
+  - The list page has the approval switch, the approval emails and the Stripe mode, plus a status filter and each order's next action.
+  - The order page has approve, mark paid (note required), retry, force resubmit (after checking Mixam), refresh from Mixam, and cancel.
+- **Server**:
+  - `GET /api/orders/{id}` adds `creditsAvailable` and `actions.canPayWithCredits`.
+  - New `GET/PUT /api/admin/orders/settings`.
+- **E2E**: `e2e/order.spec.ts` covers a ready Book → order → print files → pay with print credits → paid → listed. It is blocking in CI after 3 green runs on both projects. `seedReadyBook` now seeds the full page plan (title, end, back).
+
+**Files**:
+- New:
+  - `src/app/books/[bookId]/order/page.tsx`, `src/app/orders/[orderId]/page.tsx`;
+  - `src/components/orders/{order-form,order-detail}.tsx`, `src/components/support/support-tickets.tsx`;
+  - `src/lib/orders/api.ts`, `src/app/api/admin/orders/settings/route.ts`, `e2e/order.spec.ts`.
+- Modified:
+  - `src/app/parent/orders/page.tsx`, `src/app/admin/print-orders/**`, `src/components/books/book-view.tsx`;
+  - `src/server/orders/service.ts` and its tests;
+  - `e2e/helpers/emulator.ts`, `.github/workflows/ci.yml`, the regression page and docs.
+
+---
+
 #### `#38` - Claude Code: always allow session and agent messaging
 
 **Type**: Chore (tooling)

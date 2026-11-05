@@ -63,6 +63,12 @@ export const SEED = {
   imageStyleTitle: 'E2E Watercolour',
   /** Title of a seeded (report-only) Story. */
   storyTitle: 'The Deterministic Dragon',
+  /** Print catalogue for the order journey (slice 5.6). */
+  printProductId: 'e2e-paperback',
+  printLayoutId: 'e2e-square',
+  printLayoutName: 'E2E Square Paperback',
+  printCatalogProductId: 'e2e-printed-book',
+  printPriceId: 'e2e-printed-book-gbp',
 } as const;
 
 /** The TEST_MODE wizard (src/server/creation/engines/wizard.ts): four questions, then a story titled "<hero>'s Big Day". */
@@ -234,17 +240,64 @@ export async function seedReadyBook(opts: {
   const bookRef = db.collection('books').doc(bookId);
   batch.set(bookRef, {
     ownerUid, manuscriptId, storyId: opts.storyId, childId, styleId: SEED.imageStyleId, layoutId: null,
-    printProductId: null, status: 'ready', art: { total: words.length + 1, done: words.length + 1, failed: 0 },
+    printProductId: null, status: 'ready', art: { total: words.length + 2, done: words.length + 2, failed: 0 },
     [REGRESSION_FIELD]: true, createdAt: now, updatedAt: now,
   });
-  for (let n = 1; n <= words.length + 1; n++) {
-    batch.set(bookRef.collection('pages').doc(String(n)), {
-      ownerUid, pageNumber: n, kind: n === 1 ? 'cover' : 'story', manuscriptPage: n === 1 ? null : n - 1,
-      artUrl: transparentPng, artJob: null, createdAt: now, updatedAt: now,
+  // The page plan Book creation uses: cover, title, story pages, end, back (art on cover, story and back).
+  const plan = [
+    { kind: 'cover', manuscriptPage: null },
+    { kind: 'title', manuscriptPage: null },
+    ...words.map((_, i) => ({ kind: 'story', manuscriptPage: i + 1 })),
+    { kind: 'end', manuscriptPage: null },
+    { kind: 'back', manuscriptPage: null },
+  ];
+  plan.forEach((page, i) => {
+    const drawn = page.kind === 'cover' || page.kind === 'story' || page.kind === 'back';
+    batch.set(bookRef.collection('pages').doc(String(i + 1)), {
+      ownerUid, pageNumber: i + 1, kind: page.kind, manuscriptPage: page.manuscriptPage,
+      artUrl: drawn ? transparentPng : null, artJob: null, createdAt: now, updatedAt: now,
     });
-  }
+  });
   await batch.commit();
   return { bookId, manuscriptId };
+}
+
+/**
+ * Seed a print template that fits a seeded Book (3 story pages: 2 + 3 = 5 →
+ * 8 interior pages), its print product, and a catalogue Product and GBP Price
+ * so `GET /api/books/{id}/print-options` offers it (slice 5.6).
+ */
+export async function seedPrintCatalog(): Promise<void> {
+  const db = emulatorFirestore();
+  const now = FieldValue.serverTimestamp();
+  await Promise.all([
+    db.collection('printProducts').doc(SEED.printProductId).set({
+      name: 'E2E Paperback', active: true, spine: false, blankPages: 0,
+      mixamSpec: { binding: { type: 'perfect_bound' }, interior: { material: { type: 'silk', weight: 150 } }, format: { minPageCount: 8, maxPageCount: 48, pageCountIncrement: 4, bleedRequired: 3.175 } },
+      [REGRESSION_FIELD]: true, createdAt: now, updatedAt: now,
+    }),
+    db.collection('printLayouts').doc(SEED.printLayoutId).set({
+      name: SEED.printLayoutName, leafWidth: 8, leafHeight: 8, leavesPerSpread: 1, font: 'Helvetica', fontSize: 20,
+      printProductId: SEED.printProductId, pageConstraints: { maxPages: 48, pageMultiple: 4 },
+      [REGRESSION_FIELD]: true, createdAt: now, updatedAt: now,
+    }),
+    db.collection('products').doc(SEED.printCatalogProductId).set({
+      name: 'E2E Printed book', kind: 'one_time', scope: 'family', grants: [], printProductId: SEED.printProductId, active: true,
+      [REGRESSION_FIELD]: true, createdAt: now, updatedAt: now,
+    }),
+    db.collection('prices').doc(SEED.printPriceId).set({
+      productId: SEED.printCatalogProductId, currency: 'GBP', amountMinor: 1999, interval: null, active: true,
+      [REGRESSION_FIELD]: true, createdAt: now, updatedAt: now,
+    }),
+  ]);
+}
+
+/** Give a family print credits (as an admin grant would). */
+export async function grantPrintCredits(ownerUid: string, quantity: number): Promise<void> {
+  await emulatorFirestore()
+    .collection('entitlementLedgers')
+    .doc(ownerUid)
+    .set({ family: { print_credit: { granted: quantity, consumed: 0, balance: quantity } } }, { merge: true });
 }
 
 /** Find a child doc by owner + display name (used after UI-driven creation). */
@@ -310,6 +363,7 @@ export async function cleanupFunnelAccount(opts: { uid: string }): Promise<void>
   await deleteWhere('books', 'ownerUid');
   await deleteWhere('manuscripts', 'ownerUid');
   await deleteWhere('jobs', 'ownerUid');
+  await deleteWhere('printOrders', 'ownerUid');
   // Ledger docs are keyed by parentUid (see ledger.server.ts ledgerDocPath).
   await deleteDocWithSubcollections(db.collection('entitlementLedgers').doc(uid)).catch(() => {});
   await deleteDocWithSubcollections(db.collection('users').doc(uid)).catch(() => {});

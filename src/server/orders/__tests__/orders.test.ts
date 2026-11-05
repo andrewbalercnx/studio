@@ -21,6 +21,7 @@ import {
   checkout,
   createOrder,
   getOrder,
+  getOrderSettings,
   handleStripeEvent,
   listAdminOrders,
   listOrders,
@@ -28,6 +29,7 @@ import {
   payWithCredits,
   refreshFromMixam,
   retrySubmit,
+  updateOrderSettings,
   type OrderDeps,
 } from '../service';
 import { FakeStripeGateway, type StripeEvent } from '../stripe';
@@ -140,10 +142,12 @@ describe('creating an order', () => {
     const bookId = await readyBook();
     const created = await createOrder(deps, p1, { bookId, layoutId: 'spread', quantity: 2, shippingAddress: address, idempotencyKey: 'order-key-1' });
     expect(created).toMatchObject({ status: 'rendering', quantity: 2, unitAmountMinor: 2499, amountMinor: 4998, currency: 'GBP', contactEmail: 'p1@test.local' });
-    expect(created.actions).toEqual({ canPay: false, canCancel: true });
+    expect(created.actions).toEqual({ canPay: false, canPayWithCredits: false, canCancel: true });
     await bench.drain();
     const view = await getOrder(deps, p1, created.id);
     expect(view.status).toBe('awaiting_payment');
+    expect(view.creditsAvailable).toBe(0);
+    expect(view.actions).toEqual({ canPay: true, canPayWithCredits: false, canCancel: true });
     expect(view.render?.status).toBe('ready');
     expect(view.timeline.map((t) => t.status)).toEqual(['rendering', 'awaiting_payment']);
     // Same key → same order.
@@ -232,6 +236,7 @@ describe('paying with print credits', () => {
     expect(await status(orderId)).toBe('awaiting_payment');
 
     await bench.db.collection('entitlementLedgers').doc('p1').set({ family: { print_credit: { granted: 3, consumed: 0, balance: 3 } } }, { merge: true });
+    expect(await getOrder(deps, p1, orderId)).toMatchObject({ creditsAvailable: 3, actions: { canPayWithCredits: true } });
     const paid = await payWithCredits(deps, p1, orderId);
     expect(paid.status).toBe('awaiting_approval');
     expect(await credits()).toBe(1);
@@ -309,6 +314,21 @@ describe('submitting to Mixam', () => {
     expect(await applyMixamStatus(deps, orderId, { mixamOrderId: 'mx_1', status: 'ONHOLD' })).toEqual({ outcome: 'status_recorded' });
     expect(await status(orderId)).toBe('shipped');
     await expect(cancelOrder(deps, p1, orderId)).rejects.toMatchObject({ code: 'ORDER_NOT_CANCELLABLE' });
+  });
+});
+
+describe('order settings', () => {
+  it('reads the approval switch and the Stripe mode, and saves changes', async () => {
+    const store: Record<string, unknown> = {};
+    const configured: OrderDeps = {
+      ...deps,
+      config: { get: (async () => ({ requireAdminApproval: true, notifyEmails: [], ...store })) as OrderDeps['config']['get'] },
+    };
+    expect(await getOrderSettings(configured)).toEqual({ requireAdminApproval: true, notifyEmails: [], stripeMode: 'fake' });
+    await updateOrderSettings(configured, { requireAdminApproval: false, notifyEmails: ['ops@storypic.test'] });
+    const saved = await bench.db.doc('systemConfig/orders').get();
+    expect(saved.data()).toEqual({ requireAdminApproval: false, notifyEmails: ['ops@storypic.test'] });
+    expect(await getOrderSettings({ ...deps, stripe: async () => null })).toMatchObject({ stripeMode: null });
   });
 });
 
