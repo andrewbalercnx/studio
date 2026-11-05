@@ -1,6 +1,6 @@
 # Architecture Review & Rebuild Plan
 
-> **Created**: 2026-10-28 · **Status**: Phase 2 decided; Phases 3 and 4 next
+> **Created**: 2026-10-28 · **Status** (2026-11-05): Phases 0–4 done; Phase 5 slices for Books, Story creation and Print done, Characters planned; Phases 6–7 next
 >
 > The codebase was started in an early Firebase Studio and grew one feature at a time. This plan
 > reviews it end to end and rebuilds the parts that lack a coherent model, above all the process of
@@ -158,8 +158,8 @@ reset trial data for that slice, re-seed config. Order:
    web, kids PWA and mobile onto it, deletes the old modes, routes and flows, and resets trial data
    (branch `rebuild/phase5-creation-clients`,
    [`target/slices/5.4-creation-clients.md`](target/slices/5.4-creation-clients.md)).
-3. **Characters and actors**, keeping the original-photo rule in `CLAUDE.md`.
-4. **Print and orders** (`target/slices/5.5-print-orders.md`).
+3. **Characters and likeness**, keeping the original-photo rule in `CLAUDE.md` ([`target/slices/5.7-characters.md`](target/slices/5.7-characters.md); done after print, as 5.7).
+4. **Print and orders** ([`target/slices/5.5-print-orders.md`](target/slices/5.5-print-orders.md); done as 5.5–5.6).
 
 **Exit per slice**: old code deleted, end-to-end test green, docs updated.
 
@@ -186,7 +186,7 @@ reset trial data for that slice, re-seed config. Order:
 | 1 — As-is map | Done; owner chose the surviving creation modes | #8 |
 | 2 — Target model | Done: `target/`, 12 ADRs accepted | #10 |
 | 3 — Security review | Done: `security/threat-model.md` | #11 |
-| 4 — Foundations | In review: `src/server` (route wrapper, repositories, job runner, AI harness, config service), see `target/foundations.md` | #12 |
-| 5 — Rebuild slices | 5.1 Book pipeline on the server (#13, in review); 5.2 web app and kids PWA on the Book pipeline, `storybookV2` deleted, mobile book creation off, print for new Books pending the print slice (`target/slices/5.2-book-clients.md`, in review); 5.3 Story creation on the server, five mode engines, `story.finish`, reset script (`target/slices/5.3-creation-server.md`, in review); 5.4 web, kids PWA and mobile create Stories through the creation routes, old modes/flows/sessions and old storybook reads deleted, E2E funnel plays the wizard, trial data reset at deploy (`target/slices/5.4-creation-clients.md`, in review). Story creation slice merged (#13–#16); since then: diagnostics, auth emails, allowances, mobile Books (#17–#34). 5.5 print and orders with Stripe planned (`target/slices/5.5-print-orders.md`): 5.5a render, 5.5b orders and payment, 5.6 clients and deletions | #13–#34, 5.5 plan PR |
-| 6 — Clients | Not started | — |
-| 7 — Governance | Not started | — |
+| 4 — Foundations | Done: `src/server` (route wrapper, repositories, job runner, AI harness, config service), see `target/foundations.md`. Left for Phase 7: 34 of 110 routes not on `withRoute`, 3 old `*-config.server.ts` loaders, `types.ts` not split, `shared-types` not generated from the zod schemas | #12 |
+| 5 — Rebuild slices | **5.1–5.2 Books** done (#13, #14). **5.3–5.4 Story creation** done (#15, #16). Production hardening between slices: model retirement, Cloud Tasks packaging, diagnostics and trace, auth emails, allowances, admin claim, mobile Books (#17–#34). **5.5–5.6 Print and orders** done: plan (#35), render (#36), orders and Stripe (#37), order pages and admin (#39), legacy print deleted (#41; #40 merged into the stacked base). **5.7 Characters and likeness** planned (`target/slices/5.7-characters.md`) | #13–#41 |
+| 6 — Clients | Not started. Pages over 1,000 lines: admin story types, regression, print layouts, writer, print products, story generators; `/kids/*` still reads Firestore directly in 3 files; `packages/api-client` used in one place | — |
+| 7 — Governance | Not started. 113 files outside `src/server` import Firestore | — |
