@@ -16,7 +16,7 @@ import { DEFAULT_VOICE_RECORDING_TEXT } from '@/lib/types';
 import { ELEVENLABS_BRITISH_VOICES, ELEVENLABS_OTHER_VOICES, ELEVENLABS_TTS_VOICES, DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 
 type VoiceSelectorProps = {
-  child: ChildProfile;
+  child: Pick<ChildProfile, 'displayName'> & { preferredVoiceId?: string | null; autoReadAloud?: boolean | null };
   onVoiceSelect: (voiceId: string) => Promise<void>;
   onAutoReadAloudChange?: (enabled: boolean) => Promise<void>;
 };

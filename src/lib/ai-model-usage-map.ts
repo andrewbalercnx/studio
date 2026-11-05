@@ -9,12 +9,7 @@ import type { AIModelsConfig } from './types';
 
 export const MODEL_USAGE_MAP: Record<keyof Omit<AIModelsConfig, 'availabilityCheck' | 'updatedAt' | 'updatedBy'>, string[]> = {
   imageGenerationModel: [
-    'avatar-flow.ts',
-    'actor-exemplar-flow.ts',
-    'character-avatar-flow.ts',
     'image-style-sample-flow.ts',
-    'avatar-animation-flow.ts',
-    'story-actor-avatar-flow.ts',
     'story-output-type-image-flow.ts',
   ],
   primaryTextModel: [
@@ -29,7 +24,6 @@ export const MODEL_USAGE_MAP: Record<keyof Omit<AIModelsConfig, 'availabilityChe
   ],
   lightweightTextModel: [
     'story-synopsis-flow.ts',
-    'image-description-flow.ts',
   ],
   legacyTextModel: [
     'story-title-flow.ts',

@@ -1,699 +1,119 @@
-
 'use client';
-import { authFetch } from '@/lib/auth-fetch';
 
+/**
+ * The parent's children (slice 5.7b). Read and changed through
+ * `/api/children/**`; photos and the avatar through `LikenessPanel`. The
+ * browser never writes child documents.
+ */
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { LoaderCircle, Plus, User, Pencil, X, Sparkles, Image as ImageIcon, Volume2, Trash2 } from 'lucide-react';
+import { LoaderCircle, Plus, Pencil, Sparkles, Image as ImageIcon, Volume2 } from 'lucide-react';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
-import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useFirestore } from '@/firebase';
-import { collection, doc, onSnapshot, setDoc, serverTimestamp, query, where, writeBatch, updateDoc, deleteField } from 'firebase/firestore';
-import { DeleteButton, UndoBanner, useDeleteWithUndo, type DeletedItem } from '@/components/shared/DeleteWithUndo';
+import { useState, useCallback } from 'react';
+import { DeleteButton, UndoBanner, useDeleteWithUndo } from '@/components/shared/DeleteWithUndo';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import type { ChildProfile } from '@/lib/types';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUser } from '@/firebase/auth/use-user';
-import { useUploadFile } from '@/firebase/storage/use-upload-file';
-import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
 import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
 import { EntityEditor } from '@/components/shared/EntityEditor';
+import { LikenessPanel } from '@/components/shared/LikenessPanel';
 import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import { VoiceSelector } from '@/components/parent/VoiceSelector';
-
-function slugify(text: string) {
-    return text
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-}
-
-function formatDateInput(value?: any) {
-    if (!value) return '';
-    if (typeof value === 'string') {
-        const parsed = new Date(value);
-        if (!isNaN(parsed.getTime())) {
-            return parsed.toISOString().split('T')[0];
-        }
-        return '';
-    }
-    if (value.toDate && typeof value.toDate === 'function') {
-        const date = value.toDate();
-        return date.toISOString().split('T')[0];
-    }
-    const date = new Date(value);
-    if (isNaN(date.getTime())) {
-        return '';
-    }
-    return date.toISOString().split('T')[0];
-}
-
-type PreferenceInputProps = {
-    label: string;
-    placeholder: string;
-    values: string[];
-    onChange: (next: string[]) => void;
-};
-
-function PreferenceInput({ label, placeholder, values, onChange }: PreferenceInputProps) {
-    const [draft, setDraft] = useState('');
-
-    const handleAdd = () => {
-        const value = draft.trim();
-        if (!value) return;
-        if (values.includes(value)) {
-            setDraft('');
-            return;
-        }
-        onChange([...values, value]);
-        setDraft('');
-    };
-
-    const handleRemove = (value: string) => {
-        onChange(values.filter(v => v !== value));
-    };
-
-    return (
-        <div className="space-y-2">
-            <Label>{label}</Label>
-            <div className="flex gap-2">
-                <Input
-                    value={draft}
-                    placeholder={placeholder}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAdd();
-                        }
-                    }}
-                />
-                <Button type="button" variant="outline" onClick={handleAdd} disabled={!draft.trim()}>
-                    Add
-                </Button>
-            </div>
-            {values.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                    {values.map((value) => (
-                        <Badge key={value} variant="secondary" className="flex items-center gap-1">
-                            <span>{value}</span>
-                            <button type="button" onClick={() => handleRemove(value)} aria-label={`Remove ${value}`}>
-                                <X className="h-3 w-3" />
-                            </button>
-                        </Badge>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
-
-// Wrapper to use EntityEditor for children
-function ChildForm({ parentUid, onSave, child }: { parentUid: string, onSave: () => void, child?: ChildProfile | null }) {
-    return (
-        <EntityEditor
-            entityType="child"
-            entity={child}
-            parentUid={parentUid}
-            onSave={onSave}
-            onCancel={onSave}
-            onCreated={() => track(ANALYTICS_EVENTS.childCreated, { source: 'parent' })}
-        />
-    );
-}
-
-function AvatarGenerator({ child, onAvatarUpdate }: { child: ChildProfile, onAvatarUpdate: (url: string) => void }) {
-    const { user } = useUser();
-    const [isLoading, setIsLoading] = useState(false);
-    const [isAnimationLoading, setIsAnimationLoading] = useState(false);
-    const [generatedAvatar, setGeneratedAvatar] = useState<string | null>(null);
-    const [generatedAnimation, setGeneratedAnimation] = useState<string | null>(null);
-    const [feedback, setFeedback] = useState('');
-    const [error, setError] = useState<string | null>(null);
-    const [animationError, setAnimationError] = useState<string | null>(null);
-    const { toast } = useToast();
-
-    // The avatar to display: newly generated > existing avatar > null
-    const displayAvatar = generatedAvatar || child.avatarUrl;
-    // The animation to display: newly generated > existing animation > null
-    const displayAnimation = generatedAnimation || child.avatarAnimationUrl;
-    const animationStatus = child.avatarAnimationGeneration?.status;
-
-    const handleGenerate = async () => {
-        if (!user) {
-            toast({ title: 'Authentication Error', description: 'Please sign in again to generate an avatar.', variant: 'destructive' });
-            return;
-        }
-
-        setIsLoading(true);
-        setError(null);
-        try {
-            const idToken = await user.getIdToken();
-            const res = await authFetch('/api/generateAvatar', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`,
-                },
-                body: JSON.stringify({ childId: child.id, feedback }),
-            });
-            const result = await res.json();
-            if (!res.ok || !result.ok) {
-                throw new Error(result.errorMessage || 'Failed to generate avatar.');
-            }
-            setGeneratedAvatar(result.imageUrl);
-            setFeedback('');
-        } catch (err: any) {
-            setError(err.message);
-            toast({ title: 'Avatar Generation Failed', description: err.message, variant: 'destructive' });
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleAccept = () => {
-        if (generatedAvatar) {
-            onAvatarUpdate(generatedAvatar);
-            toast({ title: 'Avatar Updated!', description: 'The new avatar has been saved.' });
-        }
-    };
-
-    const handleGenerateAnimation = async () => {
-        if (!user) {
-            toast({ title: 'Authentication Error', description: 'Please sign in again.', variant: 'destructive' });
-            return;
-        }
-
-        if (!displayAvatar) {
-            toast({ title: 'No Avatar', description: 'Please generate an avatar first before creating an animation.', variant: 'destructive' });
-            return;
-        }
-
-        setIsAnimationLoading(true);
-        setAnimationError(null);
-        try {
-            const idToken = await user.getIdToken();
-            const res = await authFetch('/api/generateAvatar/animation', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`,
-                },
-                body: JSON.stringify({ childId: child.id, forceRegenerate: true }),
-            });
-            const result = await res.json();
-            console.log('[AvatarGenerator] Animation generation result:', result);
-            if (result.debugInfo) {
-                console.log('[AvatarGenerator] === ANIMATION DEBUG INFO ===');
-                if (result.debugInfo.falAttempted !== undefined) {
-                    console.log('[AvatarGenerator] fal.ai Attempted:', result.debugInfo.falAttempted);
-                }
-                if (result.debugInfo.falError) {
-                    console.log('[AvatarGenerator] fal.ai Error:', result.debugInfo.falError);
-                }
-                if (result.debugInfo.veoAttempted !== undefined) {
-                    console.log('[AvatarGenerator] Veo Attempted:', result.debugInfo.veoAttempted);
-                }
-                if (result.debugInfo.veoError) {
-                    console.log('[AvatarGenerator] Veo Error:', result.debugInfo.veoError);
-                }
-                if (result.debugInfo.veoErrorCode) {
-                    console.log('[AvatarGenerator] Veo Error Code:', result.debugInfo.veoErrorCode);
-                }
-                console.log('[AvatarGenerator] Fallback Used:', result.debugInfo.fallbackUsed);
-                console.log('[AvatarGenerator] === END ANIMATION DEBUG INFO ===');
-            }
-            if (!res.ok || !result.ok) {
-                throw new Error(result.errorMessage || 'Failed to generate animation.');
-            }
-            console.log('[AvatarGenerator] Setting generatedAnimation to:', result.animationUrl);
-            console.log('[AvatarGenerator] Current child.avatarAnimationUrl:', child.avatarAnimationUrl);
-            setGeneratedAnimation(result.animationUrl);
-
-            // Check if it's a video or static image
-            const decodedUrl = decodeURIComponent(result.animationUrl || '');
-            const isVideo = decodedUrl.includes('.mp4') || decodedUrl.includes('.webm');
-            console.log('[AvatarGenerator] New animation is video:', isVideo, 'URL preview:', decodedUrl.substring(0, 150));
-
-            toast({
-                title: 'Animation Generated!',
-                description: isVideo ? 'Video animation created!' : 'Dance pose image created (Veo video unavailable).'
-            });
-        } catch (err: any) {
-            console.error('[AvatarGenerator] Animation generation error:', err);
-            setAnimationError(err.message);
-            toast({ title: 'Animation Generation Failed', description: err.message, variant: 'destructive' });
-        } finally {
-            setIsAnimationLoading(false);
-        }
-    };
-
-    return (
-        <Card className="bg-muted/50">
-            <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2"><Sparkles className="text-primary" /> AI Avatar Generator</CardTitle>
-                <CardDescription>Create a cartoon avatar from your child's photos.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {/* Avatar and Animation side by side */}
-                <div className="grid grid-cols-2 gap-6">
-                    {/* Static Avatar */}
-                    <div className="space-y-3">
-                        <Label className="text-center block font-medium">Static Avatar</Label>
-                        <div className="flex justify-center">
-                            {isLoading ? (
-                                <div className="h-32 w-32 flex items-center justify-center bg-muted rounded-full">
-                                    <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
-                                </div>
-                            ) : displayAvatar ? (
-                                <div className="relative">
-                                    <Image src={displayAvatar} alt="Avatar" width={128} height={128} className="rounded-full border-4 border-primary shadow-md object-cover" />
-                                    {generatedAvatar && (
-                                        <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-500 text-xs">New!</Badge>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="h-32 w-32 flex items-center justify-center bg-muted rounded-full text-muted-foreground">
-                                    <User className="h-8 w-8" />
-                                </div>
-                            )}
-                        </div>
-                        {error && <p className="text-xs text-destructive text-center">{error}</p>}
-                    </div>
-
-                    {/* Dancing Animation */}
-                    <div className="space-y-3">
-                        <Label className="text-center block font-medium">Dancing Animation</Label>
-                        <div className="flex justify-center">
-                            {isAnimationLoading ? (
-                                <div className="h-32 w-32 flex items-center justify-center bg-muted rounded-full">
-                                    <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
-                                </div>
-                            ) : displayAnimation ? (
-                                <div className="relative">
-                                    {/* Check if it's a video - decode URL first since Firebase encodes the path */}
-                                    {(() => {
-                                        const decodedUrl = decodeURIComponent(displayAnimation);
-                                        const isVideo = decodedUrl.includes('.mp4') || decodedUrl.includes('.webm');
-                                        const isGif = decodedUrl.includes('.gif');
-                                        const isStaticImage = decodedUrl.includes('.png') || decodedUrl.includes('.jpg') || decodedUrl.includes('.jpeg');
-                                        console.log('[AvatarGenerator] Animation display:', { isVideo, isGif, isStaticImage, decodedUrl: decodedUrl.substring(0, 100) });
-                                        if (isVideo) {
-                                            return (
-                                                <video
-                                                    src={displayAnimation}
-                                                    autoPlay
-                                                    loop
-                                                    muted
-                                                    playsInline
-                                                    className="h-32 w-32 rounded-full border-4 border-primary shadow-md object-cover"
-                                                />
-                                            );
-                                        }
-                                        if (isGif) {
-                                            // GIF animates natively
-                                            return (
-                                                <img
-                                                    src={displayAnimation}
-                                                    alt="Dancing Avatar"
-                                                    className="h-32 w-32 rounded-full border-4 border-primary shadow-md object-cover"
-                                                />
-                                            );
-                                        }
-                                        // Static image (PNG/JPG) with CSS bounce animation
-                                        return (
-                                            <img
-                                                src={displayAnimation}
-                                                alt="Dancing Avatar"
-                                                className="h-32 w-32 rounded-full border-4 border-primary shadow-md object-cover"
-                                                style={{ animation: 'avatarDance 0.8s ease-in-out infinite' }}
-                                            />
-                                        );
-                                    })()}
-                                    {generatedAnimation && (
-                                        <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-500 text-xs">New!</Badge>
-                                    )}
-                                    {animationStatus === 'generating' && (
-                                        <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-yellow-500 text-xs">Generating...</Badge>
-                                    )}
-                                </div>
-                            ) : displayAvatar ? (
-                                <div className="h-32 w-32 flex items-center justify-center bg-muted/50 rounded-full text-muted-foreground border-2 border-dashed">
-                                    <span className="text-xs text-center px-2">Click below to generate</span>
-                                </div>
-                            ) : (
-                                <div className="h-32 w-32 flex items-center justify-center bg-muted rounded-full text-muted-foreground">
-                                    <span className="text-xs text-center px-2">Avatar needed first</span>
-                                </div>
-                            )}
-                        </div>
-                        {animationError && <p className="text-xs text-destructive text-center">{animationError}</p>}
-                        {animationStatus === 'error' && child.avatarAnimationGeneration?.lastErrorMessage && (
-                            <p className="text-xs text-destructive text-center">{child.avatarAnimationGeneration.lastErrorMessage}</p>
-                        )}
-                    </div>
-                </div>
-
-                {/* CSS for dance animation */}
-                <style dangerouslySetInnerHTML={{ __html: `
-                    @keyframes avatarDance {
-                        0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
-                        25% { transform: translateY(-6px) rotate(-3deg) scale(1.02); }
-                        50% { transform: translateY(0) rotate(0deg) scale(1); }
-                        75% { transform: translateY(-6px) rotate(3deg) scale(1.02); }
-                    }
-                `}} />
-
-                <div className="space-y-2">
-                    <Label htmlFor="feedback">Feedback (optional)</Label>
-                    <Textarea id="feedback" value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="e.g., make the hair blonder, add glasses..." />
-                </div>
-
-                {/* Avatar Generation Buttons */}
-                <div className="flex gap-2">
-                    <Button onClick={handleGenerate} disabled={isLoading} className="flex-1">
-                        {isLoading ? 'Generating...' : (displayAvatar ? 'Regenerate Avatar' : 'Generate Avatar')}
-                    </Button>
-                    {generatedAvatar && <Button onClick={handleAccept} className="flex-1">Accept & Save</Button>}
-                </div>
-
-                {/* Animation Generation Button */}
-                <div className="flex gap-2">
-                    <Button
-                        onClick={handleGenerateAnimation}
-                        disabled={isAnimationLoading || !displayAvatar}
-                        variant="outline"
-                        className="flex-1"
-                    >
-                        {isAnimationLoading ? 'Generating Animation...' : (displayAnimation ? 'Regenerate Animation' : 'Generate Dancing Animation')}
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
-
-
-function ManagePhotos({ child, onOpenChange }: { child: ChildProfile, onOpenChange: (open: boolean) => void }) {
-    const firestore = useFirestore();
-    const { toast } = useToast();
-    const { uploadFile, isUploading } = useUploadFile();
-    const { user } = useUser();
-    const [optimisticPhotos, setOptimisticPhotos] = useState(child.photos || []);
-
-    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (!user) return;
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = async () => {
-            const dataUrl = reader.result as string;
-
-            try {
-                const downloadURL = await uploadFile({
-                    childId: child.id,
-                    dataUrl,
-                    fileName: file.name,
-                });
-                if (!downloadURL) {
-                    toast({ title: 'Upload failed', description: 'Please try again in a moment.', variant: 'destructive' });
-                    return;
-                }
-                const childRef = doc(firestore, 'children', child.id);
-                const updatedPhotos = [...optimisticPhotos, downloadURL];
-                await updateDoc(childRef, {
-                    photos: updatedPhotos,
-                });
-                setOptimisticPhotos(updatedPhotos);
-                toast({ title: 'Photo uploaded!' });
-            } catch (e: any) {
-                toast({ title: 'Upload failed', description: e.message, variant: 'destructive' });
-            }
-        };
-    };
-    
-    const handleSetAvatar = async (photoUrl: string) => {
-        if (!firestore) return;
-        const childRef = doc(firestore, 'children', child.id);
-        const updateData = { avatarUrl: photoUrl };
-
-        updateDoc(childRef, updateData)
-            .then(() => {
-                toast({ title: 'Avatar updated!' });
-                onOpenChange(false);
-            })
-            .catch((serverError: any) => {
-                const permissionError = new FirestorePermissionError({
-                    path: childRef.path,
-                    operation: 'update',
-                    requestResourceData: updateData,
-                });
-                errorEmitter.emit('permission-error', permissionError);
-            });
-    }
-
-    const handleDeletePhoto = async (photoUrl: string) => {
-        if (!firestore) return;
-
-        try {
-            const newPhotos = optimisticPhotos.filter(p => p !== photoUrl);
-            setOptimisticPhotos(newPhotos);
-
-            const childRef = doc(firestore, 'children', child.id);
-            await updateDoc(childRef, { photos: newPhotos });
-            toast({ title: 'Photo deleted' });
-        } catch (err: any) {
-            // Revert optimistic update on error
-            setOptimisticPhotos(optimisticPhotos);
-            toast({ title: 'Error deleting photo', description: err.message, variant: 'destructive' });
-        }
-    }
-
-    return (
-        <div className="space-y-6">
-            <AvatarGenerator child={child} onAvatarUpdate={handleSetAvatar} />
-
-            <div>
-                <Label htmlFor="photo-upload" className="block text-sm font-medium text-gray-700 mb-2">Upload a new photo</Label>
-                <Input id="photo-upload" type="file" accept="image/*" onChange={handleFileChange} disabled={isUploading} />
-                {isUploading && <p className="text-sm text-muted-foreground mt-2 flex items-center"><LoaderCircle className="animate-spin mr-2" /> Uploading...</p>}
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-                {optimisticPhotos.map((photo, index) => (
-                    <div key={index} className="relative group">
-                        <Image src={photo} alt={`Child photo ${index + 1}`} width={150} height={150} className="rounded-md object-cover aspect-square" />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-2 transition-opacity">
-                            <Button size="sm" onClick={() => handleSetAvatar(photo)}>Set as Avatar</Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleDeletePhoto(photo)}>
-                                <Trash2 className="h-4 w-4 mr-1" />
-                                Delete
-                            </Button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-             {optimisticPhotos.length === 0 && !isUploading && (
-                <p className="text-sm text-muted-foreground text-center py-4">No photos uploaded yet.</p>
-            )}
-        </div>
-    );
-}
-
-function ChildIcon({ profile }: { profile: ChildProfile }) {
-  const router = useRouter();
-  const { setActiveChildId } = useAppContext();
-
-  const handleSelectChild = () => {
-    setActiveChildId(profile.id);
-    router.push(`/child/${profile.id}`);
-  };
-
-  return (
-    <div className="flex flex-col items-center gap-2 text-center w-32">
-      <button onClick={handleSelectChild} className="rounded-full hover:ring-4 hover:ring-primary/50 transition-all">
-        <Avatar className="h-24 w-24 border-4 border-white shadow-md">
-          <AvatarImage src={profile.avatarUrl} alt={profile.displayName} className="object-cover" />
-          <AvatarFallback className="text-3xl bg-secondary text-secondary-foreground">
-             {profile.displayName ? profile.displayName.charAt(0) : <User />}
-          </AvatarFallback>
-        </Avatar>
-      </button>
-      <p className="font-bold text-lg truncate w-full">{profile.displayName}</p>
-    </div>
-  );
-}
-
+import { peopleApi, type ChildView, type PersonView } from '@/lib/people/api';
+import { useChildren } from '@/lib/people/use-people';
 
 export default function ManageChildrenPage() {
     const { user, loading: userLoading } = useUser();
     const { isAdmin, loading: adminLoading } = useAdminStatus();
-    const firestore = useFirestore();
     const { toast } = useToast();
     const router = useRouter();
     const { setActiveChildId } = useAppContext();
+    const { items: children, loading, error, reload, replace } = useChildren();
 
-    const [children, setChildren] = useState<ChildProfile[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isPhotosOpen, setIsPhotosOpen] = useState(false);
-    const [selectedChild, setSelectedChild] = useState<ChildProfile | null>(null);
-    const [editingChild, setEditingChild] = useState<ChildProfile | null>(null);
+    const [selectedChild, setSelectedChild] = useState<ChildView | null>(null);
+    const [editingChild, setEditingChild] = useState<ChildView | null>(null);
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [isVoiceOpen, setIsVoiceOpen] = useState(false);
-    const [voiceChild, setVoiceChild] = useState<ChildProfile | null>(null);
+    const [voiceChild, setVoiceChild] = useState<ChildView | null>(null);
 
-    const childrenQuery = useMemo(() => {
-        if (!user || !firestore) return null;
-        return query(collection(firestore, 'children'), where('ownerParentUid', '==', user.uid));
-    }, [user, firestore]);
-
-    useEffect(() => {
-        if (!childrenQuery || !firestore) {
-            setLoading(false);
-            return;
-        }
-        setLoading(true);
-
-        // Track if component is still mounted
-        let isMounted = true;
-
-        const unsubscribe = onSnapshot(childrenQuery,
-            (snapshot) => {
-                const childrenList = snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as ChildProfile);
-
-                if (isMounted) {
-                    setChildren(childrenList);
-                    setLoading(false);
-                    setError(null);
-                }
-            },
-            (serverError) => {
-                const permissionError = new FirestorePermissionError({ path: 'children', operation: 'list' });
-                errorEmitter.emit('permission-error', permissionError);
-                if (isMounted) {
-                    setError("Could not fetch children profiles. Check console for details.");
-                    setChildren([]);
-                    setLoading(false);
-                }
-            }
-        );
-        return () => {
-            isMounted = false;
-            unsubscribe();
-        };
-    }, [childrenQuery, firestore]);
+    const replacePerson = useCallback((person?: PersonView) => {
+        if (person?.kind === 'child') replace(person);
+    }, [replace]);
 
     // Select this child and drop into their experience (same flow as the
-    // "Who is playing?" home screen). This is the primary action: it lets a
-    // parent go straight from "I have a profile" to "start a story for them".
-    const handlePlayAsChild = (child: ChildProfile) => {
+    // "Who is playing?" home screen).
+    const handlePlayAsChild = (child: ChildView) => {
         setActiveChildId(child.id);
         router.push(`/child/${child.id}`);
     }
 
-    const handleManagePhotos = (child: ChildProfile) => {
+    const handleManagePhotos = (child: ChildView) => {
         setSelectedChild(child);
         setIsPhotosOpen(true);
     }
 
-    const handleEditChild = (child: ChildProfile) => {
+    const handleEditChild = (child: ChildView) => {
         setEditingChild(child);
         setIsEditOpen(true);
     }
 
-    const handleManageVoice = (child: ChildProfile) => {
+    const handleManageVoice = (child: ChildView) => {
         setVoiceChild(child);
         setIsVoiceOpen(true);
     }
 
     const handleVoiceSelect = async (childId: string, voiceId: string) => {
-        if (!firestore) return;
-        const childRef = doc(firestore, 'children', childId);
-        await updateDoc(childRef, {
-            preferredVoiceId: voiceId,
-            updatedAt: serverTimestamp(),
-        });
+        replacePerson(await peopleApi.update('child', childId, { preferredVoiceId: voiceId }));
     }
 
     const handleAutoReadAloudChange = async (childId: string, enabled: boolean) => {
-        if (!firestore) return;
-        const childRef = doc(firestore, 'children', childId);
-        await updateDoc(childRef, {
-            autoReadAloud: enabled,
-            updatedAt: serverTimestamp(),
-        });
+        replacePerson(await peopleApi.update('child', childId, { autoReadAloud: enabled }));
     }
 
     // Delete with undo functionality
     const { deletedItem, markAsDeleted, clearDeletedItem } = useDeleteWithUndo();
 
     const handleDeleteChild = useCallback(async (childId: string) => {
-        if (!firestore || !user) return;
         const child = children.find(c => c.id === childId);
         if (!child) return;
-
-        const childRef = doc(firestore, 'children', childId);
-        await updateDoc(childRef, {
-            deletedAt: serverTimestamp(),
-            deletedBy: user.uid,
-            updatedAt: serverTimestamp(),
-        });
-
-        markAsDeleted({ id: childId, name: child.displayName, type: 'child' });
-        toast({ title: 'Child profile deleted', description: `${child.displayName} has been removed.` });
-    }, [firestore, user, children, markAsDeleted, toast]);
+        try {
+            await peopleApi.remove('child', childId);
+            await reload();
+            markAsDeleted({ id: childId, name: child.displayName, type: 'child' });
+            toast({ title: 'Child profile deleted', description: `${child.displayName} has been removed.` });
+        } catch (err) {
+            toast({ title: 'Could not delete', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
+        }
+    }, [children, markAsDeleted, reload, toast]);
 
     const handleUndoDelete = useCallback(async (childId: string) => {
-        if (!firestore) return;
+        try {
+            await peopleApi.restore('child', childId);
+            await reload();
+            toast({ title: 'Undo successful', description: 'The child profile has been restored.' });
+        } catch (err) {
+            toast({ title: 'Could not restore', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
+        }
+    }, [reload, toast]);
 
-        const childRef = doc(firestore, 'children', childId);
-        await updateDoc(childRef, {
-            deletedAt: deleteField(),
-            deletedBy: deleteField(),
-            updatedAt: serverTimestamp(),
-        });
-
-        toast({ title: 'Undo successful', description: 'The child profile has been restored.' });
-    }, [firestore, toast]);
-
-    // Filter out deleted children for display
-    const visibleChildren = useMemo(() => {
-        return children.filter(child => !child.deletedAt);
-    }, [children]);
+    const visibleChildren = children;
 
     const diagnostics = {
         page: 'parent-children',
         auth: { isAuthenticated: !!user, isAdmin, loading: userLoading || adminLoading, error: null, },
-        firestore: { collection: 'children', count: children.length, sampleIds: children.slice(0, 3).map(c => c.id), },
-        ...(error ? { firestoreErrorChildren: error } : {})
+        api: { route: '/api/children?view=person', count: children.length, sampleIds: children.slice(0, 3).map(c => c.id), },
+        ...(error ? { apiError: error } : {})
     };
 
-
-    const getDisplayDate = (date: any) => {
-        if (!date) return '';
-        // Firestore timestamp objects have a toDate() method
-        if (date.toDate) {
-            return date.toDate().toLocaleDateString();
-        }
-        // Handle case where it might already be a Date object or a string
-        const d = new Date(date);
-        if (!isNaN(d.getTime())) {
-            return d.toLocaleDateString();
-        }
-        return 'Invalid Date';
+    const getDisplayDate = (date: string) => {
+        const d = new Date(`${date}T00:00:00`);
+        return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
     };
 
     const renderContent = () => {
@@ -728,7 +148,7 @@ export default function ManageChildrenPage() {
                         <Card key={child.id} data-wiz-target={`child-card-${child.id}`}>
                             <CardHeader className="flex flex-row items-center gap-4">
                                 <Avatar className="h-16 w-16">
-                                    <AvatarImage src={child.avatarUrl} alt={child.displayName} className="object-cover" />
+                                    <AvatarImage src={child.likeness.avatar ?? undefined} alt={child.displayName} className="object-cover" />
                                     <AvatarFallback>{child.displayName.charAt(0)}</AvatarFallback>
                                 </Avatar>
                                 <div>
@@ -738,9 +158,9 @@ export default function ManageChildrenPage() {
                             </CardHeader>
                             <CardContent>
                                 {child.description && <p className="text-sm text-muted-foreground mb-3">{child.description}</p>}
-                                {(child.likes?.length > 0 || child.dislikes?.length > 0) ? (
+                                {(child.likes.length > 0 || child.dislikes.length > 0) ? (
                                     <div className="space-y-2">
-                                        {child.likes?.length > 0 && (
+                                        {child.likes.length > 0 && (
                                             <div>
                                                 <p className="text-xs font-semibold mb-1">Likes:</p>
                                                 <div className="flex flex-wrap gap-1">
@@ -750,7 +170,7 @@ export default function ManageChildrenPage() {
                                                 </div>
                                             </div>
                                         )}
-                                        {child.dislikes?.length > 0 && (
+                                        {child.dislikes.length > 0 && (
                                             <div>
                                                 <p className="text-xs font-semibold mb-1">Dislikes:</p>
                                                 <div className="flex flex-wrap gap-1">
@@ -804,30 +224,44 @@ export default function ManageChildrenPage() {
             />
             <div className="container mx-auto p-4 sm:p-6 md:p-8">
                 <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                    <DialogContent>
+                    <DialogContent className="max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>Create New Child Profile</DialogTitle>
                         </DialogHeader>
-                        {user && <ChildForm parentUid={user.uid} onSave={() => setIsCreateOpen(false)} child={null} />}
+                        {user && (
+                            <EntityEditor
+                                entityType="child"
+                                entity={null}
+                                onSave={(saved) => { replacePerson(saved); setIsCreateOpen(false); }}
+                                onCancel={() => setIsCreateOpen(false)}
+                                onCreated={() => track(ANALYTICS_EVENTS.childCreated, { source: 'parent' })}
+                            />
+                        )}
                     </DialogContent>
                 </Dialog>
 
                 <Dialog open={isPhotosOpen} onOpenChange={setIsPhotosOpen}>
-                    <DialogContent>
+                    <DialogContent className="max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>Manage Photos for {selectedChild?.displayName}</DialogTitle>
                         </DialogHeader>
-                        {selectedChild && <ManagePhotos child={selectedChild} onOpenChange={setIsPhotosOpen}/>}
+                        {selectedChild && <LikenessPanel person={selectedChild} onChange={replacePerson} />}
                     </DialogContent>
                 </Dialog>
 
                 <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-                    <DialogContent>
+                    <DialogContent className="max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>Edit {editingChild?.displayName}</DialogTitle>
                         </DialogHeader>
                         {user && editingChild && (
-                            <ChildForm parentUid={user.uid} onSave={() => setIsEditOpen(false)} child={editingChild} />
+                            <EntityEditor
+                                entityType="child"
+                                entity={editingChild}
+                                onSave={(saved) => { replacePerson(saved); setIsEditOpen(false); }}
+                                onCancel={() => setIsEditOpen(false)}
+                                onLikenessChange={replacePerson}
+                            />
                         )}
                     </DialogContent>
                 </Dialog>

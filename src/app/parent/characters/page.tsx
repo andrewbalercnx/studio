@@ -1,190 +1,71 @@
-
 'use client';
 
-import { useMemo, useState, useEffect, useCallback } from 'react';
+/**
+ * The family's characters (slice 5.7b). Read and changed through
+ * `/api/characters/**`; the browser never writes character documents.
+ */
+import { useState, useCallback } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
-import { useFirestore } from '@/firebase';
-import {
-  collection,
-  doc,
-  onSnapshot,
-  setDoc,
-  serverTimestamp,
-  query,
-  where,
-  writeBatch,
-  updateDoc,
-  deleteField,
-  getDoc,
-} from 'firebase/firestore';
-import type { Character, ChildProfile } from '@/lib/types';
-import { LoaderCircle, Plus, User, Pencil, Smile, Image as ImageIcon } from 'lucide-react';
+import { LoaderCircle, Plus, Pencil, Smile } from 'lucide-react';
 import { DeleteButton, UndoBanner, useDeleteWithUndo } from '@/components/shared/DeleteWithUndo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Textarea } from '@/components/ui/textarea';
-import { useUploadFile } from '@/firebase/storage/use-upload-file';
-import NextImage from 'next/image';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EntityEditor } from '@/components/shared/EntityEditor';
-import { VoiceSelector } from '@/components/parent/VoiceSelector';
-
-function slugify(text: string) {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-
-// Wrapper to use EntityEditor for characters
-function CharacterForm({ parentUid, onSave, character, children }: { parentUid: string; onSave: () => void; character?: Character | null; children: ChildProfile[] }) {
-  return (
-    <EntityEditor
-      entityType="character"
-      entity={character}
-      parentUid={parentUid}
-      children={children}
-      onSave={onSave}
-      onCancel={onSave}
-    />
-  );
-}
+import { peopleApi, type CharacterView, type PersonView } from '@/lib/people/api';
+import { useCharacters, useChildren } from '@/lib/people/use-people';
 
 export default function ManageCharactersPage() {
   const { user, loading: userLoading } = useUser();
-  const firestore = useFirestore();
   const { toast } = useToast();
+  const { items: characters, loading, reload, replace } = useCharacters();
+  const { items: children } = useChildren();
 
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [children, setChildren] = useState<ChildProfile[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
+  const [editingCharacter, setEditingCharacter] = useState<CharacterView | null>(null);
   const { deletedItem, markAsDeleted, clearDeletedItem } = useDeleteWithUndo();
 
-  const charactersQuery = useMemo(() => {
-    if (!user || !firestore) return null;
-    return query(collection(firestore, 'characters'), where('ownerParentUid', '==', user.uid));
-  }, [user, firestore]);
-
-  const childrenQuery = useMemo(() => {
-    if (!user || !firestore) return null;
-    return query(collection(firestore, 'children'), where('ownerParentUid', '==', user.uid));
-  }, [user, firestore]);
-
-  useEffect(() => {
-    if (!charactersQuery || !firestore) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-
-    // Track if component is still mounted
-    let isMounted = true;
-
-    // Also fetch help-character for wizard demonstrations
-    const fetchHelpCharacter = async () => {
-      try {
-        const helpCharDoc = await getDoc(doc(firestore, 'characters', 'help-character'));
-        if (helpCharDoc.exists() && isMounted) {
-          return { ...helpCharDoc.data(), id: helpCharDoc.id } as Character;
-        }
-      } catch {
-        // Silently fail - help-character is optional for wizard demos
-      }
-      return null;
-    };
-
-    const unsubscribe = onSnapshot(
-      charactersQuery,
-      async (snapshot) => {
-        const characterList = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as Character));
-
-        // Include help-character if it exists (for wizard demonstrations)
-        const helpCharacter = await fetchHelpCharacter();
-        if (helpCharacter && !characterList.some(c => c.id === 'help-character')) {
-          characterList.push(helpCharacter);
-        }
-
-        if (isMounted) {
-          setCharacters(characterList);
-          setLoading(false);
-        }
-      },
-      (error) => {
-        if (isMounted) {
-          toast({ title: 'Error loading characters', description: error.message, variant: 'destructive' });
-          setLoading(false);
-        }
-      }
-    );
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
-  }, [charactersQuery, firestore]);
-
-  useEffect(() => {
-    if (!childrenQuery) return;
-    const unsubscribe = onSnapshot(
-      childrenQuery,
-      (snapshot) => {
-        const childrenList = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as ChildProfile));
-        setChildren(childrenList);
-      },
-      (error) => {
-        toast({ title: 'Error loading children', description: error.message, variant: 'destructive' });
-      }
-    );
-    return () => unsubscribe();
-  }, [childrenQuery]);
-
-  const openForm = (character: Character | null = null) => {
+  const openForm = (character: CharacterView | null = null) => {
     setEditingCharacter(character);
     setIsFormOpen(true);
   };
 
+  const handleSaved = useCallback((saved?: PersonView) => {
+    if (saved?.kind === 'character') replace(saved);
+    setIsFormOpen(false);
+  }, [replace]);
+
+  const handleLikenessChange = useCallback((person: PersonView) => {
+    if (person.kind === 'character') replace(person);
+  }, [replace]);
+
   const handleDeleteCharacter = useCallback(async (characterId: string) => {
-    if (!firestore || !user) return;
     const character = characters.find(c => c.id === characterId);
     if (!character) return;
-
-    const charRef = doc(firestore, 'characters', characterId);
-    await updateDoc(charRef, {
-      deletedAt: serverTimestamp(),
-      deletedBy: user.uid,
-      updatedAt: serverTimestamp(),
-    });
-    markAsDeleted({ id: characterId, name: character.displayName, type: 'character' });
-    toast({ title: 'Character deleted', description: `${character.displayName} has been removed.` });
-  }, [firestore, user, characters, markAsDeleted, toast]);
+    try {
+      await peopleApi.remove('character', characterId);
+      await reload();
+      markAsDeleted({ id: characterId, name: character.displayName, type: 'character' });
+      toast({ title: 'Character deleted', description: `${character.displayName} has been removed.` });
+    } catch (error) {
+      toast({ title: 'Could not delete', description: error instanceof Error ? error.message : String(error), variant: 'destructive' });
+    }
+  }, [characters, markAsDeleted, reload, toast]);
 
   const handleUndoDelete = useCallback(async (characterId: string) => {
-    if (!firestore) return;
-    const charRef = doc(firestore, 'characters', characterId);
-    await updateDoc(charRef, {
-      deletedAt: deleteField(),
-      deletedBy: deleteField(),
-      updatedAt: serverTimestamp(),
-    });
-    toast({ title: 'Undo successful', description: 'The character has been restored.' });
-  }, [firestore, toast]);
+    try {
+      await peopleApi.restore('character', characterId);
+      await reload();
+      toast({ title: 'Undo successful', description: 'The character has been restored.' });
+    } catch (error) {
+      toast({ title: 'Could not restore', description: error instanceof Error ? error.message : String(error), variant: 'destructive' });
+    }
+  }, [reload, toast]);
 
-  // Filter out deleted characters
-  const visibleCharacters = useMemo(() => {
-    return characters.filter(char => !char.deletedAt);
-  }, [characters]);
-
-  // Filter out deleted children (for dropdown in character form)
-  const visibleChildren = useMemo(() => {
-    return children.filter(child => !child.deletedAt);
-  }, [children]);
+  const visibleCharacters = characters;
 
   const renderContent = () => {
     if (userLoading || loading) {
@@ -221,7 +102,7 @@ export default function ManageCharactersPage() {
           <Card key={char.id} data-wiz-target={`character-card-${char.id}`}>
             <CardHeader className="flex flex-row items-center gap-4">
               <Avatar className="h-16 w-16">
-                <AvatarImage src={char.avatarUrl} alt={char.displayName} className="object-cover" />
+                <AvatarImage src={char.likeness.avatar ?? undefined} alt={char.displayName} className="object-cover" />
                 <AvatarFallback>{char.displayName.charAt(0)}</AvatarFallback>
               </Avatar>
               <div>
@@ -233,9 +114,9 @@ export default function ManageCharactersPage() {
             </CardHeader>
             <CardContent>
               {char.description && <p className="text-sm text-muted-foreground mb-3">{char.description}</p>}
-              {(char.likes?.length > 0 || char.dislikes?.length > 0) ? (
+              {(char.likes?.length > 0 || char.dislikes.length > 0) ? (
                 <div className="space-y-2">
-                  {char.likes?.length > 0 && (
+                  {char.likes.length > 0 && (
                     <div>
                       <p className="text-xs font-semibold mb-1">Likes:</p>
                       <div className="flex flex-wrap gap-1">
@@ -245,7 +126,7 @@ export default function ManageCharactersPage() {
                       </div>
                     </div>
                   )}
-                  {char.dislikes?.length > 0 && (
+                  {char.dislikes.length > 0 && (
                     <div>
                       <p className="text-xs font-semibold mb-1">Dislikes:</p>
                       <div className="flex flex-wrap gap-1">
@@ -281,11 +162,20 @@ export default function ManageCharactersPage() {
     <>
       <div className="container mx-auto p-4 sm:p-6 md:p-8">
         <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingCharacter ? 'Edit Character' : 'Create New Character'}</DialogTitle>
             </DialogHeader>
-            {user && <CharacterForm parentUid={user.uid} onSave={() => setIsFormOpen(false)} character={editingCharacter} children={visibleChildren} />}
+            {user && (
+              <EntityEditor
+                entityType="character"
+                entity={editingCharacter}
+                childOptions={children}
+                onSave={handleSaved}
+                onCancel={() => setIsFormOpen(false)}
+                onLikenessChange={handleLikenessChange}
+              />
+            )}
           </DialogContent>
         </Dialog>
 

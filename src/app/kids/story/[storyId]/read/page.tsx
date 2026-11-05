@@ -3,17 +3,15 @@
 import { use, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { LoaderCircle } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
 import { useUser } from '@/firebase/auth/use-user';
-import { useFirestore } from '@/firebase';
 import { useKidsPWA } from '../../../layout';
 import { StoryReader } from '@/components/creation';
+import { peopleApi } from '@/lib/people/api';
 
 /** Kids PWA: read a finished story; its Books and "make a book" underneath. */
 export default function KidsStoryReadPage({ params }: { params: Promise<{ storyId: string }> }) {
   const { storyId } = use(params);
   const router = useRouter();
-  const firestore = useFirestore();
   const { user, loading: userLoading } = useUser();
   const { childId, childProfile, isLocked } = useKidsPWA();
 
@@ -23,15 +21,15 @@ export default function KidsStoryReadPage({ params }: { params: Promise<{ storyI
     }
   }, [userLoading, user, isLocked, childId, router]);
 
-  // The child's read-aloud preference lives on the child profile (parent-owned document).
+  // The child's read-aloud preference lives on the child profile, changed through the route.
   const persistAutoRead = useCallback(
     (enabled: boolean) => {
-      if (!firestore || !childId) return;
-      updateDoc(doc(firestore, 'children', childId), { autoReadAloud: enabled }).catch((err) =>
+      if (!childId) return;
+      peopleApi.update('child', childId, { autoReadAloud: enabled }).catch((err) =>
         console.warn('[KidsStoryRead] Failed to persist autoReadAloud:', err)
       );
     },
-    [firestore, childId]
+    [childId]
   );
 
   if (userLoading || !user || !childId) {

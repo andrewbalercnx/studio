@@ -92,11 +92,11 @@ const testCases: TestCase[] = [
   { id: 'users-admin-list', description: 'Admin can list users', role: 'admin', operation: 'list', path: 'users', expected: 'allow' },
 
   // ========== CHILDREN TESTS ==========
-  { id: 'children-create', description: 'Parent can create a child', role: 'parent', operation: 'create', path: (ids) => `children`, data: (ids) => ({ ownerParentUid: ids.parentUid, displayName: 'Test Child' }), expected: 'allow' },
+  { id: 'children-create', description: 'Parent cannot create a child directly (routes only)', role: 'parent', operation: 'create', path: (ids) => `children`, data: (ids) => ({ ownerParentUid: ids.parentUid, displayName: 'Test Child' }), expected: 'deny' },
   { id: 'children-read-own', description: 'Parent can read their own child', role: 'parent', operation: 'get', path: (ids) => `children/${ids.childId}`, expected: 'allow' },
   { id: 'children-read-other', description: 'Parent cannot read another parent\'s child', role: 'parent', operation: 'get', path: (ids) => `children/${ids.otherChildId}`, expected: 'deny' },
-  { id: 'children-update-own', description: 'Parent can update their own child', role: 'parent', operation: 'update', path: (ids) => `children/${ids.childId}`, data: { displayName: 'Updated Child' }, expected: 'allow' },
-  { id: 'children-delete-own', description: 'Parent can delete their own child', role: 'parent', operation: 'delete', path: (ids) => `children/${ids.childId}`, expected: 'allow' },
+  { id: 'children-update-own', description: 'Parent cannot update their own child directly (routes only)', role: 'parent', operation: 'update', path: (ids) => `children/${ids.childId}`, data: { displayName: 'Updated Child' }, expected: 'deny' },
+  { id: 'children-delete-own', description: 'Parent cannot delete their own child directly (routes only)', role: 'parent', operation: 'delete', path: (ids) => `children/${ids.childId}`, expected: 'deny' },
   { id: 'children-list-own', description: 'Parent can list their own children', role: 'parent', operation: 'list', path: 'children', queryConstraints: (ids) => [where('ownerParentUid', '==', ids.parentUid)], expected: 'allow' },
   { id: 'children-list-other', description: 'Parent can list other children (cannot validate WHERE clause)', role: 'parent', operation: 'list', path: 'children', queryConstraints: (ids) => [where('ownerParentUid', '==', ids.otherParentUid)], expected: 'allow' },
   { id: 'children-help-read-auth', description: 'Authenticated user can read help-child', role: 'parent', operation: 'get', path: () => `children/help-child`, expected: 'allow' },
@@ -125,11 +125,11 @@ const testCases: TestCase[] = [
   { id: 'events-help-read', description: 'Authenticated user can read help-storysession events', role: 'parent', operation: 'get', path: () => `storySessions/help-storysession/events/demo-event`, expected: 'allow' },
 
   // ========== CHARACTERS TESTS ==========
-  { id: 'characters-create', description: 'Parent can create a character', role: 'parent', operation: 'create', path: () => `characters`, data: (ids) => ({ ownerParentUid: ids.parentUid, displayName: 'Test Character', role: 'friend' }), expected: 'allow' },
+  { id: 'characters-create', description: 'Parent cannot create a character directly (routes only)', role: 'parent', operation: 'create', path: () => `characters`, data: (ids) => ({ ownerParentUid: ids.parentUid, displayName: 'Test Character', role: 'friend' }), expected: 'deny' },
   { id: 'characters-read-own', description: 'Parent can read their own character', role: 'parent', operation: 'get', path: (ids) => `characters/${ids.characterId}`, expected: 'allow' },
   { id: 'characters-read-other', description: 'Parent cannot read other parent\'s character', role: 'parent', operation: 'get', path: (ids) => `characters/${ids.otherCharacterId}`, expected: 'deny' },
-  { id: 'characters-update-own', description: 'Parent can update their own character', role: 'parent', operation: 'update', path: (ids) => `characters/${ids.characterId}`, data: { displayName: 'Updated Character' }, expected: 'allow' },
-  { id: 'characters-delete-own', description: 'Parent can delete their own character', role: 'parent', operation: 'delete', path: (ids) => `characters/${ids.characterId}`, expected: 'allow' },
+  { id: 'characters-update-own', description: 'Parent cannot update their own character directly (routes only)', role: 'parent', operation: 'update', path: (ids) => `characters/${ids.characterId}`, data: { displayName: 'Updated Character' }, expected: 'deny' },
+  { id: 'characters-delete-own', description: 'Parent cannot delete their own character directly (routes only)', role: 'parent', operation: 'delete', path: (ids) => `characters/${ids.characterId}`, expected: 'deny' },
   { id: 'characters-help-read', description: 'Authenticated user can read help-character', role: 'parent', operation: 'get', path: () => `characters/help-character`, expected: 'allow' },
 
   // ========== STORIES TESTS ==========

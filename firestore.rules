@@ -35,15 +35,16 @@ service cloud.firestore {
       return !('deletedAt' in resource.data) || resource.data.deletedAt == null;
     }
 
+    // A Child or Character of the caller's family (either owner field, slice 5.7).
+    function ownsPerson() {
+      return isAuthenticated()
+          && (resource.data.get('ownerUid', null) == request.auth.uid
+              || resource.data.get('ownerParentUid', null) == request.auth.uid);
+    }
+
     // Fields an update touches (top-level keys).
     function changedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
-    }
-
-    // The owner field must not change on update: otherwise an owner could move
-    // a document into another family's account.
-    function ownerUnchanged(field) {
-      return request.resource.data.get(field, null) == resource.data.get(field, null);
     }
 
     // ========== USER PROFILES ==========
@@ -74,45 +75,24 @@ service cloud.firestore {
     }
 
     // ========== CHILDREN ==========
+    // Children and Characters (slice 5.7b) are written only by the
+    // `/api/children/**` and `/api/characters/**` routes (Admin SDK) and by
+    // admins. The owner reads them; documents carry `ownerParentUid` until the
+    // likeness migration and both owner fields after it, so either matches.
+    // List queries must filter on the owner field.
     match /children/{childId} {
-      allow get: if isAdmin()
-                 || (isHelpDocument(childId) && isAuthenticated())
-                 || (isAuthenticated() && resource.data.ownerParentUid == request.auth.uid && notDeleted());
-
-      // Help-tour samples (help-*) are created server-side only.
-      allow create: if isAdmin()
-                    || (isAuthenticated() && !isHelpDocument(childId) && request.resource.data.ownerParentUid == request.auth.uid);
-
-      allow update: if isAdmin()
-                    || (isAuthenticated() && !isHelpDocument(childId) && resource.data.ownerParentUid == request.auth.uid
-                        && ownerUnchanged('ownerParentUid'));
-      allow delete: if isAdmin()
-                    || (isAuthenticated() && !isHelpDocument(childId) && resource.data.ownerParentUid == request.auth.uid);
-
-      // List: Requires ownership filter in query. Firestore will reject queries
-      // that don't include where('ownerParentUid', '==', uid).
-      allow list: if isAdmin()
-                  || (isAuthenticated() && resource.data.ownerParentUid == request.auth.uid && notDeleted());
+      allow get, list: if isAdmin()
+                       || (isHelpDocument(childId) && isAuthenticated())
+                       || (ownsPerson() && notDeleted());
+      allow write: if isAdmin();
     }
 
     // ========== CHARACTERS ==========
     match /characters/{characterId} {
-      allow get: if isAdmin()
-                 || (isHelpDocument(characterId) && isAuthenticated())
-                 || (isAuthenticated() && resource.data.ownerParentUid == request.auth.uid && notDeleted());
-
-      // List: Requires where('ownerParentUid', '==', uid) in query
-      allow list: if isAdmin()
-                  || (isAuthenticated() && resource.data.ownerParentUid == request.auth.uid && notDeleted());
-
-      allow create: if isAdmin()
-                    || (isAuthenticated() && !isHelpDocument(characterId) && request.resource.data.ownerParentUid == request.auth.uid);
-
-      allow update: if isAdmin()
-                    || (isAuthenticated() && !isHelpDocument(characterId) && resource.data.ownerParentUid == request.auth.uid
-                        && ownerUnchanged('ownerParentUid'));
-      allow delete: if isAdmin()
-                    || (isAuthenticated() && !isHelpDocument(characterId) && resource.data.ownerParentUid == request.auth.uid);
+      allow get, list: if isAdmin()
+                       || (isHelpDocument(characterId) && isAuthenticated())
+                       || (ownsPerson() && notDeleted());
+      allow write: if isAdmin();
     }
 
     // ========== STORIES ==========

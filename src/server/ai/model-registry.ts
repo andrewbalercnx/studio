@@ -47,12 +47,12 @@ export const AI_PURPOSE_KIND: Record<AIPurpose, AIPurposeKind> = {
  * - creation.text: gemini-3.8-flash (wizard, gemini3/4, friends, ending)
  * - story.finish: gemini-3.8-flash (title and synopsis; the former story-title/synopsis flows)
  * - manuscript.text: gemini-3.8-flash (the former story-pagination-flow)
- * - likeness.describe: gemini-3.8-flash (image-description-flow)
+ * - likeness.describe: gemini-3.8-flash (the former image-description-flow)
  * - image purposes (likeness.portrait, character.avatar, book.*): gemini-3.1-flash-image
  *   (DEFAULT_AI_MODELS_CONFIG.imageGenerationModel)
- * - likeness.avatar: gemini-3.1-flash-image (avatar-flow / character-avatar-flow; `character.avatar` is its
+ * - likeness.avatar: gemini-3.1-flash-image (the former avatar-flow and character-avatar-flow; `character.avatar` is its
  *   former name, kept so a configured model still applies)
- * - likeness.animate: fal.ai Kling 1.6 pro image-to-video (avatar-animation-flow); a `veo-…` model id
+ * - likeness.animate: fal.ai Kling 1.6 pro image-to-video (the former avatar-animation-flow); a `veo-…` model id
  *   uses Veo through the Gemini API instead
  * - narration: ElevenLabs eleven_v3 (default ElevenLabs version in diagnostics config)
  */

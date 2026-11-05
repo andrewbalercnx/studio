@@ -207,7 +207,7 @@ const initialTests: TestResult[] = [
   { id: 'DATA_PROMPTS', name: 'Firestore: Prompt Configs', status: 'PENDING', message: '' },
   { id: 'DATA_IMAGE_STYLES_SCENE_EXEMPLARS', name: 'Firestore: Image Style Scene Exemplars', status: 'PENDING', message: '' },
   { id: 'DATA_CHILDREN_CANONICAL', name: 'Firestore: Children Canonical Image Status', status: 'PENDING', message: '' },
-  { id: 'SCENARIO_CANONICAL_IMAGE_TRIGGER', name: 'Scenario: Canonical Image Generation Trigger', status: 'PENDING', message: '' },
+  { id: 'SCENARIO_LIKENESS_PHOTO_JOBS', name: 'Scenario: Photo Upload Queues Appearance and Portrait', status: 'PENDING', message: '' },
 ];
 
 const resetTestState = (): TestResult[] =>
@@ -885,8 +885,9 @@ export default function AdminRegressionPage() {
         updateTestResult('API_VERIFY_PIN_LOCKOUT', { status: 'ERROR', message: e.message });
     }
 
-    // Test: SCENARIO_CANONICAL_IMAGE_TRIGGER
-    // Uploads a minimal photo via API and verifies canonicalImageGeneration.status is set to 'pending'.
+    // Test: SCENARIO_LIKENESS_PHOTO_JOBS
+    // Adds a minimal photo through POST /api/children/{id}/photos (slice 5.7) and checks that
+    // the photo is stored and the appearance and portrait jobs are queued.
     try {
         const authToken = await auth?.currentUser?.getIdToken?.();
         if (!authToken) throw new Error('Admin auth token not available.');
@@ -897,39 +898,35 @@ export default function AdminRegressionPage() {
             createdAt: serverTimestamp(),
             likes: [],
             dislikes: [],
-        }, 'SCENARIO_CANONICAL_IMAGE_TRIGGER');
+        }, 'SCENARIO_LIKENESS_PHOTO_JOBS');
 
         // Minimal 1×1 PNG
         const MINIMAL_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI6QAAAABJRU5ErkJggg==';
 
-        const uploadRes = await authFetch('/api/children/photos', {
+        const uploadRes = await authFetch(`/api/children/${encodeURIComponent(childRef.id)}/photos`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
-            body: JSON.stringify({ childId: childRef.id, dataUrl: MINIMAL_PNG }),
+            body: JSON.stringify({ dataUrl: MINIMAL_PNG }),
         });
         const uploadBody = await uploadRes.json();
         if (!uploadRes.ok || !uploadBody?.ok) {
-            throw new Error(uploadBody?.errorMessage || `Photo upload API returned ${uploadRes.status}`);
+            throw new Error(uploadBody?.error?.message || `Photo upload API returned ${uploadRes.status}`);
+        }
+        const view = uploadBody.data;
+        if (!Array.isArray(view?.photoIds) || view.photoIds.length !== 1) {
+            throw new Error(`Expected 1 photo after upload, got ${Array.isArray(view?.photoIds) ? view.photoIds.length : typeof view?.photoIds}.`);
+        }
+        const status = view.likenessStatus ?? {};
+        if (status.describe === 'idle' || status.portrait === 'idle') {
+            throw new Error(`Expected appearance and portrait jobs queued, got describe=${status.describe}, portrait=${status.portrait}.`);
         }
 
-        // Read the child doc to verify generation statuses were set
-        const childSnap = await getDoc(childRef);
-        if (!childSnap.exists()) throw new Error('Child document missing after photo upload.');
-        const childData = childSnap.data();
-
-        if (childData.canonicalImageGeneration?.status !== 'pending') {
-            throw new Error(`Expected canonicalImageGeneration.status='pending', got '${childData.canonicalImageGeneration?.status ?? 'undefined'}'.`);
-        }
-        if (childData.imageDescriptionGeneration?.status !== 'pending') {
-            throw new Error(`Expected imageDescriptionGeneration.status='pending', got '${childData.imageDescriptionGeneration?.status ?? 'undefined'}'.`);
-        }
-
-        updateTestResult('SCENARIO_CANONICAL_IMAGE_TRIGGER', {
+        updateTestResult('SCENARIO_LIKENESS_PHOTO_JOBS', {
             status: 'PASS',
-            message: `Photo uploaded; canonicalImageGeneration and imageDescriptionGeneration both set to 'pending'.`,
+            message: `Photo stored; describe=${status.describe}, portrait=${status.portrait}.`,
         });
     } catch (e: any) {
-        updateTestResult('SCENARIO_CANONICAL_IMAGE_TRIGGER', { status: 'ERROR', message: e.message });
+        updateTestResult('SCENARIO_LIKENESS_PHOTO_JOBS', { status: 'ERROR', message: e.message });
     }
 
     // --- API Tests ---

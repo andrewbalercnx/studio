@@ -157,7 +157,7 @@ jobs:
         env:
           PLAYWRIGHT_BASE_URL: ${{ env.E2E_BASE_URL }}
         run: |
-          npx playwright test e2e/funnel.spec.ts e2e/login.smoke.spec.ts e2e/order.spec.ts \
+          npx playwright test e2e/funnel.spec.ts e2e/login.smoke.spec.ts e2e/order.spec.ts e2e/characters.spec.ts \
             --project=desktop-chrome --project=mobile-chrome
 
       # ── REPORT-ONLY (promotion criteria in docs/testing/e2e.md) ────────

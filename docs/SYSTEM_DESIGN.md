@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-11-05 (children and characters on the server, slice 5.7a: likeness jobs on the harness, routes, migration script; §5). 2026-11-05 (legacy storybook print and order code deleted, slice 5.6b). 2026-11-05 (print clients, slice 5.6: order pages for parents, admin order pages and the approval switch on the v2 order routes). 2026-11-05 (print orders and payment, slice 5.5b: `src/server/orders/` with Stripe Checkout behind a gateway, print credits, the approval switch, `order.submit` on the mixam queue that never submits twice, the Mixam webhook forward only). 2026-11-04 (print render, slice 5.5a: Books gain title, end and AI back-cover pages; `src/server/print/` renders a locked Book to interior and cover PDFs per template, with bleed and spine width, as immutable renders via `book.render`). 2026-11-04 (mobile makes and reads Books). 2026-11-04 (story-introduced characters get a drawn avatar: a `character.avatar` ai-image job (`src/server/characters/avatar.ts`, new AI purpose) enqueued with the turn that creates them, drawing a head-and-shoulders avatar from the character's words into `avatarUrl` — UI only, never the likeness portrait (ADR-0006)). 2026-11-04 (admin/writer roles come from the custom claim only — the client no longer trusts a `users/{uid}` doc role field; `scripts/set-admin.mjs` sets the claim; rules also refuse owner writes to flat `isAdmin`/`isWriter`/`canShowWizardTargets`). 2026-11-02 (admin allowance management with grant history; `/auth/action` handles auth email links on our domain; reset emails sent by us via `POST /api/auth/password-reset`). 2026-11-01 (Book & Story trace: AI calls tagged by trace context and always logged; `/admin/trace`). 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.4: every client creates Stories through the creation routes (§2) — one mode chooser and play view for the web child shell and the kids PWA, mobile on the same routes, `GET /api/stories[/{id}]` and `GET /api/creation-modes`; the session engine, chat mode, warmup, arc engine, every old mode route and flow, `storySessions` and the old storybook read paths are deleted; Stories are server-written only; the trial data is reset at deploy (`docs/DEPLOYMENT.md` §10). Phase 5.3: server-side Story creation (§13) — five modes behind one engine interface, `POST /api/stories` + turns + abandon + finish, `story.finish` job, target Stories and turns in `stories`, trial-data reset script; not yet used by the clients (5.4). Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
+> **Last Updated**: 2026-11-05 (children and characters clients, slice 5.7b: pages on the routes, rules server-written, old likeness flows and routes deleted; §5). 2026-11-05 (children and characters on the server, slice 5.7a: likeness jobs on the harness, routes, migration script; §5). 2026-11-05 (legacy storybook print and order code deleted, slice 5.6b). 2026-11-05 (print clients, slice 5.6: order pages for parents, admin order pages and the approval switch on the v2 order routes). 2026-11-05 (print orders and payment, slice 5.5b: `src/server/orders/` with Stripe Checkout behind a gateway, print credits, the approval switch, `order.submit` on the mixam queue that never submits twice, the Mixam webhook forward only). 2026-11-04 (print render, slice 5.5a: Books gain title, end and AI back-cover pages; `src/server/print/` renders a locked Book to interior and cover PDFs per template, with bleed and spine width, as immutable renders via `book.render`). 2026-11-04 (mobile makes and reads Books). 2026-11-04 (story-introduced characters get a drawn avatar: a `character.avatar` ai-image job (`src/server/characters/avatar.ts`, new AI purpose) enqueued with the turn that creates them, drawing a head-and-shoulders avatar from the character's words into `avatarUrl` — UI only, never the likeness portrait (ADR-0006)). 2026-11-04 (admin/writer roles come from the custom claim only — the client no longer trusts a `users/{uid}` doc role field; `scripts/set-admin.mjs` sets the claim; rules also refuse owner writes to flat `isAdmin`/`isWriter`/`canShowWizardTargets`). 2026-11-02 (admin allowance management with grant history; `/auth/action` handles auth email links on our domain; reset emails sent by us via `POST /api/auth/password-reset`). 2026-11-01 (Book & Story trace: AI calls tagged by trace context and always logged; `/admin/trace`). 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.4: every client creates Stories through the creation routes (§2) — one mode chooser and play view for the web child shell and the kids PWA, mobile on the same routes, `GET /api/stories[/{id}]` and `GET /api/creation-modes`; the session engine, chat mode, warmup, arc engine, every old mode route and flow, `storySessions` and the old storybook read paths are deleted; Stories are server-written only; the trial data is reset at deploy (`docs/DEPLOYMENT.md` §10). Phase 5.3: server-side Story creation (§13) — five modes behind one engine interface, `POST /api/stories` + turns + abandon + finish, `story.finish` job, target Stories and turns in `stories`, trial-data reset script; not yet used by the clients (5.4). Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -277,12 +277,17 @@ POST …/children|characters (no photos) ─▶ likeness.avatar from the descrip
   "imagined"; a parent may use one of the photos instead (kept across new portraits). Children get the
   animated avatar (`likeness.animate`: fal.ai Kling with `FAL_KEY`, or a `veo-…` model through the Gemini
   API). Story-introduced characters get a description avatar (formerly `character.avatar`).
+- **Clients on the routes (5.7b)**: the parent pages, the editor (`EntityEditor`), the photos and avatar
+  panel (`LikenessPanel`), the kids read-aloud toggle and the admin owner change all call
+  `/api/children/**` and `/api/characters/**` (`src/lib/people/api.ts`, `use-people.ts`). The rules refuse
+  browser writes to children and characters (admins excepted, for the sample-data tools); photos are
+  uploaded through the routes only. Pages read `PersonView` (`GET /api/children?view=person`,
+  `GET /api/characters`) and refresh while any likeness part is `working`, so each part's progress shows
+  on its own. Mobile keeps the bare `GET /api/children` shape.
 - **Migration**: the server reads the target `likeness.*` fields or the old `imageDescription` /
-  `canonicalImageUrl` / `avatarUrl` (`entities.ts`), and mirrors likeness writes into the old fields until
-  5.7b moves the pages onto the routes and `scripts/migrate-likeness.mjs` runs.
-- **Until 5.7b** the parent pages still write children and characters from the browser and use the old
-  photo and avatar routes and flows (`src/ai/flows/*avatar*`, `image-description-flow`,
-  `canonical-image-flow`).
+  `canonicalImageUrl` / `avatarUrl` (`entities.ts`); `scripts/migrate-likeness.mjs` copies the old fields
+  into the target ones with the 5.7b release (`DEPLOYMENT.md` §12). Likeness writes are still mirrored
+  into the old fields for readers not yet moved; the old fields go one release after the migration.
 
 ### 6. Configuration System
 
@@ -301,9 +306,9 @@ Central configuration for which AI models to use across the application. Managed
 
 | Model Type | Purpose | Flows Using It |
 |------------|---------|----------------|
-| `imageGenerationModel` | Image generation | avatar-flow, character-avatar-flow, etc. (the Book pipeline resolves its models through `config/aiModels` purposes, §11) |
+| `imageGenerationModel` | Image generation | image-style-sample-flow, story-output-type-image-flow, etc. (the Book pipeline resolves its models through `config/aiModels` purposes, §11) |
 | `primaryTextModel` | Complex text generation | story-beat-flow, story-compile-flow, character-traits-flow |
-| `lightweightTextModel` | Simple text tasks | story-synopsis-flow, image-description-flow |
+| `lightweightTextModel` | Simple text tasks | story-synopsis-flow |
 | `legacyTextModel` | Specific older use cases | story-title-flow |
 
 **Implementation**:
@@ -702,7 +707,7 @@ POST /api/stories/{id}/finish    failed → finishing (new job)
     abandon retries if any instance trips the circuit mid-flight).
   - `src/lib/ai-error-map.ts`: the exhaustive, unit-tested raw→user-safe message table
     (`toUserSafeMessage` / `categorizeError`).
-- **Retry adoption**: `avatarAnimationFlow` runs under `withProviderReliability`; the creation
+- **Retry adoption**: the likeness jobs (including the animated avatar) and the creation
   engines and `story.finish` call models through the AI harness (retries, breakers); the Book pipeline's `book.pageArt` job simplifies its prompt per job
   attempt (a flow-specific recovery) and goes through the AI harness (shared classifier, backoff and
   breakers). ElevenLabs TTS flows use the SDK's built-in
@@ -710,7 +715,7 @@ POST /api/stories/{id}/finish    failed → finishing (new job)
 - **No raw error reaches a child/parent — at every layer**:
   - *Routes*: the routes on `withRoute` (creation, Books) answer `{ ok: false, error: { code,
     message } }` with user-safe messages (model failures are 503 `AI_UNAVAILABLE`); the older
-    generation routes (`tts`, `generateAvatar`, `generateCharacterAvatar`) map catch-block errors
+    generation routes (`tts`) map catch-block errors
     through `toUserSafeMessage`. Clients map codes to kid-safe copy (`src/lib/stories/api.ts`).
   - *Flow results*: flows that return `{ error | errorMessage }` result objects return user-safe
     strings (routes pass these through verbatim). Raw detail stays in `aiFlowLogs` and

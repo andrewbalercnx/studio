@@ -1,8 +1,11 @@
 'use client';
 
+/**
+ * Add or edit a Child or Character (slice 5.7b). Saves through the routes
+ * (`peopleApi`); photos and the avatar are managed by `LikenessPanel`, whose
+ * parts are made by server jobs. The browser never writes these documents.
+ */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { doc, setDoc, updateDoc, serverTimestamp, collection as firestoreCollection } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,14 +18,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ArrayInput } from './ArrayInput';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { LikenessPanel } from './LikenessPanel';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase/auth/use-user';
-import { useUploadFile } from '@/firebase/storage/use-upload-file';
-import { LoaderCircle, Sparkles, Upload, User as UserIcon, X, Volume2, Square } from 'lucide-react';
-import Image from 'next/image';
-import type { ChildProfile, Character, Pronouns } from '@/lib/types';
+import { LoaderCircle, Volume2, Square } from 'lucide-react';
+import { newIdempotencyKey, peopleApi, type CharacterInput, type ChildInput, type PersonView } from '@/lib/people/api';
 import { DEFAULT_TTS_VOICE } from '@/lib/tts-config';
+
+type Pronouns = 'he/him' | 'she/her' | 'they/them';
+type CharacterType = 'Family' | 'Friend' | 'Pet' | 'Toy' | 'Other';
+const CHARACTER_TYPES: CharacterType[] = ['Family', 'Friend', 'Pet', 'Toy', 'Other'];
 
 const PRONOUN_OPTIONS: { value: Pronouns; label: string }[] = [
   { value: 'he/him', label: 'He/Him' },
@@ -53,28 +58,29 @@ type EntityType = 'child' | 'character';
 
 type EntityEditorProps = {
   entityType: EntityType;
-  entity?: ChildProfile | Character | null;
-  parentUid: string;
-  children?: ChildProfile[]; // For character editor to select childId
-  onSave: () => void;
+  entity?: PersonView | null;
+  /** For the character editor: the children it may be scoped to. */
+  childOptions?: Array<{ id: string; displayName: string }>;
+  /** Called after a successful save, with the saved view. */
+  onSave: (saved?: PersonView) => void;
   onCancel?: () => void;
   /** Fired once after a NEW entity is successfully created (not on edit/cancel). */
-  onCreated?: () => void;
+  onCreated?: (created: PersonView) => void;
+  /** Called when photos or the avatar change while editing. */
+  onLikenessChange?: (person: PersonView) => void;
 };
 
 export function EntityEditor({
   entityType,
   entity,
-  parentUid,
-  children = [],
+  childOptions: children = [],
   onSave,
   onCancel,
-  onCreated
+  onCreated,
+  onLikenessChange,
 }: EntityEditorProps) {
-  const firestore = useFirestore();
   const { toast } = useToast();
   const { user } = useUser();
-  const { uploadFile, uploadCharacterPhoto, isUploading } = useUploadFile();
   const isEditing = !!entity;
   const isCharacter = entityType === 'character';
 
@@ -85,15 +91,12 @@ export function EntityEditor({
   const [description, setDescription] = useState('');
   const [likes, setLikes] = useState<string[]>([]);
   const [dislikes, setDislikes] = useState<string[]>([]);
-  const [photos, setPhotos] = useState<string[]>([]);
-  const [avatarUrl, setAvatarUrl] = useState<string>('');
 
   // Character-specific fields
-  const [characterType, setCharacterType] = useState<Character['type']>('Friend');
+  const [characterType, setCharacterType] = useState<CharacterType>('Friend');
   const [relationship, setRelationship] = useState<string>(''); // For Family type characters
   const [childId, setChildId] = useState<string>('__family_wide__'); // Special value = family-wide
 
-  // Child-specific fields
   const [namePronunciation, setNamePronunciation] = useState<string>('');
 
   // Pronunciation test state
@@ -101,58 +104,27 @@ export function EntityEditor({
   const [isPlayingPronunciation, setIsPlayingPronunciation] = useState(false);
   const pronunciationAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Avatar generation state
-  const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
-  const [generatedAvatar, setGeneratedAvatar] = useState<string | null>(null);
-  const [avatarFeedback, setAvatarFeedback] = useState('');
-
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  // One key per create attempt, so a retried click does not add a second child.
+  const createKey = useRef(newIdempotencyKey());
 
   // Initialize form from entity
   useEffect(() => {
-    if (entity) {
-      setDisplayName(entity.displayName || '');
-      setPronouns((entity as any).pronouns || '');
-      setDescription(entity.description || '');
-      setLikes((entity as any).likes || []);
-      setDislikes((entity as any).dislikes || []);
-      setPhotos((entity as any).photos || []);
-      setAvatarUrl(entity.avatarUrl || '');
-
-      // Handle dateOfBirth (could be Firestore Timestamp or string)
-      if (entity.dateOfBirth) {
-        try {
-          let dateStr = '';
-          if (typeof entity.dateOfBirth?.toDate === 'function') {
-            const date = entity.dateOfBirth.toDate();
-            dateStr = date.toISOString().split('T')[0];
-          } else if (typeof entity.dateOfBirth === 'string') {
-            dateStr = new Date(entity.dateOfBirth).toISOString().split('T')[0];
-          } else if (entity.dateOfBirth instanceof Date) {
-            dateStr = entity.dateOfBirth.toISOString().split('T')[0];
-          }
-          setDateOfBirth(dateStr);
-        } catch (e) {
-          console.error('Error parsing date:', e);
-        }
-      }
-
-      if (isCharacter && 'type' in entity) {
-        setCharacterType((entity as Character).type || 'Friend');
-        setRelationship((entity as Character).relationship || '');
-        setChildId((entity as Character).childId || '__family_wide__');
-        // Load pronunciation for characters
-        setNamePronunciation((entity as Character).namePronunciation || '');
-      }
-
-      // Child-specific: load pronunciation
-      if (!isCharacter) {
-        const childEntity = entity as ChildProfile;
-        setNamePronunciation(childEntity.namePronunciation || '');
-      }
+    if (!entity) return;
+    setDisplayName(entity.displayName || '');
+    setPronouns((entity.pronouns as Pronouns | null) || '');
+    setDescription(entity.description || '');
+    setLikes(entity.likes || []);
+    setDislikes(entity.dislikes || []);
+    setDateOfBirth(entity.dateOfBirth || '');
+    setNamePronunciation(entity.namePronunciation || '');
+    if (entity.kind === 'character') {
+      setCharacterType(CHARACTER_TYPES.includes(entity.type as CharacterType) ? (entity.type as CharacterType) : 'Friend');
+      setRelationship(entity.relationship || '');
+      setChildId(entity.childId || '__family_wide__');
     }
-  }, [entity, isCharacter]);
+  }, [entity]);
 
   // Stop pronunciation audio playback
   const stopPronunciationPlayback = useCallback(() => {
@@ -198,9 +170,7 @@ export function EntityEditor({
       const idToken = await user.getIdToken();
 
       // Get the voice ID from the child entity if available
-      const voiceId = !isCharacter && entity
-        ? (entity as ChildProfile).preferredVoiceId
-        : undefined;
+      const voiceId = entity?.kind === 'child' ? entity.preferredVoiceId ?? undefined : undefined;
 
       const response = await fetch('/api/tts', {
         method: 'POST',
@@ -258,141 +228,7 @@ export function EntityEditor({
     } finally {
       setIsTestingPronunciation(false);
     }
-  }, [isPlayingPronunciation, stopPronunciationPlayback, namePronunciation, displayName, user, isCharacter, entity, toast]);
-
-  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!user || !entity?.id) return;
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const collectionName = isCharacter ? 'characters' : 'children';
-
-      // Convert File to dataUrl
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.readAsDataURL(file);
-      });
-
-      // Use the appropriate upload function based on entity type
-      const downloadUrl = isCharacter
-        ? await uploadCharacterPhoto({
-            characterId: entity.id,
-            dataUrl,
-            fileName: file.name,
-          })
-        : await uploadFile({
-            childId: entity.id,
-            dataUrl,
-            fileName: file.name,
-          });
-
-      const newPhotos = [...photos, downloadUrl].filter((url): url is string => url !== null);
-      setPhotos(newPhotos);
-
-      // Update Firestore
-      if (firestore) {
-        const docRef = doc(firestore, collectionName, entity.id);
-        await updateDoc(docRef, { photos: newPhotos });
-        toast({ title: 'Photo uploaded successfully' });
-      }
-    } catch (err: any) {
-      console.error('Error uploading photo:', err);
-      toast({ title: 'Error uploading photo', description: err.message, variant: 'destructive' });
-    }
-  };
-
-  const handleRemovePhoto = async (photoUrl: string) => {
-    if (!entity?.id || !firestore || !user) return;
-
-    try {
-      const newPhotos = photos.filter(p => p !== photoUrl);
-      setPhotos(newPhotos);
-
-      const collectionName = isCharacter ? 'characters' : 'children';
-      const docRef = doc(firestore, collectionName, entity.id);
-      await updateDoc(docRef, { photos: newPhotos });
-      toast({ title: 'Photo removed' });
-
-      // Trigger image description regeneration in background
-      const idToken = await user.getIdToken();
-      fetch('/api/regenerate-image-description', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          entityId: entity.id,
-          entityType: isCharacter ? 'character' : 'child',
-        }),
-      }).catch((err) => {
-        console.error('Error triggering image description regeneration:', err);
-      });
-    } catch (err: any) {
-      console.error('Error removing photo:', err);
-      toast({ title: 'Error removing photo', description: err.message, variant: 'destructive' });
-    }
-  };
-
-  const handleGenerateAvatar = async () => {
-    if (!user || !entity?.id) {
-      toast({ title: 'Error', description: 'Please save the entity first before generating an avatar', variant: 'destructive' });
-      return;
-    }
-
-    setIsGeneratingAvatar(true);
-    setError('');
-
-    try {
-      const idToken = await user.getIdToken();
-      const apiEndpoint = isCharacter ? '/api/generateCharacterAvatar' : '/api/generateAvatar';
-      const idField = isCharacter ? 'characterId' : 'childId';
-
-      const res = await fetch(apiEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({ [idField]: entity.id, feedback: avatarFeedback }),
-      });
-
-      const result = await res.json();
-      if (!res.ok || !result.ok) {
-        throw new Error(result.errorMessage || 'Failed to generate avatar.');
-      }
-
-      setGeneratedAvatar(result.imageUrl);
-      setAvatarFeedback('');
-      toast({ title: 'Avatar generated successfully!' });
-    } catch (err: any) {
-      console.error('Error generating avatar:', err);
-      setError(err.message);
-      toast({ title: 'Avatar generation failed', description: err.message, variant: 'destructive' });
-    } finally {
-      setIsGeneratingAvatar(false);
-    }
-  };
-
-  const handleAcceptAvatar = async () => {
-    if (!generatedAvatar || !entity?.id || !firestore) return;
-
-    try {
-      const collectionName = isCharacter ? 'characters' : 'children';
-      const docRef = doc(firestore, collectionName, entity.id);
-      await updateDoc(docRef, { avatarUrl: generatedAvatar });
-
-      setAvatarUrl(generatedAvatar);
-      setGeneratedAvatar(null);
-      toast({ title: 'Avatar updated successfully!' });
-    } catch (err: any) {
-      console.error('Error updating avatar:', err);
-      toast({ title: 'Error updating avatar', description: err.message, variant: 'destructive' });
-    }
-  };
+  }, [isPlayingPronunciation, stopPronunciationPlayback, namePronunciation, displayName, user, entity, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -403,122 +239,41 @@ export function EntityEditor({
       return;
     }
 
-    if (!firestore) {
-      setError('Firestore not initialized');
-      return;
-    }
-
     setIsSaving(true);
+    const profile = {
+      displayName: displayName.trim(),
+      namePronunciation: namePronunciation.trim() || null,
+      pronouns: pronouns || null,
+      description: description.trim() || null,
+      likes,
+      dislikes,
+      dateOfBirth: dateOfBirth || null,
+    };
 
     try {
-      const collectionName = isCharacter ? 'characters' : 'children';
-      const docId = entity?.id || doc(firestoreCollection(firestore, collectionName)).id;
-      const docRef = doc(firestore, collectionName, docId);
-
-      // Parse date of birth
-      let dobValue: any = null;
-      if (dateOfBirth) {
-        dobValue = new Date(dateOfBirth);
-      }
-
-      // Helper function to remove undefined fields
-      const removeUndefined = (obj: any) => {
-        const cleaned: any = {};
-        Object.keys(obj).forEach(key => {
-          if (obj[key] !== undefined) {
-            cleaned[key] = obj[key];
-          }
-        });
-        return cleaned;
-      };
-
-      // Common data
-      const commonData: any = {
-        displayName: displayName.trim(),
-        likes,
-        dislikes,
-        ownerParentUid: parentUid,
-        updatedAt: serverTimestamp(),
-      };
-
-      // Only add optional fields if they have values
-      if (pronouns) {
-        commonData.pronouns = pronouns;
-      }
-      if (description.trim()) {
-        commonData.description = description.trim();
-      }
-      if (dobValue) {
-        commonData.dateOfBirth = dobValue;
-      }
-
+      let saved: PersonView;
       if (isCharacter) {
-        // Character data
-        const characterData: any = {
-          ...commonData,
+        const input: CharacterInput = {
+          ...profile,
           type: characterType,
+          relationship: characterType === 'Family' && relationship ? relationship : null,
+          childId: childId === '__family_wide__' ? null : childId,
         };
-
-        // Only add relationship if type is Family and relationship is set
-        if (characterType === 'Family' && relationship) {
-          characterData.relationship = relationship;
-        }
-
-        // Only add childId if it's not the family-wide default
-        if (childId !== '__family_wide__') {
-          characterData.childId = childId;
-        }
-
-        // Only add pronunciation if it has a value
-        if (namePronunciation.trim()) {
-          characterData.namePronunciation = namePronunciation.trim();
-        }
-
-        const cleanedData = removeUndefined(characterData);
-
-        if (isEditing) {
-          await updateDoc(docRef, cleanedData);
-        } else {
-          await setDoc(docRef, {
-            ...characterData,
-            id: docId,
-            photos: [],
-            avatarUrl: `https://picsum.photos/seed/${docId}/200/200`,
-            createdAt: serverTimestamp(),
-            isParentGenerated: true, // Parent-created character
-            usageCount: 0, // Not used in any story yet
-          });
-        }
+        saved = entity
+          ? await peopleApi.update('character', entity.id, input)
+          : await peopleApi.create('character', { ...input, idempotencyKey: createKey.current });
       } else {
-        // Child data
-        const childData: any = {
-          ...commonData,
-        };
-
-        // Only add pronunciation if it has a value
-        if (namePronunciation.trim()) {
-          childData.namePronunciation = namePronunciation.trim();
-        }
-
-        const cleanedChildData = removeUndefined(childData);
-
-        if (isEditing) {
-          await updateDoc(docRef, cleanedChildData);
-        } else {
-          await setDoc(docRef, {
-            ...childData,
-            id: docId,
-            photos: [],
-            avatarUrl: `https://picsum.photos/seed/${displayName.trim()}/200/200`,
-            preferredVoiceId: DEFAULT_TTS_VOICE, // Set default TTS voice (Alice) for new children
-            autoReadAloud: true, // Enable "Read to Me" by default
-            createdAt: serverTimestamp(),
-          });
-        }
+        const input: ChildInput = profile;
+        saved = entity
+          ? await peopleApi.update('child', entity.id, input)
+          : await peopleApi.create('child', { ...input, preferredVoiceId: DEFAULT_TTS_VOICE, autoReadAloud: true, idempotencyKey: createKey.current });
       }
 
-      if (!isEditing) onCreated?.();
-      onSave();
+      if (!isEditing) {
+        createKey.current = newIdempotencyKey();
+        onCreated?.(saved);
+      }
+      onSave(saved);
     } catch (err: any) {
       console.error('Error saving entity:', err);
       setError(err.message || 'Failed to save');
@@ -617,9 +372,8 @@ export function EntityEditor({
               value={characterType}
               onValueChange={(val) => {
                 // Guard against spurious/invalid value changes (e.g., empty strings)
-                const validTypes = ['Family', 'Friend', 'Pet', 'Toy', 'Other'];
-                if (!validTypes.includes(val)) return;
-                setCharacterType(val as Character['type']);
+                if (!CHARACTER_TYPES.includes(val as CharacterType)) return;
+                setCharacterType(val as CharacterType);
                 // Clear relationship if switching away from Family
                 if (val !== 'Family') {
                   setRelationship('');
@@ -742,127 +496,7 @@ export function EntityEditor({
         variant="destructive"
       />
 
-      {isEditing && entity?.id && (
-        <>
-          {/* Photo Upload Section - works for both children and characters */}
-          <Card className="bg-muted/30">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Upload className="h-4 w-4" /> Photos
-              </CardTitle>
-              <CardDescription>
-                {isCharacter
-                  ? 'Upload photos of this character to help generate a better avatar'
-                  : 'Upload photos to help generate a better avatar'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {photos.length > 0 && (
-                <div className="grid grid-cols-3 gap-2">
-                  {photos.map((photoUrl, idx) => (
-                    <div key={idx} className="relative group">
-                      <Image
-                        src={photoUrl}
-                        alt={`Photo ${idx + 1}`}
-                        width={100}
-                        height={100}
-                        className="rounded-md object-cover w-full h-24"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleRemovePhoto(photoUrl)}
-                        className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div>
-                <Input
-                  type="file"
-                  accept="image/*"
-                  onChange={handlePhotoUpload}
-                  disabled={isUploading}
-                  className="cursor-pointer"
-                />
-                {isUploading && <p className="text-sm text-muted-foreground mt-2">Uploading...</p>}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* AI Avatar Generator Section */}
-          <Card className="bg-muted/30">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Sparkles className="text-primary h-4 w-4" /> AI Avatar Generator
-              </CardTitle>
-              <CardDescription>
-                {isCharacter
-                  ? 'Create a cartoon avatar from the character description'
-                  : `Create a cartoon avatar${photos.length > 0 ? ' from photos and profile' : ' from the profile description'}`}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-center">
-                {isGeneratingAvatar ? (
-                  <div className="h-40 w-40 flex items-center justify-center bg-muted rounded-full">
-                    <LoaderCircle className="h-10 w-10 animate-spin text-primary" />
-                  </div>
-                ) : generatedAvatar ? (
-                  <Image
-                    src={generatedAvatar}
-                    alt="Generated avatar"
-                    width={160}
-                    height={160}
-                    className="rounded-full border-4 border-primary shadow-md object-cover"
-                  />
-                ) : avatarUrl ? (
-                  <Image
-                    src={avatarUrl}
-                    alt="Current avatar"
-                    width={160}
-                    height={160}
-                    className="rounded-full border-2 border-muted-foreground/20 object-cover"
-                  />
-                ) : (
-                  <div className="h-40 w-40 flex items-center justify-center bg-muted rounded-full text-muted-foreground">
-                    <UserIcon className="h-10 w-10" />
-                  </div>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="avatarFeedback">Feedback (optional)</Label>
-                <Textarea
-                  id="avatarFeedback"
-                  value={avatarFeedback}
-                  onChange={(e) => setAvatarFeedback(e.target.value)}
-                  placeholder="e.g., make the hair blonder, add glasses..."
-                  rows={2}
-                  disabled={isGeneratingAvatar}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  onClick={handleGenerateAvatar}
-                  disabled={isGeneratingAvatar}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  {isGeneratingAvatar ? 'Generating...' : generatedAvatar ? 'Regenerate' : 'Generate Avatar'}
-                </Button>
-                {generatedAvatar && (
-                  <Button type="button" onClick={handleAcceptAvatar} className="flex-1">
-                    Accept & Save
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
+      {isEditing && entity && <LikenessPanel person={entity} onChange={onLikenessChange} />}
 
       <div className="flex gap-2 pt-4">
         <Button type="submit" disabled={isSaving}>

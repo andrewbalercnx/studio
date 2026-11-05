@@ -12,7 +12,7 @@
  */
 import { initializeApp } from 'firebase/app';
 import {
-  getFirestore, connectFirestoreEmulator, doc, setDoc, updateDoc, getDoc, getDocs, addDoc, collection, query, where, serverTimestamp,
+  getFirestore, connectFirestoreEmulator, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, addDoc, collection, query, where, serverTimestamp,
 } from 'firebase/firestore';
 
 const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080').split(':');
@@ -43,6 +43,9 @@ async function check(label, expected, operation) {
 
 // Seed as admin.
 await setDoc(doc(admin, 'children', 'c1'), { ownerParentUid: 'p1', displayName: 'Emma' });
+await setDoc(doc(admin, 'children', 'c3'), { ownerUid: 'p1', ownerParentUid: 'p1', displayName: 'Ana' });
+await setDoc(doc(admin, 'children', 'c9'), { ownerUid: 'p2', ownerParentUid: 'p2', displayName: 'Other' });
+await setDoc(doc(admin, 'characters', 'ch1'), { ownerUid: 'p1', ownerParentUid: 'p1', displayName: 'Rex' });
 // A story written by the retired flows (parentUid, no schemaVersion): removed by the reset, unreadable before it.
 await setDoc(doc(admin, 'stories', 's1'), { parentUid: 'p1', childId: 'c1', metadata: { title: 'Old', characterIds: [] }, isLocked: false });
 await setDoc(doc(admin, 'systemConfig', 'diagnostics'), { enableAnalytics: false });
@@ -66,11 +69,22 @@ await check('mark startup wizard complete', 'allow', () => updateDoc(doc(parent,
 await check('admin grants a role', 'allow', () => updateDoc(doc(admin, 'users', 'p1'), { 'roles.isWriter': true }));
 await check('admin toggles wizard targets', 'allow', () => updateDoc(doc(admin, 'users', 'p1'), { canShowWizardTargets: true }));
 
-// children: owner field immutable; help-* samples server-only.
-await check('create own child', 'allow', () => setDoc(doc(parent, 'children', 'c2'), { ownerParentUid: 'p1', displayName: 'Sam' }));
+// children and characters: server-written (slice 5.7b); the owner reads by either owner field.
+await check('read own child (old owner field)', 'allow', () => getDoc(doc(parent, 'children', 'c1')));
+await check('read own child (both owner fields)', 'allow', () => getDoc(doc(parent, 'children', 'c3')));
+await check('list own children by ownerUid', 'allow', () => getDocs(query(collection(parent, 'children'), where('ownerUid', '==', 'p1'))));
+await check('list own children by ownerParentUid', 'allow', () => getDocs(query(collection(parent, 'children'), where('ownerParentUid', '==', 'p1'))));
+await check("read another family's child", 'deny', () => getDoc(doc(parent, 'children', 'c9')));
+await check('create own child directly', 'deny', () => setDoc(doc(parent, 'children', 'c2'), { ownerParentUid: 'p1', ownerUid: 'p1', displayName: 'Sam' }));
 await check('create help-* child', 'deny', () => setDoc(doc(parent, 'children', 'help-x'), { ownerParentUid: 'p1' }));
-await check('rename own child', 'allow', () => updateDoc(doc(parent, 'children', 'c1'), { displayName: 'Em' }));
+await check('rename own child directly', 'deny', () => updateDoc(doc(parent, 'children', 'c1'), { displayName: 'Em' }));
+await check('set own child avatar directly', 'deny', () => updateDoc(doc(parent, 'children', 'c3'), { 'likeness.avatar': 'https://example.com/a.png' }));
 await check('move child to another family', 'deny', () => updateDoc(doc(parent, 'children', 'c1'), { ownerParentUid: 'victim' }));
+await check('delete own child directly', 'deny', () => deleteDoc(doc(parent, 'children', 'c3')));
+await check('read own character', 'allow', () => getDoc(doc(parent, 'characters', 'ch1')));
+await check('create own character directly', 'deny', () => setDoc(doc(parent, 'characters', 'ch2'), { ownerParentUid: 'p1', ownerUid: 'p1', displayName: 'Sam' }));
+await check('edit own character directly', 'deny', () => updateDoc(doc(parent, 'characters', 'ch1'), { photos: [] }));
+await check('admin edits a child', 'allow', () => updateDoc(doc(admin, 'children', 'c1'), { displayName: 'Emma' }));
 
 // Story sessions and the old storybook subcollections are gone (slice 5.4): no client access.
 await check('create a story session', 'deny', () => setDoc(doc(parent, 'storySessions', 's2'), { parentUid: 'p1', childId: 'c1', status: 'in_progress' }));

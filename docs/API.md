@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-11-05 (children and characters, slice 5.7a: `GET /api/children[/{id}]` on `withRoute` (shape kept); new `POST /api/children`, `GET/POST /api/characters`, `GET/PATCH/DELETE …/{id}`, `…/restore`, `…/photos`, `…/photos/{photoId}`, `…/likeness/refresh`, `…/avatar`, `PATCH /api/admin/{children,characters}/{id}`). 2026-11-05 (legacy print removed, slice 5.6b: `GET /api/storyBook/[bookId]`, `POST /api/storyBook/printable`, `/api/printOrders/**`, `/api/printStoryBooks/**` and `/api/admin/print-orders/**` deleted; the order routes replace them). 2026-11-05 (print clients, slice 5.6: new `GET/PUT /api/admin/orders/settings`; `OrderView` gains `actions.canPayWithCredits` and `creditsAvailable`). 2026-11-05 (print orders, slice 5.5b: new `POST/GET /api/orders`, `GET /api/orders/[orderId]`, `POST /api/orders/[orderId]/{checkout,pay-with-credits,cancel}`, `POST /api/webhooks/stripe`, `GET /api/admin/orders[/[orderId]]`, `POST /api/admin/orders/[orderId]/{approve,cancel,mark-paid,retry,refresh}`; `POST /api/webhooks/mixam` rewritten for v2 orders, forward only). 2026-11-04 (print render, slice 5.5a: new `GET /api/books/[bookId]/print-options`, `POST`/`GET /api/books/[bookId]/renders`, `GET /api/books/[bookId]/renders/[renderId]`; `GET /api/books/[bookId]` pages gain `inReader`). 2026-11-04 (new `GET /api/books` (list) and `GET /api/books/[bookId]` (read, with pages, words and server-computed progress) so the mobile app can list and read Books without Firestore; api-client `getBooks`/`getBook`; shared-types `BookListItem`/`BookReadView`). 2026-11-03 (new `GET /api/admin/allowances/summary`). 2026-11-02 (new `GET/POST /api/admin/allowances`; new `GET /api/library/summary`; new `POST /api/auth/password-reset`). 2026-11-01 (new `GET /api/admin/trace`). 2026-10-30 (`POST /api/stories/[storyId]/finish` re-dispatches a lost finish job). 2026-10-29 (Phase 5.4: every client creates Stories with the creation routes; new `GET /api/creation-modes`; `GET /api/stories?childId` and `GET /api/stories/[storyId]` rewritten for Stories (names resolved on the server; the latter also returns the turns); removed `POST /api/storyWizard`, `/api/gemini3`, `/api/gemini4`, `/api/storyFriends`, `/api/storyBeat`, `/api/storyEnding`, `/api/storyCompile`, `/api/storySession`, `/api/warmupReply`, `/api/ai-warmup`, `/api/storyArc`, `/api/characterTraits`, `/api/characters/create`, `/api/storyBook/audio`, `/api/storyBook/actorAvatar`, `GET /api/kids-flows`, `GET /api/kids-generators`, `GET/PUT /api/admin/system-config/kids-flows`, `GET /api/admin/sessions`, `GET /api/parent/storybooks`, `POST /api/parent/storybooks/thumbnails`, `GET /api/stories/[storyId]/storybooks` and its `pages` route; api-client: `listCreationModes`, `createStory`, `sendTurn`, `abandonStory`, `retryFinish`. Phase 5.3: new `POST /api/stories`, `POST /api/stories/[storyId]/turns`, `POST /api/stories/[storyId]/abandon`, `POST /api/stories/[storyId]/finish` — Story creation in five modes on the server, not yet used by the UI; `POST /api/manuscripts` and `POST /api/books` also accept Stories made by these routes once `complete`. Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-11-05 (children and characters clients, slice 5.7b: `GET /api/children[/{id}]?view=person` answers `PersonView`; `GET /api/characters?includeHelp=1`; removed `POST /api/children/photos`, `POST /api/characters/photos`, `POST /api/regenerate-image-description`, `POST /api/generateAvatar`, `POST /api/generateAvatar/animation`, `POST /api/generateCharacterAvatar`, `GET/DELETE /api/admin/cleanup-exemplars`). 2026-11-05 (children and characters, slice 5.7a: `GET /api/children[/{id}]` on `withRoute` (shape kept); new `POST /api/children`, `GET/POST /api/characters`, `GET/PATCH/DELETE …/{id}`, `…/restore`, `…/photos`, `…/photos/{photoId}`, `…/likeness/refresh`, `…/avatar`, `PATCH /api/admin/{children,characters}/{id}`). 2026-11-05 (legacy print removed, slice 5.6b: `GET /api/storyBook/[bookId]`, `POST /api/storyBook/printable`, `/api/printOrders/**`, `/api/printStoryBooks/**` and `/api/admin/print-orders/**` deleted; the order routes replace them). 2026-11-05 (print clients, slice 5.6: new `GET/PUT /api/admin/orders/settings`; `OrderView` gains `actions.canPayWithCredits` and `creditsAvailable`). 2026-11-05 (print orders, slice 5.5b: new `POST/GET /api/orders`, `GET /api/orders/[orderId]`, `POST /api/orders/[orderId]/{checkout,pay-with-credits,cancel}`, `POST /api/webhooks/stripe`, `GET /api/admin/orders[/[orderId]]`, `POST /api/admin/orders/[orderId]/{approve,cancel,mark-paid,retry,refresh}`; `POST /api/webhooks/mixam` rewritten for v2 orders, forward only). 2026-11-04 (print render, slice 5.5a: new `GET /api/books/[bookId]/print-options`, `POST`/`GET /api/books/[bookId]/renders`, `GET /api/books/[bookId]/renders/[renderId]`; `GET /api/books/[bookId]` pages gain `inReader`). 2026-11-04 (new `GET /api/books` (list) and `GET /api/books/[bookId]` (read, with pages, words and server-computed progress) so the mobile app can list and read Books without Firestore; api-client `getBooks`/`getBook`; shared-types `BookListItem`/`BookReadView`). 2026-11-03 (new `GET /api/admin/allowances/summary`). 2026-11-02 (new `GET/POST /api/admin/allowances`; new `GET /api/library/summary`; new `POST /api/auth/password-reset`). 2026-11-01 (new `GET /api/admin/trace`). 2026-10-30 (`POST /api/stories/[storyId]/finish` re-dispatches a lost finish job). 2026-10-29 (Phase 5.4: every client creates Stories with the creation routes; new `GET /api/creation-modes`; `GET /api/stories?childId` and `GET /api/stories/[storyId]` rewritten for Stories (names resolved on the server; the latter also returns the turns); removed `POST /api/storyWizard`, `/api/gemini3`, `/api/gemini4`, `/api/storyFriends`, `/api/storyBeat`, `/api/storyEnding`, `/api/storyCompile`, `/api/storySession`, `/api/warmupReply`, `/api/ai-warmup`, `/api/storyArc`, `/api/characterTraits`, `/api/characters/create`, `/api/storyBook/audio`, `/api/storyBook/actorAvatar`, `GET /api/kids-flows`, `GET /api/kids-generators`, `GET/PUT /api/admin/system-config/kids-flows`, `GET /api/admin/sessions`, `GET /api/parent/storybooks`, `POST /api/parent/storybooks/thumbnails`, `GET /api/stories/[storyId]/storybooks` and its `pages` route; api-client: `listCreationModes`, `createStory`, `sendTurn`, `abandonStory`, `retryFinish`. Phase 5.3: new `POST /api/stories`, `POST /api/stories/[storyId]/turns`, `POST /api/stories/[storyId]/abandon`, `POST /api/stories/[storyId]/finish` — Story creation in five modes on the server, not yet used by the UI; `POST /api/manuscripts` and `POST /api/books` also accept Stories made by these routes once `complete`. Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -218,20 +218,23 @@ List the caller's children, excluding soft-deleted ones (on `withRoute` since sl
 **Response**: `200 OK` with a **bare array** of child documents (`id`, the stored fields, plus a normalised
 `likeness`), the shape the mobile app reads; not the `{ ok, data }` envelope.
 
+**`?view=person`** (the web pages, slice 5.7b): `{ ok: true, data: PersonView[] }` (below).
+
 ---
 
 ### GET `/api/children/[childId]`
 
-One child, same bare shape. 404 if it does not exist or is soft-deleted; 403 if it belongs to another family
-or the active child persona.
+One child, same bare shape (`?view=person`: `{ ok: true, data: PersonView }`). 404 if it does not exist or is
+soft-deleted; 403 if it belongs to another family or the active child persona.
 
 ---
 
-### Children and Characters (slice 5.7a)
+### Children and Characters (slices 5.7a, 5.7b)
 
 The same routes exist under `/api/children/**` and `/api/characters/**` (`[childId]` / `[characterId]`).
-Auth: the owner (admins and writers exempt); the child-persona scope applies. Responses (except the two
-children GETs above) are `{ ok: true, data: PersonView }`:
+These are the only way to change a child or character: since 5.7b the Firestore rules refuse browser
+writes (admins excepted). Auth: the owner (admins and writers exempt); the child-persona scope applies.
+Responses (except the two bare children GETs above) are `{ ok: true, data: PersonView }`:
 
 `PersonView` = `{ kind, id, ownerUid, displayName, namePronunciation, pronouns, description, likes, dislikes,
 dateOfBirth, likeness: { photos, appearance, portrait, avatar, avatarSource, avatarAnimation, likenessJob },
@@ -241,7 +244,7 @@ childId, origin, originStoryId, usageCount` (characters).
 
 | Route | What it does |
 |-------|--------------|
-| `GET /api/characters[?childId=]` | The family's characters by name; with `childId`, the family-wide ones and that child's |
+| `GET /api/characters[?childId=][&includeHelp=1]` | The family's characters by name; with `childId`, the family-wide ones and that child's; with `includeHelp=1`, the help-tour sample `help-character` is appended (the help wizards point at it) |
 | `POST /api/children`, `POST /api/characters` | Create (`displayName`, optional profile fields, `idempotencyKey`). With no photos an "imagined" avatar is drawn from the description (`likeness.avatar`). 201 |
 | `GET /api/characters/{id}` | One character |
 | `PATCH /api/{children\|characters}/{id}` | Edit profile fields (zod allowlist: name, pronunciation, pronouns, description, likes, dislikes, dateOfBirth `YYYY-MM-DD`, plus `preferredVoiceId`/`autoReadAloud` or `type`/`relationship`/`childId`). Likeness fields are never client-written. A changed description redraws an "imagined" avatar |
@@ -253,72 +256,9 @@ childId, origin, originStoryId, usageCount` (characters).
 | `PATCH /api/admin/{children\|characters}/{id}` | `{ ownerUid }`: move to another family (admin) |
 
 The likeness jobs (`likeness.describe`, `likeness.portrait`, `likeness.avatar`, `likeness.animate`) are
-described in `SYSTEM_DESIGN.md` §5. Until 5.7b the web pages still use the routes below and write the
-documents from the browser.
-
----
-
-### POST `/api/children/photos`
-
-Upload photos for a child profile. Triggers image description generation in background.
-
-**Request Body**: `multipart/form-data`
-- `childId` (string, required) - Child document ID
-- `photos` (File[], required) - Photo files to upload
-
-**Response**: `200 OK`
-```json
-{
-  "urls": ["https://storage.googleapis.com/..."]
-}
-```
-
-**Side Effects**: Triggers `imageDescriptionFlow` to generate a text description of the child's physical appearance from the photos.
-
----
-
-## Characters Routes
-
-### POST `/api/characters/photos`
-
-Upload photos for a character. Triggers image description generation in background.
-
-**Request Body**: `multipart/form-data`
-- `characterId` (string, required) - Character document ID
-- `photos` (File[], required) - Photo files to upload
-
-**Response**: `200 OK`
-```json
-{
-  "urls": ["https://storage.googleapis.com/..."]
-}
-```
-
-**Side Effects**: Triggers `imageDescriptionFlow` to generate a text description of the character's physical appearance from the photos.
-
----
-
-### POST `/api/regenerate-image-description`
-
-Manually trigger regeneration of the image description for a child or character. Useful after photo changes.
-
-**Request Body**:
-```json
-{
-  "entityId": "child-or-character-id",
-  "entityType": "child" | "character"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "status": "pending"
-}
-```
-
-**Authorization**: Parents can regenerate for their own entities; admins can regenerate for any entity.
+described in `SYSTEM_DESIGN.md` §5. The old photo, avatar and description routes (`/api/children/photos`,
+`/api/characters/photos`, `/api/regenerate-image-description`, `/api/generateAvatar`,
+`/api/generateAvatar/animation`, `/api/generateCharacterAvatar`) were removed in 5.7b.
 
 ---
 
@@ -972,79 +912,6 @@ writes the ledger; a brand-new family is treated as free-tier seeded in memory.
 
 ---
 
-## Avatar Routes
-
-### POST `/api/generateAvatar`
-
-**Authentication**: Bearer token, parent or admin. The caller must own the child (`children.ownerParentUid`); admin and writer principals are exempt.
-
-Generate avatar from uploaded photo.
-
-**Request Body**:
-```json
-{
-  "childId": "child-id",
-  "photoUrl": "https://..."
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "avatarUrl": "https://storage.googleapis.com/..."
-}
-```
-
----
-
-### POST `/api/generateAvatar/animation`
-
-**Authentication**: Bearer token, parent or admin. The caller must own the child (`children.ownerParentUid`) and/or character (`characters.ownerParentUid`) named; admin and writer principals are exempt.
-
-Generate animated avatar (dancing).
-
-**Request Body**:
-```json
-{
-  "childId": "child-id"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "animationUrl": "https://storage.googleapis.com/..."
-}
-```
-
----
-
-### POST `/api/generateCharacterAvatar`
-
-**Authentication**: Bearer token, parent or admin. The caller must own the character (`characters.ownerParentUid`); admin and writer principals are exempt.
-
-Generate avatar for a character.
-
-**Request Body**:
-```json
-{
-  "characterId": "character-id",
-  "photoUrl": "https://..."
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "avatarUrl": "https://storage.googleapis.com/..."
-}
-```
-
----
-
 ## Voice Routes
 
 ### POST `/api/voices/preview`
@@ -1608,42 +1475,6 @@ One Book's or Story's run as a timeline, for `/admin/trace`. **Auth**: admin (`i
 AI calls are matched by the ids the harness tags them with, so calls logged before 2026-11-01 do not appear.
 
 **Errors**: 400 `TRACE_ID_REQUIRED`; 404 `BOOK_NOT_FOUND` / `STORY_NOT_FOUND`.
-
----
-
-### GET `/api/admin/cleanup-exemplars`
-
-Count exemplar images in Firebase Storage. Used to preview cleanup before deletion.
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "totalFiles": 25,
-  "storiesWithExemplars": 5,
-  "storyCounts": {
-    "story-123": 3,
-    "story-456": 5
-  }
-}
-```
-
----
-
-### DELETE `/api/admin/cleanup-exemplars`
-
-Delete all exemplar images from Firebase Storage. Exemplars are temporary character reference sheets stored at `stories/{storyId}/exemplars/`.
-
-**Response**: `200 OK`
-```json
-{
-  "ok": true,
-  "deleted": 25,
-  "failed": 0,
-  "total": 25,
-  "errors": []
-}
-```
 
 ---
 

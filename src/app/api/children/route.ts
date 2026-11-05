@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createPerson, getPeopleDeps, legacyChildrenResponse } from '@/server/characters';
+import { createPerson, getPeopleDeps, legacyChildrenResponse, listPeople } from '@/server/characters';
 import { editableChildSchema } from '@/server/data/schemas/people';
 import { ok, withRoute } from '@/server/http';
 
@@ -8,9 +8,11 @@ const Body = editableChildSchema.partial().extend({ displayName: z.string().trim
 /**
  * GET /api/children — the caller's children, not deleted. Answers the bare array the
  * mobile app reads (stored fields plus a normalised `likeness`), as before 5.7.
+ * With `?view=person` (the web pages): `{ ok: true, data: PersonView[] }`.
  */
-export const GET = withRoute({ auth: 'user', name: 'children.list' }, async ({ user }) => {
+export const GET = withRoute({ auth: 'user', name: 'children.list' }, async ({ user, request }) => {
   const deps = await getPeopleDeps();
+  if (new URL(request.url).searchParams.get('view') === 'person') return listPeople(deps.db, user, 'child');
   return legacyChildrenResponse(deps.db, user);
 });
 
