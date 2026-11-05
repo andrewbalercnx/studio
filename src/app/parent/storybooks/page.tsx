@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useParentGuard } from '@/hooks/use-parent-guard';
 import { LoaderCircle, BookOpen, User, Plus } from 'lucide-react';
@@ -9,45 +8,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { plural, useLibrarySummary } from '@/hooks/use-library-summary';
-
-type Child = {
-  id: string;
-  displayName: string;
-  avatarUrl?: string | null;
-  deletedAt?: unknown;
-};
+import { useChildren } from '@/lib/people/use-people';
 
 export default function ParentStorybooksPage() {
-  const { user, idTokenResult, loading: userLoading } = useUser();
+  const { loading: userLoading } = useUser();
   const { isParentGuardValidated } = useParentGuard();
   const { summary, forChild } = useLibrarySummary();
 
-  const [children, setChildren] = useState<Child[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchChildren = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const idToken = await user.getIdToken();
-      const response = await fetch('/api/children', {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-      if (!response.ok) throw new Error('Failed to fetch children');
-      const data: Child[] = await response.json();
-      setChildren(data.filter((c) => !c.deletedAt));
-    } catch (error) {
-      console.error('[storybooks] Error fetching children:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (!userLoading && user && idTokenResult) {
-      fetchChildren();
-    }
-  }, [user, userLoading, idTokenResult, fetchChildren]);
+  // The family's children through the API (slice 6.2); the server leaves out deleted ones.
+  const { items: children, loading } = useChildren();
 
   if (!isParentGuardValidated) return null;
 
@@ -90,7 +59,7 @@ export default function ParentStorybooksPage() {
               <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
                 <CardContent className="flex flex-col items-center gap-4 pt-8 pb-8">
                   <Avatar className="h-24 w-24">
-                    <AvatarImage src={child.avatarUrl || undefined} alt={child.displayName} />
+                    <AvatarImage src={child.likeness.avatar || undefined} alt={child.displayName} />
                     <AvatarFallback className="text-3xl">
                       {child.displayName?.charAt(0).toUpperCase() || <User className="h-10 w-10" />}
                     </AvatarFallback>

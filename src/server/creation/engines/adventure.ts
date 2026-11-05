@@ -1,7 +1,7 @@
 /**
  * `adventure` — Choose Your Adventure (port of today's beat engine:
  * src/ai/flows/story-beat-flow.ts + ending-flow.ts + story-text-compile-flow.ts,
- * with the prompt builders in src/lib/prompt-builders).
+ * with the former prompt builders in src/lib/prompt-builders).
  *
  *   start           pick a StoryType (unless one was given at creation)   → choice
  *   choice          story type → beat for arc step 0                       → choice (A–C)
@@ -30,7 +30,7 @@ import { castToken, extractCastIds, tokenizeNames } from '../tokens';
 import { introduceFromOption } from './freeplay';
 import { addExistingToCast, ageWords, chosenOption, generate, inputNotExpected, storySystemMessage, turnWords, withPrefix } from './shared';
 
-/** Port of src/lib/schemas/story-beat-output.ts. */
+/** Ported from the former src/lib/schemas/story-beat-output.ts. */
 const beatOptionSchema = z.object({
   id: z.string().describe("A single uppercase letter: 'A', 'B', or 'C'"),
   text: z.string().describe('A short, child-friendly choice for what happens next'),
@@ -84,7 +84,7 @@ const TOKEN_KEEP_RULE = `**Character References (overrides anything above):**
 Keep every character token such as ${castToken('abc123')} exactly as written in the draft. Do not replace tokens with names, and refer to every character listed below only by their token.`;
 
 // ---------------------------------------------------------------------------
-// Prompt builder (port of src/lib/prompt-builders/story-beat-prompt-builder.ts)
+// Prompt builder (ported from the former story-beat-prompt-builder.ts)
 // ---------------------------------------------------------------------------
 
 function progressGuidance(progress: number): string {

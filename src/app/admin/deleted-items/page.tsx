@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/collapsible';
 import { formatDistanceToNow } from 'date-fns';
 import { useEffect } from 'react';
+import { storedAvatar } from '@/lib/people/stored';
 
 type DeletedChild = ChildProfile & { deletedAt: any; deletedBy: string };
 type DeletedCharacter = Character & { deletedAt: any; deletedBy: string };
@@ -487,7 +488,7 @@ export default function AdminDeletedItemsPage() {
               getItemDetails={(child) => ({
                 id: child.id,
                 name: child.displayName,
-                avatarUrl: child.avatarUrl,
+                avatarUrl: storedAvatar(child) ?? undefined,
                 deletedAt: child.deletedAt,
                 deletedBy: child.deletedBy,
               })}
@@ -503,7 +504,7 @@ export default function AdminDeletedItemsPage() {
               getItemDetails={(character) => ({
                 id: character.id,
                 name: character.displayName,
-                avatarUrl: character.avatarUrl,
+                avatarUrl: storedAvatar(character) ?? undefined,
                 deletedAt: character.deletedAt,
                 deletedBy: character.deletedBy,
               })}

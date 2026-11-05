@@ -75,7 +75,7 @@ function ModeCard({ mode, onClick, disabled }: { mode: CreationModeView; onClick
 
 export type ModeChooserProps = {
   childId: string;
-  child?: { displayName?: string | null; avatarUrl?: string | null } | null;
+  child?: { displayName?: string | null; likeness?: { avatar: string | null } | null } | null;
   /** Where the back arrow and "Go Back Home" lead. */
   homeHref: string;
   /** Called with the new (or repeated) Story's id; the caller opens the play view. */
@@ -205,7 +205,7 @@ export function ModeChooser({ childId, child, homeHref, onCreated }: ModeChooser
         </Button>
         <div className="flex-1 flex items-center justify-center">
           <Avatar className="h-8 w-8 border-2 border-amber-300">
-            {child?.avatarUrl ? <AvatarImage src={child.avatarUrl} alt={child.displayName ?? ''} /> : null}
+            {child?.likeness?.avatar ? <AvatarImage src={child.likeness.avatar} alt={child.displayName ?? ''} /> : null}
             <AvatarFallback className="bg-gradient-to-br from-amber-200 to-orange-300 text-amber-800 text-sm font-bold">
               {child?.displayName?.charAt(0).toUpperCase() || '?'}
             </AvatarFallback>

@@ -131,6 +131,9 @@ function peopleApi(t: Transport) {
     refreshLikeness: (kind: PersonKind, id: string) => t.call<PersonView>('POST', item(kind, id, '/likeness/refresh')),
     setAvatar: (kind: PersonKind, id: string, source: AvatarSource, photoId?: string) =>
       t.call<PersonView>('POST', item(kind, id, '/avatar'), photoId ? { source, photoId } : { source }),
+    /** Admin: one family's children or characters. */
+    listOf: <K extends PersonKind>(kind: K, ownerUid: string) =>
+      t.call<ViewOf<K>[]>('GET', `/admin/${kind === 'child' ? 'children' : 'characters'}${query({ ownerUid })}`),
     /** Admin: move to another family. */
     reassignOwner: (kind: PersonKind, id: string, ownerUid: string) =>
       t.call<PersonView>('PATCH', `/admin/${kind === 'child' ? 'children' : 'characters'}/${seg(id)}`, { ownerUid }),

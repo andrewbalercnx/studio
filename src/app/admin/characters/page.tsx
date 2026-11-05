@@ -12,6 +12,7 @@ import { collection, doc, onSnapshot, writeBatch, serverTimestamp, query, orderB
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Character } from '@/lib/types';
+import { storedOwner } from '@/lib/people/stored';
 
 const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt' | 'ownerParentUid'>[] = [
     {
@@ -88,7 +89,7 @@ export default function AdminCharactersPage() {
         sampleCharacters.forEach((charData, index) => {
             const docId = sampleCharacterIds[index];
             const docRef = doc(firestore, "characters", docId);
-            batch.set(docRef, { ...charData, ownerParentUid: 'sample-parent-1', createdAt: now, updatedAt: now });
+            batch.set(docRef, { ...charData, ownerUid: 'sample-parent-1', ownerParentUid: 'sample-parent-1', createdAt: now, updatedAt: now });
         });
         
         await batch.commit();
@@ -157,7 +158,7 @@ export default function AdminCharactersPage() {
               {characters.map((char) => (
                   <TableRow key={char.id}>
                       <TableCell className="font-mono text-xs">{char.id}</TableCell>
-                      <TableCell className="font-mono text-xs">{char.ownerParentUid}</TableCell>
+                      <TableCell className="font-mono text-xs">{storedOwner(char)}</TableCell>
                       <TableCell className="font-mono text-xs">{char.childId || 'Family-wide'}</TableCell>
                       <TableCell>{char.type}</TableCell>
                       <TableCell>{char.displayName}</TableCell>

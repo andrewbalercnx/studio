@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { listOwnedPeople } from '@/server/characters/entities';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { verifyAuthToken } from '@/lib/auth-utils';
@@ -88,17 +89,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Gather real account state in parallel (server statuses only).
-    const [childrenSnap, storiesSnap, booksSnap] = await Promise.all([
-      firestore.collection('children').where('ownerParentUid', '==', uid).get(),
+    const [children, storiesSnap, booksSnap] = await Promise.all([
+      listOwnedPeople(firestore, 'child', uid),
       firestore.collection('stories').where('ownerUid', '==', uid).limit(MAX_STORIES).get(),
       firestore.collection('books').where('ownerUid', '==', uid).limit(MAX_BOOKS).get(),
     ]);
 
     const snapshot: OnboardingSnapshot = {
-      children: childrenSnap.docs.map((d) => {
-        const c = d.data();
-        return { deletedAt: c.deletedAt, photos: c.photos ?? null, avatarUrl: c.avatarUrl ?? null };
-      }),
+      children: children.map((c) => ({ photos: c.likeness.photos })),
       stories: storiesSnap.docs.map((d) => ({ status: d.data().status ?? null })),
       books: booksSnap.docs.map((d) => ({ status: d.data().status ?? null })),
     };

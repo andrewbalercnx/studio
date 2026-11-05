@@ -3,16 +3,15 @@
 
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
-import type { AppRoleMode, ChildProfile } from '@/lib/types';
-import { useDocument } from '@/lib/firestore-hooks';
-import { doc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import type { AppRoleMode } from '@/lib/types';
+import type { ChildView } from '@/lib/api';
+import { usePerson } from '@/lib/people/use-people';
 import { syncPersonaCookie } from '@/lib/persona-client';
 
 interface AppContextType {
   roleMode: AppRoleMode;
   activeChildId: string | null;
-  activeChildProfile: ChildProfile | null;
+  activeChildProfile: ChildView | null;
   activeChildProfileLoading: boolean;
   setActiveChildId: (childId: string | null) => void;
   switchToParentMode: () => void;
@@ -29,7 +28,6 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
   const { user, idTokenResult, loading: userLoading } = useUser();
   const [activeChildId, setActiveChildIdState] = useState<string | null>(null);
   const [activeWizardState, setActiveWizardState] = useState<{ id: string; step: number } | null>(null);
-  const firestore = useFirestore();
 
   // Persist wizard state to sessionStorage so it survives page navigations
   const setActiveWizard = useCallback((value: { id: string; step: number } | null | ((prev: { id: string; step: number } | null) => { id: string; step: number } | null)) => {
@@ -63,27 +61,10 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     }
   }, []);
 
-  // Only query for child profile when auth is fully ready (idTokenResult exists)
-  // This prevents Firestore permission errors on page refresh
-  const childDocRef = useMemo(() => {
-    if (!firestore || !activeChildId || !user || userLoading || !idTokenResult) return null;
-    return doc(firestore, 'children', activeChildId);
-  }, [firestore, activeChildId, user, userLoading, idTokenResult]);
-
-  const {
-    data: activeChildProfileRaw,
-    loading: activeChildProfileLoading,
-  } = useDocument<ChildProfile>(childDocRef);
-
-  const activeChildProfile = useMemo(() => {
-    if (!user || !activeChildProfileRaw) return null;
-    // Allow help-* demo profiles for wizard demonstrations (they have public access)
-    const isHelpProfile = activeChildId?.startsWith('help-');
-    if (!isHelpProfile && activeChildProfileRaw.ownerParentUid !== user.uid) {
-      return null;
-    }
-    return activeChildProfileRaw;
-  }, [activeChildProfileRaw, user, activeChildId]);
+  // The active child through the API (`PersonView`, slice 6.2): the server checks the owner
+  // (help-* tour samples are readable by anyone signed in). Wait until auth is fully ready.
+  const authReady = !!user && !userLoading && !!idTokenResult;
+  const { person: activeChildProfile, loading: activeChildProfileLoading } = usePerson('child', authReady ? activeChildId : null);
 
   useEffect(() => {
     const storedChildId = typeof window !== 'undefined' ? localStorage.getItem('activeChildId') : null;

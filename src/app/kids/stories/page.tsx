@@ -66,8 +66,8 @@ export default function KidsStoriesPage() {
           </Button>
         </Link>
         <Avatar className="h-10 w-10 border-2 border-amber-300">
-          {childProfile?.avatarUrl ? (
-            <AvatarImage src={childProfile.avatarUrl} alt={childProfile.displayName} />
+          {childProfile?.likeness.avatar ? (
+            <AvatarImage src={childProfile.likeness.avatar} alt={childProfile.displayName} />
           ) : null}
           <AvatarFallback className="bg-gradient-to-br from-amber-200 to-orange-300 text-amber-800 text-sm font-bold">
             {childProfile?.displayName?.charAt(0).toUpperCase() || '?'}

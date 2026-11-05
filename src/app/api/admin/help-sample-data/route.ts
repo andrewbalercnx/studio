@@ -40,7 +40,8 @@ export async function POST(request: Request) {
       const ref = db.collection('children').doc(child.id);
       batch.set(ref, {
         ...child,
-        ownerParentUid: 'help-demo-parent', // Dummy parent UID
+        ownerUid: 'help-demo-parent', // Dummy parent UID
+        ownerParentUid: 'help-demo-parent',
         createdAt: timestamp,
         updatedAt: timestamp,
       }, { merge: true });
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
       const ref = db.collection('characters').doc(character.id);
       batch.set(ref, {
         ...character,
+        ownerUid: 'help-demo-parent',
         ownerParentUid: 'help-demo-parent',
         createdAt: timestamp,
         updatedAt: timestamp,

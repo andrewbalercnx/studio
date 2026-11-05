@@ -3,12 +3,9 @@
 import { useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { doc } from 'firebase/firestore';
 import { ArrowLeft, BookOpen, LoaderCircle, Sparkles, User } from 'lucide-react';
-import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
-import { useDocument } from '@/lib/firestore-hooks';
-import type { ChildProfile } from '@/lib/types';
+import { usePerson } from '@/lib/people/use-people';
 import { useAppContext } from '@/hooks/use-app-context';
 import { useParentGuard } from '@/hooks/use-parent-guard';
 import { useBooks } from '@/hooks/use-books';
@@ -24,14 +21,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 export default function ChildStorybooksPage() {
   const params = useParams();
   const childId = params.childId as string;
-  const firestore = useFirestore();
   const { user, loading: userLoading } = useUser();
   const { isParentGuardValidated } = useParentGuard();
   const router = useRouter();
   const { setActiveChildId } = useAppContext();
 
-  const childRef = useMemo(() => (firestore && user && childId ? doc(firestore, 'children', childId) : null), [firestore, user, childId]);
-  const { data: child } = useDocument<ChildProfile>(childRef);
+  const { person: child } = usePerson('child', childId || null);
   const { books, loading: booksLoading } = useBooks({ childId });
 
   // Empty-state CTA: jump straight into this child's experience to start a story.
@@ -58,7 +53,7 @@ export default function ChildStorybooksPage() {
 
       <div className="flex items-center gap-4">
         <Avatar className="h-12 w-12">
-          <AvatarImage src={child?.avatarUrl || undefined} alt={childName} />
+          <AvatarImage src={child?.likeness.avatar || undefined} alt={childName} />
           <AvatarFallback>{childName.charAt(0).toUpperCase() || <User className="h-6 w-6" />}</AvatarFallback>
         </Avatar>
         <div>

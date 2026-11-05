@@ -1,14 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase/auth/use-user';
-import { useFirestore } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
-import { useCollection } from '@/lib/firestore-hooks';
+import { useChildren } from '@/lib/people/use-people';
+import type { ChildView } from '@/lib/api';
 import { useKidsPWA } from '../layout';
 import { verifyParentPin } from '@/lib/verify-pin-client';
-import type { ChildProfile } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,42 +17,17 @@ import { LoaderCircle, User, Lock, ArrowLeft, Check, Shield } from 'lucide-react
 export default function KidsSetupPage() {
   const router = useRouter();
   const { user, loading: userLoading } = useUser();
-  const firestore = useFirestore();
   const { childId, childProfile, isLocked, lockToChild, unlock } = useKidsPWA();
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [showPinEntry, setShowPinEntry] = useState(false);
 
-  // Fetch children for this parent
-  const childrenQuery = useMemo(() => {
-    if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'children'),
-      where('ownerParentUid', '==', user.uid),
-      where('deletedAt', '==', null)
-    );
-  }, [firestore, user]);
-
-  // Try without deletedAt filter as well (for older data)
-  const childrenQueryFallback = useMemo(() => {
-    if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'children'),
-      where('ownerParentUid', '==', user.uid)
-    );
-  }, [firestore, user]);
-
-  const { data: childrenRaw, loading: childrenLoading } = useCollection<ChildProfile>(childrenQueryFallback);
-
-  // Filter out deleted children client-side
-  const children = useMemo(() => {
-    if (!childrenRaw) return [];
-    return childrenRaw.filter(c => !c.deletedAt);
-  }, [childrenRaw]);
+  // The family's children through the API (slice 6.2); the server leaves out deleted ones.
+  const { items: children, loading: childrenLoading } = useChildren();
 
   // Handle selecting a child (requires PIN to change if already locked)
-  const handleSelectChild = (child: ChildProfile) => {
+  const handleSelectChild = (child: ChildView) => {
     if (isLocked && childId !== child.id) {
       // Need PIN to switch children
       setSelectedChildId(child.id);
@@ -258,10 +231,10 @@ export default function KidsSetupPage() {
                   <CardContent className="flex items-center gap-4 p-4">
                     {/* Avatar */}
                     <div className="flex-shrink-0 w-14 h-14 rounded-full bg-gradient-to-br from-amber-200 to-orange-300 flex items-center justify-center overflow-hidden">
-                      {child.avatarUrl ? (
+                      {child.likeness.avatar ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={child.avatarUrl}
+                          src={child.likeness.avatar}
                           alt={child.displayName}
                           className="w-full h-full object-cover"
                         />

@@ -25,6 +25,7 @@ export default function AdminCreateDataPage() {
     const childId = `child_${user.uid.slice(0, 8)}_${Date.now().toString().slice(-4)}`;
     const childData = {
       id: childId,
+      ownerUid: user.uid,
       ownerParentUid: user.uid,
       displayName: 'Sample Child',
       preferredVoiceId: DEFAULT_TTS_VOICE, // Alice (British)
@@ -50,6 +51,7 @@ export default function AdminCreateDataPage() {
       const helpChildRef = doc(firestore, 'children', 'help-child');
       batch.set(helpChildRef, {
         id: 'help-child',
+        ownerUid: 'help-system-owner',
         ownerParentUid: 'help-system-owner',
         displayName: 'Helpful Guide',
         createdAt: now,
@@ -61,7 +63,8 @@ export default function AdminCreateDataPage() {
       const helpCharacterRef = doc(firestore, 'characters', 'help-character');
       batch.set(helpCharacterRef, {
           id: 'help-character',
-          ownerParentUid: 'help-system-owner',
+          ownerUid: 'help-system-owner',
+        ownerParentUid: 'help-system-owner',
           displayName: 'Guide Bot',
           role: 'friend',
           traits: ['friendly', 'knowledgeable'],

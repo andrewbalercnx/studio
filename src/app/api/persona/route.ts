@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ownerOf } from '@/server/characters/entities';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { requireAuthenticatedUser } from '@/lib/server-auth';
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
       );
     }
     const childData = childSnap.data() || {};
-    if (childData.ownerParentUid !== user.uid) {
+    if (ownerOf(childData) !== user.uid) {
       return NextResponse.json(
         { ok: false, code: 'NOT_OWNER', message: 'Child profile not found.' },
         { status: 403 },

@@ -2,9 +2,8 @@
 
 import { useEffect, useState, createContext, useContext, useCallback } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
-import { useFirestore } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import type { ChildProfile } from '@/lib/types';
+import type { ChildView } from '@/lib/api';
+import { usePerson } from '@/lib/people/use-people';
 import { LoaderCircle } from 'lucide-react';
 import { PWAInstallPrompt, ServiceWorkerRegistration } from '@/components/pwa';
 import { syncPersonaCookie } from '@/lib/persona-client';
@@ -12,7 +11,7 @@ import { syncPersonaCookie } from '@/lib/persona-client';
 // PWA-specific context for kids mode
 interface KidsPWAContextType {
   childId: string | null;
-  childProfile: ChildProfile | null;
+  childProfile: ChildView | null;
   isLoading: boolean;
   isLocked: boolean;
   lockToChild: (childId: string) => void;
@@ -33,9 +32,7 @@ export function useKidsPWA() {
 
 export default function KidsLayout({ children }: { children: React.ReactNode }) {
   const { user, loading: userLoading } = useUser();
-  const firestore = useFirestore();
   const [childId, setChildId] = useState<string | null>(null);
-  const [childProfile, setChildProfile] = useState<ChildProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
 
@@ -51,45 +48,18 @@ export default function KidsLayout({ children }: { children: React.ReactNode }) 
     }
   }, []);
 
-  // Fetch child profile when childId changes
+  // The locked child through the API (slice 6.2). The server checks the owner; a child
+  // that is gone or belongs to someone else clears the lock.
+  const { person: childProfile, errorCode } = usePerson('child', user ? childId : null);
   useEffect(() => {
-    const fetchChildProfile = async () => {
-      if (!firestore || !childId || !user) {
-        setChildProfile(null);
-        return;
-      }
-
-      try {
-        const childDoc = await getDoc(doc(firestore, 'children', childId));
-        if (childDoc.exists()) {
-          const data = childDoc.data() as ChildProfile;
-          // Verify ownership
-          if (data.ownerParentUid === user.uid) {
-            setChildProfile({ ...data, id: childDoc.id });
-          } else {
-            // Not owner - clear the lock
-            setChildProfile(null);
-            setChildId(null);
-            setIsLocked(false);
-            localStorage.removeItem(KIDS_CHILD_ID_KEY);
-            syncPersonaCookie(null, null);
-          }
-        } else {
-          // Child not found - clear the lock
-          setChildProfile(null);
-          setChildId(null);
-          setIsLocked(false);
-          localStorage.removeItem(KIDS_CHILD_ID_KEY);
-          syncPersonaCookie(null, null);
-        }
-      } catch (err) {
-        console.error('[KidsPWA] Error fetching child profile:', err);
-        setChildProfile(null);
-      }
-    };
-
-    fetchChildProfile();
-  }, [firestore, childId, user]);
+    if (!errorCode || !childId) return;
+    if (errorCode === 'CHILD_NOT_FOUND' || errorCode === 'FORBIDDEN' || errorCode === 'NOT_OWNER') {
+      setChildId(null);
+      setIsLocked(false);
+      localStorage.removeItem(KIDS_CHILD_ID_KEY);
+      syncPersonaCookie(null, null);
+    }
+  }, [errorCode, childId]);
 
   const lockToChild = useCallback((newChildId: string) => {
     setChildId(newChildId);
@@ -104,7 +74,6 @@ export default function KidsLayout({ children }: { children: React.ReactNode }) 
 
   const unlock = useCallback(() => {
     setChildId(null);
-    setChildProfile(null);
     setIsLocked(false);
     if (typeof window !== 'undefined') {
       localStorage.removeItem(KIDS_CHILD_ID_KEY);

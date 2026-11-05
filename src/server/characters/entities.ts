@@ -142,6 +142,27 @@ export async function readPerson(db: Firestore, kind: PersonKind, id: string): P
   return normalize(kind, id, data);
 }
 
+/**
+ * A family's children or characters, not deleted, in either shape. Documents carry
+ * `ownerParentUid` until the migration and `ownerUid` after it (both, for new ones), so
+ * both are queried and the results merged.
+ */
+export async function listOwnedPeople(db: Firestore, kind: PersonKind, ownerUid: string, options: { limit?: number } = {}): Promise<Person[]> {
+  const collection = db.collection(COLLECTION_FOR[kind]);
+  const [legacy, target] = await Promise.all([
+    collection.where('ownerParentUid', '==', ownerUid).get(),
+    collection.where('ownerUid', '==', ownerUid).get(),
+  ]);
+  const byId = new Map<string, Person>();
+  for (const doc of [...legacy.docs, ...target.docs]) {
+    if (byId.has(doc.id)) continue;
+    const person = normalize(kind, doc.id, doc.data());
+    if (!person.deleted) byId.set(doc.id, person);
+  }
+  const people = [...byId.values()];
+  return options.limit ? people.slice(0, options.limit) : people;
+}
+
 /** The persona scope key of a person: a child is its own scope; a character its `childId` (or none). */
 export function personaChildId(person: Person): string | null {
   return person.kind === 'child' ? person.id : person.childId;

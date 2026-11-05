@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ownerOf } from '@/server/characters/entities';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/firebase/admin/app';
 import { requireAdminUser } from '@/lib/server-auth';
@@ -78,14 +79,13 @@ async function scanOrphanedChildren(
     }
 
     // Check if owner is the valid parent
-    if (data.ownerParentUid === validParentUid) {
+    const owner = ownerOf(data);
+    if (owner === validParentUid) {
       continue;
     }
 
     // Check if owner exists
-    const ownerExists = data.ownerParentUid
-      ? (await firestore.collection('users').doc(data.ownerParentUid).get()).exists
-      : false;
+    const ownerExists = owner ? (await firestore.collection('users').doc(owner).get()).exists : false;
 
     items.push({
       id: doc.id,
@@ -96,7 +96,7 @@ async function scanOrphanedChildren(
         : 'Owner parent does not exist',
       details: {
         displayName: data.displayName,
-        ownerParentUid: data.ownerParentUid,
+        ownerUid: owner,
         createdAt: data.createdAt?.toDate?.()?.toISOString() || 'unknown',
         deletedAt: data.deletedAt?.toDate?.()?.toISOString() || null,
       },
@@ -124,7 +124,8 @@ async function scanOrphanedCharacters(
     }
 
     // Check if owner is the valid parent
-    if (data.ownerParentUid === validParentUid) {
+    const characterOwner = ownerOf(data);
+    if (characterOwner === validParentUid) {
       continue;
     }
 
@@ -136,7 +137,7 @@ async function scanOrphanedCharacters(
       details: {
         displayName: data.displayName,
         type: data.type,
-        ownerParentUid: data.ownerParentUid,
+        ownerUid: characterOwner,
         childId: data.childId,
         createdAt: data.createdAt?.toDate?.()?.toISOString() || 'unknown',
       },
