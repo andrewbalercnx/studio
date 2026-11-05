@@ -18,6 +18,26 @@
 
 ### 2026-11-05
 
+#### `#49` - The pages over 1,000 lines split up (slice 6.4b)
+
+**Type**: Refactor (admin and writer pages)
+
+**Summary**: The second half of 6.4. The six pages over 1,000 lines become a short page plus one file per component, with no change a user can see.
+
+| Page | Lines before → after | Pieces |
+|------|----------------------|--------|
+| `admin/storyTypes` | 1,790 → 217 | `src/components/admin/story-types/`: arc steps, prompt config, settings, music, card, create dialog, shared |
+| `admin/regression` | 1,388 → 223 | `src/components/admin/regression/`: auth, data, and scenario + API runners taking a `RegressionContext`, plus the shared test list and cleanup helpers |
+| `admin/print-layouts` | 1,102 → 23 | `src/components/admin/print-layouts/`: font selector, layout form, panel, shared |
+| `writer` | 1,074 → 221 | `src/components/writer/`: story types, phases, prompt configs, outputs panels, shared |
+| `admin/print-products` | 1,071 → 37 | `src/components/admin/print-products/`: product form, panel, shared |
+| `admin/storyGenerators` | 1,011 → 208 | `src/components/admin/story-generators/`: AI settings, music, prompts, general info, card, shared |
+
+- The code moved unchanged; each file keeps only the imports it uses.
+- **Tests**: new `e2e/admin-config.spec.ts` (`@admin`, report-only for now). An admin opens each split page, saves a story phase on the writer page through `/api/admin/catalog/**` (6.4a), and the test checks it was stored with a server timestamp.
+
+### 2026-11-05
+
 #### `#48` - Configuration written through admin routes (slice 6.4a)
 
 **Type**: Security (rules) + Refactor (admin and writer pages)

@@ -188,6 +188,14 @@ jobs:
             --project=desktop-chrome --project=mobile-chrome
 
       # ── REPORT-ONLY (promotion criteria in docs/testing/e2e.md) ────────
+      - name: Admin and writer pages (report-only)
+        continue-on-error: true
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ env.E2E_BASE_URL }}
+        run: |
+          npx playwright test e2e/admin-config.spec.ts --project=desktop-chrome \
+            --reporter=list --output=test-results-admin
+
       - name: Accessibility scans (report-only)
         continue-on-error: true
         env:
