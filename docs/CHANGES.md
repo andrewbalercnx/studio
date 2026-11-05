@@ -44,6 +44,14 @@
 
 ---
 
+#### `#35` - Plan: slice 5.5 print and orders with Stripe
+
+**Type**: Plan (docs only)
+
+**Summary**: `docs/architecture/target/slices/5.5-print-orders.md`, from a survey of today's print code and the owner's decisions (Stripe test mode first; UK delivery included in the price; the print template decides the page design, several can be offered; admin approval of paid orders is a system-wide switch). Two gaps it fixes: Books have no front/back matter (needed for a printed cover; the back cover gets its own AI art again, as in the old pipeline's back-cover scene flow deleted with storybookV2 in #14), and spread templates print two pages per story page while the page-count rule assumed one. Built in three PRs: 5.5a render, 5.5b orders and payment, 5.6 clients and deletion of the legacy print code. `REVIEW_PLAN.md` progress updated.
+
+---
+
 #### `#34` - Mobile: make, watch and read Books
 
 **Type**: Feature (mobile)
