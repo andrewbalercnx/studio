@@ -40,6 +40,7 @@ import type { BookJobDeps } from './deps';
 import { decodeMedia, extensionFor } from './media';
 import {
   buildPaginationPrompt,
+  backCoverScene,
   coverScene,
   degenerateReason,
   fitPageCount,
@@ -63,7 +64,7 @@ export const BOOK_JOB_KINDS = {
 } as const;
 
 /** Book pages that get a picture. */
-export const ART_PAGE_KINDS: ReadonlySet<BookPage['kind']> = new Set(['cover', 'story']);
+export const ART_PAGE_KINDS: ReadonlySet<BookPage['kind']> = new Set(['cover', 'story', 'back']);
 
 // ---------------------------------------------------------------------------
 // Job specs (also used by the routes' services)
@@ -180,7 +181,7 @@ const PAGINATION_TEMPERATURES = [0.3, 0.7, 0.9];
 async function paginateWithModel(
   deps: BookJobDeps,
   args: { job: WithId<Job>; manuscript: WithId<Manuscript>; cast: Cast; text: string; title: string | null; synopsis: string | null; db: Firestore }
-): Promise<{ pages: ManuscriptPageData[]; cover: Scene }> {
+): Promise<{ pages: ManuscriptPageData[]; cover: Scene; backCover: Scene }> {
   const form = await loadForm(args.db, args.manuscript.form);
   if (!form) throw new JobFailure('FORM_MISSING', `Form ${args.manuscript.form} not found`, { retryable: false });
   const configured = await deps.config.get(paginationPromptConfig);
@@ -246,7 +247,7 @@ async function paginateWithModel(
     throw new JobFailure('STORY_TOO_SHORT', `The story is too short for ${args.manuscript.length} pages`, { retryable: false });
   }
   const pages = toManuscriptPages(fitted, args.cast);
-  return { pages, cover: coverScene(result.output, pages, args.cast) };
+  return { pages, cover: coverScene(result.output, pages, args.cast), backCover: backCoverScene(result.output, pages, args.cast) };
 }
 
 /** Narration for every page; cast sheets for Books created while the words were being written. */
@@ -286,7 +287,7 @@ function paginateHandler(getDeps: () => Promise<BookJobDeps>): JobDefinition['ru
     if (manuscript.status !== 'paginating') return;
 
     const deps = await getDeps();
-    let result: { pages: ManuscriptPageData[]; cover: Scene };
+    let result: { pages: ManuscriptPageData[]; cover: Scene; backCover: Scene };
     let title: string | null;
     try {
       const story = await loadStorySource(ctx.db, manuscript.storyId);
@@ -295,7 +296,7 @@ function paginateHandler(getDeps: () => Promise<BookJobDeps>): JobDefinition['ru
       if (!story.text.trim()) throw new JobFailure('STORY_EMPTY', 'The story has no text', { retryable: false });
       if (deps.testMode()) {
         const pages = testModePages(story.text, manuscript.length, cast);
-        result = { pages, cover: coverScene(null, pages, cast) };
+        result = { pages, cover: coverScene(null, pages, cast), backCover: backCoverScene(null, pages, cast) };
       } else {
         result = await paginateWithModel(deps, {
           job: ctx.job,
@@ -326,7 +327,7 @@ function paginateHandler(getDeps: () => Promise<BookJobDeps>): JobDefinition['ru
           narrationUrl: null,
         });
       }
-      await manuscriptRepo.updateIn(tx, manuscriptId, { status: 'ready', cover: result.cover, title });
+      await manuscriptRepo.updateIn(tx, manuscriptId, { status: 'ready', cover: result.cover, backCover: result.backCover, title });
       return true;
     });
     if (committed) await afterPagination(ctx, { ...manuscript, status: 'ready' });
@@ -603,10 +604,17 @@ const illustrateFanIn: NonNullable<JobDefinition['onChildrenComplete']> = async 
   };
 };
 
-/** The scene a Book page shows: the Manuscript's page scene, or its cover scene. */
+/** The scene a Book page shows: the Manuscript's page scene, or its cover / back cover scene. */
 async function sceneFor(db: Firestore, page: WithId<BookPage>, manuscript: WithId<Manuscript>): Promise<Scene> {
   if (page.kind === 'story' && page.manuscriptPage) {
     return (await manuscriptPages.using(db).of(manuscript.id).require(String(page.manuscriptPage))).scene;
+  }
+  if (page.kind === 'back') {
+    if (manuscript.backCover) return manuscript.backCover;
+    // A Manuscript paginated before back covers existed: everyone together, from its pages.
+    const [story, msPages] = await Promise.all([loadStorySource(db, manuscript.storyId), manuscriptPages.using(db).of(manuscript.id).where({})]);
+    const cast = await loadCast(db, story, new Date());
+    return backCoverScene(null, msPages.sort((a, b) => a.pageNumber - b.pageNumber), cast);
   }
   if (manuscript.cover) return manuscript.cover;
   throw new JobFailure('NO_SCENE', `Page ${page.pageNumber} has no scene`, { retryable: false });
@@ -670,7 +678,7 @@ function pageArtHandler(getDeps: () => Promise<BookJobDeps>): JobDefinition['run
       }
 
       const text = buildPagePrompt({
-        kind: page.kind === 'cover' ? 'cover' : 'story',
+        kind: page.kind === 'cover' ? 'cover' : page.kind === 'back' ? 'back' : 'story',
         scene,
         present,
         stylePrompt: style.prompt,

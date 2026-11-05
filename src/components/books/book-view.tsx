@@ -16,13 +16,14 @@ import { lockBook, retryBookPage, unlockBook } from '@/lib/books/api';
 import { isReadableStatus } from '@/lib/books/types';
 import { BookFailed, BookProgress } from './book-progress';
 import { BookReader } from './book-reader';
+import { PrintProof } from './print-proof';
 
 export type BookViewParentControls = {
   /** Returns true when the parent PIN guard is open; otherwise asks for the PIN and returns false. */
   requireGuard: () => boolean;
 };
 
-export function BookView({ bookId, parent }: { bookId: string; parent?: BookViewParentControls }) {
+export function BookView({ bookId, parent, admin = false }: { bookId: string; parent?: BookViewParentControls; admin?: boolean }) {
   const { toast } = useToast();
   const { data: book, loading: bookLoading } = useBook(bookId);
   const { pages } = useBookPages(book ? bookId : null);
@@ -112,6 +113,9 @@ export function BookView({ bookId, parent }: { bookId: string; parent?: BookView
             </span>
           </CardContent>
         </Card>
+      )}
+      {admin && isReadableStatus(book.status) && (
+        <PrintProof bookId={bookId} canRender={(book.status === 'ready' || locked) && (book.art?.failed ?? 0) === 0} />
       )}
     </div>
   );

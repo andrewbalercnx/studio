@@ -13,7 +13,7 @@ import { BookView } from '@/components/books';
  * Web: one Book from the server pipeline. Progress while it is being made,
  * then the reader. In parent mode (not child mode) the parent can draw a
  * failed picture again and lock or unlock the Book, each behind the PIN guard.
- * Printing is not available for these Books yet (print slice).
+ * Admins also get a print proof panel (slice 5.5a); ordering comes in 5.5b.
  */
 export default function BookPage({ params }: { params: Promise<{ bookId: string }> }) {
   const { bookId } = use(params);
@@ -45,7 +45,7 @@ export default function BookPage({ params }: { params: Promise<{ bookId: string 
             </Button>
           )}
         </div>
-        <BookView bookId={bookId} parent={isParent ? { requireGuard } : undefined} />
+        <BookView bookId={bookId} parent={isParent ? { requireGuard } : undefined} admin={roleMode === 'admin'} />
       </div>
     </div>
   );

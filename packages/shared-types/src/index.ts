@@ -244,6 +244,8 @@ export type BookReadPage = {
   artUrl: string | null;
   text: string | null;
   narrationUrl: string | null;
+  /** Shown in the on-screen reader (covers and story pages); title and end pages are for print. */
+  inReader: boolean;
 };
 
 /** One Book in full (GET /api/books/{bookId}). */

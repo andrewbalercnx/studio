@@ -187,6 +187,12 @@ describe('calculateInteriorPageAdjustment', () => {
     expect(result.finalInteriorPages % 4).toBe(0);
   });
 
+  it("aligns to the product's page multiple, not always 4", () => {
+    const result = calculateInteriorPageAdjustment(13, 0, withConstraints({ minPages: 0, maxPages: 0, pageMultiple: 2 }));
+    expect(result.finalInteriorPages).toBe(14);
+    expect(result.paddingNeeded).toBe(1);
+  });
+
   it('result finalInteriorPages is always a multiple of 4', () => {
     const constraints = withConstraints({minPages: 24, maxPages: 48 });
     for (const n of [6, 11, 17, 24, 33, 45]) {

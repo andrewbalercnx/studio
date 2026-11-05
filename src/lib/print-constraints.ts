@@ -285,20 +285,21 @@ export function calculateInteriorPageAdjustment(
     interiorPages = constraints.minPages;
   }
 
-  // Step 2: Ensure interior PDF is a multiple of 4 (required for CASE binding)
-  const remainder = interiorPages % 4;
+  // Step 2: Align to the product's page multiple (4 for case binding)
+  const multiple = constraints.pageMultiple || 1;
+  const remainder = interiorPages % multiple;
   if (remainder !== 0) {
-    const additionalPadding = 4 - remainder;
+    const additionalPadding = multiple - remainder;
     warnings.push(
-      `Added ${additionalPadding} page${additionalPadding === 1 ? '' : 's'} for 4-page alignment (${interiorPages} -> ${interiorPages + additionalPadding}).`
+      `Added ${additionalPadding} page${additionalPadding === 1 ? '' : 's'} for ${multiple}-page alignment (${interiorPages} -> ${interiorPages + additionalPadding}).`
     );
     interiorPages += additionalPadding;
   }
 
   // Step 3: Truncate if exceeds maximum
   if (constraints.maxPages > 0 && interiorPages > constraints.maxPages) {
-    // Truncate to maximum, but align down to multiple of 4
-    const maxAligned = Math.floor(constraints.maxPages / 4) * 4;
+    // Truncate to maximum, aligned down to the page multiple
+    const maxAligned = Math.floor(constraints.maxPages / multiple) * multiple;
     const pagesToRemove = interiorPages - maxAligned;
     warnings.push(
       `WARNING: Truncated ${pagesToRemove} page${pagesToRemove === 1 ? '' : 's'} to meet maximum of ${constraints.maxPages} (aligned to ${maxAligned}).`

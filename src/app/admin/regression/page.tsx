@@ -176,7 +176,7 @@ const initialTests: TestResult[] = [
   { id: 'DATA_AUTH_ADMIN_FIRESTORE', name: 'Auth: Admin Firestore Access', status: 'PENDING', message: '' },
   { id: 'DATA_AUTH_PARENT_CHILDREN', name: 'Auth: Parent Child Access', status: 'PENDING', message: '' },
   { id: 'DATA_AUTH_WRITER_CONFIGS', name: 'Auth: Writer Config Access', status: 'PENDING', message: '' },
-  { id: 'API_BOOKS_V3_AUTH', name: 'API: /api/manuscripts + /api/books (Auth + Not Found)', status: 'PENDING', message: '' },
+  { id: 'API_BOOKS_V3_AUTH', name: 'API: /api/manuscripts + /api/books + print renders (Auth + Not Found)', status: 'PENDING', message: '' },
   { id: 'API_STORIES_V3_AUTH', name: 'API: /api/stories + turns/abandon/finish (Auth + Not Found)', status: 'PENDING', message: '' },
   { id: 'API_STORIES_READ', name: 'API: GET /api/stories, /api/stories/{id}, /api/creation-modes (Auth + shape)', status: 'PENDING', message: '' },
   { id: 'API_ADMIN_ALLOWANCES', name: 'API: /api/admin/allowances (admin only, read own family)', status: 'PENDING', message: '' },
@@ -651,6 +651,11 @@ export default function AdminRegressionPage() {
             { path: `/api/books/${missingBook}/unlock` },
             { path: '/api/books', method: 'GET', expectAuthed: 200 },
             { path: `/api/books/${missingBook}`, method: 'GET', expectAuthed: 404 },
+            // Print render (slice 5.5a): a missing Book is 404 before any template is read or render started.
+            { path: `/api/books/${missingBook}/print-options`, method: 'GET', expectAuthed: 404 },
+            { path: `/api/books/${missingBook}/renders`, body: { layoutId: 'regression-missing-layout', idempotencyKey: 'regression-render-auth' } },
+            { path: `/api/books/${missingBook}/renders`, method: 'GET', expectAuthed: 404 },
+            { path: `/api/books/${missingBook}/renders/regression-missing-render`, method: 'GET', expectAuthed: 404 },
         ];
         for (const route of routes) {
             const method = route.method ?? 'POST';
@@ -667,7 +672,7 @@ export default function AdminRegressionPage() {
         }
         updateTestResult('API_BOOKS_V3_AUTH', {
             status: 'PASS',
-            message: 'manuscripts, books (create/list/get), retry, lock and unlock reject anonymous calls (401); authed calls return 404 for missing ids and 200 for the Books list.',
+            message: 'manuscripts, books (create/list/get), retry, lock, unlock, print-options and renders reject anonymous calls (401); authed calls return 404 for missing ids and 200 for the Books list.',
         });
     } catch (e: any) {
         updateTestResult('API_BOOKS_V3_AUTH', { status: 'ERROR', message: e.message });

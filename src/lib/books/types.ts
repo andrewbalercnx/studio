@@ -106,6 +106,8 @@ export type BookReadPage = {
   /** The words a child reads (display names already resolved); null for pages with no text. */
   text: string | null;
   narrationUrl: string | null;
+  /** Shown in the on-screen reader (covers and story pages); title and end pages are for print. */
+  inReader: boolean;
 };
 
 /** The making-of stage of a Book and how far through it is (server-computed for GET /api/books/{id}). */

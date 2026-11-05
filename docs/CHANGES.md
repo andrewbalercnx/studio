@@ -18,6 +18,32 @@
 
 ### 2026-11-04
 
+#### `#36` - Print render (slice 5.5a): back cover, template page model, PDFs per template
+
+**Type**: Feature (print)
+
+**Summary**: A locked Book can now be rendered to print-ready interior and cover PDFs in any compatible template. This is the first of the three print PRs planned in #35; orders and payment are 5.5b.
+- **Book matter pages**: Books are made as cover, title, story pages, end, back. The back cover gets its own AI art, ported from the old back-cover flow (deleted in #14): pagination designs a `backCover` scene with everyone together, celebrating, the hero always there and no text; `book.pageArt` draws it in the Book's style from its cast sheets, and it counts in the art progress (12 story pages → 14 pictures). The title and end pages are typeset in print. The readers show covers and story pages (`inReader` on `GET /api/books/{id}`; mobile filters on it; web "Page x of n" fixed).
+- **Template page model**: `Layout` carries `leavesPerSpread` and `printProductId`. Interior pages = title + end + story pages × leaves per story page, padded to the product's page multiple and minimum. `calculateInteriorPageAdjustment` no longer hard-codes 4.
+- **Render core** moved to `src/server/print/render.ts` behind a Book adapter (`adapter.ts`):
+  - bleed from the product (1/8 inch by default) on every page, with edge-touching boxes extended into it;
+  - spine width from the page count and paper, plus board allowance for case binding;
+  - art fitted to each template's boxes;
+  - synopsis on the back cover.
+- **`book.render`** job (queue `render`): writes `books/{id}/renders/{renderId}/{interior,cover}.pdf`, then the immutable render document with sha256 checksums, page counts, trim, bleed and spine width. It fails without retry if the Book was unlocked meanwhile.
+- **Routes**: `GET /api/books/{id}/print-options`, `POST`/`GET /api/books/{id}/renders`, `GET /api/books/{id}/renders/{renderId}`. Starting a render locks a `ready` Book and refuses one with missing pictures.
+- **Admin print proof** panel on the Book page: pick a template, render, open the PDFs.
+
+**Files**:
+- New: `src/server/print/{render,adapter,jobs,service,index}.ts` and its tests; the three route files under `src/app/api/books/[bookId]/`; `src/components/books/print-proof.tsx`.
+- Modified:
+  - Book pipeline: `src/server/books/{pagination,jobs,service,read,art-prompts}.ts`, `src/server/data/schemas/{manuscript,book}.ts`;
+  - print and jobs: `src/server/catalog/layouts.ts`, `src/lib/print-constraints.ts`, `src/server/jobs/kinds.ts`;
+  - clients and shared types: `src/components/books/{book-reader,book-view}.tsx`, `src/lib/books/{api,types}.ts`, `packages/shared-types`, `mobile/app/book/[bookId].tsx`, `mobile/src/contexts/ApiClientContext.tsx`;
+  - regression page and docs (API, SCHEMA, SYSTEM_DESIGN).
+
+---
+
 #### `#35` - Plan: slice 5.5 print and orders with Stripe
 
 **Type**: Plan (docs only)

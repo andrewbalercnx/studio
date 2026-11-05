@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formFromDocument, resolveManuscriptShape } from '../forms';
-import { artAspectRatio, layoutFromDocuments, layoutSupports, physicalPageCount } from '../layouts';
+import { artAspectRatio, contentPageCount, layoutFromDocuments, layoutSupports, physicalPageCount } from '../layouts';
 import { styleFromDocument, styleReferencesFor } from '../styles';
 
 describe('Form from storyOutputTypes', () => {
@@ -68,5 +68,20 @@ describe('Layout from printLayouts', () => {
     expect(layoutSupports({ ...layout, supportedDensities: ['picture-led'] }, 16, 'balanced')).toMatchObject({ ok: false });
     expect(artAspectRatio(layout)).toBe('5:4');
     expect(artAspectRatio(null)).toBe('1:1');
+  });
+
+  it('counts two leaves per story page on a spread template', () => {
+    const rules = { minPages: 24, maxPages: 48, pageMultiple: 4 as const };
+    expect(contentPageCount(12, 2)).toBe(26);
+    expect([12, 16, 24].map((n) => physicalPageCount(n, rules, 2))).toEqual([28, 36, 52]);
+    const spread = layoutFromDocuments('s', { name: 'S', leafWidth: 8, leafHeight: 10, leavesPerSpread: 2, printProductId: 'p1', pageConstraints: { maxPages: 48, pageMultiple: 4 } });
+    expect(spread).toMatchObject({ leavesPerSpread: 2, printProductId: 'p1' });
+    expect(layoutSupports(spread, 16, 'balanced')).toEqual({ ok: true });
+    expect(layoutSupports(spread, 24, 'balanced')).toMatchObject({ ok: false, reason: expect.stringContaining('52') });
+  });
+
+  it('pads to a page multiple of 2 when the product says so', () => {
+    expect(physicalPageCount(13, { minPages: 0, maxPages: 0, pageMultiple: 2 })).toBe(16);
+    expect(physicalPageCount(13, { minPages: 0, maxPages: 0, pageMultiple: 1 })).toBe(15);
   });
 });
