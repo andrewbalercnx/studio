@@ -13,16 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import {
-  cancelOrder,
-  formatMoney,
-  getOrder,
-  ORDER_STATUS_LABELS,
-  payWithCredits,
-  startCheckout,
-  type OrderStatus,
-  type OrderView,
-} from '@/lib/orders/api';
+import { api, formatMoney, ORDER_STATUS_LABELS, type OrderStatus, type OrderView } from '@/lib/api';
 
 const MOVING: ReadonlySet<OrderStatus> = new Set(['rendering', 'paid', 'submitting']);
 
@@ -38,7 +29,7 @@ export function OrderDetail({ orderId, justPaid, requireGuard }: { orderId: stri
 
   const load = useCallback(async () => {
     try {
-      setOrder(await getOrder(orderId));
+      setOrder(await api.orders.get(orderId));
       setError(null);
     } catch (err) {
       setError((err as Error).message);
@@ -107,7 +98,7 @@ export function OrderDetail({ orderId, justPaid, requireGuard }: { orderId: stri
 
           {order.actions.canPay && (
             <div className="space-y-2">
-              <Button className="w-full" disabled={!!busy} onClick={() => run('card', async () => void (window.location.href = (await startCheckout(order.id)).url))}>
+              <Button className="w-full" disabled={!!busy} onClick={() => run('card', async () => void (window.location.href = (await api.orders.checkout(order.id)).url))}>
                 {busy === 'card' ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
                 Pay {formatMoney(order.amountMinor, order.currency)} by card
               </Button>
@@ -116,7 +107,7 @@ export function OrderDetail({ orderId, justPaid, requireGuard }: { orderId: stri
                   variant="outline"
                   className="w-full"
                   disabled={!!busy}
-                  onClick={() => run('credits', async () => setOrder(await payWithCredits(order.id)))}
+                  onClick={() => run('credits', async () => setOrder(await api.orders.payWithCredits(order.id)))}
                 >
                   {busy === 'credits' ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Gift className="mr-2 h-4 w-4" />}
                   Use {order.quantity} print {order.quantity === 1 ? 'credit' : 'credits'} ({order.creditsAvailable} left)
@@ -169,7 +160,7 @@ export function OrderDetail({ orderId, justPaid, requireGuard }: { orderId: stri
               onClick={() => {
                 const refund = order.payment.method === 'stripe' ? ' Your card payment will be refunded.' : order.payment.method === 'credit' ? ' Your print credits will be returned.' : '';
                 if (!window.confirm(`Cancel this order?${refund}`)) return;
-                void run('cancel', async () => setOrder(await cancelOrder(order.id)));
+                void run('cancel', async () => setOrder(await api.orders.cancel(order.id)));
               }}
             >
               {busy === 'cancel' ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}

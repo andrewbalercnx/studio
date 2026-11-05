@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { fileToDataUrl, likenessBusy, peopleApi, type LikenessPart, type PartStatus, type PersonView } from '@/lib/people/api';
+import { api, fileToDataUrl, likenessBusy, type LikenessPart, type PartStatus, type PersonView } from '@/lib/api';
 
 const POLL_MS = 4_000;
 const MAX_PHOTOS = 10;
@@ -64,7 +64,7 @@ export function LikenessPanel({ person: initial, onChange }: Props) {
     let stopped = false;
     const timer = setInterval(async () => {
       try {
-        const next = await peopleApi.get(person.kind, person.id);
+        const next = await api.people.get(person.kind, person.id);
         if (!stopped) apply(next);
       } catch {
         // Keep the last view; the next tick tries again.
@@ -96,7 +96,7 @@ export function LikenessPanel({ person: initial, onChange }: Props) {
     event.target.value = '';
     if (!file) return;
     const dataUrl = await fileToDataUrl(file);
-    await run('upload', () => peopleApi.addPhoto(person.kind, person.id, dataUrl), 'Photo added');
+    await run('upload', () => api.people.addPhoto(person.kind, person.id, dataUrl), 'Photo added');
   };
 
   const { likeness, likenessStatus, photoIds } = person;
@@ -139,15 +139,15 @@ export function LikenessPanel({ person: initial, onChange }: Props) {
 
         <div className="flex flex-wrap gap-2">
           {likeness.portrait && (
-            <Button type="button" variant="outline" size="sm" disabled={!!pending} onClick={() => run('avatar', () => peopleApi.setAvatar(person.kind, person.id, 'portrait'), 'Drawing a new avatar')}>
+            <Button type="button" variant="outline" size="sm" disabled={!!pending} onClick={() => run('avatar', () => api.people.setAvatar(person.kind, person.id, 'portrait'), 'Drawing a new avatar')}>
               New avatar from the portrait
             </Button>
           )}
-          <Button type="button" variant="outline" size="sm" disabled={!!pending} onClick={() => run('avatar', () => peopleApi.setAvatar(person.kind, person.id, 'description'), 'Drawing a new avatar')}>
+          <Button type="button" variant="outline" size="sm" disabled={!!pending} onClick={() => run('avatar', () => api.people.setAvatar(person.kind, person.id, 'description'), 'Drawing a new avatar')}>
             New avatar from the description
           </Button>
           {photoIds.length > 0 && (
-            <Button type="button" variant="ghost" size="sm" disabled={!!pending} onClick={() => run('refresh', () => peopleApi.refreshLikeness(person.kind, person.id), 'Redoing the appearance and portrait')}>
+            <Button type="button" variant="ghost" size="sm" disabled={!!pending} onClick={() => run('refresh', () => api.people.refreshLikeness(person.kind, person.id), 'Redoing the appearance and portrait')}>
               <RefreshCw className="h-4 w-4 mr-1" /> Redo from photos
             </Button>
           )}
@@ -174,10 +174,10 @@ export function LikenessPanel({ person: initial, onChange }: Props) {
                   <img src={url} alt={`Photo ${index + 1}`} className="rounded-md object-cover aspect-square w-full" />
                   {avatarFromPhoto && likeness.avatar === url && <Badge className="absolute bottom-1 left-1">Avatar</Badge>}
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex flex-col items-center justify-center gap-1 transition-opacity rounded-md">
-                    <Button type="button" size="sm" disabled={!!pending} onClick={() => run('avatar', () => peopleApi.setAvatar(person.kind, person.id, 'photo', id), 'Avatar set')}>
+                    <Button type="button" size="sm" disabled={!!pending} onClick={() => run('avatar', () => api.people.setAvatar(person.kind, person.id, 'photo', id), 'Avatar set')}>
                       Use as avatar
                     </Button>
-                    <Button type="button" size="sm" variant="destructive" disabled={!!pending} onClick={() => run('remove', () => peopleApi.removePhoto(person.kind, person.id, id), 'Photo removed')}>
+                    <Button type="button" size="sm" variant="destructive" disabled={!!pending} onClick={() => run('remove', () => api.people.removePhoto(person.kind, person.id, id), 'Photo removed')}>
                       <Trash2 className="h-4 w-4 mr-1" /> Remove
                     </Button>
                   </div>

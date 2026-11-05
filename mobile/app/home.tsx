@@ -16,7 +16,7 @@ export default function HomeScreen() {
     useCallback(() => {
       let cancelled = false;
       apiClient
-        .getLibrarySummary()
+        .librarySummary()
         .then((summary) => {
           if (!cancelled) setCounts((childProfile?.id && summary.byChild[childProfile.id]) || { stories: 0, books: 0 });
         })

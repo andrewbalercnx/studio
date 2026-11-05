@@ -7,11 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useEffect, useState } from 'react';
 import { useFirestore } from '@/firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { peopleApi } from '@/lib/people/api';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { ChildProfile } from '@/lib/types';
 import { Input } from '@/components/ui/input';
+import { api } from '@/lib/api';
 
 export default function AdminChildrenPage() {
   const { isAuthenticated, isAdmin, loading: authLoading, error: authError } = useAdminStatus();
@@ -76,7 +76,7 @@ export default function AdminChildrenPage() {
     }
 
     try {
-      await peopleApi.reassignOwner('child', childId, updatedData.ownerParentUid);
+      await api.people.reassignOwner('child', childId, updatedData.ownerParentUid);
       toast({ title: 'Success', description: `Child ${childId} updated.` });
       handleCancel(childId); // Exit editing mode
     } catch (e: any) {

@@ -18,6 +18,32 @@
 
 ### 2026-11-05
 
+#### `#46` - One API client for web, kids PWA and mobile (slice 6.1)
+
+**Type**: Refactor (clients) + CI
+
+**Summary**: `@storypic/api-client` is now the only client of the API (`docs/architecture/target/slices/6-clients.md` §6.1). The web, the kids PWA and the mobile app call the same functions and get the same types.
+- **`packages/api-client`**:
+  - rewritten as `createStoryPicClient({ baseUrl, getToken })` with areas `stories`, `books` (with print), `orders` (with admin), `people`, `catalog`, plus `librarySummary`, `speak` and `verifyPin`;
+  - one transport reads both the route wrapper's envelope and the older bare answers;
+  - one error, `StoryPicApiError` (`code`, `message`, `status`);
+  - the helpers (`newIdempotencyKey`, `ChoiceKeys`, `isRetryLater`, `kidSafeMessage`, `storyStatusLabel`, `likenessBusy`, `formatMoney`, `ORDER_STATUS_LABELS`) live beside it.
+- **`packages/shared-types`**: split per area, with the order, print, people, library and catalog views added. The unused Firestore-shaped `ChildProfile`/`Character` types are removed.
+- **Packaging**: both packages are TypeScript source with no build; the committed `dist/` folders are deleted.
+- **Web**:
+  - `src/lib/api.ts` is the web's `api` instance, using the signed-in user's token;
+  - `src/lib/{stories,books,orders,people}/api.ts` are deleted, and 18 pages, components and hooks call `api.*`;
+  - `src/lib/stories/types.ts` and `src/lib/books/types.ts` keep the Firestore document types and re-export the API views from `@storypic/shared-types`.
+- **Mobile**:
+  - `ApiClientContext` drops its 400-line copy of the client and types and provides the package's client;
+  - the screens call `apiClient.stories.*`, `.books.*`, `.people.childRecords()` and so on;
+  - the packages are linked with `file:../packages/…`, and `metro.config.js` watches `../packages`.
+- **Bug fixed**: mobile's PIN check read `result.valid`, which the route never sends, so the parent gate could never pass. `verifyPin` now answers true or false.
+- **CI**: a new "Mobile typecheck & bundle" job installs mobile, typechecks it and bundles it for Android.
+- **Tests**: the package's calls, envelopes, error shapes, network failure, PIN and helpers are tested against a fake `fetch`. The old web client tests were folded into them; their type-helper tests stay.
+
+### 2026-11-05
+
 #### `#45` - Phase 6 plan: clients
 
 **Type**: Docs (plan)

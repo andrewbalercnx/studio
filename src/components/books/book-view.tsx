@@ -13,11 +13,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useBook, useBookCastSheets, useBookPages, useManuscript, useManuscriptPages } from '@/hooks/use-books';
-import { lockBook, retryBookPage, unlockBook } from '@/lib/books/api';
 import { isReadableStatus } from '@/lib/books/types';
 import { BookFailed, BookProgress } from './book-progress';
 import { BookReader } from './book-reader';
 import { PrintProof } from './print-proof';
+import { api } from '@/lib/api';
 
 export type BookViewParentControls = {
   /** Returns true when the parent PIN guard is open; otherwise asks for the PIN and returns false. */
@@ -72,7 +72,7 @@ export function BookView({ bookId, parent, admin = false }: { bookId: string; pa
 
   const retryPage = parent
     ? async (pageNumber: number) => {
-        await run(() => retryBookPage(bookId, pageNumber), 'Drawing that picture again');
+        await run(() => api.books.retryPage(bookId, pageNumber), 'Drawing that picture again');
       }
     : undefined;
 
@@ -94,7 +94,7 @@ export function BookView({ bookId, parent, admin = false }: { bookId: string; pa
         <Card className="max-w-2xl mx-auto">
           <CardContent className="flex flex-wrap items-center gap-3 p-4">
             {locked ? (
-              <Button variant="outline" disabled={busy} onClick={() => run(() => unlockBook(bookId), 'Book unlocked')}>
+              <Button variant="outline" disabled={busy} onClick={() => run(() => api.books.unlock(bookId), 'Book unlocked')}>
                 <Unlock className="mr-2 h-4 w-4" />
                 Unlock book
               </Button>
@@ -102,7 +102,7 @@ export function BookView({ bookId, parent, admin = false }: { bookId: string; pa
               <Button
                 variant="outline"
                 disabled={busy || !(book.status === 'ready' || book.status === 'partial')}
-                onClick={() => run(() => lockBook(bookId), 'Book locked')}
+                onClick={() => run(() => api.books.lock(bookId), 'Book locked')}
               >
                 <Lock className="mr-2 h-4 w-4" />
                 Lock book

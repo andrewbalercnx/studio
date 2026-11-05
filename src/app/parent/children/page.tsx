@@ -23,8 +23,8 @@ import { EntityEditor } from '@/components/shared/EntityEditor';
 import { LikenessPanel } from '@/components/shared/LikenessPanel';
 import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import { VoiceSelector } from '@/components/parent/VoiceSelector';
-import { peopleApi, type ChildView, type PersonView } from '@/lib/people/api';
 import { useChildren } from '@/lib/people/use-people';
+import { api, type ChildView, type PersonView } from '@/lib/api';
 
 export default function ManageChildrenPage() {
     const { user, loading: userLoading } = useUser();
@@ -69,11 +69,11 @@ export default function ManageChildrenPage() {
     }
 
     const handleVoiceSelect = async (childId: string, voiceId: string) => {
-        replacePerson(await peopleApi.update('child', childId, { preferredVoiceId: voiceId }));
+        replacePerson(await api.people.update('child', childId, { preferredVoiceId: voiceId }));
     }
 
     const handleAutoReadAloudChange = async (childId: string, enabled: boolean) => {
-        replacePerson(await peopleApi.update('child', childId, { autoReadAloud: enabled }));
+        replacePerson(await api.people.update('child', childId, { autoReadAloud: enabled }));
     }
 
     // Delete with undo functionality
@@ -83,7 +83,7 @@ export default function ManageChildrenPage() {
         const child = children.find(c => c.id === childId);
         if (!child) return;
         try {
-            await peopleApi.remove('child', childId);
+            await api.people.remove('child', childId);
             await reload();
             markAsDeleted({ id: childId, name: child.displayName, type: 'child' });
             toast({ title: 'Child profile deleted', description: `${child.displayName} has been removed.` });
@@ -94,7 +94,7 @@ export default function ManageChildrenPage() {
 
     const handleUndoDelete = useCallback(async (childId: string) => {
         try {
-            await peopleApi.restore('child', childId);
+            await api.people.restore('child', childId);
             await reload();
             toast({ title: 'Undo successful', description: 'The child profile has been restored.' });
         } catch (err) {

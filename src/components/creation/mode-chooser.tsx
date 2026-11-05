@@ -16,9 +16,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { StoriesLeftBadge } from '@/components/entitlements/entitlement-summary';
 import { OnboardingTipTrigger } from '@/components/onboarding/onboarding-tip-trigger';
 import { useCreateStory, useCreationModes } from '@/hooks/use-stories';
-import { kidSafeMessage, StoryApiError } from '@/lib/stories/api';
 import type { CreationModeView } from '@/lib/stories/types';
 import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
+import { kidSafeMessage, StoryPicApiError } from '@/lib/api';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Wand2,
@@ -101,7 +101,7 @@ export function ModeChooser({ childId, child, homeHref, onCreated }: ModeChooser
       console.error('[ModeChooser] Could not start the story', err);
       setError({
         message: kidSafeMessage(err),
-        outOfStories: err instanceof StoryApiError && err.code === 'ENTITLEMENT_LIMIT',
+        outOfStories: err instanceof StoryPicApiError && err.code === 'ENTITLEMENT_LIMIT',
       });
     }
   };

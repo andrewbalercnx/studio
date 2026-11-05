@@ -13,6 +13,8 @@
   "dependencies": {
     "@react-native-firebase/app": "^23.7.0",
     "@react-native-firebase/auth": "^23.7.0",
+    "@storypic/api-client": "file:../packages/api-client",
+    "@storypic/shared-types": "file:../packages/shared-types",
     "babel-preset-expo": "^54.0.9",
     "expo": "~54.0.31",
     "expo-av": "^16.0.8",

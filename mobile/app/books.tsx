@@ -22,7 +22,7 @@ export default function BooksScreen() {
 
   const load = useCallback(async () => {
     try {
-      setBooks(await apiClient.getBooks(childProfile?.id ? { childId: childProfile.id } : {}));
+      setBooks(await apiClient.books.list(childProfile?.id ? { childId: childProfile.id } : {}));
       setError(false);
     } catch (e) {
       console.error('Error loading books:', e);

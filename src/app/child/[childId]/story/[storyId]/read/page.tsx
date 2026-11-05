@@ -5,7 +5,7 @@ import { LoaderCircle } from 'lucide-react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useAppContext } from '@/hooks/use-app-context';
 import { StoryReader } from '@/components/creation';
-import { peopleApi } from '@/lib/people/api';
+import { api } from '@/lib/api';
 
 /** Web child shell: read a finished story; its Books and "make a book" underneath. */
 export default function StoryReadPage({ params }: { params: Promise<{ childId: string; storyId: string }> }) {
@@ -20,7 +20,7 @@ export default function StoryReadPage({ params }: { params: Promise<{ childId: s
   // The child's read-aloud preference lives on the child profile, changed through the route.
   const persistAutoRead = useCallback(
     (enabled: boolean) => {
-      peopleApi.update('child', childId, { autoReadAloud: enabled }).catch((err) =>
+      api.people.update('child', childId, { autoReadAloud: enabled }).catch((err) =>
         console.warn('[StoryRead] Failed to persist autoReadAloud:', err)
       );
     },

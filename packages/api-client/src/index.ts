@@ -1,14 +1,11 @@
 /**
  * @storypic/api-client
  *
- * Typed API client for StoryPic Kids child-facing features.
- * Used by PWA and mobile clients.
- *
- * NOTE: This client only exposes child-safe operations.
- * Parent management, print ordering, and admin functions are excluded.
+ * The one client of the StoryPic API (Phase 6.1), used by the web app, the
+ * kids PWA and the mobile app. The browser and the app change data only
+ * through these calls (ADR-0005).
  */
-
-export { StoryPicClient, type StoryPicClientConfig } from './client.js';
-
-// Re-export all types from shared-types for convenience
+export { createStoryPicClient, type StoryPicClient } from './client';
+export { StoryPicApiError, NETWORK_MESSAGE, type StoryPicClientConfig, type TokenProvider } from './http';
+export * from './helpers';
 export * from '@storypic/shared-types';

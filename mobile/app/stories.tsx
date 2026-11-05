@@ -29,7 +29,7 @@ export default function StoriesScreen() {
     if (!childId) return;
     try {
       // Newest first, abandoned ones left out: the server's order and status.
-      setStories(await apiClient.getMyStories(childId));
+      setStories(await apiClient.stories.list(childId));
     } catch (e) {
       console.error('Error loading stories:', e);
     } finally {

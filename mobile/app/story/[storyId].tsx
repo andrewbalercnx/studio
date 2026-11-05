@@ -35,9 +35,9 @@ export default function StoryScreen() {
     if (!storyId) return;
     try {
       const [result, storyBooks] = await Promise.all([
-        apiClient.getStory(storyId),
+        apiClient.stories.get(storyId),
         // A missing Books list only hides the Books section; the story still reads.
-        apiClient.getBooks({ storyId }).catch(() => [] as BookListItem[]),
+        apiClient.books.list({ storyId }).catch(() => [] as BookListItem[]),
       ]);
       setStory(result.story);
       setBooks(storyBooks);

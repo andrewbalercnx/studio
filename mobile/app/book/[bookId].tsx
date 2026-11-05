@@ -31,7 +31,7 @@ export default function BookScreen() {
   const load = useCallback(async () => {
     if (!bookId) return;
     try {
-      setBook(await apiClient.getBook(bookId));
+      setBook(await apiClient.books.get(bookId));
       setError(null);
     } catch (e) {
       console.error('Error loading book:', e);

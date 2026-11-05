@@ -14,17 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { useToast } from '@/hooks/use-toast';
-import {
-  adminCancelOrder,
-  approveOrder,
-  formatMoney,
-  getAdminOrder,
-  markOrderPaid,
-  ORDER_STATUS_LABELS,
-  refreshOrder,
-  retrySubmit,
-  type AdminOrderView,
-} from '@/lib/orders/api';
+import { api, formatMoney, ORDER_STATUS_LABELS, type AdminOrderView } from '@/lib/api';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -45,7 +35,7 @@ export default function AdminPrintOrderPage({ params }: { params: Promise<{ orde
 
   const load = useCallback(async () => {
     try {
-      setOrder(await getAdminOrder(orderId));
+      setOrder(await api.orders.admin.get(orderId));
       setError(null);
     } catch (err) {
       setError((err as Error).message);
@@ -94,7 +84,7 @@ export default function AdminPrintOrderPage({ params }: { params: Promise<{ orde
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           {order.nextAction === 'approve' && (
-            <Button disabled={busy} onClick={() => void act('Approved: sending to Mixam', () => approveOrder(order.id))}>
+            <Button disabled={busy} onClick={() => void act('Approved: sending to Mixam', () => api.orders.admin.approve(order.id))}>
               Approve and send to Mixam
             </Button>
           )}
@@ -104,14 +94,14 @@ export default function AdminPrintOrderPage({ params }: { params: Promise<{ orde
               disabled={busy}
               onClick={() => {
                 const note = window.prompt('Why is this order being marked paid? (kept on the order)');
-                if (note?.trim()) void act('Marked paid', () => markOrderPaid(order.id, note.trim()));
+                if (note?.trim()) void act('Marked paid', () => api.orders.admin.markPaid(order.id, note.trim()));
               }}
             >
               Mark paid…
             </Button>
           )}
           {canRetry && (
-            <Button variant="outline" disabled={busy} onClick={() => void act('Submit retried', () => retrySubmit(order.id, false))}>
+            <Button variant="outline" disabled={busy} onClick={() => void act('Submit retried', () => api.orders.admin.retrySubmit(order.id, false))}>
               Retry submit
             </Button>
           )}
@@ -121,7 +111,7 @@ export default function AdminPrintOrderPage({ params }: { params: Promise<{ orde
               disabled={busy}
               onClick={() => {
                 if (window.confirm('Only force a resubmit after checking the Mixam dashboard: this order may already be there. Continue?')) {
-                  void act('Submit forced', () => retrySubmit(order.id, true));
+                  void act('Submit forced', () => api.orders.admin.retrySubmit(order.id, true));
                 }
               }}
             >
@@ -129,7 +119,7 @@ export default function AdminPrintOrderPage({ params }: { params: Promise<{ orde
             </Button>
           )}
           {order.mixam.orderId && (
-            <Button variant="outline" disabled={busy} onClick={() => void act('Refreshed from Mixam', () => refreshOrder(order.id))}>
+            <Button variant="outline" disabled={busy} onClick={() => void act('Refreshed from Mixam', () => api.orders.admin.refresh(order.id))}>
               Refresh from Mixam
             </Button>
           )}
@@ -140,7 +130,7 @@ export default function AdminPrintOrderPage({ params }: { params: Promise<{ orde
               disabled={busy}
               onClick={() => {
                 const note = window.prompt('Cancel this order? It is cancelled at Mixam first if sent, then refunded. Note (optional):');
-                if (note !== null) void act('Cancelled', () => adminCancelOrder(order.id, note.trim() || null));
+                if (note !== null) void act('Cancelled', () => api.orders.admin.cancel(order.id, note.trim() || null));
               }}
             >
               Cancel order…

@@ -22,8 +22,8 @@ import { LikenessPanel } from './LikenessPanel';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase/auth/use-user';
 import { LoaderCircle, Volume2, Square } from 'lucide-react';
-import { newIdempotencyKey, peopleApi, type CharacterInput, type ChildInput, type PersonView } from '@/lib/people/api';
 import { DEFAULT_TTS_VOICE } from '@/lib/tts-config';
+import { api, newIdempotencyKey, type CharacterProfileInput, type ChildProfileInput, type PersonView } from '@/lib/api';
 
 type Pronouns = 'he/him' | 'she/her' | 'they/them';
 type CharacterType = 'Family' | 'Friend' | 'Pet' | 'Toy' | 'Other';
@@ -253,20 +253,20 @@ export function EntityEditor({
     try {
       let saved: PersonView;
       if (isCharacter) {
-        const input: CharacterInput = {
+        const input: CharacterProfileInput = {
           ...profile,
           type: characterType,
           relationship: characterType === 'Family' && relationship ? relationship : null,
           childId: childId === '__family_wide__' ? null : childId,
         };
         saved = entity
-          ? await peopleApi.update('character', entity.id, input)
-          : await peopleApi.create('character', { ...input, idempotencyKey: createKey.current });
+          ? await api.people.update('character', entity.id, input)
+          : await api.people.create('character', { ...input, idempotencyKey: createKey.current });
       } else {
-        const input: ChildInput = profile;
+        const input: ChildProfileInput = profile;
         saved = entity
-          ? await peopleApi.update('child', entity.id, input)
-          : await peopleApi.create('child', { ...input, preferredVoiceId: DEFAULT_TTS_VOICE, autoReadAloud: true, idempotencyKey: createKey.current });
+          ? await api.people.update('child', entity.id, input)
+          : await api.people.create('child', { ...input, preferredVoiceId: DEFAULT_TTS_VOICE, autoReadAloud: true, idempotencyKey: createKey.current });
       }
 
       if (!isEditing) {

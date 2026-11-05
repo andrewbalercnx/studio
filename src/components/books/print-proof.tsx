@@ -10,7 +10,7 @@ import { FileText, LoaderCircle, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { ChoiceKeys, getPrintOptions, getRender, listRenders, startRender, type PrintOption, type RenderView } from '@/lib/books/api';
+import { api, ChoiceKeys, type PrintOption, type RenderView } from '@/lib/api';
 
 function priceLabel(option: PrintOption): string {
   if (!option.price) return 'no price';
@@ -27,7 +27,7 @@ export function PrintProof({ bookId, canRender }: { bookId: string; canRender: b
 
   const refresh = useCallback(async () => {
     try {
-      const [opts, list] = await Promise.all([getPrintOptions(bookId), listRenders(bookId)]);
+      const [opts, list] = await Promise.all([api.books.printOptions(bookId), api.books.listRenders(bookId)]);
       setOptions(opts);
       setRenders(list);
       setLayoutId((current) => current || opts.find((o) => o.isCurrent)?.layoutId || opts[0]?.layoutId || '');
@@ -46,7 +46,7 @@ export function PrintProof({ bookId, canRender }: { bookId: string; canRender: b
     if (!pending) return;
     const timer = setInterval(async () => {
       try {
-        const view = await getRender(bookId, pending);
+        const view = await api.books.getRender(bookId, pending);
         if (view.status === 'rendering') return;
         setPending(null);
         if (view.status === 'failed') toast({ title: 'Render failed', description: view.error ?? undefined, variant: 'destructive' });
@@ -61,7 +61,7 @@ export function PrintProof({ bookId, canRender }: { bookId: string; canRender: b
   const render = async () => {
     if (!layoutId) return;
     try {
-      const result = await startRender(bookId, layoutId, keys.keyFor(layoutId));
+      const result = await api.books.startRender(bookId, layoutId, keys.keyFor(layoutId));
       if (result.status === 'ready') await refresh();
       else setPending(result.renderId);
     } catch (err) {

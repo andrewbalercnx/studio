@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
-import { likenessBusy, peopleApi, type CharacterView, type ChildView } from './api';
+import { api, likenessBusy, type CharacterView, type ChildView } from '@/lib/api';
 
 const POLL_MS = 5_000;
 
@@ -50,10 +50,10 @@ function usePeopleList<T extends ChildView | CharacterView>(load: () => Promise<
 
 /** The caller's children, from `GET /api/children?view=person`. */
 export function useChildren() {
-  return usePeopleList<ChildView>(() => peopleApi.listChildren(), 'children');
+  return usePeopleList<ChildView>(() => api.people.listChildren(), 'children');
 }
 
 /** The family's characters (and the help-tour sample), from `GET /api/characters`. */
 export function useCharacters() {
-  return usePeopleList<CharacterView>(() => peopleApi.listCharacters({ includeHelp: true }), 'characters');
+  return usePeopleList<CharacterView>(() => api.people.listCharacters({ includeHelp: true }), 'characters');
 }
