@@ -18,7 +18,7 @@
 
 ### 2026-11-05
 
-#### `#40` - Print cleanup (slice 5.6b): delete the legacy storybook print and order code
+#### `#41` - Print cleanup (slice 5.6b): delete the legacy storybook print and order code
 
 **Type**: Removal
 
