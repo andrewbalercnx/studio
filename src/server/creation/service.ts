@@ -20,7 +20,7 @@ import { createHash } from 'node:crypto';
 import { FieldValue, Timestamp, type DocumentReference, type Firestore, type Transaction } from 'firebase-admin/firestore';
 import { enforcePersonaScope } from '@/lib/persona.server';
 import { checkAllowance } from '../books/allowance';
-import { characterAvatarSpec } from '../characters/avatar';
+import { avatarSpec } from '../characters/likeness-jobs';
 import { stories, storyTurns } from '../data/repositories';
 import type { CreateInput, WithId } from '../data/repository';
 import {
@@ -350,7 +350,7 @@ export async function createStory(deps: CreationServiceDeps, user: VerifiedUser,
     // Draw an avatar for every character the mode just invented (reads before writes).
     const avatars =
       recorded.newCharacters.length > 0
-        ? await deps.runner.enqueueInTransaction(tx, recorded.newCharacters.map((c) => characterAvatarSpec({ id: c.id, ownerUid })))
+        ? await deps.runner.enqueueInTransaction(tx, recorded.newCharacters.map((c) => avatarSpec({ kind: 'character', id: c.id, ownerUid }, 'description', typeof c.data.description === 'string' ? c.data.description : null)))
         : null;
     writeCharacters();
     await repo.createIn(
@@ -520,7 +520,7 @@ export async function submitTurn(deps: CreationServiceDeps, user: VerifiedUser, 
     // is done, and an avatar job for every character this turn introduced.
     const specs = [
       ...(recorded.done ? [finishSpec({ id: storyId, ownerUid: story.ownerUid }, run)] : []),
-      ...recorded.newCharacters.map((c) => characterAvatarSpec({ id: c.id, ownerUid: story.ownerUid })),
+      ...recorded.newCharacters.map((c) => avatarSpec({ kind: 'character', id: c.id, ownerUid: story.ownerUid }, 'description', typeof c.data.description === 'string' ? c.data.description : null)),
     ];
     const pending = specs.length > 0 ? await deps.runner.enqueueInTransaction(tx, specs) : null;
 

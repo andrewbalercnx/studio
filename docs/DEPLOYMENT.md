@@ -478,3 +478,27 @@ action URL fails with `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`), which is why the app
   any email Firebase itself sends.
 - Test: "Forgot password?" on `/login` → the email comes from the StoryPic sender and its button
   opens `storypic.rcnx.io/auth/action?mode=resetPassword…`.
+
+## 12. Likeness migration (with the slice 5.7b release, not before)
+
+Slice 5.7a reads children and characters in either shape and its jobs mirror into the old fields. **Do
+not run the migration until 5.7b deploys**: while the old pages still write only the old fields, a
+migrated `likeness.*` value would win over their newer writes.
+
+With the 5.7b release:
+
+```bash
+node scripts/migrate-likeness.mjs                                          # dry run: counts per collection
+node scripts/migrate-likeness.mjs --confirm --project studio-6508342045-13669
+```
+
+It copies `ownerParentUid` → `ownerUid`, `photos` → `likeness.photos`, `imageDescription` →
+`likeness.appearance`, `canonicalImageUrl` → `likeness.portrait`, `avatarUrl` → `likeness.avatar`
+(placeholder URLs dropped) and `avatarAnimationUrl` → `likeness.avatarAnimation`, and stamps
+`likenessMigratedAt`. Target fields win, so a second run changes nothing. The old fields stay until a
+later release removes them.
+
+The animated avatar (`likeness.animate`) uses `FAL_KEY` (already mounted in `apphosting.yaml`), or
+`config/aiModels` `purposes['likeness.animate']` set to a `veo-…` model with Veo enabled on the Gemini key.
+Without either, avatars are still drawn; only the animation is skipped (the job fails with
+`ANIMATION_NOT_CONFIGURED`).

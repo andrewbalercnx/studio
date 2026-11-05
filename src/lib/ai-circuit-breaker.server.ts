@@ -32,6 +32,7 @@ export const CIRCUIT_BREAKER_DOC_PATH = 'systemConfig/circuitBreakers';
 export const PROVIDER_GEMINI_TEXT = 'gemini-text';
 export const PROVIDER_GEMINI_IMAGE = 'gemini-image';
 export const PROVIDER_ELEVENLABS_TTS = 'elevenlabs-tts';
+export const PROVIDER_VIDEO = 'video-gen';
 
 /** Per-provider state as persisted in the systemConfig doc. */
 export type PersistedBreakerState = {

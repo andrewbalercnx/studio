@@ -5,6 +5,9 @@ import { jobStatusSchema, ownerFields, stampFields, timestampSchema } from './co
 export const JOB_KINDS = [
   'likeness.describe',
   'likeness.portrait',
+  'likeness.avatar',
+  'likeness.animate',
+  /** Former name of the description avatar job; still runs jobs queued before 5.7. */
   'character.avatar',
   'story.finish',
   'manuscript.paginate',

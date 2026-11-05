@@ -11,6 +11,7 @@
  * while a Story is being created (owner-read rules); mobile and the readers
  * use these routes. Names are resolved here, never on a client.
  */
+import { readLikeness } from '../characters/entities';
 import type { Firestore, Timestamp } from 'firebase-admin/firestore';
 import { stories } from '../data/repositories';
 import type { WithId } from '../data/repository';
@@ -91,11 +92,11 @@ async function loadPeople(db: Firestore, ownerUid: string): Promise<Map<string, 
   const people = new Map<string, Person>();
   for (const doc of children.docs) {
     const data = doc.data();
-    people.set(doc.id, { id: doc.id, kind: 'child', displayName: str(data.displayName) ?? 'the child', avatarUrl: str(data.avatarUrl) });
+    people.set(doc.id, { id: doc.id, kind: 'child', displayName: str(data.displayName) ?? 'the child', avatarUrl: readLikeness(data).avatar });
   }
   for (const doc of characters.docs) {
     const data = doc.data();
-    people.set(doc.id, { id: doc.id, kind: 'character', displayName: str(data.displayName) ?? 'a friend', avatarUrl: str(data.avatarUrl) });
+    people.set(doc.id, { id: doc.id, kind: 'character', displayName: str(data.displayName) ?? 'a friend', avatarUrl: readLikeness(data).avatar });
   }
   return people;
 }

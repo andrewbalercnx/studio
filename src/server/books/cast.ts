@@ -7,14 +7,15 @@
  * - Every lookup is owner-scoped: a child or character belongs to the cast only
  *   if its `ownerParentUid` is the story's owner. There is no cross-family lookup
  *   by id or by name (as-is characters-actors.md bug 3).
- * - Likeness: `portrait` = `canonicalImageUrl`; `appearance` = `imageDescription`
- *   (generated from the original photos, CLAUDE.md rule — never regenerated
- *   here); `photos` = the original uploads. `avatarUrl` is never a likeness
- *   (it may be a picsum placeholder), and any placeholder URL is dropped.
+ * - Likeness through `characters/entities.ts` `readLikeness` (`likeness.*`, or
+ *   the old `canonicalImageUrl` / `imageDescription` until the 5.7b migration):
+ *   `appearance` is generated from the original photos (CLAUDE.md rule, never
+ *   regenerated here). The avatar is never a likeness; placeholder URLs are dropped.
  * - One token parser for story text: `$$id$$`, the single-dollar AI fallback
  *   `$id$` (15+ id chars) and the target `[[cast:id]]`.
  */
 import type { Firestore } from 'firebase-admin/firestore';
+import { isPlaceholderImageUrl, ownerOf, readLikeness } from '../characters/entities';
 import type { CastMember } from '../data/schemas/story';
 import type { StorySource } from './story-source';
 
@@ -40,16 +41,7 @@ export type CastEntry = CastMember & {
   likeness: CastLikeness;
 };
 
-const PLACEHOLDER_IMAGE = /picsum\.photos|placehold|placeholder|dummyimage\.com|loremflickr|unsplash\.it|fakeimg/i;
-
-/** Stock / placeholder images are never a likeness (ADR-0006). */
-export function isPlaceholderImageUrl(url: string): boolean {
-  return PLACEHOLDER_IMAGE.test(url);
-}
-
-function realImage(url: unknown): string | null {
-  return typeof url === 'string' && url.trim().length > 0 && !isPlaceholderImageUrl(url) ? url.trim() : null;
-}
+export { isPlaceholderImageUrl };
 
 // ---------------------------------------------------------------------------
 // Tokens
@@ -142,7 +134,7 @@ function ageFrom(dateOfBirth: unknown, now: Date): string | null {
 }
 
 function isOwned(data: RawEntity | undefined, ownerUid: string): data is RawEntity {
-  return !!data && data.ownerParentUid === ownerUid && (data.deletedAt === undefined || data.deletedAt === null);
+  return !!data && ownerOf(data) === ownerUid && (data.deletedAt === undefined || data.deletedAt === null);
 }
 
 function entryFrom(
@@ -152,7 +144,7 @@ function entryFrom(
   role: CastEntry['role'],
   now: Date
 ): CastEntry {
-  const photos = Array.isArray(data.photos) ? data.photos.map(realImage).filter((u): u is string => !!u) : [];
+  const likeness = readLikeness(data);
   return {
     castId: id,
     ref: { kind, id },
@@ -166,11 +158,7 @@ function entryFrom(
     likes: Array.isArray(data.likes) ? data.likes.filter((l): l is string => typeof l === 'string') : [],
     age: kind === 'child' ? ageFrom(data.dateOfBirth, now) : null,
     preferredVoiceId: kind === 'child' ? str(data.preferredVoiceId) : null,
-    likeness: {
-      portrait: realImage(data.canonicalImageUrl),
-      appearance: str(data.imageDescription),
-      photos,
-    },
+    likeness: { portrait: likeness.portrait, appearance: likeness.appearance, photos: likeness.photos },
   };
 }
 

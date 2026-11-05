@@ -105,7 +105,7 @@ describe('freeplay', () => {
     expect(character.avatarUrl).toBeUndefined(); // no stock placeholder (ADR-0006)
 
     // An avatar is drawn from the character's words (no photos to draw from).
-    const avatarJobs = await jobs.using(bench.db).where({ kind: 'character.avatar' });
+    const avatarJobs = await jobs.using(bench.db).where({ kind: 'likeness.avatar' });
     expect(avatarJobs.map((j) => j.target.id)).toContain(castId);
 
     const story = await stories.using(bench.db).require(created.storyId);

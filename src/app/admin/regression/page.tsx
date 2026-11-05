@@ -1085,6 +1085,12 @@ export default function AdminRegressionPage() {
             { path: '/api/webhooks/stripe', init: { method: 'POST', body: '{}' }, expect: [400, 503] },
             { path: '/api/admin/orders', expect: [401] },
             { path: '/api/admin/orders/settings', expect: [401] },
+            // Children and characters (slice 5.7a): every route refuses anonymous calls.
+            { path: '/api/children', init: { method: 'POST', body: '{}' }, expect: [401] },
+            { path: '/api/characters', expect: [401] },
+            { path: '/api/characters/regression-anon/photos', init: { method: 'POST', body: '{}' }, expect: [401] },
+            { path: '/api/children/regression-anon/avatar', init: { method: 'POST', body: '{}' }, expect: [401] },
+            { path: '/api/admin/children/regression-anon', init: { method: 'PATCH', body: '{}' }, expect: [401] },
         ];
         const failures: string[] = [];
         for (const { path, init, expect } of anonymous) {

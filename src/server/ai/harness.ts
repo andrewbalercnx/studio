@@ -19,6 +19,7 @@ import type { z } from 'zod';
 import {
   PROVIDER_ELEVENLABS_TTS,
   PROVIDER_GEMINI_IMAGE,
+  PROVIDER_VIDEO,
   PROVIDER_GEMINI_TEXT,
   withProviderReliability,
   type ProviderReliabilityOptions,
@@ -89,6 +90,7 @@ const PROVIDER_FOR_KIND: Record<AIPurposeKind, string> = {
   text: PROVIDER_GEMINI_TEXT,
   image: PROVIDER_GEMINI_IMAGE,
   tts: PROVIDER_ELEVENLABS_TTS,
+  video: PROVIDER_VIDEO,
 };
 
 const defaultGenerate: GenerateFn = async (request) => {
