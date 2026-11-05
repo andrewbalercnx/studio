@@ -12,8 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import type { PromptConfig } from '@/lib/types';
 import { useFirestore } from '@/firebase';
-import { writeBatch, doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
 
 type ValidationResultItem = {
   id: string | null;
@@ -157,15 +157,8 @@ export default function AdminUploadPage() {
     });
 
     try {
-        const batch = writeBatch(firestore);
         const validItems = parsedItems.filter((_, index) => validation.results[index].isValid);
-
-        validItems.forEach((item) => {
-            const docRef = doc(firestore, 'promptConfigs', item.id);
-            batch.set(docRef, item);
-        });
-
-        await batch.commit();
+        await api.catalog.admin.batch('promptConfigs', validItems.map((item) => ({ id: item.id, data: item as unknown as Record<string, unknown> })));
 
         setSaveState({
             lastAction: 'save_success',

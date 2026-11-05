@@ -70,6 +70,13 @@ const API_ROUTES = {
     { method: 'PUT', path: '/api/user/shipping-address', description: 'Save shipping address' },
   ],
   admin: [
+    { method: 'POST', path: '/api/admin/catalog/[collection]', description: 'Create authored config (writer/admin)', admin: true },
+    { method: 'PUT', path: '/api/admin/catalog/[collection]/[id]', description: 'Replace or merge authored config', admin: true },
+    { method: 'PATCH', path: '/api/admin/catalog/[collection]/[id]', description: 'Change config fields (dotted paths)', admin: true },
+    { method: 'DELETE', path: '/api/admin/catalog/[collection]/[id]', description: 'Delete authored config', admin: true },
+    { method: 'POST', path: '/api/admin/catalog/[collection]/batch', description: 'Seed up to 400 config documents', admin: true },
+    { method: 'GET', path: '/api/admin/children?ownerUid=', description: "One family's children", admin: true },
+    { method: 'GET', path: '/api/admin/characters?ownerUid=', description: "One family's characters", admin: true },
     { method: 'GET', path: '/api/admin/orders', description: 'List print orders', admin: true },
     { method: 'GET', path: '/api/admin/orders/[orderId]', description: 'One print order', admin: true },
     { method: 'POST', path: '/api/admin/orders/[orderId]/approve', description: 'Approve and send to Mixam', admin: true },

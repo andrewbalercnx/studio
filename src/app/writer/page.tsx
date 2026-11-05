@@ -18,9 +18,10 @@ import { Label } from '@/components/ui/label';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
-import { collection, doc, addDoc, setDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
 import type { StoryPhase, PromptConfig, StoryOutputType, PrintLayout } from '@/lib/types';
+import { api } from '@/lib/api';
 
 type StoryPhaseForm = {
   id?: string;
@@ -340,16 +341,14 @@ function StoryPhasesPanel() {
       allowMore: form.allowMore,
       orderIndex: Number(form.orderIndex) || 0,
       status: form.status,
-      updatedAt: serverTimestamp(),
     };
 
     try {
       if (form.id) {
-        await setDoc(doc(firestore, 'storyPhases', form.id), payload, { merge: true });
+        await api.catalog.admin.set('storyPhases', form.id, payload, { merge: true });
       } else {
-        await addDoc(collection(firestore, 'storyPhases'), {
+        await api.catalog.admin.create('storyPhases', {
           ...payload,
-          createdAt: serverTimestamp(),
         });
       }
       toast({ title: 'Story phase saved' });
@@ -538,16 +537,14 @@ function PromptConfigsPanel() {
         name: form.modelName,
         temperature: Number(form.modelTemperature) || 0,
       },
-      updatedAt: serverTimestamp(),
     };
     try {
       if (form.id) {
-        await setDoc(doc(firestore, 'promptConfigs', form.id), payload, { merge: true });
+        await api.catalog.admin.set('promptConfigs', form.id, payload, { merge: true });
       } else {
-        await addDoc(collection(firestore, 'promptConfigs'), {
+        await api.catalog.admin.create('promptConfigs', {
           ...payload,
           status: payload.status || 'draft',
-          createdAt: serverTimestamp(),
         });
       }
       toast({ title: 'Prompt config saved' });
@@ -850,7 +847,6 @@ function StoryOutputsPanel() {
       layoutHints: {
         ...(pageCountNum !== undefined ? { pageCount: pageCountNum } : {}),
       },
-      updatedAt: serverTimestamp(),
     };
     // Handle optional fields - set to empty string or include value
     payload.imagePrompt = form.imagePrompt || '';
@@ -859,11 +855,10 @@ function StoryOutputsPanel() {
 
     try {
       if (form.id) {
-        await setDoc(doc(firestore, 'storyOutputTypes', form.id), payload, { merge: true });
+        await api.catalog.admin.set('storyOutputTypes', form.id, payload, { merge: true });
       } else {
-        await addDoc(collection(firestore, 'storyOutputTypes'), {
+        await api.catalog.admin.create('storyOutputTypes', {
           ...payload,
-          createdAt: serverTimestamp(),
         });
       }
       toast({ title: 'Output type saved' });

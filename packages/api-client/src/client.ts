@@ -42,6 +42,9 @@ import { createTransport, query, seg, StoryPicApiError, type StoryPicClientConfi
 type ViewOf<K extends PersonKind> = K extends 'child' ? ChildView : CharacterView;
 type InputOf<K extends PersonKind> = K extends 'child' ? ChildProfileInput : CharacterProfileInput;
 
+/** The authored configuration collections written through `/api/admin/catalog/**`. */
+export type CatalogCollectionName = 'storyTypes' | 'storyPhases' | 'promptConfigs' | 'storyOutputTypes' | 'printLayouts' | 'printProducts' | 'storyGenerators';
+
 const PEOPLE: Record<PersonKind, string> = { child: '/children', character: '/characters' };
 
 function storiesApi(t: Transport) {
@@ -150,6 +153,23 @@ function catalogApi(t: Transport) {
       (await t.raw<{ ok: boolean; outputTypes?: StoryOutputType[] }>('GET', '/storyOutputTypes')).outputTypes ?? [],
     /** The art Styles a Book can be drawn in (preferred first). */
     imageStyles: async (): Promise<ImageStyle[]> => (await t.raw<{ ok: boolean; imageStyles?: ImageStyle[] }>('GET', '/imageStyles')).imageStyles ?? [],
+    /**
+     * Writers and admins: change the authored configuration (story types and phases, prompt configs,
+     * output types, print layouts; print products and story generators are admin only). The server
+     * stamps `createdAt` / `updatedAt`.
+     */
+    admin: {
+      create: (collection: CatalogCollectionName, data: Record<string, unknown>, id?: string) =>
+        t.call<{ id: string }>('POST', `/admin/catalog/${seg(collection)}`, id ? { id, data } : { data }),
+      set: (collection: CatalogCollectionName, id: string, data: Record<string, unknown>, options: { merge?: boolean } = {}) =>
+        t.call<{ id: string }>('PUT', `/admin/catalog/${seg(collection)}/${seg(id)}`, { data, merge: options.merge === true }),
+      /** Dotted paths (`layoutHints.pageCount`) change nested fields. */
+      update: (collection: CatalogCollectionName, id: string, data: Record<string, unknown>) =>
+        t.call<{ id: string }>('PATCH', `/admin/catalog/${seg(collection)}/${seg(id)}`, { data }),
+      remove: (collection: CatalogCollectionName, id: string) => t.call<{ id: string; deleted: true }>('DELETE', `/admin/catalog/${seg(collection)}/${seg(id)}`),
+      batch: (collection: CatalogCollectionName, items: Array<{ id: string; data: Record<string, unknown> }>, options: { merge?: boolean } = {}) =>
+        t.call<{ written: number }>('POST', `/admin/catalog/${seg(collection)}/batch`, { items, merge: options.merge === true }),
+    },
   };
 }
 

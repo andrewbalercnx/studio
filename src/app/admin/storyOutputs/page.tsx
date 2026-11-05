@@ -8,7 +8,7 @@ import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
-import { collection, doc, onSnapshot, query, orderBy, writeBatch, serverTimestamp, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { StoryOutputType, PrintLayout } from '@/lib/types';
@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import Image from 'next/image';
+import { api } from '@/lib/api';
 
 const slugify = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
@@ -161,20 +162,16 @@ function OutputTypeForm({ editingType, onSave, onOpenChange }: { editingType?: S
                 style: data['aiHints.style'],
             },
             paginationPrompt: data.paginationPrompt || '',
-            updatedAt: serverTimestamp(),
         };
 
         try {
             if (editingType) {
-                const docRef = doc(firestore, 'storyOutputTypes', editingType.id);
-                await writeBatch(firestore).update(docRef, docData).commit();
+                await api.catalog.admin.update('storyOutputTypes', editingType.id, docData);
                 toast({ title: 'Success', description: 'Output type updated.' });
             } else {
                 const id = `${slugify(data.name)}_v1`;
-                docData.createdAt = serverTimestamp();
                 docData.tags = [data.category]; // default tag
-                const docRef = doc(firestore, 'storyOutputTypes', id);
-                await writeBatch(firestore).set(docRef, docData, { merge: true }).commit();
+                await api.catalog.admin.set('storyOutputTypes', id, docData, { merge: true });
                 toast({ title: 'Success', description: 'New output type created.' });
             }
             onSave();
@@ -431,12 +428,10 @@ export default function AdminStoryOutputsPage() {
   const handleCreateSampleData = useCallback(async () => {
     if (!firestore) return;
     try {
-        const batch = writeBatch(firestore);
-        sampleOutputTypes.forEach((type, index) => {
-            const docRef = doc(firestore, "storyOutputTypes", sampleIds[index]);
-            batch.set(docRef, { ...type, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-        });
-        await batch.commit();
+        await api.catalog.admin.batch(
+            'storyOutputTypes',
+            sampleOutputTypes.map((type, index) => ({ id: sampleIds[index], data: type as unknown as Record<string, unknown> }))
+        );
         toast({ title: 'Success', description: 'Sample output types created.' });
     } catch (e: any) {
         console.error('Error seeding data:', e);

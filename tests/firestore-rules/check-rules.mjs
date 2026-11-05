@@ -26,6 +26,7 @@ function client(name, token) {
 
 const parent = client('parent', { sub: 'p1', user_id: 'p1' });
 const admin = client('admin', { sub: 'a1', user_id: 'a1', isAdmin: true });
+const writer = client('writer', { sub: 'w1', user_id: 'w1', isWriter: true });
 
 let failures = 0;
 async function check(label, expected, operation) {
@@ -85,6 +86,15 @@ await check('read own character', 'allow', () => getDoc(doc(parent, 'characters'
 await check('create own character directly', 'deny', () => setDoc(doc(parent, 'characters', 'ch2'), { ownerParentUid: 'p1', ownerUid: 'p1', displayName: 'Sam' }));
 await check('edit own character directly', 'deny', () => updateDoc(doc(parent, 'characters', 'ch1'), { photos: [] }));
 await check('admin edits a child', 'allow', () => updateDoc(doc(admin, 'children', 'c1'), { displayName: 'Emma' }));
+
+// Authored configuration (slice 6.4a): written through /api/admin/catalog/**; browser writes admin only.
+await setDoc(doc(admin, 'storyTypes', 'quest'), { name: 'Quest' });
+await check('parent reads a story type', 'allow', () => getDoc(doc(parent, 'storyTypes', 'quest')));
+for (const c of ['storyTypes', 'storyPhases', 'promptConfigs', 'storyOutputTypes', 'printLayouts']) {
+  await check(`writer writes ${c} directly`, 'deny', () => setDoc(doc(writer, c, 'w-test'), { name: 'x' }));
+}
+await check('parent writes a print product', 'deny', () => setDoc(doc(parent, 'printProducts', 'pp'), { name: 'x' }));
+await check('admin writes a story type', 'allow', () => updateDoc(doc(admin, 'storyTypes', 'quest'), { name: 'Quest 2' }));
 
 // Story sessions and the old storybook subcollections are gone (slice 5.4): no client access.
 await check('create a story session', 'deny', () => setDoc(doc(parent, 'storySessions', 's2'), { parentUid: 'p1', childId: 'c1', status: 'in_progress' }));

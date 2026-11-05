@@ -18,6 +18,29 @@
 
 ### 2026-11-05
 
+#### `#48` - Configuration written through admin routes (slice 6.4a)
+
+**Type**: Security (rules) + Refactor (admin and writer pages)
+
+**Summary**: The first half of 6.4. The authored configuration is now changed through one set of admin routes instead of from the browser. The pages over 1,000 lines are split in 6.4b.
+- **Server**:
+  - `src/server/catalog/writes.ts` covers seven collections: `storyTypes`, `storyPhases`, `promptConfigs`, `storyOutputTypes` and `printLayouts` (writers and admins), plus `printProducts` and `storyGenerators` (admins only).
+  - Bodies must be plain JSON objects of bounded size, with no reserved keys; dotted paths are allowed on PATCH.
+  - The server stamps `createdAt` / `updatedAt`.
+  - Batch writes run in one transaction.
+- **Routes**: `POST /api/admin/catalog/{collection}`; `PUT`/`PATCH`/`DELETE /api/admin/catalog/{collection}/{id}`; `POST /api/admin/catalog/{collection}/batch`. api-client: `catalog.admin.*`.
+- **Pages moved onto the routes**:
+  - `admin/storyTypes`, `admin/storyGenerators`, `writer`;
+  - `admin/print-layouts`, `admin/print-products`;
+  - `admin/storyPhases`, `admin/prompts`, `admin/upload`, `admin/storyOutputs`;
+  - the regression page's writer check and cleanup.
+- **Rules**:
+  - The five writer-editable collections are no longer browser-writable by writers; browser writes are admin only, kept for the database and rules-test tools.
+  - Rules tests: a writer's direct writes are refused, a parent can read, and an admin can still write. The in-app rules self-test is updated to match.
+- **Tests**: unit tests for roles, stamps, merge and replace, dotted updates, the batch and refused bodies.
+
+### 2026-11-05
+
 #### `#47` - Children and characters read through the API (slice 6.2)
 
 **Type**: Refactor (clients and server helpers) + Cleanup

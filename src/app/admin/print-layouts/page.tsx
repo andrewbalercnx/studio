@@ -3,7 +3,7 @@
 
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useFirestore } from '@/firebase';
-import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 import { useCollection } from '@/lib/firestore-hooks';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { Button } from '@/components/ui/button';
@@ -19,13 +19,13 @@ import { deleteDoc } from 'firebase/firestore';
 import type { PrintLayout, PrintProduct } from '@/lib/types';
 import SampleLayoutData from '@/data/print-layouts.json';
 import { query, where } from 'firebase/firestore';
-import { writeBatch } from 'firebase/firestore';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
 
 // Font configuration with display names and CSS font-family values
 type FontConfig = {
@@ -409,16 +409,11 @@ function PrintLayoutForm({
       backCoverLayout: cleanLayoutConfig(data.backCoverLayout),
       insideLayout: cleanLayoutConfig(data.insideLayout),
       titlePageLayout: cleanLayoutConfig(data.titlePageLayout),
-      updatedAt: serverTimestamp(),
     };
 
     try {
-      const docRef = data.id ? doc(firestore, 'printLayouts', data.id) : doc(collection(firestore, 'printLayouts'));
-      await setDoc(
-        docRef,
-        { ...payload, createdAt: payload.updatedAt },
-        { merge: true }
-      );
+      if (data.id) await api.catalog.admin.set('printLayouts', data.id, payload, { merge: true });
+      else await api.catalog.admin.create('printLayouts', payload);
       toast({ title: 'Print layout saved' });
       onSave();
     } catch (error: any) {
@@ -927,16 +922,10 @@ function PrintLayoutsPanel() {
   const handleSeedLayouts = useCallback(async () => {
     if (!firestore) return;
     try {
-      const batch = writeBatch(firestore);
-      SampleLayoutData.printLayouts.forEach((layout) => {
-        const docRef = doc(firestore, 'printLayouts', layout.id);
-        batch.set(docRef, {
-          ...layout,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      });
-      await batch.commit();
+      await api.catalog.admin.batch(
+        'printLayouts',
+        SampleLayoutData.printLayouts.map((layout) => ({ id: layout.id, data: layout as unknown as Record<string, unknown> }))
+      );
       toast({ title: 'Success', description: 'Default print layout has been seeded.' });
     } catch (e: any) {
       toast({ title: 'Error seeding data', description: e.message, variant: 'destructive' });
@@ -966,14 +955,8 @@ function PrintLayoutsPanel() {
   const handleDuplicate = async (layout: PrintLayout) => {
     if (!firestore) return;
     try {
-      const newDocRef = doc(collection(firestore, 'printLayouts'));
       const { id, createdAt, updatedAt, ...layoutData } = layout;
-      await setDoc(newDocRef, {
-        ...layoutData,
-        name: `${layout.name} (Copy)`,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      await api.catalog.admin.create('printLayouts', { ...layoutData, name: `${layout.name} (Copy)` });
       toast({ title: 'Layout duplicated', description: `Created "${layout.name} (Copy)"` });
     } catch (e: any) {
       toast({ title: 'Error duplicating layout', description: e.message, variant: 'destructive' });
@@ -986,7 +969,7 @@ function PrintLayoutsPanel() {
       return;
     }
     try {
-      await deleteDoc(doc(firestore, 'printLayouts', layout.id));
+      await api.catalog.admin.remove('printLayouts', layout.id);
       toast({ title: 'Layout deleted', description: `"${layout.name}" has been deleted.` });
     } catch (e: any) {
       toast({ title: 'Error deleting layout', description: e.message, variant: 'destructive' });
