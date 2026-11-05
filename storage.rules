@@ -3,6 +3,7 @@
 // - Child photos restricted to owner + admin (no longer public)
 // - Added file size limits on uploads
 // - Added content type validation
+// - Photos are written by the routes only (slice 5.7b); this is the only storage rules file
 rules_version = '2';
 
 service firebase.storage {
@@ -26,13 +27,13 @@ service firebase.storage {
       allow read, write: if false;
     }
 
-    // Child photos - owner or admin only
-    match /users/{parentUid}/children/{childId}/photos/{fileName} {
-      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == parentUid);
-      allow write: if isAdmin()
-                   || (isAuthenticated() && request.auth.uid == parentUid
-                       && request.resource.size < 10 * 1024 * 1024
-                       && request.resource.contentType.matches('image/.*'));
+    // Child and Character photos (slice 5.7b): uploaded through the
+    // `/api/{children,characters}/{id}/photos` routes (Admin SDK) only; the
+    // owner may read them.
+    match /users/{parentUid}/{kind}/{personId}/photos/{fileName} {
+      allow read: if isAdmin()
+                  || (isAuthenticated() && request.auth.uid == parentUid && kind in ['children', 'characters']);
+      allow write: if false;
     }
 
     // Story assets - owner or admin

@@ -452,13 +452,6 @@ export type ActorDetailsWithImages = ActorDetails & {
   photos?: string[];
 };
 
-/**
- * Type for actor details with image data URIs (for AI prompts)
- */
-export type ActorDetailsWithImageData = ActorDetailsWithImages & {
-  avatarDataUri?: string;
-};
-
 /** Extract $$id$$ and $id$ entity placeholder IDs from text. Delegates to the shared canonical implementation. */
 export function extractActorIdsFromText(text: string): string[] {
   return extractEntityIds(text);
@@ -625,51 +618,6 @@ export async function getActorsDetailsWithImages(
   const actors = await loadActorsFromIds(firestore, actorList, mainChildId);
   const details = actors.map(a => buildActorDetailsWithImagesObject(a.actorInfo, a.entity));
   return JSON.stringify(details, null, 2);
-}
-
-/**
- * Fetch image as data URI (base64)
- */
-async function fetchImageAsDataUri(url: string): Promise<string | null> {
-  if (!url) return null;
-  try {
-    const response = await fetch(url);
-    if (!response.ok) return null;
-    const buffer = await response.arrayBuffer();
-    const mimeType = response.headers.get('content-type') || 'image/jpeg';
-    return `data:${mimeType};base64,${Buffer.from(buffer).toString('base64')}`;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Load actors with image data URIs for AI image generation
- * Returns array (not JSON) because image generation flows need to access individual images
- */
-export async function getActorsDetailsWithImageData(
-  firestore: FirebaseFirestore.Firestore,
-  actorList: string[],
-  mainChildId?: string
-): Promise<ActorDetailsWithImageData[]> {
-  const actors = await loadActorsFromIds(firestore, actorList, mainChildId);
-
-  // Fetch avatar images in parallel
-  const results = await Promise.all(
-    actors.map(async ({ actorInfo, entity }) => {
-      const details = buildActorDetailsWithImagesObject(actorInfo, entity);
-      const avatarDataUri = entity.avatarUrl
-        ? await fetchImageAsDataUri(entity.avatarUrl)
-        : null;
-
-      return {
-        ...details,
-        avatarDataUri: avatarDataUri || undefined,
-      } as ActorDetailsWithImageData;
-    })
-  );
-
-  return results;
 }
 
 /**

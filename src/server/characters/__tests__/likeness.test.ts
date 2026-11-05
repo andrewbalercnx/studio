@@ -195,6 +195,13 @@ describe('people service and likeness jobs', () => {
     await expect(updatePerson(deps, p1, 'character', 'theirs', { displayName: 'Mine' })).rejects.toThrow();
   });
 
+  it('appends the help-tour sample character only when asked', async () => {
+    await db.collection('characters').doc('help-character').set({ ownerParentUid: 'help', displayName: 'Helper' });
+    await createPerson(deps, p1, 'character', { displayName: 'Rex', idempotencyKey: 'create-rex-3' });
+    expect((await listPeople(db, p1, 'character')).map((p) => p.id)).not.toContain('help-character');
+    expect((await listPeople(db, p1, 'character', { includeHelp: true })).map((p) => p.displayName)).toEqual(['Rex', 'Helper']);
+  });
+
   it('answers GET /api/children in the shape the mobile app reads', async () => {
     await db.collection('children').doc('c1').set({ ownerParentUid: 'p1', displayName: 'Emma', avatarUrl: 'https://img/a.png' });
     const response = await legacyChildrenResponse(db, p1);

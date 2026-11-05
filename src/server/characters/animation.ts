@@ -1,6 +1,6 @@
 /**
- * The animated ("dancing") avatar providers, ported from
- * `src/ai/flows/avatar-animation-flow.ts` (slice 5.7). Called by the
+ * The animated ("dancing") avatar providers, ported from the former
+ * `avatar-animation-flow` (slice 5.7). Called by the
  * `likeness.animate` job through the AI harness (`call`, purpose
  * `likeness.animate`), which adds the circuit breaker, retries and logging the
  * old flow did by hand.

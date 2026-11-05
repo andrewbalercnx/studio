@@ -18,6 +18,33 @@
 
 ### 2026-11-05
 
+#### `#44` - Characters and likeness on the clients (slice 5.7b)
+
+**Type**: Feature (clients) + Security (rules) + Cleanup
+
+**Summary**: Every page that changes a child or character now goes through the 5.7a routes. The rules refuse browser writes, and the old likeness flows and routes are deleted.
+- **Clients**:
+  - `src/lib/people/api.ts` (`peopleApi`) and `use-people.ts` (lists that refresh while a likeness part is working).
+  - `EntityEditor` saves through the routes.
+  - The new `LikenessPanel` manages photos and the avatar, and shows each part's progress and the "imagined" label.
+  - Pages moved onto the routes: `parent/children`, `parent/characters`, the read-aloud toggles in both readers, and the admin owner change.
+  - `VoiceSelector` takes the view.
+- **Routes**:
+  - `GET /api/children[/{id}]?view=person` answers `PersonView` (the bare shape stays the default for mobile).
+  - `GET /api/characters?includeHelp=1` appends the help-tour sample.
+- **Rules**:
+  - `children` and `characters` are owner-read (by `ownerUid` or `ownerParentUid`) and written only by admins and the Admin SDK.
+  - The Storage photo paths for children and characters are read-only for owners; the routes write them.
+  - `src/storage.rules` duplicate removed. Rules tests cover reads by either owner field and refused writes.
+- **Deleted**:
+  - routes `/api/children/photos`, `/api/characters/photos`, `/api/regenerate-image-description`, `/api/generateAvatar`, `/api/generateAvatar/animation`, `/api/generateCharacterAvatar`, `/api/admin/cleanup-exemplars` (and its section on the cleanup page);
+  - flows `avatar-flow`, `character-avatar-flow`, `canonical-image-flow`, `image-description-flow`, `avatar-animation-flow`, `actor-exemplar-flow`;
+  - `getActorsDetailsWithImageData`, `src/lib/migration/migrate-children-characters.ts`, `use-upload-file`.
+- **Tests**:
+  - E2E `e2e/characters.spec.ts`, now a blocking CI step: a child without photos gets an "imagined" avatar → add a photo → appearance and portrait ready → the avatar is redrawn from the portrait.
+  - A unit test for the help sample; the regression scenario now uses the new photo route.
+- **Deploy**: the rules and then `scripts/migrate-likeness.mjs` go out right after this release (`DEPLOYMENT.md` §12).
+
 #### `#43` - Characters and likeness on the server (slice 5.7a)
 
 **Type**: Feature (server)

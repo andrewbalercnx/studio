@@ -16,10 +16,22 @@ const API_ROUTES = {
     { method: 'POST', path: '/api/parent/verify-pin', description: 'Verify parent PIN' },
   ],
   children: [
-    { method: 'POST', path: '/api/children/photos', description: 'Upload child photos' },
+    { method: 'GET', path: '/api/children', description: "The family's children (bare array; ?view=person for PersonView)" },
+    { method: 'POST', path: '/api/children', description: 'Add a child (idempotencyKey required); avatar imagined until photos' },
+    { method: 'GET', path: '/api/children/[childId]', description: 'One child (?view=person for PersonView)' },
+    { method: 'PATCH', path: '/api/children/[childId]', description: 'Edit profile fields' },
+    { method: 'DELETE', path: '/api/children/[childId]', description: 'Delete (undo with …/restore)' },
+    { method: 'POST', path: '/api/children/[childId]/photos', description: 'Add a photo; redoes appearance and portrait' },
+    { method: 'DELETE', path: '/api/children/[childId]/photos/[photoId]', description: 'Remove a photo and its file' },
+    { method: 'POST', path: '/api/children/[childId]/avatar', description: 'New avatar from portrait, description or a photo' },
+    { method: 'POST', path: '/api/children/[childId]/likeness/refresh', description: 'Redo appearance and portrait from the photos' },
   ],
   characters: [
-    { method: 'POST', path: '/api/characters/photos', description: 'Upload character photos' },
+    { method: 'GET', path: '/api/characters', description: "The family's characters (?childId=, ?includeHelp=1)" },
+    { method: 'POST', path: '/api/characters', description: 'Add a character (idempotencyKey required)' },
+    { method: 'PATCH', path: '/api/characters/[characterId]', description: 'Edit profile fields' },
+    { method: 'POST', path: '/api/characters/[characterId]/photos', description: 'Add a photo; redoes appearance and portrait' },
+    { method: 'POST', path: '/api/characters/[characterId]/avatar', description: 'New avatar from portrait, description or a photo' },
   ],
   story: [
     { method: 'GET', path: '/api/creation-modes', description: 'Ways to make a story (live, enabled for kids)' },
@@ -37,11 +49,6 @@ const API_ROUTES = {
     { method: 'POST', path: '/api/books/[bookId]/pages/[pageNumber]/retry', description: 'Draw a failed page again' },
     { method: 'POST', path: '/api/books/[bookId]/lock', description: 'Lock a finished Book' },
     { method: 'POST', path: '/api/books/[bookId]/unlock', description: 'Unlock a Book' },
-  ],
-  avatar: [
-    { method: 'POST', path: '/api/generateAvatar', description: 'Generate avatar from photo' },
-    { method: 'POST', path: '/api/generateAvatar/animation', description: 'Generate animated avatar' },
-    { method: 'POST', path: '/api/generateCharacterAvatar', description: 'Generate character avatar' },
   ],
   print: [
     { method: 'GET', path: '/api/books/[bookId]/print-options', description: 'Print formats this Book fits, with pages and price' },
@@ -215,7 +222,6 @@ export default function ApiDocumentationPage() {
           <TabsTrigger value="storybook">Storybook</TabsTrigger>
           <TabsTrigger value="print">Print</TabsTrigger>
           <TabsTrigger value="characters">Characters</TabsTrigger>
-          <TabsTrigger value="avatar">Avatar</TabsTrigger>
           <TabsTrigger value="parent">Parent</TabsTrigger>
           <TabsTrigger value="user">User</TabsTrigger>
           <TabsTrigger value="voice">Voice</TabsTrigger>
@@ -267,18 +273,6 @@ export default function ApiDocumentationPage() {
             </CardHeader>
             <CardContent>
               <RouteTable routes={API_ROUTES.characters} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="avatar">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Avatar Routes</CardTitle>
-              <CardDescription>Endpoints for avatar generation</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <RouteTable routes={API_ROUTES.avatar} />
             </CardContent>
           </Card>
         </TabsContent>

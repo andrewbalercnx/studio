@@ -1180,7 +1180,7 @@ export type ChildProfile = {
         lastErrorMessage?: string | null;
     };
     // Stage 1 of two-stage reference pipeline: naturalistic portrait generated from raw photos.
-    // Used as cleaner input to actor-exemplar-flow instead of raw photos.
+    // Read as `likeness.portrait` (slice 5.7); the old field is mirrored until the migration release.
     canonicalImageUrl?: string;
     canonicalImageGeneration?: {
         status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
@@ -1348,7 +1348,7 @@ export type Character = {
         lastErrorMessage?: string | null;
     };
     // Stage 1 of two-stage reference pipeline: naturalistic portrait generated from raw photos.
-    // Used as cleaner input to actor-exemplar-flow instead of raw photos.
+    // Read as `likeness.portrait` (slice 5.7); the old field is mirrored until the migration release.
     canonicalImageUrl?: string;
     canonicalImageGeneration?: {
         status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';

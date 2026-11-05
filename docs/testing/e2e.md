@@ -100,6 +100,12 @@ end, back), a print template, product and GBP price, and two print credits; then
 copy through the UI, waits for the order's render, and pays with print credits. The card path ends
 at Stripe's hosted page, so the order service tests cover it with the fake gateway and webhook.
 
+The characters spec (`e2e/characters.spec.ts`, `@characters`, slice 5.7b) joined the blocking step on
+2026-11-05 after 3 consecutive green runs on both projects. It adds a child without photos (an
+"imagined" avatar drawn by the TEST_MODE likeness jobs), adds a photo through the photos panel, waits
+for the appearance, portrait and a new avatar, and reads them back after a reload. Under the emulator the
+stored file URLs point at production Storage, so it checks the elements, not that the images load.
+
 ## Report-only checks
 
 All three run in CI under `continue-on-error` and publish artifacts. "Report-

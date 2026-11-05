@@ -1,17 +1,15 @@
 'use client';
 
 import { use, useCallback, useEffect } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
 import { LoaderCircle } from 'lucide-react';
-import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
 import { useAppContext } from '@/hooks/use-app-context';
 import { StoryReader } from '@/components/creation';
+import { peopleApi } from '@/lib/people/api';
 
 /** Web child shell: read a finished story; its Books and "make a book" underneath. */
 export default function StoryReadPage({ params }: { params: Promise<{ childId: string; storyId: string }> }) {
   const { childId, storyId } = use(params);
-  const firestore = useFirestore();
   const { user, loading: userLoading } = useUser();
   const { activeChildId, setActiveChildId, activeChildProfile } = useAppContext();
 
@@ -19,15 +17,14 @@ export default function StoryReadPage({ params }: { params: Promise<{ childId: s
     if (childId && childId !== activeChildId) setActiveChildId(childId);
   }, [childId, activeChildId, setActiveChildId]);
 
-  // The child's read-aloud preference lives on the child profile (parent-owned document).
+  // The child's read-aloud preference lives on the child profile, changed through the route.
   const persistAutoRead = useCallback(
     (enabled: boolean) => {
-      if (!firestore) return;
-      updateDoc(doc(firestore, 'children', childId), { autoReadAloud: enabled }).catch((err) =>
+      peopleApi.update('child', childId, { autoReadAloud: enabled }).catch((err) =>
         console.warn('[StoryRead] Failed to persist autoReadAloud:', err)
       );
     },
-    [firestore, childId]
+    [childId]
   );
 
   if (userLoading || !user) {

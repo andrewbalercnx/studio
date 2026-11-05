@@ -6,7 +6,8 @@ import { LoaderCircle, Save, X } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffect, useState } from 'react';
 import { useFirestore } from '@/firebase';
-import { collection, doc, onSnapshot, query, orderBy, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { peopleApi } from '@/lib/people/api';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { ChildProfile } from '@/lib/types';
@@ -74,9 +75,8 @@ export default function AdminChildrenPage() {
       return;
     }
 
-    const childRef = doc(firestore, 'children', childId);
     try {
-      await updateDoc(childRef, { ownerParentUid: updatedData.ownerParentUid });
+      await peopleApi.reassignOwner('child', childId, updatedData.ownerParentUid);
       toast({ title: 'Success', description: `Child ${childId} updated.` });
       handleCancel(childId); // Exit editing mode
     } catch (e: any) {

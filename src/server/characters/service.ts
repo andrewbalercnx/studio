@@ -82,8 +82,16 @@ export async function getPerson(db: Firestore, user: VerifiedUser, kind: PersonK
   return viewOf((await loadOwnedRaw(db, user, kind, id)).person);
 }
 
-/** The family's children or characters (not deleted), by name. Characters can be narrowed to those a child may use. */
-export async function listPeople(db: Firestore, user: VerifiedUser, kind: PersonKind, filter: { childId?: string | null } = {}): Promise<PersonView[]> {
+/**
+ * The family's children or characters (not deleted), by name. Characters can be narrowed to those a child may use.
+ * `includeHelp` appends the help-tour sample (`help-character`), which the help wizards point at.
+ */
+export async function listPeople(
+  db: Firestore,
+  user: VerifiedUser,
+  kind: PersonKind,
+  filter: { childId?: string | null; includeHelp?: boolean } = {}
+): Promise<PersonView[]> {
   const collection = db.collection(COLLECTION_FOR[kind]);
   // Documents carry `ownerParentUid` until the migration and `ownerUid` after it.
   const [legacy, target] = await Promise.all([collection.where('ownerParentUid', '==', user.uid).get(), collection.where('ownerUid', '==', user.uid).get()]);
@@ -95,7 +103,13 @@ export async function listPeople(db: Firestore, user: VerifiedUser, kind: Person
   }
   let people = [...byId.values()];
   if (kind === 'character' && filter.childId) people = people.filter((p) => p.kind === 'character' && (!p.childId || p.childId === filter.childId));
-  return people.sort((a, b) => a.displayName.localeCompare(b.displayName)).map(viewOf);
+  people.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  if (filter.includeHelp) {
+    const helpId = kind === 'child' ? 'help-child' : 'help-character';
+    const help = await collection.doc(helpId).get();
+    if (help.exists && !byId.has(helpId)) people.push(normalize(kind, helpId, help.data() ?? {}));
+  }
+  return people.map(viewOf);
 }
 
 /**
