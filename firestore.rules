@@ -179,12 +179,15 @@ service cloud.firestore {
 
     // ========== PRINT ORDERS ==========
     match /printOrders/{orderId} {
+      // v2 orders (slice 5.5b) carry ownerUid; legacy ones parentUid / ownerUserId.
       allow get: if isAdmin()
+                 || (isAuthenticated() && resource.data.ownerUid == request.auth.uid)
                  || (isAuthenticated() && resource.data.parentUid == request.auth.uid)
                  || (isAuthenticated() && resource.data.ownerUserId == request.auth.uid);
 
-      // List: Requires where('parentUid', '==', uid) or where('ownerUserId', '==', uid) in query
+      // List: Requires where('ownerUid' | 'parentUid' | 'ownerUserId', '==', uid) in query
       allow list: if isAdmin()
+                  || (isAuthenticated() && resource.data.ownerUid == request.auth.uid)
                   || (isAuthenticated() && resource.data.parentUid == request.auth.uid)
                   || (isAuthenticated() && resource.data.ownerUserId == request.auth.uid);
 

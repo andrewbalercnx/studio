@@ -10,6 +10,7 @@ import { defineRepository, defineSubRepository } from './repository';
 import { bookPageSchema, bookSchema, castSheetSchema, renderSchema } from './schemas/book';
 import { jobSchema } from './schemas/job';
 import { manuscriptPageSchema, manuscriptSchema } from './schemas/manuscript';
+import { printOrderSchema, stripeEventSchema } from './schemas/order';
 import { storySchema, turnSchema } from './schemas/story';
 
 export const jobs = defineRepository({ path: 'jobs', schema: jobSchema, label: 'Job' });
@@ -40,3 +41,6 @@ export const renders = defineSubRepository({
   label: 'Render',
   immutable: true,
 });
+
+export const printOrders = defineRepository({ path: 'printOrders', schema: printOrderSchema, label: 'Order' });
+export const stripeEvents = defineRepository({ path: 'stripeEvents', schema: stripeEventSchema, label: 'Stripe event' });

@@ -120,6 +120,14 @@ await check('create storybook on a target story', 'deny', () => addDoc(collectio
 
 // print (#9).
 await check('create print order', 'deny', () => addDoc(collection(parent, 'printOrders'), { parentUid: 'p1', paymentStatus: 'paid' }));
+// v2 print orders (slice 5.5b): owner reads by ownerUid; only the server writes; Stripe events are server-only.
+await setDoc(doc(admin, 'printOrders', 'po1'), { ownerUid: 'p1', schemaVersion: 2, status: 'awaiting_payment' });
+await setDoc(doc(admin, 'printOrders', 'po2'), { ownerUid: 'p2', schemaVersion: 2, status: 'awaiting_payment' });
+await check('read own v2 print order', 'allow', () => getDoc(doc(parent, 'printOrders', 'po1')));
+await check('list own v2 print orders', 'allow', () => getDocs(query(collection(parent, 'printOrders'), where('ownerUid', '==', 'p1'))));
+await check("read another family's v2 print order", 'deny', () => getDoc(doc(parent, 'printOrders', 'po2')));
+await check('mark own v2 print order paid', 'deny', () => updateDoc(doc(parent, 'printOrders', 'po1'), { status: 'paid' }));
+await check('read a Stripe event', 'deny', () => getDoc(doc(parent, 'stripeEvents', 'evt1')));
 await check('create draft print storybook', 'allow', () => setDoc(doc(parent, 'printStoryBooks', 'pb1'), { ownerUserId: 'p1', storyId: 's1', pdfStatus: 'draft', pages: [] }));
 await check('create print storybook with PDF', 'deny', () => setDoc(doc(parent, 'printStoryBooks', 'pb2'), {
   ownerUserId: 'p1', storyId: 's1', pdfStatus: 'draft', coverPdfUrl: 'https://example.com/x.pdf',

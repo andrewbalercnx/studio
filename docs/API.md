@@ -1,6 +1,6 @@
 # API Documentation
 
-> **Last Updated**: 2026-11-04 (print render, slice 5.5a: new `GET /api/books/[bookId]/print-options`, `POST`/`GET /api/books/[bookId]/renders`, `GET /api/books/[bookId]/renders/[renderId]`; `GET /api/books/[bookId]` pages gain `inReader`). 2026-11-04 (new `GET /api/books` (list) and `GET /api/books/[bookId]` (read, with pages, words and server-computed progress) so the mobile app can list and read Books without Firestore; api-client `getBooks`/`getBook`; shared-types `BookListItem`/`BookReadView`). 2026-11-03 (new `GET /api/admin/allowances/summary`). 2026-11-02 (new `GET/POST /api/admin/allowances`; new `GET /api/library/summary`; new `POST /api/auth/password-reset`). 2026-11-01 (new `GET /api/admin/trace`). 2026-10-30 (`POST /api/stories/[storyId]/finish` re-dispatches a lost finish job). 2026-10-29 (Phase 5.4: every client creates Stories with the creation routes; new `GET /api/creation-modes`; `GET /api/stories?childId` and `GET /api/stories/[storyId]` rewritten for Stories (names resolved on the server; the latter also returns the turns); removed `POST /api/storyWizard`, `/api/gemini3`, `/api/gemini4`, `/api/storyFriends`, `/api/storyBeat`, `/api/storyEnding`, `/api/storyCompile`, `/api/storySession`, `/api/warmupReply`, `/api/ai-warmup`, `/api/storyArc`, `/api/characterTraits`, `/api/characters/create`, `/api/storyBook/audio`, `/api/storyBook/actorAvatar`, `GET /api/kids-flows`, `GET /api/kids-generators`, `GET/PUT /api/admin/system-config/kids-flows`, `GET /api/admin/sessions`, `GET /api/parent/storybooks`, `POST /api/parent/storybooks/thumbnails`, `GET /api/stories/[storyId]/storybooks` and its `pages` route; api-client: `listCreationModes`, `createStory`, `sendTurn`, `abandonStory`, `retryFinish`. Phase 5.3: new `POST /api/stories`, `POST /api/stories/[storyId]/turns`, `POST /api/stories/[storyId]/abandon`, `POST /api/stories/[storyId]/finish` — Story creation in five modes on the server, not yet used by the UI; `POST /api/manuscripts` and `POST /api/books` also accept Stories made by these routes once `complete`. Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
+> **Last Updated**: 2026-11-05 (print orders, slice 5.5b: new `POST/GET /api/orders`, `GET /api/orders/[orderId]`, `POST /api/orders/[orderId]/{checkout,pay-with-credits,cancel}`, `POST /api/webhooks/stripe`, `GET /api/admin/orders[/[orderId]]`, `POST /api/admin/orders/[orderId]/{approve,cancel,mark-paid,retry,refresh}`; `POST /api/webhooks/mixam` rewritten for v2 orders, forward only). 2026-11-04 (print render, slice 5.5a: new `GET /api/books/[bookId]/print-options`, `POST`/`GET /api/books/[bookId]/renders`, `GET /api/books/[bookId]/renders/[renderId]`; `GET /api/books/[bookId]` pages gain `inReader`). 2026-11-04 (new `GET /api/books` (list) and `GET /api/books/[bookId]` (read, with pages, words and server-computed progress) so the mobile app can list and read Books without Firestore; api-client `getBooks`/`getBook`; shared-types `BookListItem`/`BookReadView`). 2026-11-03 (new `GET /api/admin/allowances/summary`). 2026-11-02 (new `GET/POST /api/admin/allowances`; new `GET /api/library/summary`; new `POST /api/auth/password-reset`). 2026-11-01 (new `GET /api/admin/trace`). 2026-10-30 (`POST /api/stories/[storyId]/finish` re-dispatches a lost finish job). 2026-10-29 (Phase 5.4: every client creates Stories with the creation routes; new `GET /api/creation-modes`; `GET /api/stories?childId` and `GET /api/stories/[storyId]` rewritten for Stories (names resolved on the server; the latter also returns the turns); removed `POST /api/storyWizard`, `/api/gemini3`, `/api/gemini4`, `/api/storyFriends`, `/api/storyBeat`, `/api/storyEnding`, `/api/storyCompile`, `/api/storySession`, `/api/warmupReply`, `/api/ai-warmup`, `/api/storyArc`, `/api/characterTraits`, `/api/characters/create`, `/api/storyBook/audio`, `/api/storyBook/actorAvatar`, `GET /api/kids-flows`, `GET /api/kids-generators`, `GET/PUT /api/admin/system-config/kids-flows`, `GET /api/admin/sessions`, `GET /api/parent/storybooks`, `POST /api/parent/storybooks/thumbnails`, `GET /api/stories/[storyId]/storybooks` and its `pages` route; api-client: `listCreationModes`, `createStory`, `sendTurn`, `abandonStory`, `retryFinish`. Phase 5.3: new `POST /api/stories`, `POST /api/stories/[storyId]/turns`, `POST /api/stories/[storyId]/abandon`, `POST /api/stories/[storyId]/finish` — Story creation in five modes on the server, not yet used by the UI; `POST /api/manuscripts` and `POST /api/books` also accept Stories made by these routes once `complete`. Phase 5.2: the web app and kids PWA create Books with `POST /api/books` and read them from Firestore; removed `POST /api/storybookV2/{create,pages,images,finalize,pageEdit}`, `POST /api/storyPagination` and `POST /api/storyBook/pageAudio`; api-client `createBook` replaces `createStorybook`/`generatePages`/`generateImages`; `POST /api/internal/system-test` runs the Book pipeline. Phase 5.1: new `POST /api/manuscripts`, `POST /api/books`, `POST /api/books/[bookId]/pages/[pageNumber]/retry`, `POST /api/books/[bookId]/lock`, `POST /api/books/[bookId]/unlock` — the server-side Book pipeline, not yet used by the UI; the job route now runs the pipeline's job kinds. Phase 4: new internal `POST /api/internal/jobs/run`, Cloud Tasks OIDC only, no job kinds registered yet; Phase 3: header-only tokens; Mixam webhook order-id match, final-state guard and 500 on internal errors; `my-orders` returns an allowlist; `GET /api/children*` documented and exclude soft-deleted children; persona scope on `storyFriends`). 2026-10-28 (Phase 0 route auth: session/story/print ownership required on the story-flow, avatar, audio, pagination, print-layout and `storyBook/[bookId]` routes; `characters/create` and gemini4 `createCharacter` take owner and child from the session; `postcode/lookup` and `ai-warmup` require sign-in; Mixam webhook requires a signature; `healthz` logs admin-only; removed orphaned `POST /api/storybookV2/exemplars` and the undocumented-but-nonexistent `PATCH /api/storyBook/[bookId]`. Earlier: 2026-06-11 W4-A: new `POST/DELETE /api/persona` signed child-persona cookie; persona-scope enforcement (403 `PERSONA_SCOPE_MISMATCH`) on `storySession`, `storyWizard`, `storyCompile`, and `storybookV2` create/pages/images/finalize/pageEdit/exemplars; `POST /api/parent/verify-pin` brute-force lockout (429 `PIN_LOCKED`) + `dryRun`; Security: `POST /api/storybookV2/pages` and `POST /api/storybookV2/images` now require authentication + `story.parentUid` ownership; W3-A: new `GET /api/admin/ops/metrics`, `POST /api/admin/ops/health-check`, `GET /api/admin/sessions`; `adminNextAction`/`failureSummary` on `GET /api/admin/print-orders` and the Mixam webhook; W3-B: new `GET /api/health` canary/rollback probe, `GET /api/flags` server-evaluated feature flags; W3-C: new `POST /api/feedback`, `GET /api/feedback/eligibility`, `POST /api/feedback/testimonial`, `GET /api/tickets`; `POST /api/report-issue` creates a tracked ticket; `GET /api/printOrders/my-orders` returns server-derived `timeline` + `estimatedTurnaround`; W2-C: new `POST /api/storybookV2/pageEdit`; degraded-order gate + `saveAddress` on `POST /api/printOrders/mixam`; `artStatus` rollup on `GET /api/parent/storybooks` and `GET /api/storyBook/[bookId]`; W2-B: `/api/user/onboarding` — server-derived first-run checklist + time-to-first-book instrumentation)
 >
 > **IMPORTANT**: This document must be updated whenever API routes change.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -871,6 +871,60 @@ One render. While the render document does not exist yet, its job's progress.
 ```
 `status` is `rendering` (job queued or running), `ready`, or `failed` (with `error`, e.g. the Book was
 unlocked before the render ran). **Errors**: 404 `RENDER_NOT_FOUND`.
+
+---
+
+## Order Routes (print orders, slice 5.5b)
+
+Print orders for Books (`printOrders`, `schemaVersion: 2`). Auth: the order's owner (or an admin). Lifecycle:
+`rendering → awaiting_payment → paid → [awaiting_approval] → submitting → submitted → in_production → shipped → delivered`;
+`cancelled` (refunded by Stripe → `refunded`). `awaiting_approval` only while `systemConfig/orders.requireAdminApproval` is on (default).
+
+**OrderView**: `{ id, bookId, layoutId, status, quantity, unitAmountMinor, amountMinor, currency, shippingAddress, contactEmail, timeline: [{ status, at, by, note }], payment: { method, paidAt, refundedAt }, tracking: { jobNumber, trackingUrl }, render: { status, files: [{ role, url, pageCount }], error } | null, actions: { canPay, canCancel }, createdAt }`.
+
+### POST `/api/orders`
+
+Order printed copies of a Book in a template. Price from the catalogue (an active Product linked to the template's print product, with its active Price; VAT and UK delivery included). Starts this order's own print render (locks a `ready` Book); the order is `rendering` until the files exist, then `awaiting_payment`.
+
+**Body**: `{ "bookId", "layoutId", "quantity": 1–10, "shippingAddress": { "name", "line1", "line2?", "city", "state?", "postalCode", "country?": "GB" }, "contactEmail?" (default: the account email), "idempotencyKey": "8–128 chars" }`
+
+**Response** 201: `OrderView`. Same key → the same order.
+
+**Errors**: 400 `INVALID_ADDRESS` (UK address check), `INVALID_QUANTITY`, `INVALID_EMAIL`; 404 Book; 409 `LAYOUT_UNSUPPORTED`, `NO_PRICE`, `BOOK_HAS_MISSING_ART`, `BOOK_NOT_FINISHED`.
+
+### GET `/api/orders`, GET `/api/orders/[orderId]`
+
+The family's orders newest first (`OrderView[]`, without render details), or one order with its render proof links.
+
+### POST `/api/orders/[orderId]/checkout`
+
+Create a Stripe Checkout Session (order id in `client_reference_id` and metadata; the Price's `externalPriceId` when set, else `price_data` with the same amount) and return `{ "url" }`. The browser returns to `/orders/{id}?paid=1`; the webhook marks the order paid.
+
+**Errors**: 409 `ORDER_RENDERING`, `ORDER_STATE`; 503 `STRIPE_NOT_CONFIGURED`.
+
+### POST `/api/orders/[orderId]/pay-with-credits`
+
+Pay with print credits, one per copy, spent in the same transaction that marks the order paid. **Errors**: 402 `ENTITLEMENT_LIMIT` (`details.remaining`); 409 `ORDER_STATE`.
+
+### POST `/api/orders/[orderId]/cancel`
+
+Cancel before the order goes to the printer (`rendering`, `awaiting_payment`, `paid`, `awaiting_approval`). Card payments are refunded through Stripe (the status becomes `refunded` when Stripe confirms); print credits are returned at once. Idempotent. **Errors**: 409 `ORDER_NOT_CANCELLABLE`.
+
+### Admin: `/api/admin/orders`
+
+Admin only. `AdminOrderView` = `OrderView` + `ownerUid`, `renderId`, `approval`, `mixam` (`orderId`, `jobNumber`, `status`, `trackingUrl`, `requestStartedAt`, `submittedAt`, `lastError`), `paymentDetail`, `nextAction` (`approve` | `retry` | `none`).
+
+| Route | What it does |
+|-------|--------------|
+| GET `/api/admin/orders[?status=]` | Every v2 order, newest first |
+| GET `/api/admin/orders/[orderId]` | One order |
+| POST `/api/admin/orders/[orderId]/approve` | Approve a paid order waiting for approval; enqueues `order.submit` |
+| POST `/api/admin/orders/[orderId]/cancel` | Body `{ note? }`. Any order not yet shipped; cancels at Mixam first when submitted (409 `MIXAM_CANCEL_FAILED`), then refunds / returns credits |
+| POST `/api/admin/orders/[orderId]/mark-paid` | Body `{ note }` (required, kept on the order). Audited mark-paid of an order awaiting payment |
+| POST `/api/admin/orders/[orderId]/retry` | Body `{ force? }`. A new `order.submit`; `force` skips the Mixam lookup after an uncertain attempt (check Mixam first). 409 `ALREADY_SUBMITTED` |
+| POST `/api/admin/orders/[orderId]/refresh` | Ask Mixam for the status and apply it, forward only |
+
+**`order.submit` job** (queue `mixam`): claims `submitting`; marks `mixam.requestStartedAt` just before the request; a later attempt that finds the mark looks the order up at Mixam by our id before sending again and stops with `SUBMIT_UNCERTAIN` when it cannot find it; a Mixam 4xx clears the mark and stops with `MIXAM_REJECTED` (no automatic retry).
 
 ---
 
@@ -3154,107 +3208,28 @@ Create a dev todo item. Used by Claude Code to track follow-up work items.
 
 ### POST `/api/webhooks/mixam`
 
-Mixam webhook for order status updates. Called by Mixam when order status changes.
+Mixam status updates for print orders (slice 5.5b).
 
-**Authentication**: A valid `X-Mixam-Signature` (HMAC-SHA256 of the raw body with `MIXAM_WEBHOOK_SECRET`) is required. Missing or invalid signature → 401. Secret not configured → 503.
+**Authentication**: a valid `X-Mixam-Signature` (HMAC-SHA256 of the raw body with `MIXAM_WEBHOOK_SECRET`). Missing or invalid → 401; secret not configured → 503.
 
 **Behaviour**:
-- The payload's `metadata.externalOrderId` selects our order; the update is applied only if the payload's `orderId` equals that order's stored `mixamOrderId`. Otherwise the webhook is acknowledged (200, `warning`) and ignored.
-- An order in a final state (`delivered`, `cancelled`) keeps its status; the payload is still recorded.
-- Internal processing errors return **500** so Mixam retries. Retries are safe: the status and the admin email change only when the status actually differs.
+- `metadata.externalOrderId` selects our order (`printOrders/{id}`, `schemaVersion: 2`); the payload's `orderId` must equal the Mixam order id we recorded at submission, else it is acknowledged (`outcome: "mixam_id_mismatch"`) and ignored.
+- Forward only: `submitted → in_production → shipped → delivered` (`PENDING`/`CONFIRMED` → submitted, `INPRODUCTION` → in_production, `DISPATCHED` → shipped, `DELIVERED`). Any other status (on hold, artwork errors, cancelled at Mixam, unknown) is recorded in `mixam.status` and changes nothing.
+- `shipped` emails the parent the tracking link from `shipments[].trackingUrl`.
+- Unknown orders answer 200 so Mixam stops retrying; internal errors answer 500 so it retries. Retries are safe (a repeated status is not a forward move).
 
-**Request Headers**:
-- `X-Mixam-Signature` - HMAC-SHA256 signature (required)
+**Response**: `{ "received": true, "outcome": "in_production" }`
 
-**Request Body** (Mixam webhook payload):
-```json
-{
-  "orderId": "mixam-order-id",
-  "status": "PENDING|INPRODUCTION|DISPATCHED|ONHOLD|etc",
-  "statusReason": "Optional reason for status",
-  "metadata": {
-    "externalOrderId": "our-print-order-id",
-    "statusCallbackUrl": "webhook-url"
-  },
-  "items": [
-    {
-      "itemId": "item-id",
-      "metadata": { "externalItemId": "our-item-id" },
-      "errors": [
-        { "filename": "file.pdf", "page": 1, "message": "Error description" }
-      ],
-      "hasErrors": false
-    }
-  ],
-  "hasErrors": false,
-  "artworkComplete": true,
-  "shipments": [
-    {
-      "trackingUrl": "https://tracking.example.com/...",
-      "consignmentNumber": "TRACK123",
-      "courier": "Royal Mail",
-      "parcelNumbers": ["PKG001"],
-      "date": { "date": "2025-01-15", "timestamp": 1736899200 }
-    }
-  ]
-}
-```
+### POST `/api/webhooks/stripe`
 
-**Response**: `200 OK`
-```json
-{
-  "received": true,
-  "orderId": "our-print-order-id",
-  "status": "in_production"
-}
-```
+Stripe events for print orders (ADR-0012). Verifies `Stripe-Signature` on the raw body with `STRIPE_WEBHOOK_SECRET`.
 
-**Status Mapping**:
-| Mixam Status | Internal Status |
-|--------------|-----------------|
-| PENDING, RECEIVED | submitted |
-| CONFIRMED, ACCEPTED | confirmed |
-| INPRODUCTION, PRINTING | in_production |
-| DISPATCHED, SHIPPED | shipped |
-| DELIVERED | delivered |
-| CANCELLED, CANCELED | cancelled |
-| ONHOLD, ON_HOLD | on_hold |
+- Each event id is applied once (`stripeEvents/{eventId}`, written in the same transaction as the order change); a repeat answers `outcome: "duplicate"`.
+- `checkout.session.completed` (paid) → the order becomes `paid`, then `awaiting_approval` (approval on) or gets an `order.submit` job (approval off); the parent gets a confirmation email, the `notifyEmails` an approval request. Paid after the parent cancelled → refunded automatically.
+- `charge.refunded` → the order with that payment intent becomes `refunded`.
+- Other event types are recorded and ignored.
 
-**Fields Updated on PrintOrder**:
-- `mixamStatus` - Raw Mixam status
-- `mixamArtworkComplete` - Whether artwork processing is complete
-- `mixamHasErrors` - Whether there are artwork errors
-- `mixamStatusReason` - Reason for current status
-- `mixamArtworkErrors` - Array of detailed artwork errors
-- `mixamTrackingUrl` - Shipment tracking URL
-- `mixamTrackingNumber` - Consignment number
-- `mixamCarrier` - Courier name
-- `mixamParcelNumbers` - Array of parcel numbers
-- `mixamShipmentDate` - Shipment date
-- `mixamShipments` - Full shipments array
-- `lastWebhookPayload` - Full webhook payload (for debugging)
-- `lastWebhookAt` - Timestamp of last webhook
-- `fulfillmentStatus` - Mapped internal status
-- `statusHistory` - Appended with new status entry
-- `adminNextAction` - Sprint W3-A: next required admin action `{ action, label, urgent, setAt, source: 'webhook' }` (mapping in `src/lib/mixam/order-state.ts`)
-- `needsAdminAttention` - Sprint W3-A: rollup of `adminNextAction.urgent`
-- `failureSummary` - Sprint W3-A: one-line failure summary, `null` clears a stale summary
-
-**Admin state machine (Sprint W3-A)**: each webhook advances the admin-facing order state and
-records the next required admin action on the order doc. Conservative by design — webhooks only
-update state and flag/queue actions; they never trigger irreversible operations (no auto-confirm,
-no auto-cancel).
-
-| Internal status after webhook | adminNextAction.action | urgent |
-|------------------------------|------------------------|--------|
-| validation_failed (or any non-terminal status with artwork errors) | `fix_artwork` | yes |
-| ready_to_submit / awaiting_approval | `review_approval` | yes |
-| approved | `submit_to_mixam` | yes |
-| submitted | `confirm_order` | yes |
-| on_hold | `investigate_hold` | yes |
-| failed | `investigate_failure` | yes |
-| validating / submitting / confirmed / in_production / shipped | `monitor` | no |
-| draft / delivered / cancelled | `none` | no |
+**Responses**: 200 `{ "received": true, "eventId": "evt_…", "outcome": "paid" }`; 400 `INVALID_SIGNATURE`; 503 `STRIPE_NOT_CONFIGURED`; 500 on internal errors (Stripe retries).
 
 ### GET `/api/webhooks/mixam`
 

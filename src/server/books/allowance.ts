@@ -17,7 +17,7 @@ import type { EntitlementComponentKey, EntitlementLedger } from '@/lib/types';
 export const LEDGERS_COLLECTION = 'entitlementLedgers';
 
 export type AllowanceCharge =
-  | { allowed: true; remaining: number; write: () => void }
+  | { allowed: true; remaining: number; source: 'child' | 'family'; write: () => void }
   | { allowed: false; remaining: number; reason: string };
 
 /** Read the family's ledger in `tx` (a read: call it before any write). */
@@ -50,16 +50,18 @@ export function chargeAllowance(
   component: EntitlementComponentKey,
   ownerUid: string,
   childId: string | null,
-  now: Date = new Date()
+  now: Date = new Date(),
+  amount = 1
 ): AllowanceCharge {
   const ensured = ledger.stored ? ensureFreeTier(ledger.stored, now) : buildFreeTierLedger(ownerUid, now);
-  const result = consume(ensured, component, { parentUid: ownerUid, childId: childId ?? undefined }, 1);
+  const result = consume(ensured, component, { parentUid: ownerUid, childId: childId ?? undefined }, amount);
   if (!result.allowed) {
     return { allowed: false, remaining: result.remaining, reason: result.reason ?? `insufficient ${component}` };
   }
   return {
     allowed: true,
     remaining: result.remaining,
+    source: result.source === 'child' ? 'child' : 'family',
     write: () => {
       const { parentUid: _owner, createdAt: _created, updatedAt: _updated, ...toWrite } = result.ledger;
       tx.set(
@@ -88,4 +90,29 @@ export async function checkAllowance(
   const ensured = stored ? ensureFreeTier(stored, now) : buildFreeTierLedger(ownerUid, now);
   const check = canConsume(ensured, component, { parentUid: ownerUid, childId: childId ?? undefined }, 1);
   return { allowed: check.allowed, remaining: check.remaining };
+}
+
+/**
+ * Give back consumable units (e.g. print credits from a cancelled order) to the
+ * pool they were spent from, in the caller's transaction, from the ledger the
+ * caller read in it.
+ */
+export function returnConsumable(
+  tx: Transaction,
+  ledger: { ref: DocumentReference; stored: EntitlementLedger | null },
+  component: EntitlementComponentKey,
+  source: 'child' | 'family',
+  childId: string | null,
+  amount: number
+): void {
+  const pool = source === 'child' && childId ? ledger.stored?.children?.[childId] : ledger.stored?.family;
+  const current = (pool as Record<string, { granted?: number; consumed?: number; balance?: number }> | undefined)?.[component] ?? {};
+  const restored = {
+    ...current,
+    granted: current.granted ?? amount,
+    consumed: Math.max(0, (current.consumed ?? amount) - amount),
+    balance: (current.balance ?? 0) + amount,
+  };
+  const patch = source === 'child' && childId ? { children: { [childId]: { [component]: restored } } } : { family: { [component]: restored } };
+  tx.set(ledger.ref, { ...patch, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 }
