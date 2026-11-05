@@ -287,7 +287,7 @@ export type StoryBookFinalizedPage = {
 export type PrintableAssetMetadata = {
   dpi: number;
   trimSize: string;
-  pageCount: number; // Total pages in the PrintStoryBook (cover + interior content)
+  pageCount: number; // Total pages in the print (cover + interior)
   coverPageCount: number; // 2 for hardcover (front + back outside), 4 for paperback
   interiorPageCount: number; // Total pages in interior PDF (content + padding) - must match actual PDF
   spreadCount: number;
@@ -576,42 +576,6 @@ export type LegacyStoryWithOutput = {
  * @deprecated Use StoryBookOutput instead. Alias kept for backward compatibility.
  */
 export type StoryBook = LegacyStoryWithOutput;
-
-export type PrintStoryBookStatus = 'draft' | 'generating_pdfs' | 'ready' | 'error';
-
-export type PrintStoryBookPage = {
-  pageNumber: number;
-  type: 'cover_front' | 'cover_back' | 'endpaper_front' | 'endpaper_back' | 'interior';
-  displayText?: string;
-  imageUrl?: string;
-  printLayoutId: string;
-  // Custom positioning if user adjusted from default layout
-  customTextBox?: { x: number; y: number; width: number; height: number };
-  customImageBox?: { x: number; y: number; width: number; height: number };
-};
-
-export type PrintStoryBook = {
-  id: string;
-  ownerUserId: string;
-  storyId: string;
-  storybookId?: string;  // If set, use new model path: stories/{storyId}/storybooks/{storybookId}/pages
-  storySessionId?: string;
-  title: string;
-  childName?: string;
-  printLayoutId: string;
-  pages: PrintStoryBookPage[];
-  pdfStatus: PrintStoryBookStatus;
-  coverPdfUrl?: string;
-  interiorPdfUrl?: string;
-  combinedPdfUrl?: string;
-  printableMetadata?: PrintableAssetMetadata;
-  pdfErrorMessage?: string;
-  // Warnings generated during PDF creation (page count adjustments, truncations)
-  pdfGenerationWarnings?: string[];
-  createdAt: any;
-  updatedAt: any;
-  generatedAt?: any;
-};
 
 export type StoryBookPageGenerationStatus = {
     status: 'idle' | 'running' | 'ready' | 'error' | 'rate_limited';

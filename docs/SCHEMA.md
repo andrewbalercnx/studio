@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-11-05 (print orders, slice 5.5b: `printOrders` v2 shape (`schemaVersion: 2`) read by owners via `ownerUid`; new `stripeEvents`; `systemConfig/orders`; `jobs.kind` adds `order.submit`). 2026-11-04 (print render, slice 5.5a: `manuscripts.backCover`; Books get `title`, `end` and `back` pages; `books/*/renders` written by `book.render` with checksums, page count, trim, bleed and spine width; `jobs.kind` adds `book.render`). 2026-11-04 (`users`: roles are custom claims only — owner writes to `roles`, the flat `isAdmin`/`isWriter`/`canShowWizardTargets` fields, and PIN fields are refused; `scripts/set-admin.mjs` sets the claim). 2026-11-02 (`entitlementLedgers/*/grants` history; new `authEmailThrottle`). 2026-11-01 (`aiFlowLogs`: `purpose`, `storyId`, `manuscriptId`, `bookId`, `jobId`, `jobKind`; harness calls always logged). 2026-10-30 (AI model names: Gemini 2.5 and older retired, mapped to 3.x on read). 2026-10-29 (Phase 5.4: `stories` holds Stories (`schemaVersion: 2`) only and is server-written only — the owner reads a Story and its `turns`; `storySessions` (with `messages`, `events`), `children/{id}/sessions`, the legacy story fields and the `stories/{id}/storybooks` subcollection are removed (trial-data reset at deploy, `docs/DEPLOYMENT.md` §10; rules deny every client access to them); `systemConfig/kids-flows` removed; `storyGenerators` is read through `GET /api/creation-modes`. Phase 5.3: target-shaped Stories (`schemaVersion: 2`, `ownerUid`, `modeId`, `cast`, `modeState`…) and the `stories/{id}/turns` subcollection, written by the new creation routes — present, the UI switches in 5.4; AI-introduced characters get `origin: 'story'` / `originStoryId`; rules: owner-read, no client writes on target Stories and turns, legacy owner updates unchanged; `jobs.kind` adds `story.finish`. Phase 5.2: the web app and kids PWA read `books`, `manuscripts` and their pages directly (owner-filtered queries) and create Books through `POST /api/books`; `stories/*/storybooks` is legacy and read-only (no route writes it any more except the old print/share path), kept until the trial data reset. Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-11-05 (slice 5.6b: `printStoryBooks` removed; rules deny client access). 2026-11-05 (print orders, slice 5.5b: `printOrders` v2 shape (`schemaVersion: 2`) read by owners via `ownerUid`; new `stripeEvents`; `systemConfig/orders`; `jobs.kind` adds `order.submit`). 2026-11-04 (print render, slice 5.5a: `manuscripts.backCover`; Books get `title`, `end` and `back` pages; `books/*/renders` written by `book.render` with checksums, page count, trim, bleed and spine width; `jobs.kind` adds `book.render`). 2026-11-04 (`users`: roles are custom claims only — owner writes to `roles`, the flat `isAdmin`/`isWriter`/`canShowWizardTargets` fields, and PIN fields are refused; `scripts/set-admin.mjs` sets the claim). 2026-11-02 (`entitlementLedgers/*/grants` history; new `authEmailThrottle`). 2026-11-01 (`aiFlowLogs`: `purpose`, `storyId`, `manuscriptId`, `bookId`, `jobId`, `jobKind`; harness calls always logged). 2026-10-30 (AI model names: Gemini 2.5 and older retired, mapped to 3.x on read). 2026-10-29 (Phase 5.4: `stories` holds Stories (`schemaVersion: 2`) only and is server-written only — the owner reads a Story and its `turns`; `storySessions` (with `messages`, `events`), `children/{id}/sessions`, the legacy story fields and the `stories/{id}/storybooks` subcollection are removed (trial-data reset at deploy, `docs/DEPLOYMENT.md` §10; rules deny every client access to them); `systemConfig/kids-flows` removed; `storyGenerators` is read through `GET /api/creation-modes`. Phase 5.3: target-shaped Stories (`schemaVersion: 2`, `ownerUid`, `modeId`, `cast`, `modeState`…) and the `stories/{id}/turns` subcollection, written by the new creation routes — present, the UI switches in 5.4; AI-introduced characters get `origin: 'story'` / `originStoryId`; rules: owner-read, no client writes on target Stories and turns, legacy owner updates unchanged; `jobs.kind` adds `story.finish`. Phase 5.2: the web app and kids PWA read `books`, `manuscripts` and their pages directly (owner-filtered queries) and create Books through `POST /api/books`; `stories/*/storybooks` is legacy and read-only (no route writes it any more except the old print/share path), kept until the trial data reset. Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -181,9 +181,8 @@ See [Story and turns](#target-model-stories-story-and-storiesidturns) below: eve
 retired flows (`parentUid`, `storyText`, `metadata.title`, `storyMode`, `actors`, `audioUrl`,
 `actorAvatarUrl`, `selectedImageStyle*`, `pageGeneration` / `imageGeneration`, soft delete) and the
 `stories/{storyId}/storybooks` subcollection (with its pages, made by the `storybookV2` routes
-removed in slice 5.2) are removed by the trial-data reset. The kept print, order and share code for
-old storybooks (`printStoryBooks`, `storyBook/printable`, `storyBook/share`, `storyBook/{id}`) is
-unchanged until the print slice; it finds no storybooks after the reset.
+removed in slice 5.2) are removed by the trial-data reset. Their print code (`printStoryBooks`, `storyBook/printable`, `storyBook/{id}`) was deleted
+in slice 5.6b; the share route is kept and finds no storybooks after the reset.
 
 ---
 
@@ -379,45 +378,11 @@ See `LegacyStoryWithOutput` type for field definitions.
 
 ---
 
-### `printStoryBooks`
+### `printStoryBooks` (removed)
 
-Print-ready storybook configurations.
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | Yes | Document ID |
-| `ownerUserId` | string | Yes | Owner's Firebase UID |
-| `storyId` | string | Yes | Source story ID |
-| `storybookId` | string | No | Source storybook ID (new model) |
-| `title` | string | Yes | Book title |
-| `childName` | string | No | Child's name |
-| `printLayoutId` | string | Yes | Print layout ID |
-| `pages` | PrintStoryBookPage[] | Yes | Page configurations |
-| `pdfStatus` | 'draft' \| 'generating_pdfs' \| 'ready' \| 'error' | Yes | PDF generation status |
-| `coverPdfUrl` | string | No | Cover PDF URL |
-| `interiorPdfUrl` | string | No | Interior PDF URL |
-| `combinedPdfUrl` | string | No | Combined PDF URL |
-| `printableMetadata` | PrintableAssetMetadata | No | Print metadata |
-| `pdfGenerationWarnings` | string[] | No | Warnings from PDF generation (truncation, padding) |
-| `createdAt` | timestamp | Yes | Creation time |
-| `updatedAt` | timestamp | Yes | Last update time |
-
-**PrintableAssetMetadata** (embedded object):
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `dpi` | number | Yes | PDF resolution (e.g., 300) |
-| `trimSize` | string | Yes | Page dimensions (e.g., "8in x 10in") |
-| `pageCount` | number | Yes | Total pages in PrintStoryBook |
-| `coverPageCount` | number | Yes | Cover pages (2 for hardcover) |
-| `interiorPageCount` | number | Yes | Total pages in interior PDF (content + padding) |
-| `spreadCount` | number | Yes | Number of spreads |
-| `printLayoutId` | string | No | Print layout used |
-| `hasSeparatePDFs` | boolean | No | True if cover/interior are separate |
-| `paddingPageCount` | number | No | Blank pages added to meet Mixam requirements |
-| `contentPageCount` | number | No | Actual content pages (before padding) |
-
-**Security**: Users can CRUD their own printStoryBooks; admins have full access.
+Legacy print-ready storybook configurations, deleted with the legacy print code in slice 5.6b. No
+route reads or writes it; Firestore rules give clients no access; the trial-data reset and the admin
+cleanup scan still purge leftover documents.
 
 ---
 
@@ -1505,7 +1470,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 | `stories` | Owner (`ownerUid`), Admin | Admin (server) only | `turns`: owner reads (lists filter on `ownerUid`), server writes. No other subcollection is readable or writable by a client; `storySessions` and `children/*/sessions` have no rules (deny) |
 | `printOrders` | Owner (`ownerUid` on v2; legacy `parentUid`/`ownerUserId`), Admin | Admin | Created and updated by server routes (Admin SDK) only |
 | `stripeEvents` | None | None | Server only (Stripe webhook idempotency) |
-| `printStoryBooks` | Owner, Admin | Owner (create draft, delete), Admin (all) | Owner creates only with `pdfStatus: 'draft'` and no PDF fields; layout and PDFs are server-written |
+| `printStoryBooks` | None | None | Removed (5.6b); rules deny all client access |
 | `printProducts` | Authenticated | Admin | |
 | `promptConfigs` | Writer, Admin | Writer, Admin | |
 | `storyPhases` | Writer, Admin | Writer, Admin | |
@@ -1531,6 +1496,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-11-05 | Slice 5.6b: legacy `printStoryBooks` removed (rules deny client access; leftover documents purged by the reset and cleanup) |
 | 2026-11-05 | Print orders (5.5b): `printOrders` v2 (`schemaVersion: 2`, `ownerUid`), new `stripeEvents`, `systemConfig/orders`; rules: owners read v2 orders by `ownerUid`, writes stay admin/server only |
 | 2026-11-04 | Print render (5.5a): `manuscripts.backCover`; Book pages `title`, `end`, `back`; `books/*/renders` written by `book.render`; no rules change (server-written, owner-read as before) |
 | 2026-10-29 | Phase 5.3: target-shaped Stories (`schemaVersion: 2`) and `stories/{id}/turns`, written by the creation routes and `story.finish`, present but not yet used by the UI; `characters.origin` / `originStoryId`; rules: owner-read and no client writes for target Stories and turns (legacy owner updates unchanged) |

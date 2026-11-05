@@ -1,4 +1,3 @@
-import type { PrintOrder } from '@/lib/types';
 import type { EmailConfig, EmailTemplate, EmailTemplateType } from '@/lib/types';
 import { getEmailConfig } from './send-email';
 
@@ -8,13 +7,6 @@ import { getEmailConfig } from './send-email';
  */
 function getBaseUrl(): string {
   return process.env.NEXT_PUBLIC_SITE_URL || 'https://storypickids.com';
-}
-
-/**
- * Get the admin URL for a print order.
- */
-export function getOrderAdminUrl(orderId: string): string {
-  return `${getBaseUrl()}/admin/print-orders/${orderId}`;
 }
 
 /**
@@ -94,48 +86,6 @@ function buildEmailContent(
 }
 
 /**
- * Build order details section for print order emails.
- */
-function buildOrderDetails(
-  order: PrintOrder,
-  statusClass: string,
-  statusLabel: string,
-  extras?: string
-): string {
-  return `
-    <div class="order-details">
-      <p><span class="label">Order ID:</span> <span class="value">${order.id}</span></p>
-      <p><span class="label">Customer Email:</span> <span class="value">${order.contactEmail}</span></p>
-      <p><span class="label">Quantity:</span> <span class="value">${order.quantity}</span></p>
-      <p><span class="label">Status:</span> <span class="status ${statusClass}">${statusLabel}</span></p>
-      ${extras || ''}
-    </div>
-  `;
-}
-
-// Helper functions
-
-function getStatusClass(status: string): string {
-  const statusLower = status.toLowerCase();
-  if (statusLower.includes('pending') || statusLower.includes('submitted')) return 'status-pending';
-  if (statusLower.includes('approved') || statusLower.includes('confirmed')) return 'status-approved';
-  if (statusLower.includes('rejected') || statusLower.includes('failed')) return 'status-rejected';
-  if (statusLower.includes('shipped') || statusLower.includes('delivered') || statusLower.includes('production')) return 'status-shipped';
-  if (statusLower.includes('cancelled')) return 'status-cancelled';
-  return 'status-pending';
-}
-
-function formatStatus(status: string): string {
-  return status
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, c => c.toUpperCase());
-}
-
-// ============================================================================
-// Email Template Functions (using configurable templates)
-// ============================================================================
-
-/**
  * Get the subject line for an email template with placeholders replaced.
  */
 export async function getTemplateSubject(
@@ -153,164 +103,6 @@ export async function getTemplateSubject(
 export async function isTemplateEnabled(templateType: EmailTemplateType): Promise<boolean> {
   const config = await getEmailConfig();
   return config.templates[templateType]?.enabled ?? true;
-}
-
-/**
- * Email template for new order submission.
- */
-export async function orderSubmittedTemplate(order: PrintOrder): Promise<{ subject: string; html: string } | null> {
-  const config = await getEmailConfig();
-  const template = config.templates.orderSubmitted;
-
-  if (!template.enabled) {
-    return null;
-  }
-
-  const adminUrl = getOrderAdminUrl(order.id || '');
-  const values = { orderId: order.id || '' };
-
-  const details = buildOrderDetails(
-    order,
-    'status-pending',
-    'Pending Review',
-    `<p><span class="label">Shipping To:</span> <span class="value">${order.shippingAddress?.name || 'N/A'}</span></p>`
-  );
-
-  return {
-    subject: replacePlaceholders(template.subject, values),
-    html: buildEmailContent(template, config, details, adminUrl),
-  };
-}
-
-/**
- * Email template for order status change.
- */
-export async function orderStatusChangedTemplate(
-  order: PrintOrder,
-  oldStatus: string,
-  newStatus: string
-): Promise<{ subject: string; html: string } | null> {
-  const config = await getEmailConfig();
-  const template = config.templates.orderStatusChanged;
-
-  if (!template.enabled) {
-    return null;
-  }
-
-  const adminUrl = getOrderAdminUrl(order.id || '');
-  const values = {
-    orderId: order.id || '',
-    status: formatStatus(newStatus),
-  };
-
-  const statusClass = getStatusClass(newStatus);
-  const statusLabel = formatStatus(newStatus);
-
-  const extras = `
-    <p><span class="label">Previous Status:</span> <span class="value">${formatStatus(oldStatus)}</span></p>
-    ${(order as any).mixamStatusReason ? `<p><span class="label">Reason:</span> <span class="value">${(order as any).mixamStatusReason}</span></p>` : ''}
-  `;
-
-  const details = `
-    <div class="order-details">
-      <p><span class="label">Order ID:</span> <span class="value">${order.id}</span></p>
-      <p><span class="label">Customer Email:</span> <span class="value">${order.contactEmail}</span></p>
-      ${extras}
-      <p><span class="label">New Status:</span> <span class="status ${statusClass}">${statusLabel}</span></p>
-    </div>
-  `;
-
-  return {
-    subject: replacePlaceholders(template.subject, values),
-    html: buildEmailContent(template, config, details, adminUrl),
-  };
-}
-
-/**
- * Email template for order approved.
- */
-export async function orderApprovedTemplate(order: PrintOrder): Promise<{ subject: string; html: string } | null> {
-  const config = await getEmailConfig();
-  const template = config.templates.orderApproved;
-
-  if (!template.enabled) {
-    return null;
-  }
-
-  const adminUrl = getOrderAdminUrl(order.id || '');
-  const values = { orderId: order.id || '' };
-
-  const details = buildOrderDetails(
-    order,
-    'status-approved',
-    'Approved',
-    order.mixamOrderId ? `<p><span class="label">Mixam Order ID:</span> <span class="value">${order.mixamOrderId}</span></p>` : ''
-  );
-
-  return {
-    subject: replacePlaceholders(template.subject, values),
-    html: buildEmailContent(template, config, details, adminUrl),
-  };
-}
-
-/**
- * Email template for order rejected.
- */
-export async function orderRejectedTemplate(
-  order: PrintOrder,
-  reason?: string
-): Promise<{ subject: string; html: string } | null> {
-  const config = await getEmailConfig();
-  const template = config.templates.orderRejected;
-
-  if (!template.enabled) {
-    return null;
-  }
-
-  const adminUrl = getOrderAdminUrl(order.id || '');
-  const values = { orderId: order.id || '' };
-
-  const details = buildOrderDetails(
-    order,
-    'status-rejected',
-    'Rejected',
-    reason ? `<p><span class="label">Reason:</span> <span class="value">${reason}</span></p>` : ''
-  );
-
-  return {
-    subject: replacePlaceholders(template.subject, values),
-    html: buildEmailContent(template, config, details, adminUrl),
-  };
-}
-
-/**
- * Email template for order cancelled.
- */
-export async function orderCancelledTemplate(
-  order: PrintOrder,
-  reason?: string
-): Promise<{ subject: string; html: string } | null> {
-  const config = await getEmailConfig();
-  const template = config.templates.orderCancelled;
-
-  if (!template.enabled) {
-    return null;
-  }
-
-  const adminUrl = getOrderAdminUrl(order.id || '');
-  const values = { orderId: order.id || '' };
-
-  const details = buildOrderDetails(
-    order,
-    'status-cancelled',
-    'Cancelled',
-    reason ? `<p><span class="label">Reason:</span> <span class="value">${reason}</span></p>` : ''
-  );
-
-  return {
-    subject: replacePlaceholders(template.subject, values),
-    html: buildEmailContent(template, config, details, adminUrl),
-  };
 }
 
 /**

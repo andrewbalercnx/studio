@@ -88,18 +88,6 @@
       ]
     }
   ],
-  "printStoryBooks": [
-    {
-      "id": "help-print-storybook",
-      "storyId": "help-story",
-      "storybookId": "help-storybook",
-      "title": "Demo Adventure - Print Edition",
-      "childName": "Demo Child",
-      "printLayoutId": "a4-portrait-spread-v1",
-      "pages": [],
-      "pdfStatus": "draft"
-    }
-  ],
   "printOrders": [
     {
       "id": "help-print-order",

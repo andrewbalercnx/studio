@@ -15,7 +15,6 @@ import helpSampleData from '@/data/help-sample-data.json';
  * - storySessions (help-session)
  * - stories (help-story)
  * - storyBooks (help-storybook)
- * - printStoryBooks (help-print-storybook)
  * - printOrders (help-print-order)
  */
 export async function POST(request: Request) {
@@ -97,18 +96,6 @@ export async function POST(request: Request) {
       seededDocs.push(`storyBooks/${book.id}`);
     }
 
-    // Seed print story books
-    for (const printBook of helpSampleData.printStoryBooks) {
-      const ref = db.collection('printStoryBooks').doc(printBook.id);
-      batch.set(ref, {
-        ...printBook,
-        ownerUserId: 'help-demo-parent',
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      }, { merge: true });
-      seededDocs.push(`printStoryBooks/${printBook.id}`);
-    }
-
     // Seed print orders
     for (const order of helpSampleData.printOrders) {
       const ref = db.collection('printOrders').doc(order.id);
@@ -172,7 +159,6 @@ export async function GET(request: Request) {
       { name: 'storySessions', ids: helpSampleData.storySessions.map(s => s.id) },
       { name: 'stories', ids: helpSampleData.stories.map(s => s.id) },
       { name: 'storyBooks', ids: helpSampleData.storyBooks.map(b => b.id) },
-      { name: 'printStoryBooks', ids: helpSampleData.printStoryBooks.map(p => p.id) },
       { name: 'printOrders', ids: helpSampleData.printOrders.map(o => o.id) },
     ];
 

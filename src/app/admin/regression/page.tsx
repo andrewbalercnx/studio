@@ -196,7 +196,7 @@ const initialTests: TestResult[] = [
   { id: 'API_FEEDBACK_ELIGIBILITY', name: 'API: /api/feedback/eligibility (GET shape)', status: 'PENDING', message: '' },
   { id: 'API_TICKETS_GET', name: 'API: /api/tickets (GET shape)', status: 'PENDING', message: '' },
   { id: 'API_REPORT_ISSUE_VALIDATION', name: 'API: /api/report-issue (POST validation)', status: 'PENDING', message: '' },
-  { id: 'API_MY_ORDERS_TIMELINE', name: 'API: /api/printOrders/my-orders (timeline shape)', status: 'PENDING', message: '' },
+  { id: 'API_MY_ORDERS_TIMELINE', name: 'API: GET /api/orders (timeline and actions)', status: 'PENDING', message: '' },
   { id: 'DATA_CHILDREN_EXTENDED', name: 'Firestore: Children (Extended)', status: 'PENDING', message: '' },
   { id: 'DATA_CHILDREN', name: 'Firestore: Children', status: 'PENDING', message: '' },
   { id: 'DATA_STORY_OUTPUTS', name: 'Firestore: Story Output Types', status: 'PENDING', message: '' },
@@ -1079,8 +1079,6 @@ export default function AdminRegressionPage() {
     // The IDs are placeholders; a 404 would mean auth ran too late.
     try {
         const anonymous: Array<{ path: string; init?: RequestInit; expect: number[] }> = [
-            { path: '/api/storyBook/regression-anon', expect: [401] },
-            { path: '/api/printStoryBooks/regression-anon/generate-pdfs', init: { method: 'POST' }, expect: [401] },
             { path: '/api/postcode/lookup?postcode=SW1A1AA', expect: [401] },
             { path: '/api/webhooks/mixam', init: { method: 'POST', body: '{}' }, expect: [401, 503] },
             // Unsigned Stripe events: 400 (bad signature), or 503 while Stripe is not configured.
@@ -1197,24 +1195,18 @@ export default function AdminRegressionPage() {
         updateTestResult('API_REPORT_ISSUE_VALIDATION', { status: 'FAIL', message: e.message });
     }
 
-    // Test: API_MY_ORDERS_TIMELINE — server-derived timeline/statusCategory shape.
+    // Test: API_MY_ORDERS_TIMELINE — GET /api/orders (slice 5.6): the caller's orders, each with
+    // its server-built timeline and the actions the client may offer.
     try {
-        const w3cToken = await auth?.currentUser?.getIdToken?.();
-        if (!w3cToken) throw new Error('Authentication required.');
-        const response = await authFetch('/api/printOrders/my-orders', {
-            headers: { Authorization: `Bearer ${w3cToken}` },
-        });
+        const ordersToken = await auth?.currentUser?.getIdToken?.();
+        if (!ordersToken) throw new Error('Authentication required.');
+        const response = await authFetch('/api/orders', { headers: { Authorization: `Bearer ${ordersToken}` } });
         const result = await response.json();
-        if (response.status !== 200) throw new Error(`API returned status ${response.status}: ${result.error || 'Unknown error'}`);
-        if (result.ok !== true || !Array.isArray(result.orders)) throw new Error('Response missing ok:true / orders array.');
-        if (!result.estimatedTurnaround || typeof result.estimatedTurnaround.label !== 'string') {
-            throw new Error('Response missing estimatedTurnaround.label.');
-        }
-        const badOrder = result.orders.find((o: any) =>
-            !o.timeline || !Array.isArray(o.timeline.steps) || o.timeline.steps.length !== 5 ||
-            !['pending', 'in_progress', 'completed', 'cancelled'].includes(o.statusCategory));
-        if (badOrder) throw new Error(`Order ${badOrder.id || '?'} is missing a 5-step timeline or valid statusCategory.`);
-        updateTestResult('API_MY_ORDERS_TIMELINE', { status: 'PASS', message: `${result.orders.length} order(s) with server-derived timelines; estimate present.` });
+        if (response.status !== 200) throw new Error(`API returned status ${response.status}: ${result.error?.message || 'Unknown error'}`);
+        if (result.ok !== true || !Array.isArray(result.data)) throw new Error('Response missing ok:true / data array.');
+        const badOrder = result.data.find((o: any) => !Array.isArray(o.timeline) || typeof o.status !== 'string' || typeof o.actions?.canCancel !== 'boolean');
+        if (badOrder) throw new Error(`Order ${badOrder.id || '?'} is missing its timeline, status or actions.`);
+        updateTestResult('API_MY_ORDERS_TIMELINE', { status: 'PASS', message: `${result.data.length} order(s), each with a timeline and actions.` });
     } catch (e: any) {
         updateTestResult('API_MY_ORDERS_TIMELINE', { status: 'FAIL', message: e.message });
     }
