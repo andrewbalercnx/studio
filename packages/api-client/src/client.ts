@@ -1,290 +1,186 @@
 /**
- * StoryPic API Client
- *
- * Provides typed methods for all child-facing API operations.
+ * The StoryPic API, grouped by area. One client for the web app, the kids PWA
+ * and the mobile app (Phase 6.1): every client calls the same functions and
+ * gets the same types.
  */
-
 import type {
+  AdminOrderView,
+  AvatarSource,
   BookListItem,
   BookReadView,
+  BookStatus,
+  CharacterProfileInput,
+  CharacterView,
   ChildInput,
+  ChildProfileInput,
+  ChildRecord,
+  ChildView,
+  CreateBookRequest,
+  CreateBookResponse,
+  CreateOrderRequest,
   CreateStoryRequest,
   CreationModeView,
-  StoryOutputType,
   ImageStyle,
+  LibrarySummary,
+  OrderSettings,
+  OrderStatus,
+  OrderView,
+  PersonKind,
+  PersonView,
+  PrintOption,
+  RenderView,
+  StoryOutputType,
   StoryStatus,
   StoryTurnResult,
   StoryTurnView,
   StoryView,
-  TTSResponse,
   TTSRequest,
+  TTSResponse,
 } from '@storypic/shared-types';
+import { createTransport, query, seg, StoryPicApiError, type StoryPicClientConfig, type Transport } from './http';
 
-/**
- * Configuration for the StoryPic API client.
- */
-export type StoryPicClientConfig = {
-  /** Base URL for API requests (e.g., '/api' or 'https://storypic.com/api') */
-  baseUrl: string;
-  /** Function to get the current Firebase ID token */
-  getToken: () => Promise<string>;
-  /** Optional timeout in milliseconds (default: 60000) */
-  timeout?: number;
-};
+type ViewOf<K extends PersonKind> = K extends 'child' ? ChildView : CharacterView;
+type InputOf<K extends PersonKind> = K extends 'child' ? ChildProfileInput : CharacterProfileInput;
 
-/**
- * Error thrown by the API client.
- */
-export class StoryPicApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly code?: string
-  ) {
-    super(message);
-    this.name = 'StoryPicApiError';
-  }
+const PEOPLE: Record<PersonKind, string> = { child: '/children', character: '/characters' };
+
+function storiesApi(t: Transport) {
+  return {
+    /** The ways a child can make a story: live, enabled for kids, in order, exactly one `recommended`. */
+    listModes: async (): Promise<CreationModeView[]> => (await t.call<{ modes: CreationModeView[] }>('GET', '/creation-modes')).modes,
+    /** One `idempotencyKey` per tap; a repeat returns the same Story and first turn. 402 ENTITLEMENT_LIMIT without allowance. */
+    create: (input: CreateStoryRequest) => t.call<StoryTurnResult>('POST', '/stories', input),
+    /**
+     * The child's answer. One key per answer. 409 TURN_IN_PROGRESS: still being worked on (repeat later);
+     * 409 TURN_CONFLICT: another answer came first; 503: the AI was unavailable, nothing recorded.
+     */
+    sendTurn: (storyId: string, input: ChildInput, idempotencyKey: string) =>
+      t.call<StoryTurnResult>('POST', `/stories/${seg(storyId)}/turns`, { input, idempotencyKey }),
+    abandon: (storyId: string) => t.call<{ storyId: string; status: StoryStatus }>('POST', `/stories/${seg(storyId)}/abandon`),
+    /** A Story that failed while finishing goes back to finishing. */
+    retryFinish: (storyId: string) => t.call<{ storyId: string; status: StoryStatus }>('POST', `/stories/${seg(storyId)}/finish`),
+    /** The child's Stories, newest first (abandoned ones left out), names resolved on the server. */
+    list: async (childId: string): Promise<StoryView[]> => (await t.call<{ stories: StoryView[] }>('GET', `/stories${query({ childId })}`)).stories,
+    get: (storyId: string) => t.call<{ story: StoryView; turns: StoryTurnView[] }>('GET', `/stories/${seg(storyId)}`),
+  };
 }
 
-/**
- * StoryPic API Client for child-facing features.
- */
-export class StoryPicClient {
-  private baseUrl: string;
-  private getToken: () => Promise<string>;
-  private timeout: number;
+function booksApi(t: Transport) {
+  return {
+    /** The server runs the whole pipeline; one key per "make my book" tap (charged once). */
+    create: (input: CreateBookRequest) => t.call<CreateBookResponse>('POST', '/books', input),
+    /** The family's Books, newest first, optionally for one child or story. */
+    list: (filter: { childId?: string; storyId?: string } = {}) => t.call<BookListItem[]>('GET', `/books${query(filter)}`),
+    /** One Book in full: pages (words and picture) and live progress. */
+    get: (bookId: string) => t.call<BookReadView>('GET', `/books/${seg(bookId)}`),
+    retryPage: (bookId: string, pageNumber: number) =>
+      t.call<{ bookId: string; pageNumber: number; status: BookStatus }>('POST', `/books/${seg(bookId)}/pages/${seg(pageNumber)}/retry`),
+    lock: (bookId: string) => t.call<{ bookId: string; status: BookStatus }>('POST', `/books/${seg(bookId)}/lock`),
+    unlock: (bookId: string) => t.call<{ bookId: string; status: BookStatus }>('POST', `/books/${seg(bookId)}/unlock`),
+    printOptions: (bookId: string) => t.call<PrintOption[]>('GET', `/books/${seg(bookId)}/print-options`),
+    /** Start a print render; locks the Book. */
+    startRender: (bookId: string, layoutId: string, idempotencyKey: string) =>
+      t.call<{ renderId: string; jobId: string; status: 'rendering' | 'ready' }>('POST', `/books/${seg(bookId)}/renders`, { layoutId, idempotencyKey }),
+    getRender: (bookId: string, renderId: string) => t.call<RenderView>('GET', `/books/${seg(bookId)}/renders/${seg(renderId)}`),
+    listRenders: (bookId: string) => t.call<RenderView[]>('GET', `/books/${seg(bookId)}/renders`),
+  };
+}
 
-  constructor(config: StoryPicClientConfig) {
-    this.baseUrl = config.baseUrl.replace(/\/$/, ''); // Remove trailing slash
-    this.getToken = config.getToken;
-    this.timeout = config.timeout ?? 60000;
-  }
+function ordersApi(t: Transport) {
+  const order = (id: string, rest = '') => `/orders/${seg(id)}${rest}`;
+  const admin = (id: string, rest = '') => `/admin/orders/${seg(id)}${rest}`;
+  return {
+    create: (input: CreateOrderRequest) => t.call<OrderView>('POST', '/orders', input),
+    list: () => t.call<OrderView[]>('GET', '/orders'),
+    get: (orderId: string) => t.call<OrderView>('GET', order(orderId)),
+    /** Stripe Checkout: the page to send the parent to. */
+    checkout: (orderId: string) => t.call<{ url: string }>('POST', order(orderId, '/checkout')),
+    payWithCredits: (orderId: string) => t.call<OrderView>('POST', order(orderId, '/pay-with-credits')),
+    cancel: (orderId: string) => t.call<OrderView>('POST', order(orderId, '/cancel')),
+    admin: {
+      list: (status?: OrderStatus | null) => t.call<AdminOrderView[]>('GET', `/admin/orders${query({ status: status ?? null })}`),
+      get: (orderId: string) => t.call<AdminOrderView>('GET', admin(orderId)),
+      approve: (orderId: string) => t.call<AdminOrderView>('POST', admin(orderId, '/approve')),
+      cancel: (orderId: string, note: string | null) => t.call<AdminOrderView>('POST', admin(orderId, '/cancel'), { note }),
+      markPaid: (orderId: string, note: string) => t.call<AdminOrderView>('POST', admin(orderId, '/mark-paid'), { note }),
+      retrySubmit: (orderId: string, force: boolean) => t.call<AdminOrderView>('POST', admin(orderId, '/retry'), { force }),
+      refresh: (orderId: string) => t.call<AdminOrderView>('POST', admin(orderId, '/refresh')),
+      getSettings: () => t.call<OrderSettings>('GET', '/admin/orders/settings'),
+      updateSettings: (patch: Partial<Pick<OrderSettings, 'requireAdminApproval' | 'notifyEmails'>>) =>
+        t.call<OrderSettings>('PUT', '/admin/orders/settings', patch),
+    },
+  };
+}
 
-  // ============================================================================
-  // Private HTTP helpers
-  // ============================================================================
+function peopleApi(t: Transport) {
+  const item = (kind: PersonKind, id: string, rest = '') => `${PEOPLE[kind]}/${seg(id)}${rest}`;
+  return {
+    listChildren: () => t.call<ChildView[]>('GET', '/children?view=person'),
+    listCharacters: (options: { childId?: string | null; includeHelp?: boolean } = {}) =>
+      t.call<CharacterView[]>('GET', `/characters${query({ childId: options.childId ?? null, includeHelp: options.includeHelp ? '1' : null })}`),
+    get: <K extends PersonKind>(kind: K, id: string) =>
+      t.call<ViewOf<K>>('GET', kind === 'child' ? `${item(kind, id)}?view=person` : item(kind, id)),
+    /** One key per create attempt; a repeat returns the same person. */
+    create: <K extends PersonKind>(kind: K, input: InputOf<K> & { idempotencyKey: string }) => t.call<ViewOf<K>>('POST', PEOPLE[kind], input),
+    update: <K extends PersonKind>(kind: K, id: string, patch: Partial<InputOf<K>>) => t.call<ViewOf<K>>('PATCH', item(kind, id), patch),
+    remove: (kind: PersonKind, id: string) => t.call<{ id: string; deleted: true }>('DELETE', item(kind, id)),
+    restore: (kind: PersonKind, id: string) => t.call<PersonView>('POST', item(kind, id, '/restore')),
+    /** A data URL (image/*, ≤ 8 MB, ≤ 10 photos); the appearance and portrait are redone. */
+    addPhoto: (kind: PersonKind, id: string, dataUrl: string) => t.call<PersonView>('POST', item(kind, id, '/photos'), { dataUrl }),
+    removePhoto: (kind: PersonKind, id: string, photoId: string) => t.call<PersonView>('DELETE', item(kind, id, `/photos/${seg(photoId)}`)),
+    refreshLikeness: (kind: PersonKind, id: string) => t.call<PersonView>('POST', item(kind, id, '/likeness/refresh')),
+    setAvatar: (kind: PersonKind, id: string, source: AvatarSource, photoId?: string) =>
+      t.call<PersonView>('POST', item(kind, id, '/avatar'), photoId ? { source, photoId } : { source }),
+    /** Admin: move to another family. */
+    reassignOwner: (kind: PersonKind, id: string, ownerUid: string) =>
+      t.call<PersonView>('PATCH', `/admin/${kind === 'child' ? 'children' : 'characters'}/${seg(id)}`, { ownerUid }),
+    /** The bare shape the mobile app reads (stored fields plus `likeness`). */
+    childRecords: () => t.raw<ChildRecord[]>('GET', '/children'),
+    childRecord: (childId: string) => t.raw<ChildRecord>('GET', `/children/${seg(childId)}`),
+  };
+}
 
-  private async request<T>(
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-    path: string,
-    body?: unknown
-  ): Promise<T> {
-    const token = await this.getToken();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+function catalogApi(t: Transport) {
+  return {
+    /** The Forms a finished Story can become (live output types). */
+    outputTypes: async (): Promise<StoryOutputType[]> =>
+      (await t.raw<{ ok: boolean; outputTypes?: StoryOutputType[] }>('GET', '/storyOutputTypes')).outputTypes ?? [],
+    /** The art Styles a Book can be drawn in (preferred first). */
+    imageStyles: async (): Promise<ImageStyle[]> => (await t.raw<{ ok: boolean; imageStyles?: ImageStyle[] }>('GET', '/imageStyles')).imageStyles ?? [],
+  };
+}
 
-    try {
-      const response = await fetch(`${this.baseUrl}${path}`, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        // Older routes answer { errorMessage | error: string }; routes on the
-        // shared route wrapper answer { ok: false, error: { code, message } }.
-        const envelope = typeof data.error === 'object' && data.error !== null ? data.error : null;
-        throw new StoryPicApiError(
-          envelope?.message || data.errorMessage || data.error || 'Request failed',
-          response.status,
-          envelope?.code || data.code
-        );
-      }
-
-      return data as T;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof StoryPicApiError) {
+export function createStoryPicClient(config: StoryPicClientConfig) {
+  const t = createTransport(config);
+  return {
+    stories: storiesApi(t),
+    books: booksApi(t),
+    orders: ordersApi(t),
+    people: peopleApi(t),
+    catalog: catalogApi(t),
+    /** The family's Story and Book counts, in total and per child. */
+    librarySummary: () => t.call<LibrarySummary>('GET', '/library/summary'),
+    /** Text to speech; answers the audio URL. */
+    speak: async (text: string, voiceId?: string, childId?: string): Promise<string> => {
+      const body: TTSRequest = { text, voiceId, childId };
+      const response = await t.raw<TTSResponse>('POST', '/tts', body);
+      if (!response.ok || !response.audioUrl) throw new StoryPicApiError(response.errorMessage || 'Could not make the audio', 'TTS_FAILED', 500);
+      return response.audioUrl;
+    },
+    /**
+     * The parent PIN check: true when it matches, false for a wrong PIN. Throws for anything else
+     * (429 PIN_LOCKED after too many tries, 400 PIN_NOT_SET, no connection).
+     */
+    verifyPin: async (pin: string): Promise<boolean> => {
+      try {
+        await t.raw<{ ok: true }>('POST', '/parent/verify-pin', { pin });
+        return true;
+      } catch (error) {
+        if (error instanceof StoryPicApiError && error.code === 'INCORRECT_PIN') return false;
         throw error;
       }
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new StoryPicApiError('Request timeout', 408);
-      }
-      throw new StoryPicApiError(
-        error instanceof Error ? error.message : 'Network error',
-        0
-      );
-    }
-  }
-
-  private async get<T>(path: string): Promise<T> {
-    return this.request<T>('GET', path);
-  }
-
-  private async post<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>('POST', path, body);
-  }
-
-  /** Routes on the shared route wrapper answer `{ ok: true, data }`. */
-  private async data<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
-    const response = await this.request<{ ok: boolean; data: T }>(method, path, body);
-    return response.data;
-  }
-
-  // ============================================================================
-  // Discovery
-  // ============================================================================
-
-  /**
-   * The ways a child can make a story: live modes enabled for kids, in display
-   * order, presented kid-safely, exactly one `recommended`.
-   */
-  async listCreationModes(): Promise<CreationModeView[]> {
-    const data = await this.data<{ modes: CreationModeView[] }>('GET', '/creation-modes');
-    return data.modes;
-  }
-
-  /**
-   * Get available story output types (picture book, poem, etc.).
-   */
-  async getOutputTypes(): Promise<StoryOutputType[]> {
-    const response = await this.get<{ ok: boolean; outputTypes: StoryOutputType[]; error?: string }>('/storyOutputTypes');
-    if (!response.ok) {
-      throw new StoryPicApiError(response.error || 'Failed to get output types', 500);
-    }
-    return response.outputTypes;
-  }
-
-  /**
-   * Get available image styles for storybook illustrations.
-   */
-  async getImageStyles(): Promise<ImageStyle[]> {
-    const response = await this.get<{ ok: boolean; imageStyles: ImageStyle[]; error?: string }>('/imageStyles');
-    if (!response.ok) {
-      throw new StoryPicApiError(response.error || 'Failed to get image styles', 500);
-    }
-    return response.imageStyles;
-  }
-
-  // ============================================================================
-  // Story Creation (one Story, five modes, the same routes for every client)
-  // ============================================================================
-
-  /**
-   * Start creating a Story. `idempotencyKey` must be made once per tap and
-   * repeated on a retry of that tap: the server then returns the same Story
-   * and first turn (`created: false`). 402 ENTITLEMENT_LIMIT when the family
-   * has no story allowance left.
-   */
-  async createStory(input: CreateStoryRequest): Promise<StoryTurnResult> {
-    return this.data<StoryTurnResult>('POST', '/stories', input);
-  }
-
-  /**
-   * Send the child's answer to the latest prompt (a choice, typed text or a
-   * cast pick, as the turn's `expects` says). One `idempotencyKey` per
-   * answer: a repeat returns the recorded reply. 409 TURN_IN_PROGRESS means
-   * the same answer is still being worked on (repeat it later); 409
-   * TURN_CONFLICT means another answer was recorded first; 503 means the AI
-   * was unavailable and nothing was recorded (repeat it).
-   */
-  async sendTurn(storyId: string, input: ChildInput, idempotencyKey: string): Promise<StoryTurnResult> {
-    return this.data<StoryTurnResult>('POST', `/stories/${encodeURIComponent(storyId)}/turns`, { input, idempotencyKey });
-  }
-
-  /** Stop creating a Story (only while `creating`; idempotent). */
-  async abandonStory(storyId: string): Promise<{ storyId: string; status: StoryStatus }> {
-    return this.data('POST', `/stories/${encodeURIComponent(storyId)}/abandon`);
-  }
-
-  /** A Story that `failed` while finishing goes back to `finishing`. */
-  async retryFinish(storyId: string): Promise<{ storyId: string; status: StoryStatus }> {
-    return this.data('POST', `/stories/${encodeURIComponent(storyId)}/finish`);
-  }
-
-  // ============================================================================
-  // Books
-  // ============================================================================
-
-  /**
-   * Create a Book: the story's words in a Form (the Manuscript, paginated on
-   * the server with the Form's default length and density) drawn in a Style.
-   * The server runs the whole pipeline; the caller only watches the Book.
-   *
-   * `idempotencyKey` must be made once per user action (e.g. one "make my
-   * book" tap) and repeated on a retry of that action: the server then returns
-   * the same Book and charges the book allowance once.
-   */
-  async createBook(input: {
-    storyId: string;
-    formId: string;
-    styleId: string;
-    idempotencyKey: string;
-  }): Promise<{ bookId: string; manuscriptId: string; status: string; created: boolean }> {
-    const response = await this.post<{
-      ok: boolean;
-      data?: { bookId: string; manuscriptId: string; status: string; created: boolean };
-    }>('/books', input);
-    if (!response.ok || !response.data?.bookId) {
-      throw new StoryPicApiError('Failed to create book', 500);
-    }
-    return response.data;
-  }
-
-  /**
-   * The family's Books, newest first, optionally for one child or one story.
-   * The server computes the status, art rollup and `isReady` flag.
-   */
-  async getBooks(filter: { childId?: string; storyId?: string } = {}): Promise<BookListItem[]> {
-    const query = new URLSearchParams();
-    if (filter.childId) query.set('childId', filter.childId);
-    if (filter.storyId) query.set('storyId', filter.storyId);
-    const suffix = query.toString() ? `?${query.toString()}` : '';
-    return this.data<BookListItem[]>('GET', `/books${suffix}`);
-  }
-
-  /**
-   * One Book in full: meta and title, every page with its words and picture,
-   * and the live making-of progress (stage + percent). Read this to show both
-   * the progress view and the finished reader.
-   */
-  async getBook(bookId: string): Promise<BookReadView> {
-    return this.data<BookReadView>('GET', `/books/${encodeURIComponent(bookId)}`);
-  }
-
-  // ============================================================================
-  // Reading/Viewing
-  // ============================================================================
-
-  /**
-   * A Story and its turns. Every text (title, synopsis, finished text, each
-   * prompt and option) is rendered with names on the server.
-   */
-  async getStory(storyId: string): Promise<{ story: StoryView; turns: StoryTurnView[] }> {
-    return this.data('GET', `/stories/${encodeURIComponent(storyId)}`);
-  }
-
-  /**
-   * The child's Stories, newest first, with the server's status. Abandoned
-   * Stories are left out.
-   */
-  async getMyStories(childId: string): Promise<StoryView[]> {
-    const data = await this.data<{ stories: StoryView[] }>('GET', `/stories?childId=${encodeURIComponent(childId)}`);
-    return data.stories;
-  }
-
-  // ============================================================================
-  // TTS (Text-to-Speech)
-  // ============================================================================
-
-  /**
-   * Generate text-to-speech audio.
-   * Returns a URL to the audio file.
-   */
-  async speak(text: string, voiceId?: string, childId?: string): Promise<string> {
-    const body: TTSRequest = { text, voiceId, childId };
-    const response = await this.post<TTSResponse>('/tts', body);
-    if (!response.ok || !response.audioUrl) {
-      throw new StoryPicApiError(response.errorMessage || 'TTS generation failed', 500);
-    }
-    return response.audioUrl;
-  }
+    },
+  };
 }
+
+export type StoryPicClient = ReturnType<typeof createStoryPicClient>;

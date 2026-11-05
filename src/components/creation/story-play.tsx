@@ -32,11 +32,11 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useSendTurn, useStoryDoc, useStoryTurns } from '@/hooks/use-stories';
-import { abandonStory, kidSafeMessage, retryFinish, StoryApiError, type ChildInput } from '@/lib/stories/api';
 import { currentPrompt, type TurnDoc } from '@/lib/stories/types';
 import { track, ANALYTICS_EVENTS } from '@/lib/analytics';
 import { cn } from '@/lib/utils';
 import { ChildAvatarAnimation } from '@/components/child/child-avatar-animation';
+import { api, kidSafeMessage, StoryPicApiError, type ChildInput } from '@/lib/api';
 
 /** Modes whose engine also takes a typed idea where it offers choices. */
 const FREE_TEXT_MODES = new Set(['freeplay', 'guided']);
@@ -112,7 +112,7 @@ export function StoryPlay({ storyId, child, homeHref, onComplete }: StoryPlayPro
   useEffect(() => {
     if (status !== 'finishing') return;
     const timer = setInterval(() => {
-      retryFinish(storyId).catch((err) => console.warn('[StoryPlay] Finish nudge failed', err));
+      api.stories.retryFinish(storyId).catch((err) => console.warn('[StoryPlay] Finish nudge failed', err));
     }, FINISH_NUDGE_MS);
     return () => clearInterval(timer);
   }, [status, storyId]);
@@ -126,7 +126,7 @@ export function StoryPlay({ storyId, child, homeHref, onComplete }: StoryPlayPro
       if (result) setAnsweredIndex((current) => Math.max(current, promptIndex));
     } catch (err) {
       console.error('[StoryPlay] Turn failed', err);
-      const conflict = err instanceof StoryApiError && (err.code === 'TURN_CONFLICT' || err.code === 'STORY_NOT_CREATING');
+      const conflict = err instanceof StoryPicApiError && (err.code === 'TURN_CONFLICT' || err.code === 'STORY_NOT_CREATING');
       // A conflict means the listeners already show (or will show) the newest turn: no retry of the old answer.
       setError({ message: kidSafeMessage(err), retry: conflict ? null : () => submit(promptIndex, input) });
     }
@@ -173,7 +173,7 @@ export function StoryPlay({ storyId, child, homeHref, onComplete }: StoryPlayPro
             onClick={async () => {
               setRetryingFinish(true);
               try {
-                await retryFinish(storyId);
+                await api.stories.retryFinish(storyId);
               } catch (err) {
                 console.error('[StoryPlay] Retry finish failed', err);
                 setError({ message: kidSafeMessage(err), retry: null });
@@ -309,7 +309,7 @@ export function StoryPlay({ storyId, child, homeHref, onComplete }: StoryPlayPro
             <AlertDialogAction
               onClick={async () => {
                 try {
-                  await abandonStory(storyId);
+                  await api.stories.abandon(storyId);
                 } catch (err) {
                   console.error('[StoryPlay] Abandon failed', err);
                 }

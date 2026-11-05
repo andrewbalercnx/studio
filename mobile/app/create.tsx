@@ -42,7 +42,7 @@ export default function CreateScreen() {
   const loadModes = async () => {
     setLoading(true);
     try {
-      setModes(await apiClient.listCreationModes());
+      setModes(await apiClient.stories.listModes());
       setError(null);
     } catch (e) {
       console.error('Error loading modes:', e);
@@ -61,7 +61,7 @@ export default function CreateScreen() {
     setCreating(mode.modeId);
     setError(null);
     try {
-      const result = await apiClient.createStory({ childId, modeId: mode.modeId, idempotencyKey });
+      const result = await apiClient.stories.create({ childId, modeId: mode.modeId, idempotencyKey });
       router.push(`/play/${result.storyId}`);
     } catch (e) {
       console.error('Error starting story:', e);

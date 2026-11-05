@@ -6,7 +6,7 @@ import { LoaderCircle } from 'lucide-react';
 import { useUser } from '@/firebase/auth/use-user';
 import { useKidsPWA } from '../../../layout';
 import { StoryReader } from '@/components/creation';
-import { peopleApi } from '@/lib/people/api';
+import { api } from '@/lib/api';
 
 /** Kids PWA: read a finished story; its Books and "make a book" underneath. */
 export default function KidsStoryReadPage({ params }: { params: Promise<{ storyId: string }> }) {
@@ -25,7 +25,7 @@ export default function KidsStoryReadPage({ params }: { params: Promise<{ storyI
   const persistAutoRead = useCallback(
     (enabled: boolean) => {
       if (!childId) return;
-      peopleApi.update('child', childId, { autoReadAloud: enabled }).catch((err) =>
+      api.people.update('child', childId, { autoReadAloud: enabled }).catch((err) =>
         console.warn('[KidsStoryRead] Failed to persist autoReadAloud:', err)
       );
     },

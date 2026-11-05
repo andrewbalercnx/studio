@@ -77,6 +77,10 @@ To change the API URL, edit `src/contexts/ApiClientContext.tsx`:
 const API_BASE_URL = 'https://your-backend-url.com';
 ```
 
+The calls and types come from the shared `@storypic/api-client` and `@storypic/shared-types`
+(`../packages`, linked with `file:` and watched by `metro.config.js`), the same client the web app
+uses. Build from a full checkout of the repository so `../packages` is present.
+
 ## Firebase Configuration
 
 Auth uses Firebase REST API (no native Firebase SDK needed for Expo Go).

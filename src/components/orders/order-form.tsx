@@ -14,8 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { ChoiceKeys, getPrintOptions, type PrintOption } from '@/lib/books/api';
-import { createOrder, formatMoney } from '@/lib/orders/api';
+import { api, ChoiceKeys, formatMoney, type PrintOption } from '@/lib/api';
 
 const MAX_COPIES = 10;
 
@@ -35,7 +34,7 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
   const [keys] = useState(() => new ChoiceKeys());
 
   useEffect(() => {
-    getPrintOptions(bookId)
+    api.books.printOptions(bookId)
       .then((opts) => {
         const priced = opts.filter((o) => o.price);
         setOptions(priced);
@@ -57,7 +56,7 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
     if (!option || !requireGuard()) return;
     setPlacing(true);
     try {
-      const order = await createOrder({
+      const order = await api.orders.create({
         bookId,
         layoutId,
         quantity,

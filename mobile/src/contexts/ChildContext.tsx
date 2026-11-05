@@ -56,7 +56,7 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
     setLoading(true);
     try {
       // Fetch children list
-      const children = await apiClient.getChildren();
+      const children = await apiClient.people.childRecords();
       setChildrenList(children);
 
       // Load stored child ID
@@ -83,7 +83,7 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
   const refreshChildren = useCallback(async () => {
     if (!user) return;
     try {
-      const children = await apiClient.getChildren();
+      const children = await apiClient.people.childRecords();
       setChildrenList(children);
 
       // Update current child profile if it exists
@@ -115,7 +115,7 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
         setChildProfile(profile);
       } else {
         // Fetch if not in list
-        const fetchedProfile = await apiClient.getChild(newChildId);
+        const fetchedProfile = await apiClient.people.childRecord(newChildId);
         setChildProfile(fetchedProfile);
       }
     } catch (e) {
@@ -137,8 +137,7 @@ export function ChildProvider({ children: childrenProp }: { children: ReactNode 
 
   const verifyPinAndSwitch = useCallback(async (pin: string, newChildId: string): Promise<boolean> => {
     try {
-      const result = await apiClient.verifyPin(pin);
-      if (result.valid) {
+      if (await apiClient.verifyPin(pin)) {
         setRequiresPin(false);
         await SecureStore.setItemAsync(CHILD_ID_STORAGE_KEY, newChildId);
         setChildIdState(newChildId);

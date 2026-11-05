@@ -1,6 +1,6 @@
 # System Design Document
 
-> **Last Updated**: 2026-11-05 (children and characters clients, slice 5.7b: pages on the routes, rules server-written, old likeness flows and routes deleted; §5). 2026-11-05 (children and characters on the server, slice 5.7a: likeness jobs on the harness, routes, migration script; §5). 2026-11-05 (legacy storybook print and order code deleted, slice 5.6b). 2026-11-05 (print clients, slice 5.6: order pages for parents, admin order pages and the approval switch on the v2 order routes). 2026-11-05 (print orders and payment, slice 5.5b: `src/server/orders/` with Stripe Checkout behind a gateway, print credits, the approval switch, `order.submit` on the mixam queue that never submits twice, the Mixam webhook forward only). 2026-11-04 (print render, slice 5.5a: Books gain title, end and AI back-cover pages; `src/server/print/` renders a locked Book to interior and cover PDFs per template, with bleed and spine width, as immutable renders via `book.render`). 2026-11-04 (mobile makes and reads Books). 2026-11-04 (story-introduced characters get a drawn avatar: a `character.avatar` ai-image job (`src/server/characters/avatar.ts`, new AI purpose) enqueued with the turn that creates them, drawing a head-and-shoulders avatar from the character's words into `avatarUrl` — UI only, never the likeness portrait (ADR-0006)). 2026-11-04 (admin/writer roles come from the custom claim only — the client no longer trusts a `users/{uid}` doc role field; `scripts/set-admin.mjs` sets the claim; rules also refuse owner writes to flat `isAdmin`/`isWriter`/`canShowWizardTargets`). 2026-11-02 (admin allowance management with grant history; `/auth/action` handles auth email links on our domain; reset emails sent by us via `POST /api/auth/password-reset`). 2026-11-01 (Book & Story trace: AI calls tagged by trace context and always logged; `/admin/trace`). 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.4: every client creates Stories through the creation routes (§2) — one mode chooser and play view for the web child shell and the kids PWA, mobile on the same routes, `GET /api/stories[/{id}]` and `GET /api/creation-modes`; the session engine, chat mode, warmup, arc engine, every old mode route and flow, `storySessions` and the old storybook read paths are deleted; Stories are server-written only; the trial data is reset at deploy (`docs/DEPLOYMENT.md` §10). Phase 5.3: server-side Story creation (§13) — five modes behind one engine interface, `POST /api/stories` + turns + abandon + finish, `story.finish` job, target Stories and turns in `stories`, trial-data reset script; not yet used by the clients (5.4). Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
+> **Last Updated**: 2026-11-05 (one API client, slice 6.1: web, kids PWA and mobile use `@storypic/api-client` from source; mobile CI job). 2026-11-05 (children and characters clients, slice 5.7b: pages on the routes, rules server-written, old likeness flows and routes deleted; §5). 2026-11-05 (children and characters on the server, slice 5.7a: likeness jobs on the harness, routes, migration script; §5). 2026-11-05 (legacy storybook print and order code deleted, slice 5.6b). 2026-11-05 (print clients, slice 5.6: order pages for parents, admin order pages and the approval switch on the v2 order routes). 2026-11-05 (print orders and payment, slice 5.5b: `src/server/orders/` with Stripe Checkout behind a gateway, print credits, the approval switch, `order.submit` on the mixam queue that never submits twice, the Mixam webhook forward only). 2026-11-04 (print render, slice 5.5a: Books gain title, end and AI back-cover pages; `src/server/print/` renders a locked Book to interior and cover PDFs per template, with bleed and spine width, as immutable renders via `book.render`). 2026-11-04 (mobile makes and reads Books). 2026-11-04 (story-introduced characters get a drawn avatar: a `character.avatar` ai-image job (`src/server/characters/avatar.ts`, new AI purpose) enqueued with the turn that creates them, drawing a head-and-shoulders avatar from the character's words into `avatarUrl` — UI only, never the likeness portrait (ADR-0006)). 2026-11-04 (admin/writer roles come from the custom claim only — the client no longer trusts a `users/{uid}` doc role field; `scripts/set-admin.mjs` sets the claim; rules also refuse owner writes to flat `isAdmin`/`isWriter`/`canShowWizardTargets`). 2026-11-02 (admin allowance management with grant history; `/auth/action` handles auth email links on our domain; reset emails sent by us via `POST /api/auth/password-reset`). 2026-11-01 (Book & Story trace: AI calls tagged by trace context and always logged; `/admin/trace`). 2026-10-30 (Gemini 2.5 retired: defaults moved to Gemini 3.x, retired names mapped on read). 2026-10-29 (Phase 5.4: every client creates Stories through the creation routes (§2) — one mode chooser and play view for the web child shell and the kids PWA, mobile on the same routes, `GET /api/stories[/{id}]` and `GET /api/creation-modes`; the session engine, chat mode, warmup, arc engine, every old mode route and flow, `storySessions` and the old storybook read paths are deleted; Stories are server-written only; the trial data is reset at deploy (`docs/DEPLOYMENT.md` §10). Phase 5.3: server-side Story creation (§13) — five modes behind one engine interface, `POST /api/stories` + turns + abandon + finish, `story.finish` job, target Stories and turns in `stories`, trial-data reset script; not yet used by the clients (5.4). Phase 5.2: the web app and kids PWA make and read Books on the server pipeline (§3, §12); `storybookV2` and its flows deleted; old storybooks read-only for parents with their print path; printing not yet available for new Books; mobile book creation switched off. Phase 5.1: server-side Book pipeline — `manuscripts` / `books` / `jobs`, job kinds on Cloud Tasks, five new routes; Phase 4 server foundations in `src/server`, present but not yet used by product flows; Phase 3: rules protect server-trusted fields, rules tests in CI, threat model; server actions must self-authenticate; kids wizard action). 2026-10-28 (Phase 0 route auth: Admin-SDK routes enforce ownership via `route-auth.server.ts`; web clients use `authFetch`). Earlier: 2026-06-11 (W4-A: child persona model — signed httpOnly persona cookie + chokepoint enforcement, verify-pin lockout, PIN-guard reload grace)
 >
 > This document describes the current architecture of StoryPic Kids. It should be read at the beginning of any major piece of work to understand the system before making changes.
 
@@ -279,7 +279,7 @@ POST …/children|characters (no photos) ─▶ likeness.avatar from the descrip
   API). Story-introduced characters get a description avatar (formerly `character.avatar`).
 - **Clients on the routes (5.7b)**: the parent pages, the editor (`EntityEditor`), the photos and avatar
   panel (`LikenessPanel`), the kids read-aloud toggle and the admin owner change all call
-  `/api/children/**` and `/api/characters/**` (`src/lib/people/api.ts`, `use-people.ts`). The rules refuse
+  `/api/children/**` and `/api/characters/**` (`api.people`, `src/lib/people/use-people.ts`). The rules refuse
   browser writes to children and characters (admins excepted, for the sample-data tools); photos are
   uploaded through the routes only. Pages read `PersonView` (`GET /api/children?view=person`,
   `GET /api/characters`) and refresh while any likeness part is `working`, so each part's progress shows
@@ -656,7 +656,7 @@ POST /api/stories/{id}/finish    failed → finishing (new job)
 - **Two separate enforcement points.** Firestore security rules govern direct client reads and writes (the web app's client SDK and the `/kids/*` PWA). API routes use the Admin SDK, which **bypasses the rules entirely**, so every route must enforce access itself.
 - **Rules protect server-trusted fields.** Owners may write only the fields the browser legitimately changes: roles (`roles.*` and the flat `isAdmin`/`isWriter`/`canShowWizardTargets` fields) and PIN state, session allowance/compile-lock fields, story content, and storybook lock, finalization, art and generation state are server-only; owner fields cannot change on update; `help-*` documents and all of `systemConfig` except `diagnostics` are admin-only. `tests/firestore-rules/check-rules.mjs` (`npm run test:rules`, run in CI) checks every allowed browser write and every protected field against the emulator. The threat model is in `docs/architecture/security/threat-model.md`.
 - **Route ownership guards** (`src/lib/route-auth.server.ts`): a route that acts on a session, story, child, character or print storybook loads the doc and compares its owner field (`parentUid`, `ownerParentUid` or `ownerUserId`) with the token uid. A missing owner field counts as not owned. Admin and writer principals are exempt (admin test tools work across families). The guard also applies the persona scope with the token uid. Owner and child IDs for new records come from the verified parent record, never from the request body.
-- **Clients send the ID token** through `authFetch` (`src/lib/auth-fetch.ts`) on the web, which attaches it only to same-origin `/api/` URLs. The mobile app and `packages/api-client` attach it on every request.
+- **Clients send the ID token** through `@storypic/api-client`, which attaches it to every call it makes (the web instance uses base URL `/api`, so the token stays on the origin). The remaining direct `fetch` calls on the web go through `authFetch` (`src/lib/auth-fetch.ts`), which attaches it only to same-origin `/api/` URLs.
 - **Server actions are public endpoints too.** Any exported function in a `'use server'` module that client code imports can be called from any browser with any arguments. Genkit flows must never be imported into client components; a page that needs a server action gets a dedicated one that verifies the caller's ID token and ownership first (e.g. `src/app/kids/create/actions.ts`).
 - The per-route rules are listed in `docs/architecture/route-auth-matrix.md`.
 - Soft delete pattern: `deletedAt` hides from non-admins
@@ -716,7 +716,7 @@ POST /api/stories/{id}/finish    failed → finishing (new job)
   - *Routes*: the routes on `withRoute` (creation, Books) answer `{ ok: false, error: { code,
     message } }` with user-safe messages (model failures are 503 `AI_UNAVAILABLE`); the older
     generation routes (`tts`) map catch-block errors
-    through `toUserSafeMessage`. Clients map codes to kid-safe copy (`src/lib/stories/api.ts`).
+    through `toUserSafeMessage`. Clients map codes to kid-safe copy (`kidSafeMessage` in `@storypic/api-client`).
   - *Flow results*: flows that return `{ error | errorMessage }` result objects return user-safe
     strings (routes pass these through verbatim). Raw detail stays in `aiFlowLogs` and
     diagnostics-gated `debug` payloads.
@@ -914,10 +914,9 @@ unit tests, and the funnel E2E, but does not deploy.
 ```
 /
 ├── packages/                    # Shared packages (npm workspaces)
-│   ├── shared-types/           # TypeScript types for API contracts
-│   │   └── src/index.ts        # Child-facing type definitions
-│   └── api-client/             # Typed API client for child features
-│       └── src/client.ts       # StoryPicClient class
+│   ├── shared-types/           # The API's request and response types, one file per area
+│   └── api-client/             # The one API client (web, kids PWA, mobile)
+│       └── src/                # http.ts (transport, StoryPicApiError), client.ts (areas), helpers.ts
 ├── src/
 │   ├── app/                    # Next.js App Router
 │   │   ├── api/               # API route handlers
@@ -944,18 +943,22 @@ unit tests, and the funnel E2E, but does not deploy.
 
 ### Workspace Packages
 
-The project uses npm workspaces to share code between the web app and future mobile clients:
+The web app, the kids PWA and the mobile app share one API client (Phase 6.1, ADR-0005: "`packages/api-client`
+becomes the only client"). Both packages are TypeScript source with no build step: Next transpiles them
+(`transpilePackages`), and the mobile app links them (`file:../packages/…`) and Metro watches
+`../packages` (`mobile/metro.config.js`). CI typechecks and bundles the mobile app so a package change
+cannot break it unseen.
 
-**@storypic/shared-types**: TypeScript type definitions for API contracts
-- Child-facing types (ChildProfile, Character, StoryOutputType, ImageStyle) and the creation
-  contract (CreationModeView, StoryView, StoryTurnView, ChildInput, StoryTurnResult)
-- Used by the API client
+**@storypic/shared-types**: the API's request and response shapes, one file per area (stories, books and
+print, orders, people, library, catalog, TTS). Hand-written to match the server's views; generating them
+from the zod schemas is Phase 7.
 
-**@storypic/api-client**: Typed HTTP client for child-facing features
-- `StoryPicClient`: `listCreationModes`, `createStory`, `sendTurn`, `abandonStory`, `retryFinish`,
-  `getStory`, `getMyStories`, `createBook`, catalog and TTS calls
-- The web app calls the routes directly (`src/lib/stories/api.ts`, `src/lib/books/api.ts`); the
-  mobile app carries its own copy (`mobile/src/contexts/ApiClientContext.tsx`) with the same methods
+**@storypic/api-client**: `createStoryPicClient({ baseUrl, getToken })` returns the calls grouped by area
+(`stories`, `books`, `orders`, `people`, `catalog`, plus `librarySummary`, `speak`, `verifyPin`). One
+transport reads both the route wrapper's `{ ok, data | error }` and the older bare answers; every failure is a
+`StoryPicApiError` (`code`, user-safe `message`, `status`). Helpers for idempotency keys, retries and
+kid-safe copy live beside it. The web instance is `src/lib/api.ts` (`api`); mobile's is in
+`mobile/src/contexts/ApiClientContext.tsx`.
 
 ---
 
@@ -964,14 +967,14 @@ The project uses npm workspaces to share code between the web app and future mob
 | Purpose | Location |
 |---------|----------|
 | Type definitions | `src/lib/types.ts` |
-| API contract types | `packages/shared-types/src/index.ts` |
-| API client | `packages/api-client/src/client.ts` |
-| Story client hooks and calls | `src/hooks/use-stories.ts`, `src/lib/stories/` |
+| API contract types | `packages/shared-types/src/*.ts` |
+| API client (web, PWA, mobile) | `packages/api-client/src/`; web instance `src/lib/api.ts` |
+| Story client hooks | `src/hooks/use-stories.ts`, `src/lib/stories/types.ts` |
 | Creation UI (mode chooser, play view, story list, reader) | `src/components/creation/` |
 | Creation server (engines, services, views) | `src/server/creation/` |
 | Firestore rules | `firestore.rules` |
 | AI flows | `src/ai/flows/*.ts` |
-| Book client hooks and calls | `src/hooks/use-books.ts`, `src/lib/books/` |
+| Book client hooks | `src/hooks/use-books.ts`, `src/lib/books/types.ts` |
 | Book UI (chooser, progress, reader) | `src/components/books/` |
 | AI flow logger | `src/lib/ai-flow-logger.ts` |
 | Animation presets | `src/lib/animation-presets.ts` |
@@ -997,10 +1000,8 @@ The project uses npm workspaces to share code between the web app and future mob
 - Collaborative story creation (multiple children)
 
 ### Mobile Client Architecture
-The `/packages` workspace structure prepares for mobile development:
-1. `@storypic/shared-types` - Shared types used by all clients
-2. `@storypic/api-client` - HTTP client for child-facing API calls
-3. `/mobile` (future) - Expo React Native app sharing the API client
+The mobile app (`/mobile`, Expo) uses `@storypic/api-client` and `@storypic/shared-types` from
+`/packages`, the same client as the web app.
 
 Mobile scope is strictly child-facing: story creation, story reading, and making and reading Books. A finished story offers "Make a picture book" (Form + Style, `POST /api/books`); the Book screen polls `GET /api/books/{id}` every 4 s while the Book is being made, showing the stage, then reads page by page with narration; My Books lists the child's Books (`GET /api/books?childId`), and the home cards show story and book counts (`GET /api/library/summary`). No parent management or print ordering in mobile.
 

@@ -15,16 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { useToast } from '@/hooks/use-toast';
-import {
-  formatMoney,
-  getOrderSettings,
-  listAdminOrders,
-  ORDER_STATUS_LABELS,
-  updateOrderSettings,
-  type AdminOrderView,
-  type OrderSettings,
-  type OrderStatus,
-} from '@/lib/orders/api';
+import { api, formatMoney, ORDER_STATUS_LABELS, type AdminOrderView, type OrderSettings, type OrderStatus } from '@/lib/api';
 
 const FILTERS: Array<{ key: OrderStatus | null; label: string }> = [
   { key: null, label: 'All' },
@@ -43,7 +34,7 @@ function SettingsCard() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    getOrderSettings()
+    api.orders.admin.getSettings()
       .then((s) => {
         setSettings(s);
         setEmails(s.notifyEmails.join(', '));
@@ -51,10 +42,10 @@ function SettingsCard() {
       .catch((err: Error) => toast({ title: 'Could not load order settings', description: err.message, variant: 'destructive' }));
   }, [toast]);
 
-  const save = async (patch: Parameters<typeof updateOrderSettings>[0]) => {
+  const save = async (patch: Parameters<typeof api.orders.admin.updateSettings>[0]) => {
     setSaving(true);
     try {
-      const next = await updateOrderSettings(patch);
+      const next = await api.orders.admin.updateSettings(patch);
       setSettings(next);
       setEmails(next.notifyEmails.join(', '));
       toast({ title: 'Order settings saved' });
@@ -107,7 +98,7 @@ export default function AdminPrintOrdersPage() {
 
   const load = useCallback(async () => {
     try {
-      setOrders(await listAdminOrders(filter));
+      setOrders(await api.orders.admin.list(filter));
       setError(null);
     } catch (err) {
       setError((err as Error).message);

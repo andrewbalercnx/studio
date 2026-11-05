@@ -13,8 +13,8 @@ import { collection, doc, query, where, type QueryConstraint } from 'firebase/fi
 import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
-import { ChoiceKeys, createBook, type CreateBookResponse } from '@/lib/books/api';
 import type { BookCastSheetDoc, BookDoc, BookPageDoc, ManuscriptDoc, ManuscriptPageDoc } from '@/lib/books/types';
+import { api, ChoiceKeys, type CreateBookResponse } from '@/lib/api';
 
 function byPageNumber<T extends { pageNumber: number }>(items: T[] | null): T[] {
   return items ? [...items].sort((a, b) => a.pageNumber - b.pageNumber) : [];
@@ -145,7 +145,7 @@ export function useCreateBook() {
       const key = keys.current.keyFor(`${input.storyId}|${input.formId}|${input.styleId}`);
       setPending(true);
       try {
-        return await createBook({ ...input, idempotencyKey: key });
+        return await api.books.create({ ...input, idempotencyKey: key });
       } finally {
         setPending(false);
       }

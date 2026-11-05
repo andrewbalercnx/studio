@@ -15,8 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { EntityEditor } from '@/components/shared/EntityEditor';
-import { peopleApi, type CharacterView, type PersonView } from '@/lib/people/api';
 import { useCharacters, useChildren } from '@/lib/people/use-people';
+import { api, type CharacterView, type PersonView } from '@/lib/api';
 
 export default function ManageCharactersPage() {
   const { user, loading: userLoading } = useUser();
@@ -46,7 +46,7 @@ export default function ManageCharactersPage() {
     const character = characters.find(c => c.id === characterId);
     if (!character) return;
     try {
-      await peopleApi.remove('character', characterId);
+      await api.people.remove('character', characterId);
       await reload();
       markAsDeleted({ id: characterId, name: character.displayName, type: 'character' });
       toast({ title: 'Character deleted', description: `${character.displayName} has been removed.` });
@@ -57,7 +57,7 @@ export default function ManageCharactersPage() {
 
   const handleUndoDelete = useCallback(async (characterId: string) => {
     try {
-      await peopleApi.restore('character', characterId);
+      await api.people.restore('character', characterId);
       await reload();
       toast({ title: 'Undo successful', description: 'The character has been restored.' });
     } catch (error) {

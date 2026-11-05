@@ -9,8 +9,9 @@
  * UI reads.
  */
 import type { Timestamp } from 'firebase/firestore';
+import type { BookStatus } from '@storypic/shared-types';
 
-export type BookStatus = 'draft' | 'illustrating' | 'ready' | 'partial' | 'failed' | 'locked';
+export type { BookStatus };
 export type ManuscriptStatus = 'draft' | 'paginating' | 'ready' | 'failed';
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 
@@ -79,62 +80,9 @@ export function isReadableStatus(status: BookStatus | undefined): boolean {
   return status === 'ready' || status === 'partial' || status === 'locked';
 }
 
-// --- Read API DTOs (GET /api/books, GET /api/books/{bookId}) -----------------
-// Server-computed shapes so a thin client (mobile) renders without its own
-// Firestore access or derivation. `createdAt`/`updatedAt` are ISO strings.
-
-/** One Book in the family's library list (GET /api/books). */
-export type BookListItem = {
-  id: string;
-  storyId: string;
-  childId: string;
-  styleId: string;
-  status: BookStatus;
-  title: string | null;
-  art: { total: number; done: number; failed: number };
-  /** Server-derived: the Book can be opened in the reader. */
-  isReady: boolean;
-  createdAt: string | null;
-  updatedAt: string | null;
-};
-
-/** One page in a Book read view, words and picture joined. */
-export type BookReadPage = {
-  pageNumber: number;
-  kind: BookPageDoc['kind'];
-  artUrl: string | null;
-  /** The words a child reads (display names already resolved); null for pages with no text. */
-  text: string | null;
-  narrationUrl: string | null;
-  /** Shown in the on-screen reader (covers and story pages); title and end pages are for print. */
-  inReader: boolean;
-};
-
-/** The making-of stage of a Book and how far through it is (server-computed for GET /api/books/{id}). */
-export type BookReadProgress = {
-  stage: 'writing' | 'characters' | 'pages';
-  done: number | null;
-  total: number | null;
-  percent: number;
-};
-
-/** One Book in full (GET /api/books/{bookId}): meta, pages, and live progress. */
-export type BookReadView = {
-  id: string;
-  storyId: string;
-  childId: string;
-  styleId: string;
-  layoutId: string | null;
-  status: BookStatus;
-  title: string | null;
-  art: { total: number; done: number; failed: number };
-  isReady: boolean;
-  pages: BookReadPage[];
-  /** The making-of stage and how far through, for the progress view. */
-  progress: BookReadProgress;
-  createdAt: string | null;
-  updatedAt: string | null;
-};
+// --- Read API views (GET /api/books, GET /api/books/{bookId}) are defined once,
+// in `@storypic/shared-types`, for every client.
+export type { BookListItem, BookReadPage, BookReadView, BookProgressView as BookReadProgress } from '@storypic/shared-types';
 
 /** The picture state of one page, from the fields the server's job runner writes. */
 export function pageArtState(page: Pick<BookPageDoc, 'artUrl' | 'artJob'>): 'done' | 'failed' | 'pending' {

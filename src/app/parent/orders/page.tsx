@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SupportTickets } from '@/components/support/support-tickets';
 import { useUser } from '@/firebase/auth/use-user';
-import { formatMoney, listOrders, ORDER_STATUS_LABELS, type OrderView } from '@/lib/orders/api';
+import { api, formatMoney, ORDER_STATUS_LABELS, type OrderView } from '@/lib/api';
 
 export default function ParentOrdersPage() {
   const { user } = useUser();
@@ -22,7 +22,7 @@ export default function ParentOrdersPage() {
 
   useEffect(() => {
     if (!user) return;
-    listOrders()
+    api.orders.list()
       .then(setOrders)
       .catch((err: Error) => setError(err.message));
   }, [user]);

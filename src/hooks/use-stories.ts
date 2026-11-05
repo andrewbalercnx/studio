@@ -13,17 +13,8 @@ import { collection, doc, query, where } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
 import { useCollection, useDocument } from '@/lib/firestore-hooks';
-import { ChoiceKeys } from '@/lib/books/api';
-import {
-  createStory,
-  getStory,
-  isRetryLater,
-  listCreationModes,
-  listStories,
-  sendTurn,
-  type ChildInput,
-} from '@/lib/stories/api';
 import type { CreationModeId, CreationModeView, StoryDoc, StoryTurnResult, StoryTurnView, StoryView, TurnDoc } from '@/lib/stories/types';
+import { api, ChoiceKeys, isRetryLater, type ChildInput } from '@/lib/api';
 
 /** `stories/{storyId}` (live). */
 export function useStoryDoc(storyId: string | null | undefined) {
@@ -88,7 +79,7 @@ function useApiValue<T>(load: (() => Promise<T>) | null) {
 export function useStoryList(childId: string | null | undefined) {
   const { user } = useUser();
   const uid = user?.uid;
-  const load = useMemo(() => (uid && childId ? () => listStories(childId) : null), [uid, childId]);
+  const load = useMemo(() => (uid && childId ? () => api.stories.list(childId) : null), [uid, childId]);
   const { value, ...rest } = useApiValue<StoryView[]>(load);
   return { stories: value ?? [], ...rest };
 }
@@ -97,7 +88,7 @@ export function useStoryList(childId: string | null | undefined) {
 export function useStoryView(storyId: string | null | undefined) {
   const { user } = useUser();
   const uid = user?.uid;
-  const load = useMemo(() => (uid && storyId ? () => getStory(storyId) : null), [uid, storyId]);
+  const load = useMemo(() => (uid && storyId ? () => api.stories.get(storyId) : null), [uid, storyId]);
   const { value, ...rest } = useApiValue<{ story: StoryView; turns: StoryTurnView[] }>(load);
   return { story: value?.story ?? null, turns: value?.turns ?? [], ...rest };
 }
@@ -106,7 +97,7 @@ export function useStoryView(storyId: string | null | undefined) {
 export function useCreationModes() {
   const { user } = useUser();
   const uid = user?.uid;
-  const load = useMemo(() => (uid ? () => listCreationModes() : null), [uid]);
+  const load = useMemo(() => (uid ? () => api.stories.listModes() : null), [uid]);
   const { value, ...rest } = useApiValue<CreationModeView[]>(load);
   return { modes: value ?? [], ...rest };
 }
@@ -123,7 +114,7 @@ export function useCreateStory() {
     const idempotencyKey = keys.current.keyFor(`${input.childId}|${input.modeId}`);
     setPending(true);
     try {
-      return await createStory({ ...input, idempotencyKey });
+      return await api.stories.create({ ...input, idempotencyKey });
     } finally {
       setPending(false);
     }
@@ -156,7 +147,7 @@ export function useSendTurn(storyId: string) {
       try {
         for (let attempt = 0; ; attempt++) {
           try {
-            return await sendTurn(storyId, input, idempotencyKey);
+            return await api.stories.sendTurn(storyId, input, idempotencyKey);
           } catch (error) {
             const inProgress = error instanceof Error && (error as { code?: string }).code === 'TURN_IN_PROGRESS';
             if (!inProgress || attempt >= RETRY_DELAYS_MS.length) throw error;

@@ -64,7 +64,7 @@ export default function CreateBookScreen() {
     setLoadError(null);
     setLoading(true);
     try {
-      const [formList, styleList] = await Promise.all([apiClient.getOutputTypes(), apiClient.getImageStyles()]);
+      const [formList, styleList] = await Promise.all([apiClient.catalog.outputTypes(), apiClient.catalog.imageStyles()]);
       setForms(formList);
       setStyles(styleList);
     } catch (e) {
@@ -87,7 +87,7 @@ export default function CreateBookScreen() {
     setCreating(true);
     setCreateError(null);
     try {
-      const result = await apiClient.createBook({
+      const result = await apiClient.books.create({
         storyId,
         formId: form.id,
         styleId: style.id,

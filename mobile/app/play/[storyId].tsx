@@ -61,7 +61,7 @@ export default function PlayScreen() {
   const load = useCallback(async () => {
     if (!storyId) return;
     try {
-      const result = await apiClient.getStory(storyId);
+      const result = await apiClient.stories.get(storyId);
       setStory(result.story);
       setTurns(result.turns);
       setError(null);
@@ -110,7 +110,7 @@ export default function PlayScreen() {
     try {
       for (let attempt = 0; ; attempt++) {
         try {
-          await apiClient.sendTurn(storyId, input, idempotencyKey);
+          await apiClient.stories.sendTurn(storyId, input, idempotencyKey);
           break;
         } catch (e) {
           // The server is still working on this same answer: wait, then ask again with the same key.
@@ -138,7 +138,7 @@ export default function PlayScreen() {
         text: 'Stop the story',
         style: 'destructive',
         onPress: async () => {
-          if (storyId) await apiClient.abandonStory(storyId).catch((e) => console.error('Error stopping story:', e));
+          if (storyId) await apiClient.stories.abandon(storyId).catch((e) => console.error('Error stopping story:', e));
           router.back();
         },
       },
@@ -149,7 +149,7 @@ export default function PlayScreen() {
     if (!storyId) return;
     setSending(true);
     try {
-      await apiClient.retryFinish(storyId);
+      await apiClient.stories.retryFinish(storyId);
       await load();
     } catch (e) {
       setError({ message: kidSafeMessage(e), retry: null });
