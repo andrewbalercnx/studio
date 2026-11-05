@@ -128,11 +128,8 @@ await check('list own v2 print orders', 'allow', () => getDocs(query(collection(
 await check("read another family's v2 print order", 'deny', () => getDoc(doc(parent, 'printOrders', 'po2')));
 await check('mark own v2 print order paid', 'deny', () => updateDoc(doc(parent, 'printOrders', 'po1'), { status: 'paid' }));
 await check('read a Stripe event', 'deny', () => getDoc(doc(parent, 'stripeEvents', 'evt1')));
-await check('create draft print storybook', 'allow', () => setDoc(doc(parent, 'printStoryBooks', 'pb1'), { ownerUserId: 'p1', storyId: 's1', pdfStatus: 'draft', pages: [] }));
-await check('create print storybook with PDF', 'deny', () => setDoc(doc(parent, 'printStoryBooks', 'pb2'), {
-  ownerUserId: 'p1', storyId: 's1', pdfStatus: 'draft', coverPdfUrl: 'https://example.com/x.pdf',
-}));
-await check('update own print storybook', 'deny', () => updateDoc(doc(parent, 'printStoryBooks', 'pb1'), { pdfStatus: 'ready' }));
+// printStoryBooks (legacy, deleted in 5.6b): no client access.
+await check('create a print storybook', 'deny', () => setDoc(doc(parent, 'printStoryBooks', 'pb1'), { ownerUserId: 'p1', storyId: 's1', pdfStatus: 'draft', pages: [] }));
 
 // manuscripts, books, jobs (Phase 5): owner reads; only the server (Admin SDK) and admins write.
 await setDoc(doc(admin, 'manuscripts', 'm1'), { ownerUid: 'p1', storyId: 's1', status: 'ready' });

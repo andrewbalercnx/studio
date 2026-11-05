@@ -18,6 +18,43 @@
 
 ### 2026-11-05
 
+#### `#41` - Print cleanup (slice 5.6b): delete the legacy storybook print and order code
+
+**Type**: Removal
+
+**Summary**: The old print pipeline for legacy storybooks is gone. Since the trial-data reset it read collections that are empty, and #36–#39 replaced it with Book renders, the order service and the new order pages.
+- **Deleted routes**:
+  - `GET /api/storyBook/[bookId]` and `POST /api/storyBook/printable`;
+  - `/api/printStoryBooks/**` (auto-layout, generate-pdfs);
+  - `/api/printOrders/**` (create, my-orders, mixam, products, pay);
+  - `/api/admin/print-orders/**` (approve, reject, submit, reset, cancel, confirm, resubmit, refresh-status).
+- **Deleted pages**: `/storybook/[bookId]/print-layout/**` and `/storybook/[bookId]/order`.
+- **Deleted libraries that are now dead**:
+  - `storybook-status` (the degraded-art gate), `order-timeline` and its component;
+  - Mixam `order-state`, `interaction-logger` and `pdf-validator`;
+  - `order-transparency-config`, the feedback `rating-prompt` (only used by the old order page);
+  - their unit tests.
+- **Trimmed**:
+  - `PrintStoryBook*` types;
+  - the legacy order emails (`notifyOrder*` and their templates);
+  - `requirePrintStoryBookOwner`;
+  - the unused helpers in `print-layout-utils`, keeping `getLayoutForPageType`;
+  - `printStoryBooks` help sample data.
+- **Rules**: the `printStoryBooks` block is removed, so clients get no access to it (rules check updated).
+- **Updated to the new routes**:
+  - the regression page (the orders test now calls `GET /api/orders`);
+  - the API documentation page;
+  - the help-wizard print steps ("Order a printed copy");
+  - the admin "view as parent" Orders tab (v2 orders by `ownerUid`);
+  - docs.
+
+**Kept**:
+- `printProducts` and `printLayouts` with their admin pages;
+- the Mixam client, `mxjdf-builder` and `address-validator` (used by the order service);
+- the read-only share link route `/api/storyBook/share`.
+
+---
+
 #### `#39` - Print clients (slice 5.6a): order a printed copy, order pages, admin orders and the approval switch
 
 **Type**: Feature (web)

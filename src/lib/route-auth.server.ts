@@ -47,7 +47,6 @@ type OwnedCollection = {
 const STORY: OwnedCollection = { collection: 'stories', ownerField: 'parentUid', label: 'Story' };
 const CHILD: OwnedCollection = { collection: 'children', ownerField: 'ownerParentUid', label: 'Child' };
 const CHARACTER: OwnedCollection = { collection: 'characters', ownerField: 'ownerParentUid', label: 'Character' };
-const PRINT_STORYBOOK: OwnedCollection = { collection: 'printStoryBooks', ownerField: 'ownerUserId', label: 'Print storybook' };
 
 export function isPrivileged(user: VerifiedUser): boolean {
   return user.claims.isAdmin === true || user.claims.isWriter === true;
@@ -121,8 +120,6 @@ export const requireStoryReader = async (request: Request, storyId: unknown) =>
   loadOwned(await requireUser(request), STORY, storyId, { allowHelpDocuments: true });
 export const requireChildOwner = (request: Request, childId: unknown) => guard(request, CHILD, childId);
 export const requireCharacterOwner = (request: Request, characterId: unknown) => guard(request, CHARACTER, characterId);
-export const requirePrintStoryBookOwner = (request: Request, printStoryBookId: unknown) =>
-  guard(request, PRINT_STORYBOOK, printStoryBookId);
 
 /** For a second resource checked after the first guard has verified the user. */
 export const assertStoryOwner = (user: VerifiedUser, storyId: unknown) => loadOwned(user, STORY, storyId);
