@@ -16,6 +16,34 @@
 
 ## Changes
 
+### 2026-11-06
+
+#### `#50` - View-as-parent lists the family's Stories again
+
+**Type**: Bug fix (admin)
+
+**Summary**: The Stories tab on `/admin/view-as-parent/[uid]` was always empty. It queried
+`stories` by `parentUid`, which Stories made since Phase 5.3/5.4 (`schemaVersion: 2`) do not carry
+(they carry `ownerUid`), and rendered the retired shape (`metadata.title`). The page now reads a new
+admin route that returns the server's `StoryView`s and groups them by child.
+
+**Changes**:
+- New `GET /api/admin/stories?ownerUid=` (`withRoute({ auth: 'admin' })`): the family's Stories,
+  newest first, abandoned and retired-flow documents left out, built by `listStoriesForOwner`.
+- `src/server/creation/views.ts`: `listStoriesForChild` and the new `listStoriesForOwner` share one
+  query-and-render helper, so both routes answer the same views.
+- api-client: `api.stories.adminList(ownerUid)`.
+- `admin/view-as-parent/[uid]`: the Firestore stories query is gone; cards show `title`,
+  `modeId`, the `storyStatusLabel` and the created date. The tab badge counts what the route returns.
+- Tests: two cases in `src/server/creation/__tests__/read-routes.test.ts` (admin list, 400, 401/403);
+  regression `API_ROUTE_AUTH_ANON` gains the new route.
+
+**Files**:
+- Created: `src/app/api/admin/stories/route.ts`
+- Modified: `src/server/creation/views.ts`, `packages/api-client/src/client.ts`,
+  `src/app/admin/view-as-parent/[uid]/page.tsx`, `src/components/admin/regression/scenario-api-tests.ts`,
+  `src/server/creation/__tests__/read-routes.test.ts`, `docs/API.md`
+
 ### 2026-11-05
 
 #### `#49` - The pages over 1,000 lines split up (slice 6.4b)
