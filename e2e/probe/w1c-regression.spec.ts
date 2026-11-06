@@ -269,7 +269,7 @@ test.describe('W1-C probe-finding regression checks @probe', () => {
       await expect(page.getByText('My First Child')).toHaveCount(0);
       const children = await emulatorFirestore()
         .collection('children')
-        .where('ownerParentUid', '==', account.uid)
+        .where('ownerUid', '==', account.uid)
         .get();
       if (!children.empty) {
         pass = false;

@@ -95,9 +95,9 @@ export default function SelectChildScreen() {
                 <View style={styles.avatarPlaceholder}>
                   <ActivityIndicator color="#F59E0B" />
                 </View>
-              ) : item.avatarUrl ? (
+              ) : item.likeness?.avatar ? (
                 <Image
-                  source={{ uri: item.avatarUrl }}
+                  source={{ uri: item.likeness.avatar }}
                   style={styles.avatar}
                 />
               ) : (

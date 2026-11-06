@@ -305,7 +305,7 @@ export async function findChildId(parentUid: string, displayName: string): Promi
   const db = emulatorFirestore();
   const snap = await db
     .collection('children')
-    .where('ownerParentUid', '==', parentUid)
+    .where('ownerUid', '==', parentUid)
     .get();
   const match = snap.docs.find((d) => d.data().displayName === displayName);
   if (!match) {
@@ -355,9 +355,9 @@ export async function cleanupFunnelAccount(opts: { uid: string }): Promise<void>
     }
   }
 
-  await deleteWhere('children', 'ownerParentUid');
+  await deleteWhere('children', 'ownerUid');
   // Includes characters a story introduced (origin: 'story').
-  await deleteWhere('characters', 'ownerParentUid');
+  await deleteWhere('characters', 'ownerUid');
   // Stories with their turns.
   await deleteWhere('stories', 'ownerUid');
   await deleteWhere('books', 'ownerUid');

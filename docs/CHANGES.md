@@ -16,6 +16,28 @@
 
 ## Changes
 
+### 2026-11-06
+
+#### `#50` - The old children/character fields go (slice 6.3)
+
+**Type**: Refactor / data migration (completes Phase 6 bar governance)
+
+**Summary**: Now that every child and character has been migrated to the target shape (`ownerUid` + `likeness.*`, `scripts/migrate-likeness.mjs`, run in production 2026-11-06), the old field names are removed and nothing reads or writes them any more. The server reads `ownerUid` and `likeness.*` only — no fallback to `ownerParentUid` / `imageDescription` / `canonicalImageUrl` / `avatarUrl` / `avatarAnimationUrl` — and the likeness writer no longer mirrors into them. The Firestore rules and every list query match `ownerUid` only. Mobile reads `likeness.avatar` / `likeness.avatarAnimation`.
+
+**Deploy order** (no live customers, so compressed): migration run first (done); then this app deploys, the rules deploy, a new APK ships, and `scripts/drop-legacy-likeness.mjs --confirm` removes the old fields.
+
+**Changed**:
+- `src/server/characters/entities.ts`: `readLikeness`/`ownerOf` read the target shape only; the `MIRROR_LEGACY` mirror and `LEGACY_FIELD` map removed; `listOwnedPeople` queries `ownerUid` only.
+- Owner reads/queries moved to `ownerUid`: `creation/context.ts` (roster + photo count via `likeness.photos`), `creation/views.ts`, `creation/service.ts` (incl. AI-introduced characters now written with `ownerUid`), `books/cast.ts`, `books/service.ts`, `entitlements/admin-allowances.ts`, `lib/resolve-placeholders.server.ts`, `lib/people/stored.ts`.
+- Writers stop writing `ownerParentUid`: `characters/service.ts` (create + reassign), `admin/create`, `admin/characters`, `help-sample-data`, `system-test`, and the regression/firestore-test tools.
+- `firestore.rules`: `ownsPerson()` matches `ownerUid` only; `tests/firestore-rules/check-rules.mjs` asserts an old-field-only document is unreadable.
+- `src/lib/types.ts`: `ChildProfile`/`Character` drop the old fields and carry `ownerUid`.
+- Mobile: `ChildContext`, home, select-child, play, create read `likeness.avatar`.
+- New `scripts/drop-legacy-likeness.mjs` (dry-run default, refuses un-migrated documents, `--confirm --project`) + unit tests. `photos` is kept (it mirrors `likeness.photos` and is still read).
+- Docs: `SCHEMA.md`, `API.md`, `SYSTEM_DESIGN.md`, `REVIEW_PLAN.md`.
+
+**Note**: an older installed APK shows the initial-letter tile instead of the avatar until updated (no live customers).
+
 ### 2026-11-05
 
 #### `#49` - The pages over 1,000 lines split up (slice 6.4b)

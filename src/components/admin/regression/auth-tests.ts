@@ -54,8 +54,8 @@ export async function runAuthTests({ firestore, auth, updateTestResult }: Regres
         updateTestResult('DATA_AUTH_PARENT_CHILDREN', { status: 'SKIP', message: 'Skipping parent test for admin/writer.' });
     } else {
         try {
-            const ownChildrenQuery = query(collection(firestore!, 'children'), where('ownerParentUid', '==', user.uid));
-            const otherChildrenQuery = query(collection(firestore!, 'children'), where('ownerParentUid', '!=', user.uid), limit(1));
+            const ownChildrenQuery = query(collection(firestore!, 'children'), where('ownerUid', '==', user.uid));
+            const otherChildrenQuery = query(collection(firestore!, 'children'), where('ownerUid', '!=', user.uid), limit(1));
             
             await getDocs(ownChildrenQuery); // Should succeed
             let failedAsExpected = false;

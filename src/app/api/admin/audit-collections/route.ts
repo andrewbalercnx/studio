@@ -60,17 +60,17 @@ const SCHEMA_DEFINITIONS: Record<string, {
     deprecated: ['*'], // Entire collection is deprecated
   },
   children: {
-    required: ['displayName', 'ownerParentUid', 'createdAt'],
+    required: ['displayName', 'ownerUid', 'createdAt'],
     expectedTypes: {
       displayName: 'string',
-      ownerParentUid: 'string',
+      ownerUid: 'string',
     },
   },
   characters: {
-    required: ['name', 'ownerParentUid', 'createdAt'],
+    required: ['name', 'ownerUid', 'createdAt'],
     expectedTypes: {
       name: 'string',
-      ownerParentUid: 'string',
+      ownerUid: 'string',
     },
   },
   users: {

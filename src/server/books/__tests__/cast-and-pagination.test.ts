@@ -16,17 +16,20 @@ describe('loadCast', () => {
   it('is owner-scoped, drops placeholders and never uses the avatar', async () => {
     const db = new FakeFirestore().asFirestore();
     await db.collection('children').doc('c1').set({
-      ownerParentUid: 'p1',
+      ownerUid: 'p1',
       displayName: 'Emma',
       photos: ['https://picsum.photos/seed/x/1', 'https://img/real.jpg'],
-      canonicalImageUrl: 'https://picsum.photos/seed/portrait/1',
-      avatarUrl: 'https://img/avatar.png',
+      likeness: {
+        photos: ['https://picsum.photos/seed/x/1', 'https://img/real.jpg'],
+        portrait: 'https://picsum.photos/seed/portrait/1',
+        avatar: 'https://img/avatar.png',
+      },
     });
-    await db.collection('characters').doc('mine').set({ ownerParentUid: 'p1', displayName: 'Granny', type: 'Family' });
-    await db.collection('characters').doc('theirs').set({ ownerParentUid: 'p2', displayName: 'Other' });
-    await db.collection('characters').doc('gone').set({ ownerParentUid: 'p1', displayName: 'Gone', deletedAt: 1 });
-    await db.collection('characters').doc('x2').set({ ownerParentUid: 'p2', displayName: 'Granny Smith' });
-    await db.collection('characters').doc('x3').set({ ownerParentUid: 'p1', displayName: 'Granny Smith' });
+    await db.collection('characters').doc('mine').set({ ownerUid: 'p1', displayName: 'Granny', type: 'Family' });
+    await db.collection('characters').doc('theirs').set({ ownerUid: 'p2', displayName: 'Other' });
+    await db.collection('characters').doc('gone').set({ ownerUid: 'p1', displayName: 'Gone', deletedAt: 1 });
+    await db.collection('characters').doc('x2').set({ ownerUid: 'p2', displayName: 'Granny Smith' });
+    await db.collection('characters').doc('x3').set({ ownerUid: 'p1', displayName: 'Granny Smith' });
 
     const story = storyFromDocument('s', completeStory({ text: '[[cast:c1]] visits $$theirs$$, [[cast:gone]] and $$Granny Smith$$.', castIds: ['mine'] }));
     const cast = await loadCast(db, story);
@@ -80,8 +83,8 @@ describe('pagination repair and fitting', () => {
 describe('back cover scene', () => {
   async function twoCast() {
     const db = new FakeFirestore().asFirestore();
-    await db.collection('children').doc('c1').set({ ownerParentUid: 'p1', displayName: 'Emma' });
-    await db.collection('characters').doc('g').set({ ownerParentUid: 'p1', displayName: 'Granny', type: 'Family' });
+    await db.collection('children').doc('c1').set({ ownerUid: 'p1', displayName: 'Emma' });
+    await db.collection('characters').doc('g').set({ ownerUid: 'p1', displayName: 'Granny', type: 'Family' });
     const story = storyFromDocument('s', completeStory({ text: '[[cast:c1]] and [[cast:g]].', castIds: ['g'] }));
     return loadCast(db, story);
   }

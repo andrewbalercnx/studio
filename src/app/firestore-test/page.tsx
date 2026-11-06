@@ -92,13 +92,13 @@ const testCases: TestCase[] = [
   { id: 'users-admin-list', description: 'Admin can list users', role: 'admin', operation: 'list', path: 'users', expected: 'allow' },
 
   // ========== CHILDREN TESTS ==========
-  { id: 'children-create', description: 'Parent cannot create a child directly (routes only)', role: 'parent', operation: 'create', path: (ids) => `children`, data: (ids) => ({ ownerParentUid: ids.parentUid, displayName: 'Test Child' }), expected: 'deny' },
+  { id: 'children-create', description: 'Parent cannot create a child directly (routes only)', role: 'parent', operation: 'create', path: (ids) => `children`, data: (ids) => ({ ownerUid: ids.parentUid, displayName: 'Test Child' }), expected: 'deny' },
   { id: 'children-read-own', description: 'Parent can read their own child', role: 'parent', operation: 'get', path: (ids) => `children/${ids.childId}`, expected: 'allow' },
   { id: 'children-read-other', description: 'Parent cannot read another parent\'s child', role: 'parent', operation: 'get', path: (ids) => `children/${ids.otherChildId}`, expected: 'deny' },
   { id: 'children-update-own', description: 'Parent cannot update their own child directly (routes only)', role: 'parent', operation: 'update', path: (ids) => `children/${ids.childId}`, data: { displayName: 'Updated Child' }, expected: 'deny' },
   { id: 'children-delete-own', description: 'Parent cannot delete their own child directly (routes only)', role: 'parent', operation: 'delete', path: (ids) => `children/${ids.childId}`, expected: 'deny' },
-  { id: 'children-list-own', description: 'Parent can list their own children', role: 'parent', operation: 'list', path: 'children', queryConstraints: (ids) => [where('ownerParentUid', '==', ids.parentUid)], expected: 'allow' },
-  { id: 'children-list-other', description: 'Parent can list other children (cannot validate WHERE clause)', role: 'parent', operation: 'list', path: 'children', queryConstraints: (ids) => [where('ownerParentUid', '==', ids.otherParentUid)], expected: 'allow' },
+  { id: 'children-list-own', description: 'Parent can list their own children', role: 'parent', operation: 'list', path: 'children', queryConstraints: (ids) => [where('ownerUid', '==', ids.parentUid)], expected: 'allow' },
+  { id: 'children-list-other', description: 'Parent can list other children (cannot validate WHERE clause)', role: 'parent', operation: 'list', path: 'children', queryConstraints: (ids) => [where('ownerUid', '==', ids.otherParentUid)], expected: 'allow' },
   { id: 'children-help-read-auth', description: 'Authenticated user can read help-child', role: 'parent', operation: 'get', path: () => `children/help-child`, expected: 'allow' },
   { id: 'children-help-wildcard-read', description: 'Authenticated user can read help-* child docs', role: 'parent', operation: 'get', path: () => `children/help-example`, expected: 'allow' },
 
@@ -125,7 +125,7 @@ const testCases: TestCase[] = [
   { id: 'events-help-read', description: 'Authenticated user can read help-storysession events', role: 'parent', operation: 'get', path: () => `storySessions/help-storysession/events/demo-event`, expected: 'allow' },
 
   // ========== CHARACTERS TESTS ==========
-  { id: 'characters-create', description: 'Parent cannot create a character directly (routes only)', role: 'parent', operation: 'create', path: () => `characters`, data: (ids) => ({ ownerParentUid: ids.parentUid, displayName: 'Test Character', role: 'friend' }), expected: 'deny' },
+  { id: 'characters-create', description: 'Parent cannot create a character directly (routes only)', role: 'parent', operation: 'create', path: () => `characters`, data: (ids) => ({ ownerUid: ids.parentUid, displayName: 'Test Character', role: 'friend' }), expected: 'deny' },
   { id: 'characters-read-own', description: 'Parent can read their own character', role: 'parent', operation: 'get', path: (ids) => `characters/${ids.characterId}`, expected: 'allow' },
   { id: 'characters-read-other', description: 'Parent cannot read other parent\'s character', role: 'parent', operation: 'get', path: (ids) => `characters/${ids.otherCharacterId}`, expected: 'deny' },
   { id: 'characters-update-own', description: 'Parent cannot update their own character directly (routes only)', role: 'parent', operation: 'update', path: (ids) => `characters/${ids.characterId}`, data: { displayName: 'Updated Character' }, expected: 'deny' },
@@ -309,18 +309,18 @@ export default function FirestoreTestPage() {
       // 1. Own child
       const childRef = doc(collection(firestore, 'children'));
       testIds.childId = childRef.id;
-      await setupDoc('Create own child', childRef, { ownerParentUid: testIds.parentUid, displayName: 'Owned Child' });
+      await setupDoc('Create own child', childRef, { ownerUid: testIds.parentUid, displayName: 'Owned Child' });
 
       // 2. Sibling
       const siblingRef = doc(collection(firestore, 'children'));
       testIds.siblingId = siblingRef.id;
-      await setupDoc('Create sibling child', siblingRef, { ownerParentUid: testIds.parentUid, displayName: 'Sibling' });
+      await setupDoc('Create sibling child', siblingRef, { ownerUid: testIds.parentUid, displayName: 'Sibling' });
 
       // 3. Other Child (if admin) - for parents, this will just be a simulated ID.
       if (roles.isAdmin) {
         const otherChildRef = doc(collection(firestore, 'children'));
         testIds.otherChildId = otherChildRef.id;
-        await setupDoc('Create other child', otherChildRef, { ownerParentUid: testIds.otherParentUid, displayName: 'Other Child' });
+        await setupDoc('Create other child', otherChildRef, { ownerUid: testIds.otherParentUid, displayName: 'Other Child' });
       } else {
         testIds.otherChildId = 'simulated-other-child-id-for-parent';
       }
@@ -352,13 +352,13 @@ export default function FirestoreTestPage() {
       // 8. Character
       const characterRef = doc(collection(firestore, 'characters'));
       testIds.characterId = characterRef.id;
-      await setupDoc('Create character', characterRef, { ownerParentUid: testIds.parentUid, displayName: 'Test Character', role: 'friend' });
+      await setupDoc('Create character', characterRef, { ownerUid: testIds.parentUid, displayName: 'Test Character', role: 'friend' });
 
       // 9. Other character (simulated for parents, real for admins)
       if (roles.isAdmin) {
         const otherCharacterRef = doc(collection(firestore, 'characters'));
         testIds.otherCharacterId = otherCharacterRef.id;
-        await setupDoc('Create other character', otherCharacterRef, { ownerParentUid: testIds.otherParentUid, displayName: 'Other Character', role: 'pet' });
+        await setupDoc('Create other character', otherCharacterRef, { ownerUid: testIds.otherParentUid, displayName: 'Other Character', role: 'pet' });
       } else {
         testIds.otherCharacterId = 'simulated-other-character-id';
       }

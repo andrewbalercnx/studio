@@ -3,10 +3,8 @@
  * likeness jobs it needs are written in one transaction; jobs are dispatched
  * after the commit; files are deleted after it.
  *
- * During the migration a new document carries both owner fields
- * (`ownerUid`, `ownerParentUid`) and likeness writes are mirrored into the old
- * fields (`entities.ts` `likenessWrite`), so the pages that still read the old
- * shape keep working until 5.7b moves them onto these routes.
+ * Documents are in the target shape only (`ownerUid` + `likeness.*`); the old
+ * field names were dropped in slice 6.3 (`entities.ts` `likenessWrite`).
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { FieldValue, Timestamp, type Firestore, type Transaction } from 'firebase-admin/firestore';
@@ -213,7 +211,6 @@ export async function createPerson(
     const apply = () => tx.create(ref, {
       id,
       ownerUid: user.uid,
-      ownerParentUid: user.uid,
       ...profileWrite(parsed),
       likes: (parsed as ChildInput).likes ?? [],
       dislikes: (parsed as ChildInput).dislikes ?? [],
@@ -355,12 +352,12 @@ export async function setAvatar(deps: PeopleDeps, user: VerifiedUser, kind: Pers
   return getPerson(deps.db, user, kind, id);
 }
 
-/** Admin: move a child or character to another family (both owner fields). */
+/** Admin: move a child or character to another family (slice 6.3: `ownerUid` only). */
 export async function reassignOwner(deps: PeopleDeps, admin: VerifiedUser, kind: PersonKind, id: string, ownerUid: string): Promise<PersonView> {
   if (!isPrivileged(admin)) throw new BadRequestError('Admins only');
   const ref = deps.db.collection(COLLECTION_FOR[kind]).doc(id);
   const snapshot = await ref.get();
   if (!snapshot.exists) throw new NotFoundError(`${LABEL[kind]} not found`);
-  await ref.update({ ownerUid, ownerParentUid: ownerUid, updatedAt: FieldValue.serverTimestamp() });
+  await ref.update({ ownerUid, updatedAt: FieldValue.serverTimestamp() });
   return viewOf(normalize(kind, id, (await ref.get()).data() ?? {}));
 }

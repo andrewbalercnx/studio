@@ -34,10 +34,10 @@ async function deleteWhere(collection, field) {
   return snap.docs.length;
 }
 
-await deleteWhere('children', 'ownerParentUid');
+await deleteWhere('children', 'ownerUid');
 await deleteWhere('storySessions', 'parentUid');
 await deleteWhere('stories', 'parentUid');
-await deleteWhere('stories', 'ownerParentUid');
+await deleteWhere('stories', 'ownerUid');
 
 await db.collection('users').doc(uid).delete().then(() => console.log('  deleted users/' + uid)).catch(() => {});
 await auth.deleteUser(uid);

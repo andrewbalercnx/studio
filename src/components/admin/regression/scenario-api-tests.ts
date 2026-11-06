@@ -304,7 +304,6 @@ export async function runScenarioAndApiTests({ firestore, auth, updateTestResult
       const childRef = await createRegressionChild({
           displayName: 'Photo Trigger Test Child',
           ownerUid: `${REGRESSION_SUITE_TAG}-photo-parent`,
-          ownerParentUid: `${REGRESSION_SUITE_TAG}-photo-parent`,
           createdAt: serverTimestamp(),
           likes: [],
           dislikes: [],

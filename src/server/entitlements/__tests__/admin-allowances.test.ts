@@ -6,8 +6,8 @@ const admin = { uid: 'a1', email: 'admin@example.com' };
 
 function setup() {
   const fake = new FakeFirestore();
-  fake.store.set('children/c1', { ownerParentUid: 'p1', displayName: 'Emma' });
-  fake.store.set('children/x', { ownerParentUid: 'p2', displayName: 'Other' });
+  fake.store.set('children/c1', { ownerUid: 'p1', displayName: 'Emma' });
+  fake.store.set('children/x', { ownerUid: 'p2', displayName: 'Other' });
   fake.store.set('entitlementLedgers/p1', {
     family: { story_allowance: { allowance: 1, used: 1, reset: 'lifetime' }, storybook_allowance: { allowance: 2, used: 1, reset: 'lifetime' } },
     children: {},

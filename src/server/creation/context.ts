@@ -5,12 +5,12 @@
  * the AI may draw on, the mode config and (adventure) the StoryType.
  *
  * Every lookup is owner-scoped: a child or character is in the roster only if
- * its `ownerParentUid` is the Story's owner, it is not soft-deleted, and (for
+ * its `ownerUid` is the Story's owner, it is not soft-deleted, and (for
  * characters) it is family-wide or scoped to this child. There is no lookup
  * by display name across families (as-is characters-actors.md bug 3).
  *
- * Likeness summary = `imageDescription`, which is generated from the original
- * photos only (CLAUDE.md rule); this module never derives it from anything else.
+ * Likeness summary = `likeness.appearance`, generated from the original photos
+ * only (CLAUDE.md rule); this module never derives it from anything else.
  */
 import { ownerOf, readLikeness } from '../characters/entities';
 import type { Firestore } from 'firebase-admin/firestore';
@@ -163,8 +163,8 @@ export async function loadFamilyRoster(db: Firestore, ownerUid: string, childId:
     throw new NotFoundError('Child not found', { code: 'CHILD_NOT_FOUND', details: { childId } });
   }
   const [siblings, characters] = await Promise.all([
-    db.collection('children').where('ownerParentUid', '==', ownerUid).get(),
-    db.collection('characters').where('ownerParentUid', '==', ownerUid).get(),
+    db.collection('children').where('ownerUid', '==', ownerUid).get(),
+    db.collection('characters').where('ownerUid', '==', ownerUid).get(),
   ]);
   const hero = personFrom('child', childId, heroData, childId, now);
   const people: CastPerson[] = [hero];
@@ -191,7 +191,7 @@ export function summarizePreferences(hero: CastPerson, heroData: Raw): string {
   if (hero.likes.length) parts.push(`Likes: ${hero.likes.join(', ')}`);
   if (hero.dislikes.length) parts.push(`Dislikes: ${hero.dislikes.join(', ')}`);
   if (hero.description) parts.push(`Description: ${hero.description}`);
-  const photos = strings(heroData.photos).length;
+  const photos = readLikeness(heroData).photos.length;
   if (photos) parts.push(`Reference photos provided: ${photos}. Use them only for inspiration; never mention the photos directly.`);
   return parts.length > 0 ? parts.join('\n') : 'No preferences provided.';
 }

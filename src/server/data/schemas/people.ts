@@ -4,12 +4,9 @@ import { likenessSchema } from './likeness';
 /**
  * Child and Character as the server reads them (domain-model.md, slice 5.7).
  *
- * Stored documents are in transition: until the 5.7b migration has run, many
- * still carry the old field names (`ownerParentUid`, `imageDescription`,
- * `canonicalImageUrl`, `avatarUrl`, `avatarAnimationUrl`). They are read
- * through `src/server/characters/entities.ts`, which maps either shape onto
- * these schemas; the server never writes the old shape on its own (jobs mirror
- * their outputs into the old fields only while old clients still read them).
+ * Every stored document is in the target shape (`ownerUid` + `likeness.*`); the
+ * old field names were migrated and dropped in slice 6.3. Documents are read
+ * through `src/server/characters/entities.ts`, which maps them onto these schemas.
  */
 const profileFields = {
   ownerUid: z.string().min(1),

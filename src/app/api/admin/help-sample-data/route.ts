@@ -41,7 +41,6 @@ export async function POST(request: Request) {
       batch.set(ref, {
         ...child,
         ownerUid: 'help-demo-parent', // Dummy parent UID
-        ownerParentUid: 'help-demo-parent',
         createdAt: timestamp,
         updatedAt: timestamp,
       }, { merge: true });
@@ -54,7 +53,6 @@ export async function POST(request: Request) {
       batch.set(ref, {
         ...character,
         ownerUid: 'help-demo-parent',
-        ownerParentUid: 'help-demo-parent',
         createdAt: timestamp,
         updatedAt: timestamp,
       }, { merge: true });

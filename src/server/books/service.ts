@@ -72,7 +72,7 @@ function shapeFor(form: Form, requested: { length?: number | null; density?: str
 async function voiceFor(db: Firestore, story: { ownerUid: string; childId: string }): Promise<string> {
   const snapshot = await db.collection('children').doc(story.childId).get();
   const data = snapshot.data();
-  if (snapshot.exists && data?.ownerParentUid === story.ownerUid && typeof data.preferredVoiceId === 'string' && data.preferredVoiceId) {
+  if (snapshot.exists && data?.ownerUid === story.ownerUid && typeof data.preferredVoiceId === 'string' && data.preferredVoiceId) {
     return data.preferredVoiceId;
   }
   return DEFAULT_TTS_VOICE;

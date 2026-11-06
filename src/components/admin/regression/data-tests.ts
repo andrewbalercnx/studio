@@ -152,8 +152,8 @@ export async function runDataTests({ firestore, updateTestResult, setDiagnostics
             updateTestResult('DATA_CHILDREN_EXTENDED', { status: 'SKIP', message: 'No children found to test.' });
         } else {
             const child = snap.docs[0].data() as ChildProfile;
-            if (!child.ownerParentUid) {
-                throw new Error('First child document is missing ownerParentUid.');
+            if (!child.ownerUid) {
+                throw new Error('First child document is missing ownerUid.');
             }
             if (!child.displayName) {
                 throw new Error('First child document is missing displayName.');
@@ -166,7 +166,7 @@ export async function runDataTests({ firestore, updateTestResult, setDiagnostics
                 throw new Error('Child doc missing dislikes array field.');
             }
 
-            updateTestResult('DATA_CHILDREN_EXTENDED', { status: 'PASS', message: 'First child has ownerParentUid, displayName, likes, and dislikes fields.' });
+            updateTestResult('DATA_CHILDREN_EXTENDED', { status: 'PASS', message: 'First child has ownerUid, displayName, likes, and dislikes fields.' });
         }
     } catch (e: any) {
         updateTestResult('DATA_CHILDREN_EXTENDED', { status: 'FAIL', message: e.message });

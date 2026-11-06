@@ -158,8 +158,8 @@ export default function PlayScreen() {
     }
   };
 
-  const avatar = childProfile?.avatarUrl ? (
-    <Image source={{ uri: childProfile.avatarUrl }} style={styles.loadingAvatar} />
+  const avatar = childProfile?.likeness?.avatar ? (
+    <Image source={{ uri: childProfile.likeness.avatar }} style={styles.loadingAvatar} />
   ) : (
     <View style={styles.loadingAvatarPlaceholder}>
       <Text style={styles.loadingAvatarText}>{childProfile?.displayName?.charAt(0)?.toUpperCase() || '?'}</Text>

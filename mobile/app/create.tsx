@@ -124,8 +124,8 @@ export default function CreateScreen() {
 
       {/* Child Info */}
       <View style={styles.childInfo}>
-        {childProfile?.avatarUrl ? (
-          <Image source={{ uri: childProfile.avatarUrl }} style={styles.childAvatar} />
+        {childProfile?.likeness?.avatar ? (
+          <Image source={{ uri: childProfile.likeness.avatar }} style={styles.childAvatar} />
         ) : (
           <View style={styles.childAvatarPlaceholder}>
             <Text style={styles.childAvatarInitial}>
