@@ -65,6 +65,9 @@ function storiesApi(t: Transport) {
     /** The child's Stories, newest first (abandoned ones left out), names resolved on the server. */
     list: async (childId: string): Promise<StoryView[]> => (await t.call<{ stories: StoryView[] }>('GET', `/stories${query({ childId })}`)).stories,
     get: (storyId: string) => t.call<{ story: StoryView; turns: StoryTurnView[] }>('GET', `/stories/${seg(storyId)}`),
+    /** Admin: one family's Stories, every child, newest first (abandoned ones left out). */
+    adminList: async (ownerUid: string): Promise<StoryView[]> =>
+      (await t.call<{ stories: StoryView[] }>('GET', `/admin/stories${query({ ownerUid })}`)).stories,
   };
 }
 

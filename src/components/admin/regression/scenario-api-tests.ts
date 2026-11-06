@@ -501,6 +501,7 @@ export async function runScenarioAndApiTests({ firestore, auth, updateTestResult
           { path: '/api/admin/catalog/storyTypes/regression-anon', init: { method: 'PATCH', body: '{"data":{}}' }, expect: [401] },
           { path: '/api/admin/catalog/storyTypes', init: { method: 'POST', body: '{"data":{}}' }, expect: [401] },
           { path: '/api/admin/characters?ownerUid=regression-anon', init: { method: 'GET' }, expect: [401] },
+          { path: '/api/admin/stories?ownerUid=regression-anon', init: { method: 'GET' }, expect: [401] },
       ];
       const failures: string[] = [];
       for (const { path, init, expect } of anonymous) {

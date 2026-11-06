@@ -529,6 +529,21 @@ the server; `status` is the server's (`creating`, `finishing`, `complete`, `fail
 `title`, `synopsis` and `text` are null until `story.finish` has run (`text` is set when the mode
 finishes). A title the model proposed with a cast token is resolved too.
 
+### GET `/api/admin/stories`
+
+One family's Stories across all its children (admin only; the view-as-parent page). Same
+`StoryView` shape and order as `GET /api/stories`: newest first, abandoned ones left out, documents
+from the retired flows (no `schemaVersion: 2`) left out. The client groups them by `childId`.
+
+**Authentication**: admin (`isAdmin` claim). 401 without a token, 403 for a non-admin.
+
+**Query Parameters**: `ownerUid` (required; 400 `OWNER_REQUIRED` without it).
+
+**Response** (200 OK): `{ "ok": true, "data": { "stories": [ StoryView, … ] } }`. An owner with no
+Stories answers an empty list.
+
+**Client**: `api.stories.adminList(ownerUid)`.
+
 ### GET `/api/stories/[storyId]`
 
 One of the caller's Stories (owner and persona scope checked) and its turns in order, as the play
