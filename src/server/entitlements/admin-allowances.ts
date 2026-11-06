@@ -63,7 +63,7 @@ export function adjustBalances(balances: EntitlementBalances, adjustment: Pick<A
 async function loadView(deps: AdminAllowanceDeps, uid: string, email: string | null): Promise<FamilyAllowances> {
   const [ledgerSnap, childSnap, historySnap] = await Promise.all([
     deps.db.collection(LEDGERS).doc(uid).get(),
-    deps.db.collection('children').where('ownerParentUid', '==', uid).get(),
+    deps.db.collection('children').where('ownerUid', '==', uid).get(),
     // A family's history is short: sorted here, so no index is needed.
     deps.db.collection(LEDGERS).doc(uid).collection('grants').get(),
   ]);
@@ -122,7 +122,7 @@ export async function adjustAllowance(
   let childName: string | null = null;
   if (childId) {
     const child = await deps.db.collection('children').doc(childId).get();
-    if (!child.exists || child.data()?.ownerParentUid !== uid) throw new NotFoundError('That child is not in this family', { code: 'CHILD_NOT_FOUND' });
+    if (!child.exists || child.data()?.ownerUid !== uid) throw new NotFoundError('That child is not in this family', { code: 'CHILD_NOT_FOUND' });
     childName = (child.data()?.displayName as string) ?? null;
   }
 

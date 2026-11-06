@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Character } from '@/lib/types';
 import { storedOwner } from '@/lib/people/stored';
 
-const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt' | 'ownerParentUid'>[] = [
+const sampleCharacters: Omit<Character, 'id' | 'createdAt' | 'updatedAt' | 'ownerUid'>[] = [
     {
         type: "Family",
         displayName: "Sample Hero",
@@ -89,7 +89,7 @@ export default function AdminCharactersPage() {
         sampleCharacters.forEach((charData, index) => {
             const docId = sampleCharacterIds[index];
             const docRef = doc(firestore, "characters", docId);
-            batch.set(docRef, { ...charData, ownerUid: 'sample-parent-1', ownerParentUid: 'sample-parent-1', createdAt: now, updatedAt: now });
+            batch.set(docRef, { ...charData, ownerUid: 'sample-parent-1', createdAt: now, updatedAt: now });
         });
         
         await batch.commit();

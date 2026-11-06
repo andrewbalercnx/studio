@@ -102,7 +102,6 @@ export async function POST(request: Request) {
       regressionTag: 'system-test',
       displayName: 'Test Child',
       ownerUid,
-      ownerParentUid: ownerUid,
       likes: [],
       dislikes: [],
       createdAt: FieldValue.serverTimestamp(),

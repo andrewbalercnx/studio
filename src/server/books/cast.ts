@@ -5,10 +5,9 @@
  *
  * Rules:
  * - Every lookup is owner-scoped: a child or character belongs to the cast only
- *   if its `ownerParentUid` is the story's owner. There is no cross-family lookup
+ *   if its `ownerUid` is the story's owner. There is no cross-family lookup
  *   by id or by name (as-is characters-actors.md bug 3).
- * - Likeness through `characters/entities.ts` `readLikeness` (`likeness.*`, or
- *   the old `canonicalImageUrl` / `imageDescription` until the 5.7b migration):
+ * - Likeness through `characters/entities.ts` `readLikeness` (`likeness.*`):
  *   `appearance` is generated from the original photos (CLAUDE.md rule, never
  *   regenerated here). The avatar is never a likeness; placeholder URLs are dropped.
  * - One token parser for story text: `$$id$$`, the single-dollar AI fallback
@@ -214,7 +213,7 @@ export async function loadCast(db: Firestore, story: StorySource, now: Date = ne
     ] as const) {
       const snapshot = await db
         .collection(collection)
-        .where('ownerParentUid', '==', ownerUid)
+        .where('ownerUid', '==', ownerUid)
         .where('displayName', '==', name)
         .limit(1)
         .get();

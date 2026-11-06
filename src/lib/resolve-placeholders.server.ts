@@ -62,7 +62,7 @@ async function fetchEntities(ids: string[], ownerUid?: string | null): Promise<E
       // Either owner field (children and characters carry both until slice 6.3).
       const charsByName = (
         await Promise.all(
-          (['ownerUid', 'ownerParentUid'] as const).map((field) =>
+          (['ownerUid'] as const).map((field) =>
             firestore.collection('characters').where(field, '==', ownerUid).where('displayName', 'in', chunk).get()
           )
         )
@@ -81,7 +81,7 @@ async function fetchEntities(ids: string[], ownerUid?: string | null): Promise<E
       // Either owner field (children and characters carry both until slice 6.3).
       const childrenByName = (
         await Promise.all(
-          (['ownerUid', 'ownerParentUid'] as const).map((field) =>
+          (['ownerUid'] as const).map((field) =>
             firestore.collection('children').where(field, '==', ownerUid).where('displayName', 'in', chunk).get()
           )
         )

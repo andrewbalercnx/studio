@@ -93,7 +93,7 @@ describe('freeplay', () => {
 
     const character = (await bench.db.collection('characters').doc(castId).get()).data()!;
     expect(character).toMatchObject({
-      ownerParentUid: 'p1',
+      ownerUid: 'p1',
       childId: 'c1',
       displayName: 'Bramble',
       type: 'Pet',

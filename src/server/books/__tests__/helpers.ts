@@ -190,25 +190,28 @@ export async function seed(db: Firestore): Promise<void> {
     })
   );
   await db.collection('children').doc('c1').set({
-    ownerParentUid: 'p1',
+    ownerUid: 'p1',
     displayName: 'Emma',
     namePronunciation: 'EM-uh',
-    imageDescription: 'curly red hair, green eyes',
-    canonicalImageUrl: 'https://img.test/portrait-c1.png',
     photos: ['https://img.test/c1-photo.jpg', 'https://picsum.photos/seed/c1/400'],
-    avatarUrl: 'https://picsum.photos/seed/c1/200',
+    likeness: {
+      appearance: 'curly red hair, green eyes',
+      portrait: 'https://img.test/portrait-c1.png',
+      photos: ['https://img.test/c1-photo.jpg', 'https://picsum.photos/seed/c1/400'],
+      avatar: 'https://picsum.photos/seed/c1/200',
+    },
     preferredVoiceId: 'voice-emma',
   });
   await db.collection('characters').doc('ch1').set({
-    ownerParentUid: 'p1',
+    ownerUid: 'p1',
     displayName: 'Rex',
     type: 'Pet',
     description: 'a scruffy terrier',
     photos: [],
-    avatarUrl: 'https://picsum.photos/seed/rex/200',
+    likeness: { avatar: 'https://picsum.photos/seed/rex/200' },
   });
   await db.collection('characters').doc('stranger1234567890').set({
-    ownerParentUid: 'p2',
+    ownerUid: 'p2',
     displayName: 'Stranger',
     photos: ['https://img.test/stranger.jpg'],
   });

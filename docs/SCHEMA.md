@@ -1,6 +1,6 @@
 # Database Schema Documentation
 
-> **Last Updated**: 2026-11-05 (slice 6.4a: authored configuration written through `/api/admin/catalog/**`; writers lose direct browser writes). 2026-11-05 (slice 5.7b: `children`/`characters` server-written in the rules; photo uploads through the routes only in the Storage rules). 2026-11-05 (slice 5.7a: `children`/`characters` gain `ownerUid` and `likeness.*` (server-written; old fields mirrored until the 5.7b migration); `jobs.kind` adds `likeness.avatar`, `likeness.animate`). 2026-11-05 (slice 5.6b: `printStoryBooks` removed; rules deny client access). 2026-11-05 (print orders, slice 5.5b: `printOrders` v2 shape (`schemaVersion: 2`) read by owners via `ownerUid`; new `stripeEvents`; `systemConfig/orders`; `jobs.kind` adds `order.submit`). 2026-11-04 (print render, slice 5.5a: `manuscripts.backCover`; Books get `title`, `end` and `back` pages; `books/*/renders` written by `book.render` with checksums, page count, trim, bleed and spine width; `jobs.kind` adds `book.render`). 2026-11-04 (`users`: roles are custom claims only — owner writes to `roles`, the flat `isAdmin`/`isWriter`/`canShowWizardTargets` fields, and PIN fields are refused; `scripts/set-admin.mjs` sets the claim). 2026-11-02 (`entitlementLedgers/*/grants` history; new `authEmailThrottle`). 2026-11-01 (`aiFlowLogs`: `purpose`, `storyId`, `manuscriptId`, `bookId`, `jobId`, `jobKind`; harness calls always logged). 2026-10-30 (AI model names: Gemini 2.5 and older retired, mapped to 3.x on read). 2026-10-29 (Phase 5.4: `stories` holds Stories (`schemaVersion: 2`) only and is server-written only — the owner reads a Story and its `turns`; `storySessions` (with `messages`, `events`), `children/{id}/sessions`, the legacy story fields and the `stories/{id}/storybooks` subcollection are removed (trial-data reset at deploy, `docs/DEPLOYMENT.md` §10; rules deny every client access to them); `systemConfig/kids-flows` removed; `storyGenerators` is read through `GET /api/creation-modes`. Phase 5.3: target-shaped Stories (`schemaVersion: 2`, `ownerUid`, `modeId`, `cast`, `modeState`…) and the `stories/{id}/turns` subcollection, written by the new creation routes — present, the UI switches in 5.4; AI-introduced characters get `origin: 'story'` / `originStoryId`; rules: owner-read, no client writes on target Stories and turns, legacy owner updates unchanged; `jobs.kind` adds `story.finish`. Phase 5.2: the web app and kids PWA read `books`, `manuscripts` and their pages directly (owner-filtered queries) and create Books through `POST /api/books`; `stories/*/storybooks` is legacy and read-only (no route writes it any more except the old print/share path), kept until the trial data reset. Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
+> **Last Updated**: 2026-11-06 (slice 6.3: the old `children`/`characters` fields are gone — `ownerParentUid`, `imageDescription`, `canonicalImageUrl`, `avatarUrl`, `avatarAnimationUrl` and their `*Generation` companions migrated into `ownerUid` + `likeness.*` and dropped (`scripts/drop-legacy-likeness.mjs`); the rules and `listOwnedPeople` match `ownerUid` only). 2026-11-05 (slice 6.4a: authored configuration written through `/api/admin/catalog/**`; writers lose direct browser writes). 2026-11-05 (slice 5.7b: `children`/`characters` server-written in the rules; photo uploads through the routes only in the Storage rules). 2026-11-05 (slice 5.7a: `children`/`characters` gain `ownerUid` and `likeness.*` (server-written; old fields mirrored until the 5.7b migration); `jobs.kind` adds `likeness.avatar`, `likeness.animate`). 2026-11-05 (slice 5.6b: `printStoryBooks` removed; rules deny client access). 2026-11-05 (print orders, slice 5.5b: `printOrders` v2 shape (`schemaVersion: 2`) read by owners via `ownerUid`; new `stripeEvents`; `systemConfig/orders`; `jobs.kind` adds `order.submit`). 2026-11-04 (print render, slice 5.5a: `manuscripts.backCover`; Books get `title`, `end` and `back` pages; `books/*/renders` written by `book.render` with checksums, page count, trim, bleed and spine width; `jobs.kind` adds `book.render`). 2026-11-04 (`users`: roles are custom claims only — owner writes to `roles`, the flat `isAdmin`/`isWriter`/`canShowWizardTargets` fields, and PIN fields are refused; `scripts/set-admin.mjs` sets the claim). 2026-11-02 (`entitlementLedgers/*/grants` history; new `authEmailThrottle`). 2026-11-01 (`aiFlowLogs`: `purpose`, `storyId`, `manuscriptId`, `bookId`, `jobId`, `jobKind`; harness calls always logged). 2026-10-30 (AI model names: Gemini 2.5 and older retired, mapped to 3.x on read). 2026-10-29 (Phase 5.4: `stories` holds Stories (`schemaVersion: 2`) only and is server-written only — the owner reads a Story and its `turns`; `storySessions` (with `messages`, `events`), `children/{id}/sessions`, the legacy story fields and the `stories/{id}/storybooks` subcollection are removed (trial-data reset at deploy, `docs/DEPLOYMENT.md` §10; rules deny every client access to them); `systemConfig/kids-flows` removed; `storyGenerators` is read through `GET /api/creation-modes`. Phase 5.3: target-shaped Stories (`schemaVersion: 2`, `ownerUid`, `modeId`, `cast`, `modeState`…) and the `stories/{id}/turns` subcollection, written by the new creation routes — present, the UI switches in 5.4; AI-introduced characters get `origin: 'story'` / `originStoryId`; rules: owner-read, no client writes on target Stories and turns, legacy owner updates unchanged; `jobs.kind` adds `story.finish`. Phase 5.2: the web app and kids PWA read `books`, `manuscripts` and their pages directly (owner-filtered queries) and create Books through `POST /api/books`; `stories/*/storybooks` is legacy and read-only (no route writes it any more except the old print/share path), kept until the trial data reset. Phase 5.1: new `manuscripts`, `books`, `jobs` collections for the server-side Book pipeline — present, not yet used by the UI; rules owner-read / admin-write. Phase 3 rules: field-level protection for users, sessions, stories and storybooks; owner fields immutable; help docs admin-only; `systemConfig` admin-only except `diagnostics`. Earlier: security rules: `printOrders` writes admin/server-only; `printStoryBooks` owner create limited to drafts without PDF fields, owner update removed). Earlier: 2026-06-11 (W4-A: `users.pinFailedAttempts` + `users.pinLockedUntil` — verify-pin brute-force lockout state; W3-A: printOrders `adminNextAction`/`needsAdminAttention`/`failureSummary`, `systemConfig/opsHealth`; W3-B: `systemConfig/featureFlags`; W3-C: new `feedback` + `tickets` collections, `systemConfig/orderTransparency`; W2-C: page `lastEditedAt`/`lastEditedBy` + audio-reset on parent page edits, printOrders `artStatusSnapshot`/`degradedArtAcknowledged`, `saveAddress` → `users/{uid}/addresses`; W2-B: `users.onboardingState`)
 >
 > **IMPORTANT**: This document must be updated whenever the Firestore schema changes.
 > See [CLAUDE.md](../CLAUDE.md) for standing rules on documentation maintenance.
@@ -98,12 +98,11 @@ Child profiles owned by parents.
 `{ photos, appearance, portrait, avatar, avatarSource ('portrait' | 'description' | 'photo'), avatarAnimation,
 likenessJob: { describe, portrait, avatar, animate } }` (each job summary `{ jobId, status }`), plus `ownerUid`.
 Children and Characters are written only by the server (the `/api/children/**` and
-`/api/characters/**` routes and the `likeness.*` jobs) and by admins; since slice 5.7b the rules refuse
-browser writes. `scripts/migrate-likeness.mjs` (run with the 5.7b release) copies the old fields below into
-the target ones; the server reads either shape (target wins) and still mirrors its likeness writes into the
-old fields for readers not yet moved (the mobile app, older builds). The old fields are removed one
-release after the migration. Documents carry both `ownerUid` and `ownerParentUid`; the rules let the owner
-read by either. The same applies to `characters`.
+`/api/characters/**` routes and the `likeness.*` jobs) and by admins; the rules refuse browser writes.
+Documents are in the target shape: `ownerUid` and a normalised `likeness` object. The old field names
+(`ownerParentUid`, `imageDescription`, `canonicalImageUrl`, `avatarUrl`, `avatarAnimationUrl` and their
+`*Generation` companions) were migrated into `likeness.*` and then dropped in slice 6.3
+(`scripts/migrate-likeness.mjs`, then `scripts/drop-legacy-likeness.mjs`). The same applies to `characters`.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -111,18 +110,12 @@ read by either. The same applies to `characters`.
 | `displayName` | string | Yes | Child's display name |
 | `pronouns` | 'he/him' \| 'she/her' \| 'they/them' | No | Defaults to 'they/them' |
 | `dateOfBirth` | timestamp | No | Child's birth date |
-| `photos` | string[] | No | Photo URLs |
-| `avatarUrl` | string | No | AI-generated avatar URL |
-| `avatarAnimationUrl` | string | No | Dancing avatar animation URL |
-| `avatarAnimationGeneration` | object | No | Animation generation status |
+| `photos` | string[] | No | Original uploaded photo URLs (also in `likeness.photos`) |
+| `likeness` | object | No | Normalised likeness (ADR-0006): `{ photos, appearance, portrait, avatar, avatarSource, avatarAnimation, likenessJob }` — the single source for appearance, portrait and avatar |
 | `likes` | string[] | Yes | Positive preferences |
 | `dislikes` | string[] | Yes | Negative preferences |
 | `description` | string | No | Child description |
-| `imageDescription` | string | No | AI-generated physical appearance description (internal) |
-| `imageDescriptionGeneration` | object | No | Generation status: `{ status, lastRunAt, lastCompletedAt, lastErrorMessage }` |
-| `canonicalImageUrl` | string | No | Stage 1 canonical portrait URL (naturalistic, style-agnostic reference image) |
-| `canonicalImageGeneration` | object | No | Generation status: `{ status, lastRunAt, lastCompletedAt, lastErrorMessage }` |
-| `ownerParentUid` | string | Yes | Parent's Firebase UID |
+| `ownerUid` | string | Yes | Owning parent's Firebase UID |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | No | Last update time |
 | `namePronunciation` | string | No | Phonetic pronunciation for TTS |
@@ -148,18 +141,12 @@ Story characters with traits, owned by parents.
 | `type` | 'Family' \| 'Friend' \| 'Pet' \| 'Toy' \| 'Other' | Yes | Character type |
 | `relationship` | string | No | Family relationship (for type='Family') |
 | `namePronunciation` | string | No | Phonetic pronunciation for TTS |
-| `photos` | string[] | No | Photo URLs |
-| `avatarUrl` | string | No | AI-generated avatar URL |
-| `avatarGeneration` | object | No | `character.avatar` job status: `{ status: 'running' \| 'ready' \| 'failed', jobId, updatedAt }`. Drawn from the character's words for a story-introduced character (no photos); UI display only, never a likeness (ADR-0006) |
-| `avatarAnimationUrl` | string | No | Dancing avatar animation URL |
+| `photos` | string[] | No | Original uploaded photo URLs (also in `likeness.photos`) |
+| `likeness` | object | No | Normalised likeness (ADR-0006): `{ photos, appearance, portrait, avatar, avatarSource, avatarAnimation, likenessJob }` — the single source for appearance, portrait and avatar |
 | `likes` | string[] | Yes | Character likes |
 | `dislikes` | string[] | Yes | Character dislikes |
 | `description` | string | No | Character description |
-| `imageDescription` | string | No | AI-generated physical appearance description (internal) |
-| `imageDescriptionGeneration` | object | No | Generation status: `{ status, lastRunAt, lastCompletedAt, lastErrorMessage }` |
-| `canonicalImageUrl` | string | No | Stage 1 canonical portrait URL (naturalistic, style-agnostic reference image) |
-| `canonicalImageGeneration` | object | No | Generation status: `{ status, lastRunAt, lastCompletedAt, lastErrorMessage }` |
-| `ownerParentUid` | string | Yes | Parent's Firebase UID |
+| `ownerUid` | string | Yes | Owning parent's Firebase UID |
 | `childId` | string | No | Optional child-specific (blank = family-wide) |
 | `createdAt` | timestamp | Yes | Creation time |
 | `updatedAt` | timestamp | Yes | Last update time |
@@ -238,7 +225,7 @@ rename: titles come from the mode or `story.finish`.
 | Field | Type | Description |
 |-------|------|-------------|
 | `schemaVersion` | 2 | Marks a target Story |
-| `ownerUid` | string | The family (the child's `ownerParentUid`) |
+| `ownerUid` | string | The family (the child's `ownerUid`) |
 | `childId` | string | The hero |
 | `modeId` | `wizard` \| `freeplay` \| `guided` \| `friends` \| `adventure` | Creation mode (config: `storyGenerators`, see the mapping in the slice doc) |
 | `storyTypeId` | string \| null | `adventure` only |
@@ -276,9 +263,8 @@ The creation conversation, server-written. Doc id = `index` zero-padded (`0000`,
 | `input`, `inputDisplay` | ChildInput \| null, string \| null | `{kind:'choice',optionId}` \| `{kind:'text',text}` \| `{kind:'castPick',castIds}` |
 
 **Characters introduced by the AI** are created in `characters` with `origin: 'story'`,
-`originStoryId`, `ownerParentUid` (today's owner field, kept so the current UI lists them),
-`childId` (scoped to the hero), `isParentGenerated: false`, `photos: []` and no avatar — in the same
-transaction as the turn that introduced them.
+`originStoryId`, `ownerUid`, `childId` (scoped to the hero), `isParentGenerated: false`,
+`photos: []` and no avatar — in the same transaction as the turn that introduced them.
 
 **Read by clients**: the web app and kids PWA listen to `stories/{id}` and its `turns` (filtered on
 `ownerUid`) while a Story is being created; lists and readers (and mobile) use `GET /api/stories` and
@@ -1476,8 +1462,8 @@ Extends `PrintOrderAddress` with metadata for address book management.
 | Collection | Read | Write | Notes |
 |------------|------|-------|-------|
 | `users` | Owner, Admin | Owner, Admin | Owner cannot change `roles`, the flat role fields (`isAdmin`, `isWriter`, `canShowWizardTargets`), or PIN fields (`pinHash`, `pinSalt`, `pinUpdatedAt`, `pinFailedAttempts`, `pinLockedUntil`); signup may only create default parent roles. Roles are custom claims (set by `scripts/set-admin.mjs`); the doc fields are display only |
-| `children` | Owner (`ownerUid` or `ownerParentUid`), Admin | Admin (server) only | Soft-delete hidden from non-admins; written by the `/api/children/**` routes and likeness jobs; `help-*` docs readable by any signed-in user |
-| `characters` | Owner (`ownerUid` or `ownerParentUid`), Admin | Admin (server) only | Soft-delete hidden from non-admins; written by the `/api/characters/**` routes and likeness jobs; `help-*` docs readable by any signed-in user |
+| `children` | Owner (`ownerUid`), Admin | Admin (server) only | Soft-delete hidden from non-admins; written by the `/api/children/**` routes and likeness jobs; `help-*` docs readable by any signed-in user |
+| `characters` | Owner (`ownerUid`), Admin | Admin (server) only | Soft-delete hidden from non-admins; written by the `/api/characters/**` routes and likeness jobs; `help-*` docs readable by any signed-in user |
 | `stories` | Owner (`ownerUid`), Admin | Admin (server) only | `turns`: owner reads (lists filter on `ownerUid`), server writes. No other subcollection is readable or writable by a client; `storySessions` and `children/*/sessions` have no rules (deny) |
 | `printOrders` | Owner (`ownerUid` on v2; legacy `parentUid`/`ownerUserId`), Admin | Admin | Created and updated by server routes (Admin SDK) only |
 | `stripeEvents` | None | None | Server only (Stripe webhook idempotency) |
@@ -1508,6 +1494,7 @@ Extends `PrintOrderAddress` with metadata for address book management.
 
 | Date | Changes |
 |------|---------|
+| 2026-11-06 | Slice 6.3: the old `children`/`characters` fields removed — `ownerParentUid`, `imageDescription`, `canonicalImageUrl`, `avatarUrl`, `avatarAnimationUrl` and their `*Generation` companions migrated into `ownerUid` + `likeness.*` and dropped by `scripts/drop-legacy-likeness.mjs`; rules, `listOwnedPeople` and the roster/voice reads match `ownerUid` only; `photos` kept (mirrors `likeness.photos`) |
 | 2026-11-05 | Slice 6.4a: `promptConfigs`, `storyPhases`, `storyTypes`, `storyOutputTypes`, `printLayouts` are no longer browser-writable by writers (admin only); writers and admins change them, `printProducts` and `storyGenerators` through `/api/admin/catalog/**`, which stamps `createdAt`/`updatedAt` |
 | 2026-11-05 | Slice 5.7b: rules make `children`/`characters` server-written (owner reads by `ownerUid` or `ownerParentUid`; admins still write); Storage: photos under `users/{uid}/{children,characters}/{id}/photos/` are written by the routes only (owner reads); `src/storage.rules` duplicate removed |
 | 2026-11-05 | Slice 5.7a: `children`/`characters` `ownerUid` and `likeness.*` written by the new routes and likeness jobs (old fields mirrored until the 5.7b migration); no rules change yet |

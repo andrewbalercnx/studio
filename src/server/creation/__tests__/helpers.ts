@@ -119,7 +119,7 @@ export function createBench(options: { testMode?: boolean } = {}): Bench {
  */
 export async function seed(db: Firestore): Promise<void> {
   await db.collection('children').doc('c1').set({
-    ownerParentUid: 'p1',
+    ownerUid: 'p1',
     displayName: 'Emma',
     dateOfBirth: '2020-05-01',
     pronouns: 'she/her',
@@ -127,12 +127,12 @@ export async function seed(db: Firestore): Promise<void> {
     imageDescription: 'curly red hair',
     photos: ['https://img.test/c1.jpg'],
   });
-  await db.collection('children').doc('c2').set({ ownerParentUid: 'p1', displayName: 'Sam', dateOfBirth: '2018-01-01' });
-  await db.collection('children').doc('gone').set({ ownerParentUid: 'p1', displayName: 'Gone', deletedAt: new Date() });
-  await db.collection('characters').doc('ch1').set({ ownerParentUid: 'p1', displayName: 'Rex', type: 'Pet', isParentGenerated: true });
-  await db.collection('characters').doc('ch2').set({ ownerParentUid: 'p1', displayName: 'Pip', type: 'Toy', childId: 'c2' });
-  await db.collection('characters').doc('other1234567890xyz').set({ ownerParentUid: 'p2', displayName: 'Stranger', type: 'Friend' });
-  await db.collection('children').doc('k2').set({ ownerParentUid: 'p2', displayName: 'Kid of p2' });
+  await db.collection('children').doc('c2').set({ ownerUid: 'p1', displayName: 'Sam', dateOfBirth: '2018-01-01' });
+  await db.collection('children').doc('gone').set({ ownerUid: 'p1', displayName: 'Gone', deletedAt: new Date() });
+  await db.collection('characters').doc('ch1').set({ ownerUid: 'p1', displayName: 'Rex', type: 'Pet', isParentGenerated: true });
+  await db.collection('characters').doc('ch2').set({ ownerUid: 'p1', displayName: 'Pip', type: 'Toy', childId: 'c2' });
+  await db.collection('characters').doc('other1234567890xyz').set({ ownerUid: 'p2', displayName: 'Stranger', type: 'Friend' });
+  await db.collection('children').doc('k2').set({ ownerUid: 'p2', displayName: 'Kid of p2' });
 
   const generator = (extra: Record<string, unknown>) => ({ status: 'live', enabledForKids: true, name: 'X', description: 'Y', ...extra });
   await db.collection('storyGenerators').doc('wizard').set(generator({ name: 'Story Wizard' }));

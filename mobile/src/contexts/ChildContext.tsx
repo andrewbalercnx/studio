@@ -6,7 +6,7 @@ import { useApiClient } from './ApiClientContext';
 interface ChildProfile {
   id: string;
   displayName: string;
-  avatarUrl?: string;
+  likeness?: { avatar?: string | null; avatarAnimation?: string | null };
   dateOfBirth?: string;
   autoReadAloud?: boolean;
 }

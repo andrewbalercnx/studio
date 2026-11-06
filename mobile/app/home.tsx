@@ -37,8 +37,8 @@ export default function HomeScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.avatarButton} onPress={handleSwitchChild}>
-          {childProfile?.avatarUrl ? (
-            <Image source={{ uri: childProfile.avatarUrl }} style={styles.avatar} />
+          {childProfile?.likeness?.avatar ? (
+            <Image source={{ uri: childProfile.likeness.avatar }} style={styles.avatar} />
           ) : (
             <View style={styles.avatarPlaceholder}>
               <Text style={styles.avatarInitial}>

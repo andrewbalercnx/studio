@@ -43,10 +43,12 @@ async function check(label, expected, operation) {
 }
 
 // Seed as admin.
-await setDoc(doc(admin, 'children', 'c1'), { ownerParentUid: 'p1', displayName: 'Emma' });
-await setDoc(doc(admin, 'children', 'c3'), { ownerUid: 'p1', ownerParentUid: 'p1', displayName: 'Ana' });
-await setDoc(doc(admin, 'children', 'c9'), { ownerUid: 'p2', ownerParentUid: 'p2', displayName: 'Other' });
-await setDoc(doc(admin, 'characters', 'ch1'), { ownerUid: 'p1', ownerParentUid: 'p1', displayName: 'Rex' });
+await setDoc(doc(admin, 'children', 'c1'), { ownerUid: 'p1', displayName: 'Emma' });
+await setDoc(doc(admin, 'children', 'c3'), { ownerUid: 'p1', displayName: 'Ana' });
+await setDoc(doc(admin, 'children', 'c9'), { ownerUid: 'p2', displayName: 'Other' });
+// A document still carrying only the old owner field (pre-migration): slice 6.3 makes it unreadable.
+await setDoc(doc(admin, 'children', 'cLegacy'), { ownerParentUid: 'p1', displayName: 'Old' });
+await setDoc(doc(admin, 'characters', 'ch1'), { ownerUid: 'p1', displayName: 'Rex' });
 // A story written by the retired flows (parentUid, no schemaVersion): removed by the reset, unreadable before it.
 await setDoc(doc(admin, 'stories', 's1'), { parentUid: 'p1', childId: 'c1', metadata: { title: 'Old', characterIds: [] }, isLocked: false });
 await setDoc(doc(admin, 'systemConfig', 'diagnostics'), { enableAnalytics: false });
@@ -70,20 +72,21 @@ await check('mark startup wizard complete', 'allow', () => updateDoc(doc(parent,
 await check('admin grants a role', 'allow', () => updateDoc(doc(admin, 'users', 'p1'), { 'roles.isWriter': true }));
 await check('admin toggles wizard targets', 'allow', () => updateDoc(doc(admin, 'users', 'p1'), { canShowWizardTargets: true }));
 
-// children and characters: server-written (slice 5.7b); the owner reads by either owner field.
-await check('read own child (old owner field)', 'allow', () => getDoc(doc(parent, 'children', 'c1')));
-await check('read own child (both owner fields)', 'allow', () => getDoc(doc(parent, 'children', 'c3')));
+// children and characters: server-written; the owner reads by ownerUid only (slice 6.3).
+await check('read own child', 'allow', () => getDoc(doc(parent, 'children', 'c1')));
+await check('read own child (c3)', 'allow', () => getDoc(doc(parent, 'children', 'c3')));
+await check('old owner field no longer grants read', 'deny', () => getDoc(doc(parent, 'children', 'cLegacy')));
 await check('list own children by ownerUid', 'allow', () => getDocs(query(collection(parent, 'children'), where('ownerUid', '==', 'p1'))));
-await check('list own children by ownerParentUid', 'allow', () => getDocs(query(collection(parent, 'children'), where('ownerParentUid', '==', 'p1'))));
+await check('list own children by ownerParentUid no longer allowed', 'deny', () => getDocs(query(collection(parent, 'children'), where('ownerParentUid', '==', 'p1'))));
 await check("read another family's child", 'deny', () => getDoc(doc(parent, 'children', 'c9')));
-await check('create own child directly', 'deny', () => setDoc(doc(parent, 'children', 'c2'), { ownerParentUid: 'p1', ownerUid: 'p1', displayName: 'Sam' }));
-await check('create help-* child', 'deny', () => setDoc(doc(parent, 'children', 'help-x'), { ownerParentUid: 'p1' }));
+await check('create own child directly', 'deny', () => setDoc(doc(parent, 'children', 'c2'), { ownerUid: 'p1', displayName: 'Sam' }));
+await check('create help-* child', 'deny', () => setDoc(doc(parent, 'children', 'help-x'), { ownerUid: 'p1' }));
 await check('rename own child directly', 'deny', () => updateDoc(doc(parent, 'children', 'c1'), { displayName: 'Em' }));
 await check('set own child avatar directly', 'deny', () => updateDoc(doc(parent, 'children', 'c3'), { 'likeness.avatar': 'https://example.com/a.png' }));
-await check('move child to another family', 'deny', () => updateDoc(doc(parent, 'children', 'c1'), { ownerParentUid: 'victim' }));
+await check('move child to another family', 'deny', () => updateDoc(doc(parent, 'children', 'c1'), { ownerUid: 'victim' }));
 await check('delete own child directly', 'deny', () => deleteDoc(doc(parent, 'children', 'c3')));
 await check('read own character', 'allow', () => getDoc(doc(parent, 'characters', 'ch1')));
-await check('create own character directly', 'deny', () => setDoc(doc(parent, 'characters', 'ch2'), { ownerParentUid: 'p1', ownerUid: 'p1', displayName: 'Sam' }));
+await check('create own character directly', 'deny', () => setDoc(doc(parent, 'characters', 'ch2'), { ownerUid: 'p1', displayName: 'Sam' }));
 await check('edit own character directly', 'deny', () => updateDoc(doc(parent, 'characters', 'ch1'), { photos: [] }));
 await check('admin edits a child', 'allow', () => updateDoc(doc(admin, 'children', 'c1'), { displayName: 'Emma' }));
 

@@ -1158,37 +1158,10 @@ export type ChildProfile = {
     pronouns?: Pronouns; // Optional - defaults to they/them if not set
     dateOfBirth?: any; // Optional
     photos?: string[]; // Optional
-    avatarUrl?: string; // AI-generatable avatar, optional
-    // Dancing avatar animation (generated alongside avatar)
-    avatarAnimationUrl?: string;
-    avatarAnimationGeneration?: {
-        status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
-        lastRunAt?: any;
-        lastCompletedAt?: any;
-        lastErrorMessage?: string | null;
-    };
     likes: string[]; // Replaces all preference subcategories
     dislikes: string[]; // New field for negative preferences
     description?: string;
-    // AI-generated description of physical appearance from photos (for image generation prompts)
-    // Internal field - not exposed to parents
-    imageDescription?: string;
-    imageDescriptionGeneration?: {
-        status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
-        lastRunAt?: any;
-        lastCompletedAt?: any;
-        lastErrorMessage?: string | null;
-    };
-    // Stage 1 of two-stage reference pipeline: naturalistic portrait generated from raw photos.
-    // Read as `likeness.portrait` (slice 5.7); the old field is mirrored until the migration release.
-    canonicalImageUrl?: string;
-    canonicalImageGeneration?: {
-        status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
-        lastRunAt?: any;
-        lastCompletedAt?: any;
-        lastErrorMessage?: string | null;
-    };
-    ownerParentUid: string;
+    ownerUid: string;
     createdAt: any;
     updatedAt?: any;
     // Default print layout for this child - determines image dimensions during generation
@@ -1319,15 +1292,6 @@ export type Character = {
     pronouns?: Pronouns; // Optional - defaults to they/them if not set
     dateOfBirth?: any; // Optional
     photos?: string[]; // Optional
-    avatarUrl?: string; // AI-generatable avatar, optional
-    // Dancing avatar animation (generated alongside avatar)
-    avatarAnimationUrl?: string;
-    avatarAnimationGeneration?: {
-        status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
-        lastRunAt?: any;
-        lastCompletedAt?: any;
-        lastErrorMessage?: string | null;
-    };
     type: 'Family' | 'Friend' | 'Pet' | 'Toy' | 'Other'; // Replaces role
     // Relationship to the child (only applicable for type='Family')
     // e.g., 'mother', 'father', 'grandmother', 'grandfather', 'aunt', 'uncle', 'sibling', 'cousin'
@@ -1338,25 +1302,7 @@ export type Character = {
     likes: string[]; // New field (replaces traits)
     dislikes: string[]; // New field for negative preferences
     description?: string;
-    // AI-generated description of physical appearance from photos (for image generation prompts)
-    // Internal field - not exposed to parents
-    imageDescription?: string;
-    imageDescriptionGeneration?: {
-        status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
-        lastRunAt?: any;
-        lastCompletedAt?: any;
-        lastErrorMessage?: string | null;
-    };
-    // Stage 1 of two-stage reference pipeline: naturalistic portrait generated from raw photos.
-    // Read as `likeness.portrait` (slice 5.7); the old field is mirrored until the migration release.
-    canonicalImageUrl?: string;
-    canonicalImageGeneration?: {
-        status: 'idle' | 'pending' | 'generating' | 'ready' | 'error';
-        lastRunAt?: any;
-        lastCompletedAt?: any;
-        lastErrorMessage?: string | null;
-    };
-    ownerParentUid: string;
+    ownerUid: string;
     childId?: string; // Optional: blank = family-wide, set = child-specific
     createdAt: Timestamp;
     updatedAt: Timestamp;

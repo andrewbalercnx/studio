@@ -35,11 +35,9 @@ service cloud.firestore {
       return !('deletedAt' in resource.data) || resource.data.deletedAt == null;
     }
 
-    // A Child or Character of the caller's family (either owner field, slice 5.7).
+    // A Child or Character of the caller's family (slice 6.3: `ownerUid` only).
     function ownsPerson() {
-      return isAuthenticated()
-          && (resource.data.get('ownerUid', null) == request.auth.uid
-              || resource.data.get('ownerParentUid', null) == request.auth.uid);
+      return isAuthenticated() && resource.data.get('ownerUid', null) == request.auth.uid;
     }
 
     // Fields an update touches (top-level keys).
@@ -75,11 +73,10 @@ service cloud.firestore {
     }
 
     // ========== CHILDREN ==========
-    // Children and Characters (slice 5.7b) are written only by the
-    // `/api/children/**` and `/api/characters/**` routes (Admin SDK) and by
-    // admins. The owner reads them; documents carry `ownerParentUid` until the
-    // likeness migration and both owner fields after it, so either matches.
-    // List queries must filter on the owner field.
+    // Children and Characters are written only by the `/api/children/**` and
+    // `/api/characters/**` routes (Admin SDK) and by admins. The owner reads
+    // them; every document carries `ownerUid` (slice 6.3), so list queries must
+    // filter on where('ownerUid', '==', uid).
     match /children/{childId} {
       allow get, list: if isAdmin()
                        || (isHelpDocument(childId) && isAuthenticated())

@@ -26,7 +26,6 @@ export default function AdminCreateDataPage() {
     const childData = {
       id: childId,
       ownerUid: user.uid,
-      ownerParentUid: user.uid,
       displayName: 'Sample Child',
       preferredVoiceId: DEFAULT_TTS_VOICE, // Alice (British)
       autoReadAloud: true, // Enable "Read to Me" by default
@@ -52,11 +51,10 @@ export default function AdminCreateDataPage() {
       batch.set(helpChildRef, {
         id: 'help-child',
         ownerUid: 'help-system-owner',
-        ownerParentUid: 'help-system-owner',
         displayName: 'Helpful Guide',
         createdAt: now,
         updatedAt: now,
-        avatarUrl: 'https://picsum.photos/seed/help-child/200/200'
+        likeness: { avatar: 'https://picsum.photos/seed/help-child/200/200' }
       });
 
       // Help Character
@@ -64,7 +62,6 @@ export default function AdminCreateDataPage() {
       batch.set(helpCharacterRef, {
           id: 'help-character',
           ownerUid: 'help-system-owner',
-        ownerParentUid: 'help-system-owner',
           displayName: 'Guide Bot',
           role: 'friend',
           traits: ['friendly', 'knowledgeable'],

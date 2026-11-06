@@ -148,7 +148,7 @@ function record(
         id: entry.castId,
         data: {
           id: entry.castId,
-          ownerParentUid: ctx.ownerUid,
+          ownerUid: ctx.ownerUid,
           childId: ctx.childId,
           displayName: c.displayName,
           pronouns: c.pronouns,
@@ -272,10 +272,10 @@ export async function createStory(deps: CreationServiceDeps, user: VerifiedUser,
   // The child: the caller's (admins and writers act for any family), in the persona's scope.
   const childSnap = await db.collection('children').doc(body.childId).get();
   const child = childSnap.data();
-  if (!childSnap.exists || !child || (child.deletedAt !== undefined && child.deletedAt !== null) || typeof child.ownerParentUid !== 'string') {
+  if (!childSnap.exists || !child || (child.deletedAt !== undefined && child.deletedAt !== null) || typeof child.ownerUid !== 'string') {
     throw new NotFoundError('Child not found', { code: 'CHILD_NOT_FOUND', details: { childId: body.childId } });
   }
-  const ownerUid = child.ownerParentUid as string;
+  const ownerUid = child.ownerUid as string;
   await assertOwner(user, { ownerUid, childId: body.childId }, 'Child');
   const childPersona = await personaOf(user, ownerUid, body.childId);
 

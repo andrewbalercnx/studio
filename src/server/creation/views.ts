@@ -86,8 +86,8 @@ function str(value: unknown): string | null {
 /** The owner's children and characters (deleted ones too: a finished story keeps its names). */
 async function loadPeople(db: Firestore, ownerUid: string): Promise<Map<string, Person>> {
   const [children, characters] = await Promise.all([
-    db.collection('children').where('ownerParentUid', '==', ownerUid).get(),
-    db.collection('characters').where('ownerParentUid', '==', ownerUid).get(),
+    db.collection('children').where('ownerUid', '==', ownerUid).get(),
+    db.collection('characters').where('ownerUid', '==', ownerUid).get(),
   ]);
   const people = new Map<string, Person>();
   for (const doc of children.docs) {
@@ -177,10 +177,10 @@ export async function listStoriesForChild(db: Firestore, user: VerifiedUser, chi
   if (!childId || childId.includes('/')) throw new BadRequestError('childId is required', { code: 'INVALID_QUERY' });
   const childSnap = await db.collection('children').doc(childId).get();
   const child = childSnap.data();
-  if (!childSnap.exists || !child || (child.deletedAt !== undefined && child.deletedAt !== null) || typeof child.ownerParentUid !== 'string') {
+  if (!childSnap.exists || !child || (child.deletedAt !== undefined && child.deletedAt !== null) || typeof child.ownerUid !== 'string') {
     throw new NotFoundError('Child not found', { code: 'CHILD_NOT_FOUND', details: { childId } });
   }
-  const ownerUid = child.ownerParentUid as string;
+  const ownerUid = child.ownerUid as string;
   await assertOwner(user, { ownerUid, childId }, 'Child');
 
   const snapshot = await db.collection('stories').where('ownerUid', '==', ownerUid).where('childId', '==', childId).get();
