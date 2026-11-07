@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/hooks/use-app-context';
 import { OnboardingChecklist } from '@/components/onboarding/onboarding-checklist';
+import { WelcomeLanding } from '@/components/welcome/welcome-landing';
 
 function ChildIcon({ profile }: { profile: ChildView }) {
   const router = useRouter();
@@ -46,10 +47,9 @@ export default function HomePage() {
   useEffect(() => {
     if (userLoading) return;
 
-    if (!user) {
-        router.push('/login');
-        return;
-    }
+    // Logged-out visitors are NOT redirected: they see the public welcome
+    // landing (rendered below). Only signed-in roles are routed onward.
+    if (!user) return;
 
     const claims = idTokenResult?.claims;
     if (claims?.isAdmin) {
@@ -115,6 +115,11 @@ export default function HomePage() {
         <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
+  }
+
+  // Not signed in: show the public welcome / landing page for prospects.
+  if (!user) {
+    return <WelcomeLanding />;
   }
 
   // Show the child selection page for all authenticated users (parent mode)
