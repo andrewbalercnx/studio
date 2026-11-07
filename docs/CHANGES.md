@@ -18,6 +18,23 @@
 
 ### 2026-11-07
 
+#### `#52` - Brand alignment: shared logo, lavender app, icon set
+
+**Type**: Branding / UI (web + mobile)
+
+**Summary**: Brings the mobile app onto the website's visual identity instead of its old amber theme, and gives both a proper logo. The mark is an open book with a spark, shared across the website, the app badge and every generated icon. The app moves onto a lavender-violet palette (sky-blue accent, the old amber kept only as the logo spark) held in one `mobile/src/theme.ts`, loads PT Sans to match the site, and uses a Feather line-icon set for chrome. Playful story-type emoji stay as content. The new APK is built from the 6.3 mobile code, so it also carries the likeness-field change — it supersedes the APK in `#51`.
+
+**Changed**:
+- `public/icons/magical-book.svg`: redrawn as the open-book-plus-spark mark on a lavender ground; web icons and `favicon.ico` regenerated.
+- `src/components/icons.tsx`: `Logo` + new `BookSparkMark` render the shared mark (was a generic lucide icon).
+- `scripts/generate-mobile-icons.mjs` (new): renders the app icon, splash and adaptive icon from the mark.
+- `mobile/src/theme.ts` (new), `mobile/src/components/brand.tsx` (new): palette/type tokens and the `BrandMark` + `Icon` primitives.
+- `mobile/app/_layout.tsx`: loads PT Sans; lavender screen background.
+- `mobile/app/*.tsx`: amber → lavender across all screens; login and home show the mark; home cards use the icon set.
+- `mobile/app.json`: splash/adaptive-icon backgrounds moved to lavender.
+- `mobile/assets/*`: regenerated `icon`, `splash-icon`, `adaptive-icon`, `favicon`; new `mark-foreground.svg`.
+- `public/downloads/storypic-kids.apk`, `src/app/install/page.tsx`: new APK on the rebrand, install commit reference bumped.
+
 #### `#51` - New Android APK on the 6.3 likeness fields
 
 **Type**: Mobile build

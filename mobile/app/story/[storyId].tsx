@@ -51,7 +51,7 @@ export default function StoryScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#F59E0B" />
+        <ActivityIndicator size="large" color="#7c6ae0" />
         <Text style={styles.loadingText}>Loading story...</Text>
       </View>
     );
@@ -150,24 +150,24 @@ export default function StoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#B45309',
+    color: '#5b4ba0',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
     padding: 40,
   },
   errorIcon: {
@@ -176,20 +176,20 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
     color: '#374151',
     marginBottom: 24,
   },
   backButton: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#7c6ae0',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
   },
   backButtonText: {
-    color: '#FFFFFF',
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
   },
   header: {
     flexDirection: 'row',
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
     borderBottomWidth: 1,
-    borderBottomColor: '#FDE68A',
+    borderBottomColor: '#ede7fb',
   },
   headerBackButton: {
     paddingVertical: 8,
@@ -206,8 +206,8 @@ const styles = StyleSheet.create({
   },
   headerBackText: {
     fontSize: 16,
-    color: '#F59E0B',
-    fontWeight: '600',
+    color: '#7c6ae0',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
   },
   headerSpacer: {
     flex: 1,
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 4,
-    borderColor: '#FFFFFF',
+    borderColor: '#ffffff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -237,8 +237,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
     textAlign: 'center',
     marginBottom: 20,
   },
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 30,
@@ -258,10 +258,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     borderWidth: 2,
-    borderColor: '#8B5CF6',
+    borderColor: '#7c6ae0',
   },
   audioButtonPlaying: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#7c6ae0',
   },
   audioButtonIcon: {
     fontSize: 24,
@@ -269,11 +269,11 @@ const styles = StyleSheet.create({
   },
   audioButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#8B5CF6',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
+    color: '#7c6ae0',
   },
   storyTextContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
@@ -294,8 +294,8 @@ const styles = StyleSheet.create({
   },
   booksHeading: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#92400E',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
     marginBottom: 8,
   },
   actionButton: {
@@ -312,12 +312,12 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   actionButtonPrimary: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#10b981',
   },
   actionButtonSecondary: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderWidth: 2,
-    borderColor: '#F59E0B',
+    borderColor: '#7c6ae0',
   },
   actionButtonIcon: {
     fontSize: 24,
@@ -325,31 +325,31 @@ const styles = StyleSheet.create({
   },
   actionButtonTextPrimary: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
+    color: '#ffffff',
   },
   actionButtonTextSecondary: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#F59E0B',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
+    color: '#7c6ae0',
   },
   generatingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
-    backgroundColor: '#FDE68A',
+    backgroundColor: '#ede7fb',
     borderRadius: 16,
   },
   generatingText: {
     fontSize: 16,
-    color: '#92400E',
+    color: '#4b3b86',
     marginLeft: 12,
   },
   storybookButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#10B981',
+    backgroundColor: '#10b981',
     borderRadius: 16,
     padding: 12,
     shadowColor: '#000',
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
   },
   storybookThumbnailPlaceholder: {
     width: 56,
@@ -381,8 +381,8 @@ const styles = StyleSheet.create({
   },
   storybookButtonTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
+    color: '#ffffff',
   },
   storybookButtonSubtitle: {
     fontSize: 13,

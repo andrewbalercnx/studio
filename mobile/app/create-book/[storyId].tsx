@@ -105,7 +105,7 @@ export default function CreateBookScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#F59E0B" />
+        <ActivityIndicator size="large" color="#7c6ae0" />
         <Text style={styles.loadingText}>Loading book choices...</Text>
       </View>
     );
@@ -190,7 +190,7 @@ export default function CreateBookScreen() {
                   )}
                   {chosen ? (
                     <View style={styles.styleOverlay}>
-                      {creating ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.styleCheck}>✓</Text>}
+                      {creating ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.styleCheck}>✓</Text>}
                     </View>
                   ) : null}
                 </View>
@@ -210,12 +210,12 @@ export default function CreateBookScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FEF3C7' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FEF3C7' },
-  loadingText: { marginTop: 16, fontSize: 16, color: '#B45309' },
-  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FEF3C7', padding: 40 },
+  container: { flex: 1, backgroundColor: '#f4f1fb' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f1fb' },
+  loadingText: { marginTop: 16, fontSize: 16, color: '#5b4ba0' },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f1fb', padding: 40 },
   errorIcon: { fontSize: 64, marginBottom: 16 },
-  errorTitle: { fontSize: 18, fontWeight: '600', color: '#374151', marginBottom: 24, textAlign: 'center' },
+  errorTitle: { fontSize: 18, fontWeight: '600', fontFamily: 'PTSans_700Bold', color: '#374151', marginBottom: 24, textAlign: 'center' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -223,23 +223,23 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
     borderBottomWidth: 1,
-    borderBottomColor: '#FDE68A',
+    borderBottomColor: '#ede7fb',
   },
   backButton: { paddingVertical: 8, paddingRight: 16 },
-  backText: { fontSize: 16, color: '#F59E0B', fontWeight: '600' },
-  disabledText: { color: '#D1D5DB' },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '600', color: '#92400E' },
+  backText: { fontSize: 16, color: '#7c6ae0', fontWeight: '600', fontFamily: 'PTSans_700Bold' },
+  disabledText: { color: '#d1d5db' },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '600', fontFamily: 'PTSans_700Bold', color: '#4b3b86' },
   headerSpacer: { width: 60 },
   content: { flex: 1 },
   contentContainer: { padding: 20, paddingBottom: 40 },
   bigIcon: { fontSize: 48, textAlign: 'center', marginBottom: 8 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#92400E', textAlign: 'center', marginBottom: 4 },
-  subtitle: { fontSize: 16, color: '#B45309', textAlign: 'center', marginBottom: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', fontFamily: 'PTSans_700Bold', color: '#4b3b86', textAlign: 'center', marginBottom: 4 },
+  subtitle: { fontSize: 16, color: '#5b4ba0', textAlign: 'center', marginBottom: 20 },
   formCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#FDE68A',
+    borderColor: '#ede7fb',
     padding: 18,
     marginBottom: 12,
     shadowColor: '#000',
@@ -248,8 +248,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  formTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
-  formDescription: { fontSize: 14, color: '#6B7280', marginTop: 4 },
+  formTitle: { fontSize: 18, fontWeight: 'bold', fontFamily: 'PTSans_700Bold', color: '#1f2937' },
+  formDescription: { fontSize: 14, color: '#6b7280', marginTop: 4 },
   styleGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   styleItem: { width: '47%', alignItems: 'center', marginBottom: 20 },
   dimmed: { opacity: 0.5 },
@@ -259,19 +259,19 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     overflow: 'hidden',
     borderWidth: 4,
-    borderColor: '#FDE68A',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#ede7fb',
+    backgroundColor: '#ffffff',
   },
-  styleThumbChosen: { borderColor: '#F59E0B' },
+  styleThumbChosen: { borderColor: '#7c6ae0' },
   styleImage: { width: '100%', height: '100%' },
-  styleImagePlaceholder: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FEF3C7' },
+  styleImagePlaceholder: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f1fb' },
   styleImagePlaceholderIcon: { fontSize: 36 },
   styleOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(245, 158, 11, 0.4)', justifyContent: 'center', alignItems: 'center' },
-  styleCheck: { fontSize: 44, color: '#FFFFFF', fontWeight: 'bold' },
-  styleTitle: { fontSize: 15, fontWeight: '600', color: '#1F2937', textAlign: 'center', marginTop: 8 },
-  createError: { fontSize: 15, color: '#B45309', textAlign: 'center', marginBottom: 16 },
-  emptyCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, alignItems: 'center', marginTop: 12 },
-  emptyText: { fontSize: 15, color: '#6B7280' },
-  primaryButton: { backgroundColor: '#F59E0B', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  styleCheck: { fontSize: 44, color: '#ffffff', fontWeight: 'bold', fontFamily: 'PTSans_700Bold' },
+  styleTitle: { fontSize: 15, fontWeight: '600', fontFamily: 'PTSans_700Bold', color: '#1f2937', textAlign: 'center', marginTop: 8 },
+  createError: { fontSize: 15, color: '#5b4ba0', textAlign: 'center', marginBottom: 16 },
+  emptyCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 24, alignItems: 'center', marginTop: 12 },
+  emptyText: { fontSize: 15, color: '#6b7280' },
+  primaryButton: { backgroundColor: '#7c6ae0', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 },
+  primaryButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '600', fontFamily: 'PTSans_700Bold' },
 });

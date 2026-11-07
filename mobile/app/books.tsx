@@ -52,7 +52,7 @@ export default function BooksScreen() {
 
       {loading ? (
         <View style={styles.emptyContainer}>
-          <ActivityIndicator size="large" color="#F59E0B" />
+          <ActivityIndicator size="large" color="#7c6ae0" />
         </View>
       ) : books.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -90,16 +90,16 @@ export default function BooksScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#FDE68A',
+    borderBottomColor: '#ede7fb',
   },
   backButton: {
     paddingVertical: 8,
@@ -107,14 +107,14 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: 16,
-    color: '#F59E0B',
-    fontWeight: '600',
+    color: '#7c6ae0',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
   },
   headerTitle: {
     flex: 1,
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
     textAlign: 'center',
   },
   headerSpacer: {
@@ -132,28 +132,28 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
     marginBottom: 8,
     textAlign: 'center',
   },
   emptyText: {
     fontSize: 16,
-    color: '#B45309',
+    color: '#5b4ba0',
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 22,
   },
   createButton: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#7c6ae0',
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 12,
   },
   createButtonText: {
-    color: '#FFFFFF',
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
   },
   list: {
     padding: 16,
@@ -161,12 +161,12 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: '#ede7fb',
   },
   cardIcon: {
     fontSize: 32,
@@ -177,17 +177,17 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 17,
-    fontWeight: '600',
-    color: '#92400E',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
   },
   cardSubtitle: {
     fontSize: 14,
-    color: '#B45309',
+    color: '#5b4ba0',
     marginTop: 4,
   },
   cardArrow: {
     fontSize: 24,
-    color: '#F59E0B',
+    color: '#7c6ae0',
     marginLeft: 8,
   },
 });

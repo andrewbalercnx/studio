@@ -52,7 +52,7 @@ export default function SelectChildScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#F59E0B" />
+        <ActivityIndicator size="large" color="#7c6ae0" />
         <Text style={styles.loadingText}>Loading your children...</Text>
       </View>
     );
@@ -93,7 +93,7 @@ export default function SelectChildScreen() {
             >
               {selecting === item.id ? (
                 <View style={styles.avatarPlaceholder}>
-                  <ActivityIndicator color="#F59E0B" />
+                  <ActivityIndicator color="#7c6ae0" />
                 </View>
               ) : item.likeness?.avatar ? (
                 <Image
@@ -126,19 +126,19 @@ export default function SelectChildScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
     paddingTop: 60,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#B45309',
+    color: '#5b4ba0',
   },
   header: {
     paddingHorizontal: 24,
@@ -146,13 +146,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#B45309',
+    color: '#5b4ba0',
     textAlign: 'center',
     marginTop: 8,
   },
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-evenly',
   },
   childCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
     alignItems: 'center',
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   childCardSelected: {
-    borderColor: '#F59E0B',
+    borderColor: '#7c6ae0',
   },
   avatar: {
     width: 80,
@@ -191,19 +191,19 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#FDE68A',
+    backgroundColor: '#ede7fb',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   avatarInitial: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
   },
   childName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
     color: '#374151',
     textAlign: 'center',
   },
@@ -219,23 +219,23 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
     color: '#374151',
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#6b7280',
     textAlign: 'center',
   },
   signOutButton: {
     paddingVertical: 16,
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#FDE68A',
+    borderTopColor: '#ede7fb',
   },
   signOutText: {
     fontSize: 16,
-    color: '#DC2626',
+    color: '#dc2626',
   },
 });

@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useChild } from '../src/contexts/ChildContext';
 import { useApiClient, type LibraryCounts } from '../src/contexts/ApiClientContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BrandMark, Icon } from '../src/components/brand';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -34,6 +35,11 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Brand strip */}
+      <View style={styles.brandRow}>
+        <BrandMark size={26} />
+        <Text style={styles.brandName}>StoryPic Kids</Text>
+      </View>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.avatarButton} onPress={handleSwitchChild}>
@@ -60,7 +66,7 @@ export default function HomeScreen() {
           style={[styles.card, styles.createCard]}
           onPress={() => router.push('/create')}
         >
-          <Text style={styles.cardIcon}>✨</Text>
+          <View style={styles.cardIcon}><Icon name="create" size={42} color="#ffffff" /></View>
           <Text style={styles.cardTitle}>Create a Story</Text>
           <Text style={styles.cardDescription}>
             Make your own magical adventure!
@@ -72,7 +78,7 @@ export default function HomeScreen() {
           style={[styles.card, styles.storiesCard]}
           onPress={() => router.push('/stories')}
         >
-          <Text style={styles.cardIcon}>📖</Text>
+          <View style={styles.cardIcon}><Icon name="stories" size={42} color="#ffffff" /></View>
           <Text style={styles.cardTitle}>My Stories</Text>
           <Text style={styles.cardDescription}>
             {counts ? `${counts.stories} ${counts.stories === 1 ? 'story' : 'stories'} to read →` : 'Read your amazing stories!'}
@@ -84,7 +90,7 @@ export default function HomeScreen() {
           style={[styles.card, styles.booksCard]}
           onPress={() => router.push('/books')}
         >
-          <Text style={styles.cardIcon}>📚</Text>
+          <View style={styles.cardIcon}><Icon name="library" size={42} color="#ffffff" /></View>
           <Text style={styles.cardTitle}>My Books</Text>
           <Text style={styles.cardDescription}>
             {counts ? `${counts.books} picture ${counts.books === 1 ? 'book' : 'books'} →` : 'View your picture books!'}
@@ -98,16 +104,16 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#FDE68A',
+    borderBottomColor: '#ede7fb',
   },
   avatarButton: {
     marginRight: 12,
@@ -117,34 +123,34 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     borderWidth: 3,
-    borderColor: '#FDE68A',
+    borderColor: '#ede7fb',
   },
   avatarPlaceholder: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#FDE68A',
+    backgroundColor: '#ede7fb',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#F59E0B',
+    borderColor: '#7c6ae0',
   },
   avatarInitial: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
   },
   headerText: {
     flex: 1,
   },
   greeting: {
     fontSize: 16,
-    color: '#92400E',
+    color: '#4b3b86',
   },
   name: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
   },
   content: {
     flex: 1,
@@ -163,22 +169,35 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   createCard: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#7c6ae0',
   },
   storiesCard: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#6e9bf0',
   },
   booksCard: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#10b981',
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  brandName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
   },
   cardIcon: {
-    fontSize: 48,
     marginBottom: 12,
   },
   cardTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#ffffff',
     marginBottom: 8,
   },
   cardDescription: {

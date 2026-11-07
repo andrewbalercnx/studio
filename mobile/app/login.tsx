@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
+import { BrandMark } from '../src/components/brand';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -49,7 +50,7 @@ export default function LoginScreen() {
       <View style={styles.content}>
         {/* Logo */}
         <View style={styles.logoContainer}>
-          <Text style={styles.logo}>📚</Text>
+          <BrandMark size={76} style={styles.logo} />
           <Text style={styles.title}>StoryPic Kids</Text>
           <Text style={styles.subtitle}>Parent Login</Text>
         </View>
@@ -61,7 +62,7 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder="parent@example.com"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor="#9ca3af"
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -78,7 +79,7 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder="Enter your password"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor="#9ca3af"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -95,7 +96,7 @@ export default function LoginScreen() {
             disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color="#ffffff" />
             ) : (
               <Text style={styles.buttonText}>Sign In</Text>
             )}
@@ -115,7 +116,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
   },
   content: {
     flex: 1,
@@ -127,21 +128,20 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   logo: {
-    fontSize: 64,
     marginBottom: 12,
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
   },
   subtitle: {
     fontSize: 16,
-    color: '#B45309',
+    color: '#5b4ba0',
     marginTop: 4,
   },
   form: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 24,
     shadowColor: '#000',
@@ -155,38 +155,38 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
     color: '#374151',
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: '#d1d5db',
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
     color: '#111827',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#f9fafb',
   },
   button: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#7c6ae0',
     borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 8,
   },
   buttonDisabled: {
-    backgroundColor: '#FCD34D',
+    backgroundColor: '#cfc2f5',
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
   },
   info: {
     textAlign: 'center',
-    color: '#92400E',
+    color: '#4b3b86',
     fontSize: 14,
     marginTop: 24,
     lineHeight: 20,

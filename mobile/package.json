@@ -11,6 +11,7 @@
     "build:ios": "eas build --platform ios --profile preview"
   },
   "dependencies": {
+    "@expo-google-fonts/pt-sans": "^0.4.1",
     "@react-native-firebase/app": "^23.7.0",
     "@react-native-firebase/auth": "^23.7.0",
     "@storypic/api-client": "file:../packages/api-client",

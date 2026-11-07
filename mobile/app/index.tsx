@@ -30,7 +30,7 @@ export default function Index() {
         <Text style={styles.logo}>📚</Text>
         <Text style={styles.title}>StoryPic Kids</Text>
       </View>
-      <ActivityIndicator size="large" color="#F59E0B" />
+      <ActivityIndicator size="large" color="#7c6ae0" />
       <Text style={styles.loadingText}>Loading...</Text>
     </View>
   );
@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
     padding: 20,
   },
   logoContainer: {
@@ -54,12 +54,12 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#B45309',
+    color: '#5b4ba0',
   },
 });

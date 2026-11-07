@@ -171,7 +171,7 @@ export default function PlayScreen() {
       <View style={styles.loadingContainer}>
         <View style={styles.avatarContainer}>{avatar}</View>
         <Text style={styles.loadingTitle}>Setting up your story...</Text>
-        <ActivityIndicator size="large" color="#F59E0B" style={styles.spinner} />
+        <ActivityIndicator size="large" color="#7c6ae0" style={styles.spinner} />
       </View>
     );
   }
@@ -198,7 +198,7 @@ export default function PlayScreen() {
       <View style={styles.loadingContainer}>
         <View style={styles.avatarContainer}>{avatar}</View>
         <Text style={styles.loadingTitle}>Adding the finishing touches!</Text>
-        <ActivityIndicator size="large" color="#F59E0B" style={styles.spinner} />
+        <ActivityIndicator size="large" color="#7c6ae0" style={styles.spinner} />
       </View>
     );
   }
@@ -273,7 +273,7 @@ export default function PlayScreen() {
 
         {sending || !prompt ? (
           <View style={styles.processingContainer}>
-            <ActivityIndicator size="large" color="#F59E0B" />
+            <ActivityIndicator size="large" color="#7c6ae0" />
             <Text style={styles.processingText}>The storyteller is thinking...</Text>
           </View>
         ) : (
@@ -350,13 +350,13 @@ export default function PlayScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
     padding: 40,
   },
   avatarContainer: {
@@ -367,27 +367,27 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 4,
-    borderColor: '#F59E0B',
+    borderColor: '#7c6ae0',
   },
   loadingAvatarPlaceholder: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#FDE68A',
+    backgroundColor: '#ede7fb',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: '#F59E0B',
+    borderColor: '#7c6ae0',
   },
   loadingAvatarText: {
     fontSize: 48,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
   },
   loadingTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#92400E',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
     padding: 40,
   },
   errorIcon: {
@@ -407,33 +407,33 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
     marginBottom: 8,
   },
   errorText: {
     fontSize: 16,
-    color: '#B45309',
+    color: '#5b4ba0',
     textAlign: 'center',
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#7c6ae0',
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 12,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
   },
   backLinkButton: {
     marginTop: 16,
     paddingVertical: 8,
   },
   backLinkText: {
-    color: '#92400E',
+    color: '#4b3b86',
     fontSize: 16,
   },
   header: {
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     fontSize: 24,
-    color: '#9CA3AF',
+    color: '#9ca3af',
   },
   progress: {
     flex: 1,
@@ -463,13 +463,13 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#e5e7eb',
   },
   progressDotFilled: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#10b981',
   },
   progressDotActive: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#7c6ae0',
     transform: [{ scale: 1.2 }],
   },
   headerSpacer: {
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     borderWidth: 4,
-    borderColor: '#FFFFFF',
+    borderColor: '#ffffff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -502,16 +502,16 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#FDE68A',
+    backgroundColor: '#ede7fb',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: '#FFFFFF',
+    borderColor: '#ffffff',
   },
   avatarInitial: {
     fontSize: 40,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
   },
   processingContainer: {
     alignItems: 'center',
@@ -519,11 +519,11 @@ const styles = StyleSheet.create({
   },
   processingText: {
     fontSize: 18,
-    color: '#92400E',
+    color: '#4b3b86',
     marginTop: 16,
   },
   questionContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 20,
     padding: 24,
     marginBottom: 24,
@@ -535,8 +535,8 @@ const styles = StyleSheet.create({
   },
   questionText: {
     fontSize: 22,
-    fontWeight: '600',
-    color: '#1F2937',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
+    color: '#1f2937',
     textAlign: 'center',
     lineHeight: 32,
   },
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   choiceButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 20,
     flexDirection: 'row',
@@ -555,17 +555,17 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: '#e5e7eb',
     marginBottom: 12,
   },
   choiceLabel: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F59E0B',
-    color: '#FFFFFF',
+    backgroundColor: '#7c6ae0',
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
     textAlign: 'center',
     lineHeight: 36,
     marginRight: 16,
@@ -578,22 +578,22 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   choiceButtonOn: {
-    borderColor: '#F59E0B',
-    backgroundColor: '#FFFBEB',
+    borderColor: '#7c6ae0',
+    backgroundColor: '#faf7ff',
   },
   progressText: {
     fontSize: 14,
-    color: '#92400E',
+    color: '#4b3b86',
   },
   textInputContainer: {
     marginTop: 12,
     gap: 12,
   },
   textInput: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#FDE68A',
+    borderColor: '#ede7fb',
     padding: 16,
     fontSize: 18,
     minHeight: 80,
@@ -608,7 +608,7 @@ const styles = StyleSheet.create({
   },
   noOptionsText: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#6b7280',
     marginBottom: 16,
   },
 });
