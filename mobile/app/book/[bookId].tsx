@@ -100,7 +100,7 @@ export default function BookScreen() {
             </TouchableOpacity>
           </>
         ) : (
-          <ActivityIndicator size="large" color="#F59E0B" />
+          <ActivityIndicator size="large" color="#7c6ae0" />
         )}
       </View>
     );
@@ -189,46 +189,46 @@ export default function BookScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FEF3C7' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, backgroundColor: '#FEF3C7' },
+  container: { flex: 1, backgroundColor: '#f4f1fb' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, backgroundColor: '#f4f1fb' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#FDE68A',
+    borderBottomColor: '#ede7fb',
   },
   backButton: { paddingVertical: 8, paddingRight: 16 },
-  backText: { fontSize: 16, color: '#F59E0B', fontWeight: '600' },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: '#92400E', textAlign: 'center' },
+  backText: { fontSize: 16, color: '#7c6ae0', fontWeight: '600', fontFamily: 'PTSans_700Bold' },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', fontFamily: 'PTSans_700Bold', color: '#4b3b86', textAlign: 'center' },
   headerSpacer: { width: 60 },
   bigIcon: { fontSize: 56, marginBottom: 16 },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#92400E', textAlign: 'center', marginBottom: 12 },
-  subtitle: { fontSize: 15, color: '#B45309', textAlign: 'center', marginTop: 12, lineHeight: 21 },
-  progressTrack: { width: '80%', height: 12, borderRadius: 6, backgroundColor: '#FDE68A', overflow: 'hidden' },
-  progressFill: { height: 12, borderRadius: 6, backgroundColor: '#F59E0B' },
+  title: { fontSize: 20, fontWeight: 'bold', fontFamily: 'PTSans_700Bold', color: '#4b3b86', textAlign: 'center', marginBottom: 12 },
+  subtitle: { fontSize: 15, color: '#5b4ba0', textAlign: 'center', marginTop: 12, lineHeight: 21 },
+  progressTrack: { width: '80%', height: 12, borderRadius: 6, backgroundColor: '#ede7fb', overflow: 'hidden' },
+  progressFill: { height: 12, borderRadius: 6, backgroundColor: '#7c6ae0' },
   readerContent: { alignItems: 'center', padding: 16, paddingBottom: 24 },
-  pageImage: { borderRadius: 16, backgroundColor: '#FFFFFF' },
-  missingImage: { justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FDE68A', borderStyle: 'dashed' },
-  pageText: { fontSize: 20, lineHeight: 30, color: '#78350F', textAlign: 'center', marginTop: 20, paddingHorizontal: 8 },
+  pageImage: { borderRadius: 16, backgroundColor: '#ffffff' },
+  missingImage: { justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#ede7fb', borderStyle: 'dashed' },
+  pageText: { fontSize: 20, lineHeight: 30, color: '#3a2e66', textAlign: 'center', marginTop: 20, paddingHorizontal: 8 },
   pager: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderTopWidth: 1,
-    borderTopColor: '#FDE68A',
+    borderTopColor: '#ede7fb',
   },
-  pagerButton: { backgroundColor: '#F59E0B', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
+  pagerButton: { backgroundColor: '#7c6ae0', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
   pagerButtonDisabled: { opacity: 0.35 },
-  pagerButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  pagerCount: { fontSize: 16, color: '#92400E', fontWeight: '600' },
-  primaryButton: { backgroundColor: '#F59E0B', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12, marginTop: 8 },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  secondaryButton: { marginTop: 16, borderWidth: 2, borderColor: '#F59E0B', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 12, backgroundColor: '#FFFFFF' },
-  secondaryButtonText: { color: '#F59E0B', fontSize: 16, fontWeight: '600' },
+  pagerButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '600', fontFamily: 'PTSans_700Bold' },
+  pagerCount: { fontSize: 16, color: '#4b3b86', fontWeight: '600', fontFamily: 'PTSans_700Bold' },
+  primaryButton: { backgroundColor: '#7c6ae0', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12, marginTop: 8 },
+  primaryButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '600', fontFamily: 'PTSans_700Bold' },
+  secondaryButton: { marginTop: 16, borderWidth: 2, borderColor: '#7c6ae0', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 12, backgroundColor: '#ffffff' },
+  secondaryButtonText: { color: '#7c6ae0', fontSize: 16, fontWeight: '600', fontFamily: 'PTSans_700Bold' },
 });

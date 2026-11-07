@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Android adaptive-icon foreground: mark on transparent, inside the ~66% safe zone -->
+  <g transform="translate(300 330) scale(6.6)">
+    <path d="M32 22 C24 16.5 14 16.5 7 20 L7 46 C14 42.5 24 42.5 32 48 Z" fill="#ffffff" fill-opacity="0.98"/>
+    <path d="M32 22 C40 16.5 50 16.5 57 20 L57 46 C50 42.5 40 42.5 32 48 Z" fill="#ffffff" fill-opacity="0.85"/>
+    <path d="M32 22 L32 48" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-opacity="0.5"/>
+    <path d="M46 6 L48 12.5 L54.5 14.5 L48 16.5 L46 23 L44 16.5 L37.5 14.5 L44 12.5 Z" fill="#f6ab2f"/>
+  </g>
+</svg>

@@ -50,13 +50,13 @@ export default function StoriesScreen() {
   const getStatusInfo = (story: Story) => {
     switch (story.status) {
       case 'complete':
-        return { text: 'Story ready', color: '#8B5CF6', icon: '📖' };
+        return { text: 'Story ready', color: '#7c6ae0', icon: '📖' };
       case 'finishing':
-        return { text: 'Finishing touches…', color: '#F59E0B', icon: '⏳' };
+        return { text: 'Finishing touches…', color: '#7c6ae0', icon: '⏳' };
       case 'failed':
-        return { text: 'Got a bit stuck — tap to try again', color: '#B45309', icon: '🧙' };
+        return { text: 'Got a bit stuck — tap to try again', color: '#5b4ba0', icon: '🧙' };
       default:
-        return { text: 'Still being made — tap to keep going', color: '#6B7280', icon: '✏️' };
+        return { text: 'Still being made — tap to keep going', color: '#6b7280', icon: '✏️' };
     }
   };
 
@@ -105,7 +105,7 @@ export default function StoriesScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#F59E0B" />
+        <ActivityIndicator size="large" color="#7c6ae0" />
         <Text style={styles.loadingText}>Loading stories...</Text>
       </View>
     );
@@ -147,7 +147,7 @@ export default function StoriesScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#F59E0B"
+              tintColor="#7c6ae0"
             />
           }
         />
@@ -169,27 +169,27 @@ export default function StoriesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#B45309',
+    color: '#5b4ba0',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#FDE68A',
+    borderBottomColor: '#ede7fb',
   },
   backButton: {
     paddingVertical: 8,
@@ -197,14 +197,14 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: 16,
-    color: '#F59E0B',
-    fontWeight: '600',
+    color: '#7c6ae0',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
   },
   headerTitle: {
     flex: 1,
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
     textAlign: 'center',
   },
   headerSpacer: {
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   },
   storyCard: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 12,
     marginBottom: 12,
@@ -250,13 +250,13 @@ const styles = StyleSheet.create({
   },
   storyTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
+    color: '#1f2937',
     marginBottom: 4,
   },
   storySynopsis: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#6b7280',
     marginBottom: 8,
     lineHeight: 18,
   },
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '500', fontFamily: 'PTSans_700Bold',
   },
   emptyContainer: {
     flex: 1,
@@ -280,26 +280,26 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
     color: '#374151',
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#6b7280',
     textAlign: 'center',
     marginBottom: 24,
   },
   createButton: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#7c6ae0',
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 12,
   },
   createButtonText: {
-    color: '#FFFFFF',
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
   },
   floatingButton: {
     position: 'absolute',
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#7c6ae0',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',

@@ -90,22 +90,22 @@ export default function CreateScreen() {
   const getModeColor = (modeId: CreationModeId) => {
     switch (modeId) {
       case 'wizard':
-        return '#8B5CF6';
+        return '#7c6ae0';
       case 'freeplay':
-        return '#F59E0B';
+        return '#7c6ae0';
       case 'guided':
-        return '#EF4444';
+        return '#ef4444';
       case 'friends':
-        return '#10B981';
+        return '#10b981';
       default:
-        return '#6366F1';
+        return '#6e9bf0';
     }
   };
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#F59E0B" />
+        <ActivityIndicator size="large" color="#7c6ae0" />
         <Text style={styles.loadingText}>Loading story options...</Text>
       </View>
     );
@@ -182,27 +182,27 @@ export default function CreateScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#f4f1fb',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#B45309',
+    color: '#5b4ba0',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#FDE68A',
+    borderBottomColor: '#ede7fb',
   },
   backButton: {
     paddingVertical: 8,
@@ -210,14 +210,14 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: 16,
-    color: '#F59E0B',
-    fontWeight: '600',
+    color: '#7c6ae0',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
   },
   headerTitle: {
     flex: 1,
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
     textAlign: 'center',
   },
   headerSpacer: {
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   childInfo: {
     alignItems: 'center',
     paddingVertical: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     marginBottom: 16,
   },
   childAvatar: {
@@ -235,30 +235,30 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     marginBottom: 12,
     borderWidth: 3,
-    borderColor: '#FDE68A',
+    borderColor: '#ede7fb',
   },
   childAvatarPlaceholder: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#FDE68A',
+    backgroundColor: '#ede7fb',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   childAvatarInitial: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
   },
   childName: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#92400E',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
   },
   sectionTitle: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#6b7280',
     paddingHorizontal: 20,
     marginBottom: 16,
   },
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   generatorCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 20,
     padding: 20,
     marginBottom: 16,
@@ -288,16 +288,16 @@ const styles = StyleSheet.create({
   },
   generatorName: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
+    fontWeight: 'bold', fontFamily: 'PTSans_700Bold',
+    color: '#1f2937',
     marginBottom: 8,
     textAlign: 'center',
   },
   recommended: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#92400E',
-    backgroundColor: '#FEF3C7',
+    fontWeight: '600', fontFamily: 'PTSans_700Bold',
+    color: '#4b3b86',
+    backgroundColor: '#f4f1fb',
     paddingHorizontal: 10,
     paddingVertical: 2,
     borderRadius: 10,
@@ -306,14 +306,14 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 15,
-    color: '#B45309',
+    color: '#5b4ba0',
     paddingHorizontal: 20,
     marginBottom: 12,
     textAlign: 'center',
   },
   generatorDescription: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#6b7280',
     textAlign: 'center',
     lineHeight: 20,
   },
