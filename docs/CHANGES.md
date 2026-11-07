@@ -16,6 +16,18 @@
 
 ## Changes
 
+### 2026-11-07
+
+#### `#51` - New Android APK on the 6.3 likeness fields
+
+**Type**: Mobile build
+
+**Summary**: Ships a new Android APK built from the slice 6.3 mobile code (EAS build `19ea1aab`, from the `#50` merge). The app now reads `likeness.avatar` / `likeness.avatarAnimation`; older installed APKs show letter-tiles until updated, since the old avatar fields were dropped from production in `#50`. Completes the 6.3 rollout.
+
+**Changed**:
+- `public/downloads/storypic-kids.apk`: rebuilt APK (73 MB).
+- `src/app/install/page.tsx`: commit reference bumped to `8df58b8`.
+
 ### 2026-11-06
 
 #### `#50` - The old children/character fields go (slice 6.3)
