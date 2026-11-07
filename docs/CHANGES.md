@@ -18,6 +18,23 @@
 
 ### 2026-11-07
 
+#### `#53` - Public welcome / landing page for non-subscribers
+
+**Type**: UI / Marketing (web)
+
+**Summary**: The root route `/` previously redirected anyone not signed in straight to `/login`, so a prospective customer arriving at the domain met a bare login form with nothing describing the product. Signed-out visitors now see a public welcome / landing page instead: a hero with the value proposition and sign-up CTA, a three-step "how it works", a feature grid (personalised characters, illustrations, read-aloud, print keepsake, safe parent area, installable app) and a closing call to action. Signed-in roles are routed onward exactly as before (admins → `/admin`; parents/writers → child selector). The page reuses the brand system — the shared `BookSparkMark`, the lavender→sky gradient and PT Sans — and renders inside the standard header whose signed-out state already offers Sign In.
+
+**Changed**:
+- `src/app/page.tsx`: signed-out visitors render the welcome landing rather than being redirected to `/login`; the auth-resolved effect no longer pushes `/login` for no user.
+
+**Created**:
+- `src/components/welcome/welcome-landing.tsx`: the landing page (hero, how-it-works, features, closing CTA).
+
+**Docs**:
+- `docs/SYSTEM_DESIGN.md`: §1 "Public entry (welcome landing)" note; Last Updated.
+
+---
+
 #### `#52` - Brand alignment: shared logo, lavender app, icon set
 
 **Type**: Branding / UI (web + mobile)
