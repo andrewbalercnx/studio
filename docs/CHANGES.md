@@ -16,6 +16,23 @@
 
 ## Changes
 
+### 2026-11-08
+
+#### `#54` - SEO and social-share metadata for the public homepage
+
+**Type**: SEO / Marketing (web)
+
+**Summary**: `#53` made the domain root public, but the page shipped only generic default metadata, so links to it in search or on social showed no real description and no preview image. The root layout now carries full SEO and social-share metadata: `metadataBase`, a canonical URL, a title template, keywords, and Open Graph + Twitter `summary_large_image` cards pointing at a branded 1200×630 share image. The layout is a server component, so the tags render into the served `<head>` even though the landing body is client-rendered.
+
+**Changed**:
+- `src/app/layout.tsx`: added `metadataBase`, canonical, title template, keywords, `applicationName`, and `openGraph` + `twitter` card metadata.
+
+**Created**:
+- `public/og/og-image.svg` + `public/og/og-image.png`: the 1200×630 branded share image (brand gradient, logo lockup, "Stories where your child is the hero", tagline).
+- `scripts/generate-og-image.mjs`: sharp SVG→PNG generator (PT Sans). The PNG is committed and is not regenerated in CI — rerun and commit if the SVG changes.
+
+---
+
 ### 2026-11-07
 
 #### `#53` - Public welcome / landing page for non-subscribers
