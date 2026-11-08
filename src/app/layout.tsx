@@ -3,17 +3,61 @@ import './globals.css';
 import { cn } from '@/lib/utils';
 import { Providers } from './providers';
 
+const SITE_URL = 'https://storypic.rcnx.io';
+const SITE_NAME = 'StoryPic Kids';
+const SITE_DESCRIPTION =
+  'StoryPic Kids turns a few photos into beautifully illustrated, personalised storybooks starring your own child — read together on screen or in print.';
+
 export const metadata: Metadata = {
-  title: 'StoryPic Kids',
-  description: 'Create your own storybook with AI!',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: 'StoryPic Kids — personalised storybooks starring your child',
+    template: '%s · StoryPic Kids',
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    'personalised storybooks',
+    'kids books',
+    'custom children’s books',
+    'AI storybooks',
+    'bedtime stories',
+    'illustrated storybooks',
+    'StoryPic Kids',
+  ],
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'StoryPic Kids',
+    title: SITE_NAME,
   },
   formatDetection: {
     telephone: false,
+  },
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    type: 'website',
+    siteName: SITE_NAME,
+    title: 'Stories where your child is the hero',
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    locale: 'en_GB',
+    images: [
+      {
+        url: '/og/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'StoryPic Kids — personalised, illustrated storybooks starring your child',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Stories where your child is the hero',
+    description: SITE_DESCRIPTION,
+    images: ['/og/og-image.png'],
   },
 };
 
