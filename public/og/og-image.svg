@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9b84f2"/>
+      <stop offset="100%" stop-color="#6f93ec"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="30%" cy="24%" r="80%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.30"/>
+      <stop offset="60%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- brand ground -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- logo lockup: mark in a rounded tile + wordmark -->
+  <g transform="translate(80 74)">
+    <rect width="72" height="72" rx="18" fill="#ffffff" fill-opacity="0.16"/>
+    <!-- open book + spark mark (64-unit mark scaled ~0.95, centred in the tile) -->
+    <g transform="translate(4 4) scale(0.95)">
+      <path d="M32 22 C24 16.5 14 16.5 7 20 L7 46 C14 42.5 24 42.5 32 48 Z" fill="#ffffff" fill-opacity="0.96"/>
+      <path d="M32 22 C40 16.5 50 16.5 57 20 L57 46 C50 42.5 40 42.5 32 48 Z" fill="#ffffff" fill-opacity="0.82"/>
+      <path d="M32 22 L32 48" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-opacity="0.5"/>
+      <path d="M46 6 L48 12.5 L54.5 14.5 L48 16.5 L46 23 L44 16.5 L37.5 14.5 L44 12.5 Z" fill="#f6ab2f"/>
+    </g>
+    <text x="92" y="48" font-family="PT Sans, sans-serif" font-size="34" font-weight="700" fill="#ffffff">StoryPic Kids</text>
+  </g>
+
+  <!-- headline -->
+  <text x="80" y="300" font-family="PT Sans, sans-serif" font-size="76" font-weight="700" fill="#ffffff">Stories where your</text>
+  <text x="80" y="388" font-family="PT Sans, sans-serif" font-size="76" font-weight="700" fill="#ffffff">child is the <tspan fill="#ffe9c4">hero</tspan></text>
+
+  <!-- sub -->
+  <text x="82" y="452" font-family="PT Sans, sans-serif" font-size="32" font-weight="400" fill="#ffffff" fill-opacity="0.92">Personalised, illustrated storybooks starring your own child.</text>
+
+  <!-- decorative oversized mark, bottom-right -->
+  <g transform="translate(905 300) scale(9)" opacity="0.92">
+    <path d="M32 22 C24 16.5 14 16.5 7 20 L7 46 C14 42.5 24 42.5 32 48 Z" fill="#ffffff" fill-opacity="0.20"/>
+    <path d="M32 22 C40 16.5 50 16.5 57 20 L57 46 C50 42.5 40 42.5 32 48 Z" fill="#ffffff" fill-opacity="0.14"/>
+    <path d="M32 22 L32 48" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-opacity="0.22"/>
+    <path d="M46 6 L48 12.5 L54.5 14.5 L48 16.5 L46 23 L44 16.5 L37.5 14.5 L44 12.5 Z" fill="#f6ab2f" fill-opacity="0.85"/>
+  </g>
+</svg>
