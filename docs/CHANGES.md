@@ -18,6 +18,22 @@
 
 ### 2026-11-09
 
+#### `#58` - Draw page art at the template's picture-region (imageBox) aspect, not the whole leaf
+
+**Type**: Fix (Books, illustration ↔ print)
+
+**Summary**: A print template (`PrintLayout`) defines, per page type (cover / inside / back), an **`imageBox`** — the rectangle the picture occupies on the page, distinct from the whole leaf, with a `textBox` beside it for the words. The print renderer places art into that box (`print/render.ts` via `getLayoutForPageType`). But the illustration pipeline generated art at the **leaf** aspect (`leafWidth/leafHeight`) and never saw the imageBox, so for any template that reserves space for text the picture was made at the wrong shape and then cropped/letterboxed into the box. (This was a seam from the catalog rebuild: `catalog/layouts.ts` was scoped to only the compatibility subset of the template — "the print slice reads the rest" — exposing one leaf-shape `aspect` hint, which is what `artAspectRatio` reached for. `#56` only changed the no-layout screen default, not the leaf-vs-imageBox confusion. Spread templates, where the picture *is* a full leaf, masked it, as did the fact that every Book today is a screen Book.)
+
+Page art is now drawn at the imageBox aspect for the page type. Screen Books (no layout) keep the 4:5 default; the print/Mixam spec path was already wired and is unchanged.
+
+**Changed**:
+- `src/server/catalog/layouts.ts`: `Layout` gains `imageAspects: { cover, inside, back }`, resolved with the same `getLayoutForPageType` the renderer uses (page-specific layout, else legacy arrays). `artAspectRatio(layout, kind)` prefers the imageBox aspect for that page type, falling back to the leaf, then `SCREEN_ASPECT_RATIO`.
+- `src/server/books/jobs.ts`: `pageArtHandler` passes the art page kind (cover/story/back) to `artAspectRatio`.
+- `src/server/catalog/__tests__/catalog.test.ts`: page art uses the inside imageBox (not the leaf), the cover imageBox, and falls back to the leaf when a page type has no box.
+- `docs/SYSTEM_DESIGN.md`: §3 "Picture format"; Last Updated.
+
+**Follow-ups (dev-todos filed)**: pagination does not yet size text to the template `textBox` (the textual twin of this gap); and the create-book simplification (screen-vs-print, screen modelled as a full-bleed template) remains — the format half of "Option C". The mobile reader still frames pictures separately.
+
 #### `#57` - Internal endpoint to re-illustrate a Book from its current likeness and format
 
 **Type**: Feature / Ops (Books, illustration)

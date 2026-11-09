@@ -71,6 +71,25 @@ describe('Layout from printLayouts', () => {
     expect(artAspectRatio(null)).toBe('4:5');
   });
 
+  it('draws page art at the template picture-region (imageBox) aspect, per page type', () => {
+    // A portrait leaf whose inside picture box is landscape and whose cover is full-bleed.
+    const layout = layoutFromDocuments('l', {
+      name: 'L',
+      leafWidth: 8,
+      leafHeight: 10,
+      insideLayout: { imageBox: { x: 1, y: 1, width: 6, height: 4 } }, // 1.5 → 3:2
+      coverLayout: { imageBox: { x: 0, y: 0, width: 8, height: 10 } }, // 0.8 → 4:5 (full bleed)
+      pageConstraints: { maxPages: 48, pageMultiple: 4 },
+    });
+    expect(layout.imageAspects).toEqual({ cover: 0.8, inside: 1.5, back: null });
+    // Story pages use the inside imageBox, NOT the leaf (0.8 → would be 4:5).
+    expect(artAspectRatio(layout, 'story')).toBe('3:2');
+    expect(artAspectRatio(layout)).toBe('3:2'); // story is the default
+    expect(artAspectRatio(layout, 'cover')).toBe('4:5');
+    // The back cover has no box here, so it falls back to the leaf shape (0.8 → 4:5).
+    expect(artAspectRatio(layout, 'back')).toBe('4:5');
+  });
+
   it('counts two leaves per story page on a spread template', () => {
     const rules = { minPages: 24, maxPages: 48, pageMultiple: 4 as const };
     expect(contentPageCount(12, 2)).toBe(26);

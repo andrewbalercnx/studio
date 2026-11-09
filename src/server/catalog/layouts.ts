@@ -24,8 +24,9 @@
  */
 import type { Firestore } from 'firebase-admin/firestore';
 import { resolvePageConstraints } from '@/lib/print-constraints';
+import { getLayoutForPageType } from '@/lib/print-layout-utils';
 import { SCREEN_ASPECT_RATIO } from '@/lib/books/format';
-import type { PrintLayout, PrintProduct } from '@/lib/types';
+import type { PrintLayout, PrintLayoutPageType, PrintProduct } from '@/lib/types';
 
 /** Interior pages around the story: the title page and the end page (a dedication comes later). */
 export const INTERIOR_MATTER_PAGES = 2;
@@ -36,8 +37,15 @@ export type Layout = {
   layoutId: string;
   name: string;
   medium: 'screen' | 'print';
-  /** Width / height of a page, or null when unknown. */
+  /** Width / height of a whole leaf, or null when unknown (a fallback shape hint). */
   aspect: number | null;
+  /**
+   * Width / height of the *picture region* (the template's `imageBox`) for each
+   * art page type, or null when the template defines none. This — not the leaf —
+   * is the shape page art must be drawn at, so it fills the box the print
+   * renderer places it in without cropping or letterboxing.
+   */
+  imageAspects: { cover: number | null; inside: number | null; back: number | null };
   pageRules: PageRules;
   /** Printed leaves per story page: 1, or 2 for a spread template (words and picture on facing pages). */
   leavesPerSpread: 1 | 2;
@@ -57,6 +65,12 @@ export function layoutFromDocuments(layoutId: string, layoutDoc: Record<string, 
   const rules = resolvePageConstraints(layout, product);
   const width = Number(layout.leafWidth);
   const height = Number(layout.leafHeight);
+  // The picture-region aspect per page type, resolved the same way the print
+  // renderer resolves its boxes (page-specific layout, else legacy arrays).
+  const boxAspect = (pageType: PrintLayoutPageType): number | null => {
+    const box = getLayoutForPageType(layout, pageType).imageBox;
+    return box && Number(box.width) > 0 && Number(box.height) > 0 ? Number(box.width) / Number(box.height) : null;
+  };
   const asNumbers = (value: unknown): number[] | null =>
     Array.isArray(value) && value.every((v) => typeof v === 'number') ? (value as number[]) : null;
   const asStrings = (value: unknown): string[] | null =>
@@ -66,6 +80,7 @@ export function layoutFromDocuments(layoutId: string, layoutDoc: Record<string, 
     name: typeof layout.name === 'string' ? layout.name : layoutId,
     medium: layoutDoc.medium === 'screen' ? 'screen' : 'print',
     aspect: width > 0 && height > 0 ? width / height : null,
+    imageAspects: { cover: boxAspect('cover'), inside: boxAspect('inside'), back: boxAspect('backCover') },
     pageRules: { minPages: rules.minPages, maxPages: rules.maxPages, pageMultiple: rules.pageMultiple },
     leavesPerSpread: Number(layout.leavesPerSpread) === 2 ? 2 : 1,
     printProductId: typeof layout.printProductId === 'string' && layout.printProductId ? layout.printProductId : null,
@@ -128,10 +143,21 @@ const ASPECT_RATIOS: Array<[string, number]> = [
   ['9:16', 9 / 16],
 ];
 
-/** Aspect ratio for page art: the Layout's page shape, or the screen-Book portrait default. */
-export function artAspectRatio(layout: Layout | null): string {
-  if (!layout?.aspect) return SCREEN_ASPECT_RATIO;
-  const aspect = layout.aspect;
+/** The art pages (pipeline.md): the front cover, the story pages and the back cover. */
+export type ArtPageKind = 'cover' | 'story' | 'back';
+const IMAGE_ASPECT_FOR: Record<ArtPageKind, keyof Layout['imageAspects']> = { cover: 'cover', story: 'inside', back: 'back' };
+
+/**
+ * Aspect ratio for page art, snapped to the nearest ratio the image model draws.
+ *
+ * The target is the shape of the hole the picture goes into: the template's
+ * picture region (`imageBox`) for this page type. Only when the template defines
+ * no such box do we fall back to the whole leaf, and finally to the screen-Book
+ * portrait default (a screen Book has no layout at all).
+ */
+export function artAspectRatio(layout: Layout | null, kind: ArtPageKind = 'story'): string {
+  const aspect = layout?.imageAspects[IMAGE_ASPECT_FOR[kind]] ?? layout?.aspect ?? null;
+  if (!aspect) return SCREEN_ASPECT_RATIO;
   return ASPECT_RATIOS.reduce((best, candidate) =>
     Math.abs(Math.log(candidate[1] / aspect)) < Math.abs(Math.log(best[1] / aspect)) ? candidate : best
   )[0];
