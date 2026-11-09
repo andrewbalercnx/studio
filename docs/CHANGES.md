@@ -18,6 +18,24 @@
 
 ### 2026-11-08
 
+#### `#55` - Internal likeness-backfill endpoint
+
+**Type**: Fix / Internal API (likeness, illustration quality)
+
+**Summary**: Pre-pipeline child/character profiles (created before the `likeness.describe`/`likeness.portrait` jobs existed, and never edited since) have photos but no generated `appearance` or `portrait`. Both the cast-sheet and page-art prompts rely on those as the identity anchor, so illustrations of such a child can drift — e.g. a page rendering the child with the wrong skin tone, worst on crowded multi-character pages. A production audit found **no** child or character had both fields populated. This adds a system-level backfill that regenerates them.
+
+New `POST /api/internal/likeness/backfill` (secret-protected, same pattern as `/api/internal/dev-todos`) enqueues `likeness.describe` + `likeness.portrait` for profiles with photos but a missing appearance/portrait. It acts as the **system** — ownership is read from each document's `ownerUid` — so it needs no user auth and is **not** a user-impersonation path (unlike `…/likeness/refresh`). Accepts `{ scanMissing: true }` to sweep both collections, or `{ targets: [{ kind, id }] }` for specific profiles. Jobs dispatch through the normal runner.
+
+**Created**:
+- `src/app/api/internal/likeness/backfill/route.ts`: the secret-protected route.
+
+**Changed**:
+- `src/server/characters/service.ts`: new `backfillLikeness(deps, { targets?, scanMissing? })` (system, no `VerifiedUser`); imports `readLikeness`.
+- `src/server/characters/__tests__/likeness.test.ts`: tests for scan + targeted backfill, skips (deleted / no photos / not found), and that complete profiles are left untouched.
+- `docs/API.md`: documented the endpoint; Last Updated.
+
+---
+
 #### `#54` - SEO and social-share metadata for the public homepage
 
 **Type**: SEO / Marketing (web)

@@ -14,7 +14,7 @@ import { FakeFirestore } from '../../testing/fake-firestore';
 import type { VerifiedUser } from '../../http/auth';
 import { normalize, photoIdOf, readLikeness } from '../entities';
 import { describePrompt, portraitPrompt, registerLikenessJobs, type LikenessJobDeps } from '../likeness-jobs';
-import { addPhoto, createPerson, getPerson, legacyChildrenResponse, listPeople, removePhoto, setAvatar, updatePerson, type PeopleDeps } from '../service';
+import { addPhoto, backfillLikeness, createPerson, getPerson, legacyChildrenResponse, listPeople, removePhoto, setAvatar, updatePerson, type PeopleDeps } from '../service';
 import { migrationPatch } from '../../../../scripts/migrate-likeness.mjs';
 import { dropPlan, LEGACY_FIELDS } from '../../../../scripts/drop-legacy-likeness.mjs';
 
@@ -131,6 +131,58 @@ describe('people service and likeness jobs', () => {
 
   const drain = () => dispatcher.drain();
   const raw = async (collection: string, id: string) => (await db.collection(collection).doc(id).get()).data() as Record<string, unknown>;
+
+  describe('backfillLikeness (system, no user)', () => {
+    beforeEach(async () => {
+      // Pre-pipeline profile: photos but no appearance/portrait → at risk of drift.
+      await db.collection('children').doc('needs').set({ ownerUid: 'p1', displayName: 'Nym', likeness: { photos: ['https://img/1.jpg', 'https://img/2.jpg'] } });
+      // Already complete → scan must leave it alone.
+      await db.collection('children').doc('complete').set({ ownerUid: 'p1', displayName: 'Ok', likeness: { photos: ['https://img/a.jpg'], appearance: 'Red hair.', portrait: 'https://img/p.png' } });
+      // No photos → skipped.
+      await db.collection('characters').doc('nopix').set({ ownerUid: 'p1', displayName: 'Moon', likeness: { photos: [] } });
+      // Deleted → skipped even with photos.
+      await db.collection('children').doc('gone').set({ ownerUid: 'p1', displayName: 'Gone', deletedAt: new Date(), likeness: { photos: ['https://img/g.jpg'] } });
+    });
+
+    it('scanMissing enqueues describe+portrait only for incomplete profiles with photos', async () => {
+      const result = await backfillLikeness(deps, { scanMissing: true });
+      await drain();
+
+      expect(result.enqueued).toEqual([{ kind: 'child', id: 'needs', photos: 2 }]);
+      expect(result.skipped).toEqual([]); // the scan never offers complete/no-photo/deleted docs
+
+      const needs = (await raw('children', 'needs')).likeness as Record<string, unknown>;
+      expect(needs.appearance).toBe('Curly brown hair and blue eyes.');
+      expect(needs.portrait).toEqual(expect.stringContaining('firebasestorage'));
+
+      // The complete profile is untouched.
+      const complete = (await raw('children', 'complete')).likeness as Record<string, unknown>;
+      expect(complete.appearance).toBe('Red hair.');
+      expect(complete.portrait).toBe('https://img/p.png');
+    });
+
+    it('targets a specific profile and reports skips with reasons', async () => {
+      const result = await backfillLikeness(deps, {
+        targets: [
+          { kind: 'child', id: 'needs' },
+          { kind: 'character', id: 'nopix' },
+          { kind: 'child', id: 'gone' },
+          { kind: 'child', id: 'missing' },
+        ],
+      });
+      await drain();
+
+      expect(result.enqueued).toEqual([{ kind: 'child', id: 'needs', photos: 2 }]);
+      expect(result.skipped).toEqual(
+        expect.arrayContaining([
+          { kind: 'character', id: 'nopix', reason: 'no photos' },
+          { kind: 'child', id: 'gone', reason: 'deleted' },
+          { kind: 'child', id: 'missing', reason: 'not found' },
+        ]),
+      );
+      expect((await raw('children', 'needs')).likeness).toMatchObject({ appearance: 'Curly brown hair and blue eyes.' });
+    });
+  });
 
   it('creates a child with an "imagined" avatar, then animates it', async () => {
     const child = await createPerson(deps, p1, 'child', { displayName: 'Emma', description: 'Loves dinosaurs', idempotencyKey: 'create-emma-1' });
