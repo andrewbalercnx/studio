@@ -90,12 +90,13 @@ export function narrateSpec(manuscript: { id: string; ownerUid: string }, pageNu
   };
 }
 
-export function prepareCastSpec(book: { id: string; ownerUid: string }): JobSpec {
+/** `run` makes a re-illustration's cast sheets (and the page art they feed) fresh jobs. */
+export function prepareCastSpec(book: { id: string; ownerUid: string }, run = 'initial'): JobSpec {
   return {
     kind: BOOK_JOB_KINDS.prepareCast,
     ownerUid: book.ownerUid,
     target: { collection: 'books', id: book.id },
-    input: { bookId: book.id },
+    input: { bookId: book.id, run },
   };
 }
 
@@ -382,7 +383,7 @@ function narrateHandler(getDeps: () => Promise<BookJobDeps>): JobDefinition['run
 
 function prepareCastHandler(): JobDefinition['run'] {
   return async (ctx) => {
-    const { bookId } = input<{ bookId: string }>(ctx.job);
+    const { bookId, run } = input<{ bookId: string; run?: string }>(ctx.job);
     const book = await books.using(ctx.db).require(bookId);
     if (book.status !== 'illustrating') return;
     const manuscript = await manuscripts.using(ctx.db).require(book.manuscriptId);
@@ -392,7 +393,7 @@ function prepareCastHandler(): JobDefinition['run'] {
     const story = await loadStorySource(ctx.db, book.storyId);
     const cast = await loadCast(ctx.db, story);
     if (cast.members.length === 0) {
-      await ctx.enqueue([illustrateSpec(book, 'initial')]);
+      await ctx.enqueue([illustrateSpec(book, run ?? 'initial')]);
       return;
     }
     await ctx.enqueueChildren(
@@ -400,14 +401,14 @@ function prepareCastHandler(): JobDefinition['run'] {
         kind: BOOK_JOB_KINDS.castSheet,
         ownerUid: book.ownerUid,
         target: { collection: 'books', id: bookId, subpath: `castSheets/${member.castId}` },
-        input: { bookId, castId: member.castId },
+        input: { bookId, castId: member.castId, run: run ?? 'initial' },
       }))
     );
   };
 }
 
 const prepareCastFanIn: NonNullable<JobDefinition['onChildrenComplete']> = async ({ tx, db, parent, children }) => {
-  const { bookId } = parent.input as { bookId: string };
+  const { bookId, run } = parent.input as { bookId: string; run?: string };
   const sheetRepo = castSheets.using(db).of(bookId);
   const updates: Array<{ castId: string; jobId: string; status: JobStatus }> = [];
   for (const child of children) {
@@ -417,7 +418,7 @@ const prepareCastFanIn: NonNullable<JobDefinition['onChildrenComplete']> = async
   }
   return {
     // Page art runs whatever happened to the sheets: a missing sheet falls back to the portrait or the words.
-    enqueue: [illustrateSpec({ id: bookId, ownerUid: parent.ownerUid }, 'initial')],
+    enqueue: [illustrateSpec({ id: bookId, ownerUid: parent.ownerUid }, run ?? 'initial')],
     apply: async (writeTx: Transaction) => {
       for (const update of updates) {
         await sheetRepo.updateIn(writeTx, update.castId, { job: { jobId: update.jobId, status: update.status } });

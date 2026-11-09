@@ -16,6 +16,25 @@
 
 ## Changes
 
+### 2026-11-09
+
+#### `#57` - Internal endpoint to re-illustrate a Book from its current likeness and format
+
+**Type**: Feature / Ops (Books, illustration)
+
+**Summary**: Adds a secret-protected system endpoint that redraws an existing Book's pictures from scratch while keeping its words, so a Book made before a likeness backfill (#55) or the 4:5 format change (#56) can be brought up to date. It clears every art page's picture and the Book's cast sheets, resets the art rollup, and re-runs the illustration pipeline (`book.prepareCast` → `book.castSheet` → `book.illustrate` → `book.pageArt`) with a fresh run nonce, so cast sheets and page art regenerate from the **current** likeness (`portrait`/`photos`/`appearance`) and at the **current** aspect ratio. Acts as the system (ownership is read from the Book document), so it needs no user auth and is not an impersonation path; a locked Book is refused.
+
+This is the mechanism needed to regenerate book `bk_1b583c2aec70e8b03873cd00` (page 9 hallucinated the child) now that both the likeness backfill and the 4:5 format are deployed: `retryPage` only acts on failed pages, `pageArtHandler` skips pages that already have `artUrl`, and cast sheets are sticky, so an in-place regen must clear them first.
+
+**Created**:
+- `src/app/api/internal/books/reillustrate/route.ts`: `POST /api/internal/books/reillustrate` (`X-Internal-Secret`, body `{ bookId }`), returns `{ pagesCleared, castSheetsCleared, status }`; maps `AppError` to its status/code.
+
+**Changed**:
+- `src/server/books/service.ts`: new system-level `reillustrateBook(deps, bookId)` — clears art pages + cast sheets, resets the rollup to `illustrating`, enqueues `prepareCast` with a `redraw-…` run nonce; refuses a locked/unknown Book.
+- `src/server/books/jobs.ts`: `prepareCastSpec(book, run = 'initial')` threads a run nonce through `book.prepareCast` → `book.castSheet` child jobs and the fan-in's `book.illustrate`, so a re-illustration produces fresh jobs (the default `'initial'` keeps existing behaviour for new Books).
+- `src/server/books/__tests__/pipeline.test.ts`: re-illustrate clears and redraws the whole book from fresh jobs; refuses a locked book and reports an unknown one.
+- `docs/API.md`: new internal route; Last Updated.
+
 ### 2026-11-08
 
 #### `#56` - Screen Books draw pictures in portrait 4:5 (not square)

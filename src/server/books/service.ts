@@ -6,7 +6,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Firestore, Transaction } from 'firebase-admin/firestore';
 import { layoutSupports, loadForm, loadLayout, loadStyle, resolveManuscriptShape, type Form, type ManuscriptShape } from '../catalog';
-import { bookPages, books, manuscripts } from '../data/repositories';
+import { bookPages, books, castSheets, manuscripts } from '../data/repositories';
 import type { WithId } from '../data/repository';
 import type { Book, BookPage } from '../data/schemas/book';
 import type { Manuscript } from '../data/schemas/manuscript';
@@ -335,6 +335,57 @@ export async function retryPage(
   });
   await outcome.pending.dispatch();
   return { bookId, pageNumber, status: 'illustrating' };
+}
+
+// ---------------------------------------------------------------------------
+// Re-illustrate a Book (system-level, no user)
+// ---------------------------------------------------------------------------
+
+export type ReillustrateResult = {
+  bookId: string;
+  status: Book['status'];
+  pagesCleared: number;
+  castSheetsCleared: number;
+};
+
+/**
+ * Redraw a Book's pictures from scratch, keeping its words.
+ *
+ * Clears every art page's picture and the cast sheets, then runs the
+ * illustration pipeline again (prepareCast → castSheet → illustrate → pageArt),
+ * so the cast sheets and page art are regenerated from the current likeness and
+ * at the current aspect ratio. Unlike `retryPage` this does not need a failed
+ * page; unlike the user routes it reads ownership from the Book document, so it
+ * is a system operation, not an impersonation path. A locked Book is refused
+ * (unlock it first).
+ */
+export async function reillustrateBook(deps: BookServiceDeps, bookId: string): Promise<ReillustrateResult> {
+  const { db } = deps;
+  const bookRepo = books.using(db);
+  const pageRepo = bookPages.using(db).of(bookId);
+  const sheetRepo = castSheets.using(db).of(bookId);
+
+  const outcome = await db.runTransaction(async (tx) => {
+    // Reads.
+    const book = await bookRepo.getIn(tx, bookId);
+    if (!book) throw new NotFoundError('Book not found', { code: 'BOOK_NOT_FOUND', details: { bookId } });
+    if (book.status === 'locked') throw new ConflictError('Unlock the book first', { code: 'BOOK_LOCKED' });
+    const pageSnapshot = await tx.get(await pageRepo.collection());
+    const artPages = pageSnapshot.docs.map((doc) => pageRepo.parse(doc)).filter((p) => ART_PAGE_KINDS.has(p.kind));
+    const sheetSnapshot = await tx.get(await sheetRepo.collection());
+    const sheets = sheetSnapshot.docs.map((doc) => sheetRepo.parse(doc));
+
+    // A fresh run nonce makes every job of this re-illustration new (cast sheets, illustrate, page art).
+    const pending = await deps.runner.enqueueInTransaction(tx, [prepareCastSpec({ id: bookId, ownerUid: book.ownerUid }, `redraw-${randomUUID()}`)]);
+
+    // Writes: wipe the art and cast sheets, reset the rollup, start illustrating again.
+    for (const page of artPages) await pageRepo.updateIn(tx, String(page.pageNumber), { artUrl: null, artJob: null });
+    for (const sheet of sheets) await sheetRepo.updateIn(tx, sheet.castId, { imageUrl: null, job: null });
+    await bookRepo.updateIn(tx, bookId, { status: 'illustrating', art: { total: artPages.length, done: 0, failed: 0 } });
+    return { pending, pagesCleared: artPages.length, castSheetsCleared: sheets.length };
+  });
+  await outcome.pending.dispatch();
+  return { bookId, status: 'illustrating', pagesCleared: outcome.pagesCleared, castSheetsCleared: outcome.castSheetsCleared };
 }
 
 // ---------------------------------------------------------------------------
