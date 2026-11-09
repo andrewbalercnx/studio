@@ -24,6 +24,7 @@
  */
 import type { Firestore } from 'firebase-admin/firestore';
 import { resolvePageConstraints } from '@/lib/print-constraints';
+import { SCREEN_ASPECT_RATIO } from '@/lib/books/format';
 import type { PrintLayout, PrintProduct } from '@/lib/types';
 
 /** Interior pages around the story: the title page and the end page (a dedication comes later). */
@@ -127,9 +128,9 @@ const ASPECT_RATIOS: Array<[string, number]> = [
   ['9:16', 9 / 16],
 ];
 
-/** Aspect ratio for page art: the Layout's page shape, or square for a screen Book. */
+/** Aspect ratio for page art: the Layout's page shape, or the screen-Book portrait default. */
 export function artAspectRatio(layout: Layout | null): string {
-  if (!layout?.aspect) return '1:1';
+  if (!layout?.aspect) return SCREEN_ASPECT_RATIO;
   const aspect = layout.aspect;
   return ASPECT_RATIOS.reduce((best, candidate) =>
     Math.abs(Math.log(candidate[1] / aspect)) < Math.abs(Math.log(best[1] / aspect)) ? candidate : best

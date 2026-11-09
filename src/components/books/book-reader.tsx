@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ImageOff, LoaderCircle, RotateCcw, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { pageArtState, type BookPageDoc, type ManuscriptPageDoc } from '@/lib/books/types';
+import { cssAspectRatio } from '@/lib/books/format';
 
 export type BookReaderProps = {
   title: string;
@@ -80,7 +81,7 @@ export function BookReader({ title, pages, words, onRetryPage, locked }: BookRea
 
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-2xl mx-auto px-4 pb-8" data-testid="book-reader">
-      <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-amber-50 border-4 border-amber-200 shadow-lg">
+      <div className="relative w-full rounded-2xl overflow-hidden bg-amber-50 border-4 border-amber-200 shadow-lg" style={{ aspectRatio: cssAspectRatio() }}>
         {art === 'done' ? (
           // eslint-disable-next-line @next/next/no-img-element -- art URLs are Storage download URLs (or TEST_MODE data URLs)
           <img src={page.artUrl!} alt={isCover ? title : `Picture for page ${page.manuscriptPage}`} className="h-full w-full object-cover" />

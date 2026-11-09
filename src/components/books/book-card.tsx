@@ -37,7 +37,7 @@ export function BookCard({ book, href }: { book: BookDoc; href: string }) {
   return (
     <Link href={href} className="block" data-testid="book-card" data-book-status={book.status}>
       <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-        <div className="aspect-square relative bg-gray-100">
+        <div className="aspect-[4/5] relative bg-gray-100">
           {cover?.artUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- Storage download URL (or TEST_MODE data URL)
             <img src={cover.artUrl} alt={title} className="absolute inset-0 h-full w-full object-cover" />

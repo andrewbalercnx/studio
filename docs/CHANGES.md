@@ -18,6 +18,28 @@
 
 ### 2026-11-08
 
+#### `#56` - Screen Books draw pictures in portrait 4:5 (not square)
+
+**Type**: Fix / UX (Books, illustration)
+
+**Summary**: Book pictures were generated square (`artAspectRatio` returned `1:1` whenever a Book had no print layout — which is every Book today) and the reader framed them in a hardcoded `aspect-square` box, so stories read as a square block rather than a book. Screen Books now use a portrait **4:5** for both generation and display. A Book with a print Layout still uses that layout's page aspect; only the no-layout (screen) default changed, from `1:1` to `4:5`. One shared constant (`src/lib/books/format.ts`) is the single source of truth for both the generation aspect and the reader's picture frame, so the two never drift.
+
+This is the first half of the create-book simplification ("Option C"): the screen-vs-print **format** decision and the simplified create-book UI (choose a specific print layout up front, or screen) follow separately; until then every Book is a screen Book at 4:5.
+
+**Created**:
+- `src/lib/books/format.ts`: `SCREEN_ASPECT_RATIO` (`'4:5'`), `SCREEN_ASPECT`, `cssAspectRatio()`.
+
+**Changed**:
+- `src/server/catalog/layouts.ts`: `artAspectRatio(null)` returns `SCREEN_ASPECT_RATIO` (was `'1:1'`).
+- `src/components/books/book-reader.tsx`: picture frame uses the shared aspect (was `aspect-square`).
+- `src/components/books/book-card.tsx`: cover thumbnail is `4/5` (was square), matching the portrait covers.
+- `src/server/catalog/__tests__/catalog.test.ts`: `artAspectRatio(null)` expects `'4:5'`.
+- `docs/SYSTEM_DESIGN.md`: §3 "Picture format"; Last Updated.
+
+**Follow-up**: the mobile reader (`mobile/`) frames pictures separately and will need the same change in a future APK; and the create-book UI simplification (screen vs. a chosen print layout) is the remaining Option C work.
+
+---
+
 #### `#55` - Internal likeness-backfill endpoint
 
 **Type**: Fix / Internal API (likeness, illustration quality)

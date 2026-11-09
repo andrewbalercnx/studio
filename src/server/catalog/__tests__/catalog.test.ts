@@ -67,7 +67,8 @@ describe('Layout from printLayouts', () => {
     expect(layoutSupports(layout, 24, 'balanced')).toMatchObject({ ok: false });
     expect(layoutSupports({ ...layout, supportedDensities: ['picture-led'] }, 16, 'balanced')).toMatchObject({ ok: false });
     expect(artAspectRatio(layout)).toBe('5:4');
-    expect(artAspectRatio(null)).toBe('1:1');
+    // No layout = a screen Book: the portrait 4:5 default, not square.
+    expect(artAspectRatio(null)).toBe('4:5');
   });
 
   it('counts two leaves per story page on a spread template', () => {
