@@ -16,7 +16,7 @@ import { COLLECTION_FOR, editableCharacterSchema, editableChildSchema, type Pers
 import { BadRequestError, ConflictError, NotFoundError } from '../errors';
 import { assertOwner, isPrivileged, type VerifiedUser } from '../http';
 import type { JobRunner, JobSpec } from '../jobs';
-import { likenessWrite, listOwnedPeople, normalize, ownerOf, personaChildId, photoIdOf, type Person } from './entities';
+import { likenessWrite, listOwnedPeople, normalize, ownerOf, personaChildId, photoIdOf, readLikeness, type Person } from './entities';
 import { avatarSpec, likenessSpecs } from './likeness-jobs';
 
 export type PeopleDeps = {
@@ -324,6 +324,75 @@ export async function refreshLikeness(deps: PeopleDeps, user: VerifiedUser, kind
   const { person } = await loadOwnedRaw(deps.db, user, kind, id);
   await commitWithJobs(deps, async () => ({ specs: likenessSpecs(person, person.likeness.photos, `refresh-${deps.now().getTime()}`) }));
   return getPerson(deps.db, user, kind, id);
+}
+
+export type BackfillTarget = { kind: PersonKind; id: string };
+export type BackfillLikenessResult = {
+  scanned: number;
+  enqueued: Array<{ kind: PersonKind; id: string; photos: number }>;
+  skipped: Array<{ kind: PersonKind; id: string; reason: string }>;
+};
+
+/**
+ * System-level likeness backfill (no user). Enqueues `likeness.describe` +
+ * `likeness.portrait` for persons that have photos but are missing the generated
+ * `appearance` or `portrait` — the pre-pipeline profiles the per-photo trigger
+ * never ran for, whose illustrations drift for want of an identity anchor.
+ *
+ * Internal use only (secret-protected route). It acts as the system, never as a
+ * parent: ownership comes from each document's own `ownerUid`, so it is not a
+ * user impersonation path. Jobs dispatch through the normal runner after commit.
+ */
+export async function backfillLikeness(
+  deps: PeopleDeps,
+  input: { targets?: BackfillTarget[]; scanMissing?: boolean },
+): Promise<BackfillLikenessResult> {
+  const nonce = `backfill-${deps.now().getTime()}`;
+  const enqueue: Array<{ kind: PersonKind; id: string; ownerUid: string; photos: string[] }> = [];
+  const skipped: BackfillLikenessResult['skipped'] = [];
+  let scanned = 0;
+
+  const isDeleted = (data: FirebaseFirestore.DocumentData) => data.deletedAt !== undefined && data.deletedAt !== null;
+  const consider = (kind: PersonKind, id: string, data: FirebaseFirestore.DocumentData) => {
+    if (isDeleted(data)) return skipped.push({ kind, id, reason: 'deleted' });
+    const ownerUid = ownerOf(data);
+    if (!ownerUid) return skipped.push({ kind, id, reason: 'no ownerUid' });
+    const likeness = readLikeness(data);
+    if (!likeness.photos.length) return skipped.push({ kind, id, reason: 'no photos' });
+    enqueue.push({ kind, id, ownerUid, photos: likeness.photos });
+  };
+
+  if (input.scanMissing) {
+    for (const kind of ['child', 'character'] as PersonKind[]) {
+      const snapshot = await deps.db.collection(COLLECTION_FOR[kind]).get();
+      for (const doc of snapshot.docs) {
+        scanned += 1;
+        const data = doc.data();
+        if (isDeleted(data)) continue;
+        const likeness = readLikeness(data);
+        if (likeness.photos.length && (!likeness.appearance || !likeness.portrait)) consider(kind, doc.id, data);
+      }
+    }
+  }
+
+  for (const target of input.targets ?? []) {
+    if (enqueue.some((e) => e.kind === target.kind && e.id === target.id)) continue;
+    const snapshot = await deps.db.collection(COLLECTION_FOR[target.kind]).doc(target.id).get();
+    scanned += 1;
+    if (!snapshot.exists) {
+      skipped.push({ kind: target.kind, id: target.id, reason: 'not found' });
+      continue;
+    }
+    consider(target.kind, target.id, snapshot.data()!);
+  }
+
+  const specs = enqueue.flatMap((p) => likenessSpecs({ kind: p.kind, id: p.id, ownerUid: p.ownerUid }, p.photos, nonce));
+  if (specs.length) await commitWithJobs(deps, async () => ({ specs }));
+  return {
+    scanned,
+    enqueued: enqueue.map((p) => ({ kind: p.kind, id: p.id, photos: p.photos.length })),
+    skipped,
+  };
 }
 
 /**
