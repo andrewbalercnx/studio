@@ -8,7 +8,7 @@ vi.mock('@/lib/persona.server', () => ({
 import { TEST_MODE_AUDIO_DATA_URL, TEST_MODE_IMAGE_DATA_URL } from '@/lib/test-mode';
 import { NoImageReturnedError } from '../../ai/harness';
 import { bookPages, books, castSheets, jobs, manuscriptPages, manuscripts } from '../../data/repositories';
-import { createBook, createManuscript, lockBook, retryPage, unlockBook, type BookUnlockHook } from '../service';
+import { createBook, createManuscript, lockBook, reillustrateBook, retryPage, unlockBook, type BookUnlockHook } from '../service';
 import { createBench, seed, user, type Bench } from './helpers';
 
 const p1 = user('p1');
@@ -318,6 +318,48 @@ describe('lock and unlock', () => {
     const result = await createBook(bench.services, p1, { storyId: 's1', formId: 'picture', styleId: 'water' });
     await expect(lockBook(bench.services, p1, result.bookId)).rejects.toMatchObject({ status: 409, code: 'BOOK_NOT_FINISHED' });
     await bench.drain();
+  });
+});
+
+describe('reillustrate (system, no user)', () => {
+  it('clears the art and cast sheets and redraws the whole book from fresh jobs', async () => {
+    const result = await makeBook();
+    const before = await books.using(bench.db).require(result.bookId);
+    expect(before.status).toBe('ready');
+    const firstPageArt = await jobsOfKind('book.pageArt');
+    const firstCastSheets = await jobsOfKind('book.castSheet');
+
+    const outcome = await reillustrateBook(bench.services, result.bookId);
+    // 14 art pages (cover + 12 story + back), 2 cast members.
+    expect(outcome).toEqual({ bookId: result.bookId, status: 'illustrating', pagesCleared: 14, castSheetsCleared: 2 });
+
+    // Immediately after: book is illustrating again, every art page wiped, cast sheets wiped.
+    const reset = await books.using(bench.db).require(result.bookId);
+    expect(reset).toMatchObject({ status: 'illustrating', art: { total: 14, done: 0, failed: 0 } });
+    const clearedPages = await bookPages.using(bench.db).of(result.bookId).where({});
+    const art = clearedPages.filter((p) => p.kind === 'cover' || p.kind === 'story' || p.kind === 'back');
+    expect(art.every((p) => p.artUrl === null && p.artJob === null)).toBe(true);
+    const clearedSheets = await castSheets.using(bench.db).of(result.bookId).where({});
+    expect(clearedSheets.every((s) => s.imageUrl === null)).toBe(true);
+
+    // Draining the new run redraws cast sheets and every page; the book ends ready again.
+    await bench.drain();
+    const redrawn = await books.using(bench.db).require(result.bookId);
+    expect(redrawn).toMatchObject({ status: 'ready', art: { total: 14, done: 14, failed: 0 } });
+    const finalPages = (await bookPages.using(bench.db).of(result.bookId).where({})).filter((p) => p.kind === 'cover' || p.kind === 'story' || p.kind === 'back');
+    expect(finalPages.every((p) => p.artUrl?.startsWith(`https://storage.test/books/${result.bookId}/pages/`) && p.artJob?.status === 'succeeded')).toBe(true);
+    const finalSheets = await castSheets.using(bench.db).of(result.bookId).where({});
+    expect(finalSheets.every((s) => s.imageUrl?.startsWith(`https://storage.test/books/${result.bookId}/castSheets/`))).toBe(true);
+    // Fresh jobs: the second run added a new set of page-art and cast-sheet jobs.
+    expect((await jobsOfKind('book.pageArt')).length).toBe(firstPageArt.length * 2);
+    expect((await jobsOfKind('book.castSheet')).length).toBe(firstCastSheets.length * 2);
+  });
+
+  it('refuses a locked book and reports an unknown one', async () => {
+    const result = await makeBook();
+    await lockBook(bench.services, p1, result.bookId);
+    await expect(reillustrateBook(bench.services, result.bookId)).rejects.toMatchObject({ status: 409, code: 'BOOK_LOCKED' });
+    await expect(reillustrateBook(bench.services, 'bk_nope')).rejects.toMatchObject({ status: 404, code: 'BOOK_NOT_FOUND' });
   });
 });
 
