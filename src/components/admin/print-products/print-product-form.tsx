@@ -460,7 +460,7 @@ export function PrintProductForm({
           </div>
           <div className="space-y-2">
             <Label>Bleed (mm)</Label>
-            <Input type="number" step="0.001" {...register('mixamSpec.format.bleedRequired')} />
+            <Input type="number" step="any" {...register('mixamSpec.format.bleedRequired')} />
           </div>
         </div>
 
@@ -482,11 +482,11 @@ export function PrintProductForm({
               <div key={field.id} className="grid grid-cols-4 gap-2 items-end rounded-md border p-2">
                 <div className="space-y-1">
                   <Label className="text-xs">Width (mm)</Label>
-                  <Input type="number" step="0.1" {...register(`mixamSpec.format.allowedTrimSizes.${index}.width`)} />
+                  <Input type="number" step="any" {...register(`mixamSpec.format.allowedTrimSizes.${index}.width`)} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Height (mm)</Label>
-                  <Input type="number" step="0.1" {...register(`mixamSpec.format.allowedTrimSizes.${index}.height`)} />
+                  <Input type="number" step="any" {...register(`mixamSpec.format.allowedTrimSizes.${index}.height`)} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Label</Label>

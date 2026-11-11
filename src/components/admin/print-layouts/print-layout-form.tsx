@@ -229,19 +229,19 @@ export function PrintLayoutForm({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">X</Label>
-            <Input type="number" step="0.01" {...register(`${prefix}.${index}.x`)} defaultValue={field.x} />
+            <Input type="number" step="any" {...register(`${prefix}.${index}.x`)} defaultValue={field.x} />
           </div>
            <div className="space-y-1">
             <Label className="text-xs">Y</Label>
-            <Input type="number" step="0.01" {...register(`${prefix}.${index}.y`)} defaultValue={field.y} />
+            <Input type="number" step="any" {...register(`${prefix}.${index}.y`)} defaultValue={field.y} />
           </div>
            <div className="space-y-1">
             <Label className="text-xs">W</Label>
-            <Input type="number" step="0.01" {...register(`${prefix}.${index}.width`)} defaultValue={field.width} />
+            <Input type="number" step="any" {...register(`${prefix}.${index}.width`)} defaultValue={field.width} />
           </div>
            <div className="space-y-1">
             <Label className="text-xs">H</Label>
-            <Input type="number" step="0.01" {...register(`${prefix}.${index}.height`)} defaultValue={field.height} />
+            <Input type="number" step="any" {...register(`${prefix}.${index}.height`)} defaultValue={field.height} />
           </div>
            <Button variant="ghost" size="icon" onClick={() => removeFn(index)} className="self-end">
              <Trash2 className="h-4 w-4 text-destructive" />
@@ -319,19 +319,19 @@ export function PrintLayoutForm({
                     )}
                     <div className="space-y-1">
                       <Label className="text-xs">X</Label>
-                      <Input type="number" step="0.01" {...register(`${prefix}.imageBox.x`)} />
+                      <Input type="number" step="any" {...register(`${prefix}.imageBox.x`)} />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Y</Label>
-                      <Input type="number" step="0.01" {...register(`${prefix}.imageBox.y`)} />
+                      <Input type="number" step="any" {...register(`${prefix}.imageBox.y`)} />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">W</Label>
-                      <Input type="number" step="0.01" {...register(`${prefix}.imageBox.width`)} />
+                      <Input type="number" step="any" {...register(`${prefix}.imageBox.width`)} />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">H</Label>
-                      <Input type="number" step="0.01" {...register(`${prefix}.imageBox.height`)} />
+                      <Input type="number" step="any" {...register(`${prefix}.imageBox.height`)} />
                     </div>
                   </div>
                 </div>
@@ -393,19 +393,19 @@ export function PrintLayoutForm({
                     )}
                     <div className="space-y-1">
                       <Label className="text-xs">X</Label>
-                      <Input type="number" step="0.01" {...register(`${prefix}.textBox.x`)} />
+                      <Input type="number" step="any" {...register(`${prefix}.textBox.x`)} />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Y</Label>
-                      <Input type="number" step="0.01" {...register(`${prefix}.textBox.y`)} />
+                      <Input type="number" step="any" {...register(`${prefix}.textBox.y`)} />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">W</Label>
-                      <Input type="number" step="0.01" {...register(`${prefix}.textBox.width`)} />
+                      <Input type="number" step="any" {...register(`${prefix}.textBox.width`)} />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">H</Label>
-                      <Input type="number" step="0.01" {...register(`${prefix}.textBox.height`)} />
+                      <Input type="number" step="any" {...register(`${prefix}.textBox.height`)} />
                     </div>
                   </div>
                   {showStyling && (
@@ -461,7 +461,7 @@ export function PrintLayoutForm({
                       <Label className="text-xs whitespace-nowrap">Border Radius (in)</Label>
                       <Input
                         type="number"
-                        step="0.01"
+                        step="any"
                         className="w-20 text-xs"
                         placeholder="0.1"
                         {...register(`${prefix}.textBox.borderRadius`)}
@@ -507,15 +507,15 @@ export function PrintLayoutForm({
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <div className="grid gap-2">
           <Label htmlFor="leaf-width">Leaf Width (in)</Label>
-          <Input id="leaf-width" type="number" step="0.01" {...register('leafWidth')} />
+          <Input id="leaf-width" type="number" step="any" {...register('leafWidth')} />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="leaf-height">Leaf Height (in)</Label>
-          <Input id="leaf-height" type="number" step="0.01" {...register('leafHeight')} />
+          <Input id="leaf-height" type="number" step="any" {...register('leafHeight')} />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="fontSize">Font Size (pt)</Label>
-          <Input id="fontSize" type="number" step="0.5" {...register('fontSize')} />
+          <Input id="fontSize" type="number" step="any" {...register('fontSize')} />
         </div>
       </div>
 
