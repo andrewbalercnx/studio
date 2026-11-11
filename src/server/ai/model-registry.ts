@@ -21,6 +21,7 @@ export const AI_PURPOSES = [
   'character.avatar',
   'book.castSheet',
   'book.pageArt',
+  'book.printArt',
   'narration',
 ] as const;
 export type AIPurpose = (typeof AI_PURPOSES)[number];
@@ -39,6 +40,7 @@ export const AI_PURPOSE_KIND: Record<AIPurpose, AIPurposeKind> = {
   'character.avatar': 'image',
   'book.castSheet': 'image',
   'book.pageArt': 'image',
+  'book.printArt': 'image',
   narration: 'tts',
 };
 
@@ -67,6 +69,7 @@ export const DEFAULT_AI_MODELS: Record<AIPurpose, string> = {
   'character.avatar': 'googleai/gemini-3.1-flash-image',
   'book.castSheet': 'googleai/gemini-3.1-flash-image',
   'book.pageArt': 'googleai/gemini-3.1-flash-image',
+  'book.printArt': 'googleai/gemini-3.1-flash-image',
   narration: 'elevenlabs/eleven_v3',
 };
 

@@ -30,7 +30,10 @@ export type PrintOption = {
   interiorPages: number;
   /** Retail price from the product catalogue (a Product linked to this print product), or null. */
   price: { productId: string; priceId: string; currency: string; amountMinor: number } | null;
+  /** The Book's chosen template. */
   isCurrent: boolean;
+  /** The Book can be ordered in it now: the chosen template, priced, with its print pictures ready. */
+  orderable: boolean;
 };
 
 function sha(text: string, length = 24): string {
@@ -87,6 +90,12 @@ export async function printOptions(db: Firestore, user: VerifiedUser, bookId: st
       interiorPages: physicalPageCount(manuscript.length, layout.pageRules, layout.leavesPerSpread),
       price: layout.printProductId ? (prices.get(layout.printProductId) ?? null) : null,
       isCurrent: book.layoutId === doc.id,
+      orderable:
+        book.layoutId === doc.id &&
+        book.print?.layoutId === doc.id &&
+        book.print.status === 'ready' &&
+        !!layout.printProductId &&
+        prices.has(layout.printProductId),
     });
   }
   return options.sort(

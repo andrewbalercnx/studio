@@ -18,6 +18,10 @@ export const JOB_KINDS = [
   /** Coordinator: fans out `book.pageArt` for a set of pages, then rolls the Book up. */
   'book.illustrate',
   'book.pageArt',
+  /** Coordinator: fans out `book.printArt` for every picture, then rolls `book.print` up. */
+  'book.preparePrint',
+  /** One picture's print copy for the Book's template: cropped, or extended by the image model. */
+  'book.printArt',
   'book.render',
   'order.submit',
 ] as const;

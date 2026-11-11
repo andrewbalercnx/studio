@@ -9,9 +9,9 @@
  * UI reads.
  */
 import type { Timestamp } from 'firebase/firestore';
-import type { BookStatus } from '@storypic/shared-types';
+import type { BookPrintState, BookStatus } from '@storypic/shared-types';
 
-export type { BookStatus };
+export type { BookPrintState, BookStatus };
 export type ManuscriptStatus = 'draft' | 'paginating' | 'ready' | 'failed';
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 
@@ -25,6 +25,8 @@ export type BookDoc = {
   layoutId: string | null;
   status: BookStatus;
   art?: { total: number; done: number; failed: number };
+  /** Print copies of the pictures for `layoutId` (server: `book.print`). */
+  print?: BookPrintState | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 };
@@ -37,6 +39,15 @@ export type BookPageDoc = {
   manuscriptPage: number | null;
   artUrl: string | null;
   artJob: { jobId: string; status: JobStatus } | null;
+  /** This picture's print copy for the Book's template (`aspect` = width / height). */
+  printArt?: {
+    layoutId: string;
+    run: string;
+    url: string | null;
+    method: 'crop' | 'extend' | null;
+    aspect: number | null;
+    job: { jobId: string; status: JobStatus } | null;
+  } | null;
 };
 
 /** `books/{id}/castSheets/{castId}`: one cast member's reference sheet (ADR-0006). */

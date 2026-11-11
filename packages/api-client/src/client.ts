@@ -8,6 +8,7 @@ import type {
   AvatarSource,
   BookListItem,
   BookReadView,
+  BookPrintState,
   BookStatus,
   CharacterProfileInput,
   CharacterView,
@@ -85,11 +86,12 @@ function booksApi(t: Transport) {
     unlock: (bookId: string) => t.call<{ bookId: string; status: BookStatus }>('POST', `/books/${seg(bookId)}/unlock`),
     printOptions: (bookId: string) => t.call<PrintOption[]>('GET', `/books/${seg(bookId)}/print-options`),
     /**
-     * Tie a print template to a finished Book (null: back to the screen format). A change redraws
-     * every picture at the template's shape, free; the same template again is a no-op.
+     * Tie a print template to a finished Book (null: screen only). The Book's pictures stay as they
+     * are; print copies at the template's shape are made from them, free. The same template again
+     * does nothing while its copies are ready or under way, and starts again after a failure.
      */
     setLayout: (bookId: string, layoutId: string | null) =>
-      t.call<{ bookId: string; layoutId: string | null; status: BookStatus; redrawn: boolean }>('PUT', `/books/${seg(bookId)}/layout`, { layoutId }),
+      t.call<{ bookId: string; layoutId: string | null; print: BookPrintState | null; started: boolean }>('PUT', `/books/${seg(bookId)}/layout`, { layoutId }),
     /** Start a print render; locks the Book. */
     startRender: (bookId: string, layoutId: string, idempotencyKey: string) =>
       t.call<{ renderId: string; jobId: string; status: 'rendering' | 'ready' }>('POST', `/books/${seg(bookId)}/renders`, { layoutId, idempotencyKey }),

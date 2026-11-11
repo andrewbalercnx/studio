@@ -61,7 +61,7 @@ export async function loadPrintTemplate(
 }
 
 /** The Book's pages with their words, plus title, child name and synopsis. */
-export async function loadBookPrintSource(db: Firestore, bookId: string): Promise<BookPrintSource> {
+export async function loadBookPrintSource(db: Firestore, bookId: string, layoutId?: string): Promise<BookPrintSource> {
   const book = await books.using(db).require(bookId);
   const [manuscript, pages, words, story, child] = await Promise.all([
     manuscripts.using(db).get(book.manuscriptId),
@@ -79,7 +79,8 @@ export async function loadBookPrintSource(db: Firestore, bookId: string): Promis
     pages: pages.map((p) => ({
       pageNumber: p.pageNumber,
       kind: p.kind,
-      artUrl: p.artUrl,
+      // The template's print copy of the picture when there is one (book.printArt), else the picture.
+      artUrl: (layoutId && p.printArt?.layoutId === layoutId && p.printArt.url) || p.artUrl,
       text: p.manuscriptPage !== null ? (text.get(p.manuscriptPage) ?? null) : null,
     })),
   };
@@ -108,7 +109,7 @@ function renderHandler(getDeps: () => Promise<RenderJobDeps>): JobDefinition['ru
     let document;
     try {
       document = await buildPrintDocument({
-        source: await loadBookPrintSource(db, bookId),
+        source: await loadBookPrintSource(db, bookId, layoutId),
         layout: template.raw,
         product: template.product,
         rules: template.layout.pageRules,

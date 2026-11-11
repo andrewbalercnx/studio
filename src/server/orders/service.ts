@@ -153,9 +153,10 @@ type z_input_address = Omit<OrderAddress, 'line2' | 'state' | 'country'> & { lin
 
 /**
  * Create an order for a Book in its own template (the one the parent chose on
- * the Book page; its pictures are drawn for it): price from the catalogue, a
+ * the Book page) once its print copies are ready: price from the catalogue, a
  * render for this order (which locks the Book), UK address checked. 409
- * LAYOUT_NOT_SET without a template, 409 LAYOUT_MISMATCH for another one.
+ * LAYOUT_NOT_SET without a template, 409 LAYOUT_MISMATCH for another one,
+ * 409 PRINT_NOT_READY while the pictures for print are being made (or failed).
  * The same key returns the same order.
  */
 export async function createOrder(deps: OrderDeps, user: VerifiedUser, body: CreateOrderInput): Promise<OrderView> {
@@ -179,6 +180,9 @@ export async function createOrder(deps: OrderDeps, user: VerifiedUser, body: Cre
   if (!book.layoutId) throw new ConflictError('Choose a print template for this book first', { code: 'LAYOUT_NOT_SET' });
   if (book.layoutId !== body.layoutId) {
     throw new ConflictError("This book's pictures are drawn for another print template", { code: 'LAYOUT_MISMATCH', details: { layoutId: book.layoutId } });
+  }
+  if (book.print?.layoutId !== book.layoutId || book.print.status !== 'ready') {
+    throw new ConflictError('The pictures for print are not ready yet', { code: 'PRINT_NOT_READY', details: { status: book.print?.status ?? null } });
   }
   const option = (await printOptions(db, user, body.bookId)).find((o) => o.layoutId === body.layoutId);
   if (!option) throw new ConflictError('This book cannot be printed in that format', { code: 'LAYOUT_UNSUPPORTED' });

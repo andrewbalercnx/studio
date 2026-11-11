@@ -2,43 +2,35 @@
 
 /**
  * The parent ties a print template to a finished Book (ADR-0011: the parent
- * picks the Layout). Pictures are drawn at the template's picture shape, so a
- * change redraws them all on the server (free; the words stay). The list is
+ * picks the Layout). The Book's pictures never change: the server makes a
+ * print copy of each at the template's picture shape (cropped, or extended by
+ * the image model when the shapes are far apart), free of charge. The list is
  * the server's: templates this Book fits, cheapest first; only priced ones
  * can be ordered, so only those are offered.
  */
 import { useEffect, useState } from 'react';
 import { LoaderCircle, Ruler } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { api, formatMoney, type PrintOption } from '@/lib/api';
-import type { BookStatus } from '@/lib/books/types';
+import type { BookPrintState, BookStatus } from '@/lib/books/types';
 
 export function PrintTemplate({
   bookId,
   layoutId,
   status,
+  print,
   requireGuard,
 }: {
   bookId: string;
   layoutId: string | null;
   status: BookStatus;
+  print: BookPrintState | null;
   requireGuard: () => boolean;
 }) {
   const { toast } = useToast();
   const [options, setOptions] = useState<PrintOption[] | null>(null);
   const [selected, setSelected] = useState<string>(layoutId ?? '');
-  const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -56,22 +48,28 @@ export function PrintTemplate({
 
   const current = options?.find((o) => o.layoutId === layoutId) ?? null;
   const choice = options?.find((o) => o.layoutId === selected) ?? null;
-  const finished = status === 'ready' || status === 'partial';
+  const mine = print && print.layoutId === layoutId ? print : null;
+  const preparing = mine?.status === 'preparing';
+  const needsRetry = !!layoutId && (!mine || mine.status === 'failed' || mine.status === 'partial');
   const locked = status === 'locked';
 
-  const save = async () => {
-    if (!choice) return;
+  const use = async () => {
+    if (!choice || !requireGuard()) return;
     setSaving(true);
     try {
       await api.books.setLayout(bookId, choice.layoutId);
-      toast({ title: `Drawing the pictures again for ${choice.name}`, description: 'This takes a few minutes. The words stay the same.' });
+      toast({ title: `Preparing the pictures for ${choice.name}`, description: 'Your book stays exactly as it is.' });
     } catch (err) {
-      toast({ title: 'Could not change the print template', description: (err as Error).message, variant: 'destructive' });
+      toast({ title: 'Could not use that print template', description: (err as Error).message, variant: 'destructive' });
     } finally {
       setSaving(false);
-      setConfirming(false);
     }
   };
+
+  let state: string | null = null;
+  if (mine?.status === 'preparing') state = `Preparing the pictures for print: ${mine.done} of ${mine.total}.`;
+  else if (mine?.status === 'ready') state = 'The pictures for print are ready. Check them in the preview below.';
+  else if (mine) state = `${mine.failed} of ${mine.total} pictures could not be prepared for print.`;
 
   return (
     <div className="w-full space-y-3" data-testid="print-template">
@@ -80,21 +78,23 @@ export function PrintTemplate({
         Print template:{' '}
         <span data-testid="print-template-current">{layoutId ? (current?.name ?? layoutId) : 'not chosen yet'}</span>
       </div>
+      {state && <p className="text-sm text-amber-900" data-testid="print-template-state">{state}</p>}
 
       {!options ? (
         <LoaderCircle className="h-5 w-5 animate-spin text-amber-500" />
       ) : locked ? (
         <p className="text-sm text-muted-foreground">Unlock the book to change its print template.</p>
-      ) : !finished ? (
-        <p className="text-sm text-muted-foreground">
-          {layoutId ? 'The pictures are being drawn for this template.' : 'You can choose a print template once the pictures are finished.'}
-        </p>
+      ) : status === 'partial' ? (
+        <p className="text-sm text-muted-foreground">Draw the missing pictures again before choosing a print template.</p>
+      ) : status !== 'ready' ? (
+        <p className="text-sm text-muted-foreground">You can choose a print template once the pictures are finished.</p>
       ) : options.length === 0 ? (
         <p className="text-sm text-muted-foreground">No print template fits this book yet.</p>
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
-            Pick the size and shape for a printed copy. The pictures are drawn again to fit it, free of charge.
+            Pick the size and shape for a printed copy. Your book stays exactly as it is: each picture gets a copy shaped
+            for the printed page, free of charge.
           </p>
           <div className="space-y-2" role="radiogroup" aria-label="Print template">
             {options.map((o) => (
@@ -109,7 +109,7 @@ export function PrintTemplate({
                 <span>
                   <span className="block font-medium text-amber-900">
                     {o.name}
-                    {o.isCurrent ? ' (current)' : ''}
+                    {o.isCurrent ? ' (chosen)' : ''}
                   </span>
                   <span className="text-sm text-muted-foreground">
                     {o.trim.widthIn} × {o.trim.heightIn} in · {o.interiorPages} pages{o.leavesPerSpread === 2 ? ' · words and pictures on facing pages' : ''}
@@ -119,40 +119,22 @@ export function PrintTemplate({
               </button>
             ))}
           </div>
-          <Button
-            variant="outline"
-            disabled={!choice || choice.layoutId === layoutId || saving}
-            onClick={() => requireGuard() && setConfirming(true)}
-            data-testid="print-template-use"
-          >
-            Use this template
-          </Button>
+          {choice && choice.layoutId === layoutId && needsRetry ? (
+            <Button variant="outline" disabled={saving} onClick={use} data-testid="print-template-retry">
+              Prepare the pictures for print again
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              disabled={!choice || choice.layoutId === layoutId || saving || preparing}
+              onClick={use}
+              data-testid="print-template-use"
+            >
+              Use this template
+            </Button>
+          )}
         </>
       )}
-
-      <AlertDialog open={confirming} onOpenChange={setConfirming}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Draw the pictures again?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Every picture is drawn again to fit {choice?.name ?? 'this template'}. It is free and takes a few minutes; the words stay the same,
-              and the new pictures replace the ones you see now.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={saving}
-              onClick={(e) => {
-                e.preventDefault();
-                void save();
-              }}
-            >
-              {saving ? 'Starting…' : 'Draw them again'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
