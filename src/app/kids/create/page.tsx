@@ -36,7 +36,7 @@ export default function KidsCreateStoryPage() {
       childId={childId}
       child={childProfile}
       homeHref="/kids"
-      onCreated={(storyId) => router.push(`/kids/create/${storyId}`)}
+      onCreated={(storyId) => router.replace(`/kids/create/${storyId}`)}
     />
   );
 }

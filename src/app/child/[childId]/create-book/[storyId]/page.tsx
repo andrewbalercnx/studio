@@ -26,7 +26,7 @@ export default function CreateBookPage({ params }: { params: Promise<{ childId: 
       <BookChooser
         storyId={storyId}
         childAge={childAge}
-        onCreated={(bookId) => router.push(`/books/${bookId}`)}
+        onCreated={(bookId) => router.replace(`/books/${bookId}`)}
         onExit={() => router.push(`/child/${childId}/stories`)}
       />
     </div>

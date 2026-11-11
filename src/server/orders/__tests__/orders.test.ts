@@ -7,7 +7,7 @@ vi.mock('@/lib/persona.server', () => ({
 
 import SampleLayouts from '@/data/print-layouts.json';
 import type { PrintLayout } from '@/lib/types';
-import { createBook, setBookLayout } from '../../books/service';
+import { createBook, setBookLayout, unlockBook } from '../../books/service';
 import { createBench, seed, user, type Bench } from '../../books/__tests__/helpers';
 import type { ConfigDefinition } from '../../config/config-service';
 import { books, jobs, printOrders } from '../../data/repositories';
@@ -150,6 +150,8 @@ describe('creating an order', () => {
     const created = await createOrder(deps, p1, { bookId, layoutId: 'spread', quantity: 2, shippingAddress: address, idempotencyKey: 'order-key-1' });
     expect(created).toMatchObject({ status: 'rendering', quantity: 2, unitAmountMinor: 2499, amountMinor: 4998, currency: 'GBP', contactEmail: 'p1@test.local' });
     expect(created.actions).toEqual({ canPay: false, canPayWithCredits: false, canCancel: true });
+    // While the print files are being made the Book cannot be unlocked: the render needs it locked.
+    await expect(unlockBook(bench.services, p1, bookId)).rejects.toMatchObject({ status: 409, code: 'ORDER_RENDERING', details: { orderId: created.id } });
     await bench.drain();
     const view = await getOrder(deps, p1, created.id);
     expect(view.status).toBe('awaiting_payment');

@@ -69,7 +69,8 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
         contactEmail: email.trim(),
         idempotencyKey: keys.keyFor(choice),
       });
-      router.push(`/orders/${encodeURIComponent(order.id)}`);
+      // Replace, not push: Back must not return to a form whose next tap would place a second order.
+      router.replace(`/orders/${encodeURIComponent(order.id)}`);
     } catch (err) {
       toast({ title: 'Could not place the order', description: (err as Error).message, variant: 'destructive' });
       setPlacing(false);
@@ -183,7 +184,7 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
           )}
           <p className="flex items-start gap-2 text-sm text-muted-foreground">
             <Lock className="mt-0.5 h-4 w-4 shrink-0" />
-            Ordering prints this exact book, so it will be locked. You can unlock it later to make changes, but that will need a new order.
+            Ordering prints this exact book, so it will be locked. Once the print files are made you can unlock it to make changes, but that will need a new order.
           </p>
           <Button className="w-full" disabled={!complete || placing} onClick={place}>
             {placing ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}

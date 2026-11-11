@@ -18,6 +18,40 @@
 
 ### 2026-11-11
 
+#### `#62` - Fixes from the flow review: stuck orders, lost allowances, Back-button duplicates
+
+**Type**: Fix (Books, orders)
+
+**Summary**: Four defects from a review of the child's book flow and the parent's print flow.
+
+**Changes**:
+- **Stuck order**: unlocking a Book while one of its orders was still making print files failed the
+  render for good (it needs the Book locked) and left the order at "Making the print files" with no
+  way forward but cancelling. `unlockBook` now refuses with 409 `ORDER_RENDERING` until the files
+  exist; the order form says so.
+- **Lost allowance**: a Book whose words could not be written (the Manuscript failed) kept the
+  child's book allowance, and trying again charged again. Books now record which pool their unit
+  came from (`books.allowance { source, refunded }`), and `failManuscript` gives it back, one write
+  per pool (`returnAllowance` in `src/server/books/allowance.ts` handles quota and consumable
+  components). The child's message says the book was not used up.
+- **Back makes a second Book**: the create-book screens (web child shell and kids PWA) pushed to the
+  new Book, so Back showed the chooser again and the same tap made and charged a second Book. They
+  now replace the history entry; the story-creation screens do the same.
+- **Back makes a second order**: the order form pushed to the new order; it now replaces too.
+- Tests: the failed-Manuscript test checks the allowance is back; the order test checks unlock is
+  refused while rendering.
+- Docs: `API.md` (unlock 409), `SCHEMA.md` (`books.allowance`), `SYSTEM_DESIGN.md`.
+
+**Files**:
+- Modified: `src/server/books/allowance.ts`, `src/server/books/jobs.ts`, `src/server/books/service.ts`,
+  `src/server/data/schemas/book.ts`, `src/components/books/book-progress.tsx`,
+  `src/components/orders/order-form.tsx`, `src/app/child/[childId]/create-book/[storyId]/page.tsx`,
+  `src/app/child/[childId]/create/page.tsx`, `src/app/kids/create/page.tsx`,
+  `src/app/kids/create/[storyId]/style/page.tsx`, tests and docs above
+
+**Not changed**: Books made before this have no `allowance` record, so a failure of one of those
+gives nothing back.
+
 #### `#61` - Print copies of a Book's pictures instead of a redraw, with a print preview
 
 **Type**: Feature / Fix (Books, print)

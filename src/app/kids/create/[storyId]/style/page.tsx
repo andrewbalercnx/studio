@@ -41,7 +41,7 @@ export default function KidsStyleSelectionPage({ params }: { params: Promise<{ s
       <BookChooser
         storyId={storyId}
         childAge={childAge}
-        onCreated={(bookId) => router.push(`/kids/book/${bookId}`)}
+        onCreated={(bookId) => router.replace(`/kids/book/${bookId}`)}
         onExit={() => router.push(`/kids/story/${storyId}/read`)}
       />
     </div>

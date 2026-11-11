@@ -36,7 +36,7 @@ export default function ChildCreateStoryPage({ params }: { params: Promise<{ chi
         childId={childId}
         child={activeChildProfile}
         homeHref={`/child/${childId}`}
-        onCreated={(storyId) => router.push(`/child/${childId}/create/${storyId}`)}
+        onCreated={(storyId) => router.replace(`/child/${childId}/create/${storyId}`)}
       />
     </div>
   );

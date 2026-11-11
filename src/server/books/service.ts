@@ -287,6 +287,8 @@ export async function createBook(deps: BookServiceDeps, user: VerifiedUser, body
         status: 'illustrating',
         // Art: the front cover, every story page and the back cover (the title and end pages are typeset).
         art: { total: shape.length + 2, done: 0, failed: 0 },
+        // Where the unit came from, so it can be given back if the words cannot be written.
+        allowance: { source: charge.source, refunded: false },
       },
       { id: bookId }
     );
@@ -498,6 +500,14 @@ export async function unlockBook(
   return db.runTransaction(async (tx) => {
     const book = await bookRepo.requireIn(tx, bookId);
     if (book.status !== 'locked') return { bookId, status: book.status };
+    // An order's print files are made from the locked Book: unlocking now would fail them for good.
+    const rendering = await tx.get(db.collection('printOrders').where('bookId', '==', bookId).where('status', '==', 'rendering').limit(1));
+    if (!rendering.empty) {
+      throw new ConflictError('This book is being prepared for a print order. Try again in a few minutes.', {
+        code: 'ORDER_RENDERING',
+        details: { orderId: rendering.docs[0].id },
+      });
+    }
     const pageSnapshot = await tx.get(await bookPages.using(db).of(bookId).collection());
     const pages = pageSnapshot.docs.map((doc) => bookPages.using(db).of(bookId).parse(doc));
     const writes = [];

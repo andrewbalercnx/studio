@@ -274,9 +274,12 @@ describe('partial outcome and page retry', () => {
 describe('manuscript failure', () => {
   it('fails the manuscript and the books waiting on it', async () => {
     bench.ai.generateText.mockRejectedValue(Object.assign(new Error('403 Forbidden: permission denied'), { status: 403 }));
+    const used = await ledgerUsed();
     const result = await makeBook();
     expect((await manuscripts.using(bench.db).require(result.manuscriptId)).status).toBe('failed');
-    expect((await books.using(bench.db).require(result.bookId)).status).toBe('failed');
+    expect(await books.using(bench.db).require(result.bookId)).toMatchObject({ status: 'failed', allowance: { refunded: true } });
+    // The child got nothing for it: the book allowance is given back.
+    expect(await ledgerUsed()).toBe(used);
     await expect(createBook(bench.services, p1, { manuscriptId: result.manuscriptId, styleId: 'water' })).rejects.toMatchObject({ code: 'MANUSCRIPT_FAILED' });
 
     // Asking again through the story paginates it again.
