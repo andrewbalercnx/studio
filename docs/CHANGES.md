@@ -33,7 +33,9 @@ always shows the parent controls behind the console's PIN guard.
 - New `/parent/books/[bookId]`: `BookView` with the parent controls, inside `ParentLayout`.
 - The child's book list in the parent console, the order form ("Choose a print template",
   "Change template") and the order page ("Back to the book") link to `/parent/books/{id}`.
-- `/books/{id}` is unchanged: the reader the child shell links to.
+- `/books/{id}` stays the reader the child shell links to. In child mode it shows a "Grown-ups: print
+  this book" link to `/parent/books/{id}`: tapping a child's picture on the Parent overview opens the
+  child's screens, which is how the owner reached the Book.
 - `BookReader`: #59 showed every picture whole (`object-contain`), which left a blank band on Books
   drawn square before #56. Now only Books with a print template are shown whole; screen Books fill
   the 4:5 frame again (`printShaped` prop, from `books.layoutId`).
@@ -41,7 +43,7 @@ always shows the parent controls behind the console's PIN guard.
 
 **Files**:
 - Created: `src/app/parent/books/[bookId]/page.tsx`
-- Modified: `src/app/parent/storybooks/[childId]/page.tsx`, `src/components/orders/order-form.tsx`,
+- Modified: `src/app/books/[bookId]/page.tsx`, `src/app/parent/storybooks/[childId]/page.tsx`, `src/components/orders/order-form.tsx`,
   `src/components/orders/order-detail.tsx`, `src/components/books/book-reader.tsx`,
   `src/components/books/book-view.tsx`, `docs/SYSTEM_DESIGN.md`
 

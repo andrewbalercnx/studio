@@ -232,7 +232,8 @@ story complete ─▶ child picks Form + Style (BookChooser)
   page always passes the parent controls to `BookView`, because the global role mode reads "child"
   while a child is still selected on the device (kept in browser storage) and "writer" for writer
   accounts, and neither stops someone being the parent. `/books/{bookId}` is the reader the child
-  shell links to; it shows the same controls only in parent or admin mode.
+  shell links to; it shows the same controls only in parent or admin mode, and in child mode a
+  "Grown-ups: print this book" link to the parent Book page (PIN).
 - **Rationale**: the server drives every step (ADR-0002/0005), so closing the tab no longer stops a
   book, and every client reads the same documents with the same status vocabulary.
 
