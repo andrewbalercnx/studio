@@ -34,12 +34,16 @@ always shows the parent controls behind the console's PIN guard.
 - The child's book list in the parent console, the order form ("Choose a print template",
   "Change template") and the order page ("Back to the book") link to `/parent/books/{id}`.
 - `/books/{id}` is unchanged: the reader the child shell links to.
-- Docs: `SYSTEM_DESIGN.md` §3 "Parent controls".
+- `BookReader`: #59 showed every picture whole (`object-contain`), which left a blank band on Books
+  drawn square before #56. Now only Books with a print template are shown whole; screen Books fill
+  the 4:5 frame again (`printShaped` prop, from `books.layoutId`).
+- Docs: `SYSTEM_DESIGN.md` §3 "Parent controls" and "Print template and ordering".
 
 **Files**:
 - Created: `src/app/parent/books/[bookId]/page.tsx`
 - Modified: `src/app/parent/storybooks/[childId]/page.tsx`, `src/components/orders/order-form.tsx`,
-  `src/components/orders/order-detail.tsx`, `docs/SYSTEM_DESIGN.md`
+  `src/components/orders/order-detail.tsx`, `src/components/books/book-reader.tsx`,
+  `src/components/books/book-view.tsx`, `docs/SYSTEM_DESIGN.md`
 
 #### `#59` - Parents choose a Book's print template and order it; view-as-parent lists Stories
 

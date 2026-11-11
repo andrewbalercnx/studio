@@ -83,7 +83,7 @@ export function BookView({ bookId, parent, admin = false }: { bookId: string; pa
   } else if (book.status === 'failed' && !parent) {
     body = <BookFailed manuscriptFailed={false} />;
   } else if (isReadableStatus(book.status) || (book.status === 'failed' && parent)) {
-    body = <BookReader title={title} pages={pages} words={words} onRetryPage={retryPage} locked={locked} />;
+    body = <BookReader title={title} pages={pages} words={words} onRetryPage={retryPage} locked={locked} printShaped={!!book.layoutId} />;
   } else {
     body = <BookProgress manuscript={manuscript} pages={pages} castSheets={castSheets} />;
   }

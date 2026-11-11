@@ -223,7 +223,8 @@ story complete ─▶ child picks Form + Style (BookChooser)
   re-illustrate route): free, words kept, refused once locked. The order form then offers only the
   Book's own template, and `POST /api/orders` refuses any other (409 `LAYOUT_NOT_SET` /
   `LAYOUT_MISMATCH`), so what is printed is what was drawn for it. The screen reader shows a
-  print-shaped picture whole (`object-contain` in the 4:5 frame) rather than cropping it. Choosing a
+  Book with a template whole (`object-contain` in the 4:5 frame); a screen Book's pictures fill the
+  frame (`object-cover`), so older square pictures are cropped rather than letterboxed. Choosing a
   template and ordering are parent actions on the web only: the mobile app is a child-only client.
 - **Parent controls** (`/parent/books/{bookId}`, inside the parent console's PIN guard): draw a
   failed page again (`POST /api/books/{id}/pages/{n}/retry`), lock / unlock, choose the print
