@@ -70,6 +70,16 @@ export type CreateBookResponse = { bookId: string; manuscriptId: string; status:
 // Print (slice 5.5a): GET /api/books/{id}/print-options, …/renders
 // ============================================================================
 
+/** `books/{id}.print`: the print copies of a Book's pictures for its chosen template. */
+export type BookPrintState = {
+  layoutId: string;
+  run: string;
+  status: 'preparing' | 'ready' | 'partial' | 'failed';
+  total: number;
+  done: number;
+  failed: number;
+};
+
 export type PrintOption = {
   layoutId: string;
   name: string;
@@ -79,6 +89,8 @@ export type PrintOption = {
   interiorPages: number;
   price: { productId: string; priceId: string; currency: string; amountMinor: number } | null;
   isCurrent: boolean;
+  /** The Book can be ordered in this template now: chosen, priced, print pictures ready. */
+  orderable: boolean;
 };
 
 export type RenderView = {

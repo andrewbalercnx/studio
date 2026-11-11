@@ -2,7 +2,7 @@
 
 /**
  * Order printed copies of a Book (slice 5.6) in the print template the parent
- * tied to it on the Book page (the pictures are drawn for that template), with
+ * tied to it on the Book page, once its print pictures are ready, with
  * the number of copies and a UK address. Placing the order makes its print
  * files, which locks the Book.
  * Every action asks for the parent PIN first through `requireGuard`.
@@ -28,6 +28,7 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
   const { toast } = useToast();
   const [options, setOptions] = useState<PrintOption[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [chosen, setChosen] = useState(false);
   const [layoutId, setLayoutId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [address, setAddress] = useState<AddressForm>(EMPTY_ADDRESS);
@@ -38,10 +39,11 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
   useEffect(() => {
     api.books.printOptions(bookId)
       .then((opts) => {
-        // The Book's own template only: its pictures are drawn at that template's shape.
-        const current = opts.filter((o) => o.price && o.isCurrent);
-        setOptions(current);
-        setLayoutId(current[0]?.layoutId ?? '');
+        // The server says which template can be ordered now: the Book's own, priced, print pictures ready.
+        const orderable = opts.filter((o) => o.orderable);
+        setOptions(orderable);
+        setChosen(opts.some((o) => o.isCurrent));
+        setLayoutId(orderable[0]?.layoutId ?? '');
       })
       .catch((err: Error) => setLoadError(err.message));
   }, [bookId]);
@@ -87,9 +89,13 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
       <Card className="mx-auto max-w-xl">
         <CardContent className="space-y-2 p-6 text-center text-amber-900">
           <Printer className="mx-auto h-8 w-8 text-amber-500" />
-          <p>Choose a print template for this book first. Its pictures are drawn again to fit, free of charge.</p>
+          <p>
+            {chosen
+              ? 'The pictures for print are not ready yet. Check them on the book page, then come back to order.'
+              : 'Choose a print template for this book first. Its pictures get a copy shaped for the printed page, free of charge.'}
+          </p>
           <Button asChild variant="outline">
-            <Link href={`/parent/books/${encodeURIComponent(bookId)}`}>Choose a print template</Link>
+            <Link href={`/parent/books/${encodeURIComponent(bookId)}`}>{chosen ? 'Back to the book' : 'Choose a print template'}</Link>
           </Button>
         </CardContent>
       </Card>

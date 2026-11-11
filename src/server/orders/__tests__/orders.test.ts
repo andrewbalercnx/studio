@@ -7,7 +7,7 @@ vi.mock('@/lib/persona.server', () => ({
 
 import SampleLayouts from '@/data/print-layouts.json';
 import type { PrintLayout } from '@/lib/types';
-import { createBook } from '../../books/service';
+import { createBook, setBookLayout } from '../../books/service';
 import { createBench, seed, user, type Bench } from '../../books/__tests__/helpers';
 import type { ConfigDefinition } from '../../config/config-service';
 import { books, jobs, printOrders } from '../../data/repositories';
@@ -87,9 +87,16 @@ beforeEach(async () => {
   };
 });
 
+/** A finished Book; with a template, its print pictures are prepared too (fixtures, TEST_MODE). */
 async function readyBook(layoutId: string | null = 'spread'): Promise<string> {
-  const { bookId } = await createBook(bench.services, p1, { storyId: 's1', formId: 'picture', styleId: 'water', layoutId: layoutId ?? undefined });
+  const { bookId } = await createBook(bench.services, p1, { storyId: 's1', formId: 'picture', styleId: 'water' });
   await bench.drain();
+  if (layoutId) {
+    bench.testMode.on = true;
+    await setBookLayout(bench.services, p1, bookId, layoutId);
+    await bench.drain();
+    bench.testMode.on = false;
+  }
   return bookId;
 }
 
@@ -162,11 +169,12 @@ describe('creating an order', () => {
     await expect(
       createOrder(deps, p1, { bookId, layoutId: 'spread', quantity: 1, shippingAddress: { ...address, postalCode: 'NOPE' }, idempotencyKey: 'order-key-2' })
     ).rejects.toMatchObject({ code: 'INVALID_ADDRESS' });
-    await books.using(bench.db).update(bookId, { layoutId: 'square' });
+    const prepared = (await books.using(bench.db).require(bookId)).print!;
+    await books.using(bench.db).update(bookId, { layoutId: 'square', print: { ...prepared, layoutId: 'square' } });
     await expect(createOrder(deps, p1, { bookId, layoutId: 'square', quantity: 1, shippingAddress: address, idempotencyKey: 'order-key-3' })).rejects.toMatchObject({
       code: 'NO_PRICE',
     });
-    await books.using(bench.db).update(bookId, { layoutId: 'spread' });
+    await books.using(bench.db).update(bookId, { layoutId: 'spread', print: prepared });
     await expect(createOrder(deps, p1, { bookId, layoutId: 'spread', quantity: 11, shippingAddress: address, idempotencyKey: 'order-key-4' })).rejects.toMatchObject({
       code: 'INVALID_QUANTITY',
     });
@@ -182,6 +190,13 @@ describe('creating an order', () => {
     await expect(createOrder(deps, p1, { bookId: spreadBook, layoutId: 'square', quantity: 1, shippingAddress: address, idempotencyKey: 'order-key-6' })).rejects.toMatchObject({
       status: 409,
       code: 'LAYOUT_MISMATCH',
+    });
+    // The template is chosen but its print pictures are not ready.
+    const prepared = (await books.using(bench.db).require(spreadBook)).print!;
+    await books.using(bench.db).update(spreadBook, { print: { ...prepared, status: 'preparing' } });
+    await expect(createOrder(deps, p1, { bookId: spreadBook, layoutId: 'spread', quantity: 1, shippingAddress: address, idempotencyKey: 'order-key-7' })).rejects.toMatchObject({
+      status: 409,
+      code: 'PRINT_NOT_READY',
     });
   });
 });

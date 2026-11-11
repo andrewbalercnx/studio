@@ -30,9 +30,27 @@ export const bookSchema = z.object({
       failed: z.number().int().nonnegative(),
     })
     .default({ total: 0, done: 0, failed: 0 }),
+  /**
+   * Print copies of the pictures for the chosen template (`layoutId`), made from the finished
+   * screen pictures, which never change for it. `run` identifies the current preparation: a
+   * template change starts a new run and a stale run's work is ignored. Null without a template
+   * or before its copies were asked for.
+   */
+  print: z
+    .object({
+      layoutId: z.string().min(1),
+      run: z.string().min(1),
+      status: z.enum(['preparing', 'ready', 'partial', 'failed']),
+      total: z.number().int().nonnegative(),
+      done: z.number().int().nonnegative(),
+      failed: z.number().int().nonnegative(),
+    })
+    .nullable()
+    .default(null),
   ...stampFields,
 });
 export type Book = z.infer<typeof bookSchema>;
+export type BookPrint = NonNullable<Book['print']>;
 
 export const BOOK_PAGE_KINDS = ['cover', 'title', 'story', 'dedication', 'end', 'blank', 'back'] as const;
 export const bookPageKindSchema = z.enum(BOOK_PAGE_KINDS);
@@ -48,6 +66,22 @@ export const bookPageSchema = z.object({
   manuscriptPage: z.number().int().positive().nullable().default(null),
   artUrl: z.string().nullable().default(null),
   artJob: jobSummarySchema.nullable().default(null),
+  /**
+   * The picture's print copy for the Book's template (`book.printArt`): `artUrl` cropped to the
+   * template's picture shape, or extended by the image model when the shapes are far apart.
+   * `aspect` is width / height of the copy. Belongs to `run` of `book.print`.
+   */
+  printArt: z
+    .object({
+      layoutId: z.string().min(1),
+      run: z.string().min(1),
+      url: z.string().nullable().default(null),
+      method: z.enum(['crop', 'extend']).nullable().default(null),
+      aspect: z.number().positive().nullable().default(null),
+      job: jobSummarySchema.nullable().default(null),
+    })
+    .nullable()
+    .default(null),
   ...stampFields,
 });
 export type BookPage = z.infer<typeof bookPageSchema>;

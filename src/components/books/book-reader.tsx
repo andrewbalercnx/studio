@@ -20,14 +20,9 @@ export type BookReaderProps = {
   onRetryPage?: (pageNumber: number) => Promise<void>;
   /** True while the Book is locked (no retries). */
   locked?: boolean;
-  /**
-   * Pictures drawn for a print template are shown whole (their shape differs from the 4:5 frame);
-   * screen pictures fill the frame, cropping older square ones as before.
-   */
-  printShaped?: boolean;
 };
 
-export function BookReader({ title, pages, words, onRetryPage, locked, printShaped = false }: BookReaderProps) {
+export function BookReader({ title, pages, words, onRetryPage, locked }: BookReaderProps) {
   const [index, setIndex] = useState(0);
   const [retrying, setRetrying] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -89,7 +84,7 @@ export function BookReader({ title, pages, words, onRetryPage, locked, printShap
       <div className="relative w-full rounded-2xl overflow-hidden bg-amber-50 border-4 border-amber-200 shadow-lg" style={{ aspectRatio: cssAspectRatio() }}>
         {art === 'done' ? (
           // eslint-disable-next-line @next/next/no-img-element -- art URLs are Storage download URLs (or TEST_MODE data URLs)
-          <img src={page.artUrl!} alt={isCover ? title : `Picture for page ${page.manuscriptPage}`} className={`h-full w-full ${printShaped ? 'object-contain' : 'object-cover'}`} />
+          <img src={page.artUrl!} alt={isCover ? title : `Picture for page ${page.manuscriptPage}`} className="h-full w-full object-cover" />
         ) : art === 'failed' ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
             <ImageOff className="h-12 w-12 text-amber-400" />

@@ -363,31 +363,123 @@ describe('reillustrate (system, no user)', () => {
   });
 });
 
-describe('setBookLayout (parent ties a print template to a Book)', () => {
-  const pageArtAspects = () =>
-    bench.ai.generateImage.mock.calls
-      .filter(([options]) => (options as { flowName?: string }).flowName === 'book.pageArt')
-      .map(([options]) => (options as { config?: { imageConfig?: { aspectRatio?: string } } }).config?.imageConfig?.aspectRatio);
+describe('print copies for a template (setBookLayout → book.preparePrint → book.printArt)', () => {
+  // A real 4:5 screen picture, so the copies are measured and cropped for real.
+  let screenPng: string;
+  let squarePng: string;
+  beforeEach(async () => {
+    const sharp = (await import('sharp')).default;
+    const png = (w: number, h: number) => sharp({ create: { width: w, height: h, channels: 3, background: '#88aaff' } }).png().toBuffer();
+    screenPng = `data:image/png;base64,${(await png(400, 500)).toString('base64')}`;
+    squarePng = `data:image/png;base64,${(await png(600, 620)).toString('base64')}`;
+    bench.deps.fetchImage = async (url) => (url.includes('missing') ? null : screenPng);
+    bench.ai.generateImage.mockImplementation(async (options: { flowName?: string }) => ({
+      mediaUrl: options.flowName === 'book.printArt' ? squarePng : 'data:image/png;base64,iVBORw0KGgo=',
+      text: '',
+      model: {},
+      attempts: 1,
+    }));
+    // A portrait template close to the screen shape (8 × 10 in = 4:5): cropped, no AI.
+    await bench.db.collection('printLayouts').doc('portrait').set({ name: 'Portrait', leafWidth: 8, leafHeight: 10, pageConstraints: { maxPages: 40, pageMultiple: 4 } });
+  });
 
-  it('saves the template and redraws every picture at its shape without charging', async () => {
+  const printCalls = () => bench.ai.generateImage.mock.calls.filter(([o]) => (o as { flowName?: string }).flowName === 'book.printArt');
+  const artPages = async (bookId: string) =>
+    (await bookPages.using(bench.db).of(bookId).where({})).filter((p) => p.kind === 'cover' || p.kind === 'story' || p.kind === 'back');
+
+  it('crops close shapes without AI and leaves the Book and its pictures as they are', async () => {
     const result = await makeBook();
+    const before = await artPages(result.bookId);
     const used = await ledgerUsed();
-    bench.ai.generateImage.mockClear();
 
-    const outcome = await setBookLayout(bench.services, p1, result.bookId, 'square');
-    expect(outcome).toEqual({ bookId: result.bookId, layoutId: 'square', status: 'illustrating', redrawn: true });
-    expect(await books.using(bench.db).require(result.bookId)).toMatchObject({ layoutId: 'square', status: 'illustrating', art: { done: 0 } });
+    const outcome = await setBookLayout(bench.services, p1, result.bookId, 'portrait');
+    expect(outcome).toMatchObject({ layoutId: 'portrait', started: true, print: { status: 'preparing', total: 14, done: 0 } });
+    expect(await books.using(bench.db).require(result.bookId)).toMatchObject({ status: 'ready', layoutId: 'portrait' });
 
     await bench.drain();
-    expect(await books.using(bench.db).require(result.bookId)).toMatchObject({ layoutId: 'square', status: 'ready', art: { total: 14, done: 14 } });
-    const aspects = pageArtAspects();
-    expect(aspects).toHaveLength(14);
-    expect(new Set(aspects)).toEqual(new Set(['1:1'])); // the 8 × 8 template, not the 4:5 screen shape
+    const book = await books.using(bench.db).require(result.bookId);
+    expect(book).toMatchObject({ status: 'ready', art: { done: 14 }, print: { layoutId: 'portrait', status: 'ready', total: 14, done: 14, failed: 0 } });
+    const after = await artPages(result.bookId);
+    expect(after.map((p) => p.artUrl)).toEqual(before.map((p) => p.artUrl)); // the screen pictures never change
+    for (const page of after) {
+      expect(page.printArt).toMatchObject({ layoutId: 'portrait', run: book.print!.run, method: 'crop', aspect: 0.8 });
+      expect(page.printArt!.url).toMatch(new RegExp(`books/${result.bookId}/print/portrait/`));
+    }
+    expect(printCalls()).toHaveLength(0);
     expect(await ledgerUsed()).toBe(used);
+    // The same template again changes nothing while its copies are ready.
+    expect(await setBookLayout(bench.services, p1, result.bookId, 'portrait')).toMatchObject({ started: false, print: { status: 'ready' } });
+  });
 
-    // The same template again changes nothing; null goes back to the screen format.
-    expect(await setBookLayout(bench.services, p1, result.bookId, 'square')).toMatchObject({ redrawn: false, status: 'ready' });
-    expect(await setBookLayout(bench.services, p1, result.bookId, null)).toMatchObject({ layoutId: null, redrawn: true });
+  it('extends far-apart shapes with the image model from the picture itself, then crops to the exact shape', async () => {
+    const result = await makeBook();
+    await setBookLayout(bench.services, p1, result.bookId, 'square');
+    await bench.drain();
+
+    const calls = printCalls();
+    expect(calls).toHaveLength(14);
+    const [options] = calls[0] as [{ prompt: Array<{ media?: { url: string }; text?: string }>; config: { imageConfig: { aspectRatio: string } } }];
+    expect(options.prompt[0].media?.url).toBe(screenPng); // the finished picture, not the original prompts
+    expect(options.prompt[1].text).toContain('extending the scene outward');
+    expect(options.config.imageConfig.aspectRatio).toBe('1:1');
+    const cover = (await artPages(result.bookId)).find((p) => p.kind === 'cover')!;
+    expect(cover.printArt).toMatchObject({ method: 'extend', aspect: 1 });
+    const coverCall = calls.find(([o]) => String((o as { prompt: Array<{ text?: string }> }).prompt[1].text).includes('title lettering'));
+    expect(coverCall).toBeDefined(); // the cover keeps its title lettering
+    const texts = calls.map(([o]) => String((o as { prompt: Array<{ text?: string }> }).prompt[1].text));
+    expect(texts.filter((t) => t.includes('Add no words'))).toHaveLength(13); // story pages and the back cover
+    expect(await books.using(bench.db).require(result.bookId)).toMatchObject({ status: 'ready', print: { status: 'ready', done: 14 } });
+  });
+
+  it('ignores a run the parent replaced by choosing another template', async () => {
+    const result = await makeBook();
+    await setBookLayout(bench.services, p1, result.bookId, 'square');
+    const second = await setBookLayout(bench.services, p1, result.bookId, 'portrait');
+    await bench.drain();
+    const book = await books.using(bench.db).require(result.bookId);
+    expect(book.print).toMatchObject({ layoutId: 'portrait', run: second.print!.run, status: 'ready', done: 14 });
+    expect((await artPages(result.bookId)).every((p) => p.printArt?.layoutId === 'portrait' && p.printArt.run === second.print!.run)).toBe(true);
+  });
+
+  it('reports pictures that could not be copied, and starts again when asked', async () => {
+    const result = await makeBook();
+    const cover = (await artPages(result.bookId)).find((p) => p.kind === 'cover')!;
+    await bookPages.using(bench.db).of(result.bookId).update(String(cover.pageNumber), { artUrl: 'https://storage.test/missing.png' });
+    await setBookLayout(bench.services, p1, result.bookId, 'portrait');
+    await bench.drain();
+    expect((await books.using(bench.db).require(result.bookId)).print).toMatchObject({ status: 'partial', done: 13, failed: 1 });
+
+    await bookPages.using(bench.db).of(result.bookId).update(String(cover.pageNumber), { artUrl: 'https://storage.test/cover.png' });
+    expect(await setBookLayout(bench.services, p1, result.bookId, 'portrait')).toMatchObject({ started: true });
+    await bench.drain();
+    expect((await books.using(bench.db).require(result.bookId)).print).toMatchObject({ status: 'ready', done: 14, failed: 0 });
+  });
+
+  it('clears the copies for screen only, and when the pictures are redrawn', async () => {
+    const result = await makeBook();
+    await setBookLayout(bench.services, p1, result.bookId, 'portrait');
+    await bench.drain();
+    expect(await setBookLayout(bench.services, p1, result.bookId, null)).toMatchObject({ layoutId: null, print: null });
+    expect((await artPages(result.bookId)).every((p) => p.printArt === null)).toBe(true);
+
+    await setBookLayout(bench.services, p1, result.bookId, 'portrait');
+    await bench.drain();
+    await reillustrateBook(bench.services, result.bookId);
+    const book = await books.using(bench.db).require(result.bookId);
+    expect(book).toMatchObject({ layoutId: 'portrait', print: null });
+    expect((await artPages(result.bookId)).every((p) => p.printArt === null)).toBe(true);
+  });
+
+  it('prints the copies: the render source uses them for their template only', async () => {
+    const result = await makeBook();
+    await setBookLayout(bench.services, p1, result.bookId, 'portrait');
+    await bench.drain();
+    const { loadBookPrintSource } = await import('../../print/jobs');
+    const copies = await loadBookPrintSource(bench.db, result.bookId, 'portrait');
+    const screen = await loadBookPrintSource(bench.db, result.bookId, 'square');
+    const cover = copies.pages.find((p) => p.kind === 'cover')!;
+    expect(cover.artUrl).toMatch(/\/print\/portrait\//);
+    expect(screen.pages.find((p) => p.kind === 'cover')!.artUrl).toMatch(/\/pages\//);
   });
 
   it('refuses unknown templates, unfinished or locked books, and other families', async () => {

@@ -14,7 +14,7 @@ import { BadRequestError, ConflictError, NotFoundError, PaymentRequiredError } f
 import { assertOwner, isPrivileged, loadOwned, type VerifiedUser } from '../http';
 import type { JobRunner, JobSpec } from '../jobs';
 import { chargeBookAllowance, readLedgerIn } from './allowance';
-import { ART_PAGE_KINDS, illustrateSpec, paginateSpec, prepareCastSpec, rollupArt, statusFromArt } from './jobs';
+import { ART_PAGE_KINDS, illustrateSpec, paginateSpec, preparePrintSpec, prepareCastSpec, rollupArt, statusFromArt } from './jobs';
 import { isFinished, loadStorySource, type StorySource } from './story-source';
 import { DEFAULT_TTS_VOICE } from '@/lib/tts-config';
 
@@ -386,10 +386,11 @@ async function redrawIn(tx: Transaction, deps: BookServiceDeps, book: WithId<Boo
 
   const pending = await deps.runner.enqueueInTransaction(tx, [prepareCastSpec({ id: book.id, ownerUid: book.ownerUid }, `redraw-${randomUUID()}`)]);
 
-  // Writes: wipe the art and cast sheets, reset the rollup, start illustrating again.
-  for (const page of artPages) await pageRepo.updateIn(tx, String(page.pageNumber), { artUrl: null, artJob: null });
+  // Writes: wipe the art, its print copies and the cast sheets, reset the rollup, start illustrating again.
+  // The template stays; its print copies are made again from the new pictures when the parent asks.
+  for (const page of artPages) await pageRepo.updateIn(tx, String(page.pageNumber), { artUrl: null, artJob: null, printArt: null });
   for (const sheet of sheets) await sheetRepo.updateIn(tx, sheet.castId, { imageUrl: null, job: null });
-  await books.using(deps.db).updateIn(tx, book.id, { ...changes, status: 'illustrating', art: { total: artPages.length, done: 0, failed: 0 } });
+  await books.using(deps.db).updateIn(tx, book.id, { ...changes, status: 'illustrating', art: { total: artPages.length, done: 0, failed: 0 }, print: null });
   return { pending, pagesCleared: artPages.length, castSheetsCleared: sheets.length };
 }
 
@@ -397,15 +398,25 @@ async function redrawIn(tx: Transaction, deps: BookServiceDeps, book: WithId<Boo
 // PUT /api/books/{bookId}/layout
 // ---------------------------------------------------------------------------
 
-export type SetBookLayoutResult = { bookId: string; layoutId: string | null; status: Book['status']; redrawn: boolean };
+export type SetBookLayoutResult = {
+  bookId: string;
+  layoutId: string | null;
+  print: Book['print'];
+  /** True when this call started making print copies (false: the same template, already ready or under way). */
+  started: boolean;
+};
 
 /**
  * The parent ties a print template (Layout) to a finished Book, or takes it
- * back to the screen format with `null` (ADR-0011: the parent picks the
- * Layout). Page art is drawn at the template's picture shape, so a change
- * redraws every picture (free: no allowance is charged; the words are kept).
- * The same template again is a no-op. Refused while the Book is locked (409
- * BOOK_LOCKED) or still being made (409 BOOK_NOT_FINISHED).
+ * back to screen only with `null` (ADR-0011: the parent picks the Layout).
+ *
+ * The Book's pictures do not change: each gets a print copy at the template's
+ * picture shape (`book.preparePrint` → `book.printArt`: cropped, or extended
+ * by the image model when the shapes are far apart). The Book stays readable
+ * the whole time, and nothing is charged. The same template again does
+ * nothing while its copies are ready or being made, and starts again after a
+ * failure. Refused while locked (409 BOOK_LOCKED) and until every picture is
+ * drawn (409 BOOK_NOT_FINISHED: `partial` Books redraw their missing pictures first).
  */
 export async function setBookLayout(deps: BookServiceDeps, user: VerifiedUser, bookId: string, layoutId: string | null): Promise<SetBookLayoutResult> {
   const { db } = deps;
@@ -419,19 +430,29 @@ export async function setBookLayout(deps: BookServiceDeps, user: VerifiedUser, b
     const supported = layoutSupports(layout, manuscript.length, manuscript.density);
     if (!supported.ok) throw new ConflictError(supported.reason, { code: 'LAYOUT_UNSUPPORTED' });
   }
+  const pageRepo = bookPages.using(db).of(bookId);
 
   const outcome = await db.runTransaction(async (tx) => {
     const book = await bookRepo.requireIn(tx, bookId);
     if (book.status === 'locked') throw new ConflictError('Unlock the book to change its print template', { code: 'BOOK_LOCKED' });
-    if ((book.layoutId ?? null) === layoutId) return { pending: null, status: book.status };
-    if (book.status !== 'ready' && book.status !== 'partial') {
-      throw new ConflictError('Wait for the pictures to finish first', { code: 'BOOK_NOT_FINISHED', details: { status: book.status } });
+    const underway = book.print?.layoutId === layoutId && (book.print.status === 'preparing' || book.print.status === 'ready');
+    if (book.layoutId === layoutId && (layoutId === null || underway)) return { pending: null, print: book.print };
+    if (layoutId && book.status !== 'ready') {
+      throw new ConflictError('Every picture needs to be drawn first', { code: 'BOOK_NOT_FINISHED', details: { status: book.status } });
     }
-    const redraw = await redrawIn(tx, deps, book, { layoutId });
-    return { pending: redraw.pending, status: 'illustrating' as const };
+    const pageSnapshot = await tx.get(await pageRepo.collection());
+    const artPages = pageSnapshot.docs.map((doc) => pageRepo.parse(doc)).filter((p) => ART_PAGE_KINDS.has(p.kind));
+    const run = randomUUID();
+    const print: Book['print'] = layoutId ? { layoutId, run, status: 'preparing', total: artPages.length, done: 0, failed: 0 } : null;
+    const pending = layoutId ? await deps.runner.enqueueInTransaction(tx, [preparePrintSpec(book, layoutId, run)]) : null;
+    for (const page of artPages) {
+      if (page.printArt) await pageRepo.updateIn(tx, String(page.pageNumber), { printArt: null });
+    }
+    await bookRepo.updateIn(tx, bookId, { layoutId, print });
+    return { pending, print };
   });
   await outcome.pending?.dispatch();
-  return { bookId, layoutId, status: outcome.status, redrawn: outcome.pending !== null };
+  return { bookId, layoutId, print: outcome.print, started: outcome.pending !== null };
 }
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,10 @@
  *   book.illustrate      (render)   coordinator: one book.pageArt per page that needs art;
  *                                   fan-in → Book art rollup and status ready | partial | failed
  *   book.pageArt         (ai-image) one page's picture from its scene + cast sheets + Style
+ *   book.preparePrint    (render)   coordinator: one book.printArt per picture for the Book's print
+ *                                   template; fan-in → `book.print` ready | partial | failed
+ *   book.printArt        (ai-image) one picture's print copy: the screen picture cropped to the
+ *                                   template's picture shape, or extended by the image model first
  *
  * Coordinators exist because the runner's fan-in (`onChildrenComplete`) is the
  * only race-free way to act once when the last of several jobs finishes. A page
@@ -28,7 +32,7 @@ import { artAspectRatio, loadForm, loadLayout, loadStyle, styleExamplesFor, styl
 import { imagePromptConfig, paginationPromptConfig } from '../config/definitions';
 import { bookPages, books, castSheets, manuscriptPages, manuscripts } from '../data/repositories';
 import type { WithId } from '../data/repository';
-import type { Book, BookPage } from '../data/schemas/book';
+import type { Book, BookPage, BookPrint } from '../data/schemas/book';
 import type { JobStatus } from '../data/schemas/common';
 import type { Job } from '../data/schemas/job';
 import type { Manuscript, Scene } from '../data/schemas/manuscript';
@@ -38,6 +42,7 @@ import { artLevelForAttempt, buildCastSheetPrompt, buildPagePrompt, type CastShe
 import { loadCast, stripAudioTags, type Cast, type CastEntry } from './cast';
 import type { BookJobDeps } from './deps';
 import { decodeMedia, extensionFor } from './media';
+import { cropToAspect, extendPrompt, extendRatio, imageSize, printArtMethod, printAspectFor } from './print-art';
 import {
   buildPaginationPrompt,
   backCoverScene,
@@ -61,6 +66,8 @@ export const BOOK_JOB_KINDS = {
   castSheet: 'book.castSheet',
   illustrate: 'book.illustrate',
   pageArt: 'book.pageArt',
+  preparePrint: 'book.preparePrint',
+  printArt: 'book.printArt',
 } as const;
 
 /** Book pages that get a picture. */
@@ -637,10 +644,9 @@ function pageArtHandler(getDeps: () => Promise<BookJobDeps>): JobDefinition['run
     } else {
       const manuscript = await manuscripts.using(ctx.db).require(book.manuscriptId);
       const scene = await sceneFor(ctx.db, page, manuscript);
-      const [style, story, layout, globalPrompt] = await Promise.all([
+      const [style, story, globalPrompt] = await Promise.all([
         loadStyle(ctx.db, book.styleId),
         loadStorySource(ctx.db, book.storyId),
-        book.layoutId ? loadLayout(ctx.db, book.layoutId) : Promise.resolve(null),
         deps.config.get(imagePromptConfig),
       ]);
       if (!style) throw new JobFailure('STYLE_MISSING', `Style ${book.styleId} not found`, { retryable: false });
@@ -697,7 +703,8 @@ function pageArtHandler(getDeps: () => Promise<BookJobDeps>): JobDefinition['run
           flowName: 'book.pageArt',
           ownerUid: ctx.job.ownerUid,
           prompt: [...styleImages.map((s) => s.part), ...referenceParts, { text }],
-          config: { imageConfig: { aspectRatio: artAspectRatio(layout, artKind) } },
+          // Always the screen shape: a print template gets copies of these (book.printArt).
+          config: { imageConfig: { aspectRatio: artAspectRatio(null, artKind) } },
         });
         artUrl = await storeImage(deps, `books/${bookId}/pages/${pageNumber}/${ctx.job.jobId}-${ctx.job.attempt}`, mediaUrl, {
           bookId,
@@ -709,6 +716,165 @@ function pageArtHandler(getDeps: () => Promise<BookJobDeps>): JobDefinition['run
       }
     }
     await pageRepo.update(String(pageNumber), { artUrl, artJob: { jobId: ctx.job.jobId, status: 'succeeded' } });
+  };
+}
+
+// ---------------------------------------------------------------------------
+// book.preparePrint (coordinator) and book.printArt
+// ---------------------------------------------------------------------------
+
+export function preparePrintSpec(book: { id: string; ownerUid: string }, layoutId: string, run: string): JobSpec {
+  return {
+    kind: BOOK_JOB_KINDS.preparePrint,
+    ownerUid: book.ownerUid,
+    target: { collection: 'books', id: book.id },
+    input: { bookId: book.id, layoutId, run },
+  };
+}
+
+export function printArtSpec(book: { id: string; ownerUid: string }, pageNumber: number, layoutId: string, run: string): Omit<JobSpec, 'parentJobId'> {
+  return {
+    kind: BOOK_JOB_KINDS.printArt,
+    ownerUid: book.ownerUid,
+    target: { collection: 'books', id: book.id, subpath: `pages/${pageNumber}` },
+    input: { bookId: book.id, pageNumber, layoutId, run },
+  };
+}
+
+type PrintRunInput = { bookId: string; layoutId: string; run: string };
+
+/** Whether this run is still the Book's current print preparation (a template change starts a new one). */
+function isCurrentPrint(book: Book, layoutId: string, run: string): boolean {
+  return book.layoutId === layoutId && book.print?.layoutId === layoutId && book.print.run === run;
+}
+
+function artKindOf(page: BookPage): 'cover' | 'story' | 'back' {
+  return page.kind === 'cover' ? 'cover' : page.kind === 'back' ? 'back' : 'story';
+}
+
+/** Count a print run from the Book's pages (an `override` replaces a page's job status). */
+export function rollupPrint(pages: Array<WithId<BookPage>>, run: string, overrides: Map<number, JobStatus> = new Map()): Pick<BookPrint, 'status' | 'total' | 'done' | 'failed'> {
+  const artPages = pages.filter((p) => ART_PAGE_KINDS.has(p.kind));
+  let done = 0;
+  let failed = 0;
+  let pending = 0;
+  for (const page of artPages) {
+    const mine = page.printArt?.run === run ? page.printArt : null;
+    const status = overrides.get(page.pageNumber) ?? mine?.job?.status ?? null;
+    if (mine?.url) done += 1;
+    else if (status === 'failed' || status === 'cancelled') failed += 1;
+    else pending += 1;
+  }
+  const status: BookPrint['status'] = pending > 0 ? 'preparing' : failed === 0 ? 'ready' : done === 0 ? 'failed' : 'partial';
+  return { status, total: artPages.length, done, failed };
+}
+
+function preparePrintHandler(): JobDefinition['run'] {
+  return async (ctx) => {
+    const { bookId, layoutId, run } = input<PrintRunInput>(ctx.job);
+    const book = await books.using(ctx.db).require(bookId);
+    if (!isCurrentPrint(book, layoutId, run)) return;
+    const pages = (await bookPages.using(ctx.db).of(bookId).where({}))
+      .filter((p) => ART_PAGE_KINDS.has(p.kind))
+      .sort((a, b) => a.pageNumber - b.pageNumber);
+    await ctx.enqueueChildren(pages.map((page) => printArtSpec(book, page.pageNumber, layoutId, run)));
+  };
+}
+
+const preparePrintFanIn: NonNullable<JobDefinition['onChildrenComplete']> = async ({ tx, db, parent, children }) => {
+  const { bookId, layoutId, run } = parent.input as PrintRunInput;
+  const bookRepo = books.using(db);
+  const pageRepo = bookPages.using(db).of(bookId);
+  const book = await bookRepo.requireIn(tx, bookId);
+  if (!isCurrentPrint(book, layoutId, run)) return;
+  const pages = await readBookPagesIn(tx, db, bookId);
+  const overrides = new Map<number, JobStatus>();
+  const pageJobs = new Map<number, { jobId: string; status: JobStatus }>();
+  for (const child of children) {
+    const pageNumber = (child.input as { pageNumber: number }).pageNumber;
+    const page = pages.find((p) => p.pageNumber === pageNumber);
+    if (!page || page.printArt?.run !== run) {
+      // The job failed before it recorded anything on the page.
+      if (page && child.status !== 'succeeded') overrides.set(pageNumber, child.status);
+      continue;
+    }
+    overrides.set(pageNumber, child.status);
+    pageJobs.set(pageNumber, { jobId: child.jobId, status: child.status });
+  }
+  const rollup = rollupPrint(pages, run, overrides);
+  return {
+    apply: async (writeTx: Transaction) => {
+      for (const [pageNumber, job] of pageJobs) {
+        const page = pages.find((p) => p.pageNumber === pageNumber)!;
+        await pageRepo.updateIn(writeTx, String(pageNumber), { printArt: { ...page.printArt!, job } });
+      }
+      await bookRepo.updateIn(writeTx, bookId, { print: { ...book.print!, ...rollup } });
+    },
+  };
+};
+
+function printArtHandler(getDeps: () => Promise<BookJobDeps>): JobDefinition['run'] {
+  return async (ctx) => {
+    const { bookId, pageNumber, layoutId, run } = input<PrintRunInput & { pageNumber: number }>(ctx.job);
+    const bookRepo = books.using(ctx.db);
+    const pageRepo = bookPages.using(ctx.db).of(bookId);
+    const book = await bookRepo.require(bookId);
+    if (!isCurrentPrint(book, layoutId, run)) return;
+    const page = await pageRepo.require(String(pageNumber));
+    if (page.printArt?.run === run && page.printArt.url) return;
+    if (!page.artUrl) throw new JobFailure('NO_ART', `Page ${pageNumber} has no picture to copy`, { retryable: false });
+    const running = { layoutId, run, url: null, method: null, aspect: null, job: { jobId: ctx.job.jobId, status: 'running' as const } };
+    await pageRepo.update(String(pageNumber), { printArt: running });
+
+    const deps = await getDeps();
+    const kind = artKindOf(page);
+    let copy: { url: string; method: 'crop' | 'extend'; aspect: number };
+    if (deps.testMode()) {
+      copy = { url: TEST_MODE_IMAGE_DATA_URL, method: 'crop', aspect: 1 };
+    } else {
+      const layout = await loadLayout(ctx.db, layoutId);
+      if (!layout) throw new JobFailure('LAYOUT_NOT_FOUND', `No print template ${layoutId}`, { retryable: false });
+      const original = await deps.fetchImage(page.artUrl);
+      if (!original) throw new JobFailure('ART_UNAVAILABLE', `Could not fetch page ${pageNumber}'s picture`, { retryable: true });
+      const { data } = await decodeMedia(original);
+      const size = await imageSize(data).catch((error: unknown) => {
+        throw new JobFailure('ART_UNREADABLE', `Page ${pageNumber}'s picture could not be read`, { retryable: false, cause: error });
+      });
+      const target = printAspectFor(layout, kind) ?? size.width / size.height;
+      const method = printArtMethod(size.width / size.height, target);
+      let source = data;
+      if (method === 'extend') {
+        try {
+          const { mediaUrl } = await deps.ai.generateImage({
+            purpose: 'book.printArt',
+            flowName: 'book.printArt',
+            ownerUid: ctx.job.ownerUid,
+            prompt: [{ media: { url: original } }, { text: extendPrompt(kind) }],
+            config: { imageConfig: { aspectRatio: extendRatio(layout, kind) } },
+          });
+          source = (await decodeMedia(mediaUrl)).data;
+        } catch (error) {
+          throw asImageFailure(error);
+        }
+      }
+      const cropped = await cropToAspect(source, target);
+      const stored = await deps.blobs.save(`books/${bookId}/print/${layoutId}/${pageNumber}-${run}.png`, cropped.data, 'image/png', {
+        bookId,
+        pageNumber: String(pageNumber),
+        ownerUid: book.ownerUid,
+        layoutId,
+      });
+      copy = { url: stored.url, method, aspect: cropped.width / cropped.height };
+    }
+
+    // Record it only if this run is still current: a template change meanwhile makes it stale.
+    await ctx.db.runTransaction(async (tx) => {
+      const current = await bookRepo.requireIn(tx, bookId);
+      if (!isCurrentPrint(current, layoutId, run)) return;
+      await pageRepo.updateIn(tx, String(pageNumber), {
+        printArt: { layoutId, run, ...copy, job: { jobId: ctx.job.jobId, status: 'succeeded' } },
+      });
+    });
   };
 }
 
@@ -739,5 +905,13 @@ export function registerBookJobs(registry: JobRegistry, getDeps: () => Promise<B
       run: illustrateHandler(),
       onChildrenComplete: illustrateFanIn,
     })
-    .register({ kind: BOOK_JOB_KINDS.pageArt, queue: 'ai-image', maxAttempts: 3, run: pageArtHandler(getDeps) });
+    .register({ kind: BOOK_JOB_KINDS.pageArt, queue: 'ai-image', maxAttempts: 3, run: pageArtHandler(getDeps) })
+    .register({
+      kind: BOOK_JOB_KINDS.preparePrint,
+      queue: 'render',
+      maxAttempts: 5,
+      run: preparePrintHandler(),
+      onChildrenComplete: preparePrintFanIn,
+    })
+    .register({ kind: BOOK_JOB_KINDS.printArt, queue: 'ai-image', maxAttempts: 3, run: printArtHandler(getDeps) });
 }

@@ -18,6 +18,53 @@
 
 ### 2026-11-11
 
+#### `#61` - Print copies of a Book's pictures instead of a redraw, with a print preview
+
+**Type**: Feature / Fix (Books, print)
+
+**Summary**: Since #59, choosing a print template redrew every picture of the Book from the original
+prompts. The pictures could come out quite different, and the child's book went blank while it ran.
+Now the Book's pictures never change. Each finished picture gets a **print copy** at the template's
+picture shape: cropped from the centre when the shapes are within about 12% (no AI), otherwise
+extended by the image model *from the picture itself* (keep everything, paint more scene at the
+edges) and then cropped to the exact shape. The parent sees the copies in a **print preview** on the
+Book page, with extended pictures marked, and can order once they are ready.
+
+**Changes**:
+- New jobs `book.preparePrint` (coordinator, render queue) and `book.printArt` (ai-image queue), and
+  AI purpose `book.printArt`. Each run has an id: a template change starts a new run and the old
+  run's work is ignored. `src/server/books/print-art.ts` holds the shape rules, the sharp crop and
+  the extend prompt (the cover keeps its title lettering; other pages get no words).
+- `book.pageArt` always draws at the screen shape (4:5).
+- `setBookLayout` (`PUT /api/books/{id}/layout`): saves the template and starts the copies; the
+  Book stays `ready`. Needs every picture (`partial` is refused). Same template is a no-op unless
+  the copies failed. `null` clears them. Answers `{ bookId, layoutId, print, started }`.
+- Schema: `books.print { layoutId, run, status, total, done, failed }`, page `printArt { layoutId,
+  run, url, method, aspect, job }`. The internal re-illustrate clears both.
+- `print-options` gains `orderable`; `POST /api/orders` adds 409 `PRINT_NOT_READY`; the print render
+  uses each page's copy for its template.
+- Web: `PrintTemplate` (no redraw warning; progress; "Prepare the pictures for print again"), new
+  `PrintPreview`, the order button and its messages follow the copies, the order form uses
+  `orderable`. `BookReader` drops the #59/#60 `object-contain` switch: the pictures are always
+  screen-shaped again.
+- Tests: crop path (no AI, pictures and allowance unchanged), extend path (the picture is the
+  model's input, cover keeps its lettering, exact 1:1 result), a replaced run is ignored, failure and
+  retry, clearing on `null` and on re-illustrate, the render source uses the copies; orders need
+  ready copies.
+- Docs: `API.md`, `SCHEMA.md`, `SYSTEM_DESIGN.md` §3.
+
+**Files**:
+- Created: `src/server/books/print-art.ts`, `src/components/books/print-preview.tsx`
+- Modified: `src/server/books/jobs.ts`, `src/server/books/service.ts`, `src/server/data/schemas/book.ts`,
+  `src/server/data/schemas/job.ts`, `src/server/ai/model-registry.ts`, `src/server/orders/service.ts`,
+  `src/server/print/service.ts`, `src/server/print/jobs.ts`, `packages/shared-types/src/books.ts`,
+  `packages/api-client/src/client.ts`, `src/lib/books/types.ts`, `src/components/books/book-view.tsx`,
+  `src/components/books/book-reader.tsx`, `src/components/books/print-template.tsx`,
+  `src/components/orders/order-form.tsx`, tests and docs above
+
+**Deploy**: no rules, index or data migration. A Book redrawn at a template's shape under #59 keeps
+those pictures; choosing its template again makes copies from them.
+
 #### `#60` - Parent Book page in the parent console, so the print controls always show
 
 **Type**: Fix (parent print flow)
