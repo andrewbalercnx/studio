@@ -140,6 +140,15 @@ describe('PDF render', () => {
     expect(collagePictures([], 0)).toEqual([]);
   });
 
+  it('gives the cover a spine unless the print product says no, as the admin form shows it', async () => {
+    const { spine: _spine, ...unset } = product as unknown as Record<string, unknown>;
+    const withoutField = await buildPrintDocument({ source: source(12), layout: spreadLayout, product: unset as unknown as PrintProduct, rules, fetchImage });
+    expect(withoutField.spineWidthMm).toBeGreaterThan(0);
+    const off = await buildPrintDocument({ source: source(12), layout: spreadLayout, product: { ...product, spine: false }, rules, fetchImage });
+    expect(off.spineWidthMm).toBeNull();
+    expect((await renderCoverPdf(withoutField)).pageCount).toBe(3);
+  });
+
   it('renders the cover as front, spine and back', async () => {
     const doc = await buildPrintDocument({ source: source(12), layout: spreadLayout, product, rules, fetchImage });
     const cover = await PDFDocument.load((await renderCoverPdf(doc)).bytes);

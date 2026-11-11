@@ -18,7 +18,7 @@
 
 ### 2026-11-11
 
-#### `#68` - Picture pages instead of blank padding at the back of a printed Book
+#### `#68` - Picture pages instead of blank padding at the back of a printed Book; cover spine when unset
 
 **Type**: Feature (print)
 
@@ -30,9 +30,15 @@ first is headed "Pictures from our adventure"; consecutive pages show different 
 first, then the back cover's). Frames are kept 0.35 in inside the trim and below the heading. Layouts
 for landscape and portrait trims.
 
+Also: **no spine on the cover**. The admin print product form shows the spine switch on when the
+stored `spine` is missing (`spine ?? true`), but the renderer drew a spine only when it was `true`,
+so the first test order's cover had front and back but no spine although the switch read on. A
+missing `spine` now means yes in the renderer too; only an explicit `false` drops it.
+
 **Files**:
 - Created: `src/server/print/collage.ts`
-- Modified: `src/server/print/render.ts`, `src/server/print/__tests__/print.test.ts`, `docs/SYSTEM_DESIGN.md`
+- Modified: `src/server/print/render.ts`, `src/server/print/adapter.ts`,
+  `src/server/print/__tests__/print.test.ts`, `docs/SYSTEM_DESIGN.md`
 
 #### `#67` - Order form checks the email, and a rejected request names its field
 
