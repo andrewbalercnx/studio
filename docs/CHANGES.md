@@ -18,6 +18,20 @@
 
 ### 2026-11-11
 
+#### `#64` - Admin template and print product forms accept any decimal measurement
+
+**Type**: Fix (admin)
+
+**Summary**: The print template form's measurement boxes (image and text box position and size,
+border radius, font size) only accepted multiples of 0.01, so the browser refused stored values such
+as 0.827 in (10% of an A4 width) with "Enter a valid value" and the template could not be saved. They
+now accept any decimal (`step="any"`), as do the print product's trim sizes and bleed. Prices keep
+two decimals; page counts and paper weights stay whole numbers.
+
+**Files**:
+- Modified: `src/components/admin/print-layouts/print-layout-form.tsx`,
+  `src/components/admin/print-products/print-product-form.tsx`
+
 #### `#63` - List print templates that fit but have no price
 
 **Type**: Fix (parent print flow)
