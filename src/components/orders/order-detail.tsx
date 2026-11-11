@@ -170,7 +170,7 @@ export function OrderDetail({ orderId, justPaid, requireGuard }: { orderId: stri
         </CardContent>
       </Card>
       <p className="text-center text-sm">
-        <Link href={`/books/${encodeURIComponent(order.bookId)}`} className="text-amber-700 underline">
+        <Link href={`/parent/books/${encodeURIComponent(order.bookId)}`} className="text-amber-700 underline">
           Back to the book
         </Link>
         {' · '}

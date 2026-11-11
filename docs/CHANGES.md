@@ -18,6 +18,29 @@
 
 ### 2026-11-11
 
+#### `#60` - Parent Book page in the parent console, so the print controls always show
+
+**Type**: Fix (parent print flow)
+
+**Summary**: After #59 a parent opening a Book from the parent console saw no print template choice,
+no order button and no lock button. The console linked to `/books/{id}`, which shows the parent
+controls only when the global role mode is "parent" or "admin". That mode reads "child" while a child
+is still selected on the device (the selection is kept in browser storage, and the parent console does
+not clear it) and "writer" for writer accounts. The Book now has a page inside the parent console that
+always shows the parent controls behind the console's PIN guard.
+
+**Changes**:
+- New `/parent/books/[bookId]`: `BookView` with the parent controls, inside `ParentLayout`.
+- The child's book list in the parent console, the order form ("Choose a print template",
+  "Change template") and the order page ("Back to the book") link to `/parent/books/{id}`.
+- `/books/{id}` is unchanged: the reader the child shell links to.
+- Docs: `SYSTEM_DESIGN.md` §3 "Parent controls".
+
+**Files**:
+- Created: `src/app/parent/books/[bookId]/page.tsx`
+- Modified: `src/app/parent/storybooks/[childId]/page.tsx`, `src/components/orders/order-form.tsx`,
+  `src/components/orders/order-detail.tsx`, `docs/SYSTEM_DESIGN.md`
+
 #### `#59` - Parents choose a Book's print template and order it; view-as-parent lists Stories
 
 **Type**: Fix (parent print flow, admin)
