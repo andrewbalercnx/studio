@@ -18,6 +18,19 @@
 
 ### 2026-11-11
 
+#### `#66` - Admin Products: choose the linked print product from a list
+
+**Type**: Fix (admin)
+
+**Summary**: A product's linked print product (which prices every print template using that print
+product) was a free-text ID box, so the admin had to look the ID up and could mistype it. It is now
+a dropdown of the print products by name (inactive ones marked, an unknown stored ID kept and marked
+"not found", and "None"). The product card shows "Prints: <name>" when linked. The price row wraps on
+a phone, so "Add price" stays inside the card.
+
+**Files**:
+- Modified: `src/app/admin/products/page.tsx`
+
 #### `#65` - Print templates save again, and a failed check always says why
 
 **Type**: Fix (admin)
