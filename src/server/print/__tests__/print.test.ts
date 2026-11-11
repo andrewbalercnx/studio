@@ -5,7 +5,7 @@ vi.mock('@/lib/persona.server', () => ({
   enforcePersonaScope: (...args: unknown[]) => enforcePersonaScope(...args),
 }));
 
-import { PDFDocument } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFName } from 'pdf-lib';
 import SampleLayouts from '@/data/print-layouts.json';
 import type { PrintLayout, PrintProduct } from '@/lib/types';
 import { books, renders } from '../../data/repositories';
@@ -13,6 +13,7 @@ import { createBook } from '../../books/service';
 import { createBench, PNG_1X1, seed, user, type Bench } from '../../books/__tests__/helpers';
 import { buildPrintDocument, bleedInchesFor, PrintAdapterError, titlePageText, type BookPrintSource } from '../adapter';
 import { boxToRect, fitImage, renderCoverPdf, renderInteriorPdf, spineWidthMm, type PrintImage } from '../render';
+import { collagePictures } from '../collage';
 import { getRender, listRenders, printOptions, startRender } from '../service';
 
 const spreadLayout = (SampleLayouts as { printLayouts: PrintLayout[] }).printLayouts[0]; // 8×10, two leaves per story page
@@ -117,6 +118,26 @@ describe('PDF render', () => {
       expect(page.getWidth()).toBeCloseTo(8.25 * 72);
       expect(page.getHeight()).toBeCloseTo(10.25 * 72);
     }
+  });
+
+  it('fills the padding after "The End" with pages of the Book\'s pictures, not blank paper', async () => {
+    // Single leaf: title + 12 story pages + end = 14 → padded to 24, so 10 picture pages.
+    const doc = await buildPrintDocument({ source: source(12), layout: singleLayout, product, rules, fetchImage });
+    const pdf = await PDFDocument.load((await renderInteriorPdf(doc)).bytes);
+    const images = (index: number) => {
+      const xobjects = pdf.getPage(index).node.Resources()?.lookup(PDFName.of('XObject'));
+      return xobjects instanceof PDFDict ? xobjects.keys().length : 0;
+    };
+    expect(images(13)).toBe(0); // "The End"
+    for (let index = 14; index < 24; index += 1) expect(images(index)).toBeGreaterThan(0);
+  });
+
+  it('picks different pictures for consecutive picture pages, wrapping round', () => {
+    const pictures = ['a', 'b', 'c', 'd', 'e'];
+    expect(collagePictures(pictures, 0)).toEqual(['a', 'b', 'c']);
+    expect(collagePictures(pictures, 1)).toEqual(['d', 'e', 'a']);
+    expect(collagePictures(['a', 'b'], 3)).toEqual(['a', 'b']);
+    expect(collagePictures([], 0)).toEqual([]);
   });
 
   it('renders the cover as front, spine and back', async () => {

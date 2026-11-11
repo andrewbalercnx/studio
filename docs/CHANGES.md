@@ -18,6 +18,22 @@
 
 ### 2026-11-11
 
+#### `#68` - Picture pages instead of blank padding at the back of a printed Book
+
+**Type**: Feature (print)
+
+**Summary**: A print product's page minimum and multiple pad the interior: the owner's first test
+order (8 story pages in a facing-pages template, 18 pages) came out with six blank pages after "The
+End". Those pages are now a scrapbook of the Book's own pictures: three per page, each in an
+instant-photo frame with a soft shadow and a strip of tape, tilted a few degrees, on warm paper. The
+first is headed "Pictures from our adventure"; consecutive pages show different pictures (story pages
+first, then the back cover's). Frames are kept 0.35 in inside the trim and below the heading. Layouts
+for landscape and portrait trims.
+
+**Files**:
+- Created: `src/server/print/collage.ts`
+- Modified: `src/server/print/render.ts`, `src/server/print/__tests__/print.test.ts`, `docs/SYSTEM_DESIGN.md`
+
 #### `#67` - Order form checks the email, and a rejected request names its field
 
 **Type**: Fix (orders, API)
