@@ -18,6 +18,21 @@
 
 ### 2026-11-11
 
+#### `#67` - Order form checks the email, and a rejected request names its field
+
+**Type**: Fix (orders, API)
+
+**Summary**: A parent's order failed with "Request body failed validation" and no hint why. Browser
+autofill had appended a second address to the prefilled email ("parent@…andrew…@…"), which the
+order route's `contactEmail` check rejected. The order form now checks for one email address,
+says "Enter one email address" under the box and keeps "Place order" disabled until it is valid.
+Every route's body-validation message now names the first failing field and reason, e.g.
+"Request body failed validation (contactEmail: Invalid email)"; `details` is unchanged.
+
+**Files**:
+- Modified: `src/components/orders/order-form.tsx`, `src/server/http/with-route.ts`,
+  `src/server/http/__tests__/with-route.test.ts`
+
 #### `#66` - Admin Products: choose the linked print product from a list
 
 **Type**: Fix (admin)

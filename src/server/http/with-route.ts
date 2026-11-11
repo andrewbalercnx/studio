@@ -90,7 +90,10 @@ async function parseBody(request: Request, schema: z.ZodTypeAny): Promise<unknow
   }
   const result = schema.safeParse(raw);
   if (!result.success) {
-    throw new BadRequestError('Request body failed validation', {
+    // Name the first problem: clients show this message as it is.
+    const first = result.error.issues[0];
+    const where = first?.path.length ? `${first.path.join('.')}: ` : '';
+    throw new BadRequestError(`Request body failed validation${first ? ` (${where}${first.message})` : ''}`, {
       code: 'INVALID_BODY',
       details: result.error.issues.map((issue) => ({ path: issue.path, message: issue.message })),
     });
