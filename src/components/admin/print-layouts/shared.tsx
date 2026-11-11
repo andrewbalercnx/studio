@@ -47,8 +47,11 @@ export const numberOrEmpty = z.preprocess(
   z.number().optional()
 );
 
+/** A stored colour may be null (cleared); the form treats it as unset. */
+const optionalString = z.preprocess((val) => (val === null || val === '' ? undefined : val), z.string().optional());
+
 export const boxSchema = z.object({
-  leaf: z.coerce.number().min(1, "Leaf must be 1 or 2.").max(2, "Leaf must be 1 or 2."),
+  leaf: z.preprocess((val) => (val === undefined || val === null || val === '' ? 1 : val), z.coerce.number().min(1, "Leaf must be 1 or 2.").max(2, "Leaf must be 1 or 2.")),
   x: z.coerce.number(),
   y: z.coerce.number(),
   width: positiveNumber,
@@ -62,8 +65,8 @@ export const textLayoutBoxSchema = z.object({
   y: numberOrEmpty,
   width: numberOrEmpty,
   height: numberOrEmpty,
-  backgroundColor: z.string().optional(),
-  textColor: z.string().optional(),
+  backgroundColor: optionalString,
+  textColor: optionalString,
   borderRadius: numberOrEmpty,
 }).optional();
 
@@ -98,7 +101,7 @@ export const printLayoutFormSchema = z.object({
   leafHeight: positiveNumber,
   leavesPerSpread: z.enum(['1', '2']),
   // Typography settings
-  font: z.string().optional(),
+  font: optionalString,
   fontSize: numberOrEmpty,
   // Page-type-specific layouts
   coverLayout: pageLayoutConfigSchema,
@@ -106,11 +109,12 @@ export const printLayoutFormSchema = z.object({
   insideLayout: pageLayoutConfigSchema,
   titlePageLayout: pageLayoutConfigSchema,
   // Print product link and page constraints
-  printProductId: z.string().optional(),
+  printProductId: optionalString,
   pageConstraints: pageConstraintsSchema,
-  // Legacy arrays (still used for backwards compatibility)
-  textBoxes: z.array(boxSchema).min(1, 'At least one text box is required'),
-  imageBoxes: z.array(boxSchema).min(1, 'At least one image box is required'),
+  // Legacy arrays: only a fallback for page types without their own layout (getLayoutForPageType),
+  // so a template that sets cover/inside/back layouts needs none.
+  textBoxes: z.array(boxSchema).default([]),
+  imageBoxes: z.array(boxSchema).default([]),
 });
 
 export type PrintLayoutFormValues = z.infer<typeof printLayoutFormSchema>;

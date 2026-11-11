@@ -18,6 +18,24 @@
 
 ### 2026-11-11
 
+#### `#65` - Print templates save again, and a failed check always says why
+
+**Type**: Fix (admin)
+
+**Summary**: Saving a print template did nothing, with no message. The form's checks rejected
+templates as stored, and showed the errors only in a collapsed section or nowhere:
+- the legacy box arrays had to hold at least one text and one image box, although they are only a
+  fallback for page types without their own layout (`getLayoutForPageType`);
+- colours, font and print product stored as `null` were rejected (`z.string().optional()`);
+- a template without `leavesPerSpread` became the string "undefined" and failed its enum;
+- a legacy box without `leaf` failed.
+These are accepted now (null → unset, no legacy boxes needed, missing leaf → 1, missing
+`leavesPerSpread` → 1), and any failed check shows a toast listing the fields and messages.
+
+**Files**:
+- Modified: `src/components/admin/print-layouts/shared.tsx`, `src/components/admin/print-layouts/print-layout-form.tsx`
+- Created: `src/components/admin/print-layouts/__tests__/schema.test.ts`
+
 #### `#64` - Admin template and print product forms accept any decimal measurement
 
 **Type**: Fix (admin)

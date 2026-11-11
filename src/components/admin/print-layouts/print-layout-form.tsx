@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { LoaderCircle, Plus, Trash2, Link2, Link2Off } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import type { PrintLayout, PrintProduct } from '@/lib/types';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { useForm, useFieldArray, Controller, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
@@ -44,7 +44,7 @@ export function PrintLayoutForm({
           name: editingLayout.name,
           leafWidth: editingLayout.leafWidth,
           leafHeight: editingLayout.leafHeight,
-          leavesPerSpread: String(editingLayout.leavesPerSpread) as '1' | '2',
+          leavesPerSpread: (editingLayout.leavesPerSpread === 2 ? '2' : '1') as '1' | '2',
           font: editingLayout.font || defaultFormValues.font,
           fontSize: editingLayout.fontSize || defaultFormValues.fontSize,
           coverLayout: {
@@ -179,6 +179,26 @@ export function PrintLayoutForm({
       cleaned.pageMultiple = Number(constraints.pageMultiple) as 1 | 2 | 4;
     }
     return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+  };
+
+  // A failed check must never be silent: some fields sit in collapsed sections.
+  const onInvalid = (formErrors: FieldErrors<PrintLayoutFormValues>) => {
+    const problems: string[] = [];
+    const walk = (node: unknown, path: string) => {
+      if (!node || typeof node !== 'object') return;
+      const { message } = node as { message?: unknown };
+      if (typeof message === 'string' && message) {
+        problems.push(`${path || 'form'}: ${message}`);
+        return;
+      }
+      for (const [key, child] of Object.entries(node)) if (key !== 'ref') walk(child, path ? `${path}.${key}` : key);
+    };
+    walk(formErrors, '');
+    toast({
+      title: 'Cannot save this layout',
+      description: problems.slice(0, 5).join('; ') + (problems.length > 5 ? ` (and ${problems.length - 5} more)` : ''),
+      variant: 'destructive',
+    });
   };
 
   const onSubmit = async (data: PrintLayoutFormValues) => {
@@ -480,7 +500,7 @@ export function PrintLayoutForm({
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor="layout-name">Name</Label>
