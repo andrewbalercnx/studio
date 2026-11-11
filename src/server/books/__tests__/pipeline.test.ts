@@ -8,7 +8,7 @@ vi.mock('@/lib/persona.server', () => ({
 import { TEST_MODE_AUDIO_DATA_URL, TEST_MODE_IMAGE_DATA_URL } from '@/lib/test-mode';
 import { NoImageReturnedError } from '../../ai/harness';
 import { bookPages, books, castSheets, jobs, manuscriptPages, manuscripts } from '../../data/repositories';
-import { createBook, createManuscript, lockBook, reillustrateBook, retryPage, unlockBook, type BookUnlockHook } from '../service';
+import { createBook, createManuscript, lockBook, reillustrateBook, retryPage, setBookLayout, unlockBook, type BookUnlockHook } from '../service';
 import { createBench, seed, user, type Bench } from './helpers';
 
 const p1 = user('p1');
@@ -360,6 +360,44 @@ describe('reillustrate (system, no user)', () => {
     await lockBook(bench.services, p1, result.bookId);
     await expect(reillustrateBook(bench.services, result.bookId)).rejects.toMatchObject({ status: 409, code: 'BOOK_LOCKED' });
     await expect(reillustrateBook(bench.services, 'bk_nope')).rejects.toMatchObject({ status: 404, code: 'BOOK_NOT_FOUND' });
+  });
+});
+
+describe('setBookLayout (parent ties a print template to a Book)', () => {
+  const pageArtAspects = () =>
+    bench.ai.generateImage.mock.calls
+      .filter(([options]) => (options as { flowName?: string }).flowName === 'book.pageArt')
+      .map(([options]) => (options as { config?: { imageConfig?: { aspectRatio?: string } } }).config?.imageConfig?.aspectRatio);
+
+  it('saves the template and redraws every picture at its shape without charging', async () => {
+    const result = await makeBook();
+    const used = await ledgerUsed();
+    bench.ai.generateImage.mockClear();
+
+    const outcome = await setBookLayout(bench.services, p1, result.bookId, 'square');
+    expect(outcome).toEqual({ bookId: result.bookId, layoutId: 'square', status: 'illustrating', redrawn: true });
+    expect(await books.using(bench.db).require(result.bookId)).toMatchObject({ layoutId: 'square', status: 'illustrating', art: { done: 0 } });
+
+    await bench.drain();
+    expect(await books.using(bench.db).require(result.bookId)).toMatchObject({ layoutId: 'square', status: 'ready', art: { total: 14, done: 14 } });
+    const aspects = pageArtAspects();
+    expect(aspects).toHaveLength(14);
+    expect(new Set(aspects)).toEqual(new Set(['1:1'])); // the 8 × 8 template, not the 4:5 screen shape
+    expect(await ledgerUsed()).toBe(used);
+
+    // The same template again changes nothing; null goes back to the screen format.
+    expect(await setBookLayout(bench.services, p1, result.bookId, 'square')).toMatchObject({ redrawn: false, status: 'ready' });
+    expect(await setBookLayout(bench.services, p1, result.bookId, null)).toMatchObject({ layoutId: null, redrawn: true });
+  });
+
+  it('refuses unknown templates, unfinished or locked books, and other families', async () => {
+    const result = await createBook(bench.services, p1, { storyId: 's1', formId: 'picture', styleId: 'water' });
+    await expect(setBookLayout(bench.services, p1, result.bookId, 'nope')).rejects.toMatchObject({ status: 404, code: 'LAYOUT_NOT_FOUND' });
+    await expect(setBookLayout(bench.services, p1, result.bookId, 'square')).rejects.toMatchObject({ status: 409, code: 'BOOK_NOT_FINISHED' });
+    await bench.drain();
+    await expect(setBookLayout(bench.services, p2, result.bookId, 'square')).rejects.toMatchObject({ status: 403 });
+    await lockBook(bench.services, p1, result.bookId);
+    await expect(setBookLayout(bench.services, p1, result.bookId, 'square')).rejects.toMatchObject({ status: 409, code: 'BOOK_LOCKED' });
   });
 });
 

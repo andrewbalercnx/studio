@@ -25,8 +25,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { UserProfile, Story } from '@/lib/types';
-import { api, type CharacterView, type ChildView } from '@/lib/api';
+import type { UserProfile } from '@/lib/types';
+import { api, storyStatusLabel, type CharacterView, type ChildView, type StoryView } from '@/lib/api';
 import { format } from 'date-fns';
 
 function formatFriendlyDate(date: Date): string {
@@ -204,7 +204,7 @@ function CharactersTab({ characters, loading }: { characters: CharacterView[] | 
   );
 }
 
-function StoriesTab({ stories, kids, loading }: { stories: Story[] | null; kids: ChildView[] | null; loading: boolean }) {
+function StoriesTab({ stories, kids, loading }: { stories: StoryView[] | null; kids: ChildView[] | null; loading: boolean }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -214,7 +214,8 @@ function StoriesTab({ stories, kids, loading }: { stories: Story[] | null; kids:
     );
   }
 
-  const visibleStories = stories?.filter(s => !s.deletedAt) || [];
+  // Already newest first, abandoned ones left out (GET /api/admin/stories).
+  const visibleStories = stories || [];
 
   if (visibleStories.length === 0) {
     return (
@@ -226,7 +227,7 @@ function StoriesTab({ stories, kids, loading }: { stories: Story[] | null; kids:
 
   // Group stories by childId
   const childMap = new Map((kids || []).map(c => [c.id, c]));
-  const storiesByChild = new Map<string, Story[]>();
+  const storiesByChild = new Map<string, StoryView[]>();
 
   for (const story of visibleStories) {
     const childId = story.childId || 'unknown';
@@ -254,7 +255,7 @@ function StoriesTab({ stories, kids, loading }: { stories: Story[] | null; kids:
               {childStories.map((story) => (
                 <Card key={story.id}>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base">{story.metadata?.title || 'Untitled Story'}</CardTitle>
+                    <CardTitle className="text-base">{story.title || 'Untitled Story'}</CardTitle>
                     <CardDescription>
                       {safeToDate(story.createdAt) && formatFriendlyDate(safeToDate(story.createdAt)!)}
                     </CardDescription>
@@ -264,15 +265,16 @@ function StoriesTab({ stories, kids, loading }: { stories: Story[] | null; kids:
                       <p className="text-sm text-muted-foreground line-clamp-3 mb-2">{story.synopsis}</p>
                     )}
                     <div className="flex flex-wrap gap-2">
-                      {story.storyMode && (
-                        <Badge variant="outline" className="text-xs">{story.storyMode}</Badge>
-                      )}
-                      <Badge variant={story.status === 'text_ready' ? 'default' : 'secondary'} className="text-xs">
-                        {story.status === 'text_ready' ? (
-                          <><CheckCircle2 className="h-3 w-3 mr-1" />Ready</>
+                      <Badge variant="outline" className="text-xs">{story.modeId}</Badge>
+                      <Badge variant={story.status === 'complete' ? 'default' : 'secondary'} className="text-xs">
+                        {story.status === 'complete' ? (
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                        ) : story.status === 'failed' ? (
+                          <AlertCircle className="h-3 w-3 mr-1" />
                         ) : (
-                          <><Clock className="h-3 w-3 mr-1" />Pending</>
+                          <Clock className="h-3 w-3 mr-1" />
                         )}
+                        {storyStatusLabel(story.status)}
                       </Badge>
                     </div>
                   </CardContent>
@@ -378,11 +380,6 @@ export default function ViewAsParentPage() {
   const { data: parentProfile, loading: parentLoading } = useDocument<UserProfile>(parentDocRef);
 
   // Queries for parent's data
-  const storiesQuery = useMemo(() => {
-    if (!firestore || !targetUid) return null;
-    return query(collection(firestore, 'stories'), where('parentUid', '==', targetUid));
-  }, [firestore, targetUid]);
-
   const ordersQuery = useMemo(() => {
     if (!firestore || !targetUid) return null;
     return query(collection(firestore, 'printOrders'), where('ownerUid', '==', targetUid));
@@ -401,15 +398,29 @@ export default function ViewAsParentPage() {
     };
   }, [isAdmin, targetUid]);
   const { children, characters } = people;
+
+  // Stories through the admin route: target Stories carry ownerUid and are rendered by the server.
+  const [stories, setStories] = useState<StoryView[] | null>(null);
+  useEffect(() => {
+    if (!isAdmin || !targetUid) return;
+    let cancelled = false;
+    api.stories
+      .adminList(targetUid)
+      .then((list) => !cancelled && setStories(list))
+      .catch(() => !cancelled && setStories([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, targetUid]);
+  const storiesLoading = stories === null;
   const childrenLoading = children === null;
   const charactersLoading = characters === null;
-  const { data: stories, loading: storiesLoading } = useCollection<Story>(storiesQuery);
   const { data: orders, loading: ordersLoading } = useCollection<ParentOrderDoc>(ordersQuery);
 
   // Count visible items for tab badges
   const childCount = children?.length || 0;
   const charCount = characters?.length || 0;
-  const storyCount = stories?.filter(s => !s.deletedAt).length || 0;
+  const storyCount = stories?.length || 0;
   const orderCount = orders?.length || 0;
 
   if (adminLoading || parentLoading) {

@@ -17,6 +17,7 @@ import { isReadableStatus } from '@/lib/books/types';
 import { BookFailed, BookProgress } from './book-progress';
 import { BookReader } from './book-reader';
 import { PrintProof } from './print-proof';
+import { PrintTemplate } from './print-template';
 import { api } from '@/lib/api';
 
 export type BookViewParentControls = {
@@ -108,7 +109,7 @@ export function BookView({ bookId, parent, admin = false }: { bookId: string; pa
                 Lock book
               </Button>
             )}
-            {(book.status === 'ready' || locked) && (book.art?.failed ?? 0) === 0 ? (
+            {(book.status === 'ready' || locked) && (book.art?.failed ?? 0) === 0 && book.layoutId ? (
               <Button asChild variant="default" data-testid="order-print">
                 <Link href={`/books/${encodeURIComponent(bookId)}/order`}>
                   <Printer className="mr-2 h-4 w-4" />
@@ -118,9 +119,16 @@ export function BookView({ bookId, parent, admin = false }: { bookId: string; pa
             ) : (
               <span className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="print-unavailable">
                 <Printer className="h-4 w-4" />
-                {book.status === 'partial' ? 'Draw the missing pictures again to print this book.' : 'You can order a printed copy once the pictures are finished.'}
+                {book.status === 'partial'
+                  ? 'Draw the missing pictures again to print this book.'
+                  : book.status !== 'ready' && !locked
+                    ? 'You can order a printed copy once the pictures are finished.'
+                    : 'Choose a print template below to order a printed copy.'}
               </span>
             )}
+            <div className="basis-full border-t pt-3">
+              <PrintTemplate bookId={bookId} layoutId={book.layoutId ?? null} status={book.status} requireGuard={parent.requireGuard} />
+            </div>
           </CardContent>
         </Card>
       )}

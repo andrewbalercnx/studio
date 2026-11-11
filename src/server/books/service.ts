@@ -360,32 +360,78 @@ export type ReillustrateResult = {
  * (unlock it first).
  */
 export async function reillustrateBook(deps: BookServiceDeps, bookId: string): Promise<ReillustrateResult> {
-  const { db } = deps;
-  const bookRepo = books.using(db);
-  const pageRepo = bookPages.using(db).of(bookId);
-  const sheetRepo = castSheets.using(db).of(bookId);
-
-  const outcome = await db.runTransaction(async (tx) => {
-    // Reads.
-    const book = await bookRepo.getIn(tx, bookId);
+  const outcome = await deps.db.runTransaction(async (tx) => {
+    const book = await books.using(deps.db).getIn(tx, bookId);
     if (!book) throw new NotFoundError('Book not found', { code: 'BOOK_NOT_FOUND', details: { bookId } });
     if (book.status === 'locked') throw new ConflictError('Unlock the book first', { code: 'BOOK_LOCKED' });
-    const pageSnapshot = await tx.get(await pageRepo.collection());
-    const artPages = pageSnapshot.docs.map((doc) => pageRepo.parse(doc)).filter((p) => ART_PAGE_KINDS.has(p.kind));
-    const sheetSnapshot = await tx.get(await sheetRepo.collection());
-    const sheets = sheetSnapshot.docs.map((doc) => sheetRepo.parse(doc));
-
-    // A fresh run nonce makes every job of this re-illustration new (cast sheets, illustrate, page art).
-    const pending = await deps.runner.enqueueInTransaction(tx, [prepareCastSpec({ id: bookId, ownerUid: book.ownerUid }, `redraw-${randomUUID()}`)]);
-
-    // Writes: wipe the art and cast sheets, reset the rollup, start illustrating again.
-    for (const page of artPages) await pageRepo.updateIn(tx, String(page.pageNumber), { artUrl: null, artJob: null });
-    for (const sheet of sheets) await sheetRepo.updateIn(tx, sheet.castId, { imageUrl: null, job: null });
-    await bookRepo.updateIn(tx, bookId, { status: 'illustrating', art: { total: artPages.length, done: 0, failed: 0 } });
-    return { pending, pagesCleared: artPages.length, castSheetsCleared: sheets.length };
+    return redrawIn(tx, deps, book);
   });
   await outcome.pending.dispatch();
   return { bookId, status: 'illustrating', pagesCleared: outcome.pagesCleared, castSheetsCleared: outcome.castSheetsCleared };
+}
+
+/**
+ * Inside a transaction, after the caller's own reads: wipe the Book's art and
+ * cast sheets and enqueue the illustration pipeline under a fresh run nonce
+ * (so every job is new). `changes` are written to the Book with the reset.
+ */
+async function redrawIn(tx: Transaction, deps: BookServiceDeps, book: WithId<Book>, changes: Partial<Book> = {}) {
+  const pageRepo = bookPages.using(deps.db).of(book.id);
+  const sheetRepo = castSheets.using(deps.db).of(book.id);
+  // Reads.
+  const pageSnapshot = await tx.get(await pageRepo.collection());
+  const artPages = pageSnapshot.docs.map((doc) => pageRepo.parse(doc)).filter((p) => ART_PAGE_KINDS.has(p.kind));
+  const sheetSnapshot = await tx.get(await sheetRepo.collection());
+  const sheets = sheetSnapshot.docs.map((doc) => sheetRepo.parse(doc));
+
+  const pending = await deps.runner.enqueueInTransaction(tx, [prepareCastSpec({ id: book.id, ownerUid: book.ownerUid }, `redraw-${randomUUID()}`)]);
+
+  // Writes: wipe the art and cast sheets, reset the rollup, start illustrating again.
+  for (const page of artPages) await pageRepo.updateIn(tx, String(page.pageNumber), { artUrl: null, artJob: null });
+  for (const sheet of sheets) await sheetRepo.updateIn(tx, sheet.castId, { imageUrl: null, job: null });
+  await books.using(deps.db).updateIn(tx, book.id, { ...changes, status: 'illustrating', art: { total: artPages.length, done: 0, failed: 0 } });
+  return { pending, pagesCleared: artPages.length, castSheetsCleared: sheets.length };
+}
+
+// ---------------------------------------------------------------------------
+// PUT /api/books/{bookId}/layout
+// ---------------------------------------------------------------------------
+
+export type SetBookLayoutResult = { bookId: string; layoutId: string | null; status: Book['status']; redrawn: boolean };
+
+/**
+ * The parent ties a print template (Layout) to a finished Book, or takes it
+ * back to the screen format with `null` (ADR-0011: the parent picks the
+ * Layout). Page art is drawn at the template's picture shape, so a change
+ * redraws every picture (free: no allowance is charged; the words are kept).
+ * The same template again is a no-op. Refused while the Book is locked (409
+ * BOOK_LOCKED) or still being made (409 BOOK_NOT_FINISHED).
+ */
+export async function setBookLayout(deps: BookServiceDeps, user: VerifiedUser, bookId: string, layoutId: string | null): Promise<SetBookLayoutResult> {
+  const { db } = deps;
+  const bookRepo = books.using(db);
+  const owned = await loadOwned(user, bookRepo, bookId);
+  if (layoutId) {
+    const layout = await loadLayout(db, layoutId);
+    if (!layout) throw new NotFoundError('Layout not found', { code: 'LAYOUT_NOT_FOUND', details: { layoutId } });
+    if (layout.medium !== 'print') throw new BadRequestError('That template is not for print', { code: 'LAYOUT_NOT_PRINT' });
+    const manuscript = await manuscripts.using(db).require(owned.manuscriptId);
+    const supported = layoutSupports(layout, manuscript.length, manuscript.density);
+    if (!supported.ok) throw new ConflictError(supported.reason, { code: 'LAYOUT_UNSUPPORTED' });
+  }
+
+  const outcome = await db.runTransaction(async (tx) => {
+    const book = await bookRepo.requireIn(tx, bookId);
+    if (book.status === 'locked') throw new ConflictError('Unlock the book to change its print template', { code: 'BOOK_LOCKED' });
+    if ((book.layoutId ?? null) === layoutId) return { pending: null, status: book.status };
+    if (book.status !== 'ready' && book.status !== 'partial') {
+      throw new ConflictError('Wait for the pictures to finish first', { code: 'BOOK_NOT_FINISHED', details: { status: book.status } });
+    }
+    const redraw = await redrawIn(tx, deps, book, { layoutId });
+    return { pending: redraw.pending, status: 'illustrating' as const };
+  });
+  await outcome.pending?.dispatch();
+  return { bookId, layoutId, status: outcome.status, redrawn: outcome.pending !== null };
 }
 
 // ---------------------------------------------------------------------------

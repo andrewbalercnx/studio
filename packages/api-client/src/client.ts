@@ -65,6 +65,9 @@ function storiesApi(t: Transport) {
     /** The child's Stories, newest first (abandoned ones left out), names resolved on the server. */
     list: async (childId: string): Promise<StoryView[]> => (await t.call<{ stories: StoryView[] }>('GET', `/stories${query({ childId })}`)).stories,
     get: (storyId: string) => t.call<{ story: StoryView; turns: StoryTurnView[] }>('GET', `/stories/${seg(storyId)}`),
+    /** Admin: one family's Stories, every child, newest first (abandoned ones left out). */
+    adminList: async (ownerUid: string): Promise<StoryView[]> =>
+      (await t.call<{ stories: StoryView[] }>('GET', `/admin/stories${query({ ownerUid })}`)).stories,
   };
 }
 
@@ -81,6 +84,12 @@ function booksApi(t: Transport) {
     lock: (bookId: string) => t.call<{ bookId: string; status: BookStatus }>('POST', `/books/${seg(bookId)}/lock`),
     unlock: (bookId: string) => t.call<{ bookId: string; status: BookStatus }>('POST', `/books/${seg(bookId)}/unlock`),
     printOptions: (bookId: string) => t.call<PrintOption[]>('GET', `/books/${seg(bookId)}/print-options`),
+    /**
+     * Tie a print template to a finished Book (null: back to the screen format). A change redraws
+     * every picture at the template's shape, free; the same template again is a no-op.
+     */
+    setLayout: (bookId: string, layoutId: string | null) =>
+      t.call<{ bookId: string; layoutId: string | null; status: BookStatus; redrawn: boolean }>('PUT', `/books/${seg(bookId)}/layout`, { layoutId }),
     /** Start a print render; locks the Book. */
     startRender: (bookId: string, layoutId: string, idempotencyKey: string) =>
       t.call<{ renderId: string; jobId: string; status: 'rendering' | 'ready' }>('POST', `/books/${seg(bookId)}/renders`, { layoutId, idempotencyKey }),

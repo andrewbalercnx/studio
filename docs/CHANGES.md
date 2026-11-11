@@ -16,6 +16,58 @@
 
 ## Changes
 
+### 2026-11-11
+
+#### `#59` - Parents choose a Book's print template and order it; view-as-parent lists Stories
+
+**Type**: Fix (parent print flow, admin)
+
+**Summary**: Since the rebuild a parent could not tie a print template to a Book, and the order flow
+was hard to find: the child's book list said "Printing is coming soon", and the order form let the
+parent pick any template even though every Book's pictures were drawn for the screen (4:5), so a
+print came out cropped or letterboxed (#58). The parent now picks the template on the Book page; the
+server saves it and redraws every picture at that template's shape, free of charge. The order form
+offers only the Book's own template.
+
+Also carried in: the admin view-as-parent Stories tab was always empty (it queried `stories` by
+`parentUid`, which `schemaVersion: 2` Stories do not carry). It now reads a new admin route.
+
+**Changes**:
+- New `PUT /api/books/[bookId]/layout` (`setBookLayout`): validates the template (exists, print,
+  fits the Book's length), refuses locked or unfinished Books, sets `books.layoutId` and redraws in
+  one transaction. No allowance charge; the same template again is a no-op.
+- `src/server/books/service.ts`: the redraw writes moved into `redrawIn`, shared by
+  `reillustrateBook` (internal route, behaviour unchanged) and `setBookLayout`.
+- Book page (`BookView`): new `PrintTemplate` panel (PIN-guarded, with a confirm dialog explaining
+  the redraw); "Order a printed copy" appears once a template is set and the pictures are finished.
+- `OrderForm`: shows only the Book's own template, with a "Change template" link; without one it
+  sends the parent back to choose it.
+- `POST /api/orders` (`createOrder`): orders only in the Book's own template, 409 `LAYOUT_NOT_SET`
+  without one and 409 `LAYOUT_MISMATCH` for another; `orders.test.ts` covers both.
+- Parent `/parent/storybooks/[childId]`: "Printing is coming soon" replaced with where to print.
+- `BookReader`: pictures `object-contain` so a print-shaped picture is not cropped on screen.
+- New `GET /api/admin/stories?ownerUid=` (admin) returning `StoryView[]` (`listStoriesForOwner`,
+  same views as `GET /api/stories`); api-client `stories.adminList`; view-as-parent renders title,
+  mode, `storyStatusLabel` and created date grouped by child.
+- api-client: `books.setLayout`.
+- Tests: `pipeline.test.ts` (template saved, 14 pictures redrawn at the template's 1:1 shape, no
+  charge, no-op, null back to screen; refusals for unknown template, unfinished, other family,
+  locked); `read-routes.test.ts` (admin Stories list, 400/401/403). Regression: the layout route in
+  `API_BOOKS_V3_AUTH`, the admin Stories route in `API_ROUTE_AUTH_ANON`.
+- Docs: `API.md`, `SCHEMA.md` (`books.layoutId`), `SYSTEM_DESIGN.md` §3.
+
+**Files**:
+- Created: `src/app/api/books/[bookId]/layout/route.ts`, `src/components/books/print-template.tsx`,
+  `src/app/api/admin/stories/route.ts`
+- Modified: `src/server/books/service.ts`, `src/server/orders/service.ts`, `src/server/creation/views.ts`,
+  `packages/api-client/src/client.ts`, `src/components/books/book-view.tsx`,
+  `src/components/books/book-reader.tsx`, `src/components/orders/order-form.tsx`,
+  `src/app/books/[bookId]/page.tsx`, `src/app/parent/storybooks/[childId]/page.tsx`,
+  `src/app/admin/view-as-parent/[uid]/page.tsx`, `src/components/admin/regression/scenario-api-tests.ts`,
+  tests and docs above
+
+**Not changed**: the mobile app, which is a child-only client and gets no parent print controls.
+
 ### 2026-11-09
 
 #### `#58` - Draw page art at the template's picture-region (imageBox) aspect, not the whole leaf

@@ -5,6 +5,7 @@
  *
  *   GET /api/stories?childId=…   listStoriesForChild  (newest first, abandoned left out)
  *   GET /api/stories/{storyId}   getStoryWithTurns
+ *   GET /api/admin/stories?ownerUid=…  listStoriesForOwner (admin; whole family)
  *   GET /api/creation-modes      listChoosableModes
  *
  * The web app reads `stories/{id}` and its `turns` with read-only listeners
@@ -183,7 +184,23 @@ export async function listStoriesForChild(db: Firestore, user: VerifiedUser, chi
   const ownerUid = child.ownerUid as string;
   await assertOwner(user, { ownerUid, childId }, 'Child');
 
-  const snapshot = await db.collection('stories').where('ownerUid', '==', ownerUid).where('childId', '==', childId).get();
+  return listStoryViews(db, ownerUid, childId);
+}
+
+/**
+ * Every Story one family owns (admin tooling: no ownership check here, the
+ * route is admin-only), newest first, abandoned ones left out. Same views as
+ * `listStoriesForChild`; the client groups them by `childId`.
+ */
+export async function listStoriesForOwner(db: Firestore, ownerUid: string): Promise<StoryView[]> {
+  if (!ownerUid || ownerUid.includes('/')) throw new BadRequestError('ownerUid is required', { code: 'OWNER_REQUIRED' });
+  return listStoryViews(db, ownerUid);
+}
+
+async function listStoryViews(db: Firestore, ownerUid: string, childId?: string): Promise<StoryView[]> {
+  let q = db.collection('stories').where('ownerUid', '==', ownerUid);
+  if (childId) q = q.where('childId', '==', childId);
+  const snapshot = await q.get();
   const repo = stories.using(db);
   const found = snapshot.docs
     .filter((doc) => isTargetStory(doc.data()))

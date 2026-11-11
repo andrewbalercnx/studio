@@ -21,6 +21,7 @@ import { UnauthenticatedError } from '../../errors';
 import { GET as listRoute } from '@/app/api/stories/route';
 import { GET as getRoute } from '@/app/api/stories/[storyId]/route';
 import { GET as modesRoute } from '@/app/api/creation-modes/route';
+import { GET as adminListRoute } from '@/app/api/admin/stories/route';
 import { abandonStory, createStory, submitTurn } from '../service';
 import { createBench, key, seed, user } from './helpers';
 
@@ -119,6 +120,31 @@ describe('GET /api/stories and /api/stories/{id}', () => {
     await bench.db.collection('stories').doc('legacy1').set({ parentUid: 'p1', childId: 'c1', storyText: 'Once.' });
     expect((await read('legacy1')).body.error.code).toBe('STORY_NOT_FOUND');
     expect((await list('c1')).body.data.stories).toEqual([]);
+  });
+});
+
+describe('GET /api/admin/stories', () => {
+  const adminList = (ownerUid: string) => call(adminListRoute(get(`/api/admin/stories?ownerUid=${ownerUid}`)));
+
+  it("lists one family's Stories across its children for an admin, abandoned ones left out", async () => {
+    const abandoned = await createStory(bench.services, p1, { childId: 'c1', modeId: 'wizard', idempotencyKey: key() });
+    await abandonStory(bench.services, p1, abandoned.storyId);
+    const done = await finishedWizardStory();
+    await bench.db.collection('stories').doc('legacy1').set({ parentUid: 'p1', childId: 'c1', storyText: 'Once.' });
+
+    verifyUserToken.mockResolvedValue(user('admin', { isAdmin: true }));
+    const response = await adminList('p1');
+    expect(response.status).toBe(200);
+    expect(response.body.data.stories.map((s: { id: string }) => s.id)).toEqual([done]);
+    expect(response.body.data.stories[0]).toMatchObject({ childId: 'c1', status: 'complete', title: "Emma's Big Day" });
+    expect((await adminList('')).status).toBe(400);
+    expect((await adminList('nobody')).body.data.stories).toEqual([]);
+  });
+
+  it('refuses anyone who is not an admin', async () => {
+    expect((await adminList('p1')).status).toBe(403);
+    verifyUserToken.mockRejectedValue(new UnauthenticatedError('Missing ID token'));
+    expect((await adminList('p1')).status).toBe(401);
   });
 });
 
