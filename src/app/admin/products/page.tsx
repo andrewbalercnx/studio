@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { collection } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+import { useCollection } from '@/lib/firestore-hooks';
 import Link from 'next/link';
 import { useAdminStatus } from '@/hooks/use-admin-status';
 import { useUser } from '@/firebase/auth/use-user';
@@ -23,7 +26,7 @@ import { ENTITLEMENT_COMPONENT_LIST } from '@/lib/catalog/entitlement-components
 import { formatPrice } from '@/lib/catalog/validate';
 import type {
   Product, Price, ProductGrant, ProductKind, ProductScope, BillingInterval, Currency,
-  EntitlementComponentKey, GrantReset,
+  EntitlementComponentKey, GrantReset, PrintProduct,
 } from '@/lib/types';
 
 const KINDS: ProductKind[] = ['one_time', 'subscription', 'free'];
@@ -31,6 +34,8 @@ const SCOPES: ProductScope[] = ['family', 'child', 'gift'];
 const INTERVALS: BillingInterval[] = ['month', 'year'];
 const RESETS: GrantReset[] = ['one_time', 'per_period', 'lifetime'];
 const CURRENCIES: Currency[] = ['GBP', 'USD', 'EUR'];
+/** Select value for "no print product" (Radix Select items cannot have an empty value). */
+const NO_PRINT_PRODUCT = '__none__';
 
 type ProductWithPrices = Product & { prices: Price[] };
 
@@ -51,6 +56,12 @@ export default function ProductsAdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Product>>(emptyForm());
   const [saving, setSaving] = useState(false);
+
+  // Print products to link a product to (the template form reads them the same way).
+  const firestore = useFirestore();
+  const printProductsQuery = useMemo(() => (firestore ? collection(firestore, 'printProducts') : null), [firestore]);
+  const { data: printProducts } = useCollection<PrintProduct>(printProductsQuery);
+  const printProductName = (id: string | null | undefined) => (id ? (printProducts?.find((pp) => pp.id === id)?.name ?? id) : null);
 
   const authed = useCallback(async (path: string, init?: RequestInit) => {
     const token = await user!.getIdToken();
@@ -172,15 +183,18 @@ export default function ProductsAdminPage() {
           {products.map((p) => (
             <Card key={p.id}>
               <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <CardTitle className="flex flex-wrap items-center gap-2">
                       {p.name}
                       <Badge variant={p.active ? 'default' : 'outline'}>{p.active ? 'active' : 'inactive'}</Badge>
                       <Badge variant="secondary">{p.kind}</Badge>
                       <Badge variant="secondary">{p.scope}{p.interval ? ` · ${p.interval}` : ''}</Badge>
                     </CardTitle>
                     {p.description && <CardDescription>{p.description}</CardDescription>}
+                    {p.printProductId && (
+                      <CardDescription data-testid="linked-print-product">Prints: {printProductName(p.printProductId)}</CardDescription>
+                    )}
                   </div>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" onClick={() => openEdit(p)}><Pencil className="h-4 w-4" /></Button>
@@ -260,7 +274,30 @@ export default function ProductsAdminPage() {
               </div>
             </div>
 
-            <div><Label>Linked PrintProduct ID (optional, for printed books)</Label><Input value={form.printProductId || ''} onChange={(e) => setForm({ ...form, printProductId: e.target.value })} /></div>
+            <div>
+              <Label>Linked print product (for printed books)</Label>
+              <Select
+                value={form.printProductId || NO_PRINT_PRODUCT}
+                onValueChange={(v) => setForm({ ...form, printProductId: v === NO_PRINT_PRODUCT ? '' : v })}
+              >
+                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_PRINT_PRODUCT}>None</SelectItem>
+                  {(printProducts ?? []).map((pp) => (
+                    <SelectItem key={pp.id} value={pp.id}>
+                      {pp.name || pp.id}
+                      {pp.active === false ? ' (inactive)' : ''}
+                    </SelectItem>
+                  ))}
+                  {form.printProductId && !printProducts?.some((pp) => pp.id === form.printProductId) && (
+                    <SelectItem value={form.printProductId}>{form.printProductId} (not found)</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Its price becomes the price of every print template that uses this print product.
+              </p>
+            </div>
             <div className="flex items-center gap-2"><Switch checked={!!form.active} onCheckedChange={(c) => setForm({ ...form, active: c })} /><Label>Active (visible in catalog)</Label></div>
           </div>
           <DialogFooter>
@@ -298,7 +335,7 @@ function PriceManager({
           </div>
         ))}
       </div>
-      <div className="mt-2 flex items-end gap-2">
+      <div className="mt-2 flex flex-wrap items-end gap-2">
         <div>
           <Label className="text-xs">Currency</Label>
           <Select value={currency} onValueChange={(v: Currency) => setCurrency(v)}>
