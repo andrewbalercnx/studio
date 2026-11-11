@@ -36,6 +36,14 @@ export const bookSchema = z.object({
    * template change starts a new run and a stale run's work is ignored. Null without a template
    * or before its copies were asked for.
    */
+  /**
+   * The `storybook_allowance` unit this Book used: the pool it came from, and whether it was given
+   * back (a Book whose words could not be written). Null for Books made before this was recorded.
+   */
+  allowance: z
+    .object({ source: z.enum(['child', 'family']), refunded: z.boolean().default(false) })
+    .nullable()
+    .default(null),
   print: z
     .object({
       layoutId: z.string().min(1),

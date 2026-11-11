@@ -60,7 +60,7 @@ export function BookFailed({ manuscriptFailed }: { manuscriptFailed: boolean }) 
       <h1 className="text-2xl font-bold text-amber-900">This book got a bit stuck</h1>
       <p className="text-amber-700 max-w-sm">
         {manuscriptFailed
-          ? "We couldn't write the pages for this book. Ask a grown-up to try making it again."
+          ? "We couldn't write the pages for this book, so it didn't use up one of your books. Ask a grown-up to try making it again."
           : "We couldn't draw the pictures for this book. Ask a grown-up to help."}
       </p>
     </div>

@@ -41,6 +41,7 @@ import { toJobError } from '../jobs/runner';
 import { artLevelForAttempt, buildCastSheetPrompt, buildPagePrompt, type CastSheetSource, type PresentMember } from './art-prompts';
 import { loadCast, stripAudioTags, type Cast, type CastEntry } from './cast';
 import type { BookJobDeps } from './deps';
+import { readLedgerIn, returnAllowance } from './allowance';
 import { decodeMedia, extensionFor } from './media';
 import { cropToAspect, extendPrompt, extendRatio, imageSize, printArtMethod, printAspectFor } from './print-art';
 import {
@@ -268,17 +269,38 @@ async function afterPagination(ctx: JobContext, manuscript: WithId<Manuscript>):
   await ctx.enqueue(specs);
 }
 
-/** The Manuscript failed for good: so do the Books waiting for it. */
+/**
+ * The Manuscript failed for good: so do the Books waiting for it. Each gives its book allowance
+ * back to the pool it came from, since the child got nothing for it.
+ */
 async function failManuscript(db: Firestore, manuscriptId: string): Promise<void> {
   const manuscriptRepo = manuscripts.using(db);
   const bookRepo = books.using(db);
   const bookCollection = await bookRepo.collection();
   await db.runTransaction(async (tx) => {
+    // Reads.
     const manuscript = await manuscriptRepo.getIn(tx, manuscriptId);
     if (!manuscript || manuscript.status !== 'paginating') return;
-    const waiting = await tx.get(bookCollection.where('manuscriptId', '==', manuscriptId).where('status', '==', 'illustrating'));
+    const waiting = (await tx.get(bookCollection.where('manuscriptId', '==', manuscriptId).where('status', '==', 'illustrating'))).docs.map((doc) =>
+      bookRepo.parse(doc)
+    );
+    const refunds = waiting.filter((book) => book.allowance && !book.allowance.refunded);
+    const ledger = refunds.length > 0 ? await readLedgerIn(tx, db, manuscript.ownerUid) : null;
+    // Writes.
     await manuscriptRepo.updateIn(tx, manuscriptId, { status: 'failed' });
-    for (const doc of waiting.docs) await bookRepo.updateIn(tx, doc.id, { status: 'failed' });
+    // One return per pool: each call writes from the same ledger read.
+    const perPool = new Map<string, { source: 'child' | 'family'; childId: string; units: number }>();
+    for (const book of refunds) {
+      const key = `${book.allowance!.source}:${book.childId}`;
+      const entry = perPool.get(key) ?? { source: book.allowance!.source, childId: book.childId, units: 0 };
+      entry.units += 1;
+      perPool.set(key, entry);
+    }
+    for (const pool of perPool.values()) returnAllowance(tx, ledger!, 'storybook_allowance', pool.source, pool.childId, pool.units);
+    for (const book of waiting) {
+      const refund = refunds.includes(book);
+      await bookRepo.updateIn(tx, book.id, { status: 'failed', ...(refund ? { allowance: { ...book.allowance!, refunded: true } } : {}) });
+    }
   });
 }
 

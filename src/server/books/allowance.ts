@@ -12,6 +12,7 @@
 import { FieldValue, type DocumentReference, type Firestore, type Transaction } from 'firebase-admin/firestore';
 import { canConsume, consume } from '@/lib/entitlements/check';
 import { buildFreeTierLedger, ensureFreeTier } from '@/lib/entitlements/grant';
+import { ENTITLEMENT_COMPONENTS } from '@/lib/catalog/entitlement-components';
 import type { EntitlementComponentKey, EntitlementLedger } from '@/lib/types';
 
 export const LEDGERS_COLLECTION = 'entitlementLedgers';
@@ -90,6 +91,31 @@ export async function checkAllowance(
   const ensured = stored ? ensureFreeTier(stored, now) : buildFreeTierLedger(ownerUid, now);
   const check = canConsume(ensured, component, { parentUid: ownerUid, childId: childId ?? undefined }, 1);
   return { allowed: check.allowed, remaining: check.remaining };
+}
+
+/**
+ * Give back units of any component to the pool they came from: a quota (e.g. the book allowance
+ * of a Book whose words could not be written) gets its `used` count back; a consumable goes
+ * through `returnConsumable`. In the caller's transaction, from the ledger the caller read in it.
+ */
+export function returnAllowance(
+  tx: Transaction,
+  ledger: { ref: DocumentReference; stored: EntitlementLedger | null },
+  component: EntitlementComponentKey,
+  source: 'child' | 'family',
+  childId: string | null,
+  amount = 1
+): void {
+  if (ENTITLEMENT_COMPONENTS[component].meter === 'consumable') {
+    returnConsumable(tx, ledger, component, source, childId, amount);
+    return;
+  }
+  const pool = source === 'child' && childId ? ledger.stored?.children?.[childId] : ledger.stored?.family;
+  const current = (pool as Record<string, { allowance?: number; used?: number }> | undefined)?.[component];
+  if (!current) return; // nothing recorded in that pool (e.g. a new period started): nothing to give back
+  const restored = { ...current, used: Math.max(0, (current.used ?? 0) - amount) };
+  const patch = source === 'child' && childId ? { children: { [childId]: { [component]: restored } } } : { family: { [component]: restored } };
+  tx.set(ledger.ref, { ...patch, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 }
 
 /**
