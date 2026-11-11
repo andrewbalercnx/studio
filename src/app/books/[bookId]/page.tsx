@@ -3,7 +3,7 @@
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Activity, ArrowLeft } from 'lucide-react';
+import { Activity, ArrowLeft, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppContext } from '@/hooks/use-app-context';
 import { useParentGuard } from '@/hooks/use-parent-guard';
@@ -14,7 +14,8 @@ import { BookView } from '@/components/books';
  * then the reader. In parent mode (not child mode) the parent can draw a
  * failed picture again and lock or unlock the Book, each behind the PIN guard.
  * The parent also picks the Book's print template (pictures redrawn to fit)
- * and orders a printed copy. Admins also get a print proof panel.
+ * and orders a printed copy. Admins also get a print proof panel. In child
+ * mode a "Grown-ups" link leads to the same Book in the parent console.
  */
 export default function BookPage({ params }: { params: Promise<{ bookId: string }> }) {
   const { bookId } = use(params);
@@ -37,6 +38,16 @@ export default function BookPage({ params }: { params: Promise<{ bookId: string 
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back
           </Button>
+          {!isParent && (
+            // A parent who reached the Book through the child's screens: the controls live in the
+            // parent console, behind the PIN.
+            <Button asChild variant="ghost" size="sm" className="text-amber-800" data-testid="grown-ups-print">
+              <Link href={`/parent/books/${encodeURIComponent(bookId)}`}>
+                <Printer className="mr-1 h-4 w-4" />
+                Grown-ups: print this book
+              </Link>
+            </Button>
+          )}
           {roleMode === 'admin' && (
             <Button asChild variant="ghost" size="sm" className="text-amber-800">
               <Link href={`/admin/trace?bookId=${bookId}`}>

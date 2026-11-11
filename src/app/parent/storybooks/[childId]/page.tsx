@@ -91,7 +91,7 @@ export default function ChildStorybooksPage() {
           </div>
           <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {books.map((book) => (
-              <BookCard key={book.id} book={book} href={`/books/${book.id}`} />
+              <BookCard key={book.id} book={book} href={`/parent/books/${book.id}`} />
             ))}
           </div>
         </section>

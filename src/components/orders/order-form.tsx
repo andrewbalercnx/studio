@@ -89,7 +89,7 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
           <Printer className="mx-auto h-8 w-8 text-amber-500" />
           <p>Choose a print template for this book first. Its pictures are drawn again to fit, free of charge.</p>
           <Button asChild variant="outline">
-            <Link href={`/books/${encodeURIComponent(bookId)}`}>Choose a print template</Link>
+            <Link href={`/parent/books/${encodeURIComponent(bookId)}`}>Choose a print template</Link>
           </Button>
         </CardContent>
       </Card>
@@ -113,7 +113,7 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
           <CardTitle className="text-amber-900">Print template</CardTitle>
           <CardDescription>
             The price includes UK delivery.{' '}
-            <Link href={`/books/${encodeURIComponent(bookId)}`} className="underline">
+            <Link href={`/parent/books/${encodeURIComponent(bookId)}`} className="underline">
               Change template
             </Link>
           </CardDescription>
