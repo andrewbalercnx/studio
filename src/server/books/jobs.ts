@@ -678,8 +678,9 @@ function pageArtHandler(getDeps: () => Promise<BookJobDeps>): JobDefinition['run
         present.push({ member, action, referenceImage, referenceKind });
       }
 
+      const artKind = page.kind === 'cover' ? 'cover' : page.kind === 'back' ? 'back' : 'story';
       const text = buildPagePrompt({
-        kind: page.kind === 'cover' ? 'cover' : page.kind === 'back' ? 'back' : 'story',
+        kind: artKind,
         scene,
         present,
         stylePrompt: style.prompt,
@@ -696,7 +697,7 @@ function pageArtHandler(getDeps: () => Promise<BookJobDeps>): JobDefinition['run
           flowName: 'book.pageArt',
           ownerUid: ctx.job.ownerUid,
           prompt: [...styleImages.map((s) => s.part), ...referenceParts, { text }],
-          config: { imageConfig: { aspectRatio: artAspectRatio(layout) } },
+          config: { imageConfig: { aspectRatio: artAspectRatio(layout, artKind) } },
         });
         artUrl = await storeImage(deps, `books/${bookId}/pages/${pageNumber}/${ctx.job.jobId}-${ctx.job.attempt}`, mediaUrl, {
           bookId,
