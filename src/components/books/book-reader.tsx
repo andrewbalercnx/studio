@@ -84,7 +84,7 @@ export function BookReader({ title, pages, words, onRetryPage, locked }: BookRea
       <div className="relative w-full rounded-2xl overflow-hidden bg-amber-50 border-4 border-amber-200 shadow-lg" style={{ aspectRatio: cssAspectRatio() }}>
         {art === 'done' ? (
           // eslint-disable-next-line @next/next/no-img-element -- art URLs are Storage download URLs (or TEST_MODE data URLs)
-          <img src={page.artUrl!} alt={isCover ? title : `Picture for page ${page.manuscriptPage}`} className="h-full w-full object-cover" />
+          <img src={page.artUrl!} alt={isCover ? title : `Picture for page ${page.manuscriptPage}`} className="h-full w-full object-contain" />
         ) : art === 'failed' ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
             <ImageOff className="h-12 w-12 text-amber-400" />

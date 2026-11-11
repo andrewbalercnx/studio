@@ -1,12 +1,14 @@
 'use client';
 
 /**
- * Order printed copies of a Book (slice 5.6): pick a print template (with its
- * page count and price, from the server), the number of copies and a UK
- * address. Placing the order makes its print files, which locks the Book.
+ * Order printed copies of a Book (slice 5.6) in the print template the parent
+ * tied to it on the Book page (the pictures are drawn for that template), with
+ * the number of copies and a UK address. Placing the order makes its print
+ * files, which locks the Book.
  * Every action asks for the parent PIN first through `requireGuard`.
  */
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LoaderCircle, Lock, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -36,9 +38,10 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
   useEffect(() => {
     api.books.printOptions(bookId)
       .then((opts) => {
-        const priced = opts.filter((o) => o.price);
-        setOptions(priced);
-        setLayoutId(priced.find((o) => o.isCurrent)?.layoutId ?? priced[0]?.layoutId ?? '');
+        // The Book's own template only: its pictures are drawn at that template's shape.
+        const current = opts.filter((o) => o.price && o.isCurrent);
+        setOptions(current);
+        setLayoutId(current[0]?.layoutId ?? '');
       })
       .catch((err: Error) => setLoadError(err.message));
   }, [bookId]);
@@ -84,7 +87,10 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
       <Card className="mx-auto max-w-xl">
         <CardContent className="space-y-2 p-6 text-center text-amber-900">
           <Printer className="mx-auto h-8 w-8 text-amber-500" />
-          <p>This book cannot be printed yet: no print format with a price fits it.</p>
+          <p>Choose a print template for this book first. Its pictures are drawn again to fit, free of charge.</p>
+          <Button asChild variant="outline">
+            <Link href={`/books/${encodeURIComponent(bookId)}`}>Choose a print template</Link>
+          </Button>
         </CardContent>
       </Card>
     );
@@ -104,8 +110,13 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
     <div className="mx-auto max-w-xl space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="text-amber-900">Choose a format</CardTitle>
-          <CardDescription>The price includes UK delivery.</CardDescription>
+          <CardTitle className="text-amber-900">Print template</CardTitle>
+          <CardDescription>
+            The price includes UK delivery.{' '}
+            <Link href={`/books/${encodeURIComponent(bookId)}`} className="underline">
+              Change template
+            </Link>
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2" role="radiogroup" aria-label="Print format">
           {options.map((o) => (

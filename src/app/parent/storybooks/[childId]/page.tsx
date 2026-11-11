@@ -16,7 +16,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 /**
  * Parent console: one child's Books (server pipeline; status from the
- * server). Printing Books comes with the print slice.
+ * server). Each Book's page is where the parent picks its print template
+ * and orders a printed copy.
  */
 export default function ChildStorybooksPage() {
   const params = useParams();
@@ -86,7 +87,7 @@ export default function ChildStorybooksPage() {
         <section className="space-y-3">
           <div>
             <h2 className="text-xl font-semibold">Books</h2>
-            <p className="text-sm text-muted-foreground">Printing is coming soon for these books.</p>
+            <p className="text-sm text-muted-foreground">Open a book to choose its print template and order a printed copy.</p>
           </div>
           <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {books.map((book) => (

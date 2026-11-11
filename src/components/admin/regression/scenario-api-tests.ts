@@ -52,7 +52,7 @@ export async function runScenarioAndApiTests({ firestore, auth, updateTestResult
       const missingBook = 'regression-missing-book';
       // method defaults to POST; authed calls on missing ids return 404 unless
       // `expectAuthed` says otherwise (the Books list returns 200 for any owner).
-      const routes: Array<{ path: string; body?: unknown; method?: 'GET' | 'POST'; expectAuthed?: number }> = [
+      const routes: Array<{ path: string; body?: unknown; method?: 'GET' | 'POST' | 'PUT'; expectAuthed?: number }> = [
           { path: '/api/manuscripts', body: missingStory },
           { path: '/api/books', body: { ...missingStory, styleId: 'regression-missing-style', idempotencyKey: 'regression-books-auth' } },
           { path: `/api/books/${missingBook}/pages/2/retry` },
@@ -62,6 +62,8 @@ export async function runScenarioAndApiTests({ firestore, auth, updateTestResult
           { path: `/api/books/${missingBook}`, method: 'GET', expectAuthed: 404 },
           // Print render (slice 5.5a): a missing Book is 404 before any template is read or render started.
           { path: `/api/books/${missingBook}/print-options`, method: 'GET', expectAuthed: 404 },
+          // The parent ties a print template to a Book: a missing Book is 404 before any redraw starts.
+          { path: `/api/books/${missingBook}/layout`, method: 'PUT', body: { layoutId: null } },
           { path: `/api/books/${missingBook}/renders`, body: { layoutId: 'regression-missing-layout', idempotencyKey: 'regression-render-auth' } },
           { path: `/api/books/${missingBook}/renders`, method: 'GET', expectAuthed: 404 },
           { path: `/api/books/${missingBook}/renders/regression-missing-render`, method: 'GET', expectAuthed: 404 },
@@ -95,7 +97,7 @@ export async function runScenarioAndApiTests({ firestore, auth, updateTestResult
       }
       updateTestResult('API_BOOKS_V3_AUTH', {
           status: 'PASS',
-          message: 'manuscripts, books (create/list/get), retry, lock, unlock, print-options, renders and orders reject anonymous calls (401); authed calls return 404 for missing ids and 200 for the Books list.',
+          message: 'manuscripts, books (create/list/get), retry, lock, unlock, layout, print-options, renders and orders reject anonymous calls (401); authed calls return 404 for missing ids and 200 for the Books list.',
       });
   } catch (e: any) {
       updateTestResult('API_BOOKS_V3_AUTH', { status: 'ERROR', message: e.message });
