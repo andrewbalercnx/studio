@@ -5,8 +5,9 @@
  * picks the Layout). The Book's pictures never change: the server makes a
  * print copy of each at the template's picture shape (cropped, or extended by
  * the image model when the shapes are far apart), free of charge. The list is
- * the server's: templates this Book fits, cheapest first; only priced ones
- * can be ordered, so only those are offered.
+ * the server's: templates this Book fits, cheapest first. Only priced ones can
+ * be chosen; the others are listed greyed out so it is clear they exist, with
+ * a hint for admins on what links a template to its price.
  */
 import { useEffect, useState } from 'react';
 import { LoaderCircle, Ruler } from 'lucide-react';
@@ -21,12 +22,14 @@ export function PrintTemplate({
   status,
   print,
   requireGuard,
+  admin = false,
 }: {
   bookId: string;
   layoutId: string | null;
   status: BookStatus;
   print: BookPrintState | null;
   requireGuard: () => boolean;
+  admin?: boolean;
 }) {
   const { toast } = useToast();
   const [options, setOptions] = useState<PrintOption[] | null>(null);
@@ -37,7 +40,7 @@ export function PrintTemplate({
     let cancelled = false;
     api.books
       .printOptions(bookId)
-      .then((opts) => !cancelled && setOptions(opts.filter((o) => o.price)))
+      .then((opts) => !cancelled && setOptions(opts))
       .catch(() => !cancelled && setOptions([]));
     return () => {
       cancelled = true;
@@ -47,7 +50,8 @@ export function PrintTemplate({
   useEffect(() => setSelected(layoutId ?? ''), [layoutId]);
 
   const current = options?.find((o) => o.layoutId === layoutId) ?? null;
-  const choice = options?.find((o) => o.layoutId === selected) ?? null;
+  const choice = options?.find((o) => o.layoutId === selected && o.price) ?? null;
+  const priced = options?.filter((o) => o.price) ?? [];
   const mine = print && print.layoutId === layoutId ? print : null;
   const preparing = mine?.status === 'preparing';
   const needsRetry = !!layoutId && (!mine || mine.status === 'failed' || mine.status === 'partial');
@@ -89,13 +93,27 @@ export function PrintTemplate({
       ) : status !== 'ready' ? (
         <p className="text-sm text-muted-foreground">You can choose a print template once the pictures are finished.</p>
       ) : options.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No print template fits this book yet.</p>
+        <div className="space-y-1 text-sm text-muted-foreground" data-testid="print-template-none">
+          <p>No print template fits a book of this length yet.</p>
+          {admin && <p>Admin: add a print template (Admin → Print Layouts) whose page rules allow this many pages.</p>}
+        </div>
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
             Pick the size and shape for a printed copy. Your book stays exactly as it is: each picture gets a copy shaped
             for the printed page, free of charge.
           </p>
+          {priced.length === 0 && (
+            <div className="space-y-1 text-sm text-amber-900" data-testid="print-template-unpriced">
+              <p>These templates fit this book, but none can be ordered yet because none has a price.</p>
+              {admin && (
+                <p className="text-muted-foreground">
+                  Admin: a template is priced when its print product (Admin → Print Layouts, printProductId) is linked from an
+                  active Product with an active one-off Price (Admin → Products, &ldquo;Linked PrintProduct ID&rdquo;).
+                </p>
+              )}
+            </div>
+          )}
           <div className="space-y-2" role="radiogroup" aria-label="Print template">
             {options.map((o) => (
               <button
@@ -103,8 +121,10 @@ export function PrintTemplate({
                 type="button"
                 role="radio"
                 aria-checked={o.layoutId === selected}
+                aria-disabled={!o.price}
+                disabled={!o.price}
                 onClick={() => setSelected(o.layoutId)}
-                className={`flex w-full items-center justify-between rounded-md border p-3 text-left ${o.layoutId === selected ? 'border-amber-500 bg-amber-50' : 'border-border'}`}
+                className={`flex w-full items-center justify-between rounded-md border p-3 text-left ${o.layoutId === selected ? 'border-amber-500 bg-amber-50' : 'border-border'} ${o.price ? '' : 'cursor-not-allowed opacity-60'}`}
               >
                 <span>
                   <span className="block font-medium text-amber-900">
@@ -115,7 +135,9 @@ export function PrintTemplate({
                     {o.trim.widthIn} × {o.trim.heightIn} in · {o.interiorPages} pages{o.leavesPerSpread === 2 ? ' · words and pictures on facing pages' : ''}
                   </span>
                 </span>
-                <span className="font-semibold text-amber-900">{o.price ? formatMoney(o.price.amountMinor, o.price.currency) : ''}</span>
+                <span className={o.price ? 'font-semibold text-amber-900' : 'text-sm text-muted-foreground'}>
+                  {o.price ? formatMoney(o.price.amountMinor, o.price.currency) : 'Not available to order yet'}
+                </span>
               </button>
             ))}
           </div>

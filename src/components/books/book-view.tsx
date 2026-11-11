@@ -149,6 +149,7 @@ export function BookView({ bookId, parent, admin = false }: { bookId: string; pa
                 status={book.status}
                 print={book.print ?? null}
                 requireGuard={parent.requireGuard}
+                admin={admin}
               />
             </div>
           </CardContent>

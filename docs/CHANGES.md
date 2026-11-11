@@ -18,6 +18,20 @@
 
 ### 2026-11-11
 
+#### `#63` - List print templates that fit but have no price
+
+**Type**: Fix (parent print flow)
+
+**Summary**: The parent's template panel hid every template without a price. With no priced
+template in the catalogue it read "No print template fits this book yet" and offered nothing to
+tap. Templates that fit but have no price are now listed greyed out as "Not available to order yet",
+and admins get a hint naming the link that sets a price (template → print product → active Product
+with an active one-off Price). An empty list says no template fits a book of this length. (Pushed to
+#62's branch after #62 was merged, so it did not ship with it.)
+
+**Files**:
+- Modified: `src/components/books/print-template.tsx`, `src/components/books/book-view.tsx`
+
 #### `#62` - Fixes from the flow review: stuck orders, lost allowances, Back-button duplicates
 
 **Type**: Fix (Books, orders)
