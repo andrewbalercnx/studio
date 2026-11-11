@@ -10,7 +10,7 @@ import type { PrintLayout } from '@/lib/types';
 import { createBook } from '../../books/service';
 import { createBench, seed, user, type Bench } from '../../books/__tests__/helpers';
 import type { ConfigDefinition } from '../../config/config-service';
-import { jobs, printOrders } from '../../data/repositories';
+import { books, jobs, printOrders } from '../../data/repositories';
 import type { OrderStatus } from '../../data/schemas/order';
 import { canTransition, isForwardFulfilment, mixamStatusToOrder, transition } from '../lifecycle';
 import {
@@ -87,8 +87,8 @@ beforeEach(async () => {
   };
 });
 
-async function readyBook(): Promise<string> {
-  const { bookId } = await createBook(bench.services, p1, { storyId: 's1', formId: 'picture', styleId: 'water' });
+async function readyBook(layoutId: string | null = 'spread'): Promise<string> {
+  const { bookId } = await createBook(bench.services, p1, { storyId: 's1', formId: 'picture', styleId: 'water', layoutId: layoutId ?? undefined });
   await bench.drain();
   return bookId;
 }
@@ -162,11 +162,26 @@ describe('creating an order', () => {
     await expect(
       createOrder(deps, p1, { bookId, layoutId: 'spread', quantity: 1, shippingAddress: { ...address, postalCode: 'NOPE' }, idempotencyKey: 'order-key-2' })
     ).rejects.toMatchObject({ code: 'INVALID_ADDRESS' });
+    await books.using(bench.db).update(bookId, { layoutId: 'square' });
     await expect(createOrder(deps, p1, { bookId, layoutId: 'square', quantity: 1, shippingAddress: address, idempotencyKey: 'order-key-3' })).rejects.toMatchObject({
       code: 'NO_PRICE',
     });
+    await books.using(bench.db).update(bookId, { layoutId: 'spread' });
     await expect(createOrder(deps, p1, { bookId, layoutId: 'spread', quantity: 11, shippingAddress: address, idempotencyKey: 'order-key-4' })).rejects.toMatchObject({
       code: 'INVALID_QUANTITY',
+    });
+  });
+
+  it("orders only in the Book's own template", async () => {
+    const screenBook = await readyBook(null);
+    await expect(createOrder(deps, p1, { bookId: screenBook, layoutId: 'spread', quantity: 1, shippingAddress: address, idempotencyKey: 'order-key-5' })).rejects.toMatchObject({
+      status: 409,
+      code: 'LAYOUT_NOT_SET',
+    });
+    const spreadBook = await readyBook();
+    await expect(createOrder(deps, p1, { bookId: spreadBook, layoutId: 'square', quantity: 1, shippingAddress: address, idempotencyKey: 'order-key-6' })).rejects.toMatchObject({
+      status: 409,
+      code: 'LAYOUT_MISMATCH',
     });
   });
 });

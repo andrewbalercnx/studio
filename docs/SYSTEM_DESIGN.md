@@ -221,9 +221,10 @@ story complete ─▶ child picks Form + Style (BookChooser)
   `PUT /api/books/{id}/layout` saves it on `books.layoutId` and redraws every picture at that
   template's shape in the same transaction (`setBookLayout`, sharing `redrawIn` with the internal
   re-illustrate route): free, words kept, refused once locked. The order form then offers only the
-  Book's own template, so what is printed is what was drawn for it. The screen reader shows a
-  print-shaped picture whole (`object-contain` in the 4:5 frame) rather than cropping it. The order
-  route itself still accepts any compatible template (mobile, admin) — dev-todo to enforce it there.
+  Book's own template, and `POST /api/orders` refuses any other (409 `LAYOUT_NOT_SET` /
+  `LAYOUT_MISMATCH`), so what is printed is what was drawn for it. The screen reader shows a
+  print-shaped picture whole (`object-contain` in the 4:5 frame) rather than cropping it. Choosing a
+  template and ordering are parent actions on the web only: the mobile app is a child-only client.
 - **Parent controls** (`/books/{bookId}` in parent mode, behind the PIN guard): draw a failed page
   again (`POST /api/books/{id}/pages/{n}/retry`) and lock / unlock. **Printing is not available for
   these Books yet**: the page says "Printing is coming soon" and offers no print layout or order

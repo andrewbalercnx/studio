@@ -42,6 +42,8 @@ Also carried in: the admin view-as-parent Stories tab was always empty (it queri
   the redraw); "Order a printed copy" appears once a template is set and the pictures are finished.
 - `OrderForm`: shows only the Book's own template, with a "Change template" link; without one it
   sends the parent back to choose it.
+- `POST /api/orders` (`createOrder`): orders only in the Book's own template, 409 `LAYOUT_NOT_SET`
+  without one and 409 `LAYOUT_MISMATCH` for another; `orders.test.ts` covers both.
 - Parent `/parent/storybooks/[childId]`: "Printing is coming soon" replaced with where to print.
 - `BookReader`: pictures `object-contain` so a print-shaped picture is not cropped on screen.
 - New `GET /api/admin/stories?ownerUid=` (admin) returning `StoryView[]` (`listStoriesForOwner`,
@@ -57,15 +59,14 @@ Also carried in: the admin view-as-parent Stories tab was always empty (it queri
 **Files**:
 - Created: `src/app/api/books/[bookId]/layout/route.ts`, `src/components/books/print-template.tsx`,
   `src/app/api/admin/stories/route.ts`
-- Modified: `src/server/books/service.ts`, `src/server/creation/views.ts`,
+- Modified: `src/server/books/service.ts`, `src/server/orders/service.ts`, `src/server/creation/views.ts`,
   `packages/api-client/src/client.ts`, `src/components/books/book-view.tsx`,
   `src/components/books/book-reader.tsx`, `src/components/orders/order-form.tsx`,
   `src/app/books/[bookId]/page.tsx`, `src/app/parent/storybooks/[childId]/page.tsx`,
   `src/app/admin/view-as-parent/[uid]/page.tsx`, `src/components/admin/regression/scenario-api-tests.ts`,
   tests and docs above
 
-**Not changed**: the mobile app has no template picker yet, and `POST /api/orders` still accepts any
-compatible template (dev-todo).
+**Not changed**: the mobile app, which is a child-only client and gets no parent print controls.
 
 ### 2026-11-09
 

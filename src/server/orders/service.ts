@@ -152,9 +152,11 @@ export type CreateOrderInput = {
 type z_input_address = Omit<OrderAddress, 'line2' | 'state' | 'country'> & { line2?: string | null; state?: string | null; country?: 'GB' };
 
 /**
- * Create an order for a Book in a template: price from the catalogue, a render
- * for this order (which locks the Book), UK address checked. The same key
- * returns the same order.
+ * Create an order for a Book in its own template (the one the parent chose on
+ * the Book page; its pictures are drawn for it): price from the catalogue, a
+ * render for this order (which locks the Book), UK address checked. 409
+ * LAYOUT_NOT_SET without a template, 409 LAYOUT_MISMATCH for another one.
+ * The same key returns the same order.
  */
 export async function createOrder(deps: OrderDeps, user: VerifiedUser, body: CreateOrderInput): Promise<OrderView> {
   const { db } = deps;
@@ -174,6 +176,10 @@ export async function createOrder(deps: OrderDeps, user: VerifiedUser, body: Cre
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contactEmail)) throw new BadRequestError('An email address is needed for the order', { code: 'INVALID_EMAIL' });
 
   const book = await loadOwned(user, books.using(db), body.bookId);
+  if (!book.layoutId) throw new ConflictError('Choose a print template for this book first', { code: 'LAYOUT_NOT_SET' });
+  if (book.layoutId !== body.layoutId) {
+    throw new ConflictError("This book's pictures are drawn for another print template", { code: 'LAYOUT_MISMATCH', details: { layoutId: book.layoutId } });
+  }
   const option = (await printOptions(db, user, body.bookId)).find((o) => o.layoutId === body.layoutId);
   if (!option) throw new ConflictError('This book cannot be printed in that format', { code: 'LAYOUT_UNSUPPORTED' });
   if (!option.price || !option.printProductId) throw new ConflictError('This format has no price yet', { code: 'NO_PRICE' });
