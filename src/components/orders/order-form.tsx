@@ -53,7 +53,9 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
   }, [defaultEmail, email]);
 
   const option = options?.find((o) => o.layoutId === layoutId) ?? null;
-  const complete = !!option && !!address.name.trim() && !!address.line1.trim() && !!address.city.trim() && !!address.postalCode.trim() && !!email.trim();
+  // One address only: autofill can append a second one to a prefilled box.
+  const emailValid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
+  const complete = !!option && !!address.name.trim() && !!address.line1.trim() && !!address.city.trim() && !!address.postalCode.trim() && emailValid;
   // A changed choice is a new order; the same choice again (a double tap) is the same order.
   const choice = useMemo(() => JSON.stringify({ layoutId, quantity, address, email }), [layoutId, quantity, address, email]);
 
@@ -169,7 +171,19 @@ export function OrderForm({ bookId, defaultEmail, requireGuard }: { bookId: stri
           {field('postalCode', 'Postcode', 'postal-code')}
           <div className="space-y-1">
             <Label htmlFor="email">Email for order updates</Label>
-            <Input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              aria-invalid={!!email.trim() && !emailValid}
+            />
+            {!!email.trim() && !emailValid && (
+              <p className="text-xs text-destructive" data-testid="email-invalid">
+                Enter one email address, like name@example.com.
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

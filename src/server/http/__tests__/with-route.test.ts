@@ -99,6 +99,8 @@ describe('withRoute body validation', () => {
     const { status, body } = await json(await handler(post({ title: '' })));
     expect(status).toBe(400);
     expect(body.error.code).toBe('INVALID_BODY');
+    // The message names the field, since clients show it as it is.
+    expect(body.error.message).toMatch(/^Request body failed validation \(title: .+\)$/);
     expect(body.error.details[0].path).toEqual(['title']);
   });
 
