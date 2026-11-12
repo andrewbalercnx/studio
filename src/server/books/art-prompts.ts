@@ -69,7 +69,7 @@ A SQUARE image divided into 4 EQUAL QUADRANTS (2 rows × 2 columns):
 4. BOTTOM-RIGHT: full body BACK view
 
 === STRICT REQUIREMENTS ===
-1. Plain WHITE or very light neutral background — no scenery, no props, no text
+1. Plain WHITE or very light neutral background — no scenery, no props, no text, no signature, watermark or labels
 2. All four views show the EXACT SAME character: identical face, hair, skin tone, clothing and proportions
 3. Neutral standing poses for the full-body views
 4. ${input.heroAge ? `Make the character appealing and appropriate for a child who is ${input.heroAge}.` : 'Make the character appealing and appropriate for young children.'}
@@ -148,6 +148,25 @@ ${lines}
 IMPORTANT: Only the ${countWord} listed above may appear in this illustration. Do not add any other people, children, figures, crowd members, or background characters.`;
 }
 
+/**
+ * Image models like to sign their work and to letter whatever the prompt
+ * quotes. Every picture ends with this rule; the cover's version allows only
+ * its title and author line (given as bare lines, never inside a sentence the
+ * model could copy onto the art).
+ */
+export const NO_EXTRA_MARKS =
+  'Do not add any signature, artist name, initials, monogram, watermark, logo, stamp, caption, label or page number anywhere in the image.';
+
+export function coverTextRule(hasTitle: boolean): string {
+  return hasTitle
+    ? `The only words in the image are the title and the author line listed above. Do not letter these instructions, the words "TITLE" or "AUTHOR LINE", or quotation marks. ${NO_EXTRA_MARKS}`
+    : `Do not add any words or letters. ${NO_EXTRA_MARKS}`;
+}
+
+function textRule(kind: PagePromptInput['kind'], title: string | null | undefined): string {
+  return kind === 'cover' ? coverTextRule(!!title) : `Do not add any words, letters or numbers. ${NO_EXTRA_MARKS}`;
+}
+
 export function buildPagePrompt(input: PagePromptInput): string {
   const parts: string[] = [];
   if (input.globalPrefix) parts.push(input.globalPrefix);
@@ -155,8 +174,11 @@ export function buildPagePrompt(input: PagePromptInput): string {
   if (input.level === 'minimal') {
     parts.push(`Art Style: ${input.stylePrompt}`);
     parts.push(`Scene: ${sceneBlock(input.scene, input.present, false)}`);
-    if (input.kind === 'cover' && input.title) parts.push(`This is the front cover; include the title "${input.title}" in large, clear letters at the top.`);
-    if (input.kind === 'back') parts.push('This is the back cover: everyone together and happy; no text or words in the image.');
+    if (input.kind === 'cover' && input.title) {
+      parts.push(`This is the front cover. Letter the title in large, clear letters at the top.\nTITLE: ${input.title}`);
+    }
+    if (input.kind === 'back') parts.push('This is the back cover: everyone together and happy.');
+    parts.push(textRule(input.kind, input.title));
     return parts.join('\n\n');
   }
 
@@ -164,15 +186,14 @@ export function buildPagePrompt(input: PagePromptInput): string {
     const author = input.heroName ? `by ${input.heroName}` : null;
     parts.push(`Create a FRONT COVER for a personalized children's storybook.
 ${input.title ? `
-=== TITLE TEXT (MUST BE INCLUDED) ===
-The cover MUST include this exact title text: "${input.title}"
-${author ? `Below the title, include the author credit: "${author}"` : ''}
-
-TEXT RENDERING REQUIREMENTS:
-- Place the title prominently at the TOP of the image
-- Use large, clear, LEGIBLE letters that a child can read, in a fun, rounded, child-friendly font
-- Make each letter distinct and well-formed; use contrasting colors so the text stands out
-- Double-check spelling: the title is "${input.title}" - spell it exactly${author ? '\n- Place the author credit smaller, below the title' : ''}
+=== COVER LETTERING ===
+Letter these words on the cover, exactly as spelled, and nothing else:
+TITLE: ${input.title}
+${author ? `AUTHOR LINE: ${author}\n` : ''}
+How to letter them:
+- The title goes prominently at the TOP of the image, in large, clear, LEGIBLE letters a child can read, in a fun, rounded, child-friendly font
+- Make each letter distinct and well-formed; use contrasting colors so the words stand out
+- Spell every word exactly as given${author ? '\n- The author line goes smaller, below the title' : ''}
 ` : '\nLeave space at the top for a title.\n'}
 ILLUSTRATION REQUIREMENTS:
 - Show the main character(s) in a dynamic, engaging pose
@@ -186,7 +207,6 @@ ILLUSTRATION REQUIREMENTS:
 REQUIREMENTS FOR THE BACK COVER:
 - This is the BACK COVER of a printed book: the final image a child sees
 - Show the characters together in a warm, joyful, celebratory scene; the story is over and everyone is happy
-- Do NOT include any text, words, letters or titles in the image
 - Leave a calm area of background where a short blurb can be printed over the picture`);
     parts.push(sceneBlock(input.scene, input.present, true));
   } else {
@@ -222,5 +242,6 @@ Each reference sheet is a 2x2 grid: TOP-LEFT face close-up (use it for facial fe
 CRITICAL: Match each character's facial features (eyes, nose, mouth, hair, skin tone) EXACTLY as shown in their reference. The face must be recognizably the same person, rendered in the art style.`);
     }
   }
+  parts.push(textRule(input.kind, input.title));
   return parts.join('\n\n');
 }

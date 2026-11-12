@@ -14,6 +14,7 @@
  * The screen pictures are never changed, so a child's Book stays as it is.
  */
 import { artAspectRatio, type ArtPageKind, type Layout } from '../catalog';
+import { NO_EXTRA_MARKS } from './art-prompts';
 
 /** Largest shape difference cropped without AI: |ln(source / target)|, about 12%. */
 export const CROP_TOLERANCE = 0.12;
@@ -71,5 +72,6 @@ export function extendPrompt(kind: ArtPageKind): string {
   } else {
     lines.push('Add no words, letters or numbers.');
   }
+  lines.push(`${NO_EXTRA_MARKS} If the picture already has a signature or watermark, paint over it with the scene.`);
   return lines.join('\n');
 }

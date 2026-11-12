@@ -16,6 +16,27 @@
 
 ## Changes
 
+### 2026-11-12
+
+#### `#69` - Picture prompts forbid signatures, and the cover's words are given as bare lines
+
+**Type**: Fix (Books, art prompts)
+
+**Summary**: Two kinds of unwanted lettering in Book pictures. The first test order had a made-up
+artist's signature ("T.M.Jollffe") on a story page; and a cover had the prompt's own sentence ("The
+cover MUST include this exact title text:") painted above its title. Every picture prompt (story,
+back cover, cover, at every simplification level) now ends with one rule: no signature, artist name,
+initials, monogram, watermark, logo, stamp, caption, label or page number (`NO_EXTRA_MARKS` in
+`art-prompts.ts`). The cover's title and author line are given as bare `TITLE:` / `AUTHOR LINE:`
+lines without quotation marks, with the rule that they are the only words in the image and that the
+labels, instructions and quotation marks are not lettered. The print-copy extend prompt
+(`print-art.ts`) carries the same rule and paints over a signature already in the picture. The cast
+sheet prompt forbids signatures too. Pictures already drawn are unchanged.
+
+**Files**:
+- Modified: `src/server/books/art-prompts.ts`, `src/server/books/print-art.ts`,
+  `src/server/books/__tests__/art-prompts.test.ts`
+
 ### 2026-11-11
 
 #### `#68` - Picture pages instead of blank padding at the back of a printed Book; cover spine when unset
