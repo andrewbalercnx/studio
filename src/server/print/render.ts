@@ -10,7 +10,9 @@
  *   to the trim, and a box that touches a trim edge (a full-bleed picture, a
  *   background) is extended into the bleed so nothing prints a white sliver.
  * - Pages come from the template's page model (`leavesPerSpread`); padding
- *   follows the product's page multiple (see `catalog/layouts.ts`).
+ *   follows the product's page multiple (see `catalog/layouts.ts`), and the
+ *   padding pages after "The End" are a scrapbook of the Book's own pictures
+ *   (`collage.ts`), not blank paper.
  * - The spine width comes from the page count and paper (`spineWidthMm`).
  * - Typeset title and end pages; the back cover carries the synopsis in the
  *   template's back-cover text box. The front cover's art already carries the
@@ -19,6 +21,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
 import type { PageLayoutBox, PageLayoutConfig, PrintLayout, TextLayoutBox } from '@/lib/types';
 import { getLayoutForPageType } from '@/lib/print-layout-utils';
+import { drawCollagePage } from './collage';
 
 export const POINTS_PER_INCH = 72;
 export const MM_PER_INCH = 25.4;
@@ -390,8 +393,11 @@ export async function renderInteriorPdf(document: PrintDocument): Promise<{ byte
   if (count > document.interiorPages) {
     throw new Error(`Interior has ${count} pages, more than the ${document.interiorPages} planned`);
   }
-  while (count < document.interiorPages) {
-    addPage(ctx);
+  // Fill the padding with picture pages: the story's pictures, then the back cover's.
+  const sources = [...document.interior.filter((p) => p.kind === 'story' && p.image).map((p) => p.image!), ...(document.back.image ? [document.back.image] : [])];
+  const pictures = await Promise.all([...new Set(sources)].map((image) => embedImage(ctx, image)));
+  for (let index = 0; count < document.interiorPages; index += 1) {
+    drawCollagePage({ page: addPage(ctx), pictures, index, font: ctx.font, trim: ctx.trim, bleedIn: ctx.bleedIn });
     count += 1;
   }
   ctx.doc.setTitle('Interior');

@@ -121,7 +121,8 @@ export async function buildPrintDocument(input: {
   return {
     layout,
     bleedIn: bleedInchesFor(product),
-    spineWidthMm: product?.spine ? spineWidthMm(interiorPages, paper, isCaseBound(product)) : null,
+    // A missing `spine` means yes, as the admin form shows it (`spine ?? true`): only an explicit false drops it.
+    spineWidthMm: product && product.spine !== false ? spineWidthMm(interiorPages, paper, isCaseBound(product)) : null,
     interior,
     front: { kind: 'cover_front', text: null, image: await art(frontPage), bookPage: frontPage.pageNumber },
     back: { kind: 'cover_back', text: source.synopsis?.trim() || null, image: await art(backPage), bookPage: backPage.pageNumber },
